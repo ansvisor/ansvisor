@@ -8,7 +8,7 @@ updated: 2026-10-31
 last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, web/src/lib/chat/daily-suggestions.ts, web/src/components/chat/suggestion-detail.tsx]
 ---
 Each morning Chat can pick one action that waits in your Action Center and put it in your **Inbox**, with what it would take, so your open actions get done. It picks from what is already there, by its priority, and adds no new work. Picking costs no AI usage.

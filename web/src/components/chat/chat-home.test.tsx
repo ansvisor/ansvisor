@@ -29,8 +29,10 @@ vi.mock('@/i18n/navigation', () => ({
   usePathname: () => '/dashboard/chat',
   useRouter: () => ({ push: nav.push }),
 }));
+// Locked: the workspace is read-only, or the demo brand is open.
+const gate = vi.hoisted(() => ({ isLocked: false, openUpgrade: vi.fn() }));
 vi.mock('@/components/providers/upgrade-gate', () => ({
-  useUpgradeGate: () => ({ isLocked: false, openUpgrade: vi.fn() }),
+  useUpgradeGate: () => ({ isLocked: gate.isLocked, openUpgrade: gate.openUpgrade }),
 }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 const BRAND = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -100,6 +102,8 @@ beforeEach(() => {
   document.body.appendChild(host);
   root = createRoot(host);
   nav.push.mockClear();
+  gate.isLocked = false;
+  gate.openUpgrade.mockClear();
   list.chats = [];
   due.brand = BRAND;
   due.answer = { ok: true, dueTasks: 3, lostPages: 0, readyDrafts: 0 };
@@ -413,6 +417,22 @@ describe('ChatHome', () => {
       message: 'Why did our Google AI Overviews citations drop since Oct 19?',
     });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/cccccccc-0000-4000-8000-000000000002');
+  });
+
+  // As the composer: a read-only workspace, or the demo brand on an active
+  // plan, starts no run (and spends no AI budget); the upgrade dialog opens.
+  it('starts nothing while locked, a shortcut or Why?, and opens the upgrade dialog', async () => {
+    gate.isLocked = true;
+    due.since = SINCE;
+    const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    await act(async () => (host.querySelector('[data-skill="tasks"]') as HTMLElement).click());
+    await act(async () => (host.querySelector('[data-action="why.open"]') as HTMLElement).click());
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(gate.openUpgrade).toHaveBeenCalledTimes(2);
+    expect(nav.push).not.toHaveBeenCalled();
   });
 });
 

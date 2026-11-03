@@ -24,6 +24,14 @@ const fakes = vi.hoisted(() => ({
   stopChat: vi.fn(),
 }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
+const keyCap = vi.hoisted(() => ({
+  reached: null as { reached: boolean; renewsAt: string | null } | null,
+  read: null as { reached: boolean; renewsAt: string | null } | null,
+}));
+vi.mock('./own-key-cap', () => ({
+  ownKeyCapReached: vi.fn(async () => keyCap.reached),
+  readOwnKeyCap: vi.fn(async () => keyCap.read),
+}));
 const ownKey = vi.hoisted(() => ({ failing: null as { class: string; provider: string } | null }));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
@@ -132,6 +140,8 @@ function chatOf(agentRunId: string, status: string, progress: Record<string, unk
 }
 
 beforeEach(() => {
+  keyCap.reached = null;
+  keyCap.read = null;
   vi.clearAllMocks();
   ownKey.failing = null;
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
@@ -372,6 +382,22 @@ describe('handing a started run to Chat', () => {
     expect(await driver.openAgentRun(under, ORG, NOW)).not.toBeNull();
   });
 
+  it('stops a queued run once all agents used the month’s limit on the own key, pausing a triggered agent', async () => {
+    keyCap.reached = { reached: true, renewsAt: '2026-11-20T09:00:00.000Z' };
+    const id = queueRun();
+    expect(await driver.openAgentRun(id, ORG, NOW)).toBeNull();
+    expect(runRow(id).status).toBe('stopped');
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'own_key_cap' });
+    expect(db.tables.chat_conversations).toEqual([]);
+
+    // Run now stops the same, and leaves the agent as it is.
+    Object.assign(agentRow(), { status: 'active', paused_reason: null });
+    const manual = queueRun({ trigger_kind: 'manual', acting_user_id: PEOPLE.manager });
+    expect(await driver.openAgentRun(manual, ORG, NOW)).toBeNull();
+    expect(runRow(manual).status).toBe('stopped');
+    expect(agentRow()).toMatchObject({ status: 'active', paused_reason: null });
+  });
+
   it('pauses a triggered agent whose brand lacks a Required connection, and starts nothing', async () => {
     db.tables.chat_agent_versions[0].connections = [{ key: 'cms', required: true }];
     // A Webflow site whose sign-in failed isn't a connected CMS.
@@ -527,6 +553,39 @@ describe('handing a started run to Chat', () => {
     const again = queueRun();
     await driver.openAgentRun(again, ORG, NOW);
     expect(db.tables.chat_messages.at(-2)!.content_md).not.toContain('isn’t connected');
+  });
+
+  it("starts keeping its chat's brands from the run's brand, before its message (00436)", async () => {
+    const started: { chat: unknown; messages: number }[] = [];
+    db.rpcs.chat_start_touched_brands = ({ p_conversation_id }) =>
+      started.push({
+        chat: p_conversation_id,
+        messages: db.tables.chat_messages.filter((m) => m.conversation_id === p_conversation_id)
+          .length,
+      });
+    await driver.openAgentRun(queueRun(), ORG, NOW);
+    expect(started).toEqual([{ chat: db.tables.chat_conversations[0].id, messages: 0 }]);
+  });
+
+  it('stops a run on a brand its person can no longer use, as one gone (BRAND-ACCESS)', async () => {
+    const BRAND_B = '33333333-3333-4333-8333-333333333333';
+    db.tables.brands.push({ id: BRAND_B, organization_id: ORG, name: 'Brand B', is_demo: false });
+    db.tables.chat_agent_versions[0].scope = { all_brands: true };
+    // The owner, whom a triggered run acts as, is narrowed to Brand A.
+    agentRow().owner_id = PEOPLE.manager;
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [{ user_id: PEOPLE.manager, organization_id: ORG, brand_id: BRAND }];
+    const hidden = queueRun({ brand_id: BRAND_B });
+    expect(await driver.openAgentRun(hidden, ORG, NOW)).toBeNull();
+    expect(runRow(hidden)).toMatchObject({ status: 'stopped', stop_reason: 'brand_gone' });
+    // Brand A is still theirs: the agent stays on, and its run there starts.
+    expect(agentRow().status).toBe('active');
+    expect(await driver.openAgentRun(queueRun({ brand_id: BRAND }), ORG, NOW)).not.toBeNull();
+    // None of its brands left to them: it pauses, as for brands gone.
+    db.tables.member_brands = [];
+    const none = queueRun({ brand_id: BRAND });
+    expect(await driver.openAgentRun(none, ORG, NOW)).toBeNull();
+    expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'brand_gone' });
   });
 
   it('stops a run whose brand left its scope, and with Chat off starts nothing', async () => {

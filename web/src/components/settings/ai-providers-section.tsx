@@ -23,6 +23,8 @@ import { Link } from '@/i18n/navigation';
 import { AIProviderAvatar } from '@/components/ai-provider-avatar';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { OwnKeyGuardCard } from '@/components/settings/own-key-guard-card';
+import type { OwnKeyGuard } from '@/lib/chat/own-key-guard';
 import { formatDate } from '@/lib/format';
 import { formatRelative } from '@/lib/format-relative';
 import type { KeyFailureClass } from '@/lib/agent/key-errors';
@@ -182,6 +184,9 @@ export function AiProvidersSection() {
   const { canAdmin } = useUserRole();
   const [saved, setSaved] = useState<SavedProvider[] | null>(null);
   const [access, setAccess] = useState<OwnKeyAccess>({ state: 'open' });
+  // The key guard's card: Admins only, where Chat runs on own keys (the route
+  // sends it to nobody else); null when its numbers couldn't be read.
+  const [keyGuard, setKeyGuard] = useState<OwnKeyGuard | null | undefined>(undefined);
   const [editing, setEditing] = useState<AiProvider | null>(null);
   const [switching, setSwitching] = useState<AiProvider | null>(null);
   const [testing, setTesting] = useState<AiProvider | null>(null);
@@ -203,11 +208,13 @@ export function AiProvidersSection() {
       const body = (await res.json()) as {
         providers?: SavedProvider[];
         access?: OwnKeyAccess;
+        guard?: OwnKeyGuard | null;
         error?: string;
       };
       if (!res.ok) throw new Error(body.error || 'Failed to load');
       setSaved(body.providers ?? []);
       setAccess(body.access ?? { state: 'open' });
+      setKeyGuard('guard' in body ? (body.guard ?? null) : undefined);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to load');
       setSaved((current) => current ?? []);
@@ -312,228 +319,241 @@ export function AiProvidersSection() {
   const metered = access.state === 'plan' || access.state === 'kept';
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4" />
-          {t('aiProviders')}
-        </CardTitle>
-        <CardDescription>
-          {t(access.state === 'open' ? 'agent_description' : 'agent_descriptionMetered')}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {saved === null ? (
-          <Skeleton className="h-64 w-full" />
-        ) : (
-          <>
-            {/* Only today's Agent Chat stays locked without a key. */}
-            {access.state === 'open' && !saved.some((row) => row.active) && (
-              <p className="text-sm text-muted-foreground">{t('agent_noKey')}</p>
-            )}
-            {access.state === 'kept' && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                <p>
-                  {t('agent_kept', { date: formatDate(access.until) })}{' '}
-                  <Link
-                    href="/dashboard/settings/billing"
-                    className="font-medium underline underline-offset-4"
-                  >
-                    {t('agent_comparePlans')}
-                  </Link>
-                </p>
-              </div>
-            )}
-            {locked && (
-              <div className="flex items-start gap-3 rounded-md border bg-muted/40 p-3 text-sm">
-                <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                <p>
-                  {t('agent_locked')}{' '}
-                  <Link
-                    href="/dashboard/settings/billing"
-                    className="font-medium underline underline-offset-4"
-                  >
-                    {t('agent_comparePlans')}
-                  </Link>
-                </p>
-              </div>
-            )}
-            <div className="divide-y rounded-lg border">
-              {AI_PROVIDERS.map((provider) => {
-                const row = byProvider.get(provider);
-                return (
-                  <div key={provider} className="@container space-y-4 p-4" data-provider={provider}>
-                    <div className="flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
-                          <ProviderIcon provider={provider} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-medium">{name(provider)}</p>
-                            {row && locked ? (
-                              <Badge variant="secondary">{t('agent_notUsed')}</Badge>
-                            ) : row?.active ? (
-                              <Badge
-                                variant="outline"
-                                className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                              >
-                                <CheckCircle2 className="h-3 w-3" />
-                                {t('agent_usedByChat')}
-                              </Badge>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            {t('aiProviders')}
+          </CardTitle>
+          <CardDescription>
+            {t(access.state === 'open' ? 'agent_description' : 'agent_descriptionMetered')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {saved === null ? (
+            <Skeleton className="h-64 w-full" />
+          ) : (
+            <>
+              {/* Only today's Agent Chat stays locked without a key. */}
+              {access.state === 'open' && !saved.some((row) => row.active) && (
+                <p className="text-sm text-muted-foreground">{t('agent_noKey')}</p>
+              )}
+              {access.state === 'kept' && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <p>
+                    {t('agent_kept', { date: formatDate(access.until) })}{' '}
+                    <Link
+                      href="/dashboard/settings/billing"
+                      className="font-medium underline underline-offset-4"
+                    >
+                      {t('agent_comparePlans')}
+                    </Link>
+                  </p>
+                </div>
+              )}
+              {locked && (
+                <div className="flex items-start gap-3 rounded-md border bg-muted/40 p-3 text-sm">
+                  <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <p>
+                    {t('agent_locked')}{' '}
+                    <Link
+                      href="/dashboard/settings/billing"
+                      className="font-medium underline underline-offset-4"
+                    >
+                      {t('agent_comparePlans')}
+                    </Link>
+                  </p>
+                </div>
+              )}
+              <div className="divide-y rounded-lg border">
+                {AI_PROVIDERS.map((provider) => {
+                  const row = byProvider.get(provider);
+                  return (
+                    <div
+                      key={provider}
+                      className="@container space-y-4 p-4"
+                      data-provider={provider}
+                    >
+                      <div className="flex flex-col gap-3 @lg:flex-row @lg:items-center @lg:justify-between">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
+                            <ProviderIcon provider={provider} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-medium">{name(provider)}</p>
+                              {row && locked ? (
+                                <Badge variant="secondary">{t('agent_notUsed')}</Badge>
+                              ) : row?.active ? (
+                                <Badge
+                                  variant="outline"
+                                  className="gap-1 border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                >
+                                  <CheckCircle2 className="h-3 w-3" />
+                                  {t('agent_usedByChat')}
+                                </Badge>
+                              ) : (
+                                row && <Badge variant="secondary">{t('agent_keySaved')}</Badge>
+                              )}
+                            </div>
+                            {row ? (
+                              <p className="text-xs text-muted-foreground">
+                                {row.last4 && <code className="font-mono">…{row.last4}</code>}
+                                {' · '}
+                                {t('agent_modelInUse', {
+                                  model: chatModelId(provider, row.settings),
+                                })}
+                                {' · '}
+                                {t('agent_savedAt', { date: formatDate(row.setAt) })}
+                                {row.setByEmail &&
+                                  ` ${t('agent_savedBy', { email: row.setByEmail })}`}
+                              </p>
                             ) : (
-                              row && <Badge variant="secondary">{t('agent_keySaved')}</Badge>
+                              <p className="text-xs text-muted-foreground">
+                                {t(`agent_providers.${provider}.about`)}
+                              </p>
+                            )}
+                            {row && metered && <KeyHealthLine provider={provider} row={row} />}
+                          </div>
+                        </div>
+
+                        {canAdmin && editing !== provider && (
+                          <div className="flex shrink-0 items-center gap-2 pl-13 @lg:pl-0">
+                            {row && !row.active && !locked && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={switching !== null}
+                                onClick={guard(() => void handleUse(provider), {
+                                  action: tActions('switchAiProvider'),
+                                })}
+                              >
+                                {switching === provider && (
+                                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                )}
+                                {t('agent_useForChat')}
+                              </Button>
+                            )}
+                            {row && metered && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                data-action="aiKey.test"
+                                disabled={testing !== null}
+                                onClick={guard(() => void handleTest(provider), {
+                                  action: tActions('testAiKey'),
+                                })}
+                              >
+                                {testing === provider && (
+                                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                                )}
+                                {testing === provider ? t('agent_testing') : t('agent_test')}
+                              </Button>
+                            )}
+                            {/* A kept key is replaced, not joined by another provider's. */}
+                            {!locked && (row || access.state !== 'kept') && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={guard(() => setEditing(provider), {
+                                  action: tActions('saveAiKeys'),
+                                })}
+                              >
+                                {row ? t('agent_replace') : t('agent_addKey')}
+                              </Button>
+                            )}
+                            {row && (
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label={`${t('agent_removeKey')}: ${name(provider)}`}
+                                className="text-muted-foreground hover:text-destructive"
+                                onClick={() => {
+                                  setConfirmRemove(provider);
+                                  setRemoveOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             )}
                           </div>
-                          {row ? (
-                            <p className="text-xs text-muted-foreground">
-                              {row.last4 && <code className="font-mono">…{row.last4}</code>}
-                              {' · '}
-                              {t('agent_modelInUse', {
-                                model: chatModelId(provider, row.settings),
-                              })}
-                              {' · '}
-                              {t('agent_savedAt', { date: formatDate(row.setAt) })}
-                              {row.setByEmail &&
-                                ` ${t('agent_savedBy', { email: row.setByEmail })}`}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              {t(`agent_providers.${provider}.about`)}
-                            </p>
-                          )}
-                          {row && metered && <KeyHealthLine provider={provider} row={row} />}
-                        </div>
+                        )}
                       </div>
 
-                      {canAdmin && editing !== provider && (
-                        <div className="flex shrink-0 items-center gap-2 pl-13 @lg:pl-0">
-                          {row && !row.active && !locked && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={switching !== null}
-                              onClick={guard(() => void handleUse(provider), {
-                                action: tActions('switchAiProvider'),
-                              })}
-                            >
-                              {switching === provider && (
-                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                              )}
-                              {t('agent_useForChat')}
-                            </Button>
-                          )}
-                          {row && metered && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              data-action="aiKey.test"
-                              disabled={testing !== null}
-                              onClick={guard(() => void handleTest(provider), {
-                                action: tActions('testAiKey'),
-                              })}
-                            >
-                              {testing === provider && (
-                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                              )}
-                              {testing === provider ? t('agent_testing') : t('agent_test')}
-                            </Button>
-                          )}
-                          {/* A kept key is replaced, not joined by another provider's. */}
-                          {!locked && (row || access.state !== 'kept') && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={guard(() => setEditing(provider), {
-                                action: tActions('saveAiKeys'),
-                              })}
-                            >
-                              {row ? t('agent_replace') : t('agent_addKey')}
-                            </Button>
-                          )}
-                          {row && (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={`${t('agent_removeKey')}: ${name(provider)}`}
-                              className="text-muted-foreground hover:text-destructive"
-                              onClick={() => {
-                                setConfirmRemove(provider);
-                                setRemoveOpen(true);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
+                      {canAdmin && editing === provider && (
+                        <ProviderKeyForm
+                          provider={provider}
+                          saved={row?.settings ?? {}}
+                          onCancel={() => setEditing(null)}
+                          onSaved={async () => {
+                            // Closed once the row shows the new key, not before.
+                            await load();
+                            setEditing(null);
+                          }}
+                        />
                       )}
                     </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
 
-                    {canAdmin && editing === provider && (
-                      <ProviderKeyForm
-                        provider={provider}
-                        saved={row?.settings ?? {}}
-                        onCancel={() => setEditing(null)}
-                        onSaved={async () => {
-                          // Closed once the row shows the new key, not before.
-                          await load();
-                          setEditing(null);
-                        }}
-                      />
-                    )}
-                  </div>
-                );
-              })}
+          {!canAdmin && (
+            // Server-side, `/api/settings/ai-providers` PUT/PATCH/DELETE
+            // already refuse a non-admin role with a 403 — say so up front
+            // instead of offering buttons that end in an unhelpful toast.
+            <div className="flex items-start gap-3 rounded-md border bg-muted/40 p-3 text-sm">
+              <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div>
+                <p className="font-medium">{t('agent_adminOnly')}</p>
+                <p className="mt-1 text-muted-foreground">{t('agent_adminOnlyHint')}</p>
+              </div>
             </div>
-          </>
-        )}
+          )}
 
-        {!canAdmin && (
-          // Server-side, `/api/settings/ai-providers` PUT/PATCH/DELETE
-          // already refuse a non-admin role with a 403 — say so up front
-          // instead of offering buttons that end in an unhelpful toast.
-          <div className="flex items-start gap-3 rounded-md border bg-muted/40 p-3 text-sm">
-            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-            <div>
-              <p className="font-medium">{t('agent_adminOnly')}</p>
-              <p className="mt-1 text-muted-foreground">{t('agent_adminOnlyHint')}</p>
-            </div>
-          </div>
-        )}
+          <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
+            <DialogContent className="sm:max-w-sm">
+              <DialogHeader>
+                <DialogTitle>{t('agent_removeKey')}</DialogTitle>
+                <DialogDescription>
+                  {confirmRemove &&
+                    t(metered ? 'agent_removeKeyConfirmChat' : 'agent_removeKeyConfirm', {
+                      provider: name(confirmRemove),
+                    })}
+                </DialogDescription>
+              </DialogHeader>
 
-        <Dialog open={removeOpen} onOpenChange={setRemoveOpen}>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>{t('agent_removeKey')}</DialogTitle>
-              <DialogDescription>
-                {confirmRemove &&
-                  t(metered ? 'agent_removeKeyConfirmChat' : 'agent_removeKeyConfirm', {
-                    provider: name(confirmRemove),
-                  })}
-              </DialogDescription>
-            </DialogHeader>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" />}>{tCommon('cancel')}</DialogClose>
 
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>{tCommon('cancel')}</DialogClose>
-
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={removing}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (confirmRemove) void handleRemove(confirmRemove);
-                }}
-              >
-                {removing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {t('remove')}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={removing}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirmRemove) void handleRemove(confirmRemove);
+                  }}
+                >
+                  {removing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {t('remove')}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </CardContent>
+      </Card>
+      {keyGuard !== undefined && (
+        <OwnKeyGuardCard
+          key={keyGuard ? 'read' : 'unread'}
+          guard={keyGuard}
+          onSaved={setKeyGuard}
+        />
+      )}
+    </div>
   );
 }
 

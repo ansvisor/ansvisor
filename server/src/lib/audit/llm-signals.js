@@ -88,6 +88,13 @@ Be strict and evidence-based. For each signal return:
 
 Judge only from the provided page text and facts. Do not assume content you cannot see.`;
 
+/**
+ * A typical audit's AI checks: both views' calls, the opening's and the
+ * body's (at most 8,000 characters) with their signals, and 13 verdicts, for
+ * a caller that says what they cost before (a draft's estimate, ai-estimates.js).
+ */
+export const LLM_SIGNALS_TYPICAL_TOKENS = { inputTokens: 5_000, outputTokens: 1_500 };
+
 /** The configured model: AUDIT_LLM_MODEL, else the pinned default. */
 export function auditLlmModel() {
   return process.env.AUDIT_LLM_MODEL || DEFAULT_MODEL;
@@ -176,11 +183,12 @@ Return a verdict for every signal key.`;
 
 /**
  * Judge one view's signals in one call. Null when the call fails; a signal
- * the answer leaves out is missing from the map.
+ * the answer leaves out is missing from the map. `onUsage` gets the answer's
+ * tokens, for a caller that charges them.
  */
-async function judge(view, keys, input, model) {
+async function judge(view, keys, input, model, onUsage) {
   try {
-    const { object } = await withRetry(
+    const { object, usage } = await withRetry(
       () =>
         generateObject({
           model: resolveModel(model),
@@ -192,6 +200,7 @@ async function judge(view, keys, input, model) {
         }),
       { label: 'llm-signals' },
     );
+    if (onUsage && usage) await onUsage(usage);
     const verdicts = new Map();
     for (const key of keys) {
       const v = object?.[key];
@@ -211,11 +220,14 @@ async function judge(view, keys, input, model) {
 
 /**
  * @param {import('./context.js').AuditContext} ctx
- * @param {{ lastVerdicts?: () => Promise<Map<string, { status: string, score: number|null, reason: string, auditId: string }>> }} [options]
- *   the verdicts the page's latest complete audit had, asked for only when a call fails
+ * @param {{ lastVerdicts?: () => Promise<Map<string, { status: string, score: number|null, reason: string, auditId: string }>>, onUsage?: (usage: object) => Promise<void>|void }} [options]
+ *   `lastVerdicts`: the verdicts the page's latest complete audit had, asked
+ *   for only when a call fails. `onUsage`: each call's tokens, for a caller
+ *   that charges them (a draft's estimate, customer priorities item 9); an
+ *   audit's are its credit's. Kept verdicts make no call and cost nothing.
  * @returns {Promise<{ results: Array<{ key: string, status: string, score: number|null, evidence: object }>, partial: boolean }>}
  */
-export async function evaluateLlmSignals(ctx, { lastVerdicts } = {}) {
+export async function evaluateLlmSignals(ctx, { lastVerdicts, onUsage } = {}) {
   const model = auditLlmModel();
   warnIfAlias(model);
   const inputs = viewInputs(ctx);
@@ -242,7 +254,7 @@ export async function evaluateLlmSignals(ctx, { lastVerdicts } = {}) {
     Object.entries(LLM_SIGNAL_VIEWS).map(async ([view, keys]) => {
       const missing = keys.filter((k) => !verdicts.has(k));
       if (missing.length === 0) return;
-      const judged = await judge(view, missing, inputs[view], model);
+      const judged = await judge(view, missing, inputs[view], model, onUsage);
       for (const [key, v] of judged ?? []) {
         verdicts.set(key, { ...v, evidence: { reason: v.reason, model } });
         fresh.push({ inputHash: hashes[view], signalKey: key, ...v });

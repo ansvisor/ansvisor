@@ -67,7 +67,13 @@ export function parseGithubUrl(raw: string): GithubFolder | null {
   }
   if (url.protocol !== 'https:' || url.username || url.password || url.port) return null;
   if (url.hostname !== 'github.com' && url.hostname !== 'www.github.com') return null;
-  const parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  let parts: string[];
+  try {
+    parts = url.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+  } catch {
+    // A malformed % sequence.
+    return null;
+  }
   if (parts.length < 2) return null;
   const owner = parts[0];
   const repo = parts[1].replace(/\.git$/, '');

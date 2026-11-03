@@ -394,7 +394,8 @@ function useHomeSeen() {
 /**
  * Chat Home's top with the person's chats, the active brand's counts for
  * "For you now" and "Since you left": a chip, Why? and Which ones? ask Chat
- * in a new chat, then open it while it works.
+ * in a new chat, then open it while it works; while the workspace is
+ * read-only or the demo brand is open, they open the upgrade dialog instead.
  */
 export function ChatHome({ firstName }: { firstName: string | null }) {
   const t = useTranslations('chatShell.home');
@@ -402,7 +403,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
   const now = useNow();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const { chats } = useChatList();
-  const { openUpgrade } = useUpgradeGate();
+  const { isLocked, openUpgrade } = useUpgradeGate();
   const { canManage } = useUserRole();
   const focusCtx = useChatFocus();
   const [counts, setCounts] = useState<{
@@ -487,6 +488,12 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
 
   async function startChat(message: string, shortcutId?: ShortcutId) {
     if (starting) return;
+    // A read-only workspace, or the demo brand, starts no run: the upgrade
+    // dialog opens instead, as it does for the composer's message.
+    if (isLocked) {
+      openUpgrade();
+      return;
+    }
     setStarting(true);
     const started = await startChatRun(message, brandId ?? null, { shortcutId });
     if (!started.ok) {

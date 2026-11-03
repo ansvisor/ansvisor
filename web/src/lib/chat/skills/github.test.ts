@@ -58,6 +58,7 @@ describe('parseGithubUrl', () => {
       'https://github.com/acme/skills/tree/main/../../etc',
       'https://github.com/acme/skills/blob/main/README.md',
       'https://github.com/acme/skills/issues/1',
+      'https://github.com/acme/skills/tree/main/%E0%A4%A',
       'not a link',
     ]) {
       expect(parseGithubUrl(link), link).toBeNull();
