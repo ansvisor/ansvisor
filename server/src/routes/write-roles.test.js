@@ -23,7 +23,6 @@ import { describe, expect, it } from 'vitest';
 const OPEN = {
   // Action Center: working on actions and tasks is daily work (actions RLS).
   'POST /api/action-center/signals/:id/rescore': 'Scores a signal again, no model.',
-  'POST /api/action-center/tasks/:id/send': 'Sends a task to the Content Editor or the webhook.',
   'POST /api/action-center/tasks/:id/check': 'Check now on a task.',
   'POST /api/action-center/pages': 'Send to Action Center from AI Traffic.',
   'POST /api/action-center/audits': 'Send to Action Center from Site Audit.',
