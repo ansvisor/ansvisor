@@ -280,10 +280,14 @@ describe('QualityTab', () => {
   it('shows the three scores with their bands, labelled an Ansvisor estimate', async () => {
     await render(result);
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
-    expect(scores.textContent).toContain('E-E-A-T100Strong');
+    // Each name says in plain words what it scores (editor UX review 2026-11-03).
+    expect(scores.textContent).toContain('E-E-A-TWho stands behind the page100Strong');
     // No Trust check is live for a page without agent claims: no fake points.
-    expect(scores.textContent).toContain('TrustNot scored yet');
-    expect(scores.textContent).toContain('Readability71Can improve');
+    expect(scores.textContent).toContain('TrustSources, links and dated factsNot scored yet');
+    expect(scores.textContent).toContain('ReadabilityHow easily it reads71Can improve');
+    expect(scores.textContent).toContain(
+      '80 and up: Strong · 60 to 79: Can improve · under 60: Needs work',
+    );
     expect(scores.textContent).toContain(
       "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
     );
@@ -298,6 +302,10 @@ describe('QualityTab', () => {
       '+9 Readability3 sentences over 35 wordsSplit each into two. Show goes to the first.Show',
       '+5 ReadabilitySentences average 22.4 wordsAim for 15–20 words: shorter sentences read faster, and AI answers quote them whole.',
     ]);
+    // A gain is an estimate, and says so: no exact promise.
+    expect(suggestions.querySelector('li [title]')!.getAttribute('title')).toBe(
+      'Could raise Readability by about 10 (an estimate)',
+    );
     await act(async () => suggestions.querySelector<HTMLButtonElement>('li button')!.click());
     expect(onShow).toHaveBeenCalledWith('A very long sentence.');
   });
@@ -427,14 +435,14 @@ describe('QualityTab', () => {
     await act(async () => box()[1].click());
     expect(onConfirmAuthor).toHaveBeenLastCalledWith('profile', true);
     expect(container.querySelector('[aria-label="Quality scores"]')!.textContent).toContain(
-      'E-E-A-T60',
+      'Who stands behind the page60',
     );
   });
 
   it("lists picking the page's author as a to-do, and opens the menu", async () => {
     await render(read(result, null));
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
-    expect(scores.textContent).toContain('E-E-A-T0Needs work');
+    expect(scores.textContent).toContain('Who stands behind the page0Needs work');
     const todos = container.querySelector('[aria-label="Your to-dos"]')!;
     expect(todos.querySelector('h4')!.textContent).toBe(
       'Your to-dos 2 left · only you can do these',
@@ -694,7 +702,7 @@ describe('QualityTab', () => {
     await render({ ...read(null), trust: result });
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
     // Figures 0 of 30, fresh 0 of 7, links 1.5 of 3: 4 of 100.
-    expect(scores.textContent).toContain('Trust4Needs work');
+    expect(scores.textContent).toContain('Sources, links and dated facts4Needs work');
     const suggestions = container.querySelector('[aria-label="What would raise it"]')!;
     const rows = [...suggestions.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toContainEqual(expect.stringContaining('1 sentence with a figure has no source'));
@@ -1039,7 +1047,7 @@ describe('QualityTab', () => {
     });
     await render({ ...read(null), trust: result });
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
-    expect(scores.textContent).toContain('TrustNot scored yet');
+    expect(scores.textContent).toContain('Sources, links and dated factsNot scored yet');
     const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
     // 3 of the 40 Phase 1 points.
     expect(rows).toContainEqual(expect.stringContaining("+8 Trust1 link doesn't work"));

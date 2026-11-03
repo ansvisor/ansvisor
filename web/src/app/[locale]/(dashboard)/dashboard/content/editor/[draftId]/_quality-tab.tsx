@@ -241,6 +241,10 @@ export function QualityTab({
           {scores.map(({ name, score, empty }) => (
             <div key={name} className="min-w-0 rounded-xl border bg-card px-2.5 py-2">
               <p className="truncate text-xs text-muted-foreground">{t(`names.${name}`)}</p>
+              {/* What it measures, in plain words (editor UX review 2026-11-03). */}
+              <p className="text-[11px] leading-tight text-muted-foreground">
+                {t(`about.${name}`)}
+              </p>
               {score === null ? (
                 <p className="mt-0.5 text-xs text-muted-foreground">{empty}</p>
               ) : (
@@ -259,6 +263,7 @@ export function QualityTab({
             </div>
           ))}
         </div>
+        <p className="text-xs text-muted-foreground">{t('bandsLegend')}</p>
         <p className="text-xs text-muted-foreground">{t('estimate')}</p>
         {weightsFor && (
           <p className="text-xs text-muted-foreground">
@@ -357,7 +362,9 @@ export function QualityTab({
               {suggestions.map((s) => (
                 <li key={s.key} className="flex items-start gap-2.5 rounded-xl border px-3 py-2.5">
                   <span className="mt-0.5 shrink-0 rounded-md bg-emerald-50 px-1.5 text-[11px] font-medium text-emerald-700 tabular-nums dark:bg-emerald-950 dark:text-emerald-300">
-                    {t('gain', { gain: s.gain, score: t(`names.${s.score}`) })}
+                    <span title={t('gainLong', { gain: s.gain, score: t(`names.${s.score}`) })}>
+                      {t('gain', { gain: s.gain, score: t(`names.${s.score}`) })}
+                    </span>
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium [overflow-wrap:anywhere]">
@@ -805,7 +812,9 @@ function TodoRow({
             <>
               {' · '}
               <span className="font-medium whitespace-nowrap text-emerald-700 tabular-nums dark:text-emerald-300">
-                {t('gain', { gain: todo.gain, score: t(`names.${todo.score}`) })}
+                <span title={t('gainLong', { gain: todo.gain, score: t(`names.${todo.score}`) })}>
+                  {t('gain', { gain: todo.gain, score: t(`names.${todo.score}`) })}
+                </span>
               </span>
             </>
           )}

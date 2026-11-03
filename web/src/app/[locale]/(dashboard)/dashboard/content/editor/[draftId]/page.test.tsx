@@ -3868,7 +3868,7 @@ describe('the side panel', () => {
       await act(async () => box().click());
       expect(confirmDraftAuthor).toHaveBeenCalledWith(readable.id, 'real', true);
       expect(box().getAttribute('aria-checked')).toBe('true');
-      expect(panel()!.textContent).toContain('E-E-A-T60');
+      expect(panel()!.textContent).toContain('Who stands behind the page60');
 
       vi.spyOn(console, 'error').mockImplementation(() => {});
       try {
@@ -5178,7 +5178,7 @@ describe('the side panel', () => {
         b.textContent?.startsWith('Quality'),
       )!;
       await act(async () => chip.click());
-      const eeatNow = () => panel()!.textContent!.match(/E-E-A-T(\d+)/)?.[1];
+      const eeatNow = () => panel()!.textContent!.match(/Who stands behind the page(\d+)/)?.[1];
       const found = eeatNow();
       expect(found).toBeDefined();
       // A typo fixed in the paragraph that says how the page was made.
@@ -5550,8 +5550,8 @@ describe('the side panel', () => {
           .click(),
       );
       const scores = panel()!.querySelector('[aria-label="Quality scores"]')!;
-      expect(scores.textContent).toContain('E-E-A-T0Needs work');
-      expect(scores.textContent).toContain('TrustNot scored yet');
+      expect(scores.textContent).toContain('Who stands behind the page0Needs work');
+      expect(scores.textContent).toContain('Sources, links and dated factsNot scored yet');
 
       const pick = [...panel()!.querySelectorAll<HTMLButtonElement>('button')].find(
         (b) => b.textContent === 'Pick author',
@@ -5974,7 +5974,7 @@ describe('the side panel', () => {
       await renderPage();
       await act(async () => button('Mark ready')!.click());
       expect(document.querySelector('[role="dialog"] [role="alert"]')!.textContent).toContain(
-        'Trust 0, below 60. 1 sentence with a figure has no source. You can mark it ready, but fixing it first raises Trust to about 100.',
+        'Trust is 0, under 60: AI answers may lean on this page less. 1 sentence with a figure has no source. Fixing it first could raise Trust to about 100 (an estimate). You can still mark it ready.',
       );
       await act(async () => inDialog('Mark ready anyway')!.click());
       expect(markContentDraftReady).toHaveBeenCalledWith('d1', {
@@ -6404,7 +6404,7 @@ describe('the side panel', () => {
       await act(async () => inDialog('Review').click());
       // Before you publish (§7): what the CMS does, and Ready to paste; back to Export.
       expect(dialog()!.textContent).toContain(
-        'Ready to paste · doneNo placeholders, all images have alt text, all links work.',
+        'Ready for your CMS · doneNo placeholders, all images have alt text, all links work.',
       );
       expect(markContentDraftReady).not.toHaveBeenCalled();
       await act(async () => inDialog('Continue to export').click());
@@ -6452,7 +6452,7 @@ describe('the side panel', () => {
         await act(async () => button('Export')!.click());
         await act(async () => inDialog('Review').click());
         expect(dialog()!.textContent).toContain(
-          'Ready to paste · check itNo placeholders, all images have alt text; 1 link is still being read.',
+          'Ready for your CMS · check itNo placeholders, all images have alt text; 1 link is still being read.',
         );
         await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
         await act(async () =>
@@ -6469,7 +6469,7 @@ describe('the side panel', () => {
           }),
         );
         expect(dialog()!.textContent).toContain(
-          "Ready to paste · check itNo placeholders, all images have alt text; 1 link wasn't read: check it.",
+          "Ready for your CMS · check itNo placeholders, all images have alt text; 1 link wasn't read: check it.",
         );
       } finally {
         vi.useRealTimers();
@@ -6495,7 +6495,7 @@ describe('the side panel', () => {
       await act(async () => button('Export')!.click());
       await act(async () => inDialog('Review').click());
       expect(dialog()!.textContent).toContain(
-        'Not ready to paste yet · missing1 placeholder still open',
+        'Fix before you paste · missing1 placeholder still open',
       );
       await act(async () => inDialog('Fill now').click());
       expect(dialog()).toBeNull();
@@ -6525,7 +6525,7 @@ describe('the side panel', () => {
       );
       await renderPage();
       const ready =
-        'Ready to paste · doneNo placeholders, all images have alt text, all links work.';
+        'Ready for your CMS · doneNo placeholders, all images have alt text, all links work.';
       await act(async () => button('Export')!.click());
       expect(dialog()!.querySelector('[role="alert"]')).toBeNull();
       expect(inDialog('Download Word').disabled).toBe(false);
