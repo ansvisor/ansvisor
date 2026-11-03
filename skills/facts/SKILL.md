@@ -37,7 +37,7 @@ Ansvisor reads the brand facts from the brand's own pricing, About and product p
 2. The drafts with no mismatch, in one line.
 3. Facts a draft states that aren't in the approved list, for the person to check.
 
-When the person wants the fixes kept, save the corrected page as a new draft with `create_draft`; the app asks them first when it should.
+When the person wants the fixes kept, save the corrected page as a new draft with `create_draft`; the app asks them first when it should. In an agent's run nobody is there to ask: always save it with its tool, and the app holds it for approval where the agent's mode needs it.
 
 ## Don't
 
