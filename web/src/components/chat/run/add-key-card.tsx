@@ -182,7 +182,7 @@ export function AddKeyCard({
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={t('keyPlaceholder')}
-            className="h-8 rounded-lg border bg-background px-2.5 font-mono text-xs outline-none focus:border-foreground/30"
+            className="ph-no-capture h-8 rounded-lg border bg-background px-2.5 font-mono text-xs outline-none focus:border-foreground/30"
           />
           {provider === 'openrouter' && (
             <>
