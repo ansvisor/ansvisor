@@ -144,6 +144,9 @@ const OPEN_ROUTES: Record<string, string> = {
     "the server's cron; it starts no agent run in a read-only workspace",
   'internal/chat/agents/signals:POST':
     "the server's signal hook; it starts no agent run in a read-only workspace",
+  // The API server's report card queue (CRON_SECRET): Ansvisor's own free report card, no workspace.
+  'internal/report-card/pdf:POST':
+    "draws a free report card's PDF for the API server; no workspace, nothing written",
 };
 
 /** What checks a route's plan before it writes. */
