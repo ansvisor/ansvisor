@@ -6030,7 +6030,7 @@ describe('the run’s model (W4-03)', () => {
     expect(fakes.resolveModels).toHaveBeenCalledWith(
       ORG,
       { model: 'anthropic/claude-sonnet-5.5', effort: 'max' },
-      { ansvisorOnly: false },
+      { ansvisorOnly: false, providers: {} },
     );
     expect(fakes.readModelMenu).toHaveBeenCalledExactlyOnceWith({
       selected: 'anthropic/claude-sonnet-5.5',
@@ -6054,7 +6054,7 @@ describe('the run’s model (W4-03)', () => {
     expect(fakes.resolveModels).toHaveBeenCalledWith(
       ORG,
       { model: 'auto', effort: 'high' },
-      { ansvisorOnly: false },
+      { ansvisorOnly: false, providers: {} },
     );
     const dropped = stepsOf(started.runId).filter((s) => s.label === 'Ran on Auto');
     expect(dropped).toHaveLength(1);
@@ -6075,7 +6075,7 @@ describe('the run’s model (W4-03)', () => {
     expect(fakes.resolveModels).toHaveBeenCalledWith(
       ORG,
       { model: 'auto', effort: 'max' },
-      { ansvisorOnly: false },
+      { ansvisorOnly: false, providers: {} },
     );
     expect(fakes.readModelMenu).not.toHaveBeenCalled();
     expect(stepsOf(started.runId).map((s) => s.label)).not.toContain('Ran on Auto');
@@ -6092,7 +6092,7 @@ describe('the run’s model (W4-03)', () => {
     expect(fakes.resolveModels).toHaveBeenCalledWith(
       ORG,
       { model: 'auto', effort: 'normal' },
-      { ansvisorOnly: false },
+      { ansvisorOnly: false, providers: {} },
     );
     expect(fakes.readModelMenu).not.toHaveBeenCalled();
   });
@@ -6111,7 +6111,7 @@ describe('"Use Ansvisor’s limit" (W4-06)', () => {
     expect(fakes.resolveModels).toHaveBeenLastCalledWith(
       ORG,
       { model: 'auto', effort: 'normal' },
-      { ansvisorOnly: true },
+      { ansvisorOnly: true, providers: {} },
     );
 
     useModels([READY], [text('Done.')]);
@@ -6125,7 +6125,7 @@ describe('"Use Ansvisor’s limit" (W4-06)', () => {
     expect(fakes.resolveModels).toHaveBeenLastCalledWith(
       ORG,
       { model: 'auto', effort: 'normal' },
-      { ansvisorOnly: false },
+      { ansvisorOnly: false, providers: {} },
     );
   });
 });
@@ -6148,12 +6148,49 @@ describe('model providers (W4-34)', () => {
     expect(fakes.resolveModels).toHaveBeenCalledWith(
       ORG,
       { model: 'auto', effort: 'high' },
-      { ansvisorOnly: false },
+      { ansvisorOnly: false, providers: { openai: false } },
     );
     // No catalog check once the provider is off.
     expect(fakes.readModelMenu).not.toHaveBeenCalled();
     const dropped = stepsOf(started.runId).filter((s) => s.label === 'Ran on Auto');
     expect(dropped).toHaveLength(1);
     expect(dropped[0]).toMatchObject({ detail: "Your Admin turned off this model's provider" });
+  });
+
+  it('passes the choices on for the own key’s model, and stops when its provider is off', async () => {
+    const { ModelProviderOffError } = await import('./engine-model');
+    fakes.readProviderChoices.mockResolvedValueOnce({ deepseek: false });
+    fakes.resolveModels.mockRejectedValueOnce(new ModelProviderOffError('deepseek'));
+    const runId = await turn(ADMIN, 'Hello');
+    expect(fakes.resolveModels).toHaveBeenLastCalledWith(
+      ORG,
+      { model: 'auto', effort: 'normal' },
+      { ansvisorOnly: false, providers: { deepseek: false } },
+    );
+    expect(runRow(runId)).toMatchObject({ status: 'error', error: 'failed' });
+    expect(ofType(await eventsOf(runId), 'run.error')[0].data).toMatchObject({
+      code: 'failed',
+      reason: expect.stringContaining('your Admin turned off DeepSeek models in Chat'),
+    });
+  });
+
+  it('turns every provider that can be off off when the choices can’t be read', async () => {
+    const { PROVIDERS_OFF } = await import('./model-providers');
+    fakes.readProviderChoices.mockRejectedValueOnce(new Error('timeout'));
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      model: 'anthropic/claude-sonnet-5.5',
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect(PROVIDERS_OFF).toEqual({ openai: false, google: false, deepseek: false });
+    expect(fakes.providerOn).toHaveBeenCalledWith(PROVIDERS_OFF, 'anthropic/claude-sonnet-5.5');
+    expect(fakes.resolveModels).toHaveBeenLastCalledWith(
+      ORG,
+      { model: 'anthropic/claude-sonnet-5.5', effort: 'normal' },
+      { ansvisorOnly: false, providers: PROVIDERS_OFF },
+    );
   });
 });

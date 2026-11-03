@@ -73,11 +73,15 @@ export function bodyHasApiKey(body: unknown, field: string): boolean {
 
 /**
  * A message that asks to use or add the person's own API key ("use my
- * OpenAI key", "add our Anthropic API key"): the composer opens the Add API
- * key form for it (W4-06), so the key never goes through Chat.
+ * OpenAI key", "add our Anthropic API key"): the composer offers the Add API
+ * key form for it (W4-06), so the key never goes through Chat. The key is
+ * named as one: "API key", a provider's or "own" key, or a bare "key" that
+ * ends the sentence, so "our key competitors" or "my key topics" stay
+ * questions for Chat.
  */
+const ASKS_TO_ADD_KEY =
+  /\b(?:use|add|connect|save|set up|plug in)\b[^.?!\n]{0,30}\b(?:my|our)\b[^.?!\n]{0,30}?(?:\b(?:own|anthropic|claude|openai|open ai|chatgpt|google|gemini|openrouter|open router|azure)\s+(?:api[ -]?)?keys?\b|\bapi[ -]?keys?\b|\bkeys?\s*(?:[.?!]|$))/i;
+
 export function asksToAddKey(text: string): boolean {
-  return /\b(use|add|connect|save|set up|plug in)\b[^.?!\n]{0,30}\b(my|our)\b[^.?!\n]{0,30}\b(api[ -]?)?key\b/i.test(
-    text,
-  );
+  return ASKS_TO_ADD_KEY.test(text);
 }
