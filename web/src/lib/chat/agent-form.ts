@@ -63,6 +63,11 @@ export interface AgentFormSetup {
   takenNames: string[];
   /** The provider whose key Chat runs on (`anthropic`), or null: the monthly AI limit pays. */
   ownKeyProvider: string | null;
+  /**
+   * The time zone the person picked in Settings › Account (00468), or null
+   * for Automatic: a new Schedule trigger starts on it, before the browser's.
+   */
+  timeZone: string | null;
 }
 
 /** How often a Schedule fires, as its token offers it (mockup: Monday, Weekday, 1st of the month). */

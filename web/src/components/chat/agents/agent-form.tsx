@@ -52,7 +52,7 @@ import type { AgentDetail } from '@/lib/chat/agents';
 import type { AgentPreset } from '@/lib/chat/agents/catalog';
 import type { ChatDenialCard } from '@/lib/chat/events';
 import { CHAT_MODES, type ChatMode } from '@/lib/chat/precedence';
-import { viewerTimeZone } from '@/lib/time-zone';
+import { effectiveTimeZone, viewerTimeZone } from '@/lib/time-zone';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { cn } from '@/lib/utils';
 import { AgentDenial, CHIP } from './agent-parts';
@@ -229,10 +229,12 @@ export function AgentForm({
   const t = useTranslations('chatAgents.form');
   const tRoles = useTranslations('chatAccess.roleNames');
   const tDetail = useTranslations('chatAgents.detail');
-  // The viewer's clock, read in the browser: the server renders the skeleton.
+  // The person's clock: their Settings › Account zone, else their browser's,
+  // else UTC (a new Schedule trigger starts on it; a saved one keeps its own).
+  // Read in the browser: the server renders the skeleton.
   const zone = useSyncExternalStore(
     noSubscribe,
-    () => timeZone ?? viewerTimeZone(),
+    () => timeZone ?? effectiveTimeZone(setup.timeZone, viewerTimeZone()),
     () => timeZone ?? null,
   );
   // Back where it was opened from: the agent, Ready to use, or Your agents.

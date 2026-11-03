@@ -51,6 +51,7 @@ const SETUP: AgentFormSetup = {
   runShareDefault: 0.1,
   takenNames: [],
   ownKeyProvider: null,
+  timeZone: null,
 };
 
 const ctxOf = (over: Partial<AgentFormSetup> = {}, agent: FormContext['agent'] = null) => ({
