@@ -149,7 +149,7 @@ export function renderWentLiveEmail({
     site
       ? [
           `${escapeHtml(agent)} published the ${escapeHtml(brand)} page “${escapeHtml(title)}” on ${escapeHtml(site)} through ${escapeHtml(cms)}, without a click. An Admin allowed this agent to publish and send on its own.`,
-          'It passed Quality and your brand facts first. It is live now: check it, and take it down in your CMS if it shouldn’t be.',
+          'It passed Quality and your brand facts first. It is live now: check it, and if it shouldn’t be, use Take down on its notice in your Chat Inbox.',
         ]
       : [
           `${escapeHtml(agent)} sent the ${escapeHtml(brand)} page “${escapeHtml(title)}” to ${escapeHtml(cms)} as a draft, without a click. An Admin allowed this agent to publish and send on its own.`,

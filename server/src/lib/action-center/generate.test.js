@@ -57,6 +57,8 @@ function mockDb({
       limit: () => builder,
       range: () => builder,
       single: () => Promise.resolve(result()),
+      // The brand's Analytics sign-in (resolveBrandSources, 00470): none.
+      maybeSingle: () => Promise.resolve({ data: null, error: null }),
       insert: (payload) => {
         state.op = 'insert';
         state.payload = payload;
