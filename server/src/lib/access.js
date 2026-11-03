@@ -26,6 +26,7 @@
 import supabaseAdmin from '../config/supabase.js';
 import { logger } from './logger.js';
 import { oncePerRequest } from './request-scope.js';
+import { selectInChunks } from './chunked-in.js';
 import { readAllRpcRows } from './rpc-pages.js';
 
 function accessError(message, status, code) {
@@ -302,6 +303,26 @@ export async function assertBrandAccess(brandId, userId, { columns } = {}) {
 export async function assertAllBrands(userId) {
   const access = await brandAccessOf(userId);
   if (!access.all) throw noBrandAccess();
+  return { orgId: access.orgId, role: access.role };
+}
+
+/**
+ * Assert that the caller may reach every brand of `brandIds`: for what
+ * several brands share (a Google sign-in they all use, whose properties are
+ * every one of theirs), which would show a Selected-brands person the brands
+ * they weren't given. A brand that is gone counts for no one.
+ * @param {string[]} brandIds
+ * @param {string} userId
+ * @returns {Promise<{ orgId: string|null, role: string|null }>}
+ */
+export async function assertEveryBrand(brandIds, userId) {
+  const access = await brandAccessOf(userId);
+  const { data: brands, error } = await selectInChunks(brandIds, (ids) =>
+    supabaseAdmin.from('brands').select('id, organization_id, is_demo').in('id', ids),
+  );
+  if (error) throw new Error(error.message);
+  const refusal = firstRefusal((brands ?? []).map((brand) => refusalFor(access, brand)));
+  if (refusal) throw refusalError(refusal);
   return { orgId: access.orgId, role: access.role };
 }
 

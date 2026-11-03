@@ -5,6 +5,7 @@ import { PAGE_TYPES, type DraftMethod, type PageType } from '@/lib/content/draft
 import { lengthTarget } from '@/lib/content/editor';
 import { feedCheck, type CatalogMatch } from '@/lib/content/feed-match';
 import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
+import { parseHtml } from '@/lib/content/dom';
 import { pageOffer } from '@/lib/content/page-schema';
 import { countWords, languageCode } from '@/lib/content/readability';
 import { wordsOf } from '@/lib/content/sources';
@@ -675,7 +676,8 @@ const BLOCK_TAGS = 'h1, h2, h3, p, li, table, ol, ul, blockquote';
 
 /** Reads the page's blocks in order, each list item and table once. */
 export function readPage(html: string, characters: number): PageRead {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  // The content DOM's parser (dom.ts): the browser's, or jsdom's on the server (go-live gate).
+  const doc = parseHtml(html);
   const blocks: PageBlock[] = [];
   for (const el of doc.body.querySelectorAll(BLOCK_TAGS)) {
     const tag = el.tagName.toLowerCase();
@@ -703,7 +705,7 @@ export function readPage(html: string, characters: number): PageRead {
   for (const el of doc.body.querySelectorAll('[data-html-block]')) {
     const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
     if (!inner) continue;
-    const block = new DOMParser().parseFromString(inner, 'text/html');
+    const block = parseHtml(inner);
     htmlBlockH1s += [...block.body.querySelectorAll('h1')].filter((h) =>
       h.textContent?.trim(),
     ).length;
