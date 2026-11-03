@@ -469,6 +469,23 @@ export function QualityTab({
 export type QualityFocus = 'todos' | 'trust';
 type FocusPart = QualityFocus | 'scores';
 
+/**
+ * Brings a part of the side panel to the top of the panel's own scroll
+ * (`data-panel-scroll`), leaving the page where it is: scrollIntoView moves
+ * every scroll it sits in, and at 1024×768 took the header with Next and
+ * Mark ready out of sight (editor UX review 2026-11-03). Outside the panel,
+ * as near as it needs.
+ */
+export function scrollInPanel(el: HTMLElement) {
+  const box = el.closest<HTMLElement>('[data-panel-scroll]');
+  if (!box) {
+    el.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    return;
+  }
+  const top = box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top;
+  box.scrollTo?.({ top: Math.max(0, top - 8), behavior: 'smooth' });
+}
+
 /** How long a part shown from the basket stays marked. */
 const FOCUS_MARK_MS = 1600;
 
@@ -495,7 +512,7 @@ function useFocusRequest(
     );
     const el = part ? parts.current[part] : null;
     if (!part || !el) return;
-    el.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    scrollInPanel(el);
     el.focus({ preventScroll: true });
     setMarked(part);
     const timer = setTimeout(() => setMarked(null), FOCUS_MARK_MS);

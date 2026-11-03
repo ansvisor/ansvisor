@@ -302,26 +302,43 @@ describe('QualityTab', () => {
     expect(onShow).toHaveBeenCalledWith('A very long sentence.');
   });
 
-  it('shows the part the Next step names, scrolled in and marked, Quality open or not (editor test 2026-11-03)', async () => {
+  it('shows the part the Next step names in the panel’s own scroll, marked, Quality open or not (editor test 2026-11-03)', async () => {
     vi.useFakeTimers();
-    const scrolled: string[] = [];
-    // jsdom has no scrolling: noted per element instead.
+    // The panel's own scroll: where a part shown scrolls to, not the page.
+    const box = document.createElement('div');
+    box.setAttribute('data-panel-scroll', '');
+    box.appendChild(container);
+    document.body.appendChild(box);
+    const tops: number[] = [];
+    box.scrollTo = ((options: ScrollToOptions) => {
+      tops.push(options.top ?? -1);
+    }) as typeof box.scrollTo;
+    // jsdom has no layout: the panel at 100px, its to-dos at 180px, what raises it at 260px.
+    const at: Record<string, number> = { 'Your to-dos': 180, 'What would raise it': 260 };
+    const rect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      const top = this === box ? 100 : (at[this.getAttribute('aria-label') ?? ''] ?? 140);
+      return { top, left: 0, right: 0, bottom: top, width: 0, height: 0, x: 0, y: top } as DOMRect;
+    };
+    // The page itself never scrolls (editor UX review 2026-11-03: at 1024×768 Next and
+    // Mark ready went out of sight).
     const had = HTMLElement.prototype.scrollIntoView;
-    HTMLElement.prototype.scrollIntoView = function (this: HTMLElement) {
-      scrolled.push(this.getAttribute('aria-label') ?? '');
+    let pageScrolled = 0;
+    HTMLElement.prototype.scrollIntoView = () => {
+      pageScrolled += 1;
     };
     try {
-      // To-dos open: Show to-dos goes to them.
+      // To-dos open: Show to-dos brings them to the panel's top, less a little room.
       await render(read(result, null), null, { to: 'todos', n: 1 });
       const todos = container.querySelector<HTMLElement>('[aria-label="Your to-dos"]')!;
-      expect(scrolled).toEqual(['Your to-dos']);
+      expect(tops).toEqual([72]);
       expect(todos.tabIndex).toBe(-1);
       expect(todos.className).toContain('ring-2');
       // The same request again (a render) does nothing; a new one, with Quality open, does.
       await render(read(result, null), null, { to: 'todos', n: 1 });
-      expect(scrolled).toHaveLength(1);
+      expect(tops).toHaveLength(1);
       await render(read(result, null), null, { to: 'trust', n: 2 });
-      expect(scrolled).toEqual(['Your to-dos', 'What would raise it']);
+      expect(tops).toEqual([72, 152]);
       // The mark goes after a moment.
       await act(async () => vi.advanceTimersByTime(2_000));
       expect(
@@ -329,9 +346,12 @@ describe('QualityTab', () => {
       ).not.toContain('ring-2');
       // No to-do left: Show to-dos goes to what raises the scores instead.
       await render(result, null, { to: 'todos', n: 3 });
-      expect(scrolled.at(-1)).toBe('What would raise it');
+      expect(tops.at(-1)).toBe(152);
+      expect(pageScrolled).toBe(0);
     } finally {
+      HTMLElement.prototype.getBoundingClientRect = rect;
       HTMLElement.prototype.scrollIntoView = had;
+      box.remove();
       vi.useRealTimers();
     }
   });
