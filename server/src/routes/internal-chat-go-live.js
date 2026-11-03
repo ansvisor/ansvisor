@@ -206,8 +206,23 @@ async function checkStep(body) {
   if (!draft || draft.archived_at) throw refuse('not_found', 404);
   if (!access.all && !access.brandIds.has(draft.brand_id)) throw refuse('brand');
   if (await isDemoBrand([draft.brand_id])) throw refuse('demo_brand');
+  // A page someone took down never goes live on its own again (PR 10): a click does it.
+  if (await takenDown(body.draftId)) throw refuse('taken_down', 409);
   if (!reservationFits(step, body, run.agent_id)) throw refuse('reservation');
   return draft.brand_id;
+}
+
+/** Whether a send of the draft was taken down (00460). */
+async function takenDown(draftId) {
+  const { data, error } = await supabaseAdmin
+    .from('content_draft_deliveries')
+    .select('id')
+    .eq('draft_id', draftId)
+    .eq('status', 'taken_down')
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return !!data;
 }
 
 /** The step's slot: reserved for this run, draft and target, or done for them lately. */
