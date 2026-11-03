@@ -195,6 +195,11 @@ export const DEMO_GUARDED = [
   // a brand, the organization's sync, which skips demo brands itself.
   guard('POST /integrations/google-search-console/sync', brandIn('body')),
   guard('POST /integrations/google-analytics/sync', brandIn('body')),
+  // A brand's own Google sign-in (BRAND-ACCESS PR 15): the demo brand connects nothing.
+  guard('POST /integrations/:provider/brands/:brandId/use', brandIn('path')),
+  guard('POST /integrations/:provider/brands/:brandId/connect', brandIn('path')),
+  guard('POST /integrations/:provider/brands/:brandId/activate', brandIn('path')),
+  guard('DELETE /integrations/:provider/brands/:brandId', brandIn('path')),
 
   // Mentions (mentions.js).
   guard('POST /mentions/action', brandIn('body')),
