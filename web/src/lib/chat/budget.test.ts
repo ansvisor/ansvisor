@@ -5,6 +5,7 @@ import {
   fitImages,
   readImageShares,
   reserveChatStep,
+  reserveDraftImages,
   reserveImages,
   type ChatBudgetStep,
   type ChatStepBudget,
@@ -414,6 +415,40 @@ describe('an image request (W4-07)', () => {
       refusal: 'unavailable',
       retryable: true,
     });
+  });
+
+  it('holds a Content Editor request on its draft, with no run, settled as a Chat one (W4-09)', async () => {
+    const DRAFT = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c09';
+    answers = [{ status: 201, body: { success: true, usageId: USAGE } }];
+    const held = await reserveDraftImages({
+      organizationId: ORG,
+      draftId: DRAFT,
+      model: IMAGE,
+      images: 3,
+      source: 'ansvisor',
+    });
+    if (!held.ok) throw new Error('not held');
+    expect(calls[0]).toMatchObject({
+      path: 'reserve-draft-images',
+      body: { orgId: ORG, draftId: DRAFT, model: IMAGE, images: 3, ownKey: false },
+    });
+    expect(calls[0].body).not.toHaveProperty('runId');
+    await held.budget.charge({ produced: 3, costUsd: 0.1008 });
+    expect(calls[1]).toMatchObject({
+      path: 'charge',
+      body: { usageId: USAGE, images: { produced: 3, costUsd: 0.1008 } },
+    });
+    answers = [{ status: 429, body: { success: false, error: 'ai_limit', trial: true } }];
+    expect(
+      await reserveDraftImages({
+        organizationId: ORG,
+        draftId: DRAFT,
+        model: IMAGE,
+        images: 2,
+        source: 'own',
+      }),
+    ).toMatchObject({ ok: false, refusal: 'ai_limit', trial: true });
+    expect(calls[2].body.ownKey).toBe(true);
   });
 
   it('asks how many images fit, per image, and every one fits on the own key', async () => {

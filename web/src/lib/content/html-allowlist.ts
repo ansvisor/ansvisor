@@ -36,7 +36,8 @@ export const ALLOWED_TAGS = [
 /** Attributes kept, per tag; every other one (style, class, id, on*…) goes. */
 export const ALLOWED_ATTRIBUTES: Record<string, string[]> = {
   a: ['href'],
-  img: ['src', 'alt', 'title'],
+  // data-ai-generated: an image AI made (W4-09), which says so wherever the page goes.
+  img: ['src', 'alt', 'title', 'data-ai-generated'],
   th: ['colspan', 'rowspan'],
   td: ['colspan', 'rowspan'],
 };
