@@ -1,7 +1,12 @@
 import messages from '../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { AgentConnection } from './agent-rules';
-import { CATALOG_CONNECTION, CMS_CONNECTION, skillConnections } from './agent-skills';
+import {
+  CATALOG_CONNECTION,
+  CMS_CONNECTION,
+  connectionKindOf,
+  skillConnections,
+} from './agent-skills';
 
 /**
  * Whether a brand has the connections an agent asks for (CHAT-21 §D item
@@ -21,30 +26,13 @@ import { CATALOG_CONNECTION, CMS_CONNECTION, skillConnections } from './agent-sk
  * this can't read (one no integration offers yet) isn't held against a run.
  */
 
-/** The kinds this reads, and the products saved agents may name for them. */
-const KIND_OF: Record<string, string> = {
-  [CMS_CONNECTION]: CMS_CONNECTION,
-  webflow: CMS_CONNECTION,
-  wordpress: CMS_CONNECTION,
-  framer: CMS_CONNECTION,
-  wix: CMS_CONNECTION,
-  webhook: CMS_CONNECTION,
-  [CATALOG_CONNECTION]: CATALOG_CONNECTION,
-  shopify: CATALOG_CONNECTION,
-  merchant_center: CATALOG_CONNECTION,
-  google_search_console: 'google_search_console',
-  gsc: 'google_search_console',
-  google_analytics: 'google_analytics',
-  ga4: 'google_analytics',
-};
-
 const CONNECTION_NAMES: Record<string, string> = messages.chatAgents.connections.names;
 
 /** A connection's name as the app shows it: "Any CMS", "Google Search Console". */
 export const connectionName = (key: string) => CONNECTION_NAMES[key] ?? key;
 
-/** A connection key as the kind it is read as, or null for one this doesn't read. */
-export const connectionKindOf = (key: string): string | null => KIND_OF[key] ?? null;
+// The kinds, pure for the Skills page's chips too (agent-skills.ts).
+export { connectionKindOf };
 
 /** The webhook event a CMS workflow takes pages by (server content-delivery's DELIVERY_EVENT). */
 const PAGE_SENT_EVENT = 'content_draft.sent';
