@@ -55,6 +55,7 @@ vi.mock('./key-health', () => ({
 const {
   OwnKeyUnreadableError,
   chatRunsOnOwnKey,
+  ownChatKeyProvider,
   ownKeyAllowed,
   ownKeyAccess,
   resolveChatModelKey,
@@ -254,6 +255,14 @@ describe('chatRunsOnOwnKey', () => {
     expect(await chatRunsOnOwnKey(ORG)).toBe(true);
     org = orgOn('growth', true, new Date(Date.now() - DAY).toISOString());
     expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+  });
+
+  it('names the own key’s provider for the model menu’s Your key, none on Ansvisor’s', async () => {
+    org = orgOn('enterprise');
+    ownKey = CUSTOMER;
+    expect(await ownChatKeyProvider(ORG)).toBe(CUSTOMER.provider);
+    org = orgOn('growth');
+    expect(await ownChatKeyProvider(ORG)).toBeNull();
   });
 
   it('is no with Chat off or self-hosted, where nothing is metered', async () => {
