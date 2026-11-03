@@ -136,7 +136,8 @@ describe('traffic reads past 1,000 visits', () => {
   });
 
   it('the MCP and API traffic tool counts every visit in each breakdown', async () => {
-    const auth = { organizationId: 'org-1' } as McpAuthContext;
+    // A key's owner with All brands, as every key carries its owner's access (BRAND-ACCESS).
+    const auth = { organizationId: 'org-1', brandAccess: 'all' } as McpAuthContext;
     const result = await getAiTrafficFor(auth, { brandId: 'b1', dateTo: '2026-10-17' });
 
     expect(result?.total_visits).toBe(2500);

@@ -2,7 +2,12 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isCloud } from '@/config/plans';
 import { readActiveKey, readProviderKey, resolveAgentModelConfig } from '@/lib/agent/key';
 import type { AgentModelConfig } from '@/lib/agent/model';
-import { isAiProvider, keyUsesOf, type AiProvider } from '@/lib/agent/providers';
+import {
+  isAiProvider,
+  keyUsesOf,
+  type AiProvider,
+  type AiProviderSettings,
+} from '@/lib/agent/providers';
 import { chatAgenticEnabled } from './flag';
 import { markKeyFailing, ownKeyFailure, type OwnKeyFailure } from './key-health';
 
@@ -244,11 +249,39 @@ export async function ownChatKeyProvider(organizationId: string): Promise<AiProv
   if (access?.state !== 'plan' && access?.state !== 'kept') return null;
   const { data: key } = await supabaseAdmin
     .from('organization_ai_keys')
-    .select('provider, key_encrypted')
+    .select('provider, key_encrypted, settings')
     .eq('organization_id', organizationId)
     .eq('active', true)
     .maybeSingle();
-  return key?.key_encrypted && isAiProvider(key.provider) ? key.provider : null;
+  if (!key?.key_encrypted || !isAiProvider(key.provider)) return null;
+  // A key saved for images only isn't Chat's: Auto runs on Ansvisor's key (W4-06's Use for).
+  return keyUsesOf(key.provider, key.settings as AiProviderSettings).includes('chat')
+    ? key.provider
+    : null;
+}
+
+/**
+ * The providers of every own key a picked model's steps may run on, as
+ * resolvePickedModelKey decides it, without decrypting a key: own keys are
+ * allowed (ownKeyAccess) and the key is for Chat, active or not. The model
+ * menu marks "Your key" from it (W4-06). Empty with Chat off or self-hosted.
+ */
+export async function ownChatKeyProviders(organizationId: string): Promise<AiProvider[]> {
+  if (!isCloud() || !chatAgenticEnabled(organizationId)) return [];
+  const access = await ownKeyAccess(organizationId).catch(() => null);
+  if (access?.state !== 'plan' && access?.state !== 'kept') return [];
+  const { data, error } = await supabaseAdmin
+    .from('organization_ai_keys')
+    .select('provider, key_encrypted, settings')
+    .eq('organization_id', organizationId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).flatMap((key) =>
+    key.key_encrypted &&
+    isAiProvider(key.provider) &&
+    keyUsesOf(key.provider, key.settings as AiProviderSettings).includes('chat')
+      ? [key.provider]
+      : [],
+  );
 }
 
 /**

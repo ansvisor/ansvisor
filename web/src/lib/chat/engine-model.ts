@@ -4,6 +4,7 @@ import { AGENT_PROVIDER_OPTIONS, buildAgentModel } from '@/lib/agent/model';
 import { chatModelId, type AiProvider } from '@/lib/agent/providers';
 import { resolveChatModelKey, resolvePickedModelKey, type ChatKeySource } from './key';
 import { ownKeyFailure } from './key-health';
+import { keyModelProvider, providerOn, type ModelProviderChoices } from './model-providers';
 import {
   AUTO_CHOICE,
   AUTO_MODEL,
@@ -200,17 +201,37 @@ export function openRouterModels(
 }
 
 /**
+ * The workspace's own key runs a model whose provider an Admin turned off in
+ * Settings › Chat (W4-34): Chat stops on it rather than send the run there,
+ * or move to Ansvisor's key and the AI limit by itself.
+ */
+export class ModelProviderOffError extends Error {
+  readonly provider: string | null;
+
+  constructor(provider: string | null) {
+    super(`The own key's model provider (${provider ?? 'unknown'}) is turned off for Chat.`);
+    this.name = 'ModelProviderOffError';
+    this.provider = provider;
+  }
+}
+
+/**
  * The run's models, from the key it runs on (resolveChatModelKey) and the
  * model and effort it was started with (already checked against the plan,
  * runChoiceOf); null when the workspace has no key Chat may use. Throws
- * OwnKeyUnreadableError when the workspace's own key can't be read. On the
- * own key, its health is read once here (a read that fails reads as
- * working).
+ * OwnKeyUnreadableError when the workspace's own key can't be read, and
+ * ModelProviderOffError when another provider's own key runs a model whose
+ * maker is off in `providers` (the Admin's choices, W4-34; a picked model's
+ * provider is checked before, runModelChoice). On the own key, its health
+ * is read once here (a read that fails reads as working).
  */
 export async function resolveChatModels(
   organizationId: string,
   choice: RunModelChoice = AUTO_CHOICE,
-  { ansvisorOnly = false }: { ansvisorOnly?: boolean } = {},
+  {
+    ansvisorOnly = false,
+    providers = {},
+  }: { ansvisorOnly?: boolean; providers?: ModelProviderChoices } = {},
 ): Promise<ChatModels | null> {
   const picked = offeredModel(choice.model);
   if (picked) {
@@ -242,6 +263,13 @@ export async function resolveChatModels(
   }
   const key = await resolveChatModelKey(organizationId, { ansvisorOnly });
   if (!key) return null;
+  if (key.config.provider !== 'anthropic') {
+    const maker = keyModelProvider(
+      key.config.provider,
+      chatModelId(key.config.provider, key.config.settings),
+    );
+    if (!providerOn(providers, maker)) throw new ModelProviderOffError(maker);
+  }
   const keyFailing =
     key.source === 'own' && (await ownKeyFailure(organizationId).catch(() => null)) !== null;
   if (key.config.provider === 'anthropic') {

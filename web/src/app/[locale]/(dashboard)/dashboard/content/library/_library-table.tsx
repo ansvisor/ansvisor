@@ -445,6 +445,12 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
       </TooltipTrigger>
       <TooltipContent className="max-w-72 space-y-1">
         <p>{label}</p>
+        {/* Sent by an agent without a click (AUTONOMOUS-GO-LIVE §6.4). */}
+        {status.agent && (
+          <p data-slot="cms-sent-on-its-own" className="opacity-80">
+            {status.agent.name ? t('onItsOwn', { agent: status.agent.name }) : t('onItsOwnUnnamed')}
+          </p>
+        )}
         {live && <p className="opacity-80 [overflow-wrap:anywhere]">{live}</p>}
         {status.status === 'failed' && (status.httpStatus || status.error) && (
           <p className="opacity-80 [overflow-wrap:anywhere]">

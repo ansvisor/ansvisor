@@ -29,8 +29,10 @@ vi.mock('@/i18n/navigation', () => ({
   usePathname: () => '/dashboard/chat',
   useRouter: () => ({ push: nav.push }),
 }));
+// Locked: the workspace is read-only, or the demo brand is open.
+const gate = vi.hoisted(() => ({ isLocked: false, openUpgrade: vi.fn() }));
 vi.mock('@/components/providers/upgrade-gate', () => ({
-  useUpgradeGate: () => ({ isLocked: false, openUpgrade: vi.fn() }),
+  useUpgradeGate: () => ({ isLocked: gate.isLocked, openUpgrade: gate.openUpgrade }),
 }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 const BRAND = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -100,6 +102,8 @@ beforeEach(() => {
   document.body.appendChild(host);
   root = createRoot(host);
   nav.push.mockClear();
+  gate.isLocked = false;
+  gate.openUpgrade.mockClear();
   list.chats = [];
   due.brand = BRAND;
   due.answer = { ok: true, dueTasks: 3, lostPages: 0, readyDrafts: 0 };
@@ -202,6 +206,7 @@ describe('ChatHomeView', () => {
     await act(async () => chips[0].click());
     expect(onAsk).toHaveBeenCalledWith(
       'Show the 2 pages that lost citations and what AI cites instead.',
+      undefined,
     );
   });
 
@@ -215,10 +220,15 @@ describe('ChatHomeView', () => {
     expect(onAsk.mock.calls).toEqual([
       [
         "/tasks Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
+        undefined,
       ],
-      ['Win back the citations we lost on 2 pages: refresh them against what AI cites now.'],
+      [
+        'Win back the citations we lost on 2 pages: refresh them against what AI cites now.',
+        undefined,
+      ],
       [
         'Check the 1 ready draft, fill their page fields and send them to our CMS as drafts. Going live stays my click.',
+        undefined,
       ],
     ]);
   });
@@ -408,6 +418,22 @@ describe('ChatHome', () => {
     });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/cccccccc-0000-4000-8000-000000000002');
   });
+
+  // As the composer: a read-only workspace, or the demo brand on an active
+  // plan, starts no run (and spends no AI budget); the upgrade dialog opens.
+  it('starts nothing while locked, a shortcut or Why?, and opens the upgrade dialog', async () => {
+    gate.isLocked = true;
+    due.since = SINCE;
+    const fetchMock = vi.fn(async () => new Response('', { status: 200 }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    await act(async () => (host.querySelector('[data-skill="tasks"]') as HTMLElement).click());
+    await act(async () => (host.querySelector('[data-action="why.open"]') as HTMLElement).click());
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(gate.openUpgrade).toHaveBeenCalledTimes(2);
+    expect(nav.push).not.toHaveBeenCalled();
+  });
 });
 
 describe("a teammate's shared chat", () => {
@@ -519,18 +545,38 @@ describe('Home by focus (CHAT-24 §4)', () => {
     await render(view({ focus: focus('seo'), words: words(), dueTasks: 4, lostPages: 0, onAsk }));
     expect(chips().map((chip) => [chip.dataset.skill, chip.textContent])).toEqual([
       ['tasks', 'Complete tasks 4 due'],
-      ['auditFixes', 'Site audit fixes'],
+      ['audit-fix', 'Site audit fixes'],
       ['report', 'Weekly report'],
     ]);
     await act(async () => chips()[2].click());
-    expect(onAsk).toHaveBeenCalledWith("/report Write this week's report on our AI visibility.");
+    expect(onAsk).toHaveBeenCalledWith(
+      "/report Write this week's report on our AI visibility.",
+      undefined,
+    );
     expect(analytics.track).toHaveBeenCalledWith('chat_focus_shortcut_clicked', {
       area: 'seo',
       skill: 'report',
     });
     // A role that only reads: no job that changes things.
     await render(view({ focus: focus('seo'), words: words(), dueTasks: 4, canChange: false }));
-    expect(chips().map((chip) => chip.dataset.skill)).toEqual(['auditFixes', 'report']);
+    expect(chips().map((chip) => chip.dataset.skill)).toEqual(['audit-fix', 'report']);
+  });
+
+  it("sends a shortcut's id with a chip that runs its playbook (W2-09), and asks with a skill's /name", async () => {
+    const onAsk = vi.fn();
+    await render(view({ focus: focus('comp', 'pd'), words: words(), onAsk }));
+    const chip = (label: string) => chips().find((c) => c.textContent === label)!;
+    await act(async () => chip('Competitor moves').click());
+    await act(async () => chip('Cited for rivals, not us').click());
+    await act(async () => chip('Buyer questions').click());
+    expect(onAsk.mock.calls).toEqual([
+      ['Which competitors moved in AI answers this week, and on which prompts?', 'analyze'],
+      ['Which sources do AI engines cite for our competitors but not for us?', 'opportunities'],
+      [
+        '/questions Group the questions buyers ask AI in our category by topic, with search volume and who AI recommends.',
+        undefined,
+      ],
+    ]);
   });
 
   it('starts with four questions in the workspace’s words, a new chat each', async () => {

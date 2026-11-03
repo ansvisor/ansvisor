@@ -41,7 +41,7 @@ On Enterprise, Admins click **Included in your plan** in the model menu to open 
 - **Test** checks a key with its provider.
 - **Add API key** opens a short form: pick the provider, paste the key, choose what it is for, and click **Test & save**. The key goes straight to Settings, never into the chat, and is tested before it is kept.
 
-A model you pick runs on its provider's key first, then on your OpenRouter key, then on your plan's AI limit. Typing a message such as "use my OpenAI key" opens the same form instead of sending it.
+A model you pick runs on its provider's key first, then on your OpenRouter key, then on your plan's AI limit. "Use my OpenAI key" in a message opens the same form; send it again to ask Chat.
 
 ## When your key stops working
 
