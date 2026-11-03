@@ -1457,7 +1457,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1489,7 +1489,7 @@
         },
         {
           "heading": "Dismiss an opportunity",
-          "text": "**Dismiss**, for admins and managers, asks why:\n\n- **The topic doesn't matter to us** keeps it from being suggested again in this form for 90 days.\n- **Right topic, wrong angle** dismisses it and opens **Another angle**, so you can ask for a better take on the same need."
+          "text": "**Dismiss**, for admins and managers, asks why:\n\n- **The topic doesn't matter to us** keeps it from being suggested again in this form for 90 days. After that, its need can get a new suggestion.\n- **Right topic, wrong angle** dismisses it and opens **Another angle**, so you can ask for a better take on the same need."
         },
         {
           "heading": "Follow it to Done",
