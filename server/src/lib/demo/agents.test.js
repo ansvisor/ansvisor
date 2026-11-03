@@ -176,8 +176,8 @@ describe('agents.build', () => {
       agents: 4,
       runs: rows.runs.length,
     });
-    expect(db.log[0]).toBe('delete chat_agents');
-    expect(db.log.slice(1, 2)).toEqual(['write chat_agents']);
+    expect(db.log.slice(0, 2)).toEqual(['delete chat_agent_runs', 'delete chat_agents']);
+    expect(db.log.slice(2, 3)).toEqual(['write chat_agents']);
     expect(db.log.indexOf('write chat_agent_runs')).toBeGreaterThan(
       db.log.indexOf('write chat_agent_triggers'),
     );
@@ -199,7 +199,7 @@ describe('agents.build', () => {
   it('writes nothing for an organization without people', async () => {
     const db = fakeDb({ brands: [{ id: BRAND_ID, organization_id: ORG_ID }], profiles: [] });
     expect(await agents.build({ brandId: BRAND_ID, now: NOW, db })).toEqual({ agents: 0, runs: 0 });
-    expect(db.log).toEqual(['delete chat_agents']);
+    expect(db.log).toEqual(['delete chat_agent_runs', 'delete chat_agents']);
   });
 
   it('builds after the chats, whose clear takes its runs’ chats away', () => {
@@ -209,14 +209,20 @@ describe('agents.build', () => {
 });
 
 describe('hideDemoAgents', () => {
-  it('deletes the demo brand’s agents only', async () => {
+  it('deletes the demo brand’s agents and their runs only', async () => {
     const tables = {
       chat_agents: [
         { id: 'a1', demo_brand_id: BRAND_ID },
         { id: 'a2', demo_brand_id: null },
       ],
+      // A deleted agent's runs stay (agent_id set null): the waiting one would never settle.
+      chat_agent_runs: [
+        { id: 'r1', brand_id: BRAND_ID, status: 'needs_you' },
+        { id: 'r2', brand_id: 'another-brand', status: 'needs_you' },
+      ],
     };
     await hideDemoAgents(fakeDb(tables), BRAND_ID);
     expect(tables.chat_agents.map((a) => a.id)).toEqual(['a2']);
+    expect(tables.chat_agent_runs.map((r) => r.id)).toEqual(['r2']);
   });
 });

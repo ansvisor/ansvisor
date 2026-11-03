@@ -37,6 +37,15 @@ export async function hideDemoBrandAfterPurchase(
     }
     const hidden = (data ?? []).map((brand) => brand.id);
     if (hidden.length === 0) return;
+    // The sample agents' runs first: a deleted agent's runs stay, and one left
+    // waiting would never be settled (the sweep skips demo brands).
+    const runs = await supabaseAdmin.from('chat_agent_runs').delete().in('brand_id', hidden);
+    if (runs.error) {
+      console.error(
+        `[${ctx}] Could not remove the demo brand's agent runs of org ${orgId}:`,
+        runs.error,
+      );
+    }
     const agents = await supabaseAdmin.from('chat_agents').delete().in('demo_brand_id', hidden);
     if (agents.error) {
       console.error(

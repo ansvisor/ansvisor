@@ -41,11 +41,20 @@ beforeEach(() => {
 });
 
 describe('hideDemoBrandAfterPurchase', () => {
-  it('hides the demo brand and deletes its agents and chats', async () => {
+  it('hides the demo brand and deletes its agents, their runs and its chats', async () => {
     db.hidden = [{ id: 'demo-1' }];
     await hideDemoBrandAfterPurchase('org-1', 'active', 'test');
-    expect(db.calls).toEqual(['update brands', 'delete chat_agents', 'delete chat_conversations']);
-    expect(db.deleted).toEqual({ chat_agents: ['demo-1'], chat_conversations: ['demo-1'] });
+    expect(db.calls).toEqual([
+      'update brands',
+      'delete chat_agent_runs',
+      'delete chat_agents',
+      'delete chat_conversations',
+    ]);
+    expect(db.deleted).toEqual({
+      chat_agent_runs: ['demo-1'],
+      chat_agents: ['demo-1'],
+      chat_conversations: ['demo-1'],
+    });
   });
 
   it('touches nothing for a subscription that hasn’t started, and no chats when none was hidden', async () => {

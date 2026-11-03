@@ -432,6 +432,10 @@ export function agentRows({ brandId, now, organizationId, ownerId }) {
  * @param {string} brandId the demo brand
  */
 export async function hideDemoAgents(db, brandId) {
+  // Their runs first: a deleted agent's runs stay (agent_id set null), and a
+  // sample run left waiting would never be settled (the sweep skips demo brands).
+  const runs = await db.from('chat_agent_runs').delete().eq('brand_id', brandId);
+  if (runs.error) throw new Error(`demo agent runs delete: ${runs.error.message}`);
   const { error } = await db.from('chat_agents').delete().eq('demo_brand_id', brandId);
   if (error) throw new Error(`demo agents delete: ${error.message}`);
 }
