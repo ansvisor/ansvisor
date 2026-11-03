@@ -18,6 +18,7 @@ import {
   fakeKeepDraftVersion,
   fakeSendDraftToCms,
   fakeStartSiteAudits,
+  fakeSetDraftReady,
   fakeUpdateContentDraft,
   fakeAddBrandTopic,
   fakeAddCompetitors,
@@ -44,6 +45,7 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: vi.fn(),
   updateContentDraft: vi.fn(),
+  setContentDraftReady: vi.fn(),
 }));
 vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
 vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
@@ -59,7 +61,8 @@ vi.mock('@/lib/actions/competitor', () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraft, setContentDraftReady, updateContentDraft } =
+  await import('@/lib/actions/content-drafts');
 const { sendDraftToCms } = await import('@/lib/actions/cms-send');
 const { createReport } = await import('@/lib/actions/reports');
 const { startSiteAudits } = await import('@/lib/actions/audits');
@@ -81,6 +84,7 @@ beforeEach(() => {
   seedWorkspace(db);
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
   vi.mocked(updateContentDraft).mockImplementation(fakeUpdateContentDraft(db) as never);
+  vi.mocked(setContentDraftReady).mockImplementation(fakeSetDraftReady(db) as never);
   vi.mocked(sendDraftToCms).mockImplementation(fakeSendDraftToCms() as never);
   vi.mocked(createReport).mockImplementation(fakeCreateReport(db) as never);
   vi.mocked(startSiteAudits).mockImplementation(fakeStartSiteAudits() as never);
@@ -717,6 +721,38 @@ describe('the tracking setup: prompts, topics and competitors (W2-06)', () => {
 describe('content, reports and Site Audit (W2-07)', () => {
   const theDraft = () => db.tables.content_drafts.find((row) => row.id === DRAFT)!;
   beforeEach(() => seedDraft(db));
+
+  it('set_draft_ready: takes the draft back to its status before Ready (W4-12b)', async () => {
+    theDraft().status = 'in_review';
+    const row = await change(PEOPLE.manager, 'set_draft_ready', { draft_id: DRAFT });
+    expect(row).toMatchObject({
+      target_type: 'content_draft',
+      target_id: DRAFT,
+      summary_key: 'markDraftReady',
+      summary_params: { title: 'Pricing FAQ' },
+    });
+    expect(theDraft().status).toBe('ready');
+    expect(await undo(row.id)).toMatchObject({ code: 'ok' });
+    expect(theDraft().status).toBe('in_review');
+  });
+
+  it('set_draft_ready: leaves a page published since alone, and links it', async () => {
+    const row = await change(PEOPLE.manager, 'set_draft_ready', { draft_id: DRAFT });
+    theDraft().status = 'published';
+    expect(await undo(row.id)).toMatchObject({
+      code: 'conflict',
+      reason: 'changed',
+      href: `/dashboard/content/editor/${DRAFT}`,
+    });
+    expect(theDraft().status).toBe('published');
+  });
+
+  it('set_draft_ready: has nothing to put back for a draft that was ready already', async () => {
+    theDraft().status = 'ready';
+    const row = await change(PEOPLE.manager, 'set_draft_ready', { draft_id: DRAFT });
+    expect(row.undo_json).toBeNull();
+    expect(theDraft().status).toBe('ready');
+  });
 
   it('update_draft: puts the page before back from History', async () => {
     const row = await change(PEOPLE.manager, 'update_draft', {

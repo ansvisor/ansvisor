@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { Feature, PlanId } from '@/config/plans';
 import type { McpAuthContext } from '@/lib/mcp-auth';
-import type { ChatPageVersion } from '../events';
+import type { PageVersionRead } from '../page-versions';
 
 /**
  * Chat's tool registry (CHAT-20 §9): one row per tool Chat may call, saying
@@ -283,7 +283,7 @@ interface ToolFields<S extends z.ZodObject> {
     input: z.output<S>,
     output: unknown,
     place: { conversationId: string },
-  ): Promise<{ title: string; version: ChatPageVersion; undoVersionId: string | null } | null>;
+  ): Promise<PageVersionRead | null>;
   /**
    * A WRITE's check before its card or its run (CHAT-20 §12 rule 1: Send to
    * Action Center's duplicate check): a refusal it returns ({ ok: false,

@@ -185,7 +185,8 @@ describe('the Chat pieces preview', () => {
       'execute:pending',
     ]);
     expect(slots('question-card')).toHaveLength(3);
-    expect(slots('next-moves')).toHaveLength(1);
+    // The latest answer's, and a page's once nothing is left to fill (Mark ready, W4-12b).
+    expect(slots('next-moves')).toHaveLength(2);
     expect(slots('question-answered')).toHaveLength(2);
     expect(slots('done-line')).toHaveLength(2);
     expect(slots('approval-skipped')).toHaveLength(1);
@@ -200,6 +201,8 @@ describe('the Chat pieces preview', () => {
       '1',
       '2',
     ]);
+    // Version 2 is an Admin's or a Manager's card: Send to CMS on it.
+    expect(container.querySelectorAll('[data-action="version.sendToCms"]')).toHaveLength(1);
     expect(container.querySelectorAll('[data-action="runs.toggleTray"]')).toHaveLength(3);
   });
 

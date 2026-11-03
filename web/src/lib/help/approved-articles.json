@@ -1009,7 +1009,9 @@
         "what changed",
         "placeholder",
         "undo version",
-        "show all questions"
+        "show all questions",
+        "mark ready",
+        "set ready"
       ],
       "synonyms": [
         "assistant",
@@ -1078,7 +1080,7 @@
         },
         {
           "heading": "Versions of a page in chat",
-          "text": "Each time Chat writes or changes a page, its card shows the version, such as **Version 2 · 7 questions · 905 characters**. **What changed** lists sections Chat made shorter, new questions or sections, and placeholders in [BRACKETS] for you to fill; the first next move offers to fill one. The card previews the first sections; **Show all** opens the rest. **Undo to version 1** puts the version before back, as the editor's History does. Every version is saved to the Library as a draft."
+          "text": "Each time Chat writes or changes a page, its card shows the version, such as **Version 2 · 7 questions · 905 characters**. **What changed** lists sections Chat made shorter, new questions or sections, and placeholders in [BRACKETS] for you to fill; the first next move offers to fill one. The card previews the first sections; **Show all** opens the rest. **Undo to version 1** puts the version before back, as the editor's History does. Every version is saved to the Library as a draft. Admins and Managers can **Send to CMS** from the card, as from the Library. Once nothing is left to fill, **Mark ready** is a next move: it sets the draft to Ready as the editor does, and Undo takes it back for 7 days."
         },
         {
           "heading": "Send or publish a page from Chat",

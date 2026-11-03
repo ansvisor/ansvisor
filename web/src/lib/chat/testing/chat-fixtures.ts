@@ -241,6 +241,17 @@ export function seedDraft(db: FakeSupabase): void {
   });
 }
 
+/** setContentDraftReady: a draft or one in review becomes ready; one ready or published keeps its status. */
+export function fakeSetDraftReady(db: FakeSupabase) {
+  return async (id: string) => {
+    const row = db.tables.content_drafts.find((r) => r.id === id);
+    if (!row)
+      return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
+    if (row.status === 'draft' || row.status === 'in_review') row.status = 'ready';
+    return { ok: true, status: row.status, tasksDone: 0 };
+  };
+}
+
 /** updateContentDraft: History keeps the page before, then the change is saved. */
 export function fakeUpdateContentDraft(db: FakeSupabase) {
   return async (id: string, change: { title?: string; bodyHtml?: string }) => {

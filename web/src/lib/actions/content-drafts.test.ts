@@ -133,6 +133,7 @@ const {
   classifyDraftSources,
   keepDraftSource,
   markContentDraftReady,
+  setContentDraftReady,
   restoreDraftVersion,
   saveContentDraft,
   setContentDraftAuthor,
@@ -558,6 +559,21 @@ describe('keepDraftSource (Quality CE-046)', () => {
     // 50 kept already: the list comes back without it.
     rpcResult = { data: ['https://x.example/1'], error: null };
     await expect(keepDraftSource(DRAFT, url)).rejects.toThrow('full');
+  });
+});
+
+describe('setContentDraftReady (Chat’s Mark ready, W4-12b)', () => {
+  it('marks the draft ready as the editor does, its errors as values', async () => {
+    updated = { status: 'ready' };
+    await expect(setContentDraftReady(DRAFT)).resolves.toEqual({
+      ok: true,
+      status: 'ready',
+      tasksDone: 0,
+    });
+    await expect(setContentDraftReady('not-a-draft')).resolves.toMatchObject({
+      ok: false,
+      reason: 'invalid',
+    });
   });
 });
 
