@@ -3295,6 +3295,41 @@ describe('the AI budget', () => {
     }
   });
 
+  it('gives an agent’s run 10 reads for its skills, a person’s chat 6, and tells the model to go on with the changes', async () => {
+    budgetHolds();
+    fakes.readRun.mockResolvedValue({ rows: [] });
+    const eight = () => [
+      calls(
+        ...Array.from({ length: 8 }, (_, i) =>
+          toolCall(`r${i}`, 'read_visibility', {
+            brand_id: BRAND,
+            date_from: `2026-10-0${i + 1}T00:00:00.000Z`,
+          }),
+        ),
+      ),
+      READY,
+    ];
+    useModels(eight(), [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'How visible are we on each platform?',
+      brandId: BRAND,
+    });
+    if (!started.ok) throw new Error('not started');
+    db.tables.chat_conversations.find((c) => c.id === started.conversationId)!.agent_run_id =
+      '77777777-7777-4777-8777-777777777777';
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.readRun).toHaveBeenCalledTimes(8);
+
+    fakes.readRun.mockClear();
+    const { haiku } = useModels(eight(), [text('Done.')]);
+    await turn(ADMIN, 'How visible are we on each platform?');
+    expect(fakes.readRun).toHaveBeenCalledTimes(6);
+    // Reading is over, the task isn't: the model is told to go on with its changes.
+    expect(JSON.stringify(haiku.seen[1].prompt)).toContain(
+      'make the changes the task asks for with their tools',
+    );
+  });
+
   it('keeps an agent run’s untrusted reads as hashed word runs, never a person’s chat’s (AUTONOMOUS-GO-LIVE §6.3)', async () => {
     budgetHolds();
     const answer = Array.from({ length: 40 }, (_, i) => `w${i}`).join(' ');

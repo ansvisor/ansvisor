@@ -1059,7 +1059,8 @@ async function openContext(
   const playbook = shortcutPlaybook(actor.organizationId, progress.shortcut);
   const offered = playbook ? playbookTools(tools.offered, playbook) : tools.offered;
   const { refused } = tools;
-  const budget = readBudget(run.effort);
+  // An agent's run reads what its skills list (run-limits.ts AGENT_READS).
+  const budget = readBudget(run.effort, { agent: agentRunId !== null });
   const history = await readHistory(run, budget.historyChars);
   // One model does both on a single-model key: the run writes from the start.
   if (models.phases === 'single') progress.phase = 'write';
@@ -2289,7 +2290,17 @@ async function handleCall(
   }
   if (tool.class === 'read') {
     if (rc.progress.reads >= rc.budget.reads || rc.progress.dataChars >= rc.budget.dataChars) {
-      return result(call, { code: 'limit_reached', message: 'Answer with what was read.' }, true);
+      // Reading is over, the task isn't: "answer" alone read as "stop" and runs left their
+      // changes undone (the agents' test set, 2026-11-03).
+      return result(
+        call,
+        {
+          code: 'limit_reached',
+          message:
+            'Reading is done for this run. Go on with what was read: make the changes the task asks for with their tools, then answer.',
+        },
+        true,
+      );
     }
     const cap = readCap(tool.name);
     if (cap !== null && (rc.progress.toolReads?.[tool.name] ?? 0) >= cap) {
