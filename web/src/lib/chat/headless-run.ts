@@ -109,7 +109,7 @@ export async function openHeadlessRun(input: HeadlessRunInput): Promise<Headless
       if ((err as { code?: string }).code === '23505') return null;
       throw err;
     }
-    // Its chat keeps the brands it touches from its own on (00436), before anything is in it.
+    // A new chat keeps the brands it touches from its own on (00436), before anything is in it.
     await startTouchedBrands(conversationId);
   }
   // One after the other, so the question comes before its answer.

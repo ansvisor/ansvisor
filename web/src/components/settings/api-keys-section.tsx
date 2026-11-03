@@ -298,7 +298,7 @@ export function ApiKeysSection() {
           </DialogHeader>
           <div className="space-y-2 py-2">
             <div className="flex items-center gap-2 rounded-md border bg-muted/40 p-2 font-mono text-xs">
-              <code className="flex-1 truncate">{revealedToken}</code>
+              <code className="ph-no-capture flex-1 truncate">{revealedToken}</code>
               <Button
                 size="sm"
                 variant="ghost"
@@ -331,7 +331,7 @@ export function ApiKeysSection() {
               </div>
               <p className="text-xs text-muted-foreground">{t(`apiKeysConnectWhere.${client}`)}</p>
               <div className="flex items-start gap-2">
-                <pre className="max-h-56 min-w-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs whitespace-pre">
+                <pre className="ph-no-capture max-h-56 min-w-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs whitespace-pre">
                   {mcpClientSnippet(client, mcpEndpoint, revealedToken)}
                 </pre>
                 <Button

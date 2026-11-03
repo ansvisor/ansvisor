@@ -92,8 +92,10 @@ import {
   allowedTools,
   decideOrDeny,
   decideToolCall,
+  goLiveCandidate,
   listingDenial,
   type ChatMode,
+  type GoLiveHold,
   type PrecedenceContext,
   type ToolCall,
   type ToolDecision,
@@ -158,8 +160,10 @@ import {
 } from './tool-cache';
 import { dataBlock, guardData, isUntrustedRead } from './untrusted';
 import { keepShingles, textsOf } from './go-live-checks';
+import { readGoLiveFacts, type GoLivePage } from './go-live-facts';
+import { reserveGoLive } from './go-live-send';
 import { undoRule } from './undo';
-import { runLoggedWrite } from './write';
+import { runLoggedWrite, type WriteRequest } from './write';
 import { fileChatOutput } from './file-output';
 import { originPageSchema } from './origin';
 import { CHAT_REFERENCE_TYPES, MAX_REFERENCES } from './references';
@@ -172,6 +176,7 @@ import {
   startAction,
   weekEndIn,
 } from './task-strip';
+import { messageShortcut, playbookPlanNote, playbookTools } from './shortcut-playbooks';
 import {
   PARTS_RULE,
   PARTS_TOOL,
@@ -183,7 +188,6 @@ import {
   partsToolInput,
   personPresent,
 } from './partial-limit';
-import { messageShortcut, playbookPlanNote, playbookTools } from './shortcut-playbooks';
 import {
   MAX_SKILL_BODIES,
   USE_SKILL_TOOL,
@@ -912,8 +916,9 @@ export async function driveRun(
     const fresh = !resume && rc.progress.steps === 0 && rc.progress.modelSteps === 0;
     const typed = fresh ? (await loadShortcut(rc)) + (await loadTypedSkills(rc)) : 0;
     // A skill's run starts only when the AI limit left covers its answer (CHAT-04 item 17a).
-    if (fresh && typed > 0 && (await coveredUnits(rc, 1, { reads: true })) === 0) {
-      return pauseAtCap(rc, 'month');
+    if (fresh && typed > 0) {
+      const covered = await coveredUnits(rc, 1, { reads: true });
+      if (covered.fits === 0) return pauseAtCap(rc, covered.limit);
     }
     if (fresh && typed === 0 && (await helpTurn(rc)) === 'ended') return;
     await modelLoop(rc);
@@ -1994,6 +1999,8 @@ const contextFor = (rc: RunContext, mode: ChatMode = rc.run.mode) =>
     mode: rc.progress.injection ? 'ask_first' : mode,
     surface: 'chat',
     injectionDetected: rc.progress.injection === true,
+    // An agent run's own mode, for going live on its own (step 4b): an injection holds it there.
+    agent: rc.agentRunId ? { runId: rc.agentRunId, mode: rc.run.mode } : null,
   });
 
 const MODE_RANK: Record<ChatMode, number> = { ask_first: 0, auto: 1, full_auto: 2 };
@@ -2107,7 +2114,8 @@ async function runSites(rc: RunContext): Promise<PageSites> {
 
 /** Keeps the sites a read listed in its structured fields, when the run may open pages. */
 function keepReadSites(rc: RunContext, toolName: string, value: unknown) {
-  if (!rc.offered.has(PAGE_TOOL)) return;
+  // An agent's page may link to them too when it goes live on its own (AUTONOMOUS-GO-LIVE §6.3).
+  if (!rc.offered.has(PAGE_TOOL) && !rc.agentRunId) return;
   const found = sitesFromRead(toolName, value);
   if (found.hosts.length + found.domains.length + found.urls.length === 0) return;
   rc.progress.pageSites = joinSites(rc.progress.pageSites ?? NO_SITES, found);
@@ -2212,11 +2220,21 @@ async function handleCall(
   }
 
   const { ctx, call: facts } = await callFacts(rc, tool, input);
-  const decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
+  let decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
   // What it may read or change is noted on the chat first (BRAND-ACCESS §10, 00436): a shared
   // chat with no brand then shows only to people who can use every brand it touched.
   if (decision.kind !== 'deny' && !(await noteCallBrands(rc, tool, facts.brandId, ctx))) {
     return result(call, { code: 'failed' }, true);
+  }
+  // Step 4b's guards, read for a candidate only, with the page they were read on (its send).
+  let page: GoLivePage | null = null;
+  if (decision.kind === 'click' && ctx && goLiveCandidate(tool, ctx)) {
+    const read = await goLiveFactsOf(rc, tool, input, ctx);
+    if (read) {
+      facts.goLive = read.facts;
+      page = read.page;
+      decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
+    }
   }
   // A change its own check refuses before its card (Send to Action Center's duplicate): no card.
   if (decision.kind !== 'deny' && tool.class !== 'read') {
@@ -2228,6 +2246,7 @@ async function handleCall(
       return result(call, await deny(rc, tool, ctx, facts, decision.denial, input), true);
     case 'run': {
       if (tool.class === 'read') return readCall(rc, tool, call, input, ctx, facts.brandId);
+      if (decision.via === 'go_live') return goLiveCall(rc, tool, call, input, facts, ctx, page);
       // A change that runs without a card: Always, Full auto or the person's tick.
       const approval = approvalFor(decision);
       if (!approval || approval.kind === 'run') return result(call, { code: 'failed' }, true);
@@ -2250,8 +2269,10 @@ async function handleCall(
  * them through its runFor (writeCall).
  */
 function askWithoutSession(rc: RunContext, tool: ChatTool, decision: ToolDecision): ToolDecision {
+  // Going live on its own needs no session: the API sends it as the run's person (§5.4).
   if (
     decision.kind !== 'run' ||
+    decision.via === 'go_live' ||
     tool.class === 'read' ||
     !withoutSession(rc) ||
     runsWithoutSession(tool)
@@ -2259,6 +2280,143 @@ function askWithoutSession(rc: RunContext, tool: ChatTool, decision: ToolDecisio
     return decision;
   }
   return { kind: 'ask', reason: 'no_session', offerDontAskAgain: false };
+}
+
+/**
+ * Step 4b's facts for a candidate (AUTONOMOUS-GO-LIVE §6): read in the
+ * guards' order, on the page as it would go out. Null for a row that can't
+ * go live on its own, or outside an agent run.
+ */
+async function goLiveFactsOf(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  ctx: PrecedenceContext,
+) {
+  if (!rc.agentRunId || !tool.goLive) return null;
+  return readGoLiveFacts({
+    ctx,
+    step: tool.goLive(input as never),
+    actingUserId: rc.actor.userId,
+    runId: rc.run.id,
+    agentRunId: rc.agentRunId,
+    progress: rc.progress,
+    runSites: () => runSites(rc),
+  });
+}
+
+/**
+ * A step an allowed agent takes live on its own (AUTONOMOUS-GO-LIVE §5.4,
+ * §6.1): its slot of the agent's daily limit reserved first, at once, then
+ * the page its guards read sent through the API as the run's person (which
+ * checks it all again), logged as gone live on its own. A limit reached
+ * since the check, or a slot that can't be reserved, keeps its click card,
+ * saying why; so does a send that fails (writeCall).
+ */
+async function goLiveCall(
+  rc: RunContext,
+  tool: ChatTool,
+  call: PendingCall,
+  input: Record<string, unknown>,
+  facts: ToolCall,
+  ctx: PrecedenceContext | null,
+  page: GoLivePage | null,
+): Promise<CallOutcome> {
+  const agent = ctx?.agent;
+  const step = tool.goLive?.(input as never);
+  const held = (hold: GoLiveHold) =>
+    openCard(rc, tool, call, input, facts, { kind: 'click', held: hold });
+  if (!ctx || !agent?.goLive || !step || !page || !rc.agentRunId || !facts.brandId) {
+    return held({ code: 'unchecked' });
+  }
+  let reservationId: string | null;
+  try {
+    reservationId = await reserveGoLive({
+      organizationId: rc.actor.organizationId,
+      agentId: agent.id,
+      runId: rc.run.id,
+      agentRunId: rc.agentRunId,
+      brandId: facts.brandId,
+      toolKey: tool.labelKey,
+      step,
+      dailyLimit: agent.goLive.dailyLimit,
+    });
+  } catch (err) {
+    console.error('[chat/engine] could not reserve a go-live slot:', err);
+    return held({ code: 'unchecked' });
+  }
+  if (!reservationId) {
+    return held({
+      code: 'limit',
+      agent: agent.name,
+      limit: agent.goLive.dailyLimit,
+      nextAt: facts.goLive?.usage?.nextAt ?? null,
+    });
+  }
+  return writeCall(rc, tool, call, input, facts, ctx, { kind: 'auto', via: 'go_live' }, null, {
+    agentId: agent.id,
+    reservationId,
+    page,
+  });
+}
+
+/** A clock time in the run's time zone, for a held card's "at {time}". */
+function heldTime(at: string, timezone: string | undefined): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: validTimezone(timezone),
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(at));
+}
+
+/** Why an allowed agent's step waits for a click, in the card's words (§7.3 chatEngine.held). */
+function heldWords(rc: RunContext, held: GoLiveHold): string {
+  let reason: string;
+  switch (held.code) {
+    case 'foreign_link':
+      reason = t('held.foreign_link', { host: held.host });
+      break;
+    case 'quality_unread':
+      reason = t(
+        held.why === 'run_cap'
+          ? 'held.quality_unread_cap'
+          : held.why === 'ai_budget'
+            ? 'held.quality_unread_budget'
+            : 'held.quality_unread',
+      );
+      break;
+    case 'facts':
+      reason = t('held.facts', { page: held.page, fact: held.fact });
+      break;
+    case 'qualityLow':
+      reason = t('held.qualityLow', { check: t(`held.checks.${held.check}`), score: held.score });
+      break;
+    case 'quality':
+      reason = t('held.quality', { score: held.score });
+      break;
+    case 'limit':
+      reason = held.nextAt
+        ? t('held.limit', {
+            agent: held.agent,
+            limit: held.limit,
+            time: heldTime(held.nextAt, rc.progress.timezone),
+          })
+        : t('held.limitSoon', { agent: held.agent, limit: held.limit });
+      break;
+    case 'failed':
+      reason = t('held.failed', { why: held.why });
+      break;
+    default:
+      reason = t(`held.${held.code}`);
+  }
+  return t('card.held', { reason });
+}
+
+/** A card's notes, with why an allowed agent's step still waits for its click first. */
+function withHeld(rc: RunContext, notes: ReturnType<typeof cardNotes>, held?: GoLiveHold) {
+  if (!held) return notes;
+  return { ...notes, note: [heldWords(rc, held), notes.note].filter(Boolean).join(' ') };
 }
 
 /** A refusal: the out-of-permission answer to the browser, its record, and its words to the model. */
@@ -2485,7 +2643,12 @@ async function openCard(
   rc.sink.emit('step.started', { step: clientStep(row) });
   const digest = cardDigest(tool, input);
   const offerDontAskAgain = decision.kind === 'ask' && decision.offerDontAskAgain;
-  const notes = cardNotes(tool);
+  // Why an allowed agent's step still waits for the click (step 4b's held reason).
+  const notes = withHeld(
+    rc,
+    cardNotes(tool),
+    decision.kind === 'click' ? decision.held : undefined,
+  );
   // Why a change its mode would make by itself asks: no session is behind the run.
   if (decision.kind === 'ask' && decision.reason === 'no_session') {
     notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
@@ -2610,14 +2773,15 @@ async function openQuestion(
 /**
  * How many of a job's `units` parts the AI limit left covers (CHAT-04 item
  * 17a), each one write step at worst: its prompt as it stands (`reads`: with
- * what the run's reads may still add) and all it may write. All of them when
+ * what the run's reads may still add) and all it may write, and which limit
+ * binds: the agent run's own cap ('run') or the month's. All of them when
  * the check gets no answer: each step is still held on its own.
  */
 async function coveredUnits(
   rc: RunContext,
   units: number,
   { reads = false }: { reads?: boolean } = {},
-): Promise<number> {
+): Promise<{ fits: number; limit: 'run' | 'month' }> {
   const choice = rc.models.pick('write');
   const { system, messages } = stepInput(rc, 'write', choice.claude);
   const prompt = estimateInputTokens([system, messages, toolSchemas(rc, 'write')]);
@@ -2632,7 +2796,7 @@ async function coveredUnits(
     source: rc.models.source,
     agentRunId: rc.agentRunId,
   });
-  return fit.ok ? fit.fits : units;
+  return fit.ok ? { fits: fit.fits, limit: fit.limit } : { fits: units, limit: 'month' };
 }
 
 /**
@@ -2648,21 +2812,23 @@ async function checkParts(rc: RunContext, call: PendingCall): Promise<CallOutcom
     return result(call, { code: 'invalid_input', issues }, true);
   }
   const { parts, unit } = parsed.data;
-  const fit = partsFit(await coveredUnits(rc, parts), parts);
+  const covered = await coveredUnits(rc, parts);
+  const fit = partsFit(covered.fits, parts);
   if (fit.kind === 'all') return result(call, partsResult(parts, parts, unit));
+  // At the agent run's own cap ('run'), not the month's, its run ends at its limit.
   if (fit.kind === 'none') {
-    await pauseAtCap(rc, 'month');
+    await pauseAtCap(rc, covered.limit);
     return { kind: 'ended' };
   }
   if (!personPresent(rc)) {
-    rc.progress.limitStop = true;
+    rc.progress.limitStop = covered.limit;
     return result(call, partsResult(fit.fits, parts, unit));
   }
   // The run's questions used up: the recommended option, which the answer says.
   if ((rc.progress.asks ?? 0) >= MAX_ASKS_PER_RUN) {
     return result(call, partsResult(fit.fits, parts, unit));
   }
-  rc.progress.parts = { fits: fit.fits, parts, unit };
+  rc.progress.parts = { fits: fit.fits, parts, unit, limit: covered.limit };
   return openQuestion(rc, call, partsQuestion(fit.fits, parts, unit));
 }
 
@@ -2676,7 +2842,7 @@ async function partsAnswered(rc: RunContext, answered: CallResult, answer: AskAn
   rc.progress.parts = undefined;
   const choice = partsChoice(answer);
   if (choice === 'credits') {
-    await pauseAtCap(rc, 'month');
+    await pauseAtCap(rc, parts?.limit ?? 'month');
     return null;
   }
   if (choice === 'cancel') {
@@ -3311,6 +3477,8 @@ const SAID_FAILURES: Record<string, string> = {
   live_item: 'live_item',
   // An Admin turned publishing off for Managers since the card was decided (push_cms_draft).
   execute_off: 'execute_off',
+  // The CMS didn't put the page live: it stays a draft there, with the CMS's words (publish_cms).
+  publish_refused: 'failed',
   // A run with no session, writing through the API server as its person (lib/chat/actor/api.ts):
   // Chat off for the workspace, or the server took no one to act as.
   chat_off: 'chat_off',
@@ -3344,6 +3512,8 @@ async function writeCall(
   ctx: PrecedenceContext | null,
   approval: Exclude<ActivityApproval, { kind: 'run' }>,
   cardStepId: string | null,
+  /** A step an allowed agent takes live on its own: its slot and page (goLiveCall). */
+  goLive?: WriteRequest['goLive'],
 ): Promise<CallOutcome> {
   const target = await cardTarget(rc.brand, tool, input, facts.brandId);
   let row;
@@ -3375,8 +3545,15 @@ async function writeCall(
     surface: 'chat',
     mode: rc.run.mode,
     approval,
-    place: { conversationId: rc.run.conversationId, runId: rc.run.id, stepId },
-    approvalKey: stepId,
+    place: {
+      conversationId: rc.run.conversationId,
+      runId: rc.run.id,
+      stepId,
+      agentRunId: rc.agentRunId,
+    },
+    // On its own, a key of its own: the person's click on the card it may turn into runs anew.
+    approvalKey: goLive ? `${stepId}:go_live` : stepId,
+    ...(goLive ? { goLive } : {}),
     // No session behind the run: only a sessionFree row's change runs then (askWithoutSession);
     // a card's Approve runs in its person's own request.
     withoutSession: withoutSession(rc),
@@ -3387,37 +3564,18 @@ async function writeCall(
   const wayRefused =
     outcome.code === 'ok' && typedFailure(outcome.output) === ACTING_REFUSED && !cardStepId;
   if (outcome.code === 'approval_mismatch' || wayRefused) {
-    row = await updateStep(stepId, {
-      status: 'waiting',
-      // Its card's Approve is the person's: not a change made by itself (History's mode).
-      ...(wayRefused ? { debug: { input, toolCallId: call.toolCallId } } : {}),
+    return cardAgain(rc, tool, input, target, stepId, {
+      ...(wayRefused ? { noSession: { toolCallId: call.toolCallId } } : {}),
     });
-    rc.sink.emit('step.updated', { step: clientStep(row) });
-    const digest = cardDigest(tool, input);
-    const notes = cardNotes(tool);
-    if (wayRefused) notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
-    rc.sink.emit('confirm.required', {
-      n: row.position,
-      action: toolWords(tool, 'name'),
-      target,
-      digest,
-      canDontAskAgain: false,
-      ...notes,
-      ...(await cardDetailsOf(tool, input)),
-    });
-    return {
-      kind: 'pause',
-      card: {
-        stepId,
-        n: row.position,
-        digest,
-        kind: tool.class === 'execute' ? 'click' : 'ask',
-        offerDontAskAgain: false,
-      },
-    };
   }
 
   const failed = outcome.code !== 'ok' ? outcome.code : typedFailure(outcome.output);
+  // Gone wrong on its own: never tried again by itself; the step waits for the click, saying why.
+  if (failed && goLive) {
+    const said = outcome.code === 'ok' ? (outcome.output as { message?: unknown } | null) : null;
+    const why = typeof said?.message === 'string' ? maskIds(said.message) : t('goLive.notSent');
+    return cardAgain(rc, tool, input, target, stepId, { held: { code: 'failed', why } });
+  }
   if (failed) {
     const said = outcome.code === 'ok' ? saidFailure(outcome.output) : null;
     row = await updateStep(stepId, {
@@ -3465,6 +3623,51 @@ async function writeCall(
     // What it filed, for a change that names a file next (attach_file_to_task).
     ...(fileId ? { file_id: fileId } : {}),
   });
+}
+
+/**
+ * The step's card again, waiting on the person: an approval used for other
+ * arguments (approval_mismatch), a run with no session whose write the API
+ * server took as no one (noSession: its Approve is its person's), or an
+ * agent's step that went wrong on its own, which waits for the click with why
+ * (held).
+ */
+async function cardAgain(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  target: string,
+  stepId: string,
+  opts: { held?: GoLiveHold; noSession?: { toolCallId: string } } = {},
+): Promise<CallOutcome> {
+  const row = await updateStep(stepId, {
+    status: 'waiting',
+    // Its card's Approve is the person's: not a change made by itself (History's mode).
+    ...(opts.noSession ? { debug: { input, toolCallId: opts.noSession.toolCallId } } : {}),
+  });
+  rc.sink.emit('step.updated', { step: clientStep(row) });
+  const digest = cardDigest(tool, input);
+  const notes = withHeld(rc, cardNotes(tool), opts.held);
+  if (opts.noSession) notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
+  rc.sink.emit('confirm.required', {
+    n: row.position,
+    action: toolWords(tool, 'name'),
+    target,
+    digest,
+    canDontAskAgain: false,
+    ...notes,
+    ...(await cardDetailsOf(tool, input)),
+  });
+  return {
+    kind: 'pause',
+    card: {
+      stepId,
+      n: row.position,
+      digest,
+      kind: tool.class === 'execute' ? 'click' : 'ask',
+      offerDontAskAgain: false,
+    },
+  };
 }
 
 /** What a change made, as a card with its Open (its row's resultCard, CHAT-09 item 19). */
@@ -3951,7 +4154,7 @@ async function finish(rc: RunContext): Promise<void> {
   // one stopped at the limit too.
   rc.progress.text = withAssumptions(rc.progress.text, rc.progress.assumptions);
   // No one was there to ask: the parts that fit are done and filed, and it stops at the limit.
-  if (rc.progress.limitStop) return pauseAtCap(rc, 'month');
+  if (rc.progress.limitStop) return pauseAtCap(rc, rc.progress.limitStop);
   if (!(await moveRun(rc.run.id, ['running'], 'done', { finished: true }))) return stopNow(rc);
   const generatedAt = new Date().toISOString();
   const workingMs = workedMs(rc);

@@ -196,6 +196,11 @@ describe('POST /api/chat/skills/import', () => {
       upload('SKILL.md', strToU8(SKILL.replace('name: copy-editing', 'name: faq'))),
     );
     expect(library).toMatchObject({ status: 409, body: { code: 'library_name' } });
+    // A shortcut's name is reserved too, as when a skill is saved in Chat.
+    const shortcut = await imported(
+      upload('SKILL.md', strToU8(SKILL.replace('name: copy-editing', 'name: new-report'))),
+    );
+    expect(shortcut).toMatchObject({ status: 409, body: { code: 'library_name' } });
     expect((await imported(link(42))).status).toBe(400);
     expect(skills()).toEqual([]);
   });
@@ -203,9 +208,17 @@ describe('POST /api/chat/skills/import', () => {
   it('is for Admins and Managers on a paid plan, the plan checked first', async () => {
     as(PEOPLE.analyst);
     expect((await imported()).body).toMatchObject({ ok: false, code: 'role' });
+    // Refused before GitHub is read.
+    expect((await imported(link('https://github.com/acme/skills'))).body).toMatchObject({
+      code: 'role',
+    });
     as(PEOPLE.manager);
     db.tables.organizations[0].subscription_status = 'trialing';
     expect((await imported()).body).toMatchObject({ ok: false, code: 'import_plan' });
+    expect((await imported(link('https://github.com/acme/skills'))).body).toMatchObject({
+      code: 'import_plan',
+    });
+    expect(github.read).not.toHaveBeenCalled();
     state.readOnly = true;
     expect((await imported()).status).toBe(402);
     state.on = false;
@@ -223,6 +236,14 @@ describe('POST /api/chat/skills/import', () => {
     expect(body.skill).toMatchObject({ status: 'blocked', requested: false });
     expect(body.skill.blocks[0]).toMatch(/override/);
     expect(requestAccess).not.toHaveBeenCalled();
+  });
+
+  it('keeps an empty LICENSE file as no license text', async () => {
+    const { status } = await imported(
+      upload('s.zip', zipSync({ 'SKILL.md': strToU8(SKILL), LICENSE: new Uint8Array() })),
+    );
+    expect(status).toBe(200);
+    expect(skills()[0]).toMatchObject({ license: 'MIT', license_text: null });
   });
 
   it('refuses a second skill of the same name', async () => {

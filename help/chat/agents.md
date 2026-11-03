@@ -1,15 +1,15 @@
 ---
 title: See and run your agents in Agent Center
 route: /dashboard/agents
-keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief]
-synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent]
+keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice]
+synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms]
 plan: all
 updated: 2026-11-02
 last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
-approved: false
-sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts, web/src/lib/chat/agents/catalog.ts, web/src/lib/content/page-types.ts, web/src/lib/menu-access.ts]
+approved: true
+sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts, web/src/lib/chat/agents/catalog.ts, web/src/lib/content/page-types.ts, web/src/lib/menu-access.ts, web/src/lib/chat/agent-go-live.ts, web/src/lib/chat/precedence.ts]
 ---
 An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
 
@@ -114,6 +114,28 @@ A run may use only its share of your monthly AI limit. A run a trigger started e
 
 A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions and **Send to Action Center**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
 
+## Let an agent publish on its own
+
+An Admin can let chosen agents send pages to your CMS as drafts without a click. Two switches must be on: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with the agent in **Full auto**. Managers see the box read-only, with **Ask your Admin**.
+
+**At most a day** sets how many pages it may send on its own in 24 hours, from 1 to 20. A page still waits for your click, and its card says why, when it fails Quality or your approved brand facts, the run read text that tried to instruct it, the page has hidden text or outside links, the page is live already, or the agent reached its limit.
+
+Changing what the agent does turns this off until an Admin turns it on again.
+
+## Let an agent publish on its own
+
+An Admin can let chosen agents publish new pages on Webflow, WordPress and Wix, and send drafts to your CMS, without a click. Two switches must be on: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with the agent in **Full auto**. Managers see it read-only.
+
+**At most a day** sets how many pages it may send or publish on its own in 24 hours, from 1 to 20. A page still waits for your click, and its card says why, when it fails Quality or your approved brand facts, the run read text that tried to instruct it, the page has hidden text or outside links, the page is live already, or the agent reached its limit.
+
+Changing what the agent does turns this off until an Admin turns it on again.
+
+## When an agent sends a page on its own
+
+Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. The notice leaves Needs you once you open it. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.
+
+When an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves.
+
 ## On your own AI key
 
 When your workspace runs Chat on its own AI key, agents run on it too. The provider bills your account, and your monthly AI limit doesn't move. **Max per run** and **Monthly cap** still apply: what a run uses is measured at the providers' list prices.
@@ -123,6 +145,10 @@ When your workspace runs Chat on its own AI key, agents run on it too. The provi
 Admins and Managers can also start an agent from an open action in Action Center: **Run agent** on the action's row or at the top of the open action lists the agents that work on its brand. The run works on that action alone, acts as the person who clicked, and opens beside the action. Its chat is named after the agent and the action, and **Run history** shows its trigger as **Run agent from an action**.
 
 The run never adds targets to the action and never closes its tasks. If the action is completed or dismissed, the run stops with **The action was closed**. The action's **History** shows **Agent run started** and **Agent run completed**.
+
+## Your key's monthly agent limit
+
+When your workspace runs on its own AI key, all agents together may spend at most a monthly limit on it: $250 unless an Admin sets another, from $10 to $10,000. It is measured at the providers' list prices, and it can't be turned off. Once agents reach it, each agent pauses when it next runs, with **Key's monthly agent limit reached**, and **Run now** and **Run agent** are refused. They start again by themselves when the month renews, or when an Admin raises the limit in **Settings › AI Providers**. Chats you start yourself don't count toward it.
 
 ## Read-only roles
 

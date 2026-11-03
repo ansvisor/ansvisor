@@ -93,6 +93,7 @@ vi.mock('@/lib/chat/actor/action-center', () => ({
 }));
 vi.mock('@/lib/actions/cms-send', () => ({
   sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
+  publishDraftToCms: tracked.track('actions/cms-send.publishDraftToCms'),
 }));
 vi.mock('@/lib/actions/reports', () => ({
   createReport: tracked.track('actions/reports.createReport'),
@@ -142,6 +143,7 @@ const ctx = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'agent-internal',
+  brandAccess: 'all' as const,
   role: 'admin' as const,
 };
 const labels = (messages as Record<string, unknown>).chatTools as Record<string, unknown>;
@@ -341,6 +343,7 @@ describe('the Chat tool registry', () => {
     await runInChat('set_task_ready_for_review', { brand_id: brand, task_id: item });
     await run('update_draft', { draft_id: item, body_html: '<h1>FAQ</h1>' });
     await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
+    await run('publish_cms', { draft_id: item, destination: 'wix' });
     await run('build_report', {
       brand_id: brand,
       template: 'competitor_benchmark',
@@ -412,6 +415,7 @@ describe('the Chat tool registry', () => {
         [item, { title: undefined, bodyHtml: '<h1>FAQ</h1>' }],
       ],
       ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
+      ['actions/cms-send.publishDraftToCms', [item, 'wix']],
       [
         'actions/reports.createReport',
         [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
@@ -671,6 +675,7 @@ describe('approval policies', () => {
       // Content, reports and Site Audit (W2-07, DECISIONS T): an Analyst only saves drafts.
       update_draft: ['admin', 'manager'],
       push_cms_draft: ['admin', 'manager'],
+      publish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
       // A skill of one's own (W3-06, CHAT-13 v2): Admins and Managers save skills.
@@ -816,6 +821,64 @@ describe('approval policies', () => {
     ).toThrow(/only a write/);
   });
 
+  it('lets only an execute go live on its own, and only one whose input names no outside target (AUTONOMOUS-GO-LIVE §6.3)', () => {
+    const goLive = () => ({ kind: 'cms_draft' as const, draftId: 'd', target: 'webflow' as const });
+    const execute = {
+      ...readRow,
+      name: 'publish_test',
+      class: 'execute' as const,
+      executeGroup: 'publishing' as const,
+    };
+    // Ids and fixed choices only: a draft, the CMS the brand connected, a switch.
+    const own = defineTool({
+      ...execute,
+      inputSchema: z.object({
+        draft_id: z.string().regex(/^[0-9a-f-]{36}$/),
+        guid: z.guid().optional(),
+        destination: z.enum(['webflow', 'wordpress']),
+        live: z.boolean().default(false),
+      }),
+      fixture: { input: { draft_id: FIXTURE_IDS.item, destination: 'webflow' } },
+      goLive,
+    });
+    expect(own.flags.goLiveOnOwn).toBe(true);
+    // A field that takes an address, a mail address, a site, free text or a list of them.
+    for (const field of [
+      z.string(),
+      z.string().url(),
+      z.email(),
+      z.string().max(300).optional(),
+      z.array(z.guid()),
+      z.object({ url: z.string() }),
+    ]) {
+      expect(() =>
+        defineTool({
+          ...execute,
+          inputSchema: z.object({ draft_id: z.guid(), to: field }),
+          goLive,
+        } as never),
+      ).toThrow(/takes no free text \(to\)/);
+    }
+    // Never a read or a write, which aren't clicks to lift.
+    expect(() => defineTool({ ...readRow, goLive })).toThrow(/only an execute/);
+    expect(() =>
+      defineTool({ ...readRow, class: 'write', defaultPolicy: 'ask', maxPolicy: 'ask', goLive }),
+    ).toThrow(/only an execute/);
+    // The registry: Send to CMS may, every other row may not.
+    const onItsOwn = CHAT_TOOLS.filter((tool) => tool.flags.goLiveOnOwn).map((tool) => tool.name);
+    expect(onItsOwn).toEqual(['push_cms_draft', 'publish_cms']);
+    expect(chatTool('publish_cms')?.goLive?.({ draft_id: 'd', destination: 'wordpress' })).toEqual({
+      kind: 'publish',
+      draftId: 'd',
+      target: 'wordpress',
+    });
+    expect(chatTool('push_cms_draft')?.goLive?.({ draft_id: 'd', destination: 'wix' })).toEqual({
+      kind: 'cms_draft',
+      draftId: 'd',
+      target: 'wix',
+    });
+  });
+
   it("refuses a write's policy past what its flags allow", () => {
     const write = { ...readRow, class: 'write' as const };
     expect(() =>
@@ -833,7 +896,7 @@ describe('approval policies', () => {
     expect(
       defineTool({ ...write, defaultPolicy: 'ask', maxPolicy: 'ask', flags: { alwaysCard: true } })
         .flags,
-    ).toEqual({ alwaysCard: true, costCard: false, adminMayTurnOff: false });
+    ).toEqual({ alwaysCard: true, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false });
     expect(() => defineTool({ ...write, defaultPolicy: 'on', maxPolicy: 'on' } as never)).toThrow(
       /asked/,
     );
@@ -892,7 +955,7 @@ describe('registryCatalog', () => {
       class: 'read',
       defaultPolicy: 'on',
       planGate: { feature: 'prompt_volumes' },
-      flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false },
+      flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false },
     });
     expect(entry.planGate).not.toBe(row.planGate);
     expect(entry.flags).not.toBe(row.flags);
@@ -932,7 +995,7 @@ describe("the model's tool list on the registry's rows", () => {
     ).map((tool) => tool.name);
 
   const reads = CHAT_TOOLS.filter((tool) => tool.class === 'read').map((tool) => tool.name);
-  // The WRITEs and the EXECUTE (push_cms_draft), in the registry's order.
+  // The WRITEs and the EXECUTEs (push_cms_draft, publish_cms), in the registry's order.
   const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });
