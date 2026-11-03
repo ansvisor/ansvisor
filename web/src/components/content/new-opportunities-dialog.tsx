@@ -354,23 +354,26 @@ function NewOpportunitiesForm({
               </Button>
             </div>
             <span className="text-xs text-muted-foreground">
-              {focus === 'prompt' ? t('promptOne') : t('max', { max: cap })}
+              {focus === 'prompt' ? t('promptOne') : cap > 0 && t('max', { max: cap })}
             </span>
           </div>
         </div>
 
-        <p
-          className={cn(
-            'rounded-md border bg-muted/40 px-3 py-2 text-xs',
-            max === 0 && 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
-          )}
-        >
-          {max === 0
-            ? t('noneLeft')
-            : remaining === -1
-              ? t('usesUnlimited', { count })
-              : t('uses', { count, remaining, after: Math.max(0, remaining - count) })}
-        </p>
+        {/* Nothing to use when the focus has nothing left or the prompt has one. */}
+        {(max === 0 || (cap > 0 && !existingId)) && (
+          <p
+            className={cn(
+              'rounded-md border bg-muted/40 px-3 py-2 text-xs',
+              max === 0 && 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
+            )}
+          >
+            {max === 0
+              ? t('noneLeft')
+              : remaining === -1
+                ? t('usesUnlimited', { count })
+                : t('uses', { count, remaining, after: Math.max(0, remaining - count) })}
+          </p>
+        )}
       </div>
 
       <DialogFooter>

@@ -156,6 +156,8 @@ describe('New content opportunities', () => {
       'Every need already has an opportunity. Add prompts for new needs, or use Another angle on an opportunity.',
     );
     expect(button('Generate 1')!.disabled).toBe(true);
+    expect(text()).not.toContain('max 0');
+    expect(text()).not.toContain('Uses 1');
   });
 
   it('fills the rest with another angle on needs the brand is still barely seen for', async () => {
