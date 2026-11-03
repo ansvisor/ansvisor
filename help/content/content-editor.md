@@ -1,11 +1,11 @@
 ---
 title: Write a page in the Content Editor
 route: /dashboard/content/editor
-keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate]
+keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, chat in the editor, chat tab, continued from your chat, from your chat, this draft, ctrl j]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -47,11 +47,17 @@ Ones in alt text, structured data or HTML count too. **Send to CMS** waits until
 
 ## The side panel
 
-The side panel's tabs are **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**.
+The side panel's tabs are **Chat** (with Chat on, see below), **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**, or on **Chat** for a page Chat made.
 
 While the panel is closed, its tabs run down the editor's right edge: click one to open the panel there.
 
 Building the brief and running the Content Agent use your workspace's monthly AI usage.
+
+## Chat beside the page
+
+With Chat on, **Chat** is the side panel's first tab. A page Chat made opens on it and continues that chat: "Continued from your chat". Otherwise it continues the chat you last had here about the page, or starts one. **Ctrl J** opens it.
+
+What you ask about the page doesn't change it. The Content Agent leaves suggestions in the page, labelled "Content Agent · from your chat", with the same guards as Fix open rules; the page changes only when you **Accept** one. Remove **This draft** from the box to talk about something else. The expand icon opens the chat on Chat's own page.
 
 ## The brief
 

@@ -38,6 +38,18 @@ const getBrandFacts = vi.fn();
 const checkDraftLinks = vi.fn();
 const getSiteTrust = vi.fn();
 // No white label kit: downloads keep Ansvisor's names (export-name.test.ts has a kit's).
+// Chat beside the page (W4-16): the panel's setup when a test gives one, and the tab as a stub.
+const chatPanel = vi.hoisted(() => ({ value: null as unknown }));
+vi.mock('@/components/chat/panel/chat-panel-context', () => ({
+  useChatPanel: () => chatPanel.value,
+}));
+const editorChat = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }));
+vi.mock('@/components/chat/panel/editor-chat', () => ({
+  EditorChat: (props: Record<string, unknown>) => {
+    editorChat.props = props;
+    return <div data-slot="editor-chat" />;
+  },
+}));
 vi.mock('@/lib/actions/white-label', () => ({
   getExportBranding: async () => ({ ok: true, branding: null }),
 }));
@@ -3040,6 +3052,36 @@ describe('the side panel', () => {
     expect(getContentImpact).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
     expect(getContentResults).toHaveBeenCalledWith('b1', 'https://acme.example.com/pricing', 30);
     expect(button('Hide side panel')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('puts Chat first with the new Chat on, opens a chat-made draft on it, and Ctrl J opens it (W4-16)', async () => {
+    const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+    chatPanel.value = { setup: { enabled: true } };
+    getContentDraft.mockResolvedValue(draft({ conversation: { id: CHAT, title: 'Pricing FAQ' } }));
+    localStorage.setItem('aeo:content-editor-panel', '1');
+    try {
+      await renderPage('admin', { chatOn: true });
+      const tabs = [...panel()!.querySelectorAll('[role="tab"]')].map(tabName);
+      expect(tabs).toEqual(['Chat', 'Instructions', 'Sources', 'Live page']);
+      expect(selectedTab()).toBe('Chat');
+      expect(editorChat.props).toMatchObject({
+        draftId: 'd1',
+        conversation: { id: CHAT, title: 'Pricing FAQ' },
+      });
+      // The Content Agent's suggestions for a request typed there: the page reads them.
+      getDraftSuggestions.mockClear();
+      await act(async () => (editorChat.props!.onSuggestions as (n: number) => void)(2));
+      expect(getDraftSuggestions).toHaveBeenCalledWith('d1');
+
+      await pickTab('Instructions');
+      await act(async () => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true }));
+      });
+      expect(selectedTab()).toBe('Chat');
+    } finally {
+      chatPanel.value = null;
+      localStorage.removeItem('aeo:content-editor-panel');
+    }
   });
 
   it('keeps its tabs down the right edge while closed, and opens on the one picked', async () => {

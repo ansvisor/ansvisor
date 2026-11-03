@@ -8464,6 +8464,14 @@
         "cancel": "Cancel",
         "insert": "Insert"
       },
+      "chat": {
+        "continued": "Continued from your chat “{title}”",
+        "untitled": "Untitled chat",
+        "openFull": "Open in full page",
+        "thisDraft": "This draft",
+        "placeholder": "Make the intro shorter",
+        "empty": "Ask for changes to this page. They come back here as suggestions to accept or reject."
+      },
       "panel": {
         "label": "Side panel",
         "show": "Show side panel",
@@ -8472,6 +8480,7 @@
         "openRules": "{count, plural, one {# rule open} other {# rules open}}",
         "sourcesInUse": "{count, plural, one {# source in use} other {# sources in use}}",
         "tabs": {
+          "chat": "Chat",
           "instructions": "Instructions",
           "sources": "Sources",
           "impact": "Live page"
