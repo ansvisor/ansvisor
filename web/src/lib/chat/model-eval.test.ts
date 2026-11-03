@@ -484,11 +484,24 @@ describe('the test set’s harness (W4-35), on a scripted model', () => {
     expect(result.passed).toBe(true);
   });
 
-  it('finds a tool name shown to the person', async () => {
-    scripted([text('I would call get_plan_facts for that.')]);
-    const result = await runScenario(scenarioOf('greeting'));
-    expect(result.run.leaked).toEqual(['get_plan_facts']);
-    expect(result.passed).toBe(false);
+  it('finds a tool name, an id or an id field in what the person was sent', () => {
+    // On the events themselves: the engine takes names out of the answer (answer-guards.ts).
+    const delta = (text: string) => ({ type: 'text.delta', seq: 1, data: { text } }) as ChatEvent;
+    expect(leaksOf([delta('I would call get_plan_facts for that.')])).toEqual(['get_plan_facts']);
+    expect(leaksOf([delta(`Draft ${ORG} saved.`)])).toEqual(['an id']);
+    expect(leaksOf([delta('Hi. I can check your visibility.')])).toEqual([]);
+    const greeting = gradeRun(scenarioOf('greeting'), {
+      status: 'done',
+      answer: 'I would call get_plan_facts for that.',
+      reads: [],
+      changes: [],
+      cards: 0,
+      asks: 0,
+      denials: 0,
+      leaked: ['get_plan_facts'],
+      tokens: { input: 0, output: 0 },
+    });
+    expect(greeting.passed).toBe(false);
   });
 });
 
