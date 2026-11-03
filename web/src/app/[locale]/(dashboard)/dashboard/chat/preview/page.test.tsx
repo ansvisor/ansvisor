@@ -5,12 +5,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../messages/en.json';
 
 /**
- * The Chat pieces preview (Chat P0, D1 and D2): there only with the new Chat
- * on for the workspace, and every piece and run card in every state on it.
+ * The Chat pieces preview (Chat P0, D1 and D2): there only for Ansvisor staff
+ * (STAFF_EMAILS) with the new Chat on for the workspace, and every piece and
+ * run card in every state on it.
  */
 
+type SessionUser = { id: string; email?: string; email_confirmed_at?: string | null };
+const STAFF: SessionUser = {
+  id: 'user-1',
+  email: 'staff@ansvisor.com',
+  email_confirmed_at: '2026-10-01T00:00:00Z',
+};
 const session = vi.hoisted(() => ({
-  user: { id: 'user-1' } as { id: string } | null,
+  user: null as SessionUser | null,
   orgId: 'org-1',
 }));
 vi.mock('@/lib/supabase/server', () => ({
@@ -52,11 +59,12 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  session.user = { id: 'user-1' };
+  session.user = STAFF;
   session.orgId = 'org-1';
   notFound.mockClear();
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+  vi.stubEnv('STAFF_EMAILS', 'staff@ansvisor.com');
   // The live runs tray reads its runs.
   vi.stubGlobal(
     'fetch',
@@ -106,6 +114,25 @@ describe('the Chat pieces preview', () => {
   it('is not found signed out', async () => {
     session.user = null;
     await expect(ChatPiecesPreviewPage()).rejects.toThrow('NEXT_NOT_FOUND');
+  });
+
+  // A design sign-off page, Ansvisor's own: with Chat on for everyone, a
+  // customer (an Admin too) doesn't get it.
+  it('is not found for anyone but staff', async () => {
+    session.user = {
+      id: 'user-2',
+      email: 'admin@customer.com',
+      email_confirmed_at: STAFF.email_confirmed_at,
+    };
+    await expect(ChatPiecesPreviewPage()).rejects.toThrow('NEXT_NOT_FOUND');
+    // A staff address not yet confirmed isn't staff.
+    session.user = { ...STAFF, email_confirmed_at: null };
+    await expect(ChatPiecesPreviewPage()).rejects.toThrow('NEXT_NOT_FOUND');
+    // Nor is anyone without STAFF_EMAILS.
+    session.user = STAFF;
+    vi.stubEnv('STAFF_EMAILS', '');
+    await expect(ChatPiecesPreviewPage()).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(notFound).toHaveBeenCalledTimes(3);
   });
 
   it('shows every piece in every state', async () => {

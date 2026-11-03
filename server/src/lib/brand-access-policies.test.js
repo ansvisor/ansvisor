@@ -71,10 +71,14 @@ const NOT_BRAND_DATA = {
   api_keys: "A person's own API keys; a key carries its owner's brand access (PR 10).",
   chat_auto_choices: "A person's own Chat tool choices.",
   chat_settings: "The Account's Chat settings (D1).",
+  chat_skills:
+    "The Account's own Chat skills (00458): instructions for every brand, no brand's data.",
   chat_storage_usage: "The Account's Chat storage meter against the plan (D1).",
   chat_uploads:
     "A person's own uploads stay theirs; the others follow their chat (chat_conversations).",
   chat_user_prefs: "A person's own Chat preferences.",
+  chat_whats_new_reads:
+    "A person's own What's new read marks (00464): which product updates they read, no brand's data.",
   cloro_countries: 'The list of countries a prompt can track, the same for everyone.',
   content_authors: "The Account's authors for content (Settings › Authors).",
   content_rule_sets: "The Account's content rules.",
@@ -102,7 +106,8 @@ const DEFERRED = {
 /**
  * A person's own rows, read by them (and admins, who have All brands), where a
  * row with no brand stays readable whatever brands they see: what they wrote
- * or did themselves. Keys: `table: policy`.
+ * or did themselves, and the workspace's memory, which is every member's.
+ * Keys: `table: policy`.
  */
 const OWN_ROWS_WITHOUT_BRAND = {
   'agent_conversations: users read own conversations':
@@ -115,6 +120,16 @@ const OWN_ROWS_WITHOUT_BRAND = {
     'Chat’s change log: the person who acted, or an admin.',
   'chat_access_requests: chat_access_requests: own or admin select':
     'A request to the admins: the person who asked, or an admin.',
+  'chat_notices: chat_notices: own select':
+    "A person's own notes from the system (00446): one about a brand only where they reach it; one about the workspace's AI key has none.",
+  'chat_notices: chat_notices: own read':
+    "A person marks their own notice read or closes it (00441, 00446): it changes no one else's, and they read only those about brands they reach.",
+  'chat_schedules: chat_schedules: own or admin select':
+    'A scheduled job about the whole workspace: the person who made it (its runs act as them), or an admin.',
+  'chat_memory_items: chat_memory_items: own select':
+    'A person’s own Me memory (00459): only they read it, and it never has a brand.',
+  'chat_memory_items: chat_memory_items: workspace select':
+    'The workspace’s memory (00459): its rules for every brand and member, no brand’s data; a brand’s facts are its own lines.',
 };
 
 /** Roles that bypass RLS: a policy for them only is the server's. */
@@ -572,6 +587,8 @@ describe('every brand table answers to the brand’s access', () => {
       'prompt_usage_counters',
       'chat_conversations',
       'ship_events',
+      'chat_schedules',
+      'chat_memory_items',
     ]) {
       expect(reaching, table).toContain(table);
     }
@@ -629,6 +646,8 @@ describe('every table without a brand_id', () => {
       'chat_agent_versions',
       'chat_agent_triggers',
       'chat_agent_go_live',
+      'chat_schedule_runs',
+      'chat_outbound_emails',
     ]) {
       expect(childrenReaching, table).toContain(table);
     }

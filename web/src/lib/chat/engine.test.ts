@@ -21,6 +21,7 @@ import {
   seedWorkspace,
 } from './testing/chat-fixtures';
 import { copiedFrom, type UntrustedShingles } from './go-live-checks';
+import type { GoLiveFacts } from './precedence';
 
 /**
  * Chat's engine (C3), with a scripted model and an in-memory database: a turn
@@ -157,7 +158,10 @@ const fakes = vi.hoisted(() => ({
   markWorking: vi.fn(async () => ({ cleared: true, resumed: 0 })),
   openPage: vi.fn(),
   explain: vi.fn(),
+  goLiveFacts: vi.fn(),
 }));
+// Step 4b's guards' facts, as their reads would give them (go-live-facts.test.ts reads them).
+vi.mock('./go-live-facts', () => ({ readGoLiveFacts: fakes.goLiveFacts }));
 // fetch_page as it is, opening pages through a fake of the API's internal route.
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
@@ -265,8 +269,14 @@ const { readPrecedenceContext } = await import('./precedence-context');
 const { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
 const { ASK_TOOL } = await import('./asks');
 const { NEXT_MOVES_TOOL } = await import('./next-moves');
-const { MAX_LISTED_SKILLS, SKILL_LIBRARY, USE_SKILL_TOOL, enabledSkills, skillsForPrompt } =
-  await import('./skills/library');
+const {
+  MAX_LISTED_SKILLS,
+  SHORTCUT_PLAYBOOKS,
+  SKILL_LIBRARY,
+  USE_SKILL_TOOL,
+  enabledSkills,
+  skillsForPrompt,
+} = await import('./skills/library');
 
 type ChatEvent = import('./events').ChatEvent;
 type ChatActor = import('./engine').ChatActor;
@@ -3274,6 +3284,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     // W2-07's content rows: Admins and Managers only.
     'update_draft',
     'push_cms_draft',
+    'publish_cms',
     'build_report',
     'run_site_audit',
   ];
@@ -5176,6 +5187,139 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
   });
 });
 
+describe('shortcuts (W2-09, CHAT-08 items 4, 7, 8)', () => {
+  type Sent = { role: string; content: unknown };
+  const systemsOf = (options: CallOptions) =>
+    (options.prompt as unknown as Sent[]).filter((m) => m.role === 'system');
+  const playbook = (name: string) => SHORTCUT_PLAYBOOKS.find((p) => p.name === name)!;
+  const skillSteps = (runId: string) => stepsOf(runId).filter((s) => s.kind === 'skill');
+  const toolNames = (options: CallOptions) => options.tools?.map((tool) => tool.name) ?? [];
+
+  /** A turn sent with a shortcut's id, as the composer sends it. */
+  async function shortcutTurn(message: string, shortcutId: unknown, actor = ADMIN) {
+    const started = await engine.startChatRun(actor, {
+      message,
+      brandId: BRAND,
+      mode: 'auto',
+      shortcutId,
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(actor, started.runId);
+    return started.runId;
+  }
+  const questionOf = (runId: string) =>
+    db.tables.chat_messages.find(
+      (m) => m.conversation_id === runRow(runId).conversation_id && m.role === 'user',
+    )!;
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+  });
+
+  it('keeps the shortcut on the message, loads its playbook first and reads only its data plan', async () => {
+    const { haiku, sonnet } = useModels(
+      [calls(toolCall('r1', 'list_citations', { brand_id: BRAND })), READY],
+      [text('Citations fell on two pages.')],
+    );
+    const runId = await shortcutTurn('Analyze our citations', 'analyze');
+
+    expect(questionOf(runId).shortcut_id).toBe('analyze');
+    const [first] = stepsOf(runId);
+    expect(first).toMatchObject({
+      position: 1,
+      kind: 'skill',
+      label: 'Used shortcut: Analyze',
+      detail: 'Ansvisor library',
+      debug_json: { skill: 'analyze', via: 'shortcut' },
+    });
+    // Its body below the rules, for both models; never listed as a skill to pick.
+    for (const options of [haiku.seen[0], sonnet.seen[0]]) {
+      const systems = systemsOf(options);
+      expect(String(systems[2].content)).toContain(
+        `<skill name="analyze">\n${playbook('analyze').body}\n</skill>`,
+      );
+      expect(String(systems[1].content)).not.toContain('analyze: ');
+    }
+    // The data plan's reads only: the test's own read_visibility and fetch_page are left out.
+    const reads = toolNames(haiku.seen[0]);
+    expect(reads).toEqual(
+      expect.arrayContaining(['get_visibility_summary', 'list_citations', 'explain_change']),
+    );
+    expect(reads).not.toContain('read_visibility');
+    expect(reads).not.toContain('fetch_page');
+    // The writer keeps every change; only the reads are narrowed.
+    expect(toolNames(sonnet.seen[0])).toContain('create_draft');
+    expect(toolNames(sonnet.seen[0])).not.toContain('read_visibility');
+    expect(runRow(runId).status).toBe('done');
+    expectClean(await eventsOf(runId));
+  });
+
+  it('refuses a read outside the data plan, should the model call one', async () => {
+    const { haiku } = useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Ok.')],
+    );
+    await shortcutTurn('Analyze our visibility', 'analyze');
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    // Not offered, so it is never run: the call comes back as unavailable.
+    expect(JSON.stringify(haiku.seen[1].prompt)).toContain('unavailable tool');
+  });
+
+  it.each([
+    ['rewritten trigger words', 'Why did our citations drop?', 'analyze'],
+    ["an id that is no shortcut's", 'Analyze our citations', 'report'],
+    ['an id too long to be one', 'Analyze our citations', 'x'.repeat(80)],
+  ])("runs as the person's own request for %s", async (_, message, id) => {
+    const { haiku } = useModels([READY], [text('Ok.')]);
+    const runId = await shortcutTurn(message, id);
+    expect(questionOf(runId).shortcut_id ?? null).toBeNull();
+    expect(skillSteps(runId)).toEqual([]);
+    expect(toolNames(haiku.seen[0])).toContain('read_visibility');
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it("takes a Home chip's shortcut with its own words", async () => {
+    useModels([READY], [text('Ok.')]);
+    const runId = await shortcutTurn(
+      'What changed in our AI visibility this week, and why?',
+      'analyze',
+    );
+    expect(questionOf(runId).shortcut_id).toBe('analyze');
+    expect(skillSteps(runId).map((s) => s.label)).toEqual(['Used shortcut: Analyze']);
+  });
+
+  it('counts the playbook in the run’s 3 bodies, and answers no How-to question from Help', async () => {
+    const { haiku } = useModels(
+      [
+        calls(
+          toolCall('s1', USE_SKILL_TOOL, { name: 'winback' }),
+          toolCall('s2', USE_SKILL_TOOL, { name: 'refresh' }),
+          toolCall('s3', USE_SKILL_TOOL, { name: 'faq' }),
+        ),
+        READY,
+      ],
+      [text('Ok.')],
+    );
+    const runId = await shortcutTurn('Help me get started. What should I set up first?', 'start');
+    expect(skillSteps(runId).map((s) => (s.debug_json as { skill: string }).skill)).toEqual([
+      'start',
+      'winback',
+      'refresh',
+    ]);
+    expect(JSON.stringify(haiku.seen[1].prompt)).toContain('limit_reached');
+    expect(stepsOf(runId).some((s) => s.label === 'Read Ansvisor Help')).toBe(false);
+  });
+
+  it('keeps nothing of it while the new Chat is off', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    const { haiku } = useModels([READY], [text('Ok.')]);
+    const runId = await shortcutTurn('Analyze our citations', 'analyze');
+    expect(skillSteps(runId)).toEqual([]);
+    expect(toolNames(haiku.seen[0])).toContain('read_visibility');
+  });
+});
+
 describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
   // The mocked registry's own list: the aliases join it for these tests only.
   const tools = CHAT_TOOLS as (typeof CHAT_TOOLS)[number][];
@@ -5385,6 +5529,251 @@ describe('the /tasks task strip (W2-11, CHAT-09 §B)', () => {
     expect(ofType(await eventsOf(runId), 'tasks.updated')).toEqual([]);
     logged.mockRestore();
     delete db.failures.chat_task_state;
+  });
+});
+
+describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
+  const AGENT = 'abababab-abab-4bab-8bab-abababababab';
+  const AGENT_RUN = 'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd';
+  const SLOT = 'efefefef-efef-4fef-8fef-efefefefefef';
+  const send = toolCall('g1', 'push_cms_draft', { draft_id: DRAFT, destination: 'webflow' });
+  const PAGE = {
+    draftId: DRAFT,
+    title: 'Pricing FAQ',
+    slug: 'pricing-faq',
+    metaTitle: 'Pricing FAQ',
+    metaDescription: '',
+    html: '<p>Fair prices.</p>',
+    author: null,
+    reviewer: null,
+    featuredImage: null,
+  };
+  const PASSED: GoLiveFacts = {
+    runUntrusted: false,
+    page: 'ready',
+    text: { hold: null },
+    liveItem: false,
+    gate: { pass: true, scores: { eeat: 81, trust: 80, readability: 79, average: 80 } },
+    usage: { used: 1, counted: false, nextAt: '2026-11-02T15:30:00.000Z' },
+  };
+  const reserved: Record<string, unknown>[] = [];
+  const sent = vi.fn();
+  // The scripted models under a name React's hooks rule leaves alone: no hook, called in a helper.
+  const models = useModels;
+
+  beforeEach(() => {
+    seedDraft(db);
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
+    vi.stubEnv('CRON_SECRET', 'secret');
+    db.tables.chat_settings = [
+      {
+        organization_id: ORG,
+        tool_policies: {},
+        full_auto_for_members: true,
+        dont_ask_again: true,
+        manager_execute_off: [],
+        agents_full_auto: true,
+        auto_go_live_groups: ['publishing'],
+      },
+    ];
+    db.tables.chat_agent_runs = [
+      { id: AGENT_RUN, organization_id: ORG, agent_id: AGENT, agent_version: 2 },
+    ];
+    db.tables.chat_agents = [{ id: AGENT, organization_id: ORG, name: 'Publisher' }];
+    db.tables.chat_agent_go_live = [
+      { agent_id: AGENT, organization_id: ORG, version: 2, daily_limit: 5, skill_checksums: {} },
+    ];
+    reserved.length = 0;
+    db.rpcs.reserve_agent_go_live = (args) => {
+      reserved.push(args);
+      return SLOT;
+    };
+    fakes.goLiveFacts.mockResolvedValue({ facts: PASSED, page: PAGE });
+    vi.mocked(sendDraftToCms).mockResolvedValue({
+      ok: true,
+      target: 'webflow',
+      status: 'sent',
+      updated: false,
+      live: false,
+    });
+    sent.mockReset();
+    sent.mockImplementation(async () =>
+      Response.json({ success: true, delivery: { id: 'd1', status: 'sent', updated: false } }),
+    );
+    vi.stubGlobal('fetch', sent);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  /**
+   * A turn of the agent run (or, `own`, the Admin's own chat) in Full auto
+   * that sends the draft, driven as the minute tick drives it: no session.
+   */
+  async function agentTurn({ own = false, before }: { own?: boolean; before?: () => void } = {}) {
+    models([READY], [calls(send), text('Sent.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Send the FAQ to Webflow',
+      brandId: BRAND,
+      mode: 'full_auto',
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    if (!own) {
+      db.tables.chat_conversations.find((c) => c.id === started.conversationId)!.agent_run_id =
+        AGENT_RUN;
+    }
+    before?.();
+    await engine.driveRun(ADMIN, started.runId, undefined, {
+      sessionUserId: own ? PEOPLE.admin : null,
+    });
+    const events = await eventsOf(started.runId);
+    expectClean(events);
+    return {
+      runId: started.runId,
+      cards: ofType(events, 'confirm.required').map((e) => e.data),
+    };
+  }
+
+  it('sends an allowed agent’s draft on its own: its slot, the API as its person, Activity', async () => {
+    const { runId, cards } = await agentTurn();
+    expect(cards).toEqual([]);
+    expect(runRow(runId).status).toBe('done');
+    expect(fakes.goLiveFacts).toHaveBeenCalledWith(
+      expect.objectContaining({
+        step: { kind: 'cms_draft', draftId: DRAFT, target: 'webflow' },
+        actingUserId: PEOPLE.admin,
+        runId,
+        agentRunId: AGENT_RUN,
+      }),
+    );
+    expect(reserved).toEqual([
+      {
+        p_organization_id: ORG,
+        p_agent_id: AGENT,
+        p_run_id: runId,
+        p_agent_run_id: AGENT_RUN,
+        p_brand_id: BRAND,
+        p_content_draft_id: DRAFT,
+        p_tool_key: 'sendToCms',
+        p_kind: 'cms_draft',
+        p_target: 'webflow',
+        p_limit: 5,
+      },
+    ]);
+    // The page its guards read goes out, through the API, as the run's person.
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(
+      JSON.parse((sent.mock.calls[0] as [string, RequestInit])[1].body as string),
+    ).toMatchObject({ reservationId: SLOT, agentRunId: AGENT_RUN, runId, page: PAGE });
+    expect(stepsOf(runId)[0]).toMatchObject({ kind: 'execute', status: 'done' });
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({
+        class: 'execute',
+        approval_kind: 'auto',
+        auto_via: 'go_live',
+        agent_id: AGENT,
+        agent_run_id: AGENT_RUN,
+        run_id: runId,
+      }),
+    ]);
+  });
+
+  it('keeps the click card, saying why, when a guard holds the page; the click sends it', async () => {
+    fakes.goLiveFacts.mockResolvedValue({
+      facts: { ...PASSED, gate: { pass: false, hold: 'quality', score: 70 } },
+      page: PAGE,
+    });
+    const { runId, cards } = await agentTurn();
+    expect(cards).toEqual([
+      expect.objectContaining({
+        canDontAskAgain: false,
+        note: expect.stringMatching(/^Held for your click: Quality is 70, under 75\./),
+      }),
+    ]);
+    expect(runRow(runId).status).toBe('waiting');
+    expect(reserved).toEqual([]);
+    expect(sent).not.toHaveBeenCalled();
+    // The owner's click, in their own request: the person's own send, logged as a click.
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    expect(sendDraftToCms).toHaveBeenCalledTimes(1);
+    expect(sent).not.toHaveBeenCalled();
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({ approval_kind: 'click', auto_via: null }),
+    ]);
+  });
+
+  it('holds the step at the agent’s daily limit, with when the next one can go', async () => {
+    db.rpcs.reserve_agent_go_live = (args) => {
+      reserved.push(args);
+      return null;
+    };
+    const { runId, cards } = await agentTurn();
+    expect(cards[0].note).toMatch(
+      /^Held for your click: Publisher went live 5 times in the last 24 hours\. The next one can go on its own at \w{3} 3:30 PM\./,
+    );
+    expect(runRow(runId).status).toBe('waiting');
+    expect(sent).not.toHaveBeenCalled();
+  });
+
+  it('turns a send that failed into its click card, never trying it again by itself', async () => {
+    sent.mockImplementation(async () =>
+      Response.json({
+        success: true,
+        delivery: { id: 'd1', status: 'failed', error: 'Collection is archived' },
+      }),
+    );
+    const { runId, cards } = await agentTurn();
+    expect(cards).toEqual([
+      expect.objectContaining({
+        note: expect.stringMatching(
+          /^Held for your click: It didn’t go out: Webflow refused it: Collection is archived/,
+        ),
+      }),
+    ]);
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(stepsOf(runId)[0]).toMatchObject({ kind: 'execute', status: 'waiting' });
+    expect(db.tables.chat_activity_log ?? []).toEqual([]);
+    // The click runs the person's own send anew, not the failure kept for the try on its own.
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    expect(sendDraftToCms).toHaveBeenCalledTimes(1);
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(stepsOf(runId)[0]).toMatchObject({ status: 'done' });
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({ approval_kind: 'click' }),
+    ]);
+  });
+
+  it('holds every go-live of a run that met an injection', async () => {
+    const { runId, cards } = await agentTurn({
+      before: () => {
+        const state = db.tables.chat_run_state.at(-1)!;
+        state.progress = { ...(state.progress as object), injection: true };
+      },
+    });
+    expect(cards[0].note).toMatch(
+      /^Held for your click: This run read text that tried to instruct it\./,
+    );
+    expect(runRow(runId).status).toBe('waiting');
+    expect(reserved).toEqual([]);
+    expect(sent).not.toHaveBeenCalled();
+  });
+
+  it('reads the facts for a candidate only: a person’s own chat, the flag off, another version', async () => {
+    const plain = async (setup: () => void, own = false) => {
+      setup();
+      const { cards } = await agentTurn({ own });
+      expect(cards).toHaveLength(1);
+      expect(cards[0].note ?? '').not.toMatch(/Held for your click/);
+    };
+    await plain(() => {}, true);
+    await plain(() => vi.stubEnv('CHAT_AUTO_GO_LIVE', 'false'));
+    vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
+    await plain(() => {
+      db.tables.chat_agent_go_live[0].version = 1;
+    });
+    expect(fakes.goLiveFacts).not.toHaveBeenCalled();
+    expect(reserved).toEqual([]);
+    expect(sent).not.toHaveBeenCalled();
   });
 });
 

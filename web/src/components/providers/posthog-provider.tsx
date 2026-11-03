@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import posthog from 'posthog-js';
+import { REPLAY_OPTIONS, scrubEvent } from '@/lib/analytics-privacy';
 
 /**
  * Initialise PostHog once on mount when the env key is configured.
@@ -13,6 +14,9 @@ import posthog from 'posthog-js';
  *  - If the key is set, PostHog initialises with autocapture disabled (we
  *    capture explicit events from code so what we track is auditable) and
  *    is exposed on window for the analytics.ts wrapper.
+ *  - Secrets stay out of events and replays (analytics-privacy.ts): inputs
+ *    are always masked, `ph-no-capture` elements are left out, and URLs lose
+ *    invite tokens, addresses and sign-in codes before they are sent.
  */
 export function PostHogProvider() {
   const initialised = useRef(false);
@@ -28,6 +32,8 @@ export function PostHogProvider() {
       capture_pageleave: true,
       autocapture: false,
       disable_session_recording: false,
+      session_recording: REPLAY_OPTIONS,
+      before_send: scrubEvent,
       persistence: 'localStorage+cookie',
       person_profiles: 'identified_only',
       loaded: (instance) => {

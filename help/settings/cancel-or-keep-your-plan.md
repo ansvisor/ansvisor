@@ -8,7 +8,7 @@ updated: 2026-10-30
 last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/faq.mdx]
 ---
 Canceling doesn't end your plan at once: it runs to the end of the period you've paid for, and every page says when it ends. Until then you can keep it with one click.

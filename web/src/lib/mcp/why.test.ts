@@ -36,6 +36,7 @@ const auth: McpAuthContext = {
   organizationId: ORG,
   role: 'analyst',
   apiKeyId: 'agent-internal',
+  brandAccess: 'all',
 };
 
 /** A cell's period as chat_why_cells returns it. */

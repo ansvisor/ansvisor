@@ -54,6 +54,7 @@ vi.mock('@/lib/mcp-auth', () => ({
     email: null,
     organizationId: 'org-1',
     apiKeyId: 'key-1',
+    brandAccess: 'all',
   })),
 }));
 
@@ -69,6 +70,7 @@ async function connect() {
     email: null,
     organizationId: 'org-1',
     apiKeyId: 'key-1',
+    brandAccess: 'all',
     role: 'admin',
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

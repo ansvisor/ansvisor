@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { TeamRole } from '@/components/providers/role-provider';
-import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { autoGoLiveEnabled, chatAgenticEnabled } from '@/lib/chat/flag';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
 import {
   ADMIN_POLICIES,
@@ -24,6 +24,8 @@ import {
   type ToolPolicy,
 } from '@/lib/chat/registry/define-tool';
 import { planCardOf, type PlanCard } from '@/lib/chat/access';
+import { qualityPhase } from '@/lib/content/quality';
+import { GO_LIVE_GROUPS, GO_LIVE_TERMS } from '@/lib/chat/go-live';
 
 /**
  * Settings › Chat (CHAT-20 §5, §8b; mockup #g-policy), behind CHAT_AGENTIC:
@@ -44,6 +46,8 @@ export type SettingsFailure =
   | 'invalid'
   | 'locked'
   | 'read_only'
+  | 'quality_off'
+  | 'unavailable'
   | 'failed';
 export type SettingsResult = { ok: true } | { ok: false; failure: SettingsFailure };
 
@@ -73,7 +77,27 @@ export interface ChatSettingsView {
   rows: PolicyRow[];
   /** The person's own "Don't ask again" ticks, by label key. */
   autoChoices: string[];
+  /** Agents that publish on their own (AUTONOMOUS-GO-LIVE §7.1); null with its flag off or before 00443. */
+  goLive: GoLiveView | null;
 }
+
+/** The workspace switch for agents going live on their own, as Settings › Chat shows it. */
+export interface GoLiveView {
+  on: boolean;
+  /** When it was last turned on, and by whom (their name, else their e-mail). */
+  since: string | null;
+  byName: string | null;
+  /** Content Quality is off: each page is checked by it before it goes live. */
+  qualityOff: boolean;
+  /** The workspace's name, for the responsibility dialog. */
+  workspace: string;
+}
+
+/** A column 00443 adds, missing: the web ahead of its migration. */
+const beforeGoLive = (error: { code?: string; message?: string } | null) =>
+  !!error &&
+  (error.code === '42703' || error.code === 'PGRST204') &&
+  (error.message ?? '').includes('auto_go_live');
 
 interface Who {
   userId: string;
@@ -138,8 +162,85 @@ export async function getChatSettingsView(): Promise<
         managerExecuteOff: [...ctx.settings.managerExecuteOff],
         rows: rowsOf(ctx),
         autoChoices: [...ctx.autoChoices].filter((key) => chatToolByKey(key)),
+        // Hidden while staff haven't turned the feature on (CHAT_AUTO_GO_LIVE).
+        goLive: autoGoLiveEnabled(me.organizationId) ? await readGoLive(me.organizationId) : null,
       },
     };
+  } catch {
+    return { ok: false, failure: 'failed' };
+  }
+}
+
+/** The workspace's go-live switch, with who turned it on; null before 00443. */
+async function readGoLive(organizationId: string): Promise<GoLiveView | null> {
+  const [settings, org] = await Promise.all([
+    supabaseAdmin
+      .from('chat_settings')
+      .select('auto_go_live_groups, auto_go_live_at, auto_go_live_by')
+      .eq('organization_id', organizationId)
+      .maybeSingle(),
+    supabaseAdmin.from('organizations').select('name').eq('id', organizationId).maybeSingle(),
+  ]);
+  if (beforeGoLive(settings.error)) return null;
+  if (settings.error) throw new Error(settings.error.message);
+  const row = settings.data;
+  let byName: string | null = null;
+  if (row?.auto_go_live_by) {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name')
+      .eq('id', row.auto_go_live_by)
+      .maybeSingle();
+    byName = profile?.full_name?.trim() || null;
+    if (!byName) {
+      const { data } = await supabaseAdmin.auth.admin.getUserById(row.auto_go_live_by);
+      byName = data?.user?.email ?? null;
+    }
+  }
+  return {
+    on: GO_LIVE_GROUPS.every((group) => (row?.auto_go_live_groups ?? []).includes(group)),
+    since: row?.auto_go_live_at ?? null,
+    byName,
+    qualityOff: qualityPhase() < 1,
+    workspace: org.data?.name ?? '',
+  };
+}
+
+/**
+ * Turns agents' going live on their own on or off for the workspace
+ * (AUTONOMOUS-GO-LIVE §7.1). On: Admins only, with Full auto's plan and
+ * Content Quality on, after the responsibility dialog (its text's version
+ * kept, with who and when). Off takes effect from the next call; agents'
+ * own permissions are kept, inert.
+ */
+export async function setAutoGoLive(on: boolean, terms: number): Promise<SettingsResult> {
+  try {
+    const admin = await asAdmin();
+    if (!admin.ok) return admin;
+    const { me } = admin;
+    if (!autoGoLiveEnabled(me.organizationId)) return { ok: false, failure: 'unavailable' };
+    if (on) {
+      if (!me.ctx.plan.fullAuto) return { ok: false, failure: 'locked' };
+      if (qualityPhase() < 1) return { ok: false, failure: 'quality_off' };
+      if (terms !== GO_LIVE_TERMS) return { ok: false, failure: 'invalid' };
+    }
+    const { error } = await supabaseAdmin.from('chat_settings').upsert(
+      {
+        organization_id: me.organizationId,
+        auto_go_live_groups: on ? [...GO_LIVE_GROUPS] : [],
+        ...(on
+          ? {
+              auto_go_live_by: me.userId,
+              auto_go_live_at: new Date().toISOString(),
+              auto_go_live_terms: GO_LIVE_TERMS,
+            }
+          : {}),
+        updated_by: me.userId,
+      },
+      { onConflict: 'organization_id' },
+    );
+    if (beforeGoLive(error)) return { ok: false, failure: 'unavailable' };
+    return error ? { ok: false, failure: 'failed' } : { ok: true };
   } catch {
     return { ok: false, failure: 'failed' };
   }
