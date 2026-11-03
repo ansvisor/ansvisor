@@ -1002,6 +1002,11 @@
         "optimize a page",
         "find opportunities",
         "improve with audit",
+        "brand facts",
+        "approved facts",
+        "/facts",
+        "/wrongclaim",
+        "fact check",
         "api key in message",
         "paste api key",
         "remove key",
@@ -1017,7 +1022,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1074,6 +1079,10 @@
         {
           "heading": "Send or publish a page from Chat",
           "text": "A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. A live page, or a send to your webhook, goes from the Content Editor.\n\nSending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat.\n\nTo take a published page back down to a draft in its CMS, ask Chat, or click **Take down** on its row in **Activity** for 30 days. It always waits for your click, and Managers can do it even when publishing is off for them."
+        },
+        {
+          "heading": "Your brand facts",
+          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims a person approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact."
         },
         {
           "heading": "Open a web page",

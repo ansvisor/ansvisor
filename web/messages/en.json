@@ -3415,6 +3415,7 @@
     "profile": { "name": "Read your profile", "step": "Read your profile" },
     "aiUsage": { "name": "Read AI usage", "step": "Read AI usage" },
     "brands": { "name": "Read brands", "step": "Read Brands" },
+    "brandFacts": { "name": "Read approved brand facts", "step": "Read Brand facts" },
     "visibility": { "name": "Read visibility", "step": "Read Visibility" },
     "visibilityTrend": { "name": "Read the visibility trend", "step": "Read Visibility trend" },
     "trackedPrompts": { "name": "Read tracked prompts", "step": "Read Prompts" },
