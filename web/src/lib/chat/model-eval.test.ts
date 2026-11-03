@@ -15,10 +15,12 @@ import {
 } from './testing/chat-fixtures';
 import {
   EVAL_BRAND,
+  EVAL_PASSES_TO_OFFER,
   EVAL_SCENARIOS,
   evalCost,
   evalReadResult,
   gradeRun,
+  mayBeOffered,
   type EvalResult,
   type EvalRole,
   type EvalScenario,
@@ -36,9 +38,13 @@ import {
  *
  * CHAT_MODEL_EVAL is `untested` (every model of lib/chat/models.ts not yet
  * tested), `all`, or catalog ids with commas; CHAT_MODEL_EVAL_ONLY keeps
- * the scenarios named; CHAT_MODEL_EVAL_MAX_USD stops starting scenarios
- * once the run has cost that much; CHAT_MODEL_EVAL_OUT is where the JSON
- * report goes (the system's temp folder by default). A Claude model runs on
+ * the scenarios named; CHAT_MODEL_EVAL_PASSES runs the set that many times
+ * in a row (a model is offered only after 2 passes, every `must` check
+ * passing; a model that fails a pass has no next one);
+ * CHAT_MODEL_EVAL_VIA=openrouter calls a Claude model through OpenRouter;
+ * CHAT_MODEL_EVAL_MAX_USD stops starting scenarios once the run has cost
+ * that much; CHAT_MODEL_EVAL_OUT is where the JSON report goes (the
+ * system's temp folder by default). A Claude model runs on
  * ANTHROPIC_API_KEY, any other through OpenRouter on OPENROUTER_API_KEY, as
  * the product calls them (engine-model.ts); each is read from the
  * environment, else from web/.env.local, and never printed. A model without
@@ -515,87 +521,136 @@ function evalModels(asked: string): OfferedModel[] {
   });
 }
 
-/** The model's run, called as the product calls it: Claude on Anthropic's API, else OpenRouter. */
-function realModels(model: OfferedModel, key: string): ChatModels {
-  return model.provider === 'anthropic'
+/**
+ * The model's run, called as the product calls it: Claude on Anthropic's
+ * API, else OpenRouter. With CHAT_MODEL_EVAL_VIA=openrouter a Claude model
+ * runs through OpenRouter too, in one phase: to compare it with the others
+ * where no Anthropic key is at hand. The product's own routing is the same.
+ */
+function realModels(model: OfferedModel, key: string, via: 'product' | 'openrouter'): ChatModels {
+  return model.provider === 'anthropic' && via === 'product'
     ? pickedClaudeModels(key, 'ansvisor', model)
     : openRouterModels(key, { ...model, api: model.id });
 }
 
 const ASKED = process.env.CHAT_MODEL_EVAL?.trim() ?? '';
 
+/** One full pass of the test set on a model. */
+interface EvalPass {
+  pass: number;
+  passed: boolean;
+  scenarios: string;
+  failed: string;
+  tokens: EvalTokens;
+  cost: number | null;
+}
+
+/** The tokens of some runs, added up. */
+function tokensOf(runs: readonly EvalResult[]): EvalTokens {
+  const sum = (field: keyof EvalTokens) =>
+    runs.reduce((total, r) => total + (r.run.tokens[field] ?? 0), 0);
+  return {
+    input: sum('input'),
+    output: sum('output'),
+    cacheRead: sum('cacheRead'),
+    cacheWrite: sum('cacheWrite'),
+  };
+}
+
 describe.skipIf(!ASKED)('the test set on a real model (CHAT_MODEL_EVAL)', () => {
   const only = process.env.CHAT_MODEL_EVAL_ONLY?.split(',').map((id) => id.trim());
   const scenarios = EVAL_SCENARIOS.filter((s) => !only || only.includes(s.id));
-  const results: Record<string, EvalResult[]> = {};
+  // CHAT_MODEL_EVAL_PASSES: how many passes this run makes; a model is offered only after
+  // EVAL_PASSES_TO_OFFER in a row (mayBeOffered).
+  const passes = Math.max(1, Number(process.env.CHAT_MODEL_EVAL_PASSES) || 1);
+  const via = process.env.CHAT_MODEL_EVAL_VIA === 'openrouter' ? 'openrouter' : 'product';
+  /** model → pass → its scenarios' results. */
+  const results: Record<string, EvalResult[][]> = {};
   // CHAT_MODEL_EVAL_MAX_USD: no scenario starts once the run has cost this much.
   const maxUsd = Number(process.env.CHAT_MODEL_EVAL_MAX_USD) || null;
   let spentUsd = 0;
+  /** Whether a model failed a `must` check in an earlier pass: its later passes don't run. */
+  const failedBefore = (model: string, pass: number) =>
+    (results[model] ?? []).slice(0, pass - 1).some((runs) => runs.some((r) => !r.passed));
 
   afterAll(() => {
-    const models = Object.entries(results).map(([model, runs]) => {
-      const sum = (field: keyof EvalTokens) =>
-        runs.reduce((total, r) => total + (r.run.tokens[field] ?? 0), 0);
-      const tokens: EvalTokens = {
-        input: sum('input'),
-        output: sum('output'),
-        cacheRead: sum('cacheRead'),
-        cacheWrite: sum('cacheWrite'),
-      };
+    const models = Object.entries(results).map(([model, byPass]) => {
+      const done: EvalPass[] = byPass.map((runs, i) => {
+        const tokens = tokensOf(runs);
+        return {
+          pass: i + 1,
+          passed: runs.length === scenarios.length && runs.every((r) => r.passed),
+          scenarios: `${runs.filter((r) => r.passed).length}/${scenarios.length}`,
+          failed: runs
+            .flatMap((r) =>
+              r.checks.filter((c) => c.must && !c.ok).map((c) => `${r.scenario}: ${c.name}`),
+            )
+            .join('; '),
+          tokens,
+          cost: evalCost(model, tokens),
+        };
+      });
       return {
         model,
-        passed: runs.length === scenarios.length && runs.every((r) => r.passed),
-        scenarios: `${runs.filter((r) => r.passed).length}/${scenarios.length}`,
-        failed: runs
-          .flatMap((r) =>
-            r.checks.filter((c) => c.must && !c.ok).map((c) => `${r.scenario}: ${c.name}`),
-          )
-          .join('; '),
-        tokens,
-        cost: evalCost(model, tokens),
+        via: CHAT_MODELS.find((m) => m.id === model)?.provider === 'anthropic' ? via : 'openrouter',
+        // Every scenario of the whole set, EVAL_PASSES_TO_OFFER passes in a row.
+        mayBeOffered: !only && mayBeOffered(done),
+        passes: done,
+        cost: done.reduce((sum, p) => sum + (p.cost ?? 0), 0),
       };
     });
     const out =
       process.env.CHAT_MODEL_EVAL_OUT ?? join(tmpdir(), `chat-model-eval-${Date.now()}.json`);
     writeFileSync(
       out,
-      JSON.stringify({ ranAt: new Date().toISOString(), models, results }, null, 2),
+      JSON.stringify(
+        { ranAt: new Date().toISOString(), passesToOffer: EVAL_PASSES_TO_OFFER, models, results },
+        null,
+        2,
+      ),
     );
     console.log(`Chat model eval: report at ${out}`);
     console.table(
-      models.map(({ model, passed, scenarios: n, cost, failed }) => ({
-        model,
-        passed,
-        scenarios: n,
-        cost: cost === null ? '?' : `$${cost.toFixed(3)}`,
-        failed,
-      })),
+      models.flatMap(({ model, mayBeOffered, passes: done }) =>
+        done.map((p) => ({
+          model,
+          pass: p.pass,
+          scenarios: p.scenarios,
+          cost: p.cost === null ? '?' : `$${p.cost.toFixed(3)}`,
+          mayBeOffered,
+          failed: p.failed,
+        })),
+      ),
     );
   });
 
   // A skipped describe still collects its tests: no models without CHAT_MODEL_EVAL.
   for (const model of ASKED ? evalModels(ASKED) : []) {
-    const key = evalKey(
-      model.provider === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENROUTER_API_KEY',
-    );
+    const anthropic = model.provider === 'anthropic' && via === 'product';
+    const key = evalKey(anthropic ? 'ANTHROPIC_API_KEY' : 'OPENROUTER_API_KEY');
     describe(model.id, () => {
-      for (const scenario of scenarios) {
-        it.skipIf(!key)(
-          `row ${scenario.row}: ${scenario.id}`,
-          async ({ skip }) => {
-            if (maxUsd !== null && spentUsd >= maxUsd) skip(`$${spentUsd.toFixed(2)} spent`);
-            fakes.resolveModels.mockResolvedValue(realModels(model, key!));
-            const result = await runScenario(scenario);
-            (results[model.id] ??= []).push(result);
-            const cost = evalCost(model.id, result.run.tokens) ?? 0;
-            spentUsd += cost;
-            console.log(
-              `${model.id} · ${scenario.id}: ${result.passed ? 'passed' : 'failed'}, $${cost.toFixed(3)} ($${spentUsd.toFixed(3)} so far)`,
-            );
-            expect(result.checks.filter((c) => c.must && !c.ok)).toEqual([]);
-          },
-          300_000,
-        );
+      for (let pass = 1; pass <= passes; pass++) {
+        for (const scenario of scenarios) {
+          it.skipIf(!key)(
+            `pass ${pass} · row ${scenario.row}: ${scenario.id}`,
+            async ({ skip }) => {
+              if (maxUsd !== null && spentUsd >= maxUsd) skip(`$${spentUsd.toFixed(2)} spent`);
+              // Stopped early: a pass with a failed `must` check already rules the model out.
+              if (failedBefore(model.id, pass)) skip('failed an earlier pass');
+              fakes.resolveModels.mockResolvedValue(realModels(model, key!, via));
+              const result = await runScenario(scenario);
+              const byPass = (results[model.id] ??= []);
+              (byPass[pass - 1] ??= []).push(result);
+              const cost = evalCost(model.id, result.run.tokens) ?? 0;
+              spentUsd += cost;
+              console.log(
+                `${model.id} · pass ${pass} · ${scenario.id}: ${result.passed ? 'passed' : 'failed'}, $${cost.toFixed(3)} ($${spentUsd.toFixed(3)} so far)`,
+              );
+              expect(result.checks.filter((c) => c.must && !c.ok)).toEqual([]);
+            },
+            300_000,
+          );
+        }
       }
     });
   }
