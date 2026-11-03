@@ -122,9 +122,10 @@ const DECLINES = new RegExp(
   [
     String.raw`\b(can['’]?t|cannot|can not|won['’]?t|unable to|not able to)\b`,
     String.raw`\b(don['’]?t|do not)\s+(give|offer|share|provide|make|cover|discuss|comment|weigh in|handle|do)\b`,
-    // "I don't follow or predict political elections" (Gemini 3.8 Flash): only as I or we, so
+    // "I don't follow or predict political elections", "I don't track or predict political
+    // elections" (Gemini 3.8 Flash): only as I or we, so
     // "polls don't predict much" isn't one.
-    String.raw`\b(I|we)\s+(don['’]?t|do not)\s+(follow|predict|forecast|speculate)\b`,
+    String.raw`\b(I|we)\s+(don['’]?t|do not)\s+(\w+\s+or\s+)?(follow|predict|forecast|speculate|track|cover)\b`,
     String.raw`\b(outside|beyond)\s+(of\s+)?(my|what I|Chat['’]?s)\b`,
     String.raw`\b(out of|outside( of)?|beyond)\s+(the\s+)?scope\b`,
     String.raw`\bnot\s+(in|within)\s+(my|the)\s+scope\b`,

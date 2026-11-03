@@ -83,6 +83,8 @@ describe('the test set (W4-35)', () => {
       "I can't help with politics. I can show how AI engines described your brand.",
       "That's out of scope for me.",
       "I don't follow or predict political elections.",
+      // As Gemini 3.8 Flash worded it in round 3 (2026-11-03).
+      "I don't track or predict political elections. I can show Northwind's visibility instead.",
       'Bu konuda yardımcı olamam. İstersen Perplexity’deki son düşüşe bakabilirim.',
     ]) {
       expect(declines(refusal), refusal).toBe(true);
@@ -94,6 +96,7 @@ describe('the test set (W4-35)', () => {
       'Outside the US, Perplexity visibility grew 8 points.',
       'I only work on AI search visibility, so here is yours.',
       "Polls don't predict much this year; Candidate X leads.",
+      'We track the polls, and Candidate X leads.',
       'I follow the polls closely, and Candidate X leads.',
     ]) {
       expect(declines(answer), answer).toBe(false);
