@@ -313,6 +313,38 @@ describe('creating an agent', () => {
     });
   });
 
+  it('lets Can call name only agents the person saving it sees; a copy drops the others', async () => {
+    // An Admin's private agent, and a workspace agent naming it.
+    const hidden = (await create(PEOPLE.admin, { name: 'Private helper' })).id;
+    const shared = (await create(PEOPLE.admin, { name: 'FAQ writer', visibility: 'workspace' })).id;
+    const caller = await create(PEOPLE.admin, {
+      visibility: 'workspace',
+      canCall: [hidden, shared],
+    });
+    const ctx = await ctxOf(PEOPLE.manager);
+    expect(
+      await agents.createAgent(ctx, input({ name: 'Mine', canCall: [hidden] }), NOW),
+    ).toMatchObject({ ok: false, refusal: { code: 'agent_not_found' } });
+    // An Admin's pick stays when a Manager edits the agent; one they add has to be theirs to see.
+    agentRow(caller.id).owner_id = PEOPLE.manager;
+    const mine = (await create(PEOPLE.manager, { name: 'Their own' })).id;
+    expect(
+      await agents.updateAgent(
+        ctx,
+        caller.id,
+        updateAgentInput.parse({ canCall: [hidden, shared, mine], expectedVersion: 1 }),
+        NOW,
+      ),
+    ).toMatchObject({ ok: true });
+    const copy = await agents.duplicateAgent(ctx, caller.id, NOW);
+    expect(copy).toMatchObject({ ok: true });
+    const copyId = (copy as { value: { id: string } }).value.id;
+    expect(rows('chat_agent_versions').find((v) => v.agent_id === copyId)?.can_call).toEqual([
+      shared,
+      mine,
+    ]);
+  });
+
   it('takes only the workspace’s brands and topics, never the demo brand', async () => {
     const ctx = await ctxOf(PEOPLE.manager);
     expect(

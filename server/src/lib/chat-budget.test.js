@@ -976,6 +976,43 @@ describe('an agent run’s step, within its own cap (CHAT-27 items 21–22)', ()
     expect(rpcCalls.at(-1).args.p_run_cap).toBeCloseTo(0.3, 10);
   });
 
+  it('holds a called run within what its caller and the agents it ran before left', async () => {
+    const FIRST = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0c';
+    const SECOND = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0d';
+    const called = (id) => ({
+      id,
+      organization_id: 'o1',
+      max_share: 0.1,
+      usage_share: 0,
+      called_by_run_id: AGENT_RUN,
+    });
+    agentRuns.push(called(FIRST), called(SECOND));
+    const spend = (id, agentRunId, cost) =>
+      ledger.push({
+        id,
+        feature: 'agent',
+        cost_usd: cost,
+        own_key: false,
+        agent_run_id: agentRunId,
+        used_at: '2026-10-29T10:00:00.000Z',
+      });
+    // The caller's cap is $0.50: it spent $0.05, the first agent it ran $0.40.
+    spend('caller', AGENT_RUN, 0.05);
+    spend('first', FIRST, 0.4);
+    // The second's own cap is $0.50 too, but only $0.05 of the caller's is left.
+    await budget.reserveChatStep('o1', step({ feature: 'agent', agentRunId: SECOND }));
+    expect(rpcCalls.at(-1).args.p_run_cap).toBeCloseTo(0.05, 10);
+    // Its own spend counts once, against that cap.
+    spend('second', SECOND, 0.05);
+    await expect(
+      budget.reserveChatStep('o1', step({ feature: 'agent', agentRunId: SECOND })),
+    ).rejects.toMatchObject({ name: 'ChatBudgetError', code: 'run_cap', statusCode: 429 });
+    // The first agent it ran is held to the same: none of the caller's cap is left for it.
+    await expect(
+      budget.reserveChatStep('o1', step({ feature: 'agent', agentRunId: FIRST })),
+    ).rejects.toMatchObject({ code: 'run_cap' });
+  });
+
   it('refuses an agent run that isn’t the workspace’s', async () => {
     agentRuns[0].organization_id = 'o2';
     await expect(

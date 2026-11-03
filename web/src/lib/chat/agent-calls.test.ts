@@ -290,6 +290,59 @@ describe('runCalledAgent', () => {
     expect(calleeRuns()).toEqual([]);
   });
 
+  it('takes what the agents it ran before used out of the caller’s cap', async () => {
+    callerRun({ usage_share: 0.01 });
+    db.tables.chat_agent_runs.push({
+      id: 'eeeeeeee-0000-4000-8000-000000000100',
+      organization_id: ORG,
+      agent_id: OTHER,
+      called_by_run_id: CALLER_RUN,
+      trigger_kind: 'agent',
+      status: 'done',
+      usage_share: 0.06,
+    });
+    await calls.runCalledAgent(ctx, { agent: CALLEE, ask: 'x' }, deps());
+    // 0.1 of the caller's cap: 0.01 it used, 0.06 the agent it ran before used.
+    expect(calleeRuns().find((r) => r.agent_id === CALLEE)).toMatchObject({ max_share: 0.03 });
+  });
+
+  it('refuses an agent the person the caller acts as can’t see or run', async () => {
+    callerRun();
+    // An Admin's private agent, in Can call; the caller acts as a Manager.
+    db.tables.chat_agents.find((a) => a.id === CALLEE)!.visibility = 'private';
+    const d = deps();
+    expect(await calls.runCalledAgent(ctx, { agent: CALLEE, ask: 'x' }, d)).toMatchObject({
+      ok: false,
+      reason: 'not_found',
+    });
+    expect(calleeRuns()).toEqual([]);
+    expect(driver.open).not.toHaveBeenCalled();
+  });
+
+  it('refuses anyone but the person the caller acts as, and a role or plan that can’t run agents', async () => {
+    callerRun();
+    const d = deps();
+    expect(
+      await calls.runCalledAgent(
+        { ...ctx, userId: PEOPLE.analyst },
+        { agent: CALLEE, ask: 'x' },
+        d,
+      ),
+    ).toMatchObject({ ok: false, reason: 'invalid' });
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.role = 'analyst';
+    expect(await calls.runCalledAgent(ctx, { agent: CALLEE, ask: 'x' }, d)).toMatchObject({
+      ok: false,
+      reason: 'invalid',
+    });
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.role = 'manager';
+    db.tables.organizations.find((o) => o.id === ORG)!.plan = 'starter';
+    expect(await calls.runCalledAgent(ctx, { agent: CALLEE, ask: 'x' }, d)).toMatchObject({
+      ok: false,
+      reason: 'invalid',
+    });
+    expect(calleeRuns()).toEqual([]);
+  });
+
   it('stops the called agent when the caller is stopped, and after 4 minutes', async () => {
     callerRun();
     let release: () => void = () => {};

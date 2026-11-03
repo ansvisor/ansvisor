@@ -1209,11 +1209,15 @@ export async function listAgentRuns(
  * workspace's, ones the person saving it may use (BRAND-ACCESS: another is
  * as not found), and none is the demo brand (00380: nothing runs on it),
  * its topics belong to its brands, and the people it tells are members.
+ * Can call names agents the person saving it sees (another is as not
+ * found), bar those already on the agent (`keptCallees`), which an Admin
+ * may have picked.
  */
 async function referencesRefusal(
   ctx: AgentContext,
   version: Pick<AgentVersionData, 'scope' | 'notify_user_ids' | 'can_call'>,
   agentId: string | null = null,
+  keptCallees: readonly string[] = [],
 ): Promise<Refused | null> {
   const organizationId = ctx.actor.organizationId;
   const brands = allowedBrands(ctx.viewer.brandAccess, await brandsOf(organizationId));
@@ -1261,8 +1265,19 @@ async function referencesRefusal(
       (a) => a.status !== 'archived',
     );
     if (live.length !== callees.length) return refused('agent_not_found');
+    for (const id of callees) {
+      if (keptCallees.includes(id)) continue;
+      const callee = await loadAgent(organizationId, id);
+      if (!callee || !canSeeAgent(factsOf(callee), ctx.viewer)) return refused('agent_not_found');
+    }
   }
   return null;
+}
+
+/** The agents of a Can call the person sees: a copy keeps only those (Duplicate). */
+async function visibleCallees(ctx: AgentContext, ids: readonly string[]): Promise<string[]> {
+  const seen = await Promise.all(ids.map((id) => visibleAgent(ctx, id)));
+  return ids.filter((_, i) => seen[i] !== null);
 }
 
 interface NamedAgent {
@@ -1667,7 +1682,7 @@ export async function updateAgent(
   const problem =
     triggersRefusal(changedTriggers, now) ??
     (next && (patch.scope || patch.notifyUserIds || patch.canCall)
-      ? await referencesRefusal(ctx, next, row.id)
+      ? await referencesRefusal(ctx, next, row.id, agent.version.can_call)
       : null);
   if (problem) return problem;
   const renamed = patch.name !== undefined && patch.name !== row.name;
@@ -2037,8 +2052,15 @@ export async function duplicateAgent(
 ): Promise<AgentResult<AgentDetail>> {
   const found = await agentForAct(ctx, id, 'duplicate');
   if (!found.ok) return found;
-  const { agent } = found;
-  if (!agent.version) return refused('failed');
+  if (!found.agent.version) return refused('failed');
+  // The copy is the person's: it calls only the agents they see.
+  const agent = {
+    row: found.agent.row,
+    version: {
+      ...found.agent.version,
+      can_call: await visibleCallees(ctx, found.agent.version.can_call),
+    },
+  };
   const org = ctx.actor.organizationId;
   const { row } = agent;
   // A copy is a new agent: it is held to what creating one is.

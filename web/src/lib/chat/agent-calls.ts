@@ -5,7 +5,13 @@ import type { Json } from '@/types/supabase';
 import type { ChatActor } from './engine';
 import { CHAT_MODES, type ChatMode } from './precedence';
 import { loadAgent, readAgentContext, runnableBrands } from './agents';
-import { versionFromRow } from './agent-rules';
+import {
+  agentActDenial,
+  canCallDenial,
+  canSeeAgent,
+  canWriteAgents,
+  versionFromRow,
+} from './agent-rules';
 import { dataBlock, guardData } from './untrusted';
 
 /**
@@ -293,6 +299,10 @@ export async function runCalledAgent(
   if (!caller || caller.organization_id !== org || !caller.agent_id) {
     return refuse('invalid', t('tool.notAgentRun'));
   }
+  // Only the person the caller acts as runs its calls (the card's Approve is theirs).
+  if (caller.acting_user_id && caller.acting_user_id !== ctx.userId) {
+    return refuse('invalid', t('tool.notAgentRun'));
+  }
   if (caller.called_by_run_id) return refuse('invalid', t('tool.noChains'));
   const callable = await callableAgentsOf(caller.id);
   const callee = callable.find((a) => a.id === input.agent);
@@ -304,12 +314,13 @@ export async function runCalledAgent(
       }),
     );
   }
-  const { count, error: countError } = await supabaseAdmin
+  const { data: earlier, error: countError } = await supabaseAdmin
     .from('chat_agent_runs')
-    .select('id', { count: 'exact', head: true })
+    .select('usage_share')
     .eq('called_by_run_id', caller.id);
   if (countError) throw new Error(`Could not count the run's calls: ${countError.message}`);
-  if ((count ?? 0) >= MAX_CALLS_PER_RUN) {
+  const earlierCalls = (earlier ?? []) as { usage_share: number | null }[];
+  if (earlierCalls.length >= MAX_CALLS_PER_RUN) {
     return refuse('quota_exceeded', t('tool.tooMany', { max: MAX_CALLS_PER_RUN }));
   }
 
@@ -328,12 +339,34 @@ export async function runCalledAgent(
     organizationId: org,
   });
   if (!agentCtx) return refuse('invalid', t('tool.notAgentRun'));
+  // Their role and the plan, read now: Admins and Managers, Growth and up (run_agent's row).
+  if (!canWriteAgents(agentCtx.viewer.role) || canCallDenial([callee.id], agentCtx.plan)) {
+    return refuse('invalid', t('tool.notAgentRun'));
+  }
+  // Only an agent that person sees and may run: a private one of someone else's stays theirs.
+  const calleeFacts = {
+    ownerId: calleeAgent.row.owner_id,
+    visibility: calleeAgent.row.visibility,
+    scope: calleeAgent.version.scope,
+  };
+  if (
+    !canSeeAgent(calleeFacts, agentCtx.viewer) ||
+    agentActDenial('run', agentCtx.viewer, calleeFacts, agentCtx.settings) !== null
+  ) {
+    return refuse('not_found', t('tool.notCallable', { agents: callee.name }));
+  }
   const brands = await runnableBrands(org, calleeAgent.version.scope, agentCtx.viewer.brandAccess);
   const brand = brands.find((b) => b.id === caller.brand_id);
   if (!brand) return refuse('not_found', t('tool.noBrand', { agent: callee.name }));
 
-  // Its cap: the smaller of its own and what is left of the caller's (CHAT-27 item 21).
-  const share = calleeShare(calleeAgent.row.max_run_share, caller.max_share, caller.usage_share);
+  // Its cap: the smaller of its own and what is left of the caller's (CHAT-27 item 21), after
+  // the caller's own use and what the agents it ran before used.
+  const calledUsed = earlierCalls.reduce((sum, r) => sum + (Number(r.usage_share) || 0), 0);
+  const share = calleeShare(
+    calleeAgent.row.max_run_share,
+    caller.max_share,
+    caller.usage_share + calledUsed,
+  );
   if (share < 0.01) return refuse('quota_exceeded', t('tool.noRoom'));
 
   const callerVersion = await supabaseAdmin
