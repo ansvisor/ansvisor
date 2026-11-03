@@ -292,15 +292,24 @@ const ASKS_FOR_LANGUAGE = [
     String.raw`\b(?:answer|answers|respond|response|reply|write|rewrite|translate|say|explain|summari[sz]e|summary|tell|describe|draft|put)\b${OBJECT}\s+(?:in|into)\s+${L}${ENDS}`,
     'i',
   ),
-  new RegExp(String.raw`\b(?:in|into)\s+${L}\s*,?\s+(?:please|instead)\b`, 'i'),
+  new RegExp(String.raw`\b(?:in|into)\s+${L}\s*,?\s+(?:please|instead)\s*[.!]*\s*$`, 'i'),
   new RegExp(String.raw`^\s*in\s+${L}\s*[,:]`, 'i'),
   new RegExp(String.raw`(?:^|[.!?:;,]\s*)in\s+${L}\s*[.!]*\s*$`, 'i'),
   new RegExp(String.raw`\b(?:auf|en)\s+${L}`, 'i'),
+  // Turkish: the language, then (after at most three words, none of them a
+  // place or owner: "İngilizce promptlarda", "Almanca sayfamızın") a request
+  // verb as a whole word: "İngilizce cevap ver", "İngilizce bir blog yazısı
+  // yaz". "yazılmış", "cevaplarında", "yanıt oranı" are no request.
   new RegExp(
-    String.raw`${L}(?:\s+\S+){0,3}?\s+(?:cevap|yanıt|yaz|anlat|çevir|olarak|version|translation)`,
+    String.raw`${L}(?:\s+(?!\S*(?:da|de|ta|te|daki|deki|ın|in|un|ün|nın|nin|nun|nün)(?=$|[\s.,!?;:]))\S+){0,3}?\s+(?:cevap\s+ver|cevapla|yanıt\s+ver|yanıtla|yaz|anlat|çevir)(?:ır|ir|ar|er|ın|in|un|ün)?(?:\s+mı(?:sın|sınız)|\s+mi(?:sin|siniz))?(?=$|[\s.,!?;:])`,
     'i',
   ),
-  new RegExp(String.raw`${L}\s*,?\s+please\b`, 'i'),
+  // "give me a German version", "write a Spanish translation": asking for one.
+  new RegExp(
+    String.raw`\b(?:give|send|make|write|create|want|need)\b${OBJECT}\s+(?:a|an|the)\s+${L}\s+(?:version|translation)\b`,
+    'i',
+  ),
+  new RegExp(String.raw`${L}\s*,?\s+please\s*[.!]*\s*$`, 'i'),
 ];
 
 /** The language a question asks the answer to be in, by name; null when it asks for none. Turkish's İ folds to i. */

@@ -41,6 +41,11 @@ describe('asksForLanguage', () => {
       'Answer in German only.',
       'Neden düştük? In English.',
       'FRANSIZCA cevap ver.',
+      'Bunu İngilizce anlat.',
+      'İngilizce yazar mısın?',
+      'Almanca çevir.',
+      'Give me a German version of this page.',
+      'Show the numbers in Spanish, please.',
     ]) {
       expect(asksForLanguage(asked), asked).toBe(true);
     }
@@ -62,6 +67,15 @@ describe('asksForLanguage', () => {
       'Explain how we rank in Spanish this week',
       'How many German only prompts do we track?',
       'Show the prompts we track in German.',
+      'İngilizce yazılmış promptlarda neden düştük?',
+      'İngilizce promptlar için yanıt oranımız ne?',
+      'Almanca sayfamız ChatGPT cevaplarında görünüyor mu?',
+      'İspanyolca promptlarda rakipler ne yazıyor?',
+      'Almanca olarak kaç promptumuz var?',
+      'İngilizce promptlarda neden düştüğümüzü yaz.',
+      'Do we have a German version of the site?',
+      'Is the Spanish version of our page cited?',
+      'Our mentions in Spanish, please break them down.',
     ]) {
       expect(asksForLanguage(question), question).toBe(false);
     }
