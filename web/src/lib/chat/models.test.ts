@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { openRouterRouting } from '@/lib/agent/openrouter';
-import { CHAT_MODELS } from './models';
+import { CHAT_MODELS, OFFERED_MODELS } from './models';
 
 /** The models Chat may run once tested (W4-35). */
 
@@ -11,5 +11,13 @@ describe('CHAT_MODELS', () => {
     const limited = CHAT_MODELS.filter((model) => openRouterRouting(model.id).only);
     expect(limited.map((model) => model.id)).toContain('deepseek/deepseek-v4.1-flash');
     expect(limited.filter((model) => model.tested)).toEqual([]);
+  });
+
+  it('offers GPT-6.1 Sol, GPT-6.1 Terra and GPT-6 Luna, which passed the test set twice in a row (2026-11-03)', () => {
+    const offered = OFFERED_MODELS.map((model) => model.id);
+    for (const id of ['openai/gpt-6.1-sol', 'openai/gpt-6.1-terra', 'openai/gpt-6-luna']) {
+      expect(offered, id).toContain(id);
+      expect(CHAT_MODELS.find((model) => model.id === id)?.provider, id).toBe('openrouter');
+    }
   });
 });
