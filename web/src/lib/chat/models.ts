@@ -64,6 +64,8 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     tested: false,
   },
   // The latest of OpenAI, Google and DeepSeek, through OpenRouter (W4-35).
+  // Gemini 4 Argon passed the whole test set twice in a row (2026-11-03,
+  // side-checks/model-eval-r3-google_gemini-4-argon.json).
   {
     id: 'openai/gpt-6.1-sol',
     api: 'openai/gpt-6.1-sol',
@@ -91,7 +93,7 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     api: 'google/gemini-4-argon',
     provider: 'openrouter',
     label: 'Gemini 4 Argon',
-    tested: false,
+    tested: true,
   },
   {
     id: 'google/gemini-3.8-flash',

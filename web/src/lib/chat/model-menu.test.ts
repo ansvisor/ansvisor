@@ -55,10 +55,11 @@ const answer = (body: unknown, status = 200) =>
   fetchMock.mockResolvedValue(new Response(JSON.stringify(body), { status }));
 
 describe('the offered models', () => {
-  it('are the tested ones only: Haiku and Sonnet 5.5 at launch, Opus 5.5 hidden until tested', () => {
+  it('are the tested ones only: Haiku and Sonnet 5.5, and Gemini 4 Argon since its test runs; Opus 5.5 hidden until tested', () => {
     expect(OFFERED_MODELS.map((m) => [m.id, m.api])).toEqual([
       ['anthropic/claude-haiku-5.5', 'claude-haiku-5-5'],
       ['anthropic/claude-sonnet-5.5', 'claude-sonnet-5-5'],
+      ['google/gemini-4-argon', 'google/gemini-4-argon'],
     ]);
     expect(CHAT_MODELS.find((m) => m.id === 'anthropic/claude-opus-5.5')?.tested).toBe(false);
     expect(OFFERED_MODELS.every((m) => m.tested)).toBe(true);
@@ -66,7 +67,7 @@ describe('the offered models', () => {
     expect(isChatModelChoice('anthropic/claude-sonnet-5.5')).toBe(true);
     expect(isChatModelChoice('anthropic/claude-opus-5.5')).toBe(false);
     expect(offeredModel('anthropic/claude-opus-5.5')).toBeNull();
-    expect(isChatModelChoice('openai/gpt-6.1-sol')).toBe(false);
+    expect(isChatModelChoice('google/gemini-3.5-flash-lite')).toBe(false);
     expect(isChatModelChoice(undefined)).toBe(false);
     expect(offeredModel('auto')).toBeNull();
     expect(isCatalogId('openai/gpt-6.1-sol')).toBe(true);
@@ -90,7 +91,7 @@ describe('a run’s model and effort (W4-02)', () => {
       model: 'auto',
       effort: 'high',
     });
-    expect(runChoiceOf({ model: 'openai/gpt-6.1-sol', effort: 'turbo' }, true)).toEqual(
+    expect(runChoiceOf({ model: 'google/gemini-3.5-flash-lite', effort: 'turbo' }, true)).toEqual(
       AUTO_CHOICE,
     );
     expect(runChoiceOf({}, true)).toEqual(AUTO_CHOICE);
@@ -185,8 +186,8 @@ describe('readModelMenu', () => {
       id: 'anthropic/claude-opus-5.5',
       removed: true,
     });
-    expect((await readModelMenu({ selected: 'openai/gpt-6.1-sol' })).selected).toEqual({
-      id: 'openai/gpt-6.1-sol',
+    expect((await readModelMenu({ selected: 'google/gemini-3.5-flash-lite' })).selected).toEqual({
+      id: 'google/gemini-3.5-flash-lite',
       removed: true,
     });
     expect((await readModelMenu({ selected: 'auto' })).selected).toBeNull();
@@ -196,9 +197,15 @@ describe('readModelMenu', () => {
   it('still lists the offered models, unlabelled, when the API server doesn’t answer', async () => {
     fetchMock.mockRejectedValue(new Error('timeout'));
     const menu = await readModelMenu();
+    // A model through OpenRouter shows only with Ansvisor's OpenRouter key, unset here (W4-03).
     expect(menu.models.map((m) => [m.id, m.multiplier, m.tone])).toEqual(
-      OFFERED_MODELS.map((m) => [m.id, null, null]),
+      OFFERED_MODELS.filter((m) => m.provider === 'anthropic').map((m) => [m.id, null, null]),
     );
+    vi.stubEnv('OPENROUTER_API_KEY', 'set');
+    expect((await readModelMenu()).models.map((m) => m.id)).toEqual(
+      OFFERED_MODELS.map((m) => m.id),
+    );
+    vi.stubEnv('OPENROUTER_API_KEY', '');
     answer({}, 502);
     expect((await readModelMenu()).models).toHaveLength(2);
     vi.stubEnv('CRON_SECRET', '');
