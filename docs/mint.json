@@ -113,7 +113,8 @@
         "api-reference/metrics",
         "api-reference/brands",
         "api-reference/tracking",
-        "api-reference/webhooks"
+        "api-reference/webhooks",
+        "api-reference/report-card"
       ]
     },
     {
