@@ -254,6 +254,14 @@ fix(web): correct chart rendering on mobile
 - Zod for runtime validation
 - Follow existing patterns in `src/`
 
+### Roles
+
+A workspace has four roles: admin, manager, analyst and agency partner. Daily work, such as the Action Center, writing in the Content Editor and running a Site Audit, is every member's. Settings, connections, deletes, and anything that spends the plan's AI allowance or paid data are for admins and managers.
+
+- A new server write route (`POST`, `PUT`, `PATCH` or `DELETE`, mounted in `server/src/routes/index.js`) checks the caller's role with `assertRole` or `allowRole` from `src/lib/access.js`. If it is open to every member, add it to `OPEN` in `src/routes/write-roles.test.js` with the reason. `npm test` fails until it does one or the other.
+- Hide in the web what the server refuses: `useUserRole()` gives `canManage`.
+- Say who can do it in the feature's Help article.
+
 ### General
 
 - Follow the conventions already present in the codebase
