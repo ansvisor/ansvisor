@@ -203,6 +203,8 @@ export interface GoLiveFacts {
   text?: { hold: GoLiveTextHold } | { hold: 'foreign_link'; host: string } | { hold: null };
   /** The page is live already: an update stays a person's click. */
   liveItem?: boolean;
+  /** Someone took the page down before (PR 10): it never goes live on its own again. */
+  takenDown?: boolean;
   /** Its quality and brand facts (lib/content/go-live-gate.ts). */
   gate?: GateResult;
   /**
@@ -226,6 +228,7 @@ export type GoLiveHold =
         | 'hidden_text'
         | 'copied'
         | 'live_page'
+        | 'taken_down'
         | 'quality_off'
         | 'suggestions'
         | 'facts_unchecked';
@@ -480,7 +483,7 @@ const UNCHECKED: GoLiveHold = { code: 'unchecked' };
  * The first of step 4b's guards that holds a candidate's step for a click,
  * in their order (§5.2), or null to let it go out on its own: injection
  * and an untrusted start (the run's), the page's own state, its text and
- * links (go-live-checks.ts), a live page, its quality and brand facts
+ * links (go-live-checks.ts), a live page or one someone took down, its quality and brand facts
  * (the gate), and last the agent's daily limit, so a page that fails a
  * check doesn't hold a slot. A fact missing where it's needed: `unchecked`.
  */
@@ -498,6 +501,8 @@ export function goLiveHold(
   if (facts.text.hold) return { code: facts.text.hold };
   if (facts.liveItem === undefined) return UNCHECKED;
   if (facts.liveItem) return { code: 'live_page' };
+  if (facts.takenDown === undefined) return UNCHECKED;
+  if (facts.takenDown) return { code: 'taken_down' };
   if (!facts.gate) return UNCHECKED;
   if (!facts.gate.pass) return gateHold(facts.gate);
   if (!facts.usage) return UNCHECKED;
