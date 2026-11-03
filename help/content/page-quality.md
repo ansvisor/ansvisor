@@ -38,7 +38,7 @@ In **Settings › Content**, admins and managers can have each brand's new pages
 
 ## Next step
 
-With Quality on, the header's **Next step** names one step: plan the page, write or bring it in, fix its length or open rules, add proof and author, or check and mark ready, with **Skip this step** and **All steps**. While the Content Agent's suggestions wait, it's **Review** them. Without a prompt, fan-out or Search Console query to build the brief from, it's **Add sources**.
+With Quality on, the header's **Next step** opens a window: every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.
 
 Once you've decided the agent's **Fix open rules** suggestions, the step is ticked. Rules its later suggestions leave open don't bring it back; your edits can.
 

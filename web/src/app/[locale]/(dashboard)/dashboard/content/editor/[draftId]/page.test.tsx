@@ -6750,7 +6750,7 @@ describe('the side panel', () => {
         b.getAttribute('aria-label')?.startsWith('Next · '),
       );
 
-    it('opens by itself on a new page without taking focus, plans it, and folds after', async () => {
+    it('opens by itself on a new page, plans it, and folds after', async () => {
       getContentDraft.mockResolvedValue(
         draft({ method: 'create', bodyHtml: '<h1>Pipeline forecasting</h1><p></p>' }),
       );
@@ -6783,7 +6783,9 @@ describe('the side panel', () => {
       expect(basket()!.textContent).toContain(
         'No brief yet. I build one from your prompts, fan-outs and cited pages.',
       );
-      expect(basket()!.contains(document.activeElement)).toBe(false);
+      // A window over the page holds the focus (a modal): the person is never left typing behind it.
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+      expect(basket()!.contains(document.activeElement)).toBe(true);
 
       await act(async () => inBasket('Build brief')!.click());
       await act(async () => {});
