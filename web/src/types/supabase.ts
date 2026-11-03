@@ -2236,6 +2236,7 @@ export type Database = {
           archived_at: string | null
           created_at: string
           created_by: string | null
+          demo_brand_id: string | null
           fail_count: number
           id: string
           max_month_share: number | null
@@ -2254,6 +2255,7 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           created_by?: string | null
+          demo_brand_id?: string | null
           fail_count?: number
           id?: string
           max_month_share?: number | null
@@ -2272,6 +2274,7 @@ export type Database = {
           archived_at?: string | null
           created_at?: string
           created_by?: string | null
+          demo_brand_id?: string | null
           fail_count?: number
           id?: string
           max_month_share?: number | null
@@ -2286,6 +2289,13 @@ export type Database = {
           visibility?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "chat_agents_demo_brand_id_fkey"
+            columns: ["demo_brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "chat_agents_organization_id_fkey"
             columns: ["organization_id"]

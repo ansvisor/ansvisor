@@ -314,7 +314,7 @@ async function firstDenial(
 // ─── Rows ────────────────────────────────────────────────────────────────────
 
 const AGENT_COLUMNS =
-  'id, organization_id, name, status, paused_reason, owner_id, visibility, version, max_run_share, max_month_share, created_by, created_at, updated_at, activated_at, archived_at';
+  'id, organization_id, name, status, paused_reason, owner_id, visibility, version, max_run_share, max_month_share, created_by, created_at, updated_at, activated_at, archived_at, demo_brand_id';
 const VERSION_COLUMNS =
   'agent_id, version, skill_ids, instructions, mode, connections, model, effort, scope, notify_user_ids, followup_days, created_at';
 const TRIGGER_COLUMNS = 'id, agent_id, kind, config_json, enabled, last_fired_at, created_at';
@@ -344,6 +344,8 @@ export interface AgentRow {
   updated_at: string;
   activated_at: string | null;
   archived_at: string | null;
+  /** The demo brand whose sample agent this is (00475); null for a person's agent. */
+  demo_brand_id: string | null;
 }
 
 interface VersionRow {
@@ -399,6 +401,7 @@ function toAgentRow(row: Record<string, unknown>): AgentRow {
     visibility: AGENT_VISIBILITIES.find((v) => v === row.visibility) ?? 'private',
     max_run_share: Number(row.max_run_share),
     max_month_share: row.max_month_share === null ? null : Number(row.max_month_share),
+    demo_brand_id: typeof row.demo_brand_id === 'string' ? row.demo_brand_id : null,
   };
 }
 
@@ -453,6 +456,8 @@ export async function agentForAct(
 ): Promise<{ ok: true; agent: LoadedAgent } | Refused> {
   const agent = await visibleAgent(ctx, id);
   if (!agent) return refused('not_found');
+  // The demo brand's sample agent (00475): seen, never changed, run or copied.
+  if (agent.row.demo_brand_id) return refused('demo_brand');
   const denial = await firstDenial(ctx, [
     agentActDenial(act, ctx.viewer, factsOf(agent), ctx.settings),
   ]);
@@ -973,8 +978,9 @@ export async function listAgents(
     }),
     counts,
     keyFailure: key ? { class: key.class, provider: key.provider } : null,
-    active: visible.filter((a) => a.row.status === 'active').length,
-    activeInWorkspace: rows.filter((r) => r.status === 'active').length,
+    // The demo brand's sample agents never count toward the plan (00475).
+    active: visible.filter((a) => a.row.status === 'active' && !a.row.demo_brand_id).length,
+    activeInWorkspace: rows.filter((r) => r.status === 'active' && !r.demo_brand_id).length,
     activeLimit: agentPlanLimits(ctx.plan).activeAgents,
   };
 }
@@ -991,6 +997,8 @@ export async function runnableAgents(ctx: AgentContext): Promise<LoadedAgent[]> 
     .select(AGENT_COLUMNS)
     .eq('organization_id', ctx.actor.organizationId)
     .in('status', ['active', 'paused'])
+    // Never the demo brand's sample agents (00475): nothing runs them.
+    .is('demo_brand_id', null)
     .order('updated_at', { ascending: false })
     .limit(AGENT_LIST_MAX);
   if (error) throw new Error(`Could not read the agents: ${error.message}`);
@@ -1879,7 +1887,9 @@ async function activeCount(organizationId: string, except: string): Promise<numb
     .from('chat_agents')
     .select('id')
     .eq('organization_id', organizationId)
-    .eq('status', 'active');
+    .eq('status', 'active')
+    // The demo brand's sample agents don't count toward the plan (00475).
+    .is('demo_brand_id', null);
   if (error) throw new Error(`Could not count the active agents: ${error.message}`);
   return ((data ?? []) as { id: string }[]).filter((a) => a.id !== except).length;
 }

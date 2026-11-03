@@ -435,6 +435,159 @@ async function chatScripts({ brandId, now }) {
   return [visibility, priorities, sources, compare, subscriptions];
 }
 
+/** The rows of chats, by table, written in this order (each row after the one it points at). */
+export function emptyChatRows() {
+  return { conversations: [], messages: [], runs: [], steps: [], events: [], moves: [] };
+}
+
+/**
+ * Adds one chat's rows: its chat row (`conversation`, without its dates),
+ * and each turn's question, its answer and the answer's run with its steps.
+ * A run that ended keeps its end event (run.finished), as a reload reads it;
+ * a last turn with `waiting` is a run waiting on the person's OK: its steps
+ * and its answer so far as events, then the card (confirm.required), as the
+ * page rebuilds a run under way. Next moves come under an ended last answer.
+ *
+ * @param {ReturnType<typeof emptyChatRows>} rows
+ * @param {{ id: (key: string) => string, conversation: object, turns: object[], moves?: string[] }} chat
+ */
+export function addChat(rows, { id, conversation, turns, moves = [] }) {
+  let lastAt = null;
+  turns.forEach((turn, n) => {
+    const askedAt = turn.at;
+    const startedAt = new Date(askedAt.getTime() + 1000);
+    const finishedAt = new Date(startedAt.getTime() + turn.workingMs);
+    const waiting = n === turns.length - 1 ? turn.waiting : undefined;
+    const answerId = id(`answer:${n}`);
+    const runId = id(`run:${n}`);
+    lastAt = finishedAt;
+    rows.messages.push(
+      {
+        id: id(`question:${n}`),
+        conversation_id: conversation.id,
+        role: 'user',
+        content_md: turn.question,
+        created_at: askedAt.toISOString(),
+      },
+      {
+        id: answerId,
+        conversation_id: conversation.id,
+        role: 'assistant',
+        // A waiting run's answer is in its events until it ends.
+        content_md: waiting ? '' : turn.answer,
+        generated_at: waiting ? null : finishedAt.toISOString(),
+        data_as_of: waiting ? null : turn.dataAsOf || null,
+        timezone: 'UTC',
+        created_at: new Date(askedAt.getTime() + 500).toISOString(),
+      },
+    );
+    rows.runs.push({
+      id: runId,
+      message_id: answerId,
+      conversation_id: conversation.id,
+      status: waiting ? 'waiting' : 'done',
+      model: 'auto',
+      effort: 'normal',
+      created_at: askedAt.toISOString(),
+      started_at: startedAt.toISOString(),
+      finished_at: waiting ? null : finishedAt.toISOString(),
+    });
+    const steps = waiting ? [...turn.steps, waiting.step] : turn.steps;
+    const stepMs = turn.workingMs / (steps.length + 1);
+    const stepRows = steps.map((step, i) => {
+      const held = waiting && i === steps.length - 1;
+      return {
+        id: id(`run:${n}:step:${i + 1}`),
+        run_id: runId,
+        position: i + 1,
+        kind: step.kind,
+        status: held ? 'waiting' : 'done',
+        label: step.label,
+        detail: step.detail || null,
+        scope_json: step.scope ?? null,
+        row_count: step.rows ?? null,
+        data_as_of: held ? null : turn.dataAsOf || null,
+        started_at: new Date(startedAt.getTime() + i * stepMs).toISOString(),
+        finished_at: held ? null : new Date(startedAt.getTime() + (i + 1) * stepMs).toISOString(),
+        tool: step.tool,
+      };
+    });
+    rows.steps.push(...stepRows);
+    if (waiting) {
+      // What the page replays for a run under way: each step, the answer so far, the card.
+      let seq = 0;
+      const event = (type, data, at) =>
+        rows.events.push({ run_id: runId, seq: ++seq, type, data, created_at: at });
+      for (const row of stepRows) {
+        const step = {
+          n: row.position,
+          kind: row.kind,
+          // The card's own step waits from its start; a read works, then finishes.
+          status: row.status === 'waiting' ? 'waiting' : 'running',
+          label: row.label,
+          ...(row.detail ? { detail: row.detail } : {}),
+        };
+        event('step.started', { step }, row.started_at);
+        if (row.status === 'done') {
+          event(
+            'step.finished',
+            {
+              step: {
+                ...step,
+                status: 'done',
+                ...(row.row_count !== null ? { rowCount: row.row_count } : {}),
+              },
+            },
+            row.finished_at,
+          );
+        }
+      }
+      event('text.delta', { text: turn.answer }, finishedAt.toISOString());
+      event(
+        'confirm.required',
+        { n: stepRows.length, ...waiting.confirm },
+        finishedAt.toISOString(),
+      );
+    } else {
+      rows.events.push({
+        run_id: runId,
+        seq: 1,
+        type: 'run.finished',
+        data: {
+          workingMs: turn.workingMs,
+          stepCount: steps.length,
+          sources: turn.sources,
+          generatedAt: finishedAt.toISOString(),
+          dataAsOf: turn.dataAsOf || null,
+        },
+        created_at: finishedAt.toISOString(),
+      });
+      // The next moves come under the chat's latest answer only, as a finished run leaves them.
+      if (n === turns.length - 1) {
+        moves.forEach((label, rank) => {
+          rows.moves.push({
+            id: id(`run:${n}:move:${rank + 1}`),
+            run_id: runId,
+            rank: rank + 1,
+            label,
+            prompt: label,
+            class: 'read',
+            ghost_ok: false,
+            created_at: finishedAt.toISOString(),
+          });
+        });
+      }
+    }
+  });
+  rows.conversations.push({
+    ...conversation,
+    touched_brand_ids: [conversation.brand_id],
+    last_message_at: lastAt.toISOString(),
+    created_at: turns[0].at.toISOString(),
+    updated_at: lastAt.toISOString(),
+  });
+}
+
 /**
  * Every row of the demo's chats for the given people, in memory: chats,
  * their questions and answers, the answers' runs with their steps, end
@@ -444,115 +597,23 @@ async function chatScripts({ brandId, now }) {
  */
 export async function chatRows({ brandId, now, organizationId, userIds }) {
   const scripts = await chatScripts({ brandId, now });
-  const rows = {
-    conversations: [],
-    messages: [],
-    runs: [],
-    steps: [],
-    events: [],
-    moves: [],
-  };
+  const rows = emptyChatRows();
   for (const userId of userIds) {
     for (const chat of scripts) {
       const id = (key) => demoId(brandId, `chat:${userId}:${chat.key}:${key}`);
-      const conversationId = id('conversation');
-      let lastAt = null;
-      chat.turns.forEach((turn, n) => {
-        const askedAt = turn.at;
-        const startedAt = new Date(askedAt.getTime() + 1000);
-        const finishedAt = new Date(startedAt.getTime() + turn.workingMs);
-        const answerId = id(`answer:${n}`);
-        const runId = id(`run:${n}`);
-        lastAt = finishedAt;
-        rows.messages.push(
-          {
-            id: id(`question:${n}`),
-            conversation_id: conversationId,
-            role: 'user',
-            content_md: turn.question,
-            created_at: askedAt.toISOString(),
-          },
-          {
-            id: answerId,
-            conversation_id: conversationId,
-            role: 'assistant',
-            content_md: turn.answer,
-            generated_at: finishedAt.toISOString(),
-            data_as_of: turn.dataAsOf || null,
-            timezone: 'UTC',
-            created_at: new Date(askedAt.getTime() + 500).toISOString(),
-          },
-        );
-        rows.runs.push({
-          id: runId,
-          message_id: answerId,
-          conversation_id: conversationId,
-          status: 'done',
-          model: 'auto',
-          effort: 'normal',
-          created_at: askedAt.toISOString(),
-          started_at: startedAt.toISOString(),
-          finished_at: finishedAt.toISOString(),
-        });
-        const stepMs = turn.workingMs / (turn.steps.length + 1);
-        turn.steps.forEach((step, i) => {
-          rows.steps.push({
-            id: id(`run:${n}:step:${i + 1}`),
-            run_id: runId,
-            position: i + 1,
-            kind: step.kind,
-            status: 'done',
-            label: step.label,
-            detail: step.detail || null,
-            scope_json: step.scope,
-            row_count: step.rows ?? null,
-            data_as_of: turn.dataAsOf || null,
-            started_at: new Date(startedAt.getTime() + i * stepMs).toISOString(),
-            finished_at: new Date(startedAt.getTime() + (i + 1) * stepMs).toISOString(),
-            tool: step.tool,
-          });
-        });
-        rows.events.push({
-          run_id: runId,
-          seq: 1,
-          type: 'run.finished',
-          data: {
-            workingMs: turn.workingMs,
-            stepCount: turn.steps.length,
-            sources: turn.sources,
-            generatedAt: finishedAt.toISOString(),
-            dataAsOf: turn.dataAsOf || null,
-          },
-          created_at: finishedAt.toISOString(),
-        });
-        // The next moves come under the chat's latest answer only, as a finished run leaves them.
-        if (n === chat.turns.length - 1) {
-          chat.moves.forEach((label, rank) => {
-            rows.moves.push({
-              id: id(`run:${n}:move:${rank + 1}`),
-              run_id: runId,
-              rank: rank + 1,
-              label,
-              prompt: label,
-              class: 'read',
-              ghost_ok: false,
-              created_at: finishedAt.toISOString(),
-            });
-          });
-        }
-      });
-      rows.conversations.push({
-        id: conversationId,
-        organization_id: organizationId,
-        user_id: userId,
-        brand_id: brandId,
-        title: chat.title,
-        origin: chat.origin,
-        origin_page: chat.originPage ?? '/dashboard/chat',
-        touched_brand_ids: [brandId],
-        last_message_at: lastAt.toISOString(),
-        created_at: chat.turns[0].at.toISOString(),
-        updated_at: lastAt.toISOString(),
+      addChat(rows, {
+        id,
+        conversation: {
+          id: id('conversation'),
+          organization_id: organizationId,
+          user_id: userId,
+          brand_id: brandId,
+          title: chat.title,
+          origin: chat.origin,
+          origin_page: chat.originPage ?? '/dashboard/chat',
+        },
+        turns: chat.turns,
+        moves: chat.moves,
       });
     }
   }
@@ -560,7 +621,7 @@ export async function chatRows({ brandId, now, organizationId, userIds }) {
 }
 
 /** The demo brand's organization and its people, oldest first. */
-async function readPeople(db, brandId) {
+export async function readPeople(db, brandId) {
   const { data: brand, error } = await db
     .from('brands')
     .select('organization_id')
@@ -590,6 +651,18 @@ export async function hideDemoChats(db, brandId) {
   if (error) throw new Error(`demo chats delete: ${error.message}`);
 }
 
+/** Writes chats' rows through a build's writer, each row after the one it points at. */
+export async function writeChatRows(write, rows) {
+  await write('chat_conversations', rows.conversations);
+  await write('chat_messages', rows.messages);
+  await write('chat_runs', rows.runs);
+  await Promise.all([
+    write('chat_run_steps', rows.steps),
+    write('chat_run_events', rows.events),
+    write('chat_next_moves', rows.moves),
+  ]);
+}
+
 export const chat = {
   name: 'chat',
   // Cleared just before it is built (index.js): its rows hang off its chats, deleted with them.
@@ -610,15 +683,7 @@ export const chat = {
     const people = await readPeople(db, brandId);
     if (people.userIds.length === 0) return { chats: 0, people: 0 };
     const rows = await chatRows({ brandId, now, ...people });
-    // A row after the one it points at.
-    await write('chat_conversations', rows.conversations);
-    await write('chat_messages', rows.messages);
-    await write('chat_runs', rows.runs);
-    await Promise.all([
-      write('chat_run_steps', rows.steps),
-      write('chat_run_events', rows.events),
-      write('chat_next_moves', rows.moves),
-    ]);
+    await writeChatRows(write, rows);
     return { chats: rows.conversations.length, people: people.userIds.length };
   },
 };

@@ -69,6 +69,8 @@ Admins and Managers see the buttons they may use:
 
 Managers change their own agents and can run agents shared with the workspace. Admins can do this for every agent.
 
+The demo brand's sample agents show their runs, but running or changing one opens the plan dialog.
+
 ## Create an agent
 
 Admins and Managers click **New agent** in **Agent Center**. Four steps open, with a summary of the agent on the right:

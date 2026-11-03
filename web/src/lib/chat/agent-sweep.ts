@@ -321,6 +321,7 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
       .from('chat_agents')
       .select('id, organization_id, fail_count')
       .eq('status', 'active')
+      .is('demo_brand_id', null)
       .gt('fail_count', FAILURES_TO_PAUSE - 1)
       .limit(SWEEP_ROWS);
     if (error) throw new Error(`Could not read the agents: ${error.message}`);

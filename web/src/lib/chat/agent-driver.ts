@@ -139,6 +139,17 @@ async function readAgentRun(id: string): Promise<AgentRunRow | null> {
   return (data as AgentRunRow | null) ?? null;
 }
 
+/** Whether the brand is the demo brand (00380), whose sample agent runs nothing settles. */
+async function onDemoBrand(brandId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('brands')
+    .select('is_demo')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the agent run's brand: ${error.message}`);
+  return (data as { is_demo?: boolean } | null)?.is_demo === true;
+}
+
 /**
  * Moves an agent run from `from` to an end or a held state, only from
  * there: false when another request moved it first.
@@ -739,6 +750,9 @@ export async function settleAgentRun(
 ): Promise<string | null> {
   const run = await readAgentRun(agentRunId);
   if (!run || !HELD.includes(run.status)) return run?.status ?? null;
+  // The demo brand's sample runs (00475) stand as the demo built them: none has a
+  // Chat run to follow, and nothing ends, counts or pauses on their account.
+  if (run.brand_id && (await onDemoBrand(run.brand_id))) return run.status;
 
   const chatRunId = await chatRunOf(run.id);
   // Its action closed while its Chat run still works or waits (edge case 7). Not

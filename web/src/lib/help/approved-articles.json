@@ -799,7 +799,7 @@
         },
         {
           "heading": "Run, pause and archive",
-          "text": "Admins and Managers see the buttons they may use:\n\n- **Run now** starts a run for each brand in its scope. A second click within a minute doesn't start another one.\n- **Pause** stops its triggers until you click **Resume**. **Activate** turns on a draft.\n- Under **⋯**: **Duplicate** makes a copy as a draft. **Archive** turns it off; its triggers stop and runs waiting to start are cancelled. Admins can also **Take over** an agent, so its triggered runs act as them.\n- An archived agent has **Restore**, which brings it back paused.\n\nManagers change their own agents and can run agents shared with the workspace. Admins can do this for every agent."
+          "text": "Admins and Managers see the buttons they may use:\n\n- **Run now** starts a run for each brand in its scope. A second click within a minute doesn't start another one.\n- **Pause** stops its triggers until you click **Resume**. **Activate** turns on a draft.\n- Under **⋯**: **Duplicate** makes a copy as a draft. **Archive** turns it off; its triggers stop and runs waiting to start are cancelled. Admins can also **Take over** an agent, so its triggered runs act as them.\n- An archived agent has **Restore**, which brings it back paused.\n\nManagers change their own agents and can run agents shared with the workspace. Admins can do this for every agent.\n\nThe demo brand's sample agents show their runs, but running or changing one opens the plan dialog."
         },
         {
           "heading": "Create an agent",
