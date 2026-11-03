@@ -124,6 +124,7 @@ import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
 import { whyView } from './why/view';
+import { WHATS_NEW_TOOL, whatsNewStepDetail } from './whats-new/run';
 import {
   batchSize,
   runsWithoutSession,
@@ -3257,7 +3258,11 @@ async function readCall(
         }
       : {
           status: 'done',
-          detail: scopeDetail(scope, rows),
+          // What's new says what it found for the plan (CHAT-11 item 11).
+          detail:
+            tool.name === WHATS_NEW_TOOL
+              ? whatsNewStepDetail(read.value)
+              : scopeDetail(scope, rows),
           rowCount: rows ?? null,
           dataAsOf: asOf,
           debug: {
