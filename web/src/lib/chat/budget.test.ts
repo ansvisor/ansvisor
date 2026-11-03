@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   RESERVE_TIMEOUT_MS,
+  fitChatUnits,
   reserveChatStep,
   type ChatBudgetStep,
   type ChatStepBudget,
@@ -274,5 +275,69 @@ describe('reserveChatStep', () => {
     budget.keep();
     await budget.release();
     expect(calls).toEqual([]);
+  });
+});
+
+describe('fitChatUnits (CHAT-04 item 17a)', () => {
+  const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0a';
+  const job = (over: Partial<Parameters<typeof fitChatUnits>[0]> = {}) => ({
+    organizationId: ORG,
+    model: 'anthropic/claude-sonnet-5.5',
+    perUnit: { inputTokens: 1234.5, maxOutputTokens: 16000 },
+    units: 4,
+    source: 'ansvisor' as const,
+    ...over,
+  });
+
+  it('asks the server how many parts fit, with the secret and a time limit: a count, no dollar', async () => {
+    answers.push({ status: 200, body: { success: true, fits: 2, limit: 'run' } });
+    expect(await fitChatUnits(job({ agentRunId: AGENT_RUN }))).toEqual({
+      ok: true,
+      fits: 2,
+      limit: 'run',
+    });
+    expect(calls).toEqual([
+      {
+        path: 'fit',
+        body: {
+          orgId: ORG,
+          model: 'anthropic/claude-sonnet-5.5',
+          perUnit: { inputTokens: 1235, maxOutputTokens: 16000 },
+          units: 4,
+          agentRunId: AGENT_RUN,
+        },
+        auth: 'Bearer shh',
+        timed: true,
+      },
+    ]);
+  });
+
+  it('reads the month’s AI limit as the one that binds unless the server names the run’s cap', async () => {
+    answers.push({ status: 200, body: { success: true, fits: 1, limit: 'month' } });
+    expect(await fitChatUnits(job())).toEqual({ ok: true, fits: 1, limit: 'month' });
+    answers.push({ status: 200, body: { success: true, fits: 1 } });
+    expect(await fitChatUnits(job())).toEqual({ ok: true, fits: 1, limit: 'month' });
+  });
+
+  it('asks nothing on the workspace’s own key, or with the new Chat off: every part fits', async () => {
+    expect(await fitChatUnits(job({ source: 'own' }))).toEqual({
+      ok: true,
+      fits: 4,
+      limit: 'month',
+    });
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await fitChatUnits(job())).toEqual({ ok: true, fits: 4, limit: 'month' });
+    expect(calls).toEqual([]);
+  });
+
+  it('never throws: a refusal or no answer comes back as one', async () => {
+    answers.push({ status: 402, body: { success: false, error: 'plan_limit' } });
+    expect(await fitChatUnits(job())).toEqual({ ok: false, refusal: 'plan_limit' });
+    answers.push(() => {
+      throw new Error('socket hang up');
+    });
+    expect(await fitChatUnits(job())).toEqual({ ok: false, refusal: 'unavailable' });
+    answers.push({ status: 200, body: { success: true, fits: 'many' } });
+    expect(await fitChatUnits(job())).toEqual({ ok: false, refusal: 'unavailable' });
   });
 });
