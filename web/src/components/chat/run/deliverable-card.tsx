@@ -34,6 +34,7 @@ import {
 import type { ChatDeliverable, ChatTaskStrip } from '@/lib/chat/events';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
+import { ImageSet } from './image-set';
 
 /** Each type's icon, on its card and its Files row. */
 export const DELIVERABLE_ICONS = {
@@ -106,6 +107,8 @@ export function DeliverableCard({
   const [busy, setBusy] = useState(false);
   const Icon = DELIVERABLE_ICONS[deliverable.type] ?? FileText;
   const filed = isFiled(deliverable);
+  // A set of images (W4-08): its images and PNG, in place of Copy and Download.
+  const images = deliverable.type === 'image' && filed;
   const formats = FORMAT_ORDER.filter((format) => deliverable.formats.includes(format));
   const fileUrl = (format: string) => `/api/chat/runs/${runId}/files/${n}?format=${format}`;
 
@@ -217,8 +220,9 @@ export function DeliverableCard({
           )}
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-1">
-        {filed && (
+      {images && <ImageSet runId={runId} n={n} title={deliverable.title} />}
+      <div className="flex flex-wrap items-center gap-1 empty:hidden">
+        {filed && !images && (
           <>
             <button
               type="button"

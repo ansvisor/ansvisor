@@ -126,3 +126,88 @@ export async function fileChatOutput(
   }
   return { ok: true, id };
 }
+
+/** One image of a set, as the provider made it. */
+export interface ChatImageFile {
+  bytes: Uint8Array;
+  mimeType: string;
+}
+
+/** An image's extension in Files, by its type. */
+export const imageExtension = (mimeType: string) =>
+  mimeType === 'image/jpeg' ? 'jpg' : mimeType === 'image/webp' ? 'webp' : 'png';
+
+/** A set's n-th image's object name under its file's folder ("image-2.jpg"). */
+export const imageFileName = (n: number, mimeType: string) =>
+  `image-${n}.${imageExtension(mimeType)}`;
+
+/**
+ * Files a set of images Chat made (CHAT-15 item 24, W4-08): one row for the
+ * set, whose object is its selected image (the first, until the person
+ * picks another), and each image beside it under the file's folder
+ * ({organization}/{file}/image-{n}.{ext}). The row counts every image's
+ * bytes toward storage; a workspace without room for them all files none.
+ * An image that doesn't go up takes the row and the others with it.
+ */
+export async function fileChatImages(
+  output: Omit<ChatOutput, 'type' | 'formats' | 'body' | 'mimeType' | 'fileName'> & {
+    images: ChatImageFile[];
+  },
+): Promise<{ ok: true; id: string } | { ok: false; failure: 'storage_full' | 'failed' }> {
+  const images = output.images.filter((image) => image.bytes.byteLength > 0);
+  if (images.length === 0) return { ok: false, failure: 'failed' };
+  const bytes = images.reduce((sum, image) => sum + image.bytes.byteLength, 0);
+  const storage = await readChatStorage(output.organizationId);
+  if (!storageFits(storage, bytes)) return { ok: false, failure: 'storage_full' };
+
+  const id = randomUUID();
+  const folder = `${output.organizationId}/${id}`;
+  const first = images[0];
+  const { error: rowError } = await supabaseAdmin.from('chat_files').insert({
+    id,
+    organization_id: output.organizationId,
+    brand_id: output.brandId,
+    created_by: output.createdBy,
+    title: output.title.slice(0, 200),
+    type: 'image',
+    formats: [imageExtension(first.mimeType)],
+    mime_type: first.mimeType,
+    storage_path: `${folder}/${imageFileName(1, first.mimeType)}`,
+    size_bytes: bytes,
+    origin: output.origin,
+    conversation_id: output.conversationId,
+    message_id: output.messageId,
+    run_id: output.runId,
+    generated_at: output.generatedAt,
+    data_as_of: output.dataAsOf,
+    timezone: output.timezone,
+    content_draft_id: output.contentDraftId ?? null,
+  });
+  if (rowError) {
+    console.error('[chat-files] could not file the images:', rowError.message);
+    return { ok: false, failure: 'failed' };
+  }
+  const bucket = supabaseAdmin.storage.from(CHAT_FILES_BUCKET);
+  const paths = images.map((image, i) => `${folder}/${imageFileName(i + 1, image.mimeType)}`);
+  const uploads = await Promise.all(
+    images.map(async (image, i) => {
+      try {
+        const { error } = await bucket.upload(paths[i], image.bytes, {
+          contentType: image.mimeType,
+          upsert: false,
+        });
+        return error?.message ?? null;
+      } catch (error) {
+        return error instanceof Error ? error.message : 'upload failed';
+      }
+    }),
+  );
+  const uploadError = uploads.find((message) => message !== null);
+  if (uploadError) {
+    console.error('[chat-files] could not keep an image:', uploadError);
+    await bucket.remove(paths).catch(() => null);
+    await supabaseAdmin.from('chat_files').delete().eq('id', id);
+    return { ok: false, failure: 'failed' };
+  }
+  return { ok: true, id };
+}

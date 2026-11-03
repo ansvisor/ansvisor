@@ -4,6 +4,7 @@ import { ACTION_CENTER_TOOLS } from './action-center-tools';
 import { AUDIT_TOOLS } from './audit-tools';
 import { COMPETITOR_TOOLS } from './competitor-tools';
 import { CONTENT_TOOLS } from './content-tools';
+import { IMAGE_READS, IMAGE_WRITES } from './image-tools';
 import { PROMPT_TOOLS } from './prompt-tools';
 import { READ_TOOLS } from './read-tools';
 import { REPORT_TOOLS } from './report-tools';
@@ -26,6 +27,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...NAVIGATION_READS,
   ...WHATS_NEW_READS,
   ...WHY_TOOLS,
+  ...IMAGE_READS,
   ...WRITE_TOOLS,
   ...PROMPT_TOOLS,
   ...TOPIC_TOOLS,
@@ -34,6 +36,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...CONTENT_TOOLS,
   ...REPORT_TOOLS,
   ...AUDIT_TOOLS,
+  ...IMAGE_WRITES,
 ];
 
 /** The row of a tool, by its internal name; undefined for a name with no row. */

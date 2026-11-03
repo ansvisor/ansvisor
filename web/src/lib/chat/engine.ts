@@ -54,6 +54,7 @@ import {
 import { HOLD_MAX, checkFigures, figureHold, figuresOfRun, type KnownFigures } from './facts';
 import { fitResult, toJson } from './fit';
 import { historyMessages, planHistory, type HistoryPlan, type HistoryRow } from './history';
+import { fitImageParts } from './images/chat-images';
 import {
   HELP_SYSTEM,
   articlesOf,
@@ -2857,8 +2858,13 @@ async function openQuestion(
 async function coveredUnits(
   rc: RunContext,
   units: number,
-  { reads = false }: { reads?: boolean } = {},
+  { reads = false, imageModel }: { reads?: boolean; imageModel?: string } = {},
 ): Promise<{ fits: number; limit: 'run' | 'month' }> {
+  // Images: each at its image model's price, on the key images run on (W4-08).
+  if (imageModel) {
+    const { organizationId } = rc.run;
+    return fitImageParts({ organizationId, model: imageModel, units, agentRunId: rc.agentRunId });
+  }
   const choice = rc.models.pick('write');
   const { system, messages } = stepInput(rc, 'write', choice.claude);
   const prompt = estimateInputTokens([system, messages, toolSchemas(rc, 'write')]);
@@ -2888,8 +2894,8 @@ async function checkParts(rc: RunContext, call: PendingCall): Promise<CallOutcom
     const issues = parsed.error.issues.slice(0, 5).map((i) => `${i.path.join('.')}: ${i.message}`);
     return result(call, { code: 'invalid_input', issues }, true);
   }
-  const { parts, unit } = parsed.data;
-  const covered = await coveredUnits(rc, parts);
+  const { parts, unit, image_model: imageModel } = parsed.data;
+  const covered = await coveredUnits(rc, parts, { imageModel });
   const fit = partsFit(covered.fits, parts);
   if (fit.kind === 'all') return result(call, partsResult(parts, parts, unit));
   // At the agent run's own cap ('run'), not the month's, its run ends at its limit.
@@ -2906,7 +2912,7 @@ async function checkParts(rc: RunContext, call: PendingCall): Promise<CallOutcom
     return result(call, partsResult(fit.fits, parts, unit));
   }
   rc.progress.parts = { fits: fit.fits, parts, unit, limit: covered.limit };
-  return openQuestion(rc, call, partsQuestion(fit.fits, parts, unit));
+  return openQuestion(rc, call, partsQuestion(fit.fits, parts, unit, !!imageModel));
 }
 
 /**
@@ -3789,28 +3795,32 @@ async function deliver(
 ): Promise<string | null> {
   const made = tool.deliverable?.(input as never, output);
   if (!made) return null;
-  const filed = await fileChatOutput({
-    organizationId: rc.actor.organizationId,
-    createdBy: rc.actor.userId,
-    brandId,
-    title: made.title,
-    type: made.type,
-    formats: made.formats,
-    body: new TextEncoder().encode(made.body),
-    mimeType: made.mimeType,
-    fileName: made.fileName,
-    origin: 'chat',
-    conversationId: rc.run.conversationId,
-    messageId: null,
-    runId: rc.run.id,
-    generatedAt: new Date().toISOString(),
-    dataAsOf: rc.progress.dataAsOf,
-    timezone: rc.progress.timezone,
-    contentDraftId: made.contentDraftId ?? null,
-  }).catch((error: unknown) => {
-    console.error('[chat] could not file a deliverable:', error);
-    return { ok: false as const, failure: 'failed' as const };
-  });
+  // A set of images files itself as it is made (W4-08): its file is named, not filed again.
+  const filed =
+    made.fileId !== undefined
+      ? { ok: true as const, id: made.fileId }
+      : await fileChatOutput({
+          organizationId: rc.actor.organizationId,
+          createdBy: rc.actor.userId,
+          brandId,
+          title: made.title,
+          type: made.type,
+          formats: made.formats,
+          body: new TextEncoder().encode(made.body),
+          mimeType: made.mimeType,
+          fileName: made.fileName,
+          origin: 'chat',
+          conversationId: rc.run.conversationId,
+          messageId: null,
+          runId: rc.run.id,
+          generatedAt: new Date().toISOString(),
+          dataAsOf: rc.progress.dataAsOf,
+          timezone: rc.progress.timezone,
+          contentDraftId: made.contentDraftId ?? null,
+        }).catch((error: unknown) => {
+          console.error('[chat] could not file a deliverable:', error);
+          return { ok: false as const, failure: 'failed' as const };
+        });
   const task = filed.ok ? await taskOfDeliverable(rc, filed.id, !!made.contentDraftId) : null;
   rc.sink.emit('deliverable.created', {
     title: made.title,

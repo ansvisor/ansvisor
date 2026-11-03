@@ -78,6 +78,13 @@ vi.mock('@/lib/mcp/brand-facts-reads', async (importOriginal) =>
 vi.mock('@/lib/mcp/whats-new', async (importOriginal) =>
   tracked.all('mcp/whats-new', await importOriginal<Record<string, unknown>>()),
 );
+// No app page makes images yet: the image rows call Chat's own image functions (W4-08).
+vi.mock('@/lib/chat/images/chat-images', () => ({
+  imageModelQuestion: tracked.track('chat/images.imageModelQuestion'),
+  makeChatImages: tracked.track('chat/images.makeChatImages'),
+  imageCostLine: tracked.track('chat/images.imageCostLine'),
+  imagePrecheck: tracked.track('chat/images.imagePrecheck'),
+}));
 vi.mock('@/lib/actions/content', () => ({
   updateOpportunityStatus: tracked.track('actions/content.updateOpportunityStatus'),
 }));
@@ -280,7 +287,11 @@ describe('the Chat tool registry', () => {
       const result = await tool.run(ctx, tool.inputSchema.parse(tool.fixture.input));
       expect(calls).toHaveLength(1);
       expect(result).toEqual({ from: calls[0].from });
-      if (tool.class === 'read') {
+      if (tool.area === 'images') {
+        // Chat's own image functions, with the member's context.
+        expect(calls[0].from).toMatch(/^chat\/images\./);
+        expect(calls[0].args[0]).toBe(ctx);
+      } else if (tool.class === 'read') {
         // The MCP data functions, scoped to the signed-in member's organization.
         expect(calls[0].from).toMatch(/^mcp\//);
         expect(calls[0].args[0]).toBe(ctx);
@@ -691,6 +702,8 @@ describe('approval policies', () => {
       unpublish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
+      // Images (CHAT-20 §9 row 70, W4-08): Admins and Managers, as a report.
+      generate_image: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
@@ -706,7 +719,7 @@ describe('approval policies', () => {
           '<h1>Pricing FAQ</h1><script>fetch("https://evil.example")</script><img src="https://ansvisor.com/a.png" onerror="alert(1)">',
       } as never,
       FIXTURE_IDS.brand,
-    )!;
+    ) as { body: string };
     expect(made.body).not.toMatch(/<script/i);
     expect(made.body).not.toMatch(/onerror/i);
     expect(made.body).toContain('<h1>Pricing FAQ</h1>');

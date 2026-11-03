@@ -109,9 +109,14 @@ export const FILE_FORMATS = [
   'jsonld',
   'txt',
   'png',
+  'jpg',
   'webp',
 ] as const;
 export type ChatFileFormatName = (typeof FILE_FORMATS)[number];
+
+/** An image's own format in Files (W4-08): it downloads as it was made. */
+export type ChatImageFormat = 'png' | 'jpg' | 'webp';
+export const CHAT_IMAGE_FORMATS: readonly ChatImageFormat[] = ['png', 'jpg', 'webp'];
 
 /** A file's formats the app knows, in its own order. */
 export function knownFormats(formats: string[]): ChatFileFormatName[] {

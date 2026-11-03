@@ -11,7 +11,8 @@ import { DAY_MS, asObject, check, textOf } from './undo-parts';
  * made goes from Reports (30 days); a page it sent to a CMS and audits it
  * started have no Undo (window 0): the CMS keeps its draft item, and an
  * audit's results stay with its quota used. Their rows record what they did
- * all the same, and the card says it can't be undone. Server only.
+ * all the same, and the card says it can't be undone. Images Chat made
+ * (W4-08) have none either: their set is deleted in Files. Server only.
  */
 
 /** No Undo (§9): the row records the change, Undo finds nothing to put back. */
@@ -105,6 +106,25 @@ const runSiteAudit: UndoRule = {
   href: () => '/dashboard/audit',
 };
 
+// ─── generate_image: recorded, no Undo (§9 row 70: the set is deleted in Files) ─
+
+const generateImage: UndoRule = {
+  ...NO_UNDO,
+  targetType: 'chat_file',
+  async record(input, output): Promise<WriteRecord> {
+    const made = asObject(output);
+    return {
+      target: { type: 'chat_file', id: textOf(made.file_id) },
+      summaryParams: {
+        title: summaryValue(textOf(made.title)),
+        model: summaryValue(textOf(made.model) ?? textOf(asObject(input).model)),
+      },
+      undo: null,
+    };
+  },
+  href: () => '/dashboard/chat/files',
+};
+
 /** The output rows' records and Undo, by tool name (undo.ts UNDO_RULES). */
 export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   build_report: buildReport,
@@ -114,4 +134,5 @@ export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   // A page taken down (PR 10): recorded the same way, its CMS from the output; publish it again to undo.
   unpublish_cms: pushCmsDraft,
   run_site_audit: runSiteAudit,
+  generate_image: generateImage,
 };

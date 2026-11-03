@@ -83,6 +83,8 @@ export type ToolArea =
   | 'action_center'
   | 'content'
   | 'reports'
+  /** Making images (CHAT-15 §E, CHAT-20 §9 row 70). */
+  | 'images'
   /** Opening a page of the app (CHAT-19 §2). */
   | 'navigation'
   /** Opening a page on the web (CHAT-10 §B). */
@@ -296,21 +298,30 @@ interface ToolFields<S extends z.ZodObject> {
   fixture: { input: z.input<S> };
 }
 
-/** Something a call made (CHAT-06 item 1): its card, and the file kept for it. */
-export interface ToolDeliverable {
+/**
+ * Something a call made (CHAT-06 item 1): its card, and the file kept for
+ * it: its content, which the engine files, or the file the call filed
+ * itself (`fileId`: a set of images, W4-08).
+ */
+export type ToolDeliverable = {
   title: string;
   type: 'document' | 'table' | 'code' | 'image' | 'report';
   /** The formats it downloads in, its main one first. */
   formats: string[];
-  /** Its canonical content, its type and its object's name in Files. */
-  body: string;
-  mimeType: string;
-  fileName: string;
   /** Its card's Open: an app page (the Content Editor's draft). */
   href?: `/dashboard/${string}`;
   /** The Content draft it is ("Used in Content draft"). */
   contentDraftId?: string;
-}
+} & (
+  | {
+      /** Its canonical content, its type and its object's name in Files. */
+      body: string;
+      mimeType: string;
+      fileName: string;
+      fileId?: undefined;
+    }
+  | { fileId: string }
+);
 
 type ClassFields =
   | { class: 'read'; flags?: Partial<Pick<ToolFlags, 'adminMayTurnOff' | 'costCard'>> }
