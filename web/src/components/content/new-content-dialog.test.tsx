@@ -21,9 +21,9 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   getContentOverlap: (...args: unknown[]) => getContentOverlap(...args),
 }));
 // What the agent is given is agent-write.test.ts's; here, that Start hands it over.
-const listMembers = vi.fn();
+const listBrandMembers = vi.fn();
 vi.mock('@/lib/actions/team', () => ({
-  listMembers: (...args: unknown[]) => listMembers(...args),
+  listBrandMembers: (...args: unknown[]) => listBrandMembers(...args),
 }));
 const assignAction = vi.fn();
 vi.mock('@/lib/actions/action-center', () => ({
@@ -177,7 +177,7 @@ beforeEach(() => {
   getContentOverlap.mockReset().mockResolvedValue({ totalPrompts: 2, pages: [] });
   importContentPage.mockReset().mockResolvedValue({ error: 'failed' });
   sendContentDraftToActionCenter.mockReset();
-  listMembers.mockReset().mockResolvedValue(MEMBERS);
+  listBrandMembers.mockReset().mockResolvedValue(MEMBERS);
   assignAction.mockReset().mockResolvedValue(undefined);
   startAgentWriting.mockReset();
   agentWriteRequest.mockReset().mockResolvedValue({ sources: 'kept', rules: [] });
@@ -696,7 +696,8 @@ describe('New content', () => {
         ...document.querySelectorAll<HTMLElement>('[aria-labelledby="start-who"] [role="radio"]'),
       ].find((r) => r.textContent?.startsWith('Team'))!;
       expect(team.getAttribute('aria-checked')).toBe('true');
-      expect(listMembers).toHaveBeenCalled();
+      // The people who can see the dialog's brand (BRAND-ACCESS).
+      expect(listBrandMembers).toHaveBeenCalledWith('b1');
     });
 
     it('leaves an opportunity no longer open to pick', async () => {

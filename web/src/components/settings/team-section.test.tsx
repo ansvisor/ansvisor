@@ -150,6 +150,30 @@ describe('TeamSection on a read-only workspace', () => {
     expect(team.updateMemberRole).not.toHaveBeenCalled();
   });
 
+  it("shows a new invitation's link outside session replays", async () => {
+    team.inviteMember.mockResolvedValue({
+      inviteLink: 'https://app.ansvisor.test/en/invite/tok_123',
+      emailSent: false,
+    });
+    await render(false);
+    await click(byText('Invite member'));
+    const email = document.querySelector<HTMLInputElement>('#invite-email')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        email,
+        'cal@acme.test',
+      );
+      email.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await click(byText('Send invitation'));
+
+    expect(team.inviteMember).toHaveBeenCalledWith('cal@acme.test', 'analyst');
+    const link = [...document.querySelectorAll<HTMLInputElement>('input')].find(
+      (i) => i.value === 'https://app.ansvisor.test/en/invite/tok_123',
+    );
+    expect(link?.classList.contains('ph-no-capture')).toBe(true);
+  });
+
   it('opens Invite and asks before removing on an active plan', async () => {
     await render(false);
     await click(byText('Invite member'));

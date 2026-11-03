@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readMemberEmails } from '@/lib/member-emails';
+import { brandReaders } from '@/lib/brand-access';
 import { enforceLimit, getOrgPlan } from '@/lib/guards/plan-guard';
 import { assertWritable } from '@/lib/subscription-guard';
 
@@ -104,11 +105,31 @@ export async function getTeamInfo(): Promise<TeamInfo> {
 
 export async function listMembers(): Promise<TeamMember[]> {
   const { user, profile } = await getCurrentUserAndOrg();
+  return readMembers(user.id, profile.organization_id);
+}
 
+/**
+ * The people an action of the brand may be assigned to, for the assignee
+ * pickers (BRAND-ACCESS §3.1): the members who may use the brand, in the
+ * team's order. The caller must use it too; a brand they can't reads as not
+ * found.
+ */
+export async function listBrandMembers(brandId: string): Promise<TeamMember[]> {
+  const { user, profile } = await getCurrentUserAndOrg();
+  const [readers, members] = await Promise.all([
+    brandReaders(profile.organization_id, [brandId]),
+    readMembers(user.id, profile.organization_id),
+  ]);
+  if (!readers.has(user.id)) throw new Error('Brand not found');
+  return members.filter((member) => readers.has(member.userId));
+}
+
+/** The organization's members, the earliest first, with their e-mails. */
+async function readMembers(userId: string, organizationId: string): Promise<TeamMember[]> {
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('id, full_name, avatar_url, role, created_at')
-    .eq('organization_id', profile.organization_id)
+    .eq('organization_id', organizationId)
     .order('created_at', { ascending: true });
 
   if (error) throw new Error(error.message);
@@ -125,7 +146,7 @@ export async function listMembers(): Promise<TeamMember[]> {
     avatarUrl: (p.avatar_url as string | null) ?? null,
     role: p.role as TeamRole,
     createdAt: p.created_at as string,
-    isCurrentUser: p.id === user.id,
+    isCurrentUser: p.id === userId,
   }));
 }
 

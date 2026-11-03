@@ -8,7 +8,7 @@ updated: 2026-10-30
 last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/mcp-server.mdx, web/messages/en.json]
 ---
 Ansvisor has an MCP (Model Context Protocol) server, so AI assistants such as Claude, Codex, Cursor, VS Code, Windsurf, Gemini CLI and Zed can query your Ansvisor data in a normal conversation. There is nothing to install: the assistant connects with an API key from **Settings › MCP & API Keys**.

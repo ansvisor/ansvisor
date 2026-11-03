@@ -325,6 +325,7 @@
       "changeRoles": "Changing roles needs a plan",
       "saveAiKeys": "Saving an AI key needs a plan",
       "switchAiProvider": "Switching Chat's AI provider needs a plan",
+      "saveAiKeyLimit": "Saving the agents' limit on your key needs a plan",
       "testAiKey": "Testing an AI key needs a plan",
       "addCatalogSources": "Adding catalog sources needs a plan",
       "syncCatalog": "Syncing the catalog needs a plan",
@@ -440,11 +441,6 @@
       "failed": "Couldn't prepare the demo. Check your connection and try again.",
       "retry": "Try again",
       "close": "Close"
-    },
-    "chat": {
-      "soon": "Soon (next week)",
-      "note": "Chat arrives next week. This is a preview of it.",
-      "frameTitle": "Chat preview"
     }
   },
   "firstRun": {
@@ -520,6 +516,7 @@
   "nav": {
     "overview": "Overview",
     "chat": "Chat",
+    "chatSetUp": "Set up",
     "agentCenter": "Agent Center",
     "actionCenter": "Action Center",
     "insights": "Brand Visibility",
@@ -1788,6 +1785,8 @@
           "agent_run_started": "Agent run started{named, select, yes { · {agent}} other {}}",
           "agent_run_completed": "{to, select, done {Agent run completed} failed {Agent run failed} stopped {Agent run stopped} skipped {Agent run skipped} other {Agent run ended}}{named, select, yes { · {agent}} other {}}{reason, select, action_closed { · action closed} other {}}",
           "chat_started": "Chat started on this action",
+          "agent_went_live": "{named, select, yes {{agent}} other {An agent}} sent “{title}” to {to} on its own",
+          "agent_published": "{named, select, yes {{agent}} other {An agent}} published “{title}” on {to}, on its own",
           "still_relevant": "Kept as still relevant: no longer stale"
         },
         "eventParts": {
@@ -3511,6 +3510,7 @@
     },
     "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
+    "publishToCms": { "name": "Publish pages on your site", "step": "Published page on your site" },
     "makeReport": { "name": "Make reports", "step": "Made report" },
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "webPage": { "name": "Open web pages", "step": "Open page" },
@@ -3855,7 +3855,43 @@
       "dailyLimit": "This is one of the {limit} new actions the brand gets today, so Action Center's own new actions wait until tomorrow."
     },
     "card": {
-      "noSession": "This agent ran on its own, so it asks before changing anything."
+      "noSession": "This agent ran on its own, so it asks before changing anything.",
+      "held": "Held for your click: {reason}"
+    },
+    "held": {
+      "unchecked": "The page couldn’t be checked.",
+      "injection": "This run read text that tried to instruct it.",
+      "untrusted_scope": "This run started from outside text.",
+      "placeholders": "The page still has placeholders.",
+      "fields": "The page’s slug or meta needs fixing.",
+      "instructions": "The page has text aimed at AI assistants.",
+      "hidden_text": "The page has hidden text.",
+      "copied": "The page repeats a long passage from a page it read.",
+      "foreign_link": "The page links to {host}, which isn’t your site or one of its sources.",
+      "live_page": "The page is live already: an update stays your click.",
+      "quality_off": "Content Quality is off, so the page can’t be checked.",
+      "quality_unread": "The page’s Quality couldn’t be read in full.",
+      "quality_unread_cap": "The page’s Quality needs AI checks, and this run reached its limit.",
+      "quality_unread_budget": "The page’s Quality needs AI checks, and the month’s AI limit is reached.",
+      "suggestions": "Suggestions on the page are still waiting for review.",
+      "facts": "The page says {page} where your brand facts say {fact}.",
+      "facts_unchecked": "The page states a price, a trial or a founding year, and there are no approved brand facts to check it against.",
+      "qualityLow": "{check} is {score}, under 60.",
+      "quality": "Quality is {score}, under 75.",
+      "limit": "{agent} went live {limit, plural, one {# time} other {# times}} in the last 24 hours. The next one can go on its own at {time}.",
+      "limitSoon": "{agent} went live {limit, plural, one {# time} other {# times}} in the last 24 hours.",
+      "failed": "It didn’t go out: {why}",
+      "checks": {
+        "eeat": "E-E-A-T",
+        "trust": "Trust",
+        "readability": "Readability"
+      }
+    },
+    "goLive": {
+      "notSent": "The page wasn’t sent.",
+      "unreached": "{cms} couldn’t be reached.",
+      "refused": "{cms} refused it: {why}",
+      "rechecked": "Its permission to go live on its own changed while it ran."
     },
     "acting": {
       "refused": "This agent couldn't make this change on its own, so nothing changed. Use Run now to make it as you.",
@@ -3894,7 +3930,8 @@
       "modelDroppedDetail": "The model this chat used is no longer available",
       "modelProviderOffDetail": "Your Admin turned off this model's provider",
       "usedSkill": "Used skill: {title}",
-      "skillFromLibrary": "Ansvisor library"
+      "skillFromLibrary": "Ansvisor library",
+      "usedShortcut": "Used shortcut: {title}"
     },
     "pageRefused": {
       "no_access": "No workspace to open pages for",
@@ -4075,9 +4112,19 @@
       "noneWithSkills": "No shortcuts or skills match",
       "skills": "Skills",
       "shortcuts": {
+        "start": {
+          "name": "Get started",
+          "starter": "Help me get started. What should I set up first?"
+        },
         "analyze": { "name": "Analyze", "starter": "Analyze" },
-        "report": { "name": "Reports", "starter": "Create a report on" },
-        "create": { "name": "Create content", "starter": "Create content for" }
+        "newReport": { "name": "Reports", "starter": "Create a report on" },
+        "create": { "name": "Create content", "starter": "Create content for" },
+        "optimize": { "name": "Optimize content", "starter": "Optimize this page:" },
+        "opportunities": {
+          "name": "Find opportunities",
+          "starter": "Find content opportunities for"
+        },
+        "audit": { "name": "Improve with audit", "starter": "Run an audit on" }
       }
     },
     "reference": {
@@ -4593,7 +4640,7 @@
           "landingPages": "Landing pages to fix",
           "landingPagesMessage": "Which landing pages do AI visitors leave fastest, and what should we fix on them?",
           "auditFixes": "Site audit fixes",
-          "auditFixesMessage": "Turn our site audit findings into the fixes that matter most for AI answers, highest impact first.",
+          "auditFixesMessage": "/audit-fix Turn our site audit findings into the fixes that matter most for AI answers, highest impact first.",
           "weeklyReport": "Weekly report",
           "weeklyReportMessage": "/report Write this week's report on our AI visibility.",
           "writeNext": "What to write next",
@@ -4609,21 +4656,21 @@
           "storySources": "Sources shaping our story",
           "storySourcesMessage": "Which sources shape what AI engines say about us?",
           "buyerQuestions": "Buyer questions",
-          "buyerQuestionsMessage": "Group the questions buyers ask AI in our category by topic, with search volume and who AI recommends.",
+          "buyerQuestionsMessage": "/questions Group the questions buyers ask AI in our category by topic, with search volume and who AI recommends.",
           "howAiCompares": "How AI compares us",
-          "howAiComparesMessage": "How do AI engines compare us with each competitor, feature by feature? Quote the answers.",
+          "howAiComparesMessage": "/features How do AI engines compare us with each competitor, feature by feature? Quote the answers.",
           "unmetNeeds": "Unmet needs",
-          "unmetNeedsMessage": "Which buyer needs and use cases have no clear winner in AI answers yet?",
+          "unmetNeedsMessage": "/gaps Which buyer needs and use cases have no clear winner in AI answers yet?",
           "productDigest": "Product digest",
           "productDigestMessage": "Write a product digest: what buyers asked AI this week, how AI compared us, and the gaps for our roadmap.",
           "marketGaps": "Market gaps",
           "marketGapsMessage": "In which markets and segments does AI recommend our competitors instead of us?",
           "listingGaps": "Listing gaps",
-          "listingGapsMessage": "Which directories, marketplaces and review sites do AI engines cite in our category, and which don't list us?",
+          "listingGapsMessage": "/listings Which directories, marketplaces and review sites do AI engines cite in our category, and which don't list us?",
           "publisherSites": "Publisher sites",
           "publisherSitesMessage": "Which publisher sites do AI engines cite in our category?",
           "marketSnapshot": "Market snapshot",
-          "marketSnapshotMessage": "Give me a snapshot of who AI recommends in each of our markets."
+          "marketSnapshotMessage": "/markets Give me a snapshot of who AI recommends in each of our markets."
         },
         "starters": {
           "winning": "Are we winning in AI search this month?",
@@ -4745,6 +4792,27 @@
     },
     "inbox": {
       "title": "Inbox",
+      "notice": {
+        "reminder": "{why} Still not working after 3 days.",
+        "limit80": "Agents have used 80% of their monthly limit on your key",
+        "limit100": "Agents reached their monthly limit on your key · they're paused",
+        "limitUsed": "About {used} of {cap} this month, estimated · renews {date}",
+        "limitUsedNoDate": "About {used} of {cap} this month, estimated",
+        "limitPaused": "They start again on {date}, or when you raise the limit.",
+        "limitPausedNoDate": "They start again when the month renews, or when you raise the limit.",
+        "reviewLimit": "Review limit",
+        "raiseLimit": "Raise limit",
+        "fix": "Fix it",
+        "wentLive": "{agent} sent “{title}” to {cms} as a draft",
+        "published": "{agent} published “{title}” on {site}",
+        "wentLiveDetail": "On its own, after Quality and your brand facts",
+        "publishedDetail": "Live on {site} · on its own, after Quality and your brand facts",
+        "openPage": "Open page",
+        "openRun": "Open run",
+        "goLiveOff": "{agent} no longer publishes on its own",
+        "goLiveOffDetail": "It changed. Turn it on again if you still want it.",
+        "openAgent": "Open agent"
+      },
       "lands": "Results from your agents land here.",
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
       "nothingNeedsYou": "Nothing needs you.",
@@ -5383,6 +5451,7 @@
         "always": "Auto · policy Always",
         "full_auto": "Auto · Full auto",
         "dont_ask_again": "Auto · “Don't ask again”",
+        "go_live": "Went live on its own",
         "run": "Ran"
       },
       "denials": {
@@ -5506,6 +5575,7 @@
       "reviseDraft": "Changed the draft “{title}”",
       "reviseDraftUndo": "Put the draft “{title}” back as it was",
       "sendToCms": "Sent the draft “{title}” to {cms}",
+      "publishToCms": "Published the page “{title}” through {cms}",
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
@@ -5522,6 +5592,8 @@
       "agentTakenOver": "Took over the agent “{name}”",
       "agentRunQueued": "Asked the agent “{name}” to run for {brand}",
       "agentRunOnAction": "Asked the agent “{name}” to run on the action AC-{action}",
+      "agentGoLiveOn": "Let the agent “{name}” publish and send on its own, up to {limit} a day",
+      "agentGoLiveOff": "Stopped the agent “{name}” publishing and sending on its own",
       "modelProviderOn": "Turned on {provider} models in Chat",
       "modelProviderOff": "Turned off {provider} models in Chat"
     },
@@ -5554,7 +5626,8 @@
       "monthCap": "Set an agent's monthly AI cap",
       "fullAuto": "Run an agent in Full auto",
       "engines": "Use these engines in an agent",
-      "runWithChat": "Run Chat on an Action Center action"
+      "runWithChat": "Run Chat on an Action Center action",
+      "goLive": "Let an agent publish and send on its own"
     },
     "refusal": {
       "invalid": "Some of this agent's settings aren't valid. Check them and try again.",
@@ -5572,13 +5645,16 @@
       "agent_limit": "Your plan keeps up to {limit, plural, one {# agent} other {# agents}} on at once. Pause or archive one to turn this one on.",
       "no_brand": "None of this agent's brands is left. Pick a brand in its scope.",
       "ai_limit": "This month's AI limit is used up, so the agent can't start. It can run again once the limit resets.",
+      "own_key_cap": "Agents have used this month's limit on your own AI key. An Admin can raise it in Settings › AI Providers, or it renews on {date}.",
       "owner_role": "This agent's owner can't run agents any more. An Admin can take it over.",
       "action_not_found": "This action isn't available.",
       "action_closed": "This action is closed. Reopen it in Action Center to run an agent on it.",
       "queue_full": "{count, plural, one {# run already waits} other {# runs already wait}} for this agent on this brand. Try again once one has started.",
       "connection_missing": "This agent needs {name}, and {brand} doesn’t have it connected. Connect it for that brand, then run the agent again.",
       "own_key_failed": "{why} An Admin can fix it in Settings › AI Providers, then run the agent again.",
-      "failed": "Something went wrong with this agent. Try again."
+      "failed": "Something went wrong with this agent. Try again.",
+      "go_live_off": "An Admin hasn’t allowed agents to publish on their own in Settings › Chat.",
+      "go_live_mode": "This agent isn’t in Full auto. Pick Full auto first."
     },
     "ownKey": {
       "why": {
@@ -5599,6 +5675,7 @@
       "archived": "Archived"
     },
     "pausedReason": {
+      "own_key_cap": "Key's monthly agent limit reached",
       "cap": "AI limit reached",
       "connection": "A required connection is off",
       "skill_off": "A skill is off",
@@ -6049,7 +6126,7 @@
           "writing": "For drafts and rewrites",
           "picked": "Kept from this agent’s settings"
         },
-        "ownKey": "Runs on your {provider} key, which {provider} bills. Max per run and Monthly cap still apply.",
+        "ownKey": "Runs on your {provider} key, which {provider} bills. Max per run and the key's monthly limit still apply.",
         "limit": "Uses your monthly AI limit"
       },
       "agent": {
@@ -6127,6 +6204,23 @@
         "run_share": "Enter a whole number from 1 to 50.",
         "month_share": "Enter a whole number from 1 to 100.",
         "workspace_admins_only": "Only Admins can share agents with the workspace here."
+      },
+      "goLive": {
+        "label": "Publish and send on its own",
+        "note": "Goes live without a click, at most {limit, plural, one {# time} other {# times}} a day. Each page must pass Quality and your brand facts first. Only Admins change this.",
+        "covers": "Publishes new pages to Webflow, WordPress and Wix · sends drafts to your CMS, Framer included.",
+        "limit": "At most a day",
+        "limitRange": "{min} to {max}",
+        "limitError": "Pick a number from {min} to {max}.",
+        "needFullAuto": "Pick Full auto first",
+        "offInSettings": "An Admin hasn’t allowed agents to publish on their own in Settings › Chat",
+        "locked": "Needs {plan} · you’re on {current}",
+        "readOnly": "An Admin decides whether this agent may publish on its own",
+        "ask": "Let this agent publish and send on its own",
+        "onBy": "On · allowed by {name} on {date}",
+        "onByFormer": "On · allowed by a former member on {date}",
+        "resetByChange": "Off since the agent changed. An Admin can turn it on again.",
+        "approval": "On its own · up to {limit} a day"
       }
     },
     "deniedTitle": "I can't do this for you",
@@ -6289,7 +6383,7 @@
       },
       "ready-to-publish": {
         "name": "Ready to Publish",
-        "description": "Runs a quality pass on a draft, fills its page fields and sends a CMS draft. Going live stays your click."
+        "description": "Runs a quality pass on a draft, fills its page fields, sends a CMS draft and publishes it. It goes live on its own only if an Admin allows it."
       },
       "task-finisher": {
         "name": "Task Finisher",
@@ -6503,7 +6597,24 @@
       "notFound": "This agent isn't available. It may have been deleted, or it isn't shared with you.",
       "backToAgents": "Back to Agent Center",
       "loadFailed": "Couldn't load this agent.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "goLive": {
+        "badge": "Publishes on its own · {limit} a day",
+        "title": "Publishing on its own",
+        "status": "Status",
+        "statusOn": "On · up to {limit} a day",
+        "statusOff": "Off in Settings › Chat",
+        "statusChanged": "Off since the agent changed. An Admin can turn it on again.",
+        "statusNone": "Off",
+        "allowedBy": "Allowed by",
+        "allowedByValue": "{name} · {date}",
+        "formerMember": "A former member",
+        "recent": "Last 24 hours",
+        "recentNone": "Nothing went live on its own yet.",
+        "recentItem": "“{title}” → {target}",
+        "untitled": "Untitled page",
+        "takenDown": "Taken down"
+      }
     }
   },
   "audit": {
@@ -7616,6 +7727,8 @@
         "published": "Published {when}",
         "openLive": "Published {when}: open the live page in a new tab",
         "answered": "The webhook answered {status}.",
+        "onItsOwn": "Sent by {agent} · on its own",
+        "onItsOwnUnnamed": "Sent by an agent · on its own",
         "webflow": {
           "queued": "Sending to Webflow since {when}",
           "sent": "In Webflow as a draft item since {when}",
@@ -13265,16 +13378,22 @@
       "SSO / SAML and custom feature requests",
       "Your own AI keys: OpenAI, Anthropic, Google, Azure or OpenRouter"
     ],
+    "customPlanPointsChat": [
+      "Chat and Agent Center",
+      "Full auto, with agents that publish on their own"
+    ],
     "planCards": {
       "starter": {
         "tagline": "For small teams getting started with AI visibility monitoring and optimization.",
         "engines": "ChatGPT & Microsoft Copilot tracking",
-        "extras": ["MCP & API access"]
+        "extras": ["MCP & API access"],
+        "extrasChat": ["Chat and Agent Center"]
       },
       "growth": {
         "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
         "engines": "ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking",
-        "extras": ["Multi-region tracking", "White-label reports & exports", "Looker Studio"]
+        "extras": ["Multi-region tracking", "White-label reports & exports", "Looker Studio"],
+        "extrasChat": ["Chat and Agent Center", "Full auto, with agents that publish on their own"]
       },
       "brands": "{count, plural, one {# brand} other {# brands}}",
       "unlimitedBrands": "Unlimited brands",
@@ -13382,6 +13501,22 @@
     "agent_removeKey": "Remove key",
     "agent_adminOnly": "Admin-only setting",
     "agent_adminOnlyHint": "Only org admins can add, replace, or remove AI provider keys. Ask an admin if you need one changed.",
+    "ownKeyGuard": {
+      "title": "Agents on your key",
+      "description": "One limit for all agents on your own AI key, from {min} to {max} a month.",
+      "label": "Most all agents may spend on your key a month",
+      "save": "Save",
+      "saved": "Limit saved",
+      "note": "An estimate at the providers' list prices. Agents pause when they reach it and start again when the month renews, or when you raise it. Set a limit with your provider too: its bill is the real one.",
+      "range": "Set a limit from {min} to {max}.",
+      "month": "This month: about <b>{used}</b> of {cap} · renews {date}",
+      "monthNoDate": "This month: about <b>{used}</b> of {cap}",
+      "estimated": "Estimated",
+      "progress": "This month's agent use of the limit",
+      "unreadable": "This month's use couldn't be read just now. Reload the page in a minute.",
+      "unavailable": "This limit can't be changed yet. Try again after the next update.",
+      "failed": "The limit couldn't be saved. Try again."
+    },
     "agent_providers": {
       "anthropic": {
         "name": "Anthropic",

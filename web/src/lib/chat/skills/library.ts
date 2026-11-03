@@ -1,6 +1,7 @@
 import library from './library.json';
 import type { ChatSkillItem } from '../composer-setup';
 import { chatAgenticEnabled } from '../flag';
+import { SHORTCUT_IDS, type ShortcutId } from '../shortcuts';
 import { parseSkillFile } from './format';
 
 /**
@@ -21,6 +22,13 @@ import { parseSkillFile } from './format';
  * only with the new Chat on (CHAT_AGENTIC). Every library skill is on for
  * everyone until "My skills" lets a person switch one off (W3). Server
  * only: the bodies stay on the server, and a page gets names and titles.
+ *
+ * The shortcuts' playbooks (CHAT-08 item 8, W2-09) are library skills too,
+ * marked `metadata.hidden: "true"`: the same format, scan and CI, kept
+ * apart (SHORTCUT_PLAYBOOKS). None is listed, offered to use_skill or in the
+ * / menu's Skills group; the engine loads one only for a message sent with
+ * its shortcut, counted in the run's 3 bodies, and its `metadata.reads` are
+ * the only reads that run gets.
  */
 
 /**
@@ -73,9 +81,20 @@ export interface LibrarySkill {
   body: string;
 }
 
+/** A shortcut's playbook: a hidden library skill, with the reads its data plan allows. */
+export interface ShortcutPlaybook extends LibrarySkill {
+  name: ShortcutId;
+  /** metadata.reads: the read tools the shortcut's run may call, and no other. */
+  reads: string[];
+}
+
+const LIBRARY = library as { skills: LibrarySkill[]; playbooks: ShortcutPlaybook[] };
+
 /** The library, as library.json keeps it: in SKILL_ORDER. */
-export const SKILL_LIBRARY: readonly LibrarySkill[] = (library as { skills: LibrarySkill[] })
-  .skills;
+export const SKILL_LIBRARY: readonly LibrarySkill[] = LIBRARY.skills;
+
+/** The shortcuts' playbooks, as library.json keeps them: in the / menu's order. */
+export const SHORTCUT_PLAYBOOKS: readonly ShortcutPlaybook[] = LIBRARY.playbooks;
 
 /** The most skills listed in a request's system prompt (item 3). */
 export const MAX_LISTED_SKILLS = 20;
@@ -84,28 +103,50 @@ export const MAX_SKILL_BODIES = 3;
 /** The engine's own tool that loads a skill's body when the model picks it. */
 export const USE_SKILL_TOOL = 'use_skill';
 
-/** The library as library.json holds it, from the skills' SKILL.md files. */
+/** The words of a space-separated metadata value. */
+const listOf = (value: string | undefined) => (value ?? '').split(/\s+/).filter(Boolean);
+
+/**
+ * The library as library.json holds it, from the skills' SKILL.md files:
+ * the skills, and apart from them the hidden ones, the shortcuts' playbooks.
+ */
 export function buildSkillLibrary(files: readonly { folder: string; text: string }[]): {
   skills: LibrarySkill[];
+  playbooks: ShortcutPlaybook[];
 } {
-  const rank = (name: string) => {
-    const at = (SKILL_ORDER as readonly string[]).indexOf(name);
-    return at < 0 ? SKILL_ORDER.length : at;
+  const rankIn = (order: readonly string[]) => (name: string) => {
+    const at = order.indexOf(name);
+    return at < 0 ? order.length : at;
   };
-  const skills = files.map(({ folder, text }) => {
+  const byRank = (rank: (name: string) => number) => (a: { name: string }, b: { name: string }) =>
+    rank(a.name) - rank(b.name) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+  const parsed = files.map(({ folder, text }) => {
     const { skill } = parseSkillFile(text);
     return {
-      name: skill.name ?? folder,
-      title: skill.metadata.title ?? '',
-      description: skill.description ?? '',
-      filters: (skill.metadata.filters ?? '').split(/\s+/).filter(Boolean) as SkillFilter[],
-      body: skill.body.trim(),
+      hidden: skill.metadata.hidden === 'true',
+      reads: listOf(skill.metadata.reads),
+      skill: {
+        name: skill.name ?? folder,
+        title: skill.metadata.title ?? '',
+        description: skill.description ?? '',
+        filters: listOf(skill.metadata.filters) as SkillFilter[],
+        body: skill.body.trim(),
+      },
     };
   });
   return {
-    skills: skills.sort(
-      (a, b) => rank(a.name) - rank(b.name) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
-    ),
+    skills: parsed
+      .filter((entry) => !entry.hidden)
+      .map((entry) => entry.skill)
+      .sort(byRank(rankIn(SKILL_ORDER))),
+    playbooks: parsed
+      .filter((entry) => entry.hidden)
+      .map((entry) => ({
+        ...entry.skill,
+        name: entry.skill.name as ShortcutId,
+        reads: entry.reads,
+      }))
+      .sort(byRank(rankIn(SHORTCUT_IDS))),
   };
 }
 
@@ -115,6 +156,19 @@ export function enabledSkills(
   skills: readonly LibrarySkill[] = SKILL_LIBRARY,
 ): readonly LibrarySkill[] {
   return chatAgenticEnabled(organizationId) ? skills : [];
+}
+
+/**
+ * A shortcut's playbook for a workspace (W2-09): none while the new Chat is
+ * off, or for an id that isn't a shortcut's.
+ */
+export function shortcutPlaybook(
+  organizationId: string | null,
+  id: string | null | undefined,
+  playbooks: readonly ShortcutPlaybook[] = SHORTCUT_PLAYBOOKS,
+): ShortcutPlaybook | null {
+  if (!id || !chatAgenticEnabled(organizationId)) return null;
+  return playbooks.find((playbook) => playbook.name === id) ?? null;
 }
 
 /** The / menu's Skills group (item 5): each enabled skill's /command and title, nothing else. */

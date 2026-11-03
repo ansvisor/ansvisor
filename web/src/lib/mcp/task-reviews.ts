@@ -8,7 +8,7 @@ import {
   parseTaskDetails,
   type TaskDetailsEdit,
 } from '@/lib/action-center/task-details';
-import { brandInOrg, mcpTaskDetails } from './data';
+import { brandAllowed, mayUseBrand, mcpTaskDetails } from './data';
 import { requireManager } from './role-gate';
 
 /**
@@ -73,17 +73,27 @@ const MISSING: TaskReviewError = {
   message: 'Task review not found: approved or dismissed already, or not in this organization',
 };
 
-/** A review of the key's organization, with what is stored for it; null when there is none. */
+/**
+ * A review of a brand of the key's organization that its owner may use, with
+ * what is stored for it; null when there is none.
+ */
 async function ownedReview(auth: McpAuthContext, reviewId: string) {
   if (!auth.organizationId) return null;
   const { data, error } = await supabaseAdmin
     .from('action_task_reviews')
-    .select('id, action_id, title, details, actions!inner(brands!inner(organization_id))')
+    .select('id, action_id, title, details, actions!inner(brand_id, brands!inner(organization_id))')
     .eq('id', reviewId)
     .eq('actions.brands.organization_id', auth.organizationId as string)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return data as { id: string; action_id: string; title: string; details: unknown } | null;
+  const review = data as {
+    id: string;
+    action_id: string;
+    title: string;
+    details: unknown;
+    actions: { brand_id?: string } | null;
+  } | null;
+  return review && (await mayUseBrand(auth, review.actions?.brand_id)) ? review : null;
 }
 
 const LIST_DEFAULT = 50;
@@ -99,7 +109,7 @@ export async function listTaskReviewsFor(
   auth: McpAuthContext,
   params: { brandId: string; limit?: number },
 ): Promise<McpTaskReview[] | null> {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
   requireManager(auth);
 
   const limit = Math.min(Math.max(params.limit ?? LIST_DEFAULT, 1), LIST_MAX);
