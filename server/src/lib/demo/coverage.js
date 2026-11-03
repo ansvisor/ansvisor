@@ -75,6 +75,8 @@ export const SKIPPED = {
     "Search Console's shopping results by page (00377): the sync that reads them never runs for a demo brand, and with the brand's gsc_shopping_synced_at left empty, Readiness shows that item as not read yet and leaves it out of the score.",
   member_brands:
     "The brands shared with a Selected-brands person (00388): the organization's own people, set by its admins; everyone sees the demo brand without a row.",
+  brand_integrations:
+    "The sign-in a brand uses per integration (00470): the demo builds none. Like every brand of the Account, the demo brand uses the Account's own Google connection when there is one (nothing is synced for it), and its Webflow shows as connected from the web's own list (web lib/demo/integrations.ts).",
 };
 
 const FOLLOW_UP =

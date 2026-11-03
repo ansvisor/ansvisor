@@ -295,9 +295,13 @@ describe('ChatSkills', () => {
     expect(card('board-update').textContent).toContain('Only you');
     expect(card('copy-editing').textContent).toContain('Waiting for review');
     expect(card('copy-editing').textContent).toContain('Imported from acme/skills on GitHub');
-    // Not approved: no Run, no switch.
+    // Not approved: no Run, no switch; its review opens from the card (W3-09).
     expect(inCard('copy-editing', 'skills.run')).toBeNull();
     expect(inCard('copy-editing', 'skills.toggle')).toBeNull();
+    expect(inCard('copy-editing', 'skills.review')!.getAttribute('href')).toBe(
+      '/dashboard/chat/skills/aaaaaaaa-0000-4000-8000-000000000002',
+    );
+    expect(inCard('board-update', 'skills.review')).toBeNull();
     // No filter chips here: workspace skills have none.
     expect(container.querySelector('[data-action="skills.filter"]')).toBeNull();
   });
@@ -339,6 +343,39 @@ describe('ChatSkills', () => {
     expect(dialog.textContent).toContain('MIT');
     expect(dialog.querySelector('[data-action="skills.share"]')).toBeNull();
     expect(dialog.querySelector('[data-action="skills.delete"]')).toBeNull();
+  });
+
+  it('imports a skill from New skill, then opens its review (W3-09)', async () => {
+    answer = (url, init) =>
+      url === '/api/chat/skills/import' && init?.method === 'POST'
+        ? Response.json({ ok: true, skill: { id: 'new-1', name: 'launch-post', requested: false } })
+        : null;
+    await render();
+    await click(container.querySelector<HTMLElement>('[data-action="skills.newSkill"]')!);
+    const items = all('[role="menuitem"]', document.body);
+    expect(items.map((item) => item.textContent)).toEqual([
+      'Upload a SKILL.md or .zip',
+      'Import from GitHub',
+    ]);
+    await click(items[1]);
+    const dialog = document.querySelector<HTMLElement>('[data-slot="import-skill"]')!;
+    expect(dialog.textContent).toContain('Import a skill from GitHub');
+    const input = dialog.querySelector<HTMLInputElement>('[data-action="skills.importUrl"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        input,
+        'https://github.com/acme/skills/tree/main/launch-post',
+      );
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await click(dialog.querySelector<HTMLElement>('[data-action="skills.importSubmit"]')!);
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/skills/new-1');
+  });
+
+  it('offers New skill only to those who may save skills', async () => {
+    list.can.save = false;
+    await render();
+    expect(container.querySelector('[data-action="skills.newSkill"]')).toBeNull();
   });
 
   it('says when the list can’t be read, and reads it again on Retry', async () => {
