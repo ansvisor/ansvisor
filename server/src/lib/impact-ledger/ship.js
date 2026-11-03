@@ -25,7 +25,7 @@ import { chunkIds } from '../chunked-in.js';
 import { basketScope } from '../action-center/basket-metrics.js';
 import { targetScope } from '../action-center/validate.js';
 import { logger } from '../logger.js';
-import { MAX_TARGET_PROMPTS, checkAt } from './method.js';
+import { CHECKPOINTS, MAX_TARGET_PROMPTS, checkAt, checkpointEntry } from './method.js';
 
 /** Rows a read pages through at a time (PostgREST's max_rows). */
 export const PAGE = 1000;
@@ -364,5 +364,72 @@ export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supaba
       '[impact-ledger] cms publish not recorded',
     );
     return { id: null, created: false, failed: true };
+  }
+}
+
+/**
+ * A page taken down (AUTONOMOUS-GO-LIVE PR 10): the measurements of its
+ * cms_publish ship events still being measured close Not measurable with
+ * reason taken_down, as closeStale (job.js) closes one: day 90 won't be read
+ * for a page that left the site, and the checkpoints already measured keep
+ * theirs. Written only when the row is still as read. Never throws: logged.
+ *
+ * @returns {Promise<number>} how many it closed
+ */
+export async function closeTakenDown({ draftId, at, db = supabaseAdmin }) {
+  try {
+    const { data: ships, error } = await db
+      .from('ship_events')
+      .select('id')
+      .eq('content_draft_id', draftId)
+      .eq('kind', 'cms_publish');
+    if (error) throw new ImpactDbError('ship events read', error);
+    const ids = (ships ?? []).map((ship) => ship.id);
+    if (!ids.length) return 0;
+    const { data: rows, error: readError } = await db
+      .from('impact_measurements')
+      .select('id, checkpoints_json, next_check_at')
+      .in('ship_event_id', ids)
+      .not('next_check_at', 'is', null);
+    if (readError) throw new ImpactDbError('measurements read', readError);
+    const reason = 'taken_down';
+    const d90 = CHECKPOINTS[CHECKPOINTS.length - 1];
+    let closed = 0;
+    for (const row of rows ?? []) {
+      const earlier = Array.isArray(row.checkpoints_json) ? row.checkpoints_json : [];
+      const entry = checkpointEntry({
+        cp: d90,
+        window: {},
+        result: { reason },
+        earlier,
+        measuredAt: at,
+      });
+      const { data, error: writeError } = await db
+        .from('impact_measurements')
+        .update({
+          outcome: 'not_measurable',
+          confidence: null,
+          not_measurable_reason: reason,
+          checkpoint: d90.key,
+          checkpoints_json: [...earlier.filter((e) => e?.checkpoint !== d90.key), entry],
+          window_json: {},
+          metrics: [],
+          concurrent_changes: [],
+          next_check_at: null,
+          measured_at: at,
+        })
+        .eq('id', row.id)
+        .eq('next_check_at', row.next_check_at)
+        .select('id');
+      if (writeError) throw new ImpactDbError('measurement close', writeError);
+      closed += (data ?? []).length;
+    }
+    return closed;
+  } catch (err) {
+    logger.warn(
+      { err: { name: err?.name, code: err?.code ?? null } },
+      '[impact-ledger] taken-down page not closed',
+    );
+    return 0;
   }
 }

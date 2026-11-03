@@ -77,6 +77,12 @@ describe('the Library’s Last send filter (#1331)', () => {
     expect(ids('failed')).toEqual(['failed']);
     expect(ids('published')).toEqual(['live']);
   });
+
+  it('lists a page taken down under Sent: a draft in its CMS again (PR 10)', () => {
+    const down = new Map([...sends, ['live', { status: 'taken_down' }]]);
+    expect(draftsLastSent(list, down, 'sent').map((d) => d.id)).toEqual(['sent', 'live']);
+    expect(draftsLastSent(list, down, 'published')).toEqual([]);
+  });
 });
 
 describe('the Library tabs', () => {
