@@ -161,6 +161,24 @@ describe('Google calls on a named connected account', () => {
     }
   });
 
+  it('lists the property ids alone, without the streams, when asked', async () => {
+    sdk.execute.mockResolvedValueOnce({
+      successful: true,
+      data: {
+        accountSummaries: [
+          {
+            displayName: 'Acme',
+            propertySummaries: [{ property: 'properties/9', displayName: 'Web' }],
+          },
+        ],
+      },
+    });
+    expect(await listGaProperties(connection, { streams: false })).toEqual([
+      { propertyId: '9', displayName: 'Web', accountName: 'Acme', siteUrls: [] },
+    ]);
+    expect(sdk.execute).toHaveBeenCalledTimes(1);
+  });
+
   it('runs on the entity alone when no account is known, as before', async () => {
     sdk.execute.mockResolvedValue({ successful: true, data: { siteEntry: [] } });
     await listGscSites({ entityId: 'org_org-1', accountId: null });
