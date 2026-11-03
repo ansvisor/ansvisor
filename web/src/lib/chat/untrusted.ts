@@ -43,6 +43,30 @@ export const TRUSTED_READS: ReadonlySet<string> = new Set([
 /** Whether a read's result may carry text written outside the workspace. */
 export const isUntrustedRead = (toolName: string) => !TRUSTED_READS.has(toolName);
 
+/**
+ * The reads of what the workspace itself writes: its drafts, its Action
+ * Center tasks and their History, its saved reports (owner decision
+ * 2026-11-03, so an agent in Full auto can work from them). Their text may
+ * hold words copied from outside (a draft written from AI answers), so it
+ * is still read as untrusted data in its labelled block and scanned for
+ * instructions aimed at the model: one found asks first for the rest of
+ * the run, as any read's does (§16a rule 3). What they don't do is taint the
+ * run by themselves. AI answers, citations, fan-outs, mentions, suggestions,
+ * audit findings and web pages still do.
+ */
+export const WORKSPACE_READS: ReadonlySet<string> = new Set([
+  'list_drafts',
+  'get_draft',
+  'list_action_center_tasks',
+  'get_action',
+  'get_action_history',
+  'get_reports',
+]);
+
+/** Whether reading a tool's result taints the run (§16a): outside text, not the workspace's own. */
+export const taintsRun = (toolName: string) =>
+  isUntrustedRead(toolName) && !WORKSPACE_READS.has(toolName);
+
 /** The block names the model reads data in; never left whole inside the data. */
 export const DATA_TAGS = ['untrusted_data', 'app_data', 'read_results', 'page_context'] as const;
 
