@@ -302,6 +302,31 @@ describe('the Rules tab', () => {
       );
     });
 
+    it('shows a rule the agent tried and couldn’t fix amber, the person’s, and the rest red (editor test 2026-11-03)', async () => {
+      await show({ agentFix: { ...fix(), tried: new Set(['bannedWords']) } });
+      const tried = row('Banned words');
+      const badge = [...tried.querySelectorAll('span')].find((s) => s.textContent === '1 found')!;
+      expect(badge.className).toContain('bg-amber-50');
+      expect(badge.className).toContain('dark:bg-amber-950');
+      expect(badge.className).not.toContain('text-red');
+      expect(tried.textContent).toContain(
+        "Content Agent tried this and couldn't fix it. It's yours to decide",
+      );
+      // Open and not tried: still the agent's, red.
+      const length = [...row('Length').querySelectorAll('span')].find(
+        (s) => s.textContent === '15,921 · over',
+      )!;
+      expect(length.className).toContain('text-red-600');
+      expect(length.className).toContain('dark:text-red-400');
+      expect(row('Length').textContent).not.toContain('tried this');
+      // A held rule is the person's too: amber.
+      await show({ agentFix: { ...fix(), held: new Set(['length']) } });
+      expect(
+        [...row('Length').querySelectorAll('span')].find((s) => s.textContent === '15,921 · over')!
+          .className,
+      ).toContain('bg-amber-50');
+    });
+
     it('says why its choice waits under the card, for the choice picked', async () => {
       const agentFix = {
         ...fix(),

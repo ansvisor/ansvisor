@@ -6,6 +6,7 @@ import {
   type RewriteAdvice,
   type RuleStatus,
 } from './rules';
+import { runDecided } from './tried-rules';
 
 /**
  * The Content Editor's Next step basket (Next step spec §4): the one step to
@@ -209,8 +210,7 @@ export function thirdStepTried(
   attempt: ThirdTry | null,
   now: { batch: string | null; open: number; busy: boolean },
 ): boolean {
-  if (!attempt || now.busy || now.open > 0) return false;
-  return attempt.ended === true || (now.batch !== null && now.batch !== attempt.batch);
+  return runDecided(attempt, now);
 }
 
 /** What a pass keeps of the page as it reads when the step is taken. */

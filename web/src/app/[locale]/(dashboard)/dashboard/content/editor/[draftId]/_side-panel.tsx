@@ -279,6 +279,10 @@ export function EditorSidePanel({
   };
   // None said while the count is still read (the header's chip says so).
   const rulesOpen = rules.settled === false ? 0 : Math.max(0, rules.total - rules.met);
+  // Every rule open is the person's to decide (tried by the agent, or held): amber, not red.
+  const rulesYours = rules.rules
+    .filter(({ rule, status }) => rule.on && status.state === 'bad')
+    .every(({ rule }) => agentFix?.tried?.has(rule.key) || agentFix?.held?.has(rule.key));
   // Quality shows once its first phase is live (NEXT_PUBLIC_CONTENT_QUALITY_PHASE).
   const segments = SEGMENTS.filter((value) => value !== 'quality' || qualityPhase() >= 1);
 
@@ -441,7 +445,14 @@ export function EditorSidePanel({
               >
                 {t(`segments.${value}`)}
                 {value === 'rules' && rulesOpen > 0 && (
-                  <span className="rounded-md bg-red-50 px-1.5 text-[10.5px] font-medium text-red-700 dark:bg-red-950 dark:text-red-400">
+                  <span
+                    className={cn(
+                      'rounded-md px-1.5 text-[10.5px] font-medium',
+                      rulesYours
+                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                        : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400',
+                    )}
+                  >
                     {t('segments.open', { count: rulesOpen })}
                   </span>
                 )}

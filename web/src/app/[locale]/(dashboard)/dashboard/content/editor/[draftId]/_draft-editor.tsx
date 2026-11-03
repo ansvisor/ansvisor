@@ -260,6 +260,16 @@ import {
   writeThirdStep,
 } from './_next-step';
 import {
+  NO_TRIED,
+  readTried,
+  runDecided,
+  triedAfter,
+  triedOpen,
+  triedStill,
+  writeTried,
+  type TriedRules,
+} from '@/lib/content/tried-rules';
+import {
   qualitySuggestions,
   useTodoCopy,
   type HandOff,
@@ -499,6 +509,15 @@ export function DraftEditor({
   };
   const saveThirdTry = (attempt: ThirdTry | null) =>
     saveThirdStep({ ...thirdStepNow.current, attempt });
+  // The rules Fix open rules tried and couldn't close (editor test
+  // 2026-11-03): Rules shows them amber, the person's to decide.
+  const [triedRules, setTriedRules] = useState<TriedRules>(() => readTried(draft.id));
+  const triedNow = useRef(triedRules);
+  const saveTried = (store: TriedRules) => {
+    triedNow.current = store;
+    setTriedRules(store);
+    writeTried(draft.id, store);
+  };
   /**
    * Notes a run the third step takes, from the batch on the page now, while
    * Next's step (`at`, as it was when the run was asked for) is the third: a
@@ -2056,6 +2075,11 @@ export function DraftEditor({
       ]),
     [heldKey],
   );
+  // The rules Fix open rules tried and couldn't close, open now: amber in Rules.
+  const triedShown = useMemo(
+    () => triedOpen(triedRules.tried, rules.rules),
+    [triedRules.tried, rules.rules],
+  );
   // The rules as the agent card counts its gain: met now, and the ones still open.
   // The rules as the side panel shows them: their count once it stands.
   const rulesShown = { ...rules, settled: rulesSettled };
@@ -2300,6 +2324,8 @@ export function DraftEditor({
         // before are passed no longer (#1556 review). The rewrite's own
         // attempt stays, to pass its step.
         saveThirdStep({ ...thirdStepNow.current, passes: {} });
+        // What Fix tried was on the page before: the new page's rules are the agent's again.
+        saveTried(NO_TRIED);
         toast.success(t('rewrite.acceptedToast'));
         // The rewrite is the whole batch: as Accept all.
         nudgeAfterRead();
@@ -2374,6 +2400,7 @@ export function DraftEditor({
       undefined,
       false,
       beginThirdTry('fix', { only }),
+      open.map(({ rule }) => rule.key),
     );
   };
 
@@ -2414,13 +2441,17 @@ export function DraftEditor({
     // Fix open rules as Next's third step (beginThirdTry): found nothing, it
     // is taken; failed, stopped or never run, the attempt before it is back.
     third: { prev: ThirdTry | null } | null = null,
+    // The rules a Fix was sent: tried once its run is decided (triedAfter).
+    tried: string[] | null = null,
   ) => {
     const untried = () => {
+      if (tried) saveTried({ ...triedNow.current, pending: null });
       if (!third) return;
       const read = attemptRead.current;
       saveThirdTry(read && read.of === third.prev ? read.now : third.prev);
     };
     const nothing = () => {
+      if (tried) saveTried(triedAfter(triedNow.current, tried));
       const now = thirdStepNow.current.attempt;
       if (third && now) saveThirdTry({ ...now, ended: true });
     };
@@ -2438,6 +2469,12 @@ export function DraftEditor({
     setStoppingRun(null);
     stopSent.current = null;
     setFixing(true);
+    if (tried) {
+      saveTried({
+        ...triedNow.current,
+        pending: { keys: tried, batch: suggestionsNow.current[0]?.batchId ?? null },
+      });
+    }
     const asked = Date.now();
     try {
       // The agent reads the page as saved.
@@ -2713,6 +2750,7 @@ export function DraftEditor({
     running: fixRunning,
     blocked: agentFixBlocked(fixRunning),
     held: heldRules,
+    tried: triedShown,
   };
   const handOffCard: HandOff | null =
     sourcesOn && quality
@@ -2964,8 +3002,9 @@ export function DraftEditor({
         toast.error(t(`agentFailed.errors.${result.error}`));
         return;
       }
-      // A page written again: the third step is the new page's.
+      // A page written again: the third step is the new page's, and so are its rules.
       saveThirdStep({ attempt: null, passes: {} });
+      saveTried(NO_TRIED);
       onAgentStarted?.('write');
     } catch (err) {
       console.error('Failed to start the Content Agent again:', err);
@@ -3388,6 +3427,22 @@ export function DraftEditor({
     // pageHtml: each read of the page starts the wait again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [passesToRead, thirdRead, attemptChecked, pageHtml]);
+  // A Fix's suggestions decided, or it found nothing: the rules it was sent
+  // are tried (triedAfter). Once the rules read the page again, one met
+  // since leaves the list (triedStill): if the person's edits open it
+  // again, it's the agent's.
+  const triedDecided = runDecided(triedRules.pending, batchNow);
+  useEffect(() => {
+    const { pending } = triedNow.current;
+    if (triedDecided && pending) saveTried(triedAfter(triedNow.current, pending.keys));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triedDecided]);
+  const triedLeft =
+    thirdRead && !triedRules.pending ? triedStill(triedRules.tried, rules.rules) : triedRules.tried;
+  useEffect(() => {
+    if (triedLeft !== triedNow.current.tried) saveTried({ ...triedNow.current, tried: triedLeft });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triedLeft]);
   // A pass that no longer holds is dropped, as a stale skip is, so a page
   // that reads as it did again later doesn't bring it back to life.
   const stalePasses =
@@ -3665,6 +3720,7 @@ export function DraftEditor({
       if (!samePage) {
         setBarClosed(true);
         saveThirdStep({ attempt: null, passes: {} });
+        saveTried(NO_TRIED);
       }
     } catch (err) {
       console.error('Failed to restore the version:', err);

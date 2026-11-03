@@ -7629,6 +7629,36 @@ describe('the side panel', () => {
         await runFix();
         expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
         expect(localStorage.getItem('aeo:next-step-third-try:d1')).toBeNull();
+        // Nothing was tried: Rules stays red, the agent's to fix.
+        expect(localStorage.getItem('aeo:agent-tried-rules:d1')).toBeNull();
+      });
+
+      it('shows the rules it tried and couldn’t close amber in Rules, red until then (editor test 2026-11-03)', async () => {
+        getDraftSuggestions.mockResolvedValue([]);
+        const rulesBadge = () =>
+          [...container.querySelectorAll<HTMLElement>('aside [data-segment="rules"] span')].find(
+            (s) => /open/.test(s.textContent ?? ''),
+          )!;
+        await renderPage();
+        await act(async () =>
+          container
+            .querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!
+            .click(),
+        );
+        expect(rulesBadge().className).toContain('bg-red-50');
+        // It finds nothing to change: every rule it was sent is tried.
+        fixDraftRules.mockResolvedValue({ count: 0 });
+        await act(async () => nextButton()!.click());
+        await act(async () => inBasket('Fix open rules')!.click());
+        await settle();
+        const sent = fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key);
+        expect(JSON.parse(localStorage.getItem('aeo:agent-tried-rules:d1')!).tried).toEqual(
+          [...sent].sort(),
+        );
+        expect(rulesBadge().className).toContain('bg-amber-50');
+        expect(container.querySelector('aside')!.textContent).toContain(
+          "Content Agent tried this and couldn't fix it",
+        );
       });
 
       it('stays when the changes it shows are another tab’s, decided here', async () => {

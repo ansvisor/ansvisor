@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content rules, run agent, fix open rules, rewrite the whole page, agent suggestions, accept suggestions, rules tab, brand rules]
 synonyms: [writing rules, style guide rules, apply rules with agent, rewrite page, let the agent fix the page]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -30,6 +30,8 @@ Admins and managers keep a brand's rules in **Settings › Content › Brand rul
 **Run Agent** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet (**Fix open rules**). Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.
 
 A decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Running the agent uses your workspace's monthly AI usage.
+
+An open rule the agent can still fix shows red. Once you've decided a run's suggestions, a rule it tried and couldn't fix shows amber, with a note that it's yours to decide: change the page yourself, or the rule. The open count on the **Rules** tab turns amber when every open rule is yours.
 
 ## Rewrite the whole page
 

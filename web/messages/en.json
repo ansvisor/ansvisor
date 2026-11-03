@@ -9930,6 +9930,7 @@
         "lengthConflict": "The fan-out H2s, FAQ questions and summary these rules still ask for take about {need, number} characters, more than Length allows (up to {max, number}). Raise Length, or ask for fewer.",
         "heldAll": "What's left open is kept by AI citations, and yours to decide: the agent leaves passages AI answers quote as they are.",
         "heldLength": "Only the Length is left open, and a rewrite can't reach it. Raise the Length, or leave it.",
+        "triedNote": "Content Agent tried this and couldn't fix it. It's yours to decide: change the page yourself, or the rule.",
         "heldSentence": "Kept by AI citations · yours to decide: the long sentences are in passages AI answers quote, which the agent keeps. Shorten them yourself (Edit anyway), or leave them quoted.",
         "shopLinksLiveNote": "{list}{more, plural, =0 {} other { +# more}}: remove or replace these links on the page.",
         "shopItem": "{title} ({state, select, sold_out {not in stock} refused {Merchant Center refuses it} gone {no longer in the catalog} other {check it}})",
