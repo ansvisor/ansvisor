@@ -40,6 +40,8 @@ export const ROW_LIMITS: Readonly<Record<string, { default: number; max: number 
   get_action_history: { default: 10, max: ROW_CAP },
   list_content_opportunities: { default: 10, max: ROW_CAP },
   get_reports: { default: 5, max: 20 },
+  // What's new shows 3 updates at most (CHAT-11 item 10).
+  get_whats_new: { default: 3, max: 3 },
   // No `limit` input: a page of up to 100 answers, cut after the read (CHAT-04 §B 20 / 100).
   list_mentions: { default: 20, max: 20 },
 };

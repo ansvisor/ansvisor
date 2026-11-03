@@ -138,6 +138,8 @@ export interface GoLiveStep {
 export interface ChatWritePlace {
   conversationId: string | null;
   runId: string | null;
+  /** The agent run the chat is (CHAT-27): its drafts are made by an agent (00463). */
+  agentRunId?: string | null;
   approvalKey: string;
   /** assisted: the person approved it (a card, a click); automated: it ran by itself. */
   executionMode: 'assisted' | 'automated';
@@ -343,8 +345,13 @@ type ClassFields =
     }
   | {
       class: 'execute';
-      /** Its go-live group, which the Manager switch in Settings › Chat covers. */
-      executeGroup: ExecuteGroup;
+      /**
+       * Its go-live group, which the Manager switch in Settings › Chat covers.
+       * Null for one that only takes back what went out (unpublish_cms,
+       * AUTONOMOUS-GO-LIVE PR 10): outside every group, it never goes out on
+       * its own, and a Manager may even while publishing is off for Managers.
+       */
+      executeGroup: ExecuteGroup | null;
       flags?: Partial<Pick<ToolFlags, 'costCard'>>;
     };
 
@@ -475,7 +482,9 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     ) {
       throw new Error(`${def.name}: an execute always needs the user's click`);
     }
-    if (!EXECUTE_GROUPS.includes(def.executeGroup)) {
+    if (def.executeGroup === null) {
+      if (def.goLive) throw new Error(`${def.name}: an execute outside the groups never goes live`);
+    } else if (!EXECUTE_GROUPS.includes(def.executeGroup)) {
       throw new Error(`${def.name}: an execute belongs to a go-live group`);
     }
     return { ...def, defaultPolicy: 'click', maxPolicy: 'click', flags, excludeRoles };

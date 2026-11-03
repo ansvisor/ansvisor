@@ -21,6 +21,8 @@ export function lastSend(row: {
   created_at: string;
   sent_at: string | null;
   published_at: string | null;
+  /** When it was taken down (00460); absent before that migration. */
+  taken_down_at?: string | null;
   error: string | null;
   target?: string | null;
 }): { status: CmsDelivery['status']; target: CmsTarget; at: string; error: string | null } {
@@ -35,7 +37,7 @@ export function lastSend(row: {
       row.target === 'wix'
         ? row.target
         : 'webhook',
-    at: row.published_at ?? row.sent_at ?? row.created_at,
+    at: row.taken_down_at ?? row.published_at ?? row.sent_at ?? row.created_at,
     error: interrupted ? 'Not sent: interrupted' : row.error,
   };
 }
