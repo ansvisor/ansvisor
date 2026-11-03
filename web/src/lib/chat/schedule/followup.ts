@@ -171,23 +171,23 @@ export async function checkNewFollowUp(
   return null;
 }
 
-/** Whether the brand has a ship event for the page or the action, as the evaluator reads them. */
+/**
+ * Whether the brand has a ship event for the check, read as the evaluator reads it:
+ * by the action when one is set (its page is then not read), else by the page.
+ */
 async function hasShipEvent(brandId: string, target: FollowUpTarget): Promise<boolean> {
-  for (const [column, value] of [
-    ['action_id', target.action_id],
-    ['url', target.url],
-  ] as const) {
-    if (!value) continue;
-    const { data, error } = await supabaseAdmin
-      .from('ship_events')
-      .select('id')
-      .eq('brand_id', brandId)
-      .eq(column, value)
-      .limit(1);
-    if (error) throw new Error(`Could not read a check's changes: ${error.message}`);
-    if ((data ?? []).length > 0) return true;
-  }
-  return false;
+  const [column, value] = target.action_id
+    ? (['action_id', target.action_id] as const)
+    : (['url', target.url] as const);
+  if (!value) return false;
+  const { data, error } = await supabaseAdmin
+    .from('ship_events')
+    .select('id')
+    .eq('brand_id', brandId)
+    .eq(column, value)
+    .limit(1);
+  if (error) throw new Error(`Could not read a check's changes: ${error.message}`);
+  return (data ?? []).length > 0;
 }
 
 /** The chat a run is in: where the check's result goes. */

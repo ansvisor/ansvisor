@@ -422,7 +422,10 @@ export async function runFollowUpChecks({ db = supabaseAdmin, now = new Date() }
       // Its creator gone from the workspace or the brand: closed, nothing delivered.
       if (!(await creatorReaches(db, job))) {
         const at = now.toISOString();
-        await writeRun(db, job, at, 'The person who set it can no longer see this brand.');
+        const reason = job.brand_id
+          ? 'The person who set it can no longer see this brand.'
+          : 'The person who set it is no longer in this workspace.';
+        await writeRun(db, job, at, reason);
         await closeCheck(db, job, at);
         tally.done++;
         continue;

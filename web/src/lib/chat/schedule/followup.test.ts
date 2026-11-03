@@ -153,6 +153,14 @@ describe('createFollowUpCheck', () => {
     expect(
       await followup.createFollowUpCheck(maker(), check({ target: unshipped }), NOW),
     ).toMatchObject({ ok: false, reason: 'invalid' });
+    // The evaluator reads an action's ship events, not its page's: a shipped page doesn't cover it.
+    expect(
+      await followup.createFollowUpCheck(
+        maker(),
+        check({ target: { action_id: 'a2', url: 'https://acme.example/pricing' } }),
+        NOW,
+      ),
+    ).toMatchObject({ ok: false, reason: 'invalid' });
     expect(db.tables.chat_schedules).toEqual([]);
 
     expect(
