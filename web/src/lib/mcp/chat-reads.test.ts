@@ -83,7 +83,6 @@ vi.mock('@/lib/member-emails', () => ({ readMemberEmails: mocks.readMemberEmails
 vi.mock('@/lib/chat/precedence-context', () => ({
   readPrecedenceContext: mocks.readPrecedenceContext,
 }));
-vi.mock('./product-visibility', () => ({ merchantCenterOffered: async () => false }));
 
 const { getFanoutsFor, listAiAnswersFor, getPromptInsightsFor } = await import('./prompt-reads');
 const { getOverviewSummaryFor } = await import('./overview-reads');
@@ -328,17 +327,16 @@ describe('Overview, KPIs and Getting started', () => {
 });
 
 describe('Google reads', () => {
-  // The Google sign-in the brand uses (00470): the Account's, for every brand.
   const connected = [
-    { provider: 'google-search-console', account: { id: 'a1', label: null, status: 'connected' } },
-    { provider: 'google-analytics', account: { id: 'a2', label: null, status: 'connected' } },
+    { provider: 'google-search-console', status: 'connected' },
+    { provider: 'google-analytics', status: 'connected' },
   ];
 
   it('say a source is not connected: no connection, or no property picked', async () => {
     reads.answers.brands = { gsc_property: null, ga_property_id: '123' };
-    reads.answers.brand_integrations = [
-      { provider: 'google-search-console', account: { status: 'connected' } },
-      { provider: 'google-analytics', account: { status: 'disconnected' } },
+    reads.answers.integration_connections = [
+      { provider: 'google-search-console', status: 'connected' },
+      { provider: 'google-analytics', status: 'expired' },
     ];
     expect(await getGscSummaryFor(auth(), { brandId: BRAND })).toEqual({
       connected: false,
@@ -348,25 +346,11 @@ describe('Google reads', () => {
     });
     expect(await getGaSummaryFor(auth(), { brandId: BRAND })).toMatchObject({ connected: false });
     expect(mocks.getTrafficGoogleTotals).not.toHaveBeenCalled();
-    // The brand's own sign-ins, not the Account's row.
-    expect(reads.filters).toContainEqual({
-      table: 'brand_integrations',
-      column: 'brand_id',
-      value: BRAND,
-    });
-    expect(reads.selects.some((read) => read.table === 'integration_connections')).toBe(false);
-  });
-
-  it('say a source is not connected when the brand uses no Google sign-in', async () => {
-    reads.answers.brands = { gsc_property: 'sc-domain:x', ga_property_id: '123' };
-    reads.answers.brand_integrations = [];
-    expect(await getGscSummaryFor(auth(), { brandId: BRAND })).toMatchObject({ connected: false });
-    expect(await getGaSummaryFor(auth(), { brandId: BRAND })).toMatchObject({ connected: false });
   });
 
   it("reads Search Console's latest reported days for a short range, as the page does", async () => {
     reads.answers.brands = { gsc_property: 'sc-domain:x', ga_property_id: '123' };
-    reads.answers.brand_integrations = connected;
+    reads.answers.integration_connections = connected;
     reads.answers.gsc_query_stats = { date: '2026-10-27' };
     mocks.getTrafficGoogleTotals.mockResolvedValue({
       ga: null,
@@ -390,7 +374,7 @@ describe('Google reads', () => {
 
   it("reads Analytics' sessions to the last day it reported", async () => {
     reads.answers.brands = { gsc_property: null, ga_property_id: '123' };
-    reads.answers.brand_integrations = connected;
+    reads.answers.integration_connections = connected;
     reads.answers.ga_ai_traffic_stats = { date: '2026-10-28' };
     mocks.getTrafficGoogleTotals.mockResolvedValue({
       gsc: null,
@@ -439,40 +423,14 @@ describe('Workspace reads', () => {
     reads.answers.brand_cms_connections = [
       { brand_id: BRAND, provider: 'webflow', status: 'connected', site_name: 'Acme site' },
     ];
-    reads.answers.integration_connections = [
-      {
-        provider: 'google-search-console',
-        status: 'connected',
-        connected_by: null,
-        created_at: null,
-      },
-    ];
     reads.answers.api_keys = [{ name: 'MCP laptop', last_used_at: null }];
     reads.answers.organization_ai_keys = [{ provider: 'anthropic', active: true }];
     const read = await listConnectionsFor(auth());
-    // The one read of connections the Connections page and the agents use (W4-24).
     expect(read).toMatchObject({
-      brands: [
-        {
-          brand: 'Acme',
-          connected: [
-            { tool: 'Google Search Console', account: 'sc', access: 'read_only' },
-            { tool: 'Webflow', account: 'Acme site', access: 'read_write_drafts' },
-          ],
-          sign_in_failed: [],
-        },
-      ],
+      google: [{ brand: 'Acme', search_console: true, analytics: false }],
+      cms: [{ brand: 'Acme', provider: 'webflow', site: 'Acme site' }],
       your_api_keys: [{ name: 'MCP laptop' }],
       ai_providers: [{ provider: 'anthropic', active: true }],
-    });
-    expect(read?.brands[0].not_connected).toContain('Google Analytics');
-    expect(read?.brands[0].not_connected).not.toContain('HubSpot');
-    expect(read?.coming_soon).toContain('HubSpot');
-    // Google disconnected in Settings: the property is kept, but its sign-in is gone.
-    reads.answers.integration_connections = [];
-    expect((await listConnectionsFor(auth()))?.brands[0]).toMatchObject({
-      connected: [{ tool: 'Webflow' }],
-      sign_in_failed: ['Google Search Console'],
     });
     // Only the person's own keys: the read is by their id, never the workspace's members.
     expect(reads.filters).toContainEqual({ table: 'api_keys', column: 'user_id', value: 'u1' });
@@ -491,7 +449,7 @@ describe('Workspace reads', () => {
     expect(mocks.brandAccessFor).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'u1', organizationId: ORG }),
     );
-    expect(read?.brands.map((b) => b.brand)).toEqual(['Acme']);
+    expect(read?.google).toEqual([{ brand: 'Acme', search_console: true, analytics: false }]);
     expect(JSON.stringify(read)).not.toContain('Hidden');
   });
 

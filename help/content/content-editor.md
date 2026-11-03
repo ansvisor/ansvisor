@@ -1,11 +1,11 @@
 ---
 title: Write a page in the Content Editor
 route: /dashboard/content/editor
-keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, health claims, supplements]
+keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -44,12 +44,6 @@ The Content Agent looks up the facts a page needs, such as a price, a plan's lim
 A fact it couldn't look up stays in square brackets for you, as do up to three only your brand has, such as your customer count. Each is tinted amber; **Your input needed** in the toolbar counts them and jumps to the next one, selected so you can type over it.
 
 Ones in alt text, structured data or HTML count too. **Send to CMS** waits until none is left. With Quality on, **Export** offers **Fill now** or **Export without them**, which drops those sentences. One in the title or a heading has to be filled.
-
-## Health and supplement brands
-
-The Content Agent never writes a health benefit, a treatment, a prevention or a dose your brand didn't give in its own words, such as that a product helps you sleep or eases stress, and never looks one up. One it wrote anyway is taken out of the page, or its suggestion is dropped. A claim your page, your brand's description or **Your input** already makes can stay, and safety lines such as "talk to your doctor" always do.
-
-A brand counts as a health brand when its industry is Healthcare, or its industry, name or description names supplements, vitamins, a pharmacy, a clinic or wellness.
 
 ## The side panel
 

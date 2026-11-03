@@ -132,7 +132,7 @@ Changing what the agent does turns this off until an Admin turns it on again.
 
 ## When an agent sends a page on its own
 
-Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. A published page's notice also has **Take down**, for Admins and Managers. The notice leaves Needs you once you open it. A page someone took down never goes live on its own again. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.
+Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. The notice leaves Needs you once you open it. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.
 
 When an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves.
 

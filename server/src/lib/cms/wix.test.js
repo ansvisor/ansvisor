@@ -16,7 +16,6 @@ const {
   updateDraftPost,
   webAddress,
   publishDraftPost,
-  revertToDraft,
 } = await import('./wix.js');
 
 /**
@@ -319,21 +318,5 @@ describe('publishDraftPost (AUTONOMOUS-GO-LIVE PR 9)', () => {
     ]);
     expect(api.calls[0].headers['wix-site-id']).toBe(SITE);
     await expect(publishDraftPost(SITE, KEY, 'not-a-guid', opts)).rejects.toBeInstanceOf(WixError);
-  });
-});
-
-describe('revertToDraft (AUTONOMOUS-GO-LIVE PR 10)', () => {
-  it('reverts the published post to a draft, nothing else', async () => {
-    const opts = await start({
-      [`PATCH /blog/v3/draft-posts/${POST}`]: () => ({
-        json: { draftPost: { id: POST, status: 'UNPUBLISHED' } },
-      }),
-    });
-    expect(await revertToDraft(SITE, KEY, POST, opts)).toMatchObject({ id: POST });
-    expect(api.calls[0].body).toEqual({
-      draftPost: { id: POST },
-      action: 'UPDATE_REVERT_TO_DRAFT',
-    });
-    await expect(revertToDraft(SITE, KEY, 'not-a-guid', opts)).rejects.toBeInstanceOf(WixError);
   });
 });

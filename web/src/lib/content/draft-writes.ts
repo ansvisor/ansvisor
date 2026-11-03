@@ -1,12 +1,6 @@
 import { z } from 'zod';
 import type { createClient } from '@/lib/supabase/server';
-import {
-  DRAFT_ORIGINS,
-  PAGE_TYPES,
-  WRITING_STALE_MS,
-  agentStateOf,
-  type DraftStart,
-} from '@/lib/content/drafts';
+import { PAGE_TYPES, WRITING_STALE_MS, agentStateOf, type DraftStart } from '@/lib/content/drafts';
 import { escapeHtml } from '@/lib/content/attachments';
 import {
   MAX_BODY_HTML_LENGTH,
@@ -51,8 +45,6 @@ export const startInput = z.object({
     .max(2048)
     .regex(/^https?:\/\//i)
     .optional(),
-  origin: z.enum(DRAFT_ORIGINS).default('editor'),
-  conversationId: z.guid().nullish(),
 });
 
 /** The most prompt ids a draft keeps (00206). */
@@ -170,8 +162,7 @@ export async function insertDraft(
 ): Promise<string> {
   const parsed = startInput.safeParse(start);
   if (!draftId.safeParse(brandId).success || !parsed.success) throw new Error('invalid');
-  const { method, pageType, typePicked, source, bodyHtml, sourceUrl, origin, conversationId } =
-    parsed.data;
+  const { method, pageType, typePicked, source, bodyHtml, sourceUrl } = parsed.data;
   const title = parsed.data.title.trim().slice(0, MAX_TITLE_LENGTH).trim();
 
   const bodyHtmlKept =
@@ -201,9 +192,6 @@ export async function insertDraft(
       source_url: sourceUrl ?? null,
       prompt_ids: [...new Set(promptIds)].slice(0, MAX_DRAFT_PROMPTS),
       ...(rules.importLength ? { rules } : {}),
-      // Where it was made (00463): set once.
-      origin,
-      conversation_id: conversationId ?? null,
     })
     .select('id')
     .single();
