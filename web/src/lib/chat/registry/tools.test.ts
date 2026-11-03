@@ -114,6 +114,9 @@ vi.mock('@/lib/actions/audits', () => ({
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
 }));
+vi.mock('@/lib/actions/chat-schedules', () => ({
+  createChatSchedule: tracked.track('actions/chat-schedules.createChatSchedule'),
+}));
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
 }));
@@ -713,6 +716,8 @@ describe('approval policies', () => {
       unpublish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
+      // Scheduled work (CHAT-20 §4: Admins and Managers create schedules).
+      create_schedule: ['admin', 'manager'],
       // A skill of one's own (W3-06, CHAT-13 v2): Admins and Managers save skills.
       save_skill: ['admin', 'manager'],
       // Memory (W3-11, CHAT-14 item 25): every role has its Me; the store checks the scope.

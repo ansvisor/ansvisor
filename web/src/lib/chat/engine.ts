@@ -5,7 +5,6 @@ import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
 import type { AiProvider } from '@/lib/agent/providers';
 import { hasBrandAccess } from '@/lib/brand-access';
-import type { McpAuthContext } from '@/lib/mcp-auth';
 import { searchHelp } from '@/lib/help/search';
 import { platformName } from '@/lib/signals/names';
 import { SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
@@ -219,6 +218,7 @@ import {
 } from './skills/store';
 import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
+import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
 import { memoryChoseTarget } from './memory/rules';
 import { memoryStep, runMemory, type RunMemory } from './memory/store';
 
@@ -802,7 +802,8 @@ export async function startChatRun(
 
 /** What picks a waiting run up again: the card's Approve (or the click), or Skip. */
 export type ResumeAction =
-  | { kind: 'approve'; dontAskAgain: boolean }
+  /** input: what an editable card's edits made, checked (card-form.ts); else the call's own. */
+  | { kind: 'approve'; dontAskAgain: boolean; input?: Record<string, unknown> }
   | { kind: 'skip' }
   /** A question card's answer (CHAT-07 §A), already kept on its row. */
   | { kind: 'answer'; answer: AskAnswer };
@@ -2698,11 +2699,15 @@ const cardText = (text: string, max: number) => {
 async function cardDetailsOf(
   tool: ChatTool,
   input: Record<string, unknown>,
-  organizationId: string,
+  place: { timezone: string; organizationId: string },
 ) {
-  if (!tool.cardDetails) return {};
+  // An editable card's form (W3-02: a schedule's), as the change would be made.
+  const form = await cardFormOf(tool, input, { ...place, now: new Date() });
+  if (!tool.cardDetails) return form;
   try {
-    const details = await tool.cardDetails(input as never, { organizationId });
+    const details = await tool.cardDetails(input as never, {
+      organizationId: place.organizationId,
+    });
     const items = (details.items ?? []).slice(0, 8).map((item) => ({
       title: cardText(item.title, 200),
       ...(item.detail ? { detail: cardText(item.detail, 300) } : {}),
@@ -2719,10 +2724,11 @@ async function cardDetailsOf(
       ...(details.why ? { why: cardText(details.why, 600) } : {}),
       ...(details.goal ? { goal: cardText(details.goal, 300) } : {}),
       ...(targets.length ? { targets } : {}),
+      ...form,
     };
   } catch (err) {
     console.error('[chat/engine] could not read a card’s details:', err);
-    return {};
+    return form;
   }
 }
 
@@ -2790,6 +2796,12 @@ function cardNotes(tool: ChatTool): { noUndo?: true; note?: string } {
   return { ...(noUndo ? { noUndo: true as const } : {}), ...(note ? { note } : {}) };
 }
 
+/** Where a card's form reads its times: the run's zone and workspace. */
+const placeOf = (rc: RunContext) => ({
+  timezone: rc.progress.timezone,
+  organizationId: rc.actor.organizationId,
+});
+
 /** The hash of the arguments a card shows: what an approval is bound to (CHAT-20 §6). */
 export function cardDigest(tool: Pick<ChatTool, 'labelKey'>, input: unknown): string {
   return requestHash(tool.labelKey, input).slice(0, 32);
@@ -2809,7 +2821,7 @@ async function openCard(
   const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor.organizationId);
   const row = await insertStep(rc.run.id, {
     position: n,
-    kind: execute ? 'execute' : 'write',
+    kind: execute ? 'execute' : (tool.stepKind ?? 'write'),
     status: 'waiting',
     label: toolWords(tool, 'name'),
     detail: target || null,
@@ -2837,7 +2849,7 @@ async function openCard(
     canDontAskAgain: offerDontAskAgain,
     // A WRITE whose change can't be undone once made (§9) says so on its card.
     ...notes,
-    ...(await cardDetailsOf(tool, input, rc.actor.organizationId)),
+    ...(await cardDetailsOf(tool, input, placeOf(rc))),
   });
   return {
     kind: 'pause',
@@ -3262,13 +3274,15 @@ function toolContext(
   rc: RunContext,
   role: PrecedenceContext['role'],
   brandAccess?: PrecedenceContext['brandAccess'],
-): McpAuthContext {
+): ChatToolContext {
   return {
     userId: rc.actor.userId,
     email: rc.actor.email,
     organizationId: rc.actor.organizationId,
     role: role as UserRole,
     apiKeyId: 'agent-internal',
+    // A schedule's date phrase reads on the person's clock (CHAT-12 item 2).
+    timezone: rc.progress.timezone,
     ...(brandAccess !== undefined ? { brandAccess } : {}),
   };
 }
@@ -3708,7 +3722,7 @@ async function writeCall(
   } else {
     row = await insertStep(rc.run.id, {
       position: ++rc.progress.steps,
-      kind: tool.class === 'execute' ? 'execute' : 'write',
+      kind: tool.class === 'execute' ? 'execute' : (tool.stepKind ?? 'write'),
       status: 'running',
       label: toolWords(tool, 'name'),
       detail: target || null,
@@ -3786,10 +3800,15 @@ async function writeCall(
   // What the change touched is read again: the chat's kept results go (tool-cache.ts).
   await dropCached(rc.run.conversationId);
   const auto = approval.kind === 'auto';
+  // A row's own words for what it made ("Scheduled: Weekly report"), when it has them.
+  const done = outcome.code === 'ok' ? doneStepOf(tool, input, outcome.output) : null;
   row = await updateStep(stepId, {
     status: 'done',
-    label: toolWords(tool, 'step'),
-    detail: [target || null, auto ? t('step.auto') : null].filter(Boolean).join(' · ') || null,
+    label: done?.label ?? toolWords(tool, 'step'),
+    detail:
+      [done ? (done.detail ?? null) : target || null, auto ? t('step.auto') : null]
+        .filter(Boolean)
+        .join(' · ') || null,
     debug: { input, output: outcome.code === 'ok' ? outcome.output : null },
     measure: { latencyMs: Date.now() - started },
   });
@@ -3808,6 +3827,19 @@ async function writeCall(
     // What it filed, for a change that names a file next (attach_file_to_task).
     ...(fileId ? { file_id: fileId } : {}),
   });
+}
+
+/** A row's step once its change is made (its doneStep), or null for the row's own words. */
+function doneStepOf(tool: ChatTool, input: Record<string, unknown>, output: unknown) {
+  try {
+    const done = tool.doneStep?.(input as never, output) ?? null;
+    return done
+      ? { label: cardText(done.label, 200), detail: done.detail && cardText(done.detail, 300) }
+      : null;
+  } catch (err) {
+    console.error('[chat/engine] could not name a change’s step:', err);
+    return null;
+  }
 }
 
 /**
@@ -3841,7 +3873,7 @@ async function cardAgain(
     digest,
     canDontAskAgain: false,
     ...notes,
-    ...(await cardDetailsOf(tool, input, rc.actor.organizationId)),
+    ...(await cardDetailsOf(tool, input, placeOf(rc))),
   });
   return {
     kind: 'pause',
@@ -4006,8 +4038,10 @@ async function resumePending(
   // What runs is what the card showed: the call's arguments as its schema
   // reads them (defaults filled in, text trimmed), bound to the card's digest.
   const parsed = tool?.inputSchema.safeParse(call.input ?? {});
-  const input = (parsed?.success ? parsed.data : {}) as Record<string, unknown>;
-  const bound = !!tool && !!parsed?.success && cardDigest(tool, input) === pending.digest;
+  const asked = (parsed?.success ? parsed.data : {}) as Record<string, unknown>;
+  const bound = !!tool && !!parsed?.success && cardDigest(tool, asked) === pending.digest;
+  // The card's edits, checked when the Approve came (prepareResume), are what runs.
+  const input = action.kind === 'approve' && action.input ? action.input : asked;
   rc.run.pending = null;
   await saveState(rc.run.id, { pending: null, waitingSince: null });
   let answer: CallResult;
@@ -4155,6 +4189,8 @@ export const approveInput = z.object({
   n: z.number().int().min(1),
   digest: z.string().min(8).max(128),
   dontAskAgain: z.boolean().optional(),
+  /** An editable card's values (W3-02), by field name. */
+  form: cardFormValuesInput.optional(),
 });
 export const skipInput = z.object({ n: z.number().int().min(1) });
 
@@ -4252,7 +4288,12 @@ export async function prepareResume(
   if (!parsed.success) {
     return failure(400, 'invalid', t(kind === 'answer' ? 'error.answerInvalid' : 'error.failed'));
   }
-  const body = parsed.data as { n: number; digest?: string; dontAskAgain?: boolean };
+  const body = parsed.data as {
+    n: number;
+    digest?: string;
+    dontAskAgain?: boolean;
+    form?: Record<string, string | boolean>;
+  };
   const run = await loadRun(runId);
   if (!run || run.userId !== actor.userId || run.organizationId !== actor.organizationId) {
     return failure(404, 'not_found', t('error.notFound'));
@@ -4287,7 +4328,10 @@ export async function prepareResume(
         digest: pending.digest,
         canDontAskAgain: pending.offerDontAskAgain,
         ...cardNotes(tool),
-        ...(await cardDetailsOf(tool, input, actor.organizationId)),
+        ...(await cardDetailsOf(tool, input, {
+          timezone: progress.timezone,
+          organizationId: actor.organizationId,
+        })),
       });
       await sink.flush();
       publishRunEnd(runId);
@@ -4296,6 +4340,20 @@ export async function prepareResume(
   }
   if (kind === 'skip' && body.n !== pending.n) {
     return failure(409, 'not_waiting', t('error.notWaiting'));
+  }
+  // An editable card's values make the change's input, checked now: a refusal keeps the card.
+  let edited: Record<string, unknown> | undefined;
+  if (kind === 'approve' && body.form && tool?.form) {
+    const asked = tool.inputSchema.safeParse(call.input ?? {});
+    const made = asked.success
+      ? editedInput(tool, asked.data as Record<string, unknown>, body.form, {
+          timezone: (run.progress as Progress).timezone,
+          organizationId: actor.organizationId,
+          now: new Date(),
+        })
+      : { ok: false as const, error: null };
+    if (!made.ok) return failure(400, 'invalid', made.error ?? t('error.formInvalid'));
+    edited = made.input;
   }
   const ctx = await readPrecedenceContext({
     userId: actor.userId,
@@ -4316,7 +4374,11 @@ export async function prepareResume(
     ok: true,
     resume:
       kind === 'approve'
-        ? { kind: 'approve', dontAskAgain: !!body.dontAskAgain }
+        ? {
+            kind: 'approve',
+            dontAskAgain: !!body.dontAskAgain,
+            ...(edited ? { input: edited } : {}),
+          }
         : { kind: 'skip' },
   };
 }

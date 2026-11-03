@@ -30,6 +30,7 @@ const reserveChatStep = vi.fn();
 const chargeChatStep = vi.fn();
 const releaseChatStep = vi.fn();
 const agentUsageShares = vi.fn();
+const chatRunEstimate = vi.fn();
 const fitChatUnits = vi.fn();
 const ownKeyAgentSpend = vi.fn();
 vi.mock('../lib/plan-guard.js', () => ({ PlanLimitError }));
@@ -40,6 +41,7 @@ vi.mock('../lib/chat-budget.js', () => ({
   chargeChatStep: (...args) => chargeChatStep(...args),
   releaseChatStep: (...args) => releaseChatStep(...args),
   agentUsageShares: (...args) => agentUsageShares(...args),
+  chatRunEstimate: (...args) => chatRunEstimate(...args),
   fitChatUnits: (...args) => fitChatUnits(...args),
   MAX_FIT_UNITS: 100,
   ownKeyAgentSpend: (...args) => ownKeyAgentSpend(...args),
@@ -60,6 +62,7 @@ beforeEach(async () => {
   chargeChatStep.mockReset().mockResolvedValue(undefined);
   releaseChatStep.mockReset().mockResolvedValue(undefined);
   agentUsageShares.mockReset().mockResolvedValue({ unlimited: false, since: null, shares: [] });
+  chatRunEstimate.mockReset().mockResolvedValue({ unlimited: false, share: 0.02, runs: 12 });
   fitChatUnits.mockReset().mockResolvedValue({ fits: 3, limit: 'run' });
   ownKeyAgentSpend.mockReset();
   warnOwnKeyLimit.mockReset().mockResolvedValue({ notices: 0, emails: 0, resolved: 0 });
@@ -323,6 +326,33 @@ describe('GET /api/internal/chat/budget/agent-shares', () => {
     const res = await get(`orgId=${ORG}`);
     expect(res.status).toBe(402);
     expect(await res.json()).toMatchObject({ success: false, error: 'plan_limit' });
+  });
+});
+
+describe('GET /api/internal/chat/budget/run-estimate', () => {
+  const get = (query, secret = 'shh') =>
+    fetch(`${baseUrl}/run-estimate?${query}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+
+  it('answers about how much of the limit a run uses, never a dollar', async () => {
+    const res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, unlimited: false, share: 0.02, runs: 12 });
+    expect(chatRunEstimate).toHaveBeenLastCalledWith(ORG);
+  });
+
+  it('answers only the web, and refuses a query it can’t read', async () => {
+    expect((await get(`orgId=${ORG}`, 'nope')).status).toBe(401);
+    expect((await get('orgId=nope')).status).toBe(400);
+    expect(chatRunEstimate).not.toHaveBeenCalled();
+  });
+
+  it('says when Chat is off for the workspace', async () => {
+    chatRunEstimate.mockRejectedValueOnce(new ChatBudgetError('chat_off', 403, 'Chat is off.'));
+    const res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ success: false, error: 'chat_off' });
   });
 });
 
