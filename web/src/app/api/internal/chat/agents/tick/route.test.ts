@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * and /signals, called by the API server with CHAT_INTERNAL_SECRET. Not
  * there with the new Chat off, before the secret is read; a wrong or
  * missing secret is 401, compared in constant time; a good call fires and
- * sweeps with the agent run driver.
+ * sweeps with the agent run driver, then deletes the memory lines past
+ * their Undo (CHAT-14 item 23).
  */
 
 const fakes = vi.hoisted(() => ({
@@ -14,7 +15,9 @@ const fakes = vi.hoisted(() => ({
   signals: vi.fn(),
   sweep: vi.fn(),
   driver: vi.fn(),
+  purge: vi.fn(),
 }));
+vi.mock('@/lib/chat/memory/store', () => ({ purgeDeletedMemory: fakes.purge }));
 vi.mock('@/lib/chat/agent-driver', () => ({ agentRunDriver: fakes.driver }));
 vi.mock('@/lib/chat/agent-sweep', () => ({ sweepAgents: fakes.sweep }));
 vi.mock('@/lib/chat/agent-triggers', async (importOriginal) => ({
@@ -54,6 +57,7 @@ beforeEach(() => {
   fakes.schedules.mockResolvedValue(counts);
   fakes.signals.mockResolvedValue(counts);
   fakes.sweep.mockResolvedValue({ settled: 2 });
+  fakes.purge.mockResolvedValue(3);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -88,18 +92,30 @@ describe('POST /api/internal/chat/agents/tick', () => {
     spy.mockRestore();
   });
 
-  it('fires the due schedules, then sweeps, with the agent run driver', async () => {
+  it('fires the due schedules, then sweeps, with the agent run driver, then purges memory', async () => {
     const res = await post(tick.POST, {});
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, schedules: counts, sweep: { settled: 2 } });
+    expect(await res.json()).toEqual({
+      ok: true,
+      schedules: counts,
+      sweep: { settled: 2 },
+      memory: { purged: 3 },
+    });
     expect(fakes.schedules).toHaveBeenCalledWith(expect.any(Date), fakes.driver);
     expect(fakes.sweep).toHaveBeenCalledWith(expect.any(Date), fakes.driver);
+    expect(fakes.purge).toHaveBeenCalledWith(expect.any(Date));
   });
 
   it('runs one job when asked, and refuses an unknown one', async () => {
     const res = await post(tick.POST, { jobs: ['sweep'] });
-    expect(await res.json()).toEqual({ ok: true, schedules: null, sweep: { settled: 2 } });
+    expect(await res.json()).toEqual({
+      ok: true,
+      schedules: null,
+      sweep: { settled: 2 },
+      memory: null,
+    });
     expect(fakes.schedules).not.toHaveBeenCalled();
+    expect(fakes.purge).not.toHaveBeenCalled();
     expect((await post(tick.POST, { jobs: ['kpi'] })).status).toBe(400);
   });
 
@@ -113,6 +129,7 @@ describe('POST /api/internal/chat/agents/tick', () => {
       failed: ['schedules'],
       schedules: null,
       sweep: { settled: 2 },
+      memory: { purged: 3 },
     });
     expect(fakes.sweep).toHaveBeenCalled();
 

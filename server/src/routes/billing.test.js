@@ -244,7 +244,15 @@ describe('GET /ai-usage', () => {
     expect(getOrgIdForUser).toHaveBeenCalledWith('u1');
     // With what Write this typically costs, which it turns into a share.
     expect(getAiUsage).toHaveBeenCalledWith('o1', {
-      estimates: { writeThis: expect.any(Number), auditAiChecks: expect.any(Number) },
+      estimates: {
+        writeThis: expect.any(Number),
+        auditAiChecks: expect.any(Number),
+        // The Content Editor's runs, for the Next step window.
+        editorBrief: expect.any(Number),
+        editorFix: expect.any(Number),
+        editorRewrite: expect.any(Number),
+        editorWrite: expect.any(Number),
+      },
     });
     expect(getAiUsage.mock.calls[0][1].estimates.writeThis).toBeGreaterThan(0);
   });
