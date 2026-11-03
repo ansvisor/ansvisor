@@ -20,7 +20,8 @@
  *       the brand isn't the demo's;
  *     - the reservation is this step's: reserved for this run, draft and
  *       target, or done for them in the last 24 hours (a send again takes
- *       no second slot). A page taken down doesn't go out again on its own.
+ *       no second slot; never for a webhook, whose send is no update:
+ *       409 already_sent). A page taken down doesn't go out again on its own.
  *   Then the page goes as a person's Send to CMS does (sendContentPages),
  *   with the agent run kept on the delivery (00444), and the step is
  *   finished: done, or failed with why, which frees its slot. Never retried.
@@ -216,6 +217,9 @@ async function checkStep(body) {
   // A page someone took down never goes live on its own again (PR 10): a click does it.
   if (await takenDown(body.draftId)) throw refuse('taken_down', 409);
   if (!reservationFits(step, body, run.agent_id)) throw refuse('reservation');
+  // A webhook POST isn't an update of one item, as a CMS draft is: each send is a new package
+  // the workflow may post again. A webhook step done already is never sent twice on its own.
+  if (body.kind === 'webhook' && step.status === 'done') throw refuse('already_sent', 409);
   return draft.brand_id;
 }
 
@@ -244,7 +248,8 @@ function reservationFits(step, body, agentId) {
   if (step.status === 'reserved') {
     return step.agent_run_id === body.agentRunId && step.kind === body.kind;
   }
-  // A send again within the window takes no second slot; one taken down never goes on its own.
+  // A send again within the window takes no second slot (a webhook's is refused after it);
+  // one taken down never goes on its own.
   return step.status === 'done' && Date.now() - Date.parse(step.created_at) < SLOT_WINDOW_MS;
 }
 

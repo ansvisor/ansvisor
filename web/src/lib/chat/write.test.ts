@@ -803,6 +803,17 @@ describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
         message: 'Your webhook refused it: No workflow connected',
       },
     });
+    // Sent there already by this agent: a webhook send isn't an update, so it never goes twice.
+    sent.mockImplementationOnce(async () =>
+      Response.json({ success: false, code: 'already_sent' }, { status: 409 }),
+    );
+    expect(await runLoggedWrite(webhook())).toMatchObject({
+      output: {
+        ok: false,
+        reason: 'conflict',
+        message: 'This page went to your webhook already. An agent sends it there once.',
+      },
+    });
   });
 
   it('frees its slot when the API has no secret to be reached with: nothing went', async () => {

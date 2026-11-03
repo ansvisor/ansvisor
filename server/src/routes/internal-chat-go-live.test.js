@@ -459,6 +459,21 @@ describe('POST /api/internal/chat/go-live/send', () => {
     expect(finished().at(-1)).toMatchObject({ p_status: 'failed' });
   });
 
+  it('never sends a page to the webhook twice on a slot done already (PR 11)', async () => {
+    // Each webhook send is a new package the workflow may post: unlike a CMS draft, no update.
+    const step = db.tables.chat_agent_go_live_events[0];
+    db.tables.chat_agent_go_live_events = [
+      { ...step, kind: 'webhook', target: 'webhook', status: 'done', agent_run_id: RUN },
+    ];
+    const res = await send({ ...BODY, kind: 'webhook', target: 'webhook' });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ success: false, code: 'already_sent' });
+    expect(sendContentPages).not.toHaveBeenCalled();
+    // The done step is kept as it was, and nobody is told again.
+    expect(finished()).toEqual([]);
+    expect(tellWentLive).not.toHaveBeenCalled();
+  });
+
   it('answers the step even when telling people fails', async () => {
     tellWentLive.mockRejectedValueOnce(new Error('mail down'));
     const res = await send();

@@ -139,6 +139,9 @@ export async function sendOnItsOwn(
     // A page live already stays the editor's; the CMS didn't publish it (it stays a draft there).
     if (code === 'live_item') return { ok: false, reason: 'live_item', message: why };
     if (code === 'in_progress') return { ok: false, reason: 'conflict', message: why };
+    // A webhook send the agent made already: a POST isn't an update, so it never goes twice.
+    if (code === 'already_sent')
+      return { ok: false, reason: 'conflict', message: t('alreadySent') };
     if (res.status === 404) return { ok: false, reason: 'not_found', message: why };
     if (res.status === 400 || res.status === 422)
       return { ok: false, reason: 'invalid', message: why };

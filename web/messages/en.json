@@ -3904,7 +3904,8 @@
       "unreached": "{cms} couldn’t be reached.",
       "refused": "{cms} refused it: {why}",
       "rechecked": "Its permission to go live on its own changed while it ran.",
-      "yourWebhook": "Your webhook"
+      "yourWebhook": "Your webhook",
+      "alreadySent": "This page went to your webhook already. An agent sends it there once."
     },
     "acting": {
       "refused": "This agent couldn't make this change on its own, so nothing changed. Use Run now to make it as you.",
