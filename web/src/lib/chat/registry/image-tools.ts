@@ -94,7 +94,7 @@ export const IMAGE_WRITES = [
         .describe('What the images are, for Files: "Cover image · GEO strategies for 2026".'),
     }),
     run: (ctx, input) => makeChatImages(ctx, input),
-    precheck: (ctx, input) => imagePrecheck(ctx.organizationId, input.count),
+    precheck: (ctx, input) => imagePrecheck(ctx, input),
     // The card's line: how many images, on which model, and their share of the AI limit.
     target: (input) => imageCostLine(input.brand_id, input.model, input.count),
     // The set, filed as it was made: its card shows the images to pick from.

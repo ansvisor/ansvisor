@@ -200,9 +200,10 @@ describe('the image model question (CHAT-15 item 17)', () => {
   });
 
   it('writes multipliers and shares as the menu does', () => {
-    expect([1, 2, 1.14, 0.26, 12.4].map(images.multiplierOf)).toEqual([
+    expect([1, 2.07, 4.13, 1.14, 0.26, 12.4].map(images.multiplierOf)).toEqual([
       '1x',
       '2x',
+      '4x',
       '1.1x',
       '0.3x',
       '12x',
@@ -254,12 +255,25 @@ describe('the parts check and the card', () => {
   });
 
   it('stops before the card when Files has no room for the images', async () => {
-    expect(await images.imagePrecheck('org-1', 4)).toBeNull();
+    expect(await images.imagePrecheck(ctx, { model: LITE, count: 4 })).toBeNull();
     fakes.storage = { usedBytes: 100, limitBytes: 100, fileCount: 1 };
-    expect(await images.imagePrecheck('org-1', 4)).toMatchObject({
+    expect(await images.imagePrecheck(ctx, { model: LITE, count: 4 })).toMatchObject({
       ok: false,
       reason: 'unavailable',
     });
+  });
+
+  it('sends the model to the parts check first when the AI limit covers only some', async () => {
+    fakes.fit.mockResolvedValue({ ok: true, fits: 1, limit: 'month' });
+    expect(await images.imagePrecheck(ctx, { model: LITE, count: 4 })).toEqual({
+      ok: false,
+      reason: 'quota_exceeded',
+      message:
+        'The AI limit left covers 1 of these 4 images. Call plan_parts first with parts 4, unit "images" and this image_model, and follow it.',
+    });
+    // One image: the hold decides, as the parts check said it may go.
+    expect(await images.imagePrecheck(ctx, { model: LITE, count: 1 })).toBeNull();
+    expect(fakes.fit).toHaveBeenCalledTimes(1);
   });
 });
 

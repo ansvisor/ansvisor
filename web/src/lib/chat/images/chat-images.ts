@@ -14,6 +14,7 @@ import {
 import type { ChatToolContext } from '../registry/define-tool';
 import { IMAGE_MODELS, defaultImageModel, type ImageModel } from './models';
 import { generateImages } from './provider';
+import { PARTS_TOOL } from '../partial-limit';
 
 /**
  * Images in Chat (CHAT-15 §E, W4-08), on the server: whose key they run
@@ -66,9 +67,13 @@ export async function imageKeySource(organizationId: string): Promise<ChatKeySou
   return provider === 'openrouter' ? 'own' : 'ansvisor';
 }
 
-/** A ratio as the model menu writes it: "1x", "2x", "1.1x", "0.3x". */
+/**
+ * A ratio as CHAT-16 item 11 writes it: "1x", "2x", "4x", "1.1x", "0.3x":
+ * whole from 2x (the shares it comes from are rounded, so 2.07 is 2x), a
+ * tenth below.
+ */
 export function multiplierOf(ratio: number): string {
-  const rounded = ratio >= 10 ? Math.round(ratio) : Math.round(ratio * 10) / 10;
+  const rounded = ratio >= 2 ? Math.round(ratio) : Math.round(ratio * 10) / 10;
   return `${rounded}x`;
 }
 
@@ -222,15 +227,38 @@ export interface ImageRequestInput {
 const refusal = (reason: string, message: string) => ({ ok: false as const, reason, message });
 
 /**
- * Before the card: Files has room for a set of images (CHAT-06 item 29),
- * so none is made only to be lost. About 2 MB an image, as the providers
- * send them at 1K. Null lets it go on; a check that fails lets it go on too.
+ * Before the card (CHAT-15 item 25, CHAT-06 item 29): Files has room for
+ * the images (about 2 MB each at 1K), so none is made only to be lost; and
+ * the AI limit left covers every one, or the model checks with the parts
+ * check first, which asks the person, before any image is made. Null lets
+ * it go on; a check that gets no answer lets it go on too (the hold
+ * decides).
  */
-export async function imagePrecheck(organizationId: string | null, count: number) {
+export async function imagePrecheck(
+  ctx: Pick<ChatToolContext, 'organizationId' | 'chat'>,
+  input: Pick<ImageRequestInput, 'model' | 'count'>,
+) {
+  const organizationId = ctx.organizationId;
   if (!organizationId) return null;
   const storage = await readChatStorage(organizationId).catch(() => null);
-  if (!storage || storageFits(storage, count * 2 * 1024 * 1024)) return null;
-  return refusal('unavailable', t('storageFull'));
+  if (storage && !storageFits(storage, input.count * 2 * 1024 * 1024)) {
+    return refusal('unavailable', t('storageFull'));
+  }
+  if (input.count > 1) {
+    const { fits } = await fitImageParts({
+      organizationId,
+      model: input.model,
+      units: input.count,
+      agentRunId: ctx.chat?.agentRunId ?? null,
+    });
+    if (fits < input.count) {
+      return refusal(
+        'quota_exceeded',
+        `The AI limit left covers ${fits} of these ${input.count} images. Call ${PARTS_TOOL} first with parts ${input.count}, unit "images" and this image_model, and follow it.`,
+      );
+    }
+  }
+  return null;
 }
 
 /**
