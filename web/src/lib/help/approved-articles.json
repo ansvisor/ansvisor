@@ -771,7 +771,7 @@
         "agent sends to cms"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -820,6 +820,10 @@
         {
           "heading": "When an agent runs by itself",
           "text": "A **Schedule** trigger runs at its time on the clock of the time zone it was set in, also when summer time starts or ends. A time missed while the agent was paused isn't made up later. A **Signal** trigger runs when Action Center finds a new signal of its category, and of the definitions, pages and engines you picked. **KPI changed** and **Watch rule** triggers are saved, but don't start runs yet.\n\nSignals that come close together don't each start a run. Signals within 15 minutes join one run, a brand gets at most one signal run every 6 hours, and your plan sets how many signal runs an agent may start a day. A signal that had to wait is listed in the agent's next run, and in **Run history** as **Skipped** with the reason."
+        },
+        {
+          "heading": "A schedule's time zone",
+          "text": "A new **Schedule** trigger starts on your time zone from **Settings › Account** (your browser's when that's **Automatic**), shown beside its time. Changing your time zone later doesn't move a trigger you already have."
         },
         {
           "heading": "How a run works",
