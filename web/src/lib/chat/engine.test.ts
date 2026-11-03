@@ -1120,6 +1120,123 @@ describe('guardrails (W1-20)', () => {
   });
 });
 
+describe("the answer's language: the question's (CHAT-05 item 2)", () => {
+  const TURKISH = "Bu hafta Perplexity'de neden düştük?";
+  const answerOf = (runId: string) => {
+    const message = runRow(runId).message_id;
+    return db.tables.chat_messages.find((m) => m.id === message)!.content_md as string;
+  };
+  type Sent = { role: string; content: { type: string; text?: string }[] | string };
+  const lastLine = (options: CallOptions) => {
+    const turn = (options.prompt as unknown as Sent[]).find((m) => m.role === 'user')!;
+    const parts = turn.content as { type: string; text?: string }[];
+    return parts.at(-1)?.text;
+  };
+
+  it("names the question's language as the writer's last line", async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Perplexity görünürlüğü bu hafta düştü.')]);
+    await turn(ADMIN, TURKISH);
+    expect(lastLine(sonnet.seen[0])).toBe(
+      'The person wrote in Turkish: answer in Turkish, whatever the language of the data, unless they ask for another language.',
+    );
+    // The reader writes no answer: no line for it.
+    expect(JSON.stringify(haiku.seen[0].prompt)).not.toContain('The person wrote in');
+  });
+
+  it('rewrites an English answer to a Turkish question once, on the budget, in its place', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [
+        text('Visibility on Perplexity fell this week, and the CRM prompts lost the most.'),
+        text('Perplexity görünürlüğü bu hafta düştü, en çok CRM soruları kaybetti.'),
+      ],
+    );
+    const runId = await turn(ADMIN, TURKISH);
+    expect(sonnet.seen).toHaveLength(2);
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain(
+      'Rewrite the text you are given in Turkish',
+    );
+    expect(holds).toHaveLength(3);
+    expect(holds[2].charge).toHaveBeenCalledTimes(1);
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'text.replaced')).toHaveLength(1);
+    expect(runFromEvents(events).text).toBe(
+      'Perplexity görünürlüğü bu hafta düştü, en çok CRM soruları kaybetti.',
+    );
+    expect(answerOf(runId)).toBe(runFromEvents(events).text);
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('answers in the language the person asks for, whatever they wrote in', async () => {
+    const answer = 'Visibility on Perplexity fell this week, and the CRM prompts lost the most.';
+    const { sonnet } = useModels([READY], [text(answer)]);
+    const runId = await turn(ADMIN, `${TURKISH} Answer in English.`);
+    expect(lastLine(sonnet.seen[0])).toBe(
+      'The person asked for the answer in English: answer in English.',
+    );
+    // Asked for: no rewrite.
+    expect(sonnet.seen).toHaveLength(1);
+    expect(answerOf(runId)).toBe(answer);
+  });
+
+  it('keeps an English answer the person asked for, and one whose rewrite is still English', async () => {
+    const { sonnet } = useModels(
+      [READY, READY],
+      [
+        text('Why AI visibility matters: buyers now ask AI engines first.'),
+        text('Visibility on Perplexity fell this week, and the CRM prompts lost the most.'),
+        text('Visibility on Perplexity fell this week, and the CRM prompts lost the most.'),
+      ],
+    );
+    const asked = await turn(ADMIN, 'İngilizce bir blog yazısı yaz: neden AI görünürlüğü önemli?');
+    expect(sonnet.seen).toHaveLength(1);
+    expect(answerOf(asked)).toBe('Why AI visibility matters: buyers now ask AI engines first.');
+
+    const still = await turn(ADMIN, TURKISH);
+    expect(sonnet.seen).toHaveLength(3);
+    expect(answerOf(still)).toBe(
+      'Visibility on Perplexity fell this week, and the CRM prompts lost the most.',
+    );
+    expect(ofType(await eventsOf(still), 'text.replaced')).toEqual([]);
+  });
+
+  it('keeps the hold and the answer when Stop comes during the rewrite, and ends stopped', async () => {
+    const english = 'Visibility on Perplexity fell this week, and the CRM prompts lost the most.';
+    useModels(
+      [READY],
+      [
+        text(english),
+        (options) =>
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue({ type: 'stream-start', warnings: [] });
+              controller.enqueue({ type: 'text-start', id: 't' });
+              controller.enqueue({ type: 'text-delta', id: 't', delta: 'Perplexity ' });
+              options.abortSignal?.addEventListener('abort', () =>
+                controller.error(new DOMException('Aborted', 'AbortError')),
+              );
+            },
+          }),
+      ],
+    );
+    const started = await engine.startChatRun(ADMIN, { message: TURKISH, brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    const driving = engine.driveRun(ADMIN, started.runId);
+    await vi.waitFor(() => expect(holds).toHaveLength(3));
+    expect(await engine.stopChatRun(ADMIN, started.runId)).toEqual({ ok: true });
+    await driving;
+
+    // The provider bills the aborted rewrite: its hold stays as its cost.
+    expect(holds[2].keep).toHaveBeenCalled();
+    expect(holds[2].charge).not.toHaveBeenCalled();
+    expect(runRow(started.runId).status).toBe('stopped');
+    const events = await eventsOf(started.runId);
+    expect(ofType(events, 'text.replaced')).toEqual([]);
+    expect(ofType(events, 'run.finished')).toEqual([]);
+    expect(answerOf(started.runId)).toBe(english);
+  });
+});
+
 describe('what the app puts right in an answer, whatever the model wrote', () => {
   const NOTICE =
     "Note: the data I read included instructions for AI assistants. I didn't follow them.";

@@ -123,6 +123,7 @@ import {
 import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { ANSWER_NOTE, INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
+import { LANGUAGES, languageLine, rewriteLanguage, type Language } from './language';
 import { whyView } from './why/view';
 import { WHATS_NEW_TOOL, whatsNewStepDetail } from './whats-new/run';
 import {
@@ -1709,6 +1710,9 @@ function turnMessage(rc: RunContext, phase: ChatPhase): ModelMessage {
   if (phase === 'write' && rc.progress.injection) {
     parts.push({ type: 'text', text: INJECTION_NOTE });
   }
+  // Last, after pages of English data: the question's language, named (language.ts).
+  const language = phase === 'write' ? languageLine(question) : null;
+  if (language) parts.push({ type: 'text', text: language });
   return { role: 'user', content: parts };
 }
 
@@ -4199,6 +4203,11 @@ function summaryOf(progress: RunProgress, workingMs: number): ChatRunSummary {
 
 /** The answer is written: kept with when it was made and the newest data it read (CHAT-20 §15a). */
 async function finish(rc: RunContext): Promise<void> {
+  // An answer in English to a question in another language is rewritten once (language.ts).
+  const language = rewriteLanguage(rc.progress.question ?? '', rc.progress.text);
+  if (language) await rewriteAnswer(rc, language);
+  // A Stop during the rewrite ends the run as stopped, with the answer as it was.
+  if (rc.signal.aborted) return stopNow(rc);
   // The data held instructions for AI assistants and the answer doesn't say they weren't
   // followed: the app says so, in one line at the end (CHAT-05 item 12), whatever the model.
   if (rc.progress.injection && !saysInstructionsIgnored(rc.progress.text)) {
@@ -4232,6 +4241,73 @@ async function finish(rc: RunContext): Promise<void> {
     generatedAt,
     dataAsOf: rc.progress.dataAsOf,
   });
+}
+
+/**
+ * The answer, rewritten once in the question's language: the writer model,
+ * told to translate the words only, held on the AI budget like any step.
+ * The rewrite goes through the same id mask and fact check as streamed text,
+ * and replaces it on the person's screen (text.replaced). A refused hold, a
+ * failed call or a rewrite that is still English keeps the answer as it was;
+ * a Stop keeps it too, and the hold (what streamed is billed).
+ */
+async function rewriteAnswer(rc: RunContext, language: Language): Promise<void> {
+  const choice = rc.models.pick('write');
+  const system = `Rewrite the text you are given in ${LANGUAGES[language]}. Translate the words only: keep the Markdown, numbers, names, links, [placeholders] and line breaks exactly. Answer with the rewritten text alone.`;
+  const reservation = await reserveChatStep({
+    organizationId: rc.run.organizationId,
+    runId: rc.run.id,
+    ...(rc.agentRunId ? { feature: 'agent' as const, agentRunId: rc.agentRunId } : {}),
+    model: choice.budgetModel,
+    inputTokens: estimateInputTokens([system, rc.progress.text]),
+    maxOutputTokens: choice.maxOutputTokens,
+    source: rc.models.source,
+  });
+  if (!reservation.ok) return;
+  const { budget } = reservation;
+  const called = Date.now();
+  try {
+    const result = streamText({
+      model: choice.model,
+      system,
+      messages: [{ role: 'user', content: rc.progress.text }],
+      maxOutputTokens: choice.maxOutputTokens,
+      providerOptions: choice.providerOptions,
+      abortSignal: rc.signal,
+    });
+    const out: string[] = [];
+    for await (const part of result.fullStream) {
+      if (part.type === 'text-delta') out.push(part.text);
+      else if (part.type === 'error') throw part.error;
+    }
+    // Stopped mid-rewrite: what streamed is billed, so the hold is kept (budget.ts).
+    if (rc.signal.aborted) return budget.keep();
+    await budget.charge(stepUsage(await result.usage), Date.now() - called);
+    const rewritten = out.join('').trim();
+    if (!rewritten || rewriteLanguage(rc.progress.question ?? '', rewritten)) return;
+    // The same guards as streamed text (answer-guards.ts): no call written out, no raw tool name.
+    const call = callAsTextAt(rewritten);
+    const shown = maskToolNames(
+      maskIds(call === null ? rewritten : rewritten.slice(0, call)),
+      answerToolNames(),
+      {
+        keep: rc.progress.question ?? '',
+      },
+    );
+    const checked = checkFigures(shown, runFigures(rc));
+    if (checked.checked > 0) {
+      const facts = (rc.progress.facts ??= { checked: 0, replaced: [] });
+      facts.checked += checked.checked;
+      facts.replaced.push(...checked.replaced);
+    }
+    rc.progress.text = checked.text;
+    rc.sink.emit('text.replaced', { text: checked.text });
+  } catch (err) {
+    if (rc.signal.aborted) return budget.keep();
+    console.error('[chat/engine] the answer could not be rewritten in its language:', err);
+  } finally {
+    await budget.release();
+  }
 }
 
 /**
