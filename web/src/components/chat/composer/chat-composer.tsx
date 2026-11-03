@@ -12,6 +12,12 @@ import type { ChatMode } from '@/lib/chat/precedence';
 import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import { MAX_REFERENCES, type ChatReference } from '@/lib/chat/references';
 import {
+  keepsTrigger,
+  shortcutCommand,
+  type Shortcut,
+  type ShortcutId,
+} from '@/lib/chat/shortcuts';
+import {
   CHAT_UPLOAD_TYPES,
   UPLOAD_ACCEPT,
   uploadProblem,
@@ -27,7 +33,6 @@ import {
   matchShortcuts,
   matchSkills,
   type PlusItem,
-  type Shortcut,
 } from './composer-menus';
 import { ModeSwitch } from './mode-switch';
 import { ModelMenu, useModelLabel } from './model-menu';
@@ -76,6 +81,11 @@ export interface ComposerSend {
   references: ChatReference[];
   /** The attachments' ids (chat_uploads), each up and ready. */
   attachments: string[];
+  /**
+   * The shortcut picked from the / menu (CHAT-08 item 4), while the text
+   * still starts with its trigger words: the run uses its data plan.
+   */
+  shortcutId?: ShortcutId;
 }
 
 /**
@@ -130,7 +140,9 @@ const refKey = (ref: ChatReference) => `ref:${ref.type}:${ref.id}`;
  *
  * Menus (W1-12): "/" first in an empty box, or the / button, lists the
  * shortcuts that start a message, then the enabled skills, whose /command
- * starts it (W2-04: the server loads the skill it names); "@" at the start
+ * starts it (W2-04: the server loads the skill it names). A shortcut's
+ * message carries it while its trigger words stay (W2-09: the server runs
+ * its playbook); rewritten, it is a message like any other. "@" at the start
  * of a word, or the @ button, references data (the page's own first, then
  * the brand's prompts, pages and open tasks), the pick a chip; ＋ attaches
  * files and connects a tool. ↑ ↓ move, Enter picks, Esc closes and keeps
@@ -246,13 +258,18 @@ export function ChatComposer({
   const [fileProblem, setFileProblem] = useState<UploadProblem | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
   const chosenLabel = useModelLabel(modelChoice ?? AUTO_CHOICE);
+  // The shortcut picked from the / menu, and the trigger words it put in the box.
+  const [shortcut, setShortcut] = useState<{ id: ShortcutId; trigger: string } | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
   // The page's last hand-off taken in: each one once.
   const [taken, setTaken] = useState<number | null>(null);
   if (draft && draft.nonce !== taken) {
     setTaken(draft.nonce);
-    if (draft.text !== undefined) setText(draft.text);
+    if (draft.text !== undefined) {
+      setText(draft.text);
+      setShortcut(null);
+    }
     const reference = draft.reference;
     if (reference) {
       setRefs((all) =>
@@ -316,11 +333,12 @@ export function ChatComposer({
   }, [atSearch, searchReferences]);
 
   const shortcutName = (s: Shortcut) => t(`slash.shortcuts.${s.key}.name`);
-  // A skill with a shortcut's command (/report) takes its place: the message calls the skill.
+  // A skill under a shortcut's command takes its place: the message calls the skill. The
+  // library has none (its hidden playbooks hold those names); this keeps the menu one per command.
   const shortcuts =
     menu?.kind === 'slash'
       ? matchShortcuts(menu.query, shortcutName).filter(
-          (s) => !skills.some((skill) => `/${skill.name}` === s.command),
+          (s) => !skills.some((skill) => `/${skill.name}` === shortcutCommand(s)),
         )
       : [];
   const skillRows = menu?.kind === 'slash' ? matchSkills(menu.query, skills) : [];
@@ -447,6 +465,8 @@ export function ChatComposer({
   /** The box's text and where its cursor is, after a change: which menu that opens. */
   function textChanged(next: string, cursor: number) {
     setText(next);
+    // Its trigger words rewritten: the message is the person's own, without the shortcut.
+    if (shortcut && !keepsTrigger(next, shortcut.trigger)) setShortcut(null);
     if (!readOnly && /^\/\S*$/.test(next.slice(0, cursor))) {
       setMenu({ kind: 'slash', query: next.slice(1, cursor), typed: true });
       setActive(0);
@@ -477,11 +497,12 @@ export function ChatComposer({
     if (ghost) putText(ghost);
   };
 
-  function pickShortcut(shortcut: Shortcut) {
-    const starter = t(`slash.shortcuts.${shortcut.key}.starter`);
+  function pickShortcut(picked: Shortcut) {
+    const starter = t(`slash.shortcuts.${picked.key}.starter`);
     // Typed "/…" is the shortcut's; from the button, the text stays after the starter.
     const rest = menu?.kind === 'slash' && menu.typed ? '' : text.trim();
     setMenu(null);
+    setShortcut({ id: picked.id, trigger: starter });
     putText(`${starter} ${rest}`);
   }
 
@@ -490,6 +511,7 @@ export function ChatComposer({
     // Typed "/…" is the skill's; from the button, the text stays after the command.
     const rest = menu?.kind === 'slash' && menu.typed ? '' : text.trim();
     setMenu(null);
+    setShortcut(null);
     putText(`/${skill.name} ${rest}`);
   }
 
@@ -544,22 +566,26 @@ export function ChatComposer({
     if (!handler) return;
     const sentRefs = refs;
     const sentFiles = files;
+    const sentShortcut = shortcut && keepsTrigger(message, shortcut.trigger) ? shortcut : null;
     setSending(true);
     setText('');
     setRefs([]);
     setFiles([]);
     setFileProblem(null);
     setMenu(null);
+    setShortcut(null);
     const restore = () => {
       setText(message);
       setRefs(sentRefs);
       setFiles(sentFiles);
+      setShortcut(sentShortcut);
     };
     try {
       const sent = await handler(message, {
         context: chips,
         references: sentRefs,
         attachments: sentFiles.flatMap((f) => (f.status === 'ready' && f.id ? [f.id] : [])),
+        ...(sentShortcut ? { shortcutId: sentShortcut.id } : {}),
       });
       if (sent === false) restore();
     } catch {

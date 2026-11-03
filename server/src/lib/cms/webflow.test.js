@@ -15,6 +15,7 @@ const {
   getItem,
   listCollections,
   listSites,
+  publishItem,
   suggestFieldMap,
   updateItem,
 } = await import('./webflow.js');
@@ -393,5 +394,25 @@ describe('where pages live', () => {
     expect(await getItem(account, 'c1', 'i1')).toBeNull();
     executeWebflowTool.mockRejectedValueOnce(new Error('401 Unauthorized'));
     await expect(getItem(account, 'c1', 'i1')).rejects.toMatchObject({ code: 'auth_failed' });
+  });
+});
+
+describe('publishItem (AUTONOMOUS-GO-LIVE PR 9)', () => {
+  it('takes the item out of draft, then publishes it alone', async () => {
+    executeWebflowTool.mockResolvedValue({});
+    expect(await publishItem(account, 'col_1', 'item_1')).toBe('item_1');
+    expect(executeWebflowTool.mock.calls.map(([slug, , args]) => [slug, args])).toEqual([
+      [
+        'WEBFLOW_UPDATE_COLLECTION_ITEM_V2',
+        { collection_id: 'col_1', item_id: 'item_1', isDraft: false },
+      ],
+      ['WEBFLOW_PUBLISH_COLLECTION_ITEMS', { collection_id: 'col_1', item_ids: ['item_1'] }],
+    ]);
+  });
+
+  it('says why Webflow refused, and publishes nothing after a refused update', async () => {
+    executeWebflowTool.mockRejectedValueOnce(new Error('403 Forbidden'));
+    await expect(publishItem(account, 'col_1', 'item_1')).rejects.toBeInstanceOf(WebflowError);
+    expect(executeWebflowTool).toHaveBeenCalledTimes(1);
   });
 });

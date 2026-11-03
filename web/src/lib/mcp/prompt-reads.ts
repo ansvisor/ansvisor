@@ -1,7 +1,7 @@
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { getQueryFanout } from '@/lib/actions/fanout';
 import { getPromptResults } from '@/lib/actions/tracking';
-import { brandInOrg, getPromptVolumesFor } from './data';
+import { brandAllowed, getPromptVolumesFor } from './data';
 import { asService, latestAnswerAt, newestOf, planPlatforms } from './chat-facts';
 
 /**
@@ -23,7 +23,7 @@ export async function getFanoutsFor(
   auth: McpAuthContext,
   params: { brandId: string; days?: number },
 ) {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
   const days = params.days ?? 30;
   // The plan's platforms only, from the rows up: every count is theirs.
   const platforms = await planPlatforms(auth.organizationId!);
@@ -64,7 +64,7 @@ export async function listAiAnswersFor(
     limit?: number;
   },
 ) {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
   const limit = params.limit ?? 5;
   const [read, platforms] = await Promise.all([
     // The brand's own answers only: the read filters by brand, so another brand's prompt has none.

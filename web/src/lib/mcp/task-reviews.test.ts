@@ -73,6 +73,7 @@ const manager: McpAuthContext = {
   organizationId: 'org-1',
   role: 'manager',
   apiKeyId: 'key-1',
+  brandAccess: 'all',
 };
 let auth = manager;
 
