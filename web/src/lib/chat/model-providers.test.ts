@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   MODEL_PROVIDERS,
+  PROVIDERS_OFF,
+  keyModelProvider,
   modelProviderOn,
   parseProviderChoices,
   providerOfModel,
@@ -51,5 +53,23 @@ describe('model providers', () => {
     ).toEqual({ openai: false, google: true });
     expect(parseProviderChoices(null)).toEqual({});
     expect(parseProviderChoices(['openai'])).toEqual({});
+  });
+
+  it('read the maker of an own key’s model, Azure as OpenAI', () => {
+    expect(keyModelProvider('openrouter', 'deepseek/deepseek-v4.1-flash')).toBe('deepseek');
+    expect(keyModelProvider('openrouter', '')).toBeNull();
+    expect(keyModelProvider('azure', 'my-deployment')).toBe('openai');
+    expect(keyModelProvider('openai', 'gpt-5.5')).toBe('openai');
+    expect(keyModelProvider('google', 'gemini-3-pro')).toBe('google');
+    expect(keyModelProvider('anthropic', 'claude-sonnet-5-5')).toBe('anthropic');
+  });
+
+  it('turn off every provider that can be, and only those, when choices can’t be read', () => {
+    expect(MODEL_PROVIDERS.map((p) => providerOn(PROVIDERS_OFF, p.id))).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ]);
   });
 });

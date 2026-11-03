@@ -32,6 +32,25 @@ export function providerOfModel(modelId: string | null | undefined): string | nu
   return modelId.split('/')[0].toLowerCase();
 }
 
+/**
+ * The maker of the model a workspace's own key runs, by the key's provider
+ * and model id (Settings › AI Providers): OpenRouter by the id's prefix,
+ * Azure as OpenAI (it runs OpenAI's models); null when it can't be told.
+ */
+export function keyModelProvider(keyProvider: string, modelId: string): string | null {
+  if (keyProvider === 'openrouter') return providerOfModel(modelId);
+  if (keyProvider === 'azure') return 'openai';
+  return keyProvider;
+}
+
+/**
+ * The choices to run on when they can't be read: every provider that can be
+ * turned off reads as off, never as its default.
+ */
+export const PROVIDERS_OFF: ModelProviderChoices = Object.fromEntries(
+  MODEL_PROVIDERS.filter((p) => !p.locked).map((p) => [p.id, false]),
+);
+
 /** The choices kept on chat_settings, read leniently: known providers and booleans only. */
 export function parseProviderChoices(raw: unknown): ModelProviderChoices {
   const choices: ModelProviderChoices = {};

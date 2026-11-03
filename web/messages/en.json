@@ -3955,6 +3955,8 @@
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
+      "keyProviderOff": "Your workspace's AI key runs a {provider} model, and your Admin turned off {provider} models in Chat. An Admin can turn them on in Settings › Chat or change the key in Settings › AI Providers.",
+      "keyProviderUnknown": "Your workspace's AI key runs a model whose provider Chat can't use. An Admin can change the key in Settings › AI Providers.",
       "queueTimeout": "Too many runs are working at once in this workspace, so this one didn't start. Try again in a moment.",
       "failed": "Something went wrong, so Chat stopped here. What's done so far is kept.",
       "providerDown": "{provider} didn't answer, so Chat stopped here. What's done so far is kept. Try again in a moment.",
