@@ -14243,5 +14243,102 @@
         "description": "Understand query volume trends across platforms and identify opportunities."
       }
     }
+  },
+  "chatConnections": {
+    "uploadedFile": "Uploaded file",
+    "tools": {
+      "google_search_console": {
+        "name": "Google Search Console",
+        "description": "Real search queries and impressions for your site."
+      },
+      "google_analytics": {
+        "name": "Google Analytics",
+        "description": "Sessions and conversions from your GA4 property, for AI traffic history."
+      },
+      "bing_webmaster_tools": {
+        "name": "Bing Webmaster Tools",
+        "description": "Bing and Copilot search data."
+      },
+      "webflow": {
+        "name": "Webflow",
+        "description": "Send pages to your Webflow site as drafts."
+      },
+      "wordpress": {
+        "name": "WordPress",
+        "description": "Send pages to your WordPress site as drafts."
+      },
+      "framer": {
+        "name": "Framer",
+        "description": "Send pages to your Framer site’s CMS."
+      },
+      "wix": {
+        "name": "Wix",
+        "description": "Send pages to your Wix site as drafts."
+      },
+      "webhook": {
+        "name": "Workflow webhook",
+        "description": "Send finished pages to your own workflow."
+      },
+      "contentful": {
+        "name": "Contentful",
+        "description": "Send pages to a Contentful content type."
+      },
+      "sanity": {
+        "name": "Sanity",
+        "description": "Send pages to Sanity as documents."
+      },
+      "merchant_center": {
+        "name": "Google Merchant Center",
+        "description": "Your products as Google Shopping sees them."
+      },
+      "woocommerce": {
+        "name": "WooCommerce",
+        "description": "Your store’s products, read with its own sign-in."
+      },
+      "product_feed": {
+        "name": "Product feed or file",
+        "description": "A product feed read every day, or a file you upload."
+      },
+      "shopify": {
+        "name": "Shopify",
+        "description": "Your Shopify products for AI shopping checks."
+      },
+      "hubspot": {
+        "name": "HubSpot",
+        "description": "Ties AI visits to deals and revenue."
+      },
+      "salesforce": {
+        "name": "Salesforce",
+        "description": "Revenue from AI-referred leads."
+      },
+      "pipedrive": {
+        "name": "Pipedrive",
+        "description": "Deals from AI-referred leads."
+      },
+      "stripe": {
+        "name": "Stripe",
+        "description": "Payments matched to AI visits."
+      },
+      "google_sheets": {
+        "name": "Google Sheets",
+        "description": "Send tables and reports to a sheet."
+      },
+      "looker_studio": {
+        "name": "Looker Studio",
+        "description": "Ansvisor data in your dashboards."
+      },
+      "slack": {
+        "name": "Slack",
+        "description": "Inbox items and reports in a channel."
+      },
+      "microsoft_teams": {
+        "name": "Microsoft Teams",
+        "description": "Inbox items and reports in a channel."
+      },
+      "zapier": {
+        "name": "Zapier",
+        "description": "Start Ansvisor skills from other tools."
+      }
+    }
   }
 }
