@@ -433,6 +433,33 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
     expect(row.querySelector('[data-action="inbox.openGoLiveRun"]')).toBeNull();
   });
 
+  it('tells of a page an agent sent to the webhook on its own, which can’t be taken back (PR 11)', async () => {
+    const sent = {
+      id: '7c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f',
+      kind: 'agent_went_live' as const,
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'webhook' as const,
+      draftId: 'draft-1',
+      chatId: 'chat-1',
+      url: null,
+      createdAt: '2026-11-02T08:00:00Z',
+      read: false,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [sent] }} />);
+    const [row] = noticeRows();
+    expect(row.getAttribute('data-kind')).toBe('agent_went_live');
+    expect(row.textContent).toContain('Publisher sent “Pricing FAQ” to your webhook');
+    expect(row.textContent).not.toContain('as a draft');
+    expect(row.textContent).toContain('Ansvisor can’t take a webhook send back');
+    expect(row.querySelector('[data-action="inbox.openGoLiveRun"]')).not.toBeNull();
+    // Nothing is live through Ansvisor: no Take down, and Open page opens the editor.
+    expect(row.querySelector('[data-action="inbox.takeDown"]')).toBeNull();
+    expect(row.querySelector('[data-action="inbox.openGoLivePage"]')!.getAttribute('href')).toBe(
+      '/dashboard/content/editor/draft-1',
+    );
+  });
+
   it('offers Take down on a page published on its own to an Admin or a Manager, then says it’s down (PR 10)', async () => {
     const published = {
       id: '9f0a4e3c-3d4e-4f60-8b12-3456789abcde',

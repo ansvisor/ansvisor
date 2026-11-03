@@ -1,3 +1,4 @@
+import type { ChatNotice } from '@/lib/actions/chat-notices';
 import type { ChatStep } from '@/lib/chat/events';
 import type { TrayResponse } from '@/lib/chat/runs-tray';
 import type { PlanStep } from '@/components/agentic/plan-card';
@@ -228,6 +229,23 @@ export const PUBLISH = {
   previewLabel: 'Preview in Webflow',
   disabledReason: 'After the draft is approved',
   doneLabel: 'Published to ansvisor.com/pricing · 14:32 · by you',
+};
+
+/** A page sent to the brand's webhook (AUTONOMOUS-GO-LIVE PR 11): what its card names. */
+export const WEBHOOK_PAGE = '“Pricing FAQ” → Webhook';
+
+/** The Inbox notice after an agent sent it on its own: read, so the preview marks nothing. */
+export const WEBHOOK_NOTICE: ChatNotice = {
+  id: '00000000-0000-4000-8000-000000000011',
+  kind: 'agent_went_live',
+  agent: 'Publisher',
+  title: 'Pricing FAQ',
+  target: 'webhook',
+  draftId: '00000000-0000-4000-8000-000000000012',
+  chatId: '00000000-0000-4000-8000-000000000013',
+  url: null,
+  createdAt: '2026-11-03T08:00:00.000Z',
+  read: true,
 };
 
 export const RESULT = {

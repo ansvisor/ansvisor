@@ -34,6 +34,10 @@
  *   `kind: 'publish'` (PR 9) puts a new page live in Webflow, WordPress or
  *   Wix (lib/cms-publish.js): live already → 409 live_item, Framer → 409
  *   framer_site_publish, a publish the CMS refused → 502 publish_refused.
+ *   `kind: 'webhook'` (PR 11, target `webhook`) sends the page to the
+ *   brand's saved webhook as the editor's Send does (no address comes with
+ *   it): no webhook → 409 no_webhook, one without the event → 409
+ *   webhook_not_subscribed. What happens next is the workspace's workflow's.
  *
  * POST /api/internal/chat/go-live/quality-reads
  *   { orgId, agentRunId, runId, actingUserId, draftId, sites }
@@ -95,17 +99,20 @@ const GROUP = 'publishing';
 /** How far back a step done for the same draft and target lets it go again with no new slot. */
 const SLOT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-const sendSchema = z.strictObject({
-  orgId: z.guid(),
-  agentRunId: z.guid(),
-  runId: z.guid(),
-  actingUserId: z.guid(),
-  draftId: z.guid(),
-  target: z.enum(['webflow', 'wordpress', 'framer', 'wix']),
-  kind: z.enum(['cms_draft', 'publish']),
-  reservationId: z.guid(),
-  page: deliveryPage,
-});
+const sendSchema = z
+  .strictObject({
+    orgId: z.guid(),
+    agentRunId: z.guid(),
+    runId: z.guid(),
+    actingUserId: z.guid(),
+    draftId: z.guid(),
+    target: z.enum(['webflow', 'wordpress', 'framer', 'wix', 'webhook']),
+    kind: z.enum(['cms_draft', 'publish', 'webhook']),
+    reservationId: z.guid(),
+    page: deliveryPage,
+  })
+  // The brand's webhook is a send of its own (PR 11): never a CMS draft or a publish.
+  .refine((body) => (body.kind === 'webhook') === (body.target === 'webhook'));
 
 /**
  * A check that failed: nothing is sent. `free`: the slot was reserved for
@@ -292,7 +299,8 @@ router.post('/send', async (req, res) => {
       target: body.target,
       agentRunId: body.agentRunId,
     };
-    // A CMS draft is a send; a publish writes the checked page into it, then puts it live.
+    // A CMS draft or a webhook send is a send; a publish writes the checked page into its
+    // CMS draft, then puts it live.
     const delivery =
       body.kind === 'publish'
         ? (await publishContentPage({ ...step, page: body.page })).delivery

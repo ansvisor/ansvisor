@@ -176,6 +176,8 @@ describe('the Chat pieces preview', () => {
       'execute:pending',
       'execute:pending',
       'execute:saving',
+      // The webhook send's click card (go-live PR 11).
+      'execute:pending',
       'execute:pending',
     ]);
     expect(slots('question-card')).toHaveLength(3);
@@ -189,6 +191,8 @@ describe('the Chat pieces preview', () => {
     ]);
     expect(slots('denial-card')).toHaveLength(3);
     expect(slots('error-card')).toHaveLength(2);
+    // The Inbox notice of a page an agent sent to the webhook on its own (go-live PR 11).
+    expect(container.textContent).toContain('Publisher sent “Pricing FAQ” to your webhook');
     expect(container.querySelectorAll('[data-action="runs.toggleTray"]')).toHaveLength(3);
   });
 

@@ -425,6 +425,40 @@ describe('POST /api/internal/chat/go-live/send', () => {
     expect(finished().at(-1)).toMatchObject({ p_status: 'failed' });
   });
 
+  it('sends a page to the brand’s webhook for a webhook step, never with an address (PR 11)', async () => {
+    Object.assign(db.tables.chat_agent_go_live_events[0], { kind: 'webhook', target: 'webhook' });
+    sendContentPages.mockResolvedValueOnce({
+      batchId: null,
+      deliveries: [{ id: 'd5', draftId: DRAFT, status: 'sent', external_id: null, error: null }],
+      skipped: 0,
+    });
+    const res = await send({ ...BODY, kind: 'webhook', target: 'webhook' });
+    expect(res.status).toBe(200);
+    expect(sendContentPages).toHaveBeenCalledWith({
+      orgId: ORG,
+      brandId: BRAND,
+      userId: ACTOR,
+      pages: [expect.objectContaining({ draftId: DRAFT })],
+      target: 'webhook',
+      agentRunId: AGENT_RUN,
+    });
+    expect(publishContentPage).not.toHaveBeenCalled();
+    expect(finished()).toEqual([
+      expect.objectContaining({ p_id: STEP, p_status: 'done', p_delivery_id: 'd5' }),
+    ]);
+    await vi.waitFor(() => expect(tellWentLive).toHaveBeenCalledWith({ eventId: STEP }));
+
+    // A brand without a webhook: refused by the send, its slot freed.
+    db.tables.chat_agent_go_live_events[0].status = 'reserved';
+    sendContentPages.mockRejectedValueOnce(
+      new DeliveryError('no_webhook', 'No workflow connected', 409),
+    );
+    const none = await send({ ...BODY, kind: 'webhook', target: 'webhook' });
+    expect(none.status).toBe(409);
+    expect(await none.json()).toMatchObject({ code: 'no_webhook' });
+    expect(finished().at(-1)).toMatchObject({ p_status: 'failed' });
+  });
+
   it('answers the step even when telling people fails', async () => {
     tellWentLive.mockRejectedValueOnce(new Error('mail down'));
     const res = await send();
