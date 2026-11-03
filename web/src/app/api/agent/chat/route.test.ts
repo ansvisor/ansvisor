@@ -31,6 +31,7 @@ vi.mock('@/lib/agent/auth', () => ({
     email: 'a@example.com',
     organizationId: 'org-1',
     apiKeyId: 'agent-internal',
+    brandAccess: 'all',
   }),
 }));
 vi.mock('@/lib/agent/tools', () => ({ buildAgentTools: vi.fn() }));
@@ -82,5 +83,23 @@ describe('POST /api/agent/chat', () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     const res = await chat();
     expect(res.status).toBe(404);
+  });
+});
+
+// With the new Chat on for the workspace (CHAT_AGENTIC), Agent Chat's API is
+// gone: an old tab can't run a turn on the workspace's own key past its rules.
+describe('POST /api/agent/chat with the new Chat on', () => {
+  it('answers 404 before anything else', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    const res = await chat();
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: 'Not found' });
+  });
+
+  it('answers as before where CHAT_AGENTIC_ORGS leaves the workspace out', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'org-2');
+    const res = await chat();
+    expect(res.status).toBe(402);
   });
 });

@@ -31,7 +31,7 @@ import {
 import { whyNotYou } from '@/lib/shopping/shelf';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { dbClient, withDbClient } from '@/lib/supabase/scoped';
-import { NOT_IN_PLAN, brandInOrg, planIncludes } from './data';
+import { NOT_IN_PLAN, brandAllowed, planIncludes } from './data';
 
 /**
  * Product Visibility over MCP (plan B6b): the Shelf with "Why not you?", the
@@ -63,7 +63,7 @@ async function access(
   auth: McpAuthContext,
   brandId: string,
 ): Promise<null | typeof NOT_IN_PLAN | true> {
-  if (!(await brandInOrg(auth, brandId))) return null;
+  if (!(await brandAllowed(auth, brandId))) return null;
   return (await planIncludes(auth.organizationId!, 'shopping_analytics')) ? true : NOT_IN_PLAN;
 }
 

@@ -8,7 +8,7 @@ updated: 2026-10-30
 last_checked: 2026-10-30
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, web/src/config/plans.ts]
 ---
 **Files** keeps everything Chat finished for your workspace: pages it saved and answers you saved to Files. Everyone in your workspace can see and download them. Files are kept for 1 year.

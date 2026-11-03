@@ -78,6 +78,8 @@ interface Resend {
   context: ComposerChip[];
   references: ChatReference[];
   route?: string;
+  /** The shortcut it was sent with (W2-09): a Retry runs its data plan again. */
+  shortcutId?: ComposerSend['shortcutId'];
 }
 
 const OPEN: ClientRunStatus[] = ['queued', 'running', 'waiting'];
@@ -395,7 +397,12 @@ export function ChatThreadView({
         resend:
           sent.attachments.length > 0
             ? null
-            : { context: sent.context, references: sent.references, route },
+            : {
+                context: sent.context,
+                references: sent.references,
+                route,
+                ...(sent.shortcutId ? { shortcutId: sent.shortcutId } : {}),
+              },
       },
       {
         key: answerKey,
@@ -426,6 +433,7 @@ export function ChatThreadView({
         ...(sent.references.length > 0 ? { references: sent.references } : {}),
         ...(fromRunId ? { fromRunId } : {}),
         ...(keySource ? { keySource } : {}),
+        ...(sent.shortcutId ? { shortcutId: sent.shortcutId } : {}),
       }),
     }).catch(() => null);
     if (!res?.ok || !res.body) {
@@ -552,7 +560,12 @@ export function ChatThreadView({
     return () =>
       void send(
         question.text,
-        { context: resend.context, references: resend.references, attachments: [] },
+        {
+          context: resend.context,
+          references: resend.references,
+          attachments: [],
+          ...(resend.shortcutId ? { shortcutId: resend.shortcutId } : {}),
+        },
         resend.route,
       );
   }
