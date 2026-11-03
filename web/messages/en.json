@@ -10208,7 +10208,7 @@
     },
     "newDialog": {
       "title": "New content opportunities",
-      "description": "Generate fresh suggestions now instead of waiting for the next scheduled run.",
+      "description": "Get suggestions now. Ansvisor also writes up to 3 a night by itself, one per topic, for needs that have no opportunity yet.",
       "focus": "Focus (optional)",
       "focusOptions": {
         "auto": "Let Ansvisor choose",
@@ -10217,6 +10217,13 @@
       },
       "pickTopic": "Choose a topic",
       "pickPrompt": "Choose a prompt",
+      "topicOpen": "{count} new",
+      "topicCovered": "All covered",
+      "promptHasOne": "Has one",
+      "needsOpen": "{open} of {needs} {needs, plural, one {need} other {needs}}{focus, select, topic { in this topic} other {}} {open, plural, one {has} other {have}} no opportunity yet.",
+      "needsNone": "Every need{focus, select, topic { in this topic} other {}} already has an opportunity{noAnswers, plural, =0 {} other {, or has no tracked answers from the last 30 days yet}}. Add prompts for new needs, or use Another angle on an opportunity.",
+      "promptExisting": "This prompt's need already has an opportunity.",
+      "openExisting": "Open existing",
       "idea": "Or describe an idea (optional)",
       "ideaPlaceholder": "e.g. a comparison page against Profound for agencies",
       "count": "How many",
