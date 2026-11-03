@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ApprovalCard } from '@/components/agentic/approval-card';
+import { FormCard, type FormCardValues } from '@/components/agentic/form-card';
 import { DenialCard } from '@/components/agentic/denial-card';
 import {
   QuestionAnswered,
@@ -44,6 +45,7 @@ import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { WhyCard } from './run/why-card';
+import { useFormAssist } from './run/form-assist';
 import { NextMoves } from './run/next-moves';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
@@ -451,13 +453,19 @@ export function ChatThreadView({
   }
 
   /** Approve (or the click) or Skip on the card the run waits on. */
-  async function answer(turn: Turn, action: 'approve' | 'skip', dontAskAgain = false) {
+  async function answer(
+    turn: Turn,
+    action: 'approve' | 'skip',
+    dontAskAgain = false,
+    form?: FormCardValues,
+  ) {
     const run = turn.run;
     if (!turn.runId || !run?.confirm) return;
     const runId = turn.runId;
+    // An editable card sends its values with the Approve (W3-02); the server checks them again.
     const body =
       action === 'approve'
-        ? { n: run.confirm.n, digest: run.confirm.digest, dontAskAgain }
+        ? { n: run.confirm.n, digest: run.confirm.digest, dontAskAgain, ...(form ? { form } : {}) }
         : { n: run.confirm.n };
     const res = await fetch(`/api/chat/runs/${runId}/${action}?after=${run.lastSeq}`, {
       method: 'POST',
@@ -607,7 +615,7 @@ export function ChatThreadView({
                   turn={turn}
                   now={now}
                   reconnecting={reconnecting && turn === last}
-                  onApprove={(dontAskAgain) => answer(turn, 'approve', dontAskAgain)}
+                  onApprove={(dontAskAgain, form) => answer(turn, 'approve', dontAskAgain, form)}
                   onSkip={() => answer(turn, 'skip')}
                   onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
@@ -724,7 +732,8 @@ function Answer({
   turn: Turn;
   now: number;
   reconnecting: boolean;
-  onApprove: (dontAskAgain: boolean) => Promise<void>;
+  /** form: an editable card's values (W3-02). */
+  onApprove: (dontAskAgain: boolean, form?: FormCardValues) => Promise<void>;
   onSkip: () => Promise<void>;
   onAnswerQuestion: (value: QuestionAnswerValue) => Promise<boolean>;
   onFiled: (fileId: string) => void;
@@ -747,6 +756,7 @@ function Answer({
   const workingMs = run.summary?.workingMs ?? (turn.startedAt ? now - turn.startedAt : 0);
   const confirmStep = run.confirm ? run.steps.find((s) => s.n === run.confirm!.n) : undefined;
   const filedAt = filedNumbers(run.deliverables);
+  const formAssist = useFormAssist(run.confirm?.form);
 
   const cards = (
     <>
@@ -787,7 +797,18 @@ function Answer({
           }}
         />
       )}
-      {run.confirm && (
+      {run.confirm?.form && (
+        <FormCard
+          key={`${run.confirm.n}-${run.confirm.digest}`}
+          step={{ n: run.confirm.n, total: Math.max(run.steps.length, run.confirm.n) }}
+          title={run.confirm.action}
+          form={run.confirm.form}
+          assist={formAssist}
+          onSubmit={(values) => void onApprove(false, values)}
+          onCancel={() => void onSkip()}
+        />
+      )}
+      {run.confirm && !run.confirm.form && (
         <ApprovalCard
           kind={confirmStep?.kind === 'execute' ? 'execute' : 'write'}
           step={{ n: run.confirm.n, total: Math.max(run.steps.length, run.confirm.n) }}

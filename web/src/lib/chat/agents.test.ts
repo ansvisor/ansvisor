@@ -758,6 +758,44 @@ describe('states', () => {
     });
   });
 
+  it('won’t activate on a skill that is off, and resumes on its owner’s own skill (CHAT-13, W3-06)', async () => {
+    const { skillChecksum } = await import('./skills/store');
+    const parts = {
+      name: 'my-brief',
+      title: 'My brief',
+      description: 'Writes my brief.',
+      body: 'Read the page first.',
+    };
+    db.tables.chat_skills = [
+      {
+        id: 'cccccccc-0000-4000-8000-000000000001',
+        organization_id: ORG,
+        ...parts,
+        status: 'approved',
+        visibility: 'private',
+        enabled: false,
+        created_by: PEOPLE.manager,
+        checksum_sha256: skillChecksum(parts),
+      },
+    ];
+    const { id } = await create(PEOPLE.manager, { skills: ['my-brief'] });
+    const manager = await ctxOf(PEOPLE.manager);
+    expect(await agents.changeAgentState(manager, id, 'activate')).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 409,
+        code: 'skill_off',
+        message:
+          'The skill /my-brief is off or no longer available. Turn it on again, or pick another skill for this agent.',
+      },
+    });
+    db.tables.chat_skills[0].enabled = true;
+    expect((await agents.changeAgentState(manager, id, 'activate')).ok).toBe(true);
+    await agents.changeAgentState(manager, id, 'pause');
+    // An Admin resumes it for its owner, whose private skill it runs.
+    expect((await agents.changeAgentState(await ctxOf(PEOPLE.admin), id, 'resume')).ok).toBe(true);
+  });
+
   it('won’t resume while a brand of its scope lacks a Required connection, naming both', async () => {
     const { id } = await create(PEOPLE.manager, {
       skills: ['publish'],

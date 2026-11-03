@@ -59,7 +59,15 @@ export interface AiUsage {
    * and page, and a draft's AI checks for its Site Audit estimate. Missing
    * from an older API: the page says nothing of it.
    */
-  estimates?: { writeThis?: number; auditAiChecks?: number };
+  estimates?: {
+    writeThis?: number;
+    auditAiChecks?: number;
+    /** The Content Editor's agent runs, for the Next step window (the user, 2026-11-03). */
+    editorBrief?: number;
+    editorFix?: number;
+    editorRewrite?: number;
+    editorWrite?: number;
+  };
 }
 
 /** A count against its plan's limit this period. */
