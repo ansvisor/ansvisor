@@ -41,17 +41,20 @@ export function getCachedStatus() {
 /**
  * Returns whether the org has a provider key for Chat to use.
  *
- * On self-host (`isCloud === false`) this is a no-op — the key lives in the
- * server env and no network call is made. Only cloud instances probe the
- * endpoint, gated by the same `NEXT_PUBLIC_IS_CLOUD` flag the rest of the
- * dashboard uses.
+ * On self-host this is a no-op — the key lives in the server env and no
+ * network call is made. So it is with the new Chat on for the workspace
+ * (CHAT_AGENTIC): that one runs on the plan's AI limit, a key of its own
+ * being Enterprise's (lib/chat/key.ts). Only cloud instances with it off
+ * probe the endpoint, gated by the same `NEXT_PUBLIC_IS_CLOUD` flag the rest
+ * of the dashboard uses.
  *
- * @param isCloud - pass the value from `useFeatureGate()` so this hook stays
- *   pure and testable without a real PlanContext.
+ * @param probe - whether to ask: `isCloud` from `useFeatureGate()` with the
+ *   new Chat off (`useChatAgentic()`), so this hook stays pure and testable
+ *   without a real PlanContext.
  */
-export function useAgentKeyStatus(isCloud: boolean): 'loading' | 'configured' | 'missing' {
-  // Self-host never needs a key check — return a stable value immediately.
-  if (!isCloud) return 'configured';
+export function useAgentKeyStatus(probe: boolean): 'loading' | 'configured' | 'missing' {
+  // Self-host and the new Chat never need a key check — return a stable value immediately.
+  if (!probe) return 'configured';
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const [status, setStatus] = useState<'loading' | 'configured' | 'missing'>(cachedStatus);

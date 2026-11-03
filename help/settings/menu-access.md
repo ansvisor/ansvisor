@@ -8,7 +8,7 @@ updated: 2026-11-01
 last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/menu-access.mdx]
 ---
 **Menu access** in Settings decides which sections are on each person's left menu, so everyone sees the part of Ansvisor they use. It only hides: a section off someone's menu still opens from a link, and what their role can do there doesn't change. To change what someone can do, change their role in **Settings › Team**.

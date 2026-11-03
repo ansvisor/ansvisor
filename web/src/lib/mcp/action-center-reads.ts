@@ -2,7 +2,7 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
 import { getKpiSnapshots } from '@/lib/actions/kpis';
 import { getGettingStarted } from '@/lib/actions/getting-started';
 import { getTrackingWindow } from '@/lib/actions/tracking';
-import { brandInOrg } from './data';
+import { brandAllowed } from './data';
 import { asService, newestOf } from './chat-facts';
 
 /**
@@ -13,7 +13,7 @@ import { asService, newestOf } from './chat-facts';
  */
 
 export async function getActionCenterKpisFor(auth: McpAuthContext, params: { brandId: string }) {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
   const [snapshots, window] = await asService(() =>
     Promise.all([getKpiSnapshots(params.brandId), getTrackingWindow(params.brandId)]),
   );
@@ -38,7 +38,7 @@ export async function getActionCenterKpisFor(auth: McpAuthContext, params: { bra
 }
 
 export async function getOnboardingProgressFor(auth: McpAuthContext, params: { brandId: string }) {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
   const status = await asService(() => getGettingStarted(params.brandId));
   if (!status) return null;
   return {

@@ -15,12 +15,14 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { ListProgress } from '@/components/agentic/list-dot';
 import { Skeleton } from '@/components/ui/skeleton';
 import { buttonVariants } from '@/components/ui/button';
+import type { ChatNotice } from '@/lib/actions/chat-notices';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { agoOf } from '@/lib/chat/home';
 import { chatMenuLists } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
 import type { ChatListStatus } from './chat-list-provider';
 import { INBOX_ROW, SuggestionRows, SuggestionsPanel, type InboxDaily } from './inbox-suggestions';
+import { NoticeRows } from './inbox-notices';
 
 /**
  * The Inbox's rows: what needs the person, what runs, and unread results —
@@ -61,16 +63,20 @@ export function inboxTabOf(value: string | null | undefined): InboxTab {
   return (INBOX_TABS as readonly string[]).includes(value ?? '') ? (value as InboxTab) : 'all';
 }
 
-/** Each topic's rows: Needs you and Runs split the chats; All holds them and the suggestions. */
+/**
+ * Each topic's rows: Needs you and Runs split the chats; All holds them and
+ * the suggestions. Notices (00441) are in Needs you and All.
+ */
 export function inboxTabCounts(
   items: ChatListItem[],
   suggestions: number,
+  notices = 0,
 ): Record<InboxTab, number> {
   const needsYou = items.filter((c) => c.state === 'needsYou').length;
   return {
-    all: items.length + suggestions,
+    all: items.length + suggestions + notices,
     suggestions,
-    needsYou,
+    needsYou: needsYou + notices,
     runs: items.length - needsYou,
   };
 }
@@ -206,6 +212,8 @@ export interface ChatInboxViewProps {
   daily?: InboxDaily | null;
   /** The topic open first, from the address (`?tab=`). */
   initialTab?: InboxTab;
+  /** The person's open notices (00441), at the top of Needs you. */
+  notices?: ChatNotice[];
 }
 
 /**
@@ -229,11 +237,13 @@ function PlainInboxView({
   items,
   now,
   onRetry,
+  notices = [],
 }: Omit<ChatInboxViewProps, 'daily' | 'initialTab'>) {
   const t = useTranslations('chatShell.inbox');
   const counts = inboxCounts(items, now ?? new Date());
+  const needsYou = counts.needsYou + notices.length;
   const summary = [
-    counts.needsYou ? t('summary.needsYou', { count: counts.needsYou }) : null,
+    needsYou ? t('summary.needsYou', { count: needsYou }) : null,
     counts.running ? t('summary.running', { count: counts.running }) : null,
     counts.doneToday ? t('summary.doneToday', { count: counts.doneToday }) : null,
   ].filter(Boolean);
@@ -243,7 +253,7 @@ function PlainInboxView({
       <div className="mb-3.5 flex items-center gap-3">
         <h1 className="text-2xl font-bold tracking-[-.6px]">{t('title')}</h1>
       </div>
-      {status === 'ready' && items.length > 0 && (
+      {status === 'ready' && items.length + notices.length > 0 && (
         <p className="-mt-1 mb-3.5 text-[13px] text-muted-foreground">
           {summary.length > 0 && `${summary.join(' · ')}. `}
           {t('lands')}
@@ -268,14 +278,15 @@ function PlainInboxView({
           </button>
         </p>
       )}
-      {status === 'ready' && items.length === 0 && (
+      {status === 'ready' && items.length + notices.length === 0 && (
         <div className="flex items-center gap-2 rounded-[14px] border border-dashed px-4 py-6 text-sm text-muted-foreground">
           <InboxIcon aria-hidden className="size-4" />
           {t('empty')}
         </div>
       )}
-      {status === 'ready' && items.length > 0 && (
+      {status === 'ready' && items.length + notices.length > 0 && (
         <div className="flex flex-col gap-2">
+          <NoticeRows notices={notices} />
           {items.map((chat) => (
             <InboxRow key={chat.id} chat={chat} now={now} />
           ))}
@@ -302,6 +313,7 @@ function TabbedInboxView({
   onRetry,
   daily,
   initialTab = 'all',
+  notices = [],
 }: Omit<ChatInboxViewProps, 'daily'> & { daily: InboxDaily }) {
   const t = useTranslations('chatShell.inbox');
   const gets = daily.read.roleFeed !== 'never';
@@ -320,9 +332,9 @@ function TabbedInboxView({
   const tabs = INBOX_TABS.filter((name) => gets || name !== 'suggestions');
   const ready = status === 'ready';
   const counts = inboxCounts(items, now ?? new Date());
-  const tabCounts = inboxTabCounts(items, suggestionsTotal);
+  const tabCounts = inboxTabCounts(items, suggestionsTotal, notices.length);
   const summary = [
-    counts.needsYou ? t('summary.needsYou', { count: counts.needsYou }) : null,
+    tabCounts.needsYou ? t('summary.needsYou', { count: tabCounts.needsYou }) : null,
     counts.running ? t('summary.running', { count: counts.running }) : null,
     counts.doneToday ? t('summary.doneToday', { count: counts.doneToday }) : null,
     suggestionsTotal ? t('summary.suggestions', { count: suggestionsTotal }) : null,
@@ -368,7 +380,10 @@ function TabbedInboxView({
   }, [unseen, onSeen]);
 
   const chats = inboxTabChats(items, tab);
-  const rows = tab === 'all' ? chats.length + suggestions.length : chats.length;
+  // Notices lead Needs you, and All with it.
+  const noticesShown = tab === 'all' || tab === 'needsYou' ? notices : [];
+  const rows =
+    (tab === 'all' ? chats.length + suggestions.length : chats.length) + noticesShown.length;
 
   return (
     <div className="max-w-[880px]">
@@ -443,6 +458,7 @@ function TabbedInboxView({
             )}
             {rows > 0 ? (
               <div className="flex flex-col gap-2">
+                <NoticeRows notices={noticesShown} />
                 {chats.map((chat) => (
                   <InboxRow key={chat.id} chat={chat} now={now} />
                 ))}
