@@ -1163,7 +1163,7 @@ describe("the answer's language: the question's (CHAT-05 item 2)", () => {
     const { sonnet } = useModels([READY], [text(answer)]);
     const runId = await turn(ADMIN, `${TURKISH} Answer in English.`);
     expect(lastLine(sonnet.seen[0])).toBe(
-      'The person asked for the answer in a language they named: answer in that language.',
+      'The person asked for the answer in English: answer in English.',
     );
     // Asked for: no rewrite.
     expect(sonnet.seen).toHaveLength(1);
@@ -1189,6 +1189,42 @@ describe("the answer's language: the question's (CHAT-05 item 2)", () => {
       'Visibility on Perplexity fell this week, and the CRM prompts lost the most.',
     );
     expect(ofType(await eventsOf(still), 'text.replaced')).toEqual([]);
+  });
+
+  it('keeps the hold and the answer when Stop comes during the rewrite, and ends stopped', async () => {
+    const english = 'Visibility on Perplexity fell this week, and the CRM prompts lost the most.';
+    useModels(
+      [READY],
+      [
+        text(english),
+        (options) =>
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue({ type: 'stream-start', warnings: [] });
+              controller.enqueue({ type: 'text-start', id: 't' });
+              controller.enqueue({ type: 'text-delta', id: 't', delta: 'Perplexity ' });
+              options.abortSignal?.addEventListener('abort', () =>
+                controller.error(new DOMException('Aborted', 'AbortError')),
+              );
+            },
+          }),
+      ],
+    );
+    const started = await engine.startChatRun(ADMIN, { message: TURKISH, brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    const driving = engine.driveRun(ADMIN, started.runId);
+    await vi.waitFor(() => expect(holds).toHaveLength(3));
+    expect(await engine.stopChatRun(ADMIN, started.runId)).toEqual({ ok: true });
+    await driving;
+
+    // The provider bills the aborted rewrite: its hold stays as its cost.
+    expect(holds[2].keep).toHaveBeenCalled();
+    expect(holds[2].charge).not.toHaveBeenCalled();
+    expect(runRow(started.runId).status).toBe('stopped');
+    const events = await eventsOf(started.runId);
+    expect(ofType(events, 'text.replaced')).toEqual([]);
+    expect(ofType(events, 'run.finished')).toEqual([]);
+    expect(answerOf(started.runId)).toBe(english);
   });
 });
 

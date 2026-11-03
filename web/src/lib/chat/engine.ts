@@ -3964,6 +3964,8 @@ async function finish(rc: RunContext): Promise<void> {
   // An answer in English to a question in another language is rewritten once (language.ts).
   const language = rewriteLanguage(rc.progress.question ?? '', rc.progress.text);
   if (language) await rewriteAnswer(rc, language);
+  // A Stop during the rewrite ends the run as stopped, with the answer as it was.
+  if (rc.signal.aborted) return stopNow(rc);
   // Written while the run still runs: a failed write ends it as an error, never "done" without its answer.
   await checkedFactsStep(rc);
   if (!(await moveRun(rc.run.id, ['running'], 'done', { finished: true }))) return stopNow(rc);
@@ -3995,7 +3997,8 @@ async function finish(rc: RunContext): Promise<void> {
  * told to translate the words only, held on the AI budget like any step.
  * The rewrite goes through the same id mask and fact check as streamed text,
  * and replaces it on the person's screen (text.replaced). A refused hold, a
- * failed call or a rewrite that is still English keeps the answer as it was.
+ * failed call or a rewrite that is still English keeps the answer as it was;
+ * a Stop keeps it too, and the hold (what streamed is billed).
  */
 async function rewriteAnswer(rc: RunContext, language: Language): Promise<void> {
   const choice = rc.models.pick('write');
@@ -4026,6 +4029,8 @@ async function rewriteAnswer(rc: RunContext, language: Language): Promise<void> 
       if (part.type === 'text-delta') out.push(part.text);
       else if (part.type === 'error') throw part.error;
     }
+    // Stopped mid-rewrite: what streamed is billed, so the hold is kept (budget.ts).
+    if (rc.signal.aborted) return budget.keep();
     await budget.charge(stepUsage(await result.usage), Date.now() - called);
     const rewritten = out.join('').trim();
     if (!rewritten || rewriteLanguage(rc.progress.question ?? '', rewritten)) return;
@@ -4038,6 +4043,7 @@ async function rewriteAnswer(rc: RunContext, language: Language): Promise<void> 
     rc.progress.text = checked.text;
     rc.sink.emit('text.replaced', { text: checked.text });
   } catch (err) {
+    if (rc.signal.aborted) return budget.keep();
     console.error('[chat/engine] the answer could not be rewritten in its language:', err);
   } finally {
     await budget.release();

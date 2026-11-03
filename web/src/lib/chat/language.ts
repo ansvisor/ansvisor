@@ -230,23 +230,76 @@ export function detectLanguage(text: string): Language | null {
   return best.language;
 }
 
-const LANGUAGE_NAMES =
-  'english|turkish|german|french|spanish|italian|portuguese|dutch|englisch|deutsch|anglais|français|inglés|ingles|español|inglese|italiano|inglês|português|engels|nederlands|ingilizce|türkçe|almanca|fransızca|ispanyolca|italyanca|portekizce|felemenkçe';
+/** Each language's names, in the languages Chat reads and in Turkish. */
+const NAMES: Record<Language, readonly string[]> = {
+  en: [
+    'english',
+    'englisch',
+    'anglais',
+    'inglés',
+    'ingles',
+    'inglese',
+    'inglês',
+    'engels',
+    'ingilizce',
+  ],
+  tr: ['turkish', 'türkçe'],
+  de: ['german', 'deutsch', 'almanca'],
+  fr: ['french', 'français', 'fransızca'],
+  es: ['spanish', 'español', 'ispanyolca'],
+  it: ['italian', 'italiano', 'italyanca'],
+  pt: ['portuguese', 'português', 'portekizce'],
+  nl: ['dutch', 'nederlands', 'felemenkçe'],
+};
+
+const NAMED = new Map(
+  (Object.keys(NAMES) as Language[]).flatMap((language) =>
+    NAMES[language].map((name) => [name, language] as const),
+  ),
+);
+const L = `(${[...NAMED.keys()].join('|')})`;
+/** After "in <language>": the end, a mark, or a word that doesn't make the language a noun's ("in German prompts"). */
+const ENDS = String.raw`(?=\s*(?:$|[.,;:!?)]|(?:please|only|instead|too|and|about|for|with|so|rather|this|that|the|a|an|but|if|using)\b))`;
 
 /**
  * The person asks for the answer in a language they name ("answer in
  * English", "İngilizce cevap ver", "İngilizce bir blog yazısı yaz", "auf
  * Deutsch"): that language, whatever they wrote in (owner, 2026-11-03).
- * Naming one in passing ("why do Turkish users search less?") isn't asking.
+ * Naming one in passing ("why do Turkish users search less?", "how visible
+ * are we in German prompts?", "why did we drop in Spanish?") isn't asking:
+ * "in <language>" asks only after an answer verb, before "please" or
+ * "only", at the very start, or as the last words of a message that isn't
+ * a question.
  */
-const ASKS_FOR_LANGUAGE = new RegExp(
-  `\\b(?:in|into|auf|en)\\s+(?:${LANGUAGE_NAMES})|(?:${LANGUAGE_NAMES})(?:\\s+\\S+){0,3}?\\s+(?:cevap|yanıt|yaz|anlat|çevir|olarak|please|only|version|translation)`,
-  'i',
-);
+const ASKS_FOR_LANGUAGE = [
+  new RegExp(
+    String.raw`\b(?:answer|answers|respond|response|reply|write|rewrite|translate|say|explain|summari[sz]e|tell|describe|draft|put|give)\b(?:\s+\S+){0,6}?\s+(?:in|into)\s+${L}${ENDS}`,
+    'i',
+  ),
+  new RegExp(String.raw`\b(?:in|into)\s+${L}\s*,?\s+(?:please|only|instead)\b`, 'i'),
+  new RegExp(String.raw`^\s*in\s+${L}\s*[,:]`, 'i'),
+  new RegExp(String.raw`\bin\s+${L}\s*[.!]*\s*$`, 'i'),
+  new RegExp(String.raw`\b(?:auf|en)\s+${L}`, 'i'),
+  new RegExp(
+    String.raw`${L}(?:\s+\S+){0,3}?\s+(?:cevap|yanıt|yaz|anlat|çevir|olarak|version|translation)`,
+    'i',
+  ),
+  new RegExp(String.raw`${L}\s*,?\s+(?:please|only)\b`, 'i'),
+];
 
-/** Whether a question asks for the answer in a language it names; Turkish's İ folds to i. */
+/** The language a question asks the answer to be in, by name; null when it asks for none. Turkish's İ folds to i. */
+export function askedLanguage(question: string): Language | null {
+  const text = question.replace(/İ/g, 'i');
+  for (const pattern of ASKS_FOR_LANGUAGE) {
+    const name = pattern.exec(text)?.[1];
+    if (name) return NAMED.get(name.toLowerCase()) ?? null;
+  }
+  return null;
+}
+
+/** Whether a question asks for the answer in a language it names. */
 export function asksForLanguage(question: string): boolean {
-  return ASKS_FOR_LANGUAGE.test(question.replace(/İ/g, 'i'));
+  return askedLanguage(question) !== null;
 }
 
 /**
@@ -255,8 +308,10 @@ export function asksForLanguage(question: string): boolean {
  * when the language is unclear.
  */
 export function languageLine(question: string): string | null {
-  if (asksForLanguage(question)) {
-    return 'The person asked for the answer in a language they named: answer in that language.';
+  const asked = askedLanguage(question);
+  if (asked) {
+    const name = LANGUAGES[asked];
+    return `The person asked for the answer in ${name}: answer in ${name}.`;
   }
   const language = detectLanguage(question);
   if (!language) return null;

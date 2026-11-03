@@ -32,6 +32,11 @@ describe('asksForLanguage', () => {
       'Bu hafta neden düştük? İngilizce cevap ver.',
       'İngilizce bir blog yazısı yaz: neden AI görünürlüğü önemli?',
       'Schreib es auf Deutsch, bitte.',
+      'Can you write the summary for my team in Spanish?',
+      'Translate the last answer into German.',
+      'Neden düştük? In English please.',
+      'In German: why did we drop on Perplexity this week?',
+      'Summarize this week for my boss in French.',
     ]) {
       expect(asksForLanguage(asked), asked).toBe(true);
     }
@@ -42,6 +47,10 @@ describe('asksForLanguage', () => {
       'Why do Turkish users search less on Perplexity?',
       "Bu hafta Perplexity'de neden düştük?",
       'Türkçe sorular neden daha az görünür?',
+      'How visible are we in German prompts on ChatGPT?',
+      'Why did we drop in Spanish answers this week?',
+      'Explain why we dropped in German answers this week.',
+      'Why did we drop in Spanish?',
     ]) {
       expect(asksForLanguage(question), question).toBe(false);
     }
@@ -55,7 +64,13 @@ describe('languageLine', () => {
     );
     expect(languageLine('Perplexity?')).toBeNull();
     expect(languageLine("Bu hafta Perplexity'de neden düştük? Answer in English.")).toBe(
-      'The person asked for the answer in a language they named: answer in that language.',
+      'The person asked for the answer in English: answer in English.',
+    );
+    expect(languageLine('İngilizce bir blog yazısı yaz: neden AI görünürlüğü önemli?')).toBe(
+      'The person asked for the answer in English: answer in English.',
+    );
+    expect(languageLine('Schreib es auf Deutsch, bitte.')).toBe(
+      'The person asked for the answer in German: answer in German.',
     );
   });
 });
@@ -86,5 +101,11 @@ describe('rewriteLanguage', () => {
     ).toBeNull();
     expect(rewriteLanguage('Bu sayfayı in English yaz, lütfen ve hemen', ENGLISH)).toBeNull();
     expect(rewriteLanguage(`${TURKISH} Answer in English.`, ENGLISH)).toBeNull();
+  });
+
+  it('still rewrites when a language is only named in the question', () => {
+    expect(
+      rewriteLanguage("İngilizce sorularda bu hafta Perplexity'de neden düştük?", ENGLISH),
+    ).toBe('tr');
   });
 });
