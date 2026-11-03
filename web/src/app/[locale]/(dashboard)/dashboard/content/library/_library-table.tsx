@@ -150,6 +150,8 @@ export function LibraryTable({
           <TableHead>{t('columns.type')}</TableHead>
           <TableHead>{t('columns.method')}</TableHead>
           <TableHead>{t('columns.by')}</TableHead>
+          {/* Its own column where it fits; under By below xl, so 1024px keeps its columns. */}
+          <TableHead className="hidden xl:table-cell">{t('columns.madeIn')}</TableHead>
           <TableHead>{t('columns.status')}</TableHead>
           {shopping && <TableHead>{t('columns.shopping')}</TableHead>}
           <TableHead>{t('columns.created')}</TableHead>
@@ -197,6 +199,14 @@ export function LibraryTable({
               </TableCell>
               <TableCell>
                 <DraftAuthorCell draft={draft} />
+                {draft.origin !== 'editor' && (
+                  <span className="mt-0.5 block xl:hidden">
+                    <MadeInCell draft={draft} chatOn={chatOn} compact />
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="hidden xl:table-cell">
+                <MadeInCell draft={draft} chatOn={chatOn} />
               </TableCell>
               <TableCell>
                 {/* The agent works on drafts only: its state says more than "Draft".
@@ -498,6 +508,43 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
 }
 
 /** Who wrote it: the Content Agent, "You", or the member by name. */
+/**
+ * Where the draft was made (00463, W4-10): the Content Editor, Chat, an
+ * Action Center task, an agent or an MCP client. One made in a chat the
+ * member may open has Open chat, with the new Chat on. `compact`: the line
+ * under By below xl, "in Chat · Open chat".
+ */
+function MadeInCell({
+  draft,
+  chatOn,
+  compact = false,
+}: {
+  draft: ContentDraftListItem;
+  chatOn: boolean;
+  compact?: boolean;
+}) {
+  const t = useTranslations('contentEditor.library.madeIn');
+  return (
+    <span
+      className={`flex whitespace-nowrap text-xs text-muted-foreground ${compact ? 'items-center gap-1' : 'flex-col'}`}
+    >
+      <span data-slot={compact ? 'made-in-short' : 'made-in'} data-origin={draft.origin}>
+        {compact ? t('in', { place: t(draft.origin) }) : t(draft.origin)}
+      </span>
+      {chatOn && draft.origin !== 'editor' && draft.conversation && (
+        <Link
+          href={`/dashboard/chat/${draft.conversation.id}`}
+          data-action="library.openChat"
+          title={draft.conversation.title || undefined}
+          className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+        >
+          {t('openChat')}
+        </Link>
+      )}
+    </span>
+  );
+}
+
 function DraftAuthorCell({ draft }: { draft: ContentDraftListItem }) {
   const t = useTranslations('contentEditor.library');
   if (draft.author === 'agent') {
