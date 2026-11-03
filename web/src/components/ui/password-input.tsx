@@ -12,7 +12,12 @@ export function PasswordInput({ className, ...props }: PasswordInputProps) {
 
   return (
     <div className="relative">
-      <Input type={visible ? 'text' : 'password'} className={cn('pr-10', className)} {...props} />
+      {/* Left out of session replays while shown as text too. */}
+      <Input
+        type={visible ? 'text' : 'password'}
+        className={cn('ph-no-capture pr-10', className)}
+        {...props}
+      />
       <button
         type="button"
         onClick={() => setVisible((v) => !v)}

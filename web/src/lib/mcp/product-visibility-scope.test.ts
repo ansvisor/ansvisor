@@ -101,6 +101,7 @@ async function connect(organizationId = ORG) {
     email: null,
     organizationId,
     apiKeyId: 'k',
+    brandAccess: 'all',
     role: 'admin',
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();

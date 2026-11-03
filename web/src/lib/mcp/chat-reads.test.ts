@@ -49,7 +49,7 @@ vi.mock('@/lib/supabase/scoped', () => ({
   withDbClient: (_client: unknown, fn: () => Promise<unknown>) => fn(),
 }));
 const mocks = vi.hoisted(() => ({
-  brandInOrg: vi.fn(),
+  brandAllowed: vi.fn(),
   getPromptVolumesFor: vi.fn(),
   getVisibilitySummaryFor: vi.fn(),
   getQueryFanout: vi.fn(),
@@ -67,7 +67,7 @@ vi.mock('@/lib/brand-access', async (importOriginal) => ({
   brandAccessFor: mocks.brandAccessFor,
 }));
 vi.mock('./data', () => ({
-  brandInOrg: mocks.brandInOrg,
+  brandAllowed: mocks.brandAllowed,
   getPromptVolumesFor: mocks.getPromptVolumesFor,
   getVisibilitySummaryFor: mocks.getVisibilitySummaryFor,
 }));
@@ -106,14 +106,14 @@ beforeEach(() => {
   reads.answers = {};
   reads.org = { plan: 'starter', subscription_status: 'active', plan_overrides: null };
   for (const fn of Object.values(mocks)) fn.mockReset();
-  mocks.brandInOrg.mockResolvedValue(true);
+  mocks.brandAllowed.mockResolvedValue(true);
   mocks.brandAccessFor.mockResolvedValue('all');
 });
 afterEach(() => vi.unstubAllEnvs());
 
 describe('a brand outside the organization', () => {
   it('reads nothing, from every brand read', async () => {
-    mocks.brandInOrg.mockResolvedValue(false);
+    mocks.brandAllowed.mockResolvedValue(false);
     mocks.getPromptVolumesFor.mockResolvedValue(null);
     mocks.getVisibilitySummaryFor.mockResolvedValue(null);
     const params = { brandId: 'other' };

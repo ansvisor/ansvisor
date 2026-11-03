@@ -23,6 +23,7 @@ const {
   allowedBrands,
   brandAccessFor,
   brandAccessOf,
+  brandReaders,
   canAccessBrand,
   hasBrandAccess,
   readAccessProfile,
@@ -221,5 +222,76 @@ describe('canAccessBrand', () => {
   it('answers nothing on a guess: without can_access_brand (before 00388) it throws', async () => {
     delete fake.db.rpcs.can_access_brand;
     await expect(canAccessBrand(PERSON, BRAND)).rejects.toThrow(/brand's access/);
+  });
+});
+
+describe('brandReaders', () => {
+  const ADMIN = 'admin-1';
+  const NARROW = 'narrow-1';
+  const ELSEWHERE = 'elsewhere-1';
+  beforeEach(() => {
+    fake.db.tables.profiles.push(
+      { id: ADMIN, organization_id: ORG, role: 'admin', brand_scope: 'selected' },
+      { id: NARROW, organization_id: ORG, role: 'analyst', brand_scope: 'selected' },
+      { id: ELSEWHERE, organization_id: OTHER_ORG, role: 'admin', brand_scope: 'all' },
+    );
+  });
+  const ids = (readers: Map<string, Set<string>>, brandId: string) =>
+    [...readers].filter(([, brands]) => brands.has(brandId)).map(([id]) => id);
+
+  it('lists everyone in the organization who has All brands, an Admin always', async () => {
+    const readers = await brandReaders(ORG, [BRAND]);
+    expect(ids(readers, BRAND)).toEqual([PERSON, ADMIN]);
+    // A Selected-brands person without a grant, and another organization's people, aren't.
+    expect(readers.has(NARROW)).toBe(false);
+    expect(readers.has(ELSEWHERE)).toBe(false);
+  });
+
+  it('adds a Selected-brands person for the brands shared with them, and the demo brand', async () => {
+    fake.db.tables.member_brands = [{ user_id: NARROW, organization_id: ORG, brand_id: SHARED }];
+    const readers = await brandReaders(ORG, [BRAND, SHARED, DEMO]);
+    expect(ids(readers, BRAND)).toEqual([PERSON, ADMIN]);
+    expect(ids(readers, SHARED)).toEqual([PERSON, ADMIN, NARROW]);
+    expect(ids(readers, DEMO)).toEqual([PERSON, ADMIN, NARROW]);
+    expect(readers.get(NARROW)).toEqual(new Set([SHARED, DEMO]));
+  });
+
+  it('reads no grant while everyone has All brands', async () => {
+    fake.db.tables.profiles = fake.db.tables.profiles.filter((p) => p.id !== NARROW);
+    await brandReaders(ORG, [BRAND]);
+    expect(fake.db.log.map(([table]) => table)).not.toContain('member_brands');
+  });
+
+  it('counts no one for another organization’s brand, or an id that isn’t one', async () => {
+    expect((await brandReaders(ORG, [OTHERS])).size).toBe(0);
+    expect((await brandReaders(ORG, ['not-a-brand'])).size).toBe(0);
+    expect((await brandReaders(ORG, [])).size).toBe(0);
+  });
+
+  it('reads everyone as All brands before 00388', async () => {
+    const real = supabaseAdmin.from.bind(supabaseAdmin);
+    vi.spyOn(supabaseAdmin, 'from').mockImplementation(((table: string) =>
+      table === 'profiles'
+        ? {
+            select: (columns: string) =>
+              columns.includes('brand_scope')
+                ? {
+                    eq: async () => ({
+                      data: null,
+                      error: {
+                        code: '42703',
+                        message: 'column profiles.brand_scope does not exist',
+                      },
+                    }),
+                  }
+                : real(table).select(columns),
+          }
+        : real(table)) as never);
+    expect(ids(await brandReaders(ORG, [BRAND]), BRAND)).toEqual([PERSON, ADMIN, NARROW]);
+  });
+
+  it('throws on a read that fails', async () => {
+    fake.db.failures.profiles = { message: 'timeout' };
+    await expect(brandReaders(ORG, [BRAND])).rejects.toThrow(/timeout/);
   });
 });

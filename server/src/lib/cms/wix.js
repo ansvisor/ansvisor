@@ -365,3 +365,24 @@ export async function updateDraftPost(
     }),
   );
 }
+
+/**
+ * Puts a draft post live (AUTONOMOUS-GO-LIVE PR 9): Wix publishes it as it
+ * was written, then the draft post read again for its address. The draft
+ * post after it.
+ */
+export async function publishDraftPost(siteId, apiKey, id, { request, base } = {}) {
+  const path = postPath(id);
+  if (!path) throw new WixError('not_found', 'Wix has no such post.');
+  await call(`/blog/v3/draft-posts/${path}/publish`, {
+    siteId,
+    apiKey,
+    method: 'POST',
+    body: {},
+    request,
+    base,
+  });
+  const after = await readDraftPost(siteId, apiKey, path, { request, base });
+  if (!after) throw new WixError('not_found', 'Wix has no such post.');
+  return after;
+}

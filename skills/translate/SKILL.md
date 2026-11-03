@@ -37,4 +37,4 @@ For each language: the translated page, and a short list of what to check, such 
 
 - Don't add, drop or change facts, claims or figures: translate only.
 - Don't add local prices, offers or examples the original doesn't have.
-- Never publish a translation: going live is always the person's click.
+- Never publish a translation yourself: the app decides whether a page goes live, and asks the person unless an Admin allowed this agent to go live on its own.
