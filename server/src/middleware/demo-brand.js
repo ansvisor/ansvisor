@@ -135,6 +135,7 @@ export const DEMO_GUARDED = [
   guard('POST /content-drafts/send', brandIn('body')),
   guard('POST /content-drafts/publish-cms', brandIn('body')),
   guard('POST /content-drafts/:draftId/publish', rowIn('content_drafts', 'path', 'draftId')),
+  guard('POST /content-drafts/:draftId/take-down', rowIn('content_drafts', 'path', 'draftId')),
   guard('POST /content-drafts/webflow-status', brandIn('body')),
   guard('POST /content-drafts/wordpress-status', brandIn('body')),
   guard('POST /content-drafts/framer-status', brandIn('body')),

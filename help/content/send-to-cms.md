@@ -1,17 +1,17 @@
 ---
 title: Send a page to your CMS
 route: /dashboard/content/library
-keywords: [send to cms, webflow, wordpress, framer, draft post, last send, qualified reviewer, reviewer metadata, reviewed by]
+keywords: [send to cms, webflow, wordpress, framer, draft post, last send, qualified reviewer, reviewer metadata, reviewed by, take down, unpublish]
 synonyms: [push to cms, publish to blog, send to website, export to cms, send reviewer, reviewer field]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-02
+last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/send-to-cms.mdx, docs/guides/content-editor.mdx]
 ---
-**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Ansvisor never publishes on its own: you publish in your CMS. Only admins and managers can send pages.
+**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Send to CMS never publishes: you publish in your CMS. Only admins and managers can send pages.
 
 ## Send one page
 
@@ -39,13 +39,19 @@ In the Library, tick the rows to send, up to 25 at once, and click **Send to CMS
 
 ## See how a send went
 
-Beside each row's status, the Library shows the last send: a clock while it's on its way, a paper plane once it's sent, a red warning when it failed (hover it to see why), and a blue link once it's published (click it to open the live page).
+Beside each row's status, the Library shows the last send: a clock while it's on its way, a paper plane once it's sent, a red warning when it failed (hover it to see why), a blue link once it's published (click it to open the live page), and a crossed-out cloud once it was taken down.
 
-The **Last send** filter beside **Created** lists the pages that were **Never sent**, **Sending**, **Sent**, **Failed** or **Published**. A send to your workflow isn't retried on its own: send a failed page again from the Library.
+The **Last send** filter beside **Created** lists the pages that were **Never sent**, **Sending**, **Sent**, **Failed** or **Published**; a page taken down counts as **Sent**. A send to your workflow isn't retried on its own: send a failed page again from the Library.
 
 ## When a page becomes Published
 
 Once you publish the item in Webflow or Framer, or the post in WordPress or Wix, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one.
+
+## Take a published page down
+
+A page published through Ansvisor in Webflow, WordPress or Wix can be taken down: pick **Take down** in its row's **…** menu. It leaves your site at once and goes back to a draft in your CMS, and the Library shows **Taken down** beside its status. Links to it, and AI answers that cited it, may still point to it for a while.
+
+Admins and managers can take a page down, even when publishing is off for managers. A page someone took down never goes live on its own again: an agent's next publish of it waits for a click. Framer publishes the whole site, and a send to your workflow is your workflow's: take those down there.
 
 ## Sending a page again
 
