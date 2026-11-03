@@ -13,6 +13,8 @@ const DAY = 24 * 60 * 60 * 1000;
 
 let org: Record<string, unknown> | null;
 let ownKey: Record<string, unknown> | null;
+/** Every key the workspace saved, for a read of them all. */
+let ownKeys: Record<string, unknown>[];
 const reads: string[] = [];
 const updates: Record<string, unknown>[] = [];
 
@@ -30,6 +32,9 @@ vi.mock('@/lib/supabase/admin', () => ({
           update = row;
           return chain;
         },
+        // A read of every row (no maybeSingle): the workspace's keys.
+        then: (resolve: (value: unknown) => unknown) =>
+          Promise.resolve({ data: ownKeys, error: null }).then(resolve),
         maybeSingle: async () => {
           if (!update) return { data: table === 'organizations' ? org : ownKey, error: null };
           // The start fills an empty date only.
@@ -56,6 +61,7 @@ const {
   OwnKeyUnreadableError,
   chatRunsOnOwnKey,
   ownChatKeyProvider,
+  ownChatKeyProviders,
   ownKeyAllowed,
   ownKeyAccess,
   resolveChatModelKey,
@@ -80,6 +86,7 @@ beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
   org = orgOn('starter');
   ownKey = null;
+  ownKeys = [];
   reads.length = 0;
   updates.length = 0;
 });
@@ -265,6 +272,15 @@ describe('chatRunsOnOwnKey', () => {
     expect(await ownChatKeyProvider(ORG)).toBeNull();
   });
 
+  it('leaves out an active key that isn’t for Chat: Auto runs on Ansvisor’s key, on the limit', async () => {
+    org = orgOn('enterprise');
+    ownKey = { ...CUSTOMER, settings: { useFor: ['images'] } };
+    expect(await ownChatKeyProvider(ORG)).toBeNull();
+    expect(await chatRunsOnOwnKey(ORG)).toBe(false);
+    ownKey = { ...CUSTOMER, settings: { useFor: ['chat', 'images'] } };
+    expect(await ownChatKeyProvider(ORG)).toBe('openai');
+  });
+
   it('is no with Chat off or self-hosted, where nothing is metered', async () => {
     org = orgOn('enterprise');
     ownKey = CUSTOMER;
@@ -274,5 +290,19 @@ describe('chatRunsOnOwnKey', () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     expect(await chatRunsOnOwnKey(ORG)).toBe(false);
     expect(reads).toEqual([]);
+  });
+});
+
+describe('ownChatKeyProviders', () => {
+  it('names every own key for Chat, active or not, where own keys are allowed', async () => {
+    org = orgOn('enterprise');
+    ownKeys = [
+      { provider: 'openai', key_encrypted: 'env1', settings: { useFor: ['images'] } },
+      { provider: 'openrouter', key_encrypted: 'env2', settings: {} },
+      { provider: 'anthropic', key_encrypted: null, settings: {} },
+    ];
+    expect(await ownChatKeyProviders(ORG)).toEqual(['openrouter']);
+    org = orgOn('growth');
+    expect(await ownChatKeyProviders(ORG)).toEqual([]);
   });
 });
