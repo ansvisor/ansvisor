@@ -153,9 +153,13 @@ export function stepActor(step: NextStep): 'agent' | 'you' {
  * held by quoted passages), so the two never seem to disagree.
  */
 function fixRulesReason(t: T, state: NextStepState): string {
-  const fix = t('reasons.fixRules', { count: state.openRules.length });
-  const others = (state.openTotal ?? state.openRules.length) - state.openRules.length;
-  return others > 0 ? `${fix} ${t('reasons.fixRulesOthers', { count: others })}` : fix;
+  const count = state.openRules.length;
+  const total = state.openTotal ?? count;
+  // The open rules counted once, as Rules counts them (editor UX review
+  // 2026-11-03: "9 rules" here beside "10 open" there read as two numbers).
+  return total > count
+    ? t('reasons.fixRulesSplit', { total, count, others: total - count })
+    : t('reasons.fixRules', { count });
 }
 
 /** Why the step is next, from the page's own numbers. */

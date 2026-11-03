@@ -7935,8 +7935,6 @@
       },
       "header": {
         "rename": "{title} · click to rename it in the page",
-        "running": "{count, plural, one {# running} other {# running}}",
-        "runningHint": "The Content Agent is working on this page. Click to follow its steps or stop it.",
         "readyLabel": "Ready: click to move it back to review",
         "readyHint": "Marked ready. Click to move it back to review.",
         "publishedHint": "Published. Click to give the address it's live at.",
@@ -8024,10 +8022,7 @@
           "ai_budget": "This month's AI usage is spent, so the AI checks didn't run.",
           "no_subscription": "The AI checks run with an active plan.",
           "failed": "The AI checks couldn't run. Try again."
-        },
-        "chip": "Audit ≈{score}",
-        "chipReading": "Audit ≈…",
-        "chipHint": "Site Audit estimate: about where this page would score, free"
+        }
       },
       "agentWriting": {
         "title": "Content Agent is working on this page",
@@ -8090,7 +8085,7 @@
         }
       },
       "run": {
-        "about": "What Run Agent does"
+        "about": "What it does"
       },
       "data": {
         "uses": "Uses your data: {parts} · <edit>Edit sources</edit>",
@@ -8109,12 +8104,12 @@
         "runFailedLine": "Nothing it wrote was kept. Try again; if it fails again, fix what's left yourself.",
         "placeholders": "{count, plural, one {# fact needs your input} other {# facts need your input}}",
         "waiting": "{count, plural, one {Content Agent has # suggestion for you} other {Content Agent has # suggestions for you}}",
-        "gain": "Rules {met, number} → {after, number} of {total, number}",
+        "gain": "{met, number} → {after, number}/{total, number} rules",
         "review": "Review",
         "reviewed": "All suggestions reviewed",
-        "reviewedLine": "{accepted, number} accepted · Rules {met, number} of {total, number}{open, plural, =0 {} other { · # still open}}",
+        "reviewedLine": "{accepted, number} accepted · {met, number}/{total, number} rules{open, plural, =0 {} other { · # still open}}",
         "more": "+{count, number} more",
-        "run": "Run Agent",
+        "run": "Fix open rules",
         "next": "Next: {action}",
         "nextTitle": "Next · {step}",
         "lastRun": "Last run: <run></run>",
@@ -8128,11 +8123,6 @@
         "stop": "Stop",
         "stopped": "Stopped · nothing was changed",
         "stopFailed": "Couldn't stop the agent. It may still finish.",
-        "drafting": "Content Agent is drafting a change here…",
-        "draftingFrom": "Drafting from {pages, plural, one {# cited page} other {# cited pages}} and {fanouts, plural, one {# fan-out} other {# fan-outs}}…",
-        "draftingFromPages": "Drafting from {pages, plural, one {# cited page} other {# cited pages}}…",
-        "draftingFromFanouts": "Drafting from {fanouts, plural, one {# fan-out} other {# fan-outs}}…",
-        "draftingRules": "Drafting from your rules…",
         "steps": {
           "readRules": "Reading {count, plural, one {# rule} other {# rules}}",
           "readRulesAny": "Reading rules",
@@ -8694,14 +8684,14 @@
         "outline": "Outline",
         "answers": "Answers “{fanout}”",
         "keywords": "Keywords",
-        "empty": "Empty. Run Agent to draft one, or add H2s yourself.",
+        "empty": "Empty. Build brief to draft one, or add H2s yourself.",
         "emptyOutline": "No H2s yet. Rebuild brief to draft them, or add H2s yourself.",
         "fromOpportunity": "From the opportunity's brief. Rebuild brief maps each H2 to a fan-out.",
         "edited": "Edited by you.",
         "builtFrom": "{count, plural, one {Built from # source} other {Built from # sources}} · {date}",
         "rebuild": "Rebuild brief",
-        "run": "Run Agent",
-        "info": "Run Agent writes the goal, audience and outline from your sources.",
+        "run": "Build brief",
+        "info": "Build brief writes the goal, audience and outline from your sources.",
         "status": {
           "empty": "No brief yet",
           "emptyDetail": "Goal, audience and outline are empty.",
@@ -8989,7 +8979,8 @@
         "sentWixUpdated": "Draft post updated in Wix",
         "wixImages": "{images, plural, one {# image wasn't sent: add it in Wix.} other {# images weren't sent: add them in Wix.}}"
       },
-      "rulesChip": "Rules {met}/{total}",
+      "rulesChip": "{met}/{total} rules",
+      "rulesChipLabel": "Rules {met}/{total} met",
       "rulesChipReading": "Rules · reading",
       "rulesChipHint": "Rules this page meets now. Open the Rules tab.",
       "reviewer": {
@@ -9075,7 +9066,8 @@
           "writeMine": "The page is empty: write it, and the next step follows from what you write.",
           "import": "The live page didn't come in. I write a first draft from your sources, or you write it yourself.",
           "length": "{count, number} characters against a Length of {target, number}. Small fixes won't get there, so rewrite it in one go.",
-          "fixRules": "{count, plural, one {# rule is} other {# rules are}} still open for the agent. Small, reviewable changes for them.",
+          "fixRules": "{count, plural, one {# rule is} other {# rules are}} open, all for the agent. Small, reviewable changes for them.",
+          "fixRulesSplit": "{total, plural, one {# rule is} other {# rules are}} open: Content Agent can fix {count, number} in small, reviewable changes, and {others, plural, one {# is} other {# are}} yours to decide in the Rules tab.",
           "fixRulesOthers": "{count, plural, one {# more is} other {# more are}} yours to decide in the Rules tab.",
           "proofTrust": "Trust is {trust}, under {gate}. The Quality tab names what raises it.",
           "proofTrustTodo": "Trust is {trust}, under {gate}. Only you can do this first: {todo}.",
@@ -9774,7 +9766,7 @@
           },
           "typeRules": {
             "line": "{count, plural, one {# page type rule not met} other {# page type rules not met}}: {names}",
-            "detail": "{rules}. This page type's own rules, as the Rules tab reads them: meet them there, or Run Agent in Rules."
+            "detail": "{rules}. This page type's own rules, as the Rules tab reads them: meet them there, or Fix open rules in Rules."
           }
         }
       },
@@ -9788,7 +9780,7 @@
         },
         "setName": "{type} · Ansvisor default",
         "pickSet": "Pick a page type",
-        "met": "{met} of {total} rules met",
+        "met": "{met}/{total} rules met",
         "metReading": "Reading the rules…",
         "typeGroup": "{type} rules",
         "groups": {
@@ -9912,12 +9904,11 @@
         "run": {
           "notMet": "{count, plural, one {# rule is not met} other {# rules are not met}}",
           "allMet": "All rules are met",
-          "info": "<b>Run Agent</b> fixes the open rules. You review each change. <b>▾ Rewrite page</b> rewrites the whole page. Uses more AI.",
-          "infoFix": "<b>Run Agent</b> fixes the open rules. You review each change.",
+          "info": "<b>Fix open rules</b> suggests changes for the open rules. You review each one. <b>▾ Rewrite page</b> rewrites the whole page. Uses more AI.",
+          "infoFix": "<b>Fix open rules</b> suggests changes for the open rules. You review each one.",
           "names": "{names}{more, select, yes {…} other {}}",
-          "label": "Run Agent",
+          "label": "Fix open rules",
           "rewriteLabel": "Rewrite page",
-          "working": "Working…",
           "more": "More ways to run the agent",
           "recommendedDetail": "Recommended · {detail}",
           "fix": {
@@ -9933,7 +9924,7 @@
         },
         "rewriteAdvice": {
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
-          "open": "Recommended: {count, number} rules are open. A rewrite meets them together."
+          "open": "Recommended: Content Agent can fix {count, number} of them, and a rewrite meets them together."
         },
         "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
         "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",

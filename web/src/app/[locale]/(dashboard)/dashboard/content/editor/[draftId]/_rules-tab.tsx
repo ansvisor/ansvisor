@@ -51,7 +51,6 @@ import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
 import { RunCard } from './_run-card';
-import { WorkingDots } from './_working-dots';
 import type { DraftRulesState } from './_use-draft-rules';
 import { BrandRulesBox } from './_brand-rules-box';
 
@@ -158,8 +157,8 @@ function RunAgentButton({
         if (mode === 'rewrite') onMode('fix');
       }}
     >
-      {running && <WorkingDots className="ml-0" />}
-      {running ? t('working') : mode === 'rewrite' ? t('rewriteLabel') : t('label')}
+      {/* The agent card says it's working, alone (editor UX review 2026-11-03). */}
+      {mode === 'rewrite' ? t('rewriteLabel') : t('label')}
     </Button>
   );
   if (!split) return main;
@@ -871,10 +870,12 @@ function StatusBadge({
       className={cn(
         'w-20 shrink-0 truncate text-right text-[11px] font-medium',
         status.state === 'ok' && 'text-emerald-600 dark:text-emerald-400',
+        // Red only for what blocks (editor UX review 2026-11-03): an open rule
+        // is amber; one the agent tried, or no run can close, a chip with its note.
         status.state === 'bad' &&
           (yours
             ? 'rounded-md bg-amber-50 px-1 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-            : 'text-red-600 dark:text-red-400'),
+            : 'text-amber-600 dark:text-amber-400'),
         status.state === 'info' && 'font-normal text-muted-foreground',
       )}
     >

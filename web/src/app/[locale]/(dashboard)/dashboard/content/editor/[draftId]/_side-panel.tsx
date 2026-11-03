@@ -449,9 +449,10 @@ export function EditorSidePanel({
                   <span
                     className={cn(
                       'rounded-md px-1.5 text-[10.5px] font-medium',
+                      // Red only for what blocks: open rules don't (editor UX review 2026-11-03).
                       rulesYours
                         ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                        : 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400',
+                        : 'border border-amber-200 text-amber-700 dark:border-amber-900 dark:text-amber-300',
                     )}
                   >
                     {t('segments.open', { count: rulesOpen })}

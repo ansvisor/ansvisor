@@ -96,8 +96,8 @@ import {
   type SuggestionSource,
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
-import { REBUILD_LIMITS, rebuildSources } from '@/lib/content/brief';
-import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
+import { rebuildSources } from '@/lib/content/brief';
+import { buildSourceGroups, type DraftSourceKind } from '@/lib/content/sources';
 import {
   cleanHtml,
   formatHtmlSource,
@@ -205,7 +205,6 @@ import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentCard } from './_agent-card';
-import { AgentDrafting, draftingKey } from './_agent-drafting';
 import { AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
 import { ReviewerMenu } from './_reviewer-menu';
 import { BeforePublish, TRUST_GATE, type ReadyAnyway, type ReadyToPaste } from './_before-publish';
@@ -276,7 +275,7 @@ import {
   type QualityFocus,
   type QualityRead,
 } from './_quality-tab';
-import { AuditEstimateCard, AuditEstimateChip, useAuditEstimate } from './_audit-estimate';
+import { AuditEstimateCard, useAuditEstimate } from './_audit-estimate';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
@@ -651,7 +650,6 @@ export function DraftEditor({
         onSource: (source) => onSource.current(source),
       }),
       OneH1,
-      AgentDrafting,
       FlashBlock,
       PlaceholderMarks,
       PageInfoStrip,
@@ -1849,42 +1847,6 @@ export function DraftEditor({
       editor.state.tr.setMeta(suggestionsKey, { suggestions: cards, labels: suggestionLabels }),
     );
   }, [editor, suggestions, suggestionLabels, ruleEffects]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // While Fix open rules runs, a dashed card in the page where its change
-  // will most likely land, from which of the kept data (CE-027/035).
-  const keptCounts = useMemo(
-    () =>
-      reads.sources?.data
-        ? includedCounts(
-            buildSourceGroups(reads.sources.data, reads.sources.choices, {
-              title: draft.title,
-              sourceUrl: draft.sourceUrl,
-            }),
-          )
-        : null,
-    [reads.sources, draft.title, draft.sourceUrl],
-  );
-  // As many as the agent gets (rebuildSources).
-  const pages = Math.min(keptCounts?.cited_page ?? 0, REBUILD_LIMITS.pages);
-  const fanouts = Math.min(keptCounts?.fanout ?? 0, REBUILD_LIMITS.fanouts);
-  const draftingText = !fixing
-    ? null
-    : pages && fanouts
-      ? t('agentCard.draftingFrom', { pages, fanouts })
-      : pages
-        ? t('agentCard.draftingFromPages', { pages })
-        : fanouts
-          ? t('agentCard.draftingFromFanouts', { fanouts })
-          : t('agentCard.draftingRules');
-  useEffect(() => {
-    if (!editor || editor.isDestroyed) return;
-    editor.view.dispatch(
-      editor.state.tr.setMeta(draftingKey, {
-        title: t('agentCard.drafting'),
-        text: draftingText,
-      }),
-    );
-  }, [editor, draftingText, t]);
 
   /**
    * Accept, reject, undo (an accepted one) or restore (a rejected one): the
@@ -3958,28 +3920,6 @@ export function DraftEditor({
                 readAgain={`${agentWorking}:${agentRun?.id ?? ''}`}
               />
             )}
-            {/* The agent at work on this page: a click opens the basket, with its steps and Stop. */}
-            {/* Fix open rules or the brief at work: the basket shows their steps and Stop. */}
-            {!chatOn && qualityOn && agentWorking && (
-              <HeaderTip label={t('header.running', { count: 1 })} hint={t('header.runningHint')}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNextFocus(true);
-                    setNextOpen(true);
-                  }}
-                  aria-label={t('header.running', { count: 1 })}
-                  className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
-                >
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none dark:bg-emerald-400"
-                  />
-                  {/* Narrower than 1024px, the dot alone: the count is on hover. */}
-                  <span className="hidden lg:inline">{t('header.running', { count: 1 })}</span>
-                </button>
-              </HeaderTip>
-            )}
             {/* The month's AI usage, with this page's share (AI usage spec §3.1). */}
             <AiUsageMeter compact draftId={draft.id} />
             <HeaderTip label={t('history.button')} hint={historyWaits ?? t('history.hint')}>
@@ -4144,7 +4084,7 @@ export function DraftEditor({
             title={t('rulesChipHint')}
             aria-label={
               rulesSettled
-                ? t('rulesChip', { met: rules.met, total: rules.total })
+                ? t('rulesChipLabel', { met: rules.met, total: rules.total })
                 : t('rulesChipReading')
             }
             className={cn(
@@ -4203,7 +4143,6 @@ export function DraftEditor({
               </span>
             </button>
           )}
-          <AuditEstimateChip state={auditEstimate} />
           {citedCount > 0 && (
             <span
               title={t('cited.chipHint')}

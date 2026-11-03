@@ -103,11 +103,16 @@ describe('NextStepButton', () => {
     expect(onOpenChange).toHaveBeenCalledWith(true, expect.anything());
   });
 
-  it('counts the rules the agent can fix, and says how many more the Rules tab counts', async () => {
+  it('counts the open rules once, as Rules does, and how many the agent can fix (editor UX review 2026-11-03)', async () => {
     // Length far off and a rule held by quoted passages: open in the Rules tab, not for Fix.
     await render(state({ method: 'optimize', openRules: ['faq'], openTotal: 3 }));
     expect(popup()!.textContent).toContain(
-      '1 rule is still open for the agent. Small, reviewable changes for them. 2 more are yours to decide in the Rules tab.',
+      '3 rules are open: Content Agent can fix 1 in small, reviewable changes, and 2 are yours to decide in the Rules tab.',
+    );
+    // All of them the agent's.
+    await render(state({ method: 'optimize', openRules: ['faq', 'summary'], openTotal: 2 }));
+    expect(popup()!.textContent).toContain(
+      '2 rules are open, all for the agent. Small, reviewable changes for them.',
     );
   });
 

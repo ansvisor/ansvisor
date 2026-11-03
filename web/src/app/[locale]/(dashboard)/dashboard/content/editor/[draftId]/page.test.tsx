@@ -476,7 +476,7 @@ describe('the content editor', () => {
     expect(tags.textContent).toContain('Feature page');
     expect(tags.textContent).toContain('Optimize');
     expect(tags.textContent).toContain('In review');
-    expect(tags.textContent).toMatch(/Rules \d+\/\d+/);
+    expect(tags.textContent).toMatch(/\d+\/\d+ rules/);
     expect(container.querySelector('a[href="/dashboard/content/library"]')).not.toBeNull();
 
     // The page's text, against a feature page's 3,000-character target.
@@ -503,8 +503,12 @@ describe('the content editor', () => {
     await renderPage();
     await act(() => new Promise((resolve) => setTimeout(resolve, 1_100)));
 
+    // In Quality, not the header: it keeps one score (editor UX review 2026-11-03, decision c).
     const [, tags] = container.querySelector('header')!.children;
-    expect(tags.textContent).toContain('Audit ≈62');
+    expect(tags.textContent).not.toContain('Audit ≈');
+    expect(
+      container.querySelector('[data-slot="audit-estimate"]')?.textContent ?? '',
+    ).not.toContain('Audit ≈');
     const [draftId, brandId, doc] = readAuditEstimate.mock.calls.at(-1)!;
     expect([draftId, brandId]).toEqual(['d1', 'b1']);
     // The whole page, its head too, as Export's HTML file has it.
@@ -1255,7 +1259,7 @@ describe('the content editor', () => {
       );
       await act(async () =>
         [...container.querySelectorAll<HTMLButtonElement>('aside button')]
-          .find((b) => b.textContent === 'Run Agent')!
+          .find((b) => b.textContent === 'Fix open rules')!
           .click(),
       );
       await act(async () => {});
@@ -2152,7 +2156,7 @@ describe('the content editor', () => {
         );
         await act(async () =>
           [...container.querySelector('aside')!.querySelectorAll<HTMLButtonElement>('button')]
-            .find((b) => b.textContent === 'Run Agent')!
+            .find((b) => b.textContent === 'Fix open rules')!
             .click(),
         );
         await act(async () => {});
@@ -2523,7 +2527,7 @@ describe('the content editor', () => {
         'Accuracy is shown per team, each week, against closed revenue.Teams trust it.FAQDoes it work with custom stages? Yes, any stage.',
       );
       expect(bar()!.textContent).toMatch(
-        /^All suggestions reviewed2 accepted · Rules \d+ of \d+ · \d+ still open/,
+        /^All suggestions reviewed2 accepted · \d+\/\d+ rules · \d+ still open/,
       );
       // Not a full run's batch: nothing about running it again.
       expect(bar()!.textContent).not.toContain('a run makes at most');
@@ -3095,7 +3099,7 @@ describe('the side panel', () => {
         land({ categories: ['shop.example/collections/boots'], products: [], site: null }),
       );
       expect(panel()!.textContent).toContain('Links its category page');
-      expect(panel()!.textContent).toMatch(/\d+ of \d+ rules met/);
+      expect(panel()!.textContent).toMatch(/\d+\/\d+ rules met/);
 
       // Brief › Shopping path picks again: the rules read the path again.
       const { buildDraftShoppingPath } = await import('@/lib/actions/shopping-path');
@@ -3485,6 +3489,7 @@ describe('the side panel', () => {
     const [met, total] = chip
       .getAttribute('aria-label')!
       .replace('Rules ', '')
+      .replace(' met', '')
       .split('/')
       .map(Number);
     expect(total).toBeGreaterThan(met);
@@ -3496,7 +3501,7 @@ describe('the side panel', () => {
     expect(panel()!.querySelector('[role="tab"] .sr-only')?.textContent).toBe(
       `${total - met} rules open`,
     );
-    expect(panel()!.textContent).toContain(`${met} of ${total} rules met`);
+    expect(panel()!.textContent).toContain(`${met}/${total} rules met`);
 
     // Turning a rule off for this draft saves it and takes it out of the count.
     const sentence = panel()!.querySelector<HTMLElement>(
@@ -3509,7 +3514,7 @@ describe('the side panel', () => {
       overrides: { sentence: { on: false } },
       textRules: [],
     });
-    expect(chip.getAttribute('aria-label')).toBe(`Rules ${met - 1}/${total - 1}`);
+    expect(chip.getAttribute('aria-label')).toBe(`Rules ${met - 1}/${total - 1} met`);
     expect(toast).toHaveBeenCalledWith('Rule updated for this draft');
   });
 
@@ -4621,7 +4626,7 @@ describe('the side panel', () => {
       await pickTab('Rules');
       const others = [...panel()!.querySelectorAll('button')].filter((b) => !card.contains(b));
       expect(others.some((b) => b.textContent?.includes('Working'))).toBe(false);
-      expect(others.find((b) => b.textContent === 'Run Agent')?.disabled).toBe(true);
+      expect(others.find((b) => b.textContent === 'Fix open rules')?.disabled).toBe(true);
       expect(fixDraftRules).not.toHaveBeenCalled();
       await act(async () => answer({ count: 1 }));
       await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
@@ -5768,7 +5773,7 @@ describe('the side panel', () => {
       );
       await act(async () =>
         [...panel()!.querySelectorAll<HTMLButtonElement>('button')]
-          .find((b) => b.textContent === 'Run Agent')!
+          .find((b) => b.textContent === 'Fix open rules')!
           .click(),
       );
       await act(async () => {});
@@ -7008,21 +7013,23 @@ describe('the side panel', () => {
     const trayCalls = (fetch: ReturnType<typeof vi.fn>) =>
       fetch.mock.calls.filter(([url]) => String(url).startsWith('/api/chat/runs/tray'));
 
-    it('says "1 running" while Fix open rules works, and opens the basket on it', async () => {
+    it('shows no "1 running" beside the agent card while Fix open rules works: the card says it (editor UX review 2026-11-03)', async () => {
       const fetch = vi.fn(async () => new Response('{}'));
       vi.stubGlobal('fetch', fetch);
       try {
         fixUnderWay();
         await renderPage();
-        expect(button('1 running')).toBeUndefined();
         // Chat off: no page pill, and no runs tray or its read.
         expect(pill()).toBeNull();
         expect(container.querySelector('[data-action="runs.toggleTray"]')).toBeNull();
         await runFix();
         expect(basket()).toBeNull();
-        expect(pill()).toBeNull();
-        expect(container.textContent).not.toContain('You can leave this page');
-        await act(async () => button('1 running')!.click());
+        expect(button('1 running')).toBeUndefined();
+        expect(
+          container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
+        ).toContain('Content Agent is working');
+        // Next still shows the run's steps and Stop.
+        await act(async () => nextButton()!.click());
         expect(basket()!.textContent).toContain('Content Agent is working');
         expect(trayCalls(fetch)).toEqual([]);
       } finally {
@@ -7691,7 +7698,9 @@ describe('the side panel', () => {
             .querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!
             .click(),
         );
-        expect(rulesBadge().className).toContain('bg-red-50');
+        // Open, the agent's still: amber outline, never red (red is for what blocks).
+        expect(rulesBadge().className).toContain('border-amber-200');
+        expect(rulesBadge().className).not.toContain('red');
         // It finds nothing to change: every rule it was sent is tried.
         fixDraftRules.mockResolvedValue({ count: 0 });
         await act(async () => nextButton()!.click());
@@ -7809,7 +7818,7 @@ describe('the side panel', () => {
       getDraftSuggestions.mockResolvedValue([]);
       fixDraftRules.mockResolvedValue({ count: 0 });
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       const sent = fixDraftRules.mock.calls[0][2];
       // Far past its 20 characters, the Length is held from Fix: the hint says how far off the page is.
@@ -7826,7 +7835,7 @@ describe('the side panel', () => {
       expect(panel()!.textContent).toContain(
         "This month's AI usage is used up. It resets on Nov 20.",
       );
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       expect(fixDraftRules).not.toHaveBeenCalled();
     });
 
@@ -7836,7 +7845,7 @@ describe('the side panel', () => {
       let answer: (value: { count: number }) => void = () => {};
       fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       expect(aiUsage.refresh).not.toHaveBeenCalled();
       await act(async () => answer({ count: 0 }));
@@ -7851,24 +7860,20 @@ describe('the side panel', () => {
       fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
       await openRules();
 
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       const card = () =>
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
       expect(card().getAttribute('aria-busy')).toBe('true');
       // No run read yet: no steps, and nothing for Stop to stop.
       expect(card().textContent).toBe('Content Agent is working');
-      // Where its change will most likely land, a card that it is drafting.
-      const drafting = () => container.querySelector('.ProseMirror [data-agent-drafting]');
-      expect(drafting()!.textContent).toBe(
-        'Content Agent is drafting a change here…Drafting from your rules…',
-      );
+      // The card alone says it works: nothing drafting in the page (editor UX review 2026-11-03).
+      expect(container.querySelector('.ProseMirror [data-agent-drafting]')).toBeNull();
 
       await act(async () => answer({ count: 1 }));
       await act(async () => {});
       expect(card().getAttribute('aria-busy')).toBe('false');
       expect(card().textContent).toContain('Content Agent has 1 suggestion for you');
-      expect(drafting()).toBeNull();
     });
 
     it('shows the run’s steps while it works, and Stop leaves the page as it was', async () => {
@@ -7892,7 +7897,7 @@ describe('the side panel', () => {
         outcome: null,
       });
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
       // Its steps, short names for the work; none about data it has none of.
@@ -7938,7 +7943,7 @@ describe('the side panel', () => {
       fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
       readAgentRun.mockResolvedValue(fixRun);
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       const reads = getDraftSuggestions.mock.calls.length;
       await act(async () => agentStop().click());
@@ -7957,7 +7962,7 @@ describe('the side panel', () => {
       readAgentRun.mockResolvedValue(fixRun);
       stopAgentRun.mockResolvedValue({ stopped: false });
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       await act(async () => agentStop().click());
       expect(agentStop().disabled).toBe(false);
@@ -7978,7 +7983,7 @@ describe('the side panel', () => {
         steps: [{ key: 'read_rules', count: 14 }],
       });
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
       expect(card.textContent).toBe('Content Agent is working');
@@ -8039,7 +8044,7 @@ describe('the side panel', () => {
         readAgentRun.mockResolvedValue(null);
         fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
         await pickTab('Rules');
-        await act(async () => panelButton('Run Agent').click());
+        await act(async () => panelButton('Fix open rules').click());
         await act(async () => {});
         expect(toast).toHaveBeenCalledTimes(1);
         getDraftSuggestions.mockResolvedValue([agentSuggestion]);
@@ -8085,12 +8090,8 @@ describe('the side panel', () => {
       let answer: (value: { count: number }) => void = () => {};
       fixDraftRules.mockReturnValue(new Promise((resolve) => (answer = resolve)));
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
-      // Only cited pages kept: no "0 fan-outs".
-      expect(container.querySelector('.ProseMirror [data-agent-drafting]')!.textContent).toContain(
-        'Drafting from 2 cited pages…',
-      );
       await pickTab('Sources');
       expect(button('Rebuild with selection')!.disabled).toBe(true);
       expect(panel()!.textContent).toContain(
@@ -8117,7 +8118,7 @@ describe('the side panel', () => {
         outcome: 'done',
       });
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
       expect(card.textContent).toBe('Content Agent is working');
@@ -8131,7 +8132,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ count: 1 });
       await openRules();
 
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
 
       const [id, brandId, request] = fixDraftRules.mock.calls[0];
@@ -8174,7 +8175,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ count: 0 });
       await openRules();
 
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
 
       expect(fixDraftRules.mock.calls[0][2].rules).toContainEqual(
@@ -8203,7 +8204,7 @@ describe('the side panel', () => {
       getDraftSuggestions.mockResolvedValue([]);
       fixDraftRules.mockResolvedValue({ count: 0 });
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       expect(fixDraftRules.mock.calls[0][2].sources).toMatchObject({
         promptIds: [],
@@ -8424,11 +8425,8 @@ describe('the side panel', () => {
       });
       stopAgentRun.mockResolvedValue({ error: 'failed' });
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
-      expect(container.querySelector('.ProseMirror [data-agent-drafting]')!.textContent).toContain(
-        'Drafting from 1 cited page and 1 fan-out…',
-      );
       const card = container.querySelector('[role="region"][aria-label="Agent suggestions"]')!;
       const stop = [...card.querySelectorAll('button')].find((b) => b.textContent === 'Stop')!;
       await act(async () => stop.click());
@@ -8449,7 +8447,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ count: 8 });
       await openRules();
 
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
 
       expect(toast.success).toHaveBeenCalledWith(
@@ -8459,7 +8457,7 @@ describe('the side panel', () => {
       expect(
         container.querySelector('[role="region"][aria-label="Agent suggestions"]')!.textContent,
       ).toMatch(
-        /^All suggestions reviewed0 accepted · Rules \d+ of \d+ · \d+ still open · a run makes at most 8 changes: run it again for the rest/,
+        /^All suggestions reviewed0 accepted · \d+\/\d+ rules · \d+ still open · a run makes at most 8 changes: run it again for the rest/,
       );
     });
 
@@ -8475,7 +8473,7 @@ describe('the side panel', () => {
         fixDraftRules.mockRejectedValue(new Error('An unexpected response was received'));
         await openRules();
 
-        await act(async () => panelButton('Run Agent').click());
+        await act(async () => panelButton('Fix open rules').click());
         await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
         expect(toast.error).not.toHaveBeenCalled();
         await act(async () => void (await vi.advanceTimersByTimeAsync(5_000)));
@@ -8523,7 +8521,7 @@ describe('the side panel', () => {
         getDraftSuggestions.mockResolvedValue([]);
         fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
         await openRules();
-        await act(async () => panelButton('Run Agent').click());
+        await act(async () => panelButton('Fix open rules').click());
         await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
         await act(async () => {});
       }
@@ -8577,7 +8575,7 @@ describe('the side panel', () => {
       getContentDraft.mockResolvedValue(traced);
       fixDraftRules.mockResolvedValue({ count: 0, why: 'locked' });
       await openRules();
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       expect(toast).toHaveBeenCalledWith(
         "Content Agent's changes were all in passages AI answers quote, which it keeps. Unlock the ones you're fine to change (Edit anyway), or change them yourself.",
@@ -8592,7 +8590,7 @@ describe('the side panel', () => {
         fixDraftRules.mockResolvedValue({ error: 'unconfirmed' });
         await openRules();
 
-        await act(async () => panelButton('Run Agent').click());
+        await act(async () => panelButton('Fix open rules').click());
         await act(async () => void (await vi.advanceTimersByTimeAsync(85_000)));
         expect(toast.error).not.toHaveBeenCalled();
         await act(async () => void (await vi.advanceTimersByTimeAsync(10_000)));
@@ -8613,7 +8611,7 @@ describe('the side panel', () => {
       expect(panel()!.querySelector('[aria-label="One H1 per page: on or off"]')).toBeNull();
       expect(panel()!.querySelector('[aria-label="Length: on or off"]')).not.toBeNull();
 
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       const asked = fixDraftRules.mock.calls[0][2].rules.map((r: { key: string }) => r.key);
       expect(asked).not.toContain('oneH1');
@@ -8640,7 +8638,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ error: 'ai_budget' });
       await openRules();
 
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       expect(toast.error).toHaveBeenCalledWith(
         "This month's AI usage is spent. Upgrade for more, or try again once it resets.",
@@ -8652,7 +8650,7 @@ describe('the side panel', () => {
       getDraftSuggestions.mockResolvedValue([agentSuggestion]);
       await openRules();
 
-      const fix = panelButton('Run Agent');
+      const fix = panelButton('Fix open rules');
       expect(fix.disabled).toBe(true);
       // Why, under the card: never only on hover.
       expect(panel()!.querySelector('[role="status"]')!.textContent).toBe(
@@ -8669,7 +8667,7 @@ describe('the side panel', () => {
       getCitedPassages.mockReturnValue(new Promise((resolve) => (read = resolve)));
       await openRules();
 
-      const fix = () => panelButton('Run Agent');
+      const fix = () => panelButton('Fix open rules');
       expect(fix().disabled).toBe(true);
       expect(panel()!.querySelector('[role="status"]')!.textContent).toBe(
         'Reading which passages AI quotes, so the agent leaves them as they are…',
@@ -8685,7 +8683,7 @@ describe('the side panel', () => {
       fixDraftRules.mockResolvedValue({ error: 'open_suggestions' });
       await openRules();
 
-      await act(async () => panelButton('Run Agent').click());
+      await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       expect(toast.error).toHaveBeenCalledWith(
         "This page has open suggestions, maybe from another tab. They're shown now: accept or reject them first.",

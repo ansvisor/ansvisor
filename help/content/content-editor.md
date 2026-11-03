@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,13 +15,13 @@ The Content Editor is where pages are written. It opens from the Library, from t
 
 ## The header
 
-The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, and a **Rules** chip with how many rules the page meets now; click it to open the rules. An **Audit** chip estimates the page's Site Audit score; see below. On a page that optimizes a live one, a chip counts the cited passages kept.
+The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept.
 
 On the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel.
 
 ## Site Audit estimate
 
-The **Audit** chip, for example **Audit ≈62**, is about where the page would score in Site Audit once published. Click it to see the score by category: Structure, Content, Authority, Trust and E-E-A-T. It's free, and it's read again each time you pause typing.
+In the side panel's **Quality**, **Site Audit estimate** (for example **≈62**) is about where the page would score in Site Audit once published, with the score by category: Structure, Content, Authority, Trust and E-E-A-T. It's free, and it's read again each time you pause typing.
 
 It runs Site Audit's checks on the page as it would go out. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.
 
@@ -55,7 +55,7 @@ Building the brief and running the Content Agent use your workspace's monthly AI
 
 ## The brief
 
-**Brief** shows the page type, target URL, goal, audience, length, outline and keywords; **Edit brief** changes them. With no brief yet, **Run Agent** writes the goal, audience and outline from your sources; once there is one, the button reads **Rebuild brief**. Either writes the outline from the sources you keep, each H2 answering a search AI ran for your prompts. If you edited the brief, rebuilding asks first: **Rebuild anyway** or **Keep my brief**.
+**Brief** shows the page type, target URL, goal, audience, length, outline and keywords; **Edit brief** changes them. With no brief yet, **Build brief** writes the goal, audience and outline from your sources; once there is one, the button reads **Rebuild brief**. Either writes the outline from the sources you keep, each H2 answering a search AI ran for your prompts. If you edited the brief, rebuilding asks first: **Rebuild anyway** or **Keep my brief**.
 
 A draft started from an opportunity with a brief starts with that brief's outline and keywords.
 

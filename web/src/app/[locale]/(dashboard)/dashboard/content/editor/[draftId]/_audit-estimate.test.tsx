@@ -4,12 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import type { AiUsage } from '@/lib/billing/ai-usage';
-import {
-  AuditEstimateCard,
-  AuditEstimateChip,
-  ESTIMATE_DELAY_MS,
-  useAuditEstimate,
-} from './_audit-estimate';
+import { AuditEstimateCard, ESTIMATE_DELAY_MS, useAuditEstimate } from './_audit-estimate';
 
 /**
  * The draft's Site Audit estimate (customer priorities item 9): read again
@@ -49,12 +44,8 @@ let root: Root;
 
 function Harness({ doc }: { doc: string }) {
   const state = useAuditEstimate('d1', 'b1', doc);
-  return (
-    <>
-      <AuditEstimateChip state={state} />
-      <AuditEstimateCard state={state} />
-    </>
-  );
+  // In Quality only: the header keeps one score (editor UX review 2026-11-03, decision c).
+  return <AuditEstimateCard state={state} />;
 }
 async function render(doc: string) {
   await act(async () =>
@@ -106,12 +97,10 @@ describe('the Site Audit estimate', () => {
   it('is read once the page settles, for free, and shows the score, its categories and what it rests on', async () => {
     await render('<p>one</p>');
     expect(readAuditEstimate).not.toHaveBeenCalled();
-    expect(button('Audit ≈…')).toBeDefined();
     await settle();
     expect(readAuditEstimate).toHaveBeenCalledWith('d1', 'b1', '<p>one</p>', {
       verdicts: undefined,
     });
-    expect(button('Audit ≈62')).toBeDefined();
     const text = card().textContent!;
     expect(text).toContain('Site Audit estimate');
     expect(text).toContain('≈62');
@@ -183,13 +172,12 @@ describe('the Site Audit estimate', () => {
     expect(button('Estimate AI checks')!.disabled).toBe(false);
   });
 
-  it('says nothing of AI usage where it isn’t metered, and hides the chip when it can’t read', async () => {
+  it('says nothing of AI usage where it isn’t metered, and says when it can’t read', async () => {
     usage = null;
     readAuditEstimate.mockResolvedValue({ error: 'failed' });
     await render('<p>one</p>');
     await settle();
     expect(card().textContent).toContain("Couldn't read the estimate.");
     expect(card().textContent).not.toContain('AI usage');
-    expect(container.textContent).not.toContain('Audit ≈');
   });
 });
