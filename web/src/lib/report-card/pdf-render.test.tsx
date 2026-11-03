@@ -96,6 +96,24 @@ describe('reportCardPdf', () => {
     expect(pages(await reportCardPdf(japanese))).toBe(4);
   }, 30_000);
 
+  it('keeps page 4 one page with 25 two-line questions, the key and the summary', async () => {
+    const tall: ReportCardPayload = {
+      ...long,
+      questionRows: Array.from({ length: 25 }, (_, i) => ({
+        text: `${'Çok uzun bir soru metni '.repeat(8)}${i}`,
+        textEn: null,
+        named: {
+          'chatgpt-web': i % 3 === 0 ? 'named' : 'missed',
+          'gemini-web': 'missed',
+          'google-aio': 'none',
+          'google-aimode': 'missed',
+        },
+        instead: 'Kapadokya Balon Turları ve Seyahat Acentesi Anonim Şirketi',
+      })),
+    };
+    expect(pages(await reportCardPdf(tall))).toBe(4);
+  }, 30_000);
+
   it('keeps a card with no ad data and no deal value on four pages', async () => {
     expect(pages(await reportCardPdf({ ...SAMPLE_REPORT_CARD, cpc: null, dealValue: null }))).toBe(
       4,

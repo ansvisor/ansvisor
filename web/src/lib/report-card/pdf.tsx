@@ -29,6 +29,7 @@ import {
   percent,
   planOffers,
   questionLines,
+  questionSummary,
   quickWins,
   revenueRows,
   totals,
@@ -159,9 +160,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 0.5,
     borderBottomColor: BORDER,
-    paddingVertical: 3,
+    paddingVertical: 2.5,
   },
-  qText: { fontSize: 7.5, lineHeight: 1.3 },
+  qText: { fontSize: 7.5, lineHeight: 1.25 },
+  legend: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'center',
+    backgroundColor: BAND,
+    borderRadius: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   qCell: { width: 52, textAlign: 'center' },
   footer: {
     position: 'absolute',
@@ -618,26 +630,49 @@ const SHORT_ENGINE: Record<string, string> = {
   'google-aimode': 'AI Mode',
 };
 
-/** A small check mark, drawn: Inter has no glyph for one. */
+/** A check mark, drawn in ink: Inter has no glyph for one. */
 function Tick() {
   return (
-    <Svg width={9} height={9} viewBox="0 0 12 12">
-      <Path d="M2 6.5 L5 9.5 L10.5 3" stroke={INK} strokeWidth={1.8} fill="none" />
+    <Svg width={10} height={10} viewBox="0 0 12 12">
+      <Path d="M1.8 6.4 L4.9 9.5 L10.6 2.8" stroke={INK} strokeWidth={2.4} fill="none" />
     </Svg>
   );
+}
+
+/** A dash or "n/a": light, so the ticks stand out. */
+function Faint({ children }: { children: string }) {
+  return <Text style={[styles.qText, { color: MUTED, opacity: 0.5 }]}>{children}</Text>;
 }
 
 /** Page 4: every question asked, and what each engine did with it. */
 function QuestionsPage({ card }: { card: ReportCardPayload }) {
   const lines = questionLines(card);
+  const summary = questionSummary(card);
   const engines = card.engines.map((e) => e.engine);
   return (
     <Page size="A4" style={styles.page}>
       <Header
         eyebrow="What we measured"
         title={`The ${lines.length} questions we asked`}
-        subtitle={`As asked in ${countryName(card.country)}, in ${card.language}. A tick: the answer named ${clip(card.companyName, 40)}; a dash: it didn’t; n/a: no answer. “Named instead” is the brand its answers named most.`}
+        subtitle={`As asked in ${countryName(card.country)}, in ${card.language}. “Named instead” is the brand its answers named most.`}
       />
+      {summary && (
+        <Text style={[styles.paragraph, styles.bold, { marginBottom: 6 }]}>{summary}</Text>
+      )}
+      <View style={styles.legend}>
+        <View style={styles.legendItem}>
+          <Tick />
+          <Text style={styles.qText}>Named</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <Faint>–</Faint>
+          <Text style={styles.qText}>Not named</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <Faint>n/a</Faint>
+          <Text style={styles.qText}>No answer</Text>
+        </View>
+      </View>
       <View style={styles.tableHeader}>
         <Text style={[styles.th, { width: 16 }]}>#</Text>
         <Text style={[styles.th, { flex: 1 }]}>Question</Text>
@@ -657,9 +692,7 @@ function QuestionsPage({ card }: { card: ReportCardPayload }) {
               {line.named[engine] === 'named' ? (
                 <Tick />
               ) : (
-                <Text style={[styles.qText, { color: MUTED }]}>
-                  {line.named[engine] === 'missed' ? '–' : 'n/a'}
-                </Text>
+                <Faint>{line.named[engine] === 'missed' ? '–' : 'n/a'}</Faint>
               )}
             </View>
           ))}

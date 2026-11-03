@@ -317,6 +317,32 @@ export function questionLines(card: ReportCardPayload): QuestionLine[] {
   }));
 }
 
+/**
+ * Page 4's one-line summary, above the table: none named, or how many
+ * answers named the company and in which questions.
+ */
+export function questionSummary(card: ReportCardPayload): string | null {
+  const rows = card.questionRows ?? [];
+  if (!rows.length) return null;
+  let answers = 0;
+  let named = 0;
+  const questions: number[] = [];
+  rows.forEach((row, i) => {
+    const marks = Object.values(row.named);
+    answers += marks.filter((mark) => mark !== 'none').length;
+    const here = marks.filter((mark) => mark === 'named').length;
+    named += here;
+    if (here > 0) questions.push(i + 1);
+  });
+  const company = clip(card.companyName, NAME_MAX);
+  if (named === 0) return `${company} wasn’t named in any of the ${answers} answers.`;
+  const where =
+    questions.length <= 10
+      ? `${questions.length === 1 ? 'question' : 'questions'} ${listOf(questions.map(String))}`
+      : `${questions.length} of the ${rows.length} questions`;
+  return `Named in ${named} of ${answers} answers: ${where}.`;
+}
+
 // ─── Page 3: outcomes ────────────────────────────────────────────────────────
 
 export interface Goal {

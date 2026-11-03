@@ -16,6 +16,7 @@ import {
   planOffers,
   quickWins,
   questionLines,
+  questionSummary,
   quotedQuestion,
   revenueRows,
   totals,
@@ -367,6 +368,67 @@ describe('questionLines', () => {
 
   it('has none for a card without its questions', () => {
     expect(questionLines(card({ questionRows: undefined }))).toEqual([]);
+  });
+});
+
+describe('questionSummary', () => {
+  it('says how many answers named the company, and in which questions', () => {
+    expect(questionSummary(SAMPLE_REPORT_CARD)).toBe(
+      'Named in 18 of 100 answers: 14 of the 25 questions.',
+    );
+    const few = card({
+      questionRows: [
+        {
+          text: 'a',
+          textEn: null,
+          named: { 'chatgpt-web': 'missed', 'gemini-web': 'none' },
+          instead: null,
+        },
+        {
+          text: 'b',
+          textEn: null,
+          named: { 'chatgpt-web': 'named', 'gemini-web': 'named' },
+          instead: null,
+        },
+        {
+          text: 'c',
+          textEn: null,
+          named: { 'chatgpt-web': 'missed', 'gemini-web': 'missed' },
+          instead: null,
+        },
+        {
+          text: 'd',
+          textEn: null,
+          named: { 'chatgpt-web': 'named', 'gemini-web': 'missed' },
+          instead: null,
+        },
+      ],
+    });
+    expect(questionSummary(few)).toBe('Named in 3 of 7 answers: questions 2 and 4.');
+  });
+
+  it('says so when no answer named the company', () => {
+    const none = card({
+      questionRows: [
+        {
+          text: 'a',
+          textEn: null,
+          named: { 'chatgpt-web': 'missed', 'google-aio': 'none' },
+          instead: null,
+        },
+        {
+          text: 'b',
+          textEn: null,
+          named: { 'chatgpt-web': 'missed', 'google-aio': 'missed' },
+          instead: null,
+        },
+      ],
+    });
+    expect(questionSummary(none)).toBe('Brewline Coffee wasn’t named in any of the 3 answers.');
+  });
+
+  it('has none for a card without its questions', () => {
+    expect(questionSummary(card({ questionRows: undefined }))).toBeNull();
   });
 });
 
