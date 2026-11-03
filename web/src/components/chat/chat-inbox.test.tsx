@@ -73,8 +73,14 @@ vi.mock('@/lib/actions/chat-suggestions', () => ({
   setDailySuggestions: server.set,
   startDailySuggestions: server.start,
 }));
-const notices = vi.hoisted(() => ({ read: vi.fn(async () => true) }));
-vi.mock('@/lib/actions/chat-notices', () => ({ markChatNoticesRead: notices.read }));
+const notices = vi.hoisted(() => ({
+  read: vi.fn(async () => true),
+  close: vi.fn(async () => true),
+}));
+vi.mock('@/lib/actions/chat-notices', () => ({
+  markChatNoticesRead: notices.read,
+  closeChatNotice: notices.close,
+}));
 const list = vi.hoisted(() => ({ chats: [] as ChatListItem[] }));
 vi.mock('./chat-list-provider', () => ({
   useChatList: () => ({ status: 'ready', chats: list.chats, refresh: async () => undefined }),
@@ -308,6 +314,116 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
       'Your OpenAI account is out of credit. Still not working after 3 days.',
     );
     expect(notices.read).not.toHaveBeenCalled();
+  });
+
+  it('warns at 80% of the key’s agent limit, with the estimate and the way to the limit', async () => {
+    const limit = {
+      id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0a',
+      kind: 'own_key_limit' as const,
+      level: 80 as const,
+      usedUsd: 205.4,
+      capUsd: 250,
+      renewsAt: '2026-11-20T09:00:00.000Z',
+      createdAt: '2026-11-01T08:00:00Z',
+      read: false,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [limit] }} />);
+    const [row] = noticeRows();
+    expect(row.getAttribute('data-kind')).toBe('own_key_limit_80');
+    expect(row.textContent).toContain('Agents have used 80% of their monthly limit on your key');
+    expect(row.textContent).toContain('About $205 of $250 this month, estimated · renews Nov 20');
+    const link = row.querySelector('[data-action="inbox.keyLimit"]')!;
+    expect(link.textContent).toBe('Review limit');
+    expect(link.getAttribute('href')).toBe('/dashboard/settings/ai-providers');
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([limit.id]);
+  });
+
+  it('says the agents paused at the limit, and offers to raise it', async () => {
+    const reached = {
+      id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b',
+      kind: 'own_key_limit' as const,
+      level: 100 as const,
+      usedUsd: 251.2,
+      capUsd: 250,
+      renewsAt: '2026-11-20T09:00:00.000Z',
+      createdAt: '2026-11-01T08:00:00Z',
+      read: true,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [reached] }} />);
+    const [row] = noticeRows();
+    expect(row.textContent).toContain(
+      "Agents reached their monthly limit on your key · they're paused",
+    );
+    expect(row.textContent).toContain('They start again on Nov 20, or when you raise the limit.');
+    expect(row.querySelector('[data-action="inbox.keyLimit"]')!.textContent).toBe('Raise limit');
+    expect(notices.read).not.toHaveBeenCalled();
+  });
+
+  it('tells of a page an agent sent on its own, with Open page and Open run, closed once opened (AUTONOMOUS-GO-LIVE §6.4)', async () => {
+    notices.close.mockClear();
+    const wentLive = {
+      id: '7d8f2c1a-1b2c-4d3e-8f90-123456789abc',
+      kind: 'agent_went_live' as const,
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'webflow' as const,
+      draftId: 'draft-1',
+      chatId: 'chat-1',
+      url: null,
+      createdAt: '2026-11-02T08:00:00Z',
+      read: false,
+    };
+    const off = {
+      id: '8e9f3d2b-2c3d-4e5f-9a01-23456789abcd',
+      kind: 'agent_go_live_off' as const,
+      agent: 'Publisher',
+      agentId: 'agent-1',
+      createdAt: '2026-11-02T09:00:00Z',
+      read: true,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [wentLive, off] }} />);
+    const [sent, stopped] = noticeRows();
+    expect(sent.getAttribute('data-kind')).toBe('agent_went_live');
+    expect(sent.textContent).toContain('Publisher sent “Pricing FAQ” to Webflow as a draft');
+    expect(sent.textContent).toContain('On its own, after Quality and your brand facts');
+    const page = sent.querySelector<HTMLAnchorElement>('[data-action="inbox.openGoLivePage"]')!;
+    expect(page.getAttribute('href')).toBe('/dashboard/content/editor/draft-1');
+    expect(sent.querySelector('[data-action="inbox.openGoLiveRun"]')!.getAttribute('href')).toBe(
+      '/dashboard/chat/chat-1',
+    );
+    expect(stopped.textContent).toContain('Publisher no longer publishes on its own');
+    expect(stopped.textContent).toContain('It changed. Turn it on again if you still want it.');
+    expect(
+      stopped.querySelector('[data-action="inbox.openGoLiveAgent"]')!.getAttribute('href'),
+    ).toBe('/dashboard/agents/agent-1');
+    // Shown: the unread one marked read. Opened: closed.
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([wentLive.id]);
+    await act(async () => page.click());
+    expect(notices.close).toHaveBeenCalledExactlyOnceWith(wentLive.id);
+  });
+
+  it('tells of a page an agent published live on its own, Open page opening the live page (PR 9)', async () => {
+    const published = {
+      id: '9f0a4e3c-3d4e-4f60-8b12-3456789abcde',
+      kind: 'agent_went_live' as const,
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'wordpress' as const,
+      draftId: 'draft-1',
+      chatId: null,
+      url: 'https://www.acme.example/pricing-faq/',
+      createdAt: '2026-11-02T08:00:00Z',
+      read: true,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [published] }} />);
+    const [row] = noticeRows();
+    expect(row.getAttribute('data-kind')).toBe('agent_published');
+    expect(row.textContent).toContain('Publisher published “Pricing FAQ” on acme.example');
+    expect(row.textContent).toContain('Live on acme.example · on its own');
+    const page = row.querySelector<HTMLAnchorElement>('[data-action="inbox.openGoLivePage"]')!;
+    expect(page.getAttribute('href')).toBe('https://www.acme.example/pricing-faq/');
+    expect(page.getAttribute('target')).toBe('_blank');
+    expect(row.querySelector('[data-action="inbox.openGoLiveRun"]')).toBeNull();
   });
 
   it('shows the notice in the Inbox without tabs too, and none that couldn’t be read', async () => {

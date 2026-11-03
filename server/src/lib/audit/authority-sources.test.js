@@ -41,6 +41,16 @@ describe('authorityKind', () => {
     expect(authorityKind('bbc.co.uk')).toBe('news');
   });
 
+  it('counts the sites a brand trusts, and their pages (00449)', () => {
+    const trusted = ['sca.coffee', 'www.NCAusa.org'];
+    expect(authorityKind('sca.coffee', trusted)).toBe('trusted');
+    expect(authorityKind('www.sca.coffee', trusted)).toBe('trusted');
+    expect(authorityKind('docs.ncausa.org', trusted)).toBe('trusted');
+    expect(authorityKind('notsca.coffee', trusted)).toBeNull();
+    // A site on the shared list stays what it is.
+    expect(authorityKind('fda.gov', ['fda.gov'])).toBe('official');
+  });
+
   it("doesn't count a company's site that only looks like one", () => {
     expect(authorityKind('example.gov.com')).toBeNull();
     expect(authorityKind('notarxiv.org')).toBeNull();
@@ -74,6 +84,21 @@ describe('outboundAuthorityLinks', () => {
         count: 2,
         authorityKinds: { 'saglik.gov.tr': 'official', 'unesco.org': 'international' },
         otherHosts: ['instagram.com'],
+        trustedSources: [],
+      },
+    });
+  });
+
+  it('counts the brand’s trusted sources its run read, and says which', () => {
+    const ctx = {
+      ...page(['https://sca.coffee/brewing', 'https://arxiv.org/abs/1']),
+      trustedSources: ['sca.coffee'],
+    };
+    expect(outboundAuthorityLinks.evaluate(ctx)).toMatchObject({
+      status: 'pass',
+      evidence: {
+        authorityKinds: { 'sca.coffee': 'trusted', 'arxiv.org': 'research' },
+        trustedSources: ['sca.coffee'],
       },
     });
   });

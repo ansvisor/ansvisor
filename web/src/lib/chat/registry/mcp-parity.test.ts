@@ -29,6 +29,7 @@ beforeAll(async () => {
     email: null,
     organizationId: 'org-1',
     apiKeyId: 'key-1',
+    brandAccess: 'all' as const,
     role: 'admin' as const,
   };
   const server = createMcpServer(auth);

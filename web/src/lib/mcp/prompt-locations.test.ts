@@ -8,8 +8,8 @@ import type { McpAuthContext } from '@/lib/mcp-auth';
  * is the key's, with its averages and cards, paged by prompt.
  */
 
-const brandInOrg = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/mcp/data', () => ({ brandInOrg }));
+const brandAllowed = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/mcp/data', () => ({ brandAllowed }));
 
 const getPromptLocationMatrix = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/prompt', () => ({ getPromptLocationMatrix }));
@@ -45,6 +45,7 @@ const auth: McpAuthContext = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'key-1',
+  brandAccess: 'all',
   role: 'admin',
 };
 
@@ -58,7 +59,7 @@ const cell = (score: number | null, over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  brandInOrg.mockReset().mockResolvedValue(true);
+  brandAllowed.mockReset().mockResolvedValue(true);
   scoped.clients.length = 0;
   promptRows = [
     { id: 'p1', text: 'Best cold brew', regions: ['US', 'DE'], is_active: true },
@@ -183,7 +184,7 @@ describe('getPromptLocationsFor', () => {
   });
 
   it("answers null for another organization's brand, without reading it", async () => {
-    brandInOrg.mockResolvedValue(false);
+    brandAllowed.mockResolvedValue(false);
     expect(await getPromptLocationsFor(auth, { brandId: 'brand-2' })).toBeNull();
     expect(getPromptLocationMatrix).not.toHaveBeenCalled();
   });

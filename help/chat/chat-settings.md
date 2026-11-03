@@ -4,18 +4,18 @@ route: /dashboard/chat/settings
 keywords: [chat settings, default mode, your focus, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-02
+last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 **Settings** in the chat menu holds your own Chat preferences. They are yours alone and follow you to every device. A change is kept as soon as you make it; if it can't be kept, it goes back and Chat says so. The bar next to **Settings** shows how much of this month's AI usage your workspace has used.
 
 ## Default mode
 
-**Default mode** is how much the agent does on its own when you start a job: **Ask me first**, **Auto, ask before changes** or **Full auto**. New chats start in it. Nothing is published or sent without your click. **Full auto** needs the Growth plan, and your Admin can turn it off for everyone but Admins; when it is locked, point at it to see why. Analysts and Agency partners only read, so they have no default mode.
+**Default mode** is how much the agent does on its own when you start a job: **Ask me first**, **Auto, ask before changes** or **Full auto**. New chats start in it. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own. **Full auto** needs the Growth plan, and your Admin can turn it off for everyone but Admins; when it is locked, point at it to see why. Analysts and Agency partners only read, so they have no default mode.
 
 ## Your focus
 

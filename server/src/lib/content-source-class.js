@@ -137,13 +137,15 @@ export function buildSourceClassPrompt(site) {
  * is billed all the same, so its hold is kept and it counts in the day's
  * reads. A spent budget throws PlanLimitError.
  */
-async function readSite({ orgId, draftId, site, modelId }) {
-  const budget = await reserveAiBudget(orgId, {
-    feature: 'quality',
-    modelId,
-    draftId,
-    holdUsd: SOURCE_CLASS_HOLD_USD,
-  });
+async function readSite({ orgId, draftId, site, modelId, reserve = null }) {
+  const budget = reserve
+    ? await reserve({ modelId, holdUsd: SOURCE_CLASS_HOLD_USD })
+    : await reserveAiBudget(orgId, {
+        feature: 'quality',
+        modelId,
+        draftId,
+        holdUsd: SOURCE_CLASS_HOLD_USD,
+      });
   try {
     const generated = await generateObject({
       model: resolveModel(modelId),
@@ -177,9 +179,12 @@ async function readSite({ orgId, draftId, site, modelId }) {
  * read fails, its error is thrown, a spent budget's first (PlanLimitError,
  * 429: the editor pauses the reads).
  *
- * @param {{ orgId: string, draftId: string, sites: string[] }} input
+ * `reserve`, when given, holds each model call in place of the workspace's
+ * Quality budget (chat-budget agentRunReserve: an agent run's own steps).
+ *
+ * @param {{ orgId: string, draftId: string, sites: string[], reserve?: Function|null }} input
  */
-export async function readSourceClasses({ orgId, draftId, sites }) {
+export async function readSourceClasses({ orgId, draftId, sites, reserve = null }) {
   const asked = sites.filter(keptSite).slice(0, MAX_SOURCE_SITES);
   if (!asked.length) return { classes: [], limited: false };
   const since = new Date(Date.now() - SOURCE_CLASS_DAYS * 86_400_000).toISOString();
@@ -214,7 +219,7 @@ export async function readSourceClasses({ orgId, draftId, sites }) {
       ...(await Promise.allSettled(
         reading
           .slice(at, at + SITES_AT_ONCE)
-          .map((site) => readSite({ orgId, draftId, site, modelId })),
+          .map((site) => readSite({ orgId, draftId, site, modelId, reserve })),
       )),
     );
   }

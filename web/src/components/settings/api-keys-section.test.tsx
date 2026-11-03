@@ -109,6 +109,31 @@ describe('ApiKeysSection', () => {
     vi.unstubAllEnvs();
   });
 
+  it('shows the new key and its MCP setup outside session replays', async () => {
+    fetchMock.mockImplementation(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST'
+        ? json({ key: { id: 'k2', name: 'laptop', prefix: 'ak_9876', token: 'ak_9876_secret' } })
+        : json({ keys: [] }),
+    );
+    await render(false);
+    await act(async () => button('New key')!.click());
+    const name = document.querySelector<HTMLInputElement>('#apiKeyName')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        name,
+        'laptop',
+      );
+      name.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => button('Create')!.click());
+
+    const shown = [...document.querySelectorAll('code, pre')].filter((el) =>
+      el.textContent?.includes('ak_9876_secret'),
+    );
+    expect(shown.map((el) => el.tagName)).toEqual(['CODE', 'PRE']);
+    for (const el of shown) expect(el.closest('.ph-no-capture')).not.toBeNull();
+  });
+
   it('opens New key on an active plan', async () => {
     await render(false);
     await act(async () => button('New key')!.click());

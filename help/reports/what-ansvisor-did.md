@@ -8,7 +8,7 @@ updated: 2026-11-01
 last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, web/src/components/reports/impact-report.tsx]
 ---
 **What Ansvisor did for you** lists the changes you shipped in a month, such as a page published to your CMS, and what each one did in AI answers. Open it from **Reports** with **What Ansvisor did for you**. It shows the brand you have open.
