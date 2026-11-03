@@ -105,6 +105,20 @@ describe('buildReportCard', () => {
       ],
       cpc: { usd: 0.42, keywords: 2 },
       dealValue: { amount: 500, currency: 'TRY' },
+      questionRows: [
+        {
+          text: 'en iyi kahve',
+          textEn: 'best coffee',
+          named: { 'chatgpt-web': 'named', 'google-aio': 'none' },
+          instead: 'Ridge',
+        },
+        {
+          text: 'kahve aboneliği',
+          textEn: 'coffee subscription',
+          named: { 'chatgpt-web': 'missed', 'google-aio': 'none' },
+          instead: 'Ridge',
+        },
+      ],
     });
     expect(kept[0].answers).toEqual({
       'chatgpt-web': { named: true, competitors: ['Ridge'], cited: ['https://ridge.example/a'] },

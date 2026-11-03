@@ -47,7 +47,10 @@ describe('renderReportCardEmail', () => {
     expect(html).toContain('19%');
     expect(html).toContain('named in 18 of 95 answers');
     expect(html).toContain('Ridge &amp; Co');
-    expect(html).toContain('attached as a PDF, 3 pages');
+    expect(html).toContain('attached as a PDF, 4 pages');
+    expect(html).toContain('and all 25 questions we asked');
+    expect(html).toContain('border-radius:100px');
+    expect(html).not.toMatch(/#111827|#6b7280|#6366f1/);
     expect(html).toContain(
       'href="https://app.ansvisor.com/en/sign-up?utm_source=report-card&amp;utm_medium=email"',
     );

@@ -5,7 +5,9 @@ import {
   MIN_CPC_KEYWORDS,
   PLAN_STEPS_MAX,
   PLAN_STEPS_MIN,
+  QUESTION_ROW_MAX,
   actionPlan,
+  buyVsEarn,
   conversionRange,
   countryName,
   firstDaySteps,
@@ -13,9 +15,9 @@ import {
   money,
   planOffers,
   quickWins,
+  questionLines,
   quotedQuestion,
   revenueRows,
-  times,
   totals,
   valueRows,
 } from './rules';
@@ -251,18 +253,24 @@ describe('countryName', () => {
 });
 
 describe('valueRows', () => {
-  it('prices 100, 1,000 and 10,000 visits at the cost per click, against each plan', () => {
-    const rows = valueRows(SAMPLE_REPORT_CARD);
-    expect(rows).toEqual([
-      { visits: 100, monthly: 185, yearly: 2_220, multiple: { starter: 3.8, growth: 0.7 } },
-      { visits: 1_000, monthly: 1_850, yearly: 22_200, multiple: { starter: 37.8, growth: 7.4 } },
-      {
-        visits: 10_000,
-        monthly: 18_500,
-        yearly: 222_000,
-        multiple: { starter: 377.6, growth: 74.3 },
-      },
+  it('prices 100, 1,000 and 10,000 visits at the cost per click, a month and a year', () => {
+    expect(valueRows(SAMPLE_REPORT_CARD)).toEqual([
+      { visits: 100, monthly: 185, yearly: 2_220 },
+      { visits: 1_000, monthly: 1_850, yearly: 22_200 },
+      { visits: 10_000, monthly: 18_500, yearly: 222_000 },
     ]);
+  });
+
+  it('sets 1,000 visits bought in ads against Growth over 12 months', () => {
+    expect(buyVsEarn(SAMPLE_REPORT_CARD)).toEqual({
+      visits: 1_000,
+      adsMonthly: 1_850,
+      adsYearly: 22_200,
+      growthMonthly: PLANS.growth.pricing?.monthly,
+      growthTwelveMonths: (PLANS.growth.pricing?.monthly ?? 0) * 12,
+      growthYearly: PLANS.growth.pricing?.annual,
+    });
+    expect(buyVsEarn(card({ cpc: null }))).toBeNull();
   });
 
   it('is null without a cost per click, or with fewer than five keywords behind it', () => {
@@ -320,12 +328,52 @@ describe('planOffers', () => {
   });
 });
 
+describe('questionLines', () => {
+  it('quotes each question as page 1 does, cut to two lines', () => {
+    const lines = questionLines(
+      card({
+        questionRows: [
+          {
+            text: 'kısa soru',
+            textEn: 'short question',
+            named: { 'chatgpt-web': 'named' },
+            instead: null,
+          },
+          {
+            text: '在哪里买咖啡豆',
+            textEn: 'Where to buy coffee beans',
+            named: {},
+            instead: 'Ridge',
+          },
+          {
+            text: 'x '.repeat(80).trim(),
+            textEn: null,
+            named: {},
+            instead: 'A very long competitor name that runs on',
+          },
+        ],
+      }),
+    );
+    expect(lines[0]).toEqual({
+      text: 'kısa soru',
+      named: { 'chatgpt-web': 'named' },
+      instead: null,
+    });
+    expect(lines[1].text).toBe('Where to buy coffee beans');
+    expect(lines[2].text.length).toBeLessThanOrEqual(QUESTION_ROW_MAX);
+    expect(lines[2].text.endsWith('…')).toBe(true);
+    expect(lines[2].instead?.length).toBeLessThanOrEqual(28);
+  });
+
+  it('has none for a card without its questions', () => {
+    expect(questionLines(card({ questionRows: undefined }))).toEqual([]);
+  });
+});
+
 describe('formats', () => {
-  it('writes money in whole units and multiples to one decimal under ten', () => {
+  it('writes money in whole units', () => {
     expect(money(1_850)).toBe('$1,850');
     expect(money(380, 'EUR')).toBe('€380');
     expect(money(380, 'TRY')).toBe('TRY\u00a0380');
-    expect(times(3.8)).toBe('3.8×');
-    expect(times(377.6)).toBe('378×');
   });
 });

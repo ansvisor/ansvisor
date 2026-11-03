@@ -129,6 +129,26 @@ export async function buildReportCard(
   );
   if (keywords.called) meter.keywords += limits.volumeUsd;
 
+  // Page 4: every question, what each engine did with it, and the brand
+  // its answers named most.
+  const questionRows = questions.map((q, index) => {
+    const counts = new Map();
+    const marks = {};
+    for (const engine of asked.engines) {
+      const answer = asked.answers.find((a) => a.question === index && a.engine === engine);
+      if (!answer || typeof answer.text !== 'string') {
+        marks[engine] = 'none';
+        continue;
+      }
+      marks[engine] = figures.namedAnswers.has(`${index}:${engine}`) ? 'named' : 'missed';
+      for (const name of named.get(`${index}:${engine}`) ?? []) {
+        counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+    }
+    const instead = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    return { text: q.text, textEn: q.textEn, named: marks, instead };
+  });
+
   const payload = {
     companyName,
     domain: site,
@@ -144,6 +164,7 @@ export async function buildReportCard(
     ownCitations: figures.ownCitations,
     missedQuestions: figures.missedQuestions,
     missedCount: figures.missedCount,
+    questionRows,
     cpc: keywords.cpc,
     dealValue,
   };

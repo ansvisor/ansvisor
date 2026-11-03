@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: false
 sources: [docs/api-reference/report-card.mdx]
 ---
-The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor writes 25 questions your buyers might ask from your home page, asks each one once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a three-page PDF. One card is made per company every 30 days: asking again within that time sends the same card again.
+The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor writes 25 questions your buyers might ask from your home page, asks each one once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: asking again within that time sends the same card again.
 
 ## What the card measured
 
@@ -19,6 +19,7 @@ The free AI visibility report card is a one-time snapshot you can ask for on the
 - The same share for each engine.
 - The competitors the answers named most, and the sites they cite, with yours marked.
 - Three things to do now, and an action plan of four to six steps with the Ansvisor features that work on each. Both are picked from your results by fixed rules.
+- On the last page, all 25 questions, whether each engine's answer named you, and the brand named most instead.
 
 The questions and answers stay in your target country's language; the PDF is in English.
 
@@ -32,4 +33,4 @@ After you start a trial, add your brand in the setup wizard, then add the card's
 
 ## The value table and the revenue scenario
 
-The third page prices AI visits at the median Google Ads cost per click of your questions' keywords in your country, against the Starter and Growth plans. A revenue line appears only if you gave an average order or deal value, and its conversion rate is an assumption. Both are scenarios, not a forecast or a guarantee. **AI Referral Traffic** measures your real visits from AI answers once it's set up.
+The third page prices AI visits at the median Google Ads cost per click of your questions' keywords in your country, when at least five keywords have one. Ad clicks are bought again every month; pages AI engines cite can keep sending visits for as long as they're cited. The page sets that against what Ansvisor Growth costs, and says how AI answers can also lead to searches for your name. A revenue line appears only if you gave an average order or deal value, and its conversion rate is an assumption. Both are scenarios, not a forecast or a guarantee. **AI Referral Traffic** measures your real visits from AI answers once it's set up.

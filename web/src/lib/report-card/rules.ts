@@ -292,6 +292,31 @@ export function firstDaySteps(card: ReportCardPayload): string[] {
   ];
 }
 
+// ─── Page 4: the questions ───────────────────────────────────────────────────
+
+/** How long a question may run on page 4: two lines at most, so 25 fit. */
+export const QUESTION_ROW_MAX = 90;
+
+export interface QuestionLine {
+  /** The question as the card quotes it: as asked, or its English. */
+  text: string;
+  /** Each engine's answer: named the company, didn't, or gave none. */
+  named: Partial<
+    Record<ReportCardPayload['engines'][number]['engine'], 'named' | 'missed' | 'none'>
+  >;
+  /** The brand named most in its answers, if any. */
+  instead: string | null;
+}
+
+/** Page 4's rows: every question asked, quoted as page 1 quotes one. */
+export function questionLines(card: ReportCardPayload): QuestionLine[] {
+  return (card.questionRows ?? []).map((row) => ({
+    text: clip(quotedQuestion(row) ?? row.textEn ?? row.text, QUESTION_ROW_MAX),
+    named: row.named,
+    instead: row.instead ? clip(row.instead, 28) : null,
+  }));
+}
+
 // ─── Page 3: outcomes ────────────────────────────────────────────────────────
 
 export interface Goal {
@@ -327,8 +352,6 @@ export interface ValueRow {
   /** What the same visits would cost a month in Google Ads, in USD. */
   monthly: number;
   yearly: number;
-  /** The month's ad cost as a multiple of each plan's monthly price. */
-  multiple: Record<ComparedPlan, number>;
 }
 
 export function planMonthly(plan: ComparedPlan): number {
@@ -352,11 +375,26 @@ export function valueRows(card: ReportCardPayload): ValueRow[] | null {
   const { usd } = card.cpc;
   return VISIT_ROWS.map((visits) => {
     const monthly = Math.round(visits * usd);
-    const multiple = Object.fromEntries(
-      COMPARED_PLANS.map((plan) => [plan, Math.round((monthly / planMonthly(plan)) * 10) / 10]),
-    ) as Record<ComparedPlan, number>;
-    return { visits, monthly, yearly: monthly * 12, multiple };
+    return { visits, monthly, yearly: monthly * 12 };
   });
+}
+
+/**
+ * Buying the visits vs earning them (owner, 2026-11-03): the 1,000-visit
+ * row's ad cost, a month and over 12 months, bought again every month,
+ * against Growth's price a month, over 12 months and paid yearly.
+ */
+export function buyVsEarn(card: ReportCardPayload) {
+  const row = valueRows(card)?.find((r) => r.visits === 1_000);
+  if (!row) return null;
+  return {
+    visits: row.visits,
+    adsMonthly: row.monthly,
+    adsYearly: row.yearly,
+    growthMonthly: planMonthly('growth'),
+    growthTwelveMonths: planMonthly('growth') * 12,
+    growthYearly: planYearly('growth'),
+  };
 }
 
 /**
@@ -440,10 +478,6 @@ export function money(amount: number, currency = 'USD'): string {
     return `${formatNumber(Math.round(amount))} ${currency}`;
   }
 }
-
-/** A multiple: "3.8×" under ten, "38×" from there. */
-export const times = (multiple: number): string =>
-  `${multiple < 10 ? multiple : formatNumber(Math.round(multiple))}×`;
 
 /** "$1.85": a cost per click, to the cent. */
 export const cents = (usd: number): string =>
