@@ -4055,6 +4055,11 @@
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
     "removeChip": "Remove {label}",
+    "keyPaste": {
+      "line": "This looks like an API key. Save it securely instead of sending it?",
+      "remove": "Remove",
+      "save": "Save securely"
+    },
     "usage": {
       "close": "Close"
     },
