@@ -138,9 +138,22 @@ async function chatScripts({ brandId, now }) {
     .map(([promptId, rows]) => ({
       text: ctx.promptText(promptId),
       named: rows.some((r) => r.mention_count > 0),
+      answers: rows.map((r) => r.id),
     }))
     .sort((a, b) => Number(a.named) - Number(b.named));
   const missed = perplexityByPrompt.filter((p) => !p.named);
+  // The sites Perplexity's answers to them cite most.
+  const missedAnswers = new Set(missed.flatMap((p) => p.answers));
+  const missedCited = new Map();
+  for (const c of citations) {
+    if (missedAnswers.has(c.prompt_result_id)) {
+      missedCited.set(c.domain, (missedCited.get(c.domain) ?? 0) + 1);
+    }
+  }
+  const missedSites = [...missedCited]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([domain]) => domain);
   const askedAt = at(LATEST, 2, 40);
   const followAt = new Date(askedAt.getTime() + 4 * MINUTE_MS);
   const visibility = {
@@ -205,7 +218,9 @@ async function chatScripts({ brandId, now }) {
             ? `It isn't named for:\n${missed.map((p) => `- ${p.text}`).join('\n')}`
             : 'It is named for every tracked prompt.',
           '',
-          'Answers to these prompts cite reviews and buying guides more than shops, so a page that answers the question directly gives Perplexity something of yours to cite.',
+          missedSites.length > 0
+            ? `Perplexity's answers to them cite ${missedSites.join(' and ')} most, so a page of yours that answers the question directly gives it one of yours to cite.`
+            : 'A page of yours that answers these questions directly gives Perplexity one of yours to cite.',
         ].join('\n'),
         sources: [{ label: 'Prompt performance', count: perplexityByPrompt.length }],
       },
