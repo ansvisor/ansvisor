@@ -60046,10 +60046,10 @@ comment on function public.set_member_brand_access(uuid, uuid, text, uuid[], uui
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00472_brand_google_property_guard.sql
+-- migrations/00473_brand_google_property_guard.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
--- 00472: a brand's Google properties are set by the server
+-- 00473: a brand's Google properties are set by the server
 -- ============================================================================
 -- A brand's Search Console site (gsc_property) and Analytics property
 -- (ga_property_id) are picked from the list of the Google sign-in the brand
