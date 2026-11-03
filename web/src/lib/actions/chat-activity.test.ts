@@ -14,12 +14,15 @@ let calls: Call[] = [];
 let role = 'manager';
 let logRows: Record<string, unknown>[] = [];
 let logError: { message: string } | null = null;
+/** The sends marked published, for Take down (PR 10). */
+let liveSends: Record<string, unknown>[] = [];
 
 function from(table: string) {
   const call: Call = { table, filters: [] };
   calls.push(call);
   const answer = () => {
     if (table === 'chat_activity_log') return { data: logError ? null : logRows, error: logError };
+    if (table === 'content_draft_deliveries') return { data: liveSends, error: null };
     if (table === 'profiles') {
       return call.filters.some((f) => f[0] === 'in' || f[1] === 'organization_id')
         ? {
@@ -88,9 +91,68 @@ beforeEach(() => {
   role = 'manager';
   logRows = [row()];
   logError = null;
+  liveSends = [];
   undoChange.mockReset();
 });
 afterEach(() => vi.unstubAllEnvs());
+
+describe('listActivity, Take down (AUTONOMOUS-GO-LIVE PR 10)', () => {
+  const DRAFT = '44444444-4444-4444-8444-444444444444';
+  const published = (over: Record<string, unknown> = {}) =>
+    row({
+      tool_key: 'publishToCms',
+      class: 'execute',
+      approval_kind: 'click',
+      auto_via: null,
+      summary_key: 'publishToCms',
+      target_type: 'content_draft',
+      target_id: DRAFT,
+      undo_until: null,
+      created_at: new Date(Date.now() - HOUR).toISOString(),
+      ...over,
+    });
+  const LIVE = {
+    draft_id: DRAFT,
+    target: 'wordpress',
+    published_url: 'https://acme.example/pricing-faq/',
+    content_drafts: { title: 'Pricing FAQ' },
+  };
+
+  it('offers Take down on a page a row published that is still live, for 30 days', async () => {
+    logRows = [published(), published({ id: 'a2', created_at: '2026-09-01T10:00:00Z' })];
+    liveSends = [LIVE];
+    const result = await listActivity();
+    if (!result.ok) throw new Error('expected rows');
+    expect(result.rows.map((r) => r.takeDown)).toEqual([
+      {
+        draftId: DRAFT,
+        title: 'Pricing FAQ',
+        url: 'https://acme.example/pricing-faq/',
+        target: 'wordpress',
+      },
+      null,
+    ]);
+    const read = calls.find((c) => c.table === 'content_draft_deliveries')!;
+    expect(read.filters).toContainEqual(['eq', 'organization_id', ORG]);
+    expect(read.filters).toContainEqual(['eq', 'status', 'published']);
+    expect(read.filters).toContainEqual(['in', 'draft_id', [DRAFT]]);
+  });
+
+  it('offers none on a page not live anymore, nor in Framer, nor to an Analyst', async () => {
+    logRows = [published()];
+    const none = async () => {
+      const result = await listActivity();
+      if (!result.ok) throw new Error('expected rows');
+      return result.rows[0].takeDown;
+    };
+    expect(await none()).toBeNull();
+    liveSends = [{ ...LIVE, target: 'framer' }];
+    expect(await none()).toBeNull();
+    liveSends = [LIVE];
+    role = 'analyst';
+    expect(await none()).toBeNull();
+  });
+});
 
 describe('listActivity', () => {
   it("gives a member their own rows, in words, with Undo while it's open", async () => {

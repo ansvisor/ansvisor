@@ -122,6 +122,7 @@ vi.mock('../config/supabase.js', () => ({
 const {
   assertAllBrands,
   assertBrandAccess,
+  assertEveryBrand,
   assertOpportunitiesAccess,
   assertPromptAccess,
   assertRole,
@@ -317,6 +318,39 @@ describe('assertAllBrands', () => {
     });
     state.profile.role = 'admin';
     await expect(assertAllBrands('u1')).resolves.toMatchObject({ role: 'admin' });
+  });
+});
+
+describe('assertEveryBrand', () => {
+  const brandRow = (id, extra = {}) => ({ id, organization_id: 'org-1', is_demo: false, ...extra });
+
+  it('lets through who reaches every brand, and refuses Selected brands one not granted', async () => {
+    state.brands = [brandRow('b1'), brandRow('b2'), brandRow('demo', { is_demo: true })];
+    await expect(assertEveryBrand(['b1', 'b2', 'demo'], 'u1')).resolves.toMatchObject({
+      orgId: 'org-1',
+    });
+    state.profile.brand_scope = 'selected';
+    state.grants = ['b1', 'b2'];
+    // The demo brand is everyone's.
+    await expect(assertEveryBrand(['b1', 'b2', 'demo'], 'u1')).resolves.toMatchObject({
+      role: 'manager',
+    });
+    state.grants = ['b1'];
+    await expect(assertEveryBrand(['b1', 'b2'], 'u1')).rejects.toMatchObject({
+      status: 403,
+      code: 'no_brand_access',
+    });
+    // A brand that is gone counts for no one.
+    await expect(assertEveryBrand(['b1', 'gone'], 'u1')).resolves.toBeTruthy();
+  });
+
+  it('refuses another organization’s brand, and fails on a failed read', async () => {
+    state.brands = [brandRow('b1'), { ...brandRow('b2'), organization_id: 'org-2' }];
+    await expect(assertEveryBrand(['b1', 'b2'], 'u1')).rejects.toMatchObject({
+      code: 'not_in_workspace',
+    });
+    state.brandsError = { message: 'boom' };
+    await expect(assertEveryBrand(['b1'], 'u1')).rejects.toThrow('boom');
   });
 });
 

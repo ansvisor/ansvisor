@@ -22,6 +22,8 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const takeDown = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/cms-take-down', () => ({ takeDownDraft: takeDown }));
 
 const { ActivityLogView } = await import('./activity-log-view');
 
@@ -61,6 +63,7 @@ const row = (over: Partial<ActivityRow> = {}): ActivityRow => ({
   status: 'done',
   canUndo: true,
   undoneAt: null,
+  takeDown: null,
   ...over,
 });
 const page = (over = {}) => ({
@@ -120,6 +123,45 @@ describe('ActivityLogView', () => {
     expect(actions.undoActivity).toHaveBeenCalledWith('a1');
     expect(toast.success).toHaveBeenCalledWith('Undone.');
     expect(actions.listActivity).toHaveBeenCalledTimes(2);
+  });
+
+  it('offers Take down on a page Chat published that is still live, then says it’s down (PR 10)', async () => {
+    actions.listActivity.mockResolvedValue(
+      page({
+        rows: [
+          row({
+            toolKey: 'publishToCms',
+            class: 'execute',
+            approvalKind: 'click',
+            autoVia: null,
+            summaryKey: 'publishToCms',
+            summaryParams: { title: 'Pricing FAQ', cms: 'Wix' },
+            canUndo: false,
+            takeDown: {
+              draftId: 'draft-1',
+              title: 'Pricing FAQ',
+              url: 'https://acme.example/post/pricing-faq',
+              target: 'wix',
+            },
+          }),
+        ],
+      }),
+    );
+    takeDown.mockResolvedValue({ ok: true, target: 'wix' });
+    await render();
+    expect(text()).toContain('Published the page “Pricing FAQ” through Wix');
+    expect(button('Undo')).toBeUndefined();
+    await act(async () => button('Take down')!.click());
+    const dialog = document.querySelector('[data-slot="take-down-dialog"]')!;
+    expect(dialog.textContent).toContain(
+      'It leaves acme.example now and goes back to a draft in Wix.',
+    );
+    await act(async () =>
+      (dialog.querySelector('[data-action="takeDown.confirm"]') as HTMLElement).click(),
+    );
+    expect(takeDown).toHaveBeenCalledWith('draft-1');
+    expect(button('Take down')).toBeUndefined();
+    expect(text()).toContain('Taken down');
   });
 
   it('links a change that changed since, to undo by hand', async () => {
