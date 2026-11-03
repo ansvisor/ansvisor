@@ -1142,6 +1142,17 @@ describe('the fact check (W1-21)', () => {
     expectClean(events);
   });
 
+  it('keeps the period the app reads, named with its unit, as no metric', async () => {
+    useModels([READY], [text('Over the last 30 days you are up 37%, with 30 visits.')]);
+    const runId = await turn(ADMIN, 'How are we doing?');
+    const streamed = ofType(await eventsOf(runId), 'text.delta')
+      .map((e) => e.data.text)
+      .join('');
+    expect(streamed).toBe(
+      'Over the last 30 days you are up [real metric], with [real metric] visits.',
+    );
+  });
+
   it('keeps a link whole when the stream is cut just before its figure', async () => {
     const lead = `${'Visibility is up 12% on ChatGPT. '.repeat(5)}Read https://example.com/blog/`;
     useModels(
@@ -5043,6 +5054,22 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
       detail: 'Ansvisor library',
     });
     expectClean(events);
+  });
+
+  it('lets the answer name a loaded skill’s targets: the fact check knows its text', async () => {
+    const answer = 'Each answer stays under the 80-word target.';
+    const streamedOf = async (runId: string) =>
+      ofType(await eventsOf(runId), 'text.delta')
+        .map((e) => e.data.text)
+        .join('');
+    // No skill loaded: the target is a figure nothing gave.
+    useModels([READY], [text(answer)]);
+    const plain = await turn(ADMIN, 'Write an FAQ for our pricing page');
+    expect(await streamedOf(plain)).toBe('Each answer stays under the [real metric]-word target.');
+    expect(skill('faq').body).toContain('40 to 80 words');
+    useModels([READY], [text(answer)]);
+    const faq = await turn(ADMIN, '/faq Write an FAQ for our pricing page');
+    expect(await streamedOf(faq)).toBe(answer);
   });
 
   it('loads the skill the model picks, once, and at most 3 bodies a run', async () => {
