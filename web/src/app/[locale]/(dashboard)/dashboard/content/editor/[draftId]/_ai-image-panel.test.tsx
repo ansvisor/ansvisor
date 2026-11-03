@@ -92,7 +92,7 @@ describe('AiImagePanel', () => {
   it('starts from the page’s title, the recommended model and two options, with their share', async () => {
     await render();
     expect($<HTMLTextAreaElement>('#ai-image-prompt').value).toBe(
-      'A cover image for “GEO strategies for 2026”',
+      'A cover image about GEO strategies for 2026',
     );
     expect($('[data-model="' + LITE + '"]').getAttribute('aria-checked')).toBe('true');
     expect(container.textContent).toContain('1x · about 0.15% of your monthly AI limit per image');
@@ -113,7 +113,7 @@ describe('AiImagePanel', () => {
     await click('[data-action="ai-image.generate"]');
     expect(posted).toEqual([
       {
-        prompt: 'A cover image for “GEO strategies for 2026”',
+        prompt: 'A cover image about GEO strategies for 2026',
         style: 'illustration',
         aspectRatio: '1:1',
         model: PRO,
@@ -123,7 +123,7 @@ describe('AiImagePanel', () => {
     expect(container.querySelectorAll('[data-option]')).toHaveLength(2);
     expect($('[data-option="1"]').getAttribute('aria-checked')).toBe('true');
     expect($<HTMLInputElement>('#ai-image-alt').value).toBe(
-      'A cover image for “GEO strategies for 2026”',
+      'A cover image about GEO strategies for 2026',
     );
     expect($('[data-action="ai-image.generate"]').textContent).toContain('Regenerate');
   });
@@ -138,7 +138,7 @@ describe('AiImagePanel', () => {
     expect(file.name).toBe('ai-image.png');
     expect(onUse).toHaveBeenCalledWith({
       src: 'https://cdn.example/up.png',
-      alt: 'A cover image for “GEO strategies for 2026”',
+      alt: 'A cover image about GEO strategies for 2026',
     });
   });
 

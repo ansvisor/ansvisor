@@ -34,7 +34,7 @@ export type DraftImagesInput = z.output<typeof draftImagesInput>;
  * no text unless asked. Appended to every prompt, after the person's words.
  */
 export const DRAFT_IMAGE_RULES =
-  "Rules: don't show a screenshot or mock-up of a product's interface; no realistic people or faces; no charts, graphs or figures with numbers; no text, letters or logos in the image unless the description above asks for them.";
+  'Rules: an image only, never a web page, app screen, dashboard or a mock-up of one; no realistic people or faces; no charts, graphs or numbers; no words, letters, labels or logos anywhere in it unless the description above asks for them.';
 
 /** The prompt the image model gets: the person's words, the style, then the rules. */
 export function draftImagePrompt(
@@ -46,7 +46,7 @@ export function draftImagePrompt(
       ? 'Style: a clean, flat illustration.'
       : input.style === 'photo'
         ? 'Style: photo-like, natural light, no people.'
-        : `Style: clean and modern, to sit on ${brandName || 'the brand'}'s website.`;
+        : `Style: clean, modern and warm, in colors that suit ${brandName || 'the brand'}.`;
   return [input.prompt, style, DRAFT_IMAGE_RULES].join('\n\n');
 }
 

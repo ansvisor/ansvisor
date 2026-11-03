@@ -57,16 +57,16 @@ beforeEach(() => {
 describe('the prompt', () => {
   it('keeps the person’s words, the style, and the rules: no product screens, realistic people or charts with numbers, no text', () => {
     expect(draftImagePrompt({ prompt: 'A coffee cup', style: 'brand' }, 'Acme Coffee')).toBe(
-      `A coffee cup\n\nStyle: clean and modern, to sit on Acme Coffee's website.\n\n${DRAFT_IMAGE_RULES}`,
+      `A coffee cup\n\nStyle: clean, modern and warm, in colors that suit Acme Coffee.\n\n${DRAFT_IMAGE_RULES}`,
     );
     expect(draftImagePrompt({ prompt: 'x y z', style: 'illustration' }, '')).toContain(
       'flat illustration',
     );
     expect(draftImagePrompt({ prompt: 'x y z', style: 'photo' }, '')).toContain('no people');
-    expect(DRAFT_IMAGE_RULES).toMatch(/interface/);
-    expect(DRAFT_IMAGE_RULES).toMatch(/realistic people/);
-    expect(DRAFT_IMAGE_RULES).toMatch(/charts/);
-    expect(DRAFT_IMAGE_RULES).toMatch(/no text/);
+    expect(DRAFT_IMAGE_RULES).toMatch(/never a web page, app screen/);
+    expect(DRAFT_IMAGE_RULES).toMatch(/no realistic people/);
+    expect(DRAFT_IMAGE_RULES).toMatch(/no charts, graphs or numbers/);
+    expect(DRAFT_IMAGE_RULES).toMatch(/no words, letters, labels or logos/);
   });
 
   it('takes two to four options, a known model, style and shape', () => {

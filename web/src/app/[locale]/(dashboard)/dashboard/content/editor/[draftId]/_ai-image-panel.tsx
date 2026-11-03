@@ -205,6 +205,11 @@ export function AiImagePanel({
         </div>
       </div>
 
+      {!models && !failure && (
+        <p data-slot="ai-image-models-loading" className="text-xs text-muted-foreground">
+          {t('loadingModels')}
+        </p>
+      )}
       {models && (
         <div role="radiogroup" aria-label={t('model')} className="space-y-1">
           <span className="text-xs text-muted-foreground">{t('model')}</span>

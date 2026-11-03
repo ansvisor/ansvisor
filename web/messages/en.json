@@ -8462,7 +8462,7 @@
         },
         "ai": {
           "prompt": "Describe the image",
-          "promptDefault": "A cover image for “{title}”",
+          "promptDefault": "A cover image about {title}",
           "style": "Style",
           "styles": {
             "brand": "Brand style",
@@ -8471,6 +8471,7 @@
           },
           "ratio": "Shape",
           "model": "Image model",
+          "loadingModels": "Reading the image models…",
           "modelCost": "{multiplier} · about {percent}% of your monthly AI limit per image",
           "modelOwnKey": "{multiplier} · Your key",
           "recommended": "Recommended",
