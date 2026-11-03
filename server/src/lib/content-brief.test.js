@@ -529,6 +529,10 @@ describe('rebuildDraftBrief', () => {
 });
 
 describe('briefFit (editor UX review 2026-11-03, decision b)', () => {
+  afterEach(() => {
+    delete process.env.CONTENT_BRIEF_RULES;
+  });
+
   it('plans no more sections and key points than the Length holds', () => {
     // 800 characters (up to 960): two short sections, two points each.
     expect(briefFit(800)).toEqual({ sections: 2, keyPoints: 2 });
@@ -541,6 +545,8 @@ describe('briefFit (editor UX review 2026-11-03, decision b)', () => {
   });
 
   it('asks the model for that many, and keeps no more of what it answers', async () => {
+    // The ask is version 2's: version 1's words stay as its eval baseline has them.
+    process.env.CONTENT_BRIEF_RULES = 'true';
     const prompt = buildBriefPrompt({
       brand: { name: 'Acme', language: 'en' },
       draft: { title: 'Office coffee', page_type: null, method: 'create', source_url: null },
@@ -560,6 +566,15 @@ describe('briefFit (editor UX review 2026-11-03, decision b)', () => {
     ).toContain(
       'Length: between 4500 and 5500 characters, about 5000. Fit the page to it: at most 12 H2 sections',
     );
+    delete process.env.CONTENT_BRIEF_RULES;
+    expect(
+      buildBriefPrompt({
+        brand: { name: 'Acme', language: 'en' },
+        draft: { title: 'Office coffee', page_type: null, method: 'create', source_url: null },
+        prompts: [],
+        sources: sources({ length: 800 }),
+      }),
+    ).toContain('Length: about 800 characters.\n');
     generateObject.mockResolvedValue({
       object: {
         goal: 'Win office searches',

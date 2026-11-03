@@ -1204,9 +1204,15 @@ export function buildBriefPrompt({
       : null;
   const listed = v2 ? rules.filter((r) => r.name) : [];
   const fit = briefFit(sources.length, sources.lengthBand);
-  const length = sources.lengthBand
-    ? `between ${sources.lengthBand.min} and ${sources.lengthBand.max} characters, about ${sources.length}`
-    : `about ${sources.length} characters`;
+  // Version 1's words stay as its eval baseline recorded them (content-brief-eval):
+  // its answer is cut to fit all the same (shapeWhole).
+  const length =
+    v2 && sources.lengthBand
+      ? `between ${sources.lengthBand.min} and ${sources.lengthBand.max} characters, about ${sources.length}`
+      : `about ${sources.length} characters`;
+  const fitLine = v2
+    ? ` Fit the page to it: at most ${fit.sections} H2 ${fit.sections === 1 ? 'section' : 'sections'}, each with up to ${fit.keyPoints} key points. Leave out what doesn't fit rather than go past it.`
+    : '';
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
 ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
@@ -1214,7 +1220,7 @@ ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
 Page: ${draft.title || 'Untitled'}
 Page type: ${pageTypeFormat(draft.page_type)}
 ${leans ? `Its sections lean to: ${leans}.\n` : ''}${draft.method === 'optimize' && draft.source_url ? `Existing page to improve: ${draft.source_url}` : 'A new page.'}
-Length: ${length}. Fit the page to it: at most ${fit.sections} H2 ${fit.sections === 1 ? 'section' : 'sections'}, each with up to ${fit.keyPoints} key points. Leave out what doesn't fit rather than go past it.
+Length: ${length}.${fitLine}
 ${listed.length ? `\nRules the page is written to:\n${list(listed.map((r) => (r.detail ? `${r.name}: ${r.detail}` : r.name)))}\n` : ''}
 Prompts the page must answer:
 ${list(prompts)}
