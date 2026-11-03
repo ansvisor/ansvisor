@@ -16,10 +16,13 @@ const reads = vi.hoisted(() => ({
   selects: [] as { table: string; columns: string }[],
   filters: [] as { table: string; column: string; value: unknown }[],
   answers: {} as Record<string, unknown>,
+  /** brand_integrations' rows by brand_id, when a test gives each brand its own. */
+  byBrand: null as Record<string, unknown[]> | null,
   org: { plan: 'starter', subscription_status: 'active', plan_overrides: null } as unknown,
 }));
 
 function from(table: string) {
+  let brandId: unknown = null;
   const chain: Record<string, unknown> = {
     select: (columns: string) => {
       reads.selects.push({ table, columns });
@@ -27,6 +30,7 @@ function from(table: string) {
     },
     eq: (column: string, value: unknown) => {
       reads.filters.push({ table, column, value });
+      if (column === 'brand_id') brandId = value;
       return chain;
     },
     in: () => chain,
@@ -38,7 +42,13 @@ function from(table: string) {
         ? { data: reads.org, error: null }
         : { data: reads.answers[table] ?? null, error: null },
     then: (resolve: (value: unknown) => unknown) =>
-      Promise.resolve({ data: reads.answers[table] ?? [], error: null }).then(resolve),
+      Promise.resolve({
+        data:
+          table === 'brand_integrations' && reads.byBrand
+            ? (reads.byBrand[String(brandId)] ?? [])
+            : (reads.answers[table] ?? []),
+        error: null,
+      }).then(resolve),
   };
   return chain;
 }
@@ -105,6 +115,7 @@ beforeEach(() => {
   reads.selects = [];
   reads.filters = [];
   reads.answers = {};
+  reads.byBrand = null;
   reads.org = { plan: 'starter', subscription_status: 'active', plan_overrides: null };
   for (const fn of Object.values(mocks)) fn.mockReset();
   mocks.brandAllowed.mockResolvedValue(true);
@@ -439,12 +450,11 @@ describe('Workspace reads', () => {
     reads.answers.brand_cms_connections = [
       { brand_id: BRAND, provider: 'webflow', status: 'connected', site_name: 'Acme site' },
     ];
-    reads.answers.integration_connections = [
+    // The Google sign-in the brand uses (00470).
+    reads.answers.brand_integrations = [
       {
         provider: 'google-search-console',
-        status: 'connected',
-        connected_by: null,
-        created_at: null,
+        account: { id: 'a1', label: null, status: 'connected' },
       },
     ];
     reads.answers.api_keys = [{ name: 'MCP laptop', last_used_at: null }];
@@ -469,16 +479,55 @@ describe('Workspace reads', () => {
     expect(read?.brands[0].not_connected).not.toContain('HubSpot');
     expect(read?.coming_soon).toContain('HubSpot');
     // Google disconnected in Settings: the property is kept, but its sign-in is gone.
-    reads.answers.integration_connections = [];
+    reads.answers.brand_integrations = [
+      {
+        provider: 'google-search-console',
+        account: { id: 'a1', label: null, status: 'disconnected' },
+      },
+    ];
     expect((await listConnectionsFor(auth()))?.brands[0]).toMatchObject({
       connected: [{ tool: 'Webflow' }],
       sign_in_failed: ['Google Search Console'],
     });
+    // The brand's own sign-ins, not the Account's row.
+    expect(reads.filters).toContainEqual({
+      table: 'brand_integrations',
+      column: 'brand_id',
+      value: BRAND,
+    });
+    expect(reads.selects.some((s) => s.table === 'integration_connections')).toBe(false);
     // Only the person's own keys: the read is by their id, never the workspace's members.
     expect(reads.filters).toContainEqual({ table: 'api_keys', column: 'user_id', value: 'u1' });
     expect(reads.selects.some((s) => s.table === 'profiles')).toBe(false);
     const columns = reads.selects.map((s) => s.columns).join(',');
     expect(columns).not.toMatch(/key_hash|key_encrypted|key_last4|prefix|composio|credential/);
+  });
+
+  it('read each brand’s Google tools on the sign-in that brand uses', async () => {
+    reads.answers.brands = [
+      { id: BRAND, name: 'Acme', gsc_property: 'sc-acme', ga_property_id: null },
+      { id: 'brand-2', name: 'Beta', gsc_property: 'sc-beta', ga_property_id: null },
+    ];
+    reads.byBrand = {
+      [BRAND]: [
+        {
+          provider: 'google-search-console',
+          account: { id: 'a1', label: null, status: 'connected' },
+        },
+      ],
+      // Beta uses another sign-in of the Account, signed out.
+      'brand-2': [
+        {
+          provider: 'google-search-console',
+          account: { id: 'a2', label: null, status: 'disconnected' },
+        },
+      ],
+    };
+    const read = await listConnectionsFor(auth());
+    expect(read?.brands).toMatchObject([
+      { brand: 'Acme', connected: [{ tool: 'Google Search Console' }], sign_in_failed: [] },
+      { brand: 'Beta', connected: [], sign_in_failed: ['Google Search Console'] },
+    ]);
   });
 
   it("list a Selected-brands person's brands only (BRAND-ACCESS)", async () => {
