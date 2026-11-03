@@ -18,6 +18,7 @@ const auth: McpAuthContext = {
   organizationId: 'org-1',
   role: 'analyst',
   apiKeyId: 'agent-internal',
+  brandAccess: 'all',
 };
 
 let requests: { url: string; init: RequestInit }[];

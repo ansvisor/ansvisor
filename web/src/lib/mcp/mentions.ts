@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import { mayUseBrand } from './data';
 import { expandDateToEndOfDay } from '@/lib/dates';
 import { mentionExcerpt } from '@/lib/mention-match';
 import {
@@ -102,7 +103,11 @@ interface OwnedBrand {
   terms: string[];
 }
 
-/** The brand, when it belongs to the key's organization; null otherwise. */
+/**
+ * The brand, when it belongs to the key's organization and its owner may use
+ * it; null otherwise. The Mentions functions (00434) run with the service
+ * role here, which they don't check, so every read asks this first.
+ */
 async function ownedBrand(auth: McpAuthContext, brandId: string): Promise<OwnedBrand | null> {
   if (!auth.organizationId) return null;
   const { data } = await supabaseAdmin
@@ -111,7 +116,7 @@ async function ownedBrand(auth: McpAuthContext, brandId: string): Promise<OwnedB
     .eq('id', brandId)
     .eq('organization_id', auth.organizationId)
     .maybeSingle();
-  if (!data) return null;
+  if (!data || !(await mayUseBrand(auth, data.id))) return null;
   const row = data as { id: string; name: string; brand_domains?: { domain?: string }[] };
   return {
     id: row.id,
@@ -570,6 +575,7 @@ export async function getMentionFor(
   if (answer.error) throw new Error(answer.error.message);
   const row = answer.data as unknown as ResultRow | null;
   if (!row || row.brands?.organization_id !== auth.organizationId) return null;
+  if (!(await mayUseBrand(auth, row.brand_id))) return null;
 
   return {
     id: row.id,
@@ -684,16 +690,18 @@ export async function overrideMentionSentimentFor(
   sentiment: MentionSentiment,
   note?: string,
 ): Promise<MentionOverrideResult> {
-  // An answer of another organization reads as missing, not as forbidden.
+  // An answer of another organization, or of a brand the owner may not use, reads as missing.
   if (!auth.organizationId) return { error: 'missing', message: 'Answer not found' };
   const { data: owned, error: ownedError } = await supabaseAdmin
     .from('prompt_results')
-    .select('id, brands!inner(organization_id)')
+    .select('id, brand_id, brands!inner(organization_id)')
     .eq('id', resultId)
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (ownedError) throw new Error(ownedError.message);
-  if (!owned) return { error: 'missing', message: 'Answer not found' };
+  if (!owned || !(await mayUseBrand(auth, owned.brand_id))) {
+    return { error: 'missing', message: 'Answer not found' };
+  }
 
   const { data, error } = await supabaseAdmin.rpc('override_mention_sentiment', {
     p_result_id: resultId,
