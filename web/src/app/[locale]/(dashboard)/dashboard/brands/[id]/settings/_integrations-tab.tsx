@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import { BarChart3, Loader2, Plus, Search, Unplug } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,6 +19,7 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { setBrandGaProperty, setBrandGscProperty } from '@/lib/actions/integrations';
+import { formatDate } from '@/lib/format';
 import {
   activateBrandSignIn,
   chooseBrandSignIn,
@@ -107,7 +108,6 @@ function GoogleCard({
   onChanged: () => void;
 }) {
   const t = useTranslations('brands.settings.integrations');
-  const format = useFormatter();
   const { canManage } = useUserRole();
   const { guard, openUpgrade } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
@@ -235,7 +235,7 @@ function GoogleCard({
           </p>
           {current?.connected && !current.accountLevel && current.connectedAt && (
             <p className="text-xs text-muted-foreground">
-              {t('connectedOn', { date: format.dateTime(new Date(current.connectedAt), 'short') })}
+              {t('connectedOn', { date: formatDate(current.connectedAt) })}
             </p>
           )}
           {current?.connected && sharedWith.length > 0 && (

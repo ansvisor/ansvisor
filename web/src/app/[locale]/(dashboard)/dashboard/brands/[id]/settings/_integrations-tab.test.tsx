@@ -93,6 +93,7 @@ beforeEach(() => {
     value: [{ siteUrl: 'sc-domain:acme.test', permissionLevel: 'siteOwner' }],
   });
   client.disconnectBrandSignIn.mockResolvedValue({ ok: true, value: true });
+  client.readBrandGaProperties.mockResolvedValue({ ok: true, value: [] });
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -134,6 +135,25 @@ describe('IntegrationsTab', () => {
     expect(card('Google Analytics').textContent).toContain(
       'This brand uses no Google account for this yet.',
     );
+  });
+
+  it('says when a brand’s own Google login was connected', async () => {
+    client.readBrandGoogle.mockResolvedValue({
+      ok: true,
+      value: [
+        {
+          provider: 'google-analytics',
+          configured: true,
+          property: null,
+          current: { ...globexOwn, status: 'connected', connected: true },
+          usable: [{ ...globexOwn, brandIds: ['b1'] }],
+        },
+      ],
+    });
+    await render();
+    const ga = card('Google Analytics').textContent;
+    expect(ga).toContain('Uses its own Google account.');
+    expect(ga).toContain('Connected on Nov 1, 2026');
   });
 
   it('offers a manager the other accounts, another one, and Disconnect', async () => {
