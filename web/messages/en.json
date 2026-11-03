@@ -9045,6 +9045,8 @@
         "byAgent": "Content Agent takes this step",
         "byYou": "Only you can take this step",
         "raisesTitle": "What raises it",
+        "cost": "About {minutes, plural, one {# minute} other {# minutes}} · {percent} of this month's AI usage",
+        "costTime": "About {minutes, plural, one {# minute} other {# minutes}}",
         "tipLine": "{state} →",
         "states": {
           "done": "done",

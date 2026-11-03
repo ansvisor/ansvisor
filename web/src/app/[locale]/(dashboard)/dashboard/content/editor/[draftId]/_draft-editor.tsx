@@ -3365,6 +3365,27 @@ export function DraftEditor({
   // The bottom nudge names a to-do: only while Next's step is the person's too.
   const nudgeFits = stepActor(next.step) === 'you' && next.step.id !== 'review';
   const todoLine = firstTodo && quality ? todoCopy(firstTodo, quality).next : null;
+  // The agent's step, typically (the user, 2026-11-03): its minutes, and its
+  // share of the month's AI usage as the server prices it (ai-estimates.js).
+  const NEXT_COSTS: Partial<
+    Record<
+      NextAction,
+      { minutes: number; estimate: 'editorBrief' | 'editorFix' | 'editorRewrite' | 'editorWrite' }
+    >
+  > = {
+    buildBrief: { minutes: 1, estimate: 'editorBrief' },
+    fixRules: { minutes: 1, estimate: 'editorFix' },
+    rewritePage: { minutes: 2, estimate: 'editorRewrite' },
+    writeWithAgent: { minutes: 3, estimate: 'editorWrite' },
+  };
+  const nextCostOf = NEXT_COSTS[next.step.primary];
+  const nextCost = nextCostOf
+    ? {
+        minutes: nextCostOf.minutes,
+        percent:
+          aiUsage && !aiUsage.unlimited ? (aiUsage.estimates?.[nextCostOf.estimate] ?? null) : null,
+      }
+    : null;
   // What raises the score on Next's step, for its window (the user, 2026-11-03):
   // the person's to-dos and Quality's suggestions with their points, or the
   // rules the agent's step closes.
@@ -3916,6 +3937,7 @@ export function DraftEditor({
                 onSkip={skipStep}
                 blocked={nextBlocked}
                 raises={nextRaises}
+                cost={nextCost}
                 working={
                   agentWorking
                     ? {

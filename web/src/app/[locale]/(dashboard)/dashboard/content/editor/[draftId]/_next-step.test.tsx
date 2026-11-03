@@ -50,6 +50,7 @@ async function render(
     blocked = (() => null) as (action: string) => string | null,
     working = null as { run: AgentRun | null; onStop: () => void; stopping: boolean } | null,
     raises = [] as { line: string; gain: string | null }[],
+    cost = null as { minutes: number; percent: number | null } | null,
   } = {},
 ) {
   await act(async () => {
@@ -67,6 +68,7 @@ async function render(
           blocked={blocked}
           working={working}
           raises={raises}
+          cost={cost}
         />
       </NextIntlClientProvider>,
     );
@@ -323,6 +325,22 @@ describe('the window (the user, 2026-11-03)', () => {
     );
     // Nothing to list: no heading for it.
     expect(popup()!.textContent).not.toContain('What raises it');
+  });
+
+  it('says how long the agent’s step takes and its share of the month’s AI usage', async () => {
+    await render(state({ openRules: ['faq'] }), { cost: { minutes: 1, percent: 3.4 } });
+    expect(popup()!.textContent).toContain("About 1 minute · 3% of this month's AI usage");
+    await render(state({ openRules: ['faq'] }), { cost: { minutes: 2, percent: 0.4 } });
+    expect(popup()!.textContent).toContain("About 2 minutes · <1% of this month's AI usage");
+    // Unlimited, or unread: the time alone.
+    await render(state({ openRules: ['faq'] }), { cost: { minutes: 2, percent: null } });
+    expect(popup()!.textContent).toContain('About 2 minutes');
+    expect(popup()!.textContent).not.toContain('AI usage');
+    // The person's step: none.
+    await render(state({ quality: { trust: 54, trustLow: true, todos: [] } }), {
+      cost: { minutes: 1, percent: 3 },
+    });
+    expect(popup()!.textContent).not.toContain('About 1 minute');
   });
 });
 

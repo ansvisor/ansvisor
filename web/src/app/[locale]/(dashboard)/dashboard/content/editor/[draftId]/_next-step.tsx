@@ -252,6 +252,7 @@ export function NextStepButton({
   blocked,
   working,
   raises = [],
+  cost = null,
 }: {
   next: NextPath;
   state: NextStepState;
@@ -272,6 +273,11 @@ export function NextStepButton({
    * ("+15 E-E-A-T"), or none for a rule the agent closes.
    */
   raises?: { line: string; gain: string | null }[];
+  /**
+   * The agent's step, typically: about how many minutes, and the share of
+   * the month's AI usage (null on an unlimited plan, or while unread).
+   */
+  cost?: { minutes: number; percent: number | null } | null;
 }) {
   const t = useTranslations('contentEditor.editor.nextStep');
   const { step, path, tips } = next;
@@ -407,6 +413,16 @@ export function NextStepButton({
                   <DialogDescription className="text-sm [overflow-wrap:anywhere]">
                     {stepReason(t, step, state, todoLine, path)}
                   </DialogDescription>
+                  {actor === 'agent' && cost && (
+                    <p className="text-xs text-muted-foreground">
+                      {cost.percent === null
+                        ? t('costTime', { minutes: cost.minutes })
+                        : t('cost', {
+                            minutes: cost.minutes,
+                            percent: cost.percent >= 1 ? `${Math.round(cost.percent)}%` : `<1%`,
+                          })}
+                    </p>
+                  )}
                 </div>
 
                 {raises.length > 0 && (
