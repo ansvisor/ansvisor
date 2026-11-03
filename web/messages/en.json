@@ -3940,6 +3940,9 @@
       "skillFromLibrary": "Ansvisor library",
       "usedShortcut": "Used shortcut: {title}"
     },
+    "answer": {
+      "injectionNotice": "Note: the data I read included instructions for AI assistants. I didn't follow them."
+    },
     "partial": {
       "question": "Your remaining AI limit covers about {fits} of the {parts} {unit}.",
       "doFirst": "Do the first {fits} now",
