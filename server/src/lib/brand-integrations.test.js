@@ -34,7 +34,7 @@ vi.mock('../config/supabase.js', () => ({
 const warn = vi.hoisted(() => vi.fn());
 vi.mock('./logger.js', () => ({ logger: { info: vi.fn(), warn, error: vi.fn() } }));
 
-const { brandConnection, composioTarget, connectedBrands } =
+const { brandConnection, composioTarget, connectedBrands, signInBrandIds } =
   await import('./brand-integrations.js');
 
 const ACCOUNT = {
@@ -235,5 +235,23 @@ describe('composioTarget', () => {
       entityId: 'org_org-1',
       accountId: 'ca_1',
     });
+  });
+});
+
+describe('signInBrandIds', () => {
+  it('answers every brand that uses the sign-in, its own among them', async () => {
+    db.answers.brand_integrations = ok([{ brand_id: 'b1' }, { brand_id: 'b2' }]);
+    expect(await signInBrandIds({ brandId: 'b1', accountId: 'acct-1' })).toEqual(['b1', 'b2']);
+    expect(readsOf('brand_integrations')[0].filters).toContainEqual(['eq', 'account_id', 'acct-1']);
+  });
+
+  it("answers null before 00470, when the connection is the Account's row", async () => {
+    expect(await signInBrandIds({ brandId: 'b1', accountId: null })).toBeNull();
+    expect(readsOf('brand_integrations')).toHaveLength(0);
+  });
+
+  it('fails on a failed read', async () => {
+    db.answers.brand_integrations = { data: null, error: { code: 'XX000', message: 'boom' } };
+    await expect(signInBrandIds({ brandId: 'b1', accountId: 'acct-1' })).rejects.toThrow('boom');
   });
 });
