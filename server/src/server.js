@@ -23,6 +23,7 @@ import {
 } from './middleware/demo-brand.js';
 import routes from './routes/index.js';
 import trafficRoutes from './routes/traffic.js';
+import publicReportCardRoutes from './routes/public-report-card.js';
 import botIngestRoutes from './routes/bot-ingest.js';
 import cloroCallbackRoutes from './routes/cloro-callback.js';
 import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
@@ -116,6 +117,11 @@ app.use('/', botIngestRoutes);
 // its own limiter runs first and its body is read only up to its own 64 KB,
 // whatever its content type, never by the 50 MB parsers below.
 app.use('/', trafficRoutes);
+
+// --- The free report card's form on www.ansvisor.com (routes/public-report-card.js) ---
+// Public like /track: its own CORS (REPORT_CARD_ORIGINS), limiter and 16 KB
+// body, before the dashboard's CORS and the 50 MB parsers below.
+app.use('/public/report-card', publicReportCardRoutes);
 
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
