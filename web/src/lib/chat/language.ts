@@ -1,0 +1,260 @@
+/**
+ * The language of a Chat answer (CHAT-05 item 2; owner decision 2026-10-31:
+ * the question's language). The writer reads the person's question first
+ * and then pages of English data, and a small model answers in the data's
+ * language: Claude Haiku 5.5 answered a Turkish question in English in Chat's
+ * model test set (W4-35, 2026-11-03). So the engine names the question's
+ * language as the turn's last line, and, when an answer still comes out in
+ * English for a question in another language, has it rewritten once.
+ *
+ * Read from common words and letters, for the languages Chat's people write
+ * in most; null when a text is too short or unclear, and then nothing is
+ * said or rewritten. Pure.
+ */
+
+export const LANGUAGES = {
+  en: 'English',
+  tr: 'Turkish',
+  de: 'German',
+  fr: 'French',
+  es: 'Spanish',
+  it: 'Italian',
+  pt: 'Portuguese',
+  nl: 'Dutch',
+} as const;
+
+export type Language = keyof typeof LANGUAGES;
+
+/** Each language's most common short words: what tells it apart in a sentence or two. */
+const WORDS: Record<Language, readonly string[]> = {
+  en: [
+    'the',
+    'and',
+    'is',
+    'are',
+    'to',
+    'of',
+    'what',
+    'why',
+    'how',
+    'did',
+    'we',
+    'our',
+    'this',
+    'that',
+    'for',
+    'with',
+    'you',
+    'it',
+    'was',
+    'do',
+    'can',
+    'my',
+  ],
+  tr: [
+    've',
+    'bir',
+    'bu',
+    'ne',
+    'neden',
+    'nasıl',
+    'için',
+    'mi',
+    'mı',
+    'mu',
+    'mü',
+    'ile',
+    'çok',
+    'daha',
+    'gibi',
+    'biz',
+    'bizim',
+    'hafta',
+    'nedir',
+    'var',
+    'yok',
+    'şu',
+  ],
+  de: [
+    'der',
+    'die',
+    'das',
+    'und',
+    'ist',
+    'nicht',
+    'wie',
+    'warum',
+    'wir',
+    'unser',
+    'mit',
+    'für',
+    'auf',
+    'ein',
+    'eine',
+    'zu',
+    'im',
+    'den',
+    'von',
+    'es',
+    'sind',
+    'diese',
+  ],
+  fr: [
+    'le',
+    'les',
+    'et',
+    'est',
+    'pourquoi',
+    'comment',
+    'nous',
+    'notre',
+    'avec',
+    'pour',
+    'sur',
+    'une',
+    'des',
+    'du',
+    'que',
+    'ce',
+    'pas',
+    'cette',
+    'sont',
+    'dans',
+  ],
+  es: [
+    'el',
+    'los',
+    'las',
+    'y',
+    'es',
+    'por',
+    'qué',
+    'cómo',
+    'nuestro',
+    'nuestra',
+    'con',
+    'para',
+    'una',
+    'del',
+    'que',
+    'se',
+    'esta',
+    'este',
+    'hemos',
+    'son',
+  ],
+  it: [
+    'il',
+    'gli',
+    'è',
+    'perché',
+    'nostro',
+    'nostra',
+    'per',
+    'che',
+    'non',
+    'di',
+    'questa',
+    'questo',
+    'sono',
+    'siamo',
+  ],
+  pt: [
+    'os',
+    'é',
+    'nosso',
+    'nossa',
+    'com',
+    'uma',
+    'do',
+    'não',
+    'são',
+    'caiu',
+    'nós',
+    'você',
+    'isso',
+  ],
+  nl: [
+    'het',
+    'en',
+    'waarom',
+    'hoe',
+    'wij',
+    'ons',
+    'onze',
+    'met',
+    'voor',
+    'op',
+    'een',
+    'van',
+    'dat',
+    'niet',
+    'zijn',
+    'deze',
+    'ik',
+  ],
+};
+
+/** Letters only one of them uses, each a strong sign. */
+const LETTERS: Partial<Record<Language, RegExp>> = {
+  tr: /[ğşıİĞŞ]/g,
+  de: /[ß]/g,
+  es: /[ñ¿¡]/g,
+  pt: /[ãõ]/g,
+};
+
+const wordsOf = (text: string) =>
+  text
+    .toLowerCase()
+    // Code, links and Markdown tell nothing about the language.
+    .replace(/```[\s\S]*?```|`[^`]*`|https?:\/\/\S+|\[[^\]]*\]\([^)]*\)/g, ' ')
+    .split(/[^\p{L}']+/u)
+    .map((word) => word.replace(/'.*$/, ''))
+    .filter(Boolean);
+
+/**
+ * A text's language: the one whose common words and letters it has most,
+ * with at least 2 signs and well ahead of the next; null when unsure.
+ */
+export function detectLanguage(text: string): Language | null {
+  const words = wordsOf(text);
+  const scores = (Object.keys(WORDS) as Language[]).map((language) => {
+    const common = new Set(WORDS[language]);
+    const hits = words.filter((word) => common.has(word)).length;
+    const letters = text.match(LETTERS[language] ?? /(?!)/g)?.length ?? 0;
+    return { language, score: hits + 2 * Math.min(letters, 3) };
+  });
+  scores.sort((a, b) => b.score - a.score);
+  const [best, next] = scores;
+  if (best.score < 2 || best.score < 1.5 * next.score) return null;
+  return best.language;
+}
+
+/** A language named in a question ("in English", "İngilizce", "auf Deutsch"): the person picked one. */
+const NAMES_A_LANGUAGE =
+  /\b(english|turkish|german|french|spanish|italian|portuguese|dutch|englisch|anglais|inglés|ingles|inglese|inglês|engels|deutsch|français|español|italiano|português|nederlands)\b|ingilizce|türkçe|almanca|fransızca|ispanyolca|italyanca|portekizce|felemenkçe/i;
+
+/**
+ * The turn's last line for the writer: the question's language, named, so
+ * pages of English data don't set it. Null when the language is unclear.
+ */
+export function languageLine(question: string): string | null {
+  const language = detectLanguage(question);
+  if (!language) return null;
+  const name = LANGUAGES[language];
+  return `The person wrote in ${name}: answer in ${name}, whatever the language of the data, unless they ask for another language.`;
+}
+
+/**
+ * The language an answer is rewritten in, once, when it came out in English
+ * for a question in another language; null otherwise: the same language, one
+ * of them unclear, or a question that names a language (an English blog
+ * post asked for in Turkish is English on purpose).
+ */
+export function rewriteLanguage(question: string, answer: string): Language | null {
+  // Turkish's dotted capital İ ("İngilizce") folds to i for the check.
+  if (NAMES_A_LANGUAGE.test(question.replace(/İ/g, 'i'))) return null;
+  const asked = detectLanguage(question);
+  if (!asked || asked === 'en') return null;
+  return detectLanguage(answer) === 'en' ? asked : null;
+}

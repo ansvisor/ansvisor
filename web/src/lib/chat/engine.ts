@@ -123,6 +123,7 @@ import {
 import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
+import { LANGUAGES, languageLine, rewriteLanguage, type Language } from './language';
 import { whyView } from './why/view';
 import {
   batchSize,
@@ -1614,6 +1615,9 @@ function turnMessage(rc: RunContext, phase: ChatPhase): ModelMessage {
   if (phase === 'write' && rc.progress.injection) {
     parts.push({ type: 'text', text: INJECTION_NOTE });
   }
+  // Last, after pages of English data: the question's language, named (language.ts).
+  const language = phase === 'write' ? languageLine(question) : null;
+  if (language) parts.push({ type: 'text', text: language });
   return { role: 'user', content: parts };
 }
 
@@ -3957,6 +3961,9 @@ function summaryOf(progress: RunProgress, workingMs: number): ChatRunSummary {
 
 /** The answer is written: kept with when it was made and the newest data it read (CHAT-20 §15a). */
 async function finish(rc: RunContext): Promise<void> {
+  // An answer in English to a question in another language is rewritten once (language.ts).
+  const language = rewriteLanguage(rc.progress.question ?? '', rc.progress.text);
+  if (language) await rewriteAnswer(rc, language);
   // Written while the run still runs: a failed write ends it as an error, never "done" without its answer.
   await checkedFactsStep(rc);
   if (!(await moveRun(rc.run.id, ['running'], 'done', { finished: true }))) return stopNow(rc);
@@ -3981,6 +3988,60 @@ async function finish(rc: RunContext): Promise<void> {
     generatedAt,
     dataAsOf: rc.progress.dataAsOf,
   });
+}
+
+/**
+ * The answer, rewritten once in the question's language: the writer model,
+ * told to translate the words only, held on the AI budget like any step.
+ * The rewrite goes through the same id mask and fact check as streamed text,
+ * and replaces it on the person's screen (text.replaced). A refused hold, a
+ * failed call or a rewrite that is still English keeps the answer as it was.
+ */
+async function rewriteAnswer(rc: RunContext, language: Language): Promise<void> {
+  const choice = rc.models.pick('write');
+  const system = `Rewrite the text you are given in ${LANGUAGES[language]}. Translate the words only: keep the Markdown, numbers, names, links, [placeholders] and line breaks exactly. Answer with the rewritten text alone.`;
+  const reservation = await reserveChatStep({
+    organizationId: rc.run.organizationId,
+    runId: rc.run.id,
+    ...(rc.agentRunId ? { feature: 'agent' as const, agentRunId: rc.agentRunId } : {}),
+    model: choice.budgetModel,
+    inputTokens: estimateInputTokens([system, rc.progress.text]),
+    maxOutputTokens: choice.maxOutputTokens,
+    source: rc.models.source,
+  });
+  if (!reservation.ok) return;
+  const { budget } = reservation;
+  const called = Date.now();
+  try {
+    const result = streamText({
+      model: choice.model,
+      system,
+      messages: [{ role: 'user', content: rc.progress.text }],
+      maxOutputTokens: choice.maxOutputTokens,
+      providerOptions: choice.providerOptions,
+      abortSignal: rc.signal,
+    });
+    const out: string[] = [];
+    for await (const part of result.fullStream) {
+      if (part.type === 'text-delta') out.push(part.text);
+      else if (part.type === 'error') throw part.error;
+    }
+    await budget.charge(stepUsage(await result.usage), Date.now() - called);
+    const rewritten = out.join('').trim();
+    if (!rewritten || rewriteLanguage(rc.progress.question ?? '', rewritten)) return;
+    const checked = checkFigures(maskIds(rewritten), runFigures(rc));
+    if (checked.checked > 0) {
+      const facts = (rc.progress.facts ??= { checked: 0, replaced: [] });
+      facts.checked += checked.checked;
+      facts.replaced.push(...checked.replaced);
+    }
+    rc.progress.text = checked.text;
+    rc.sink.emit('text.replaced', { text: checked.text });
+  } catch (err) {
+    console.error('[chat/engine] the answer could not be rewritten in its language:', err);
+  } finally {
+    await budget.release();
+  }
 }
 
 /**
