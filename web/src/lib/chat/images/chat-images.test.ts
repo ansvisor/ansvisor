@@ -2,9 +2,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * Images in Chat on the server (CHAT-15 §E, W4-08): whose key they run on,
- * the image model question, the parts check's count, and a request held,
- * made, charged at what the provider said and filed as one set.
+ * Images in Chat on the server (CHAT-15 §E, W4-08): the image model
+ * question, the parts check's count, and a request held, made, charged at
+ * what the provider said and filed as one set (whose key and the models'
+ * costs: access.test.ts).
  */
 
 const fakes = vi.hoisted(() => ({
@@ -125,30 +126,6 @@ beforeEach(() => {
   fakes.fit.mockReset().mockResolvedValue({ ok: true, fits: 4, limit: 'month' });
 });
 
-describe('the key images run on', () => {
-  it('is Ansvisor’s OpenRouter key, unless Chat runs on the workspace’s own OpenRouter key', async () => {
-    expect(await images.imageKey('org-1')).toEqual({ key: 'or-ansvisor', source: 'ansvisor' });
-    fakes.chatKey = { source: 'own', config: { provider: 'openrouter', apiKey: 'or-own' } };
-    expect(await images.imageKey('org-1')).toEqual({ key: 'or-own', source: 'own' });
-    // An own key of a provider that can't make these images: Ansvisor's, on the AI limit.
-    fakes.chatKey = { source: 'own', config: { provider: 'anthropic', apiKey: 'sk-own' } };
-    expect(await images.imageKey('org-1')).toEqual({ key: 'or-ansvisor', source: 'ansvisor' });
-  });
-
-  it('is none with Chat off or no key set, and never Ansvisor’s for an own key it can’t read', async () => {
-    fakes.agentic = false;
-    expect(await images.imageKey('org-1')).toBeNull();
-    fakes.agentic = true;
-    vi.stubEnv('OPENROUTER_API_KEY', '');
-    expect(await images.imageKey('org-1')).toBeNull();
-    vi.stubEnv('OPENROUTER_API_KEY', 'or-ansvisor');
-    fakes.chatKey = new OwnKeyUnreadableError('openrouter');
-    await expect(images.imageKey('org-1')).rejects.toBeInstanceOf(OwnKeyUnreadableError);
-    fakes.chatKey = new OwnKeyUnreadableError('anthropic');
-    expect(await images.imageKey('org-1')).toEqual({ key: 'or-ansvisor', source: 'ansvisor' });
-  });
-});
-
 describe('the image model question (CHAT-15 item 17)', () => {
   it('offers the cheapest first, recommended, each with its multiplier and share per image', async () => {
     const asked = await images.imageModelQuestion(ctx);
@@ -197,18 +174,6 @@ describe('the image model question (CHAT-15 item 17)', () => {
     expect(await images.imageModelQuestion({ organizationId: null })).toEqual({
       code: 'not_found',
     });
-  });
-
-  it('writes multipliers and shares as the menu does', () => {
-    expect([1, 2.07, 4.13, 1.14, 0.26, 12.4].map(images.multiplierOf)).toEqual([
-      '1x',
-      '2x',
-      '4x',
-      '1.1x',
-      '0.3x',
-      '12x',
-    ]);
-    expect([0.774, 1.55, 3.1, 12.6].map(images.percentOf)).toEqual(['0.77', '1.6', '3.1', '13']);
   });
 });
 
