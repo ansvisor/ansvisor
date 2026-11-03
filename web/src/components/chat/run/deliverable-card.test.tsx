@@ -404,11 +404,11 @@ describe('DeliverableCard for a set of images (W4-08, CHAT-15 items 21–22)', (
     await settle();
     await click(action('deliverable.png')!);
     expect(fetchMock).toHaveBeenCalledWith(`${base}/2`);
-    // jsdom draws no canvas: the image is saved as it came.
-    expect(download.saveBlob).toHaveBeenCalledWith(
-      expect.any(Blob),
-      'cover-image-geo-strategies.jpg',
-    );
+    // jsdom draws no canvas: the image is saved as it came. (Node's own Blob on Node 20, not
+    // jsdom's: read by its fields, not its class.)
+    const [saved, name] = download.saveBlob.mock.calls[0] as [Blob, string];
+    expect(name).toBe('cover-image-geo-strategies.jpg');
+    expect(saved.size).toBe(2);
     expect(toast).toHaveBeenCalledWith('Downloaded cover-image-geo-strategies.jpg');
   });
 
