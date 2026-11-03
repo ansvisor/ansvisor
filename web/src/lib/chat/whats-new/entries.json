@@ -1,6 +1,24 @@
 {
   "entries": [
     {
+      "slug": "agents-publish-on-their-own",
+      "feature": "Agents that publish on their own",
+      "homeLine": "An Admin can now let chosen agents publish pages without waiting for a click.",
+      "route": "/dashboard/settings/chat",
+      "plans": [
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-03",
+      "lines": [
+        "Routine pages waited for a click even when the agent's work was ready.",
+        "With an Admin's two switches, an agent in Full auto sends or publishes up to the daily limit you set.",
+        "A page still waits for you when it fails Quality, your brand facts or the other safety checks.",
+        "Turn on Agents that publish on their own in Settings › Chat, then allow it on the agent."
+      ]
+    },
+    {
       "slug": "chat",
       "feature": "Chat",
       "homeLine": "Chat answers questions from your Ansvisor data and does the work with you.",
@@ -17,6 +35,139 @@
         "Chat reads your data, shows each step it takes and asks before it changes anything.",
         "You get answers, drafts and reports in one place, with the numbers checked against your data.",
         "Ask a question on Chat Home, or press Ctrl J to open Chat beside any page."
+      ]
+    },
+    {
+      "slug": "connections",
+      "feature": "Connections",
+      "homeLine": "See what each brand has connected, and what it could connect, right in Chat.",
+      "route": "/dashboard/settings/integrations",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-03",
+      "lines": [
+        "Connected tools were spread across settings, so it was hard to see what a brand had.",
+        "Connections lists each tool with its status, account and the skills and agents that use it.",
+        "You see what a tool would unlock before you connect it, and what would stop if you disconnect it.",
+        "Open Connections in the Chat menu; an Admin connects a tool, and others ask their Admin."
+      ]
+    },
+    {
+      "slug": "follow-up-checks",
+      "feature": "Follow-up checks",
+      "homeLine": "After a change, Chat can check back on a later day and tell you what happened.",
+      "route": "/dashboard/chat",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-03",
+      "lines": [
+        "It was easy to fix a page and never learn whether the fix worked.",
+        "After a change, Chat offers a check in 7, 14, 30 or 90 days that reads your tracking data.",
+        "You get Improved, No meaningful change or Declined in the chat and at the top of your Inbox.",
+        "Click Set check on the card Chat shows after a change you made or approved."
+      ]
+    },
+    {
+      "slug": "memory",
+      "feature": "Memory",
+      "homeLine": "Chat can remember short notes between chats, such as the tone your brand uses.",
+      "route": "/dashboard/chat",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-03",
+      "lines": [
+        "Repeating the same preferences in every chat took time.",
+        "Start a message with \"Remember that…\" and Chat saves one short line once you click Save.",
+        "Notes for you, a brand or the workspace shape every chat, and the steps show when one was used.",
+        "Change or delete notes on the Memory page, from the ⋯ menu at the top of a chat."
+      ]
+    },
+    {
+      "slug": "scheduled-jobs",
+      "feature": "Scheduled jobs",
+      "homeLine": "Chat can now do work on a schedule, such as a report every Monday at 9:00.",
+      "route": "/dashboard/chat",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-03",
+      "lines": [
+        "Weekly reports and checks meant asking Chat the same thing every week.",
+        "Say \"every Monday at 9:00\" and Chat shows a card you can edit; nothing is scheduled until you click.",
+        "Each run lands in your Inbox or your email, and a repeat can say No change when nothing moved.",
+        "Admins and Managers ask in any chat, then manage their jobs on the Scheduled page in the Chat menu."
+      ]
+    },
+    {
+      "slug": "skills",
+      "feature": "Skills",
+      "homeLine": "Open Skills to run, schedule or turn off Chat's skills, and keep your own.",
+      "route": "/dashboard/chat",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-03",
+      "lines": [
+        "A good way of doing a task was hard to repeat the same way every time.",
+        "The Skills page lists Ansvisor's skills and your own, each with the connections it uses.",
+        "Admins and Managers can save steps as a skill in Chat, or import one from a file or GitHub for review.",
+        "Open Skills in the Chat menu, or type / in Chat to use a skill."
+      ]
+    },
+    {
+      "slug": "take-down",
+      "feature": "Take down",
+      "homeLine": "A page published through Ansvisor can be taken down from the Library in one click.",
+      "route": "/dashboard/content/library",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-03",
+      "lines": [
+        "Pulling a page that went live used to mean finding it in your CMS.",
+        "Take down removes a page from your Webflow, WordPress or Wix site and keeps it there as a draft.",
+        "A page you took down never goes live on its own again, even from an agent.",
+        "Admins and Managers pick Take down in the page's … menu in the Library, or on an agent's notice."
+      ]
+    },
+    {
+      "slug": "time-zone",
+      "feature": "Your time zone",
+      "homeLine": "Pick your own time zone, so Chat's times and your schedules match your day.",
+      "route": "/dashboard/settings/account",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-03",
+      "lines": [
+        "Times followed your browser, which was off when you travel or work in another time zone.",
+        "Each person can now pick a time zone, or keep Automatic to follow the browser.",
+        "New scheduled jobs, Chat's times and your daily suggestions use it.",
+        "Open Settings › Account › Time zone and type a city or an offset."
       ]
     },
     {

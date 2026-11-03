@@ -5,7 +5,7 @@ route: /dashboard/chat
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-03
-approved: false
+approved: true
 ---
 Weekly reports and checks meant asking Chat the same thing every week.
 Say "every Monday at 9:00" and Chat shows a card you can edit; nothing is scheduled until you click.

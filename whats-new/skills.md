@@ -5,7 +5,7 @@ route: /dashboard/chat
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-03
-approved: false
+approved: true
 ---
 A good way of doing a task was hard to repeat the same way every time.
 The Skills page lists Ansvisor's skills and your own, each with the connections it uses.

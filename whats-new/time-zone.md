@@ -5,7 +5,7 @@ route: /dashboard/settings/account
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-03
-approved: false
+approved: true
 ---
 Times followed your browser, which was off when you travel or work in another time zone.
 Each person can now pick a time zone, or keep Automatic to follow the browser.

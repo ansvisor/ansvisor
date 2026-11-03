@@ -5,7 +5,7 @@ route: /dashboard/settings/chat
 plans: [growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-03
-approved: false
+approved: true
 ---
 Routine pages waited for a click even when the agent's work was ready.
 With an Admin's two switches, an agent in Full auto sends or publishes up to the daily limit you set.

@@ -5,7 +5,7 @@ route: /dashboard/content/library
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-03
-approved: false
+approved: true
 ---
 Pulling a page that went live used to mean finding it in your CMS.
 Take down removes a page from your Webflow, WordPress or Wix site and keeps it there as a draft.

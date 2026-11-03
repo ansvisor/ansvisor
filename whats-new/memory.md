@@ -5,7 +5,7 @@ route: /dashboard/chat
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-03
-approved: false
+approved: true
 ---
 Repeating the same preferences in every chat took time.
 Start a message with "Remember that…" and Chat saves one short line once you click Save.

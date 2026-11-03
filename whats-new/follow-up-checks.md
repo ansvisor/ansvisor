@@ -5,7 +5,7 @@ route: /dashboard/chat
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-03
-approved: false
+approved: true
 ---
 It was easy to fix a page and never learn whether the fix worked.
 After a change, Chat offers a check in 7, 14, 30 or 90 days that reads your tracking data.

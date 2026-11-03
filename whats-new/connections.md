@@ -5,7 +5,7 @@ route: /dashboard/settings/integrations
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-03
-approved: false
+approved: true
 ---
 Connected tools were spread across settings, so it was hard to see what a brand had.
 Connections lists each tool with its status, account and the skills and agents that use it.
