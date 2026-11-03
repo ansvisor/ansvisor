@@ -10219,7 +10219,7 @@
     },
     "newDialog": {
       "title": "New content opportunities",
-      "description": "Get suggestions now. Ansvisor also writes up to 3 a night by itself, one per topic, for needs that have no opportunity yet.",
+      "description": "Get suggestions now. Ansvisor also writes up to 3 a night by itself, one per topic, for needs that have no opportunity yet, and once none are left, at most 1 a night as another angle.",
       "focus": "Focus (optional)",
       "focusOptions": {
         "auto": "Let Ansvisor choose",

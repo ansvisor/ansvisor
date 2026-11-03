@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   ANGLE_AFTER_DAYS,
+  NIGHTLY_ANGLES,
   STILL_LOW_VISIBILITY,
   angleCandidates,
   angleLine,
@@ -94,6 +95,38 @@ describe('angleCandidates', () => {
   });
 });
 
+describe('angleCandidates at night', () => {
+  const nightly = (candidates, rows) => pick(candidates, rows, { nightly: true });
+
+  it('takes only needs whose opportunity has been done for 30 days, most demand first', () => {
+    const candidates = [
+      cand('c1', { metrics: { tested: 3, visibility: 5, demand: 900 } }),
+      cand('c2', { metrics: { tested: 3, visibility: 5, demand: 4000 } }),
+      cand('c3', { metrics: { tested: 3, visibility: 5, demand: 9000 } }),
+      cand('c4', { metrics: { tested: 3, visibility: 5, demand: 9500 } }),
+    ];
+    const rows = [
+      row('o1', 'c1', { updated_at: daysAgo(ANGLE_AFTER_DAYS) }),
+      row('o2', 'c2', { updated_at: daysAgo(45) }),
+      row('o3', 'c3', { updated_at: daysAgo(ANGLE_AFTER_DAYS - 1) }),
+      row('o4', 'c4', { status: 'dismissed', updated_at: daysAgo(60) }),
+    ];
+    expect(nightly(candidates, rows)).toEqual(['c2', 'c1']);
+  });
+
+  it('leaves out a need still open, however old, and one the brand is seen for', () => {
+    const candidates = [
+      cand('c1'),
+      cand('c2', { metrics: { tested: 3, visibility: 35, demand: 100 } }),
+    ];
+    const rows = [
+      row('o1', 'c1', { status: 'new', created_at: daysAgo(200), updated_at: daysAgo(200) }),
+      row('o2', 'c2', { updated_at: daysAgo(90) }),
+    ];
+    expect(nightly(candidates, rows)).toEqual([]);
+  });
+});
+
 describe('angleLine', () => {
   it('tells the model what the need has and that this one must differ', () => {
     const line = angleLine({ title: 'Compare coffee subscriptions', decision: 'create' });
@@ -108,13 +141,14 @@ describe('the generator', () => {
     'utf8',
   );
 
-  it('fills only a New request, never a prompt or page request, from coverage before its checks', () => {
-    expect(code).toContain(
-      'const angleRoom = !targeted && count !== undefined && !promptId ? count - fresh.length : 0;',
+  it('fills a New request, or a night with no need left, never a prompt or page request', () => {
+    const flat = code.replace(/\s+/g, ' ');
+    expect(flat).toContain('const nightly = count === undefined;');
+    expect(flat).toContain(
+      'targeted || promptId ? 0 : nightly ? (fresh.length ? 0 : NIGHTLY_ANGLES) : count - fresh.length;',
     );
-    expect(code).toContain(
-      'angleCandidates(candidates, existing, { covered: coveredBefore, inFocus })',
-    );
+    expect(flat).toContain('covered: coveredBefore, inFocus, nightly,');
+    expect(NIGHTLY_ANGLES).toBe(1);
   });
 
   it('never folds an angle into another opportunity, and marks it as one', () => {

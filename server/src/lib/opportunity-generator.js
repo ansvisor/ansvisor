@@ -46,7 +46,7 @@ import {
   pickPageCluster,
 } from './opportunity-page-focus.js';
 import { reopenStrengthened } from './opportunity-reopen.js';
-import { angleCandidates, angleLine } from './opportunity-angles.js';
+import { NIGHTLY_ANGLES, angleCandidates, angleLine } from './opportunity-angles.js';
 import {
   claimOpportunitySlots,
   linkOpportunitySlots,
@@ -591,14 +591,18 @@ export async function generateContentOpportunities(
       });
   // A New request that runs out of needs without an opportunity writes the
   // rest as another angle on needs the brand is still barely seen for
-  // (opportunity-angles.js). A prompt's or a page's request is for its need.
-  const angleRoom = !targeted && count !== undefined && !promptId ? count - fresh.length : 0;
+  // (opportunity-angles.js); a night with no need left writes at most
+  // NIGHTLY_ANGLES. A prompt's or a page's request is for its need.
+  const nightly = count === undefined;
+  const angleRoom =
+    targeted || promptId ? 0 : nightly ? (fresh.length ? 0 : NIGHTLY_ANGLES) : count - fresh.length;
   const angles =
     angleRoom > 0
-      ? angleCandidates(candidates, existing, { covered: coveredBefore, inFocus }).slice(
-          0,
-          angleRoom,
-        )
+      ? angleCandidates(candidates, existing, {
+          covered: coveredBefore,
+          inFocus,
+          nightly,
+        }).slice(0, angleRoom)
       : [];
   const wanted = [...fresh, ...angles];
   // Their own baskets, for the prompt and the new opportunity's searches.
