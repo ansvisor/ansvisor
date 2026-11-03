@@ -246,7 +246,8 @@ export function PlanSwitcher({
   /**
    * The custom plan's points: its AI usage first, set per customer above
    * Enterprise's floor (2026-10-27), then the pricing page's points. With the
-   * new Chat on (chatMetered), its hint says Chat and agents draw on it.
+   * new Chat on (chatMetered), its hint says Chat and agents draw on it, and
+   * its Chat points come right after it.
    */
   function customPlanPoints(): PlanFeature[] {
     const aiUsage = aiUsageMultiple('enterprise');
@@ -255,6 +256,7 @@ export function PlanSwitcher({
       ...(aiUsage
         ? [{ text: tCards('aiUsageCustom', { count: aiUsage }), hint: tCards(hint) }]
         : []),
+      ...(chatMetered ? (t.raw('customPlanPointsChat') as string[]) : []).map((text) => ({ text })),
       ...(t.raw('customPlanPoints') as string[]).map((text) => ({ text })),
     ];
   }

@@ -51,6 +51,7 @@ import { engineName, nextRunOf, percentOf, writesAgents } from '@/lib/chat/agent
 import type { AgentDetail } from '@/lib/chat/agents';
 import type { AgentPreset } from '@/lib/chat/agents/catalog';
 import type { ChatDenialCard } from '@/lib/chat/events';
+import { GO_LIVE_LIMIT_DEFAULT } from '@/lib/chat/go-live';
 import { CHAT_MODES, type ChatMode } from '@/lib/chat/precedence';
 import { effectiveTimeZone, viewerTimeZone } from '@/lib/time-zone';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -71,7 +72,14 @@ import {
   radioKeys,
   radioTab,
 } from './agent-form-triggers';
-import { changeAgent, createAgent, updateAgent, type AgentRefused } from './agent-requests';
+import { AgentGoLiveBox, goLiveBlock, goLiveLimitOf } from './agent-go-live-box';
+import {
+  changeAgent,
+  createAgent,
+  setAgentGoLive,
+  updateAgent,
+  type AgentRefused,
+} from './agent-requests';
 import { useAgentWords } from './agent-words';
 
 /**
@@ -84,7 +92,9 @@ import { useAgentWords } from './agent-words';
  * step is checked before the next opens; what the server refuses (a name
  * taken, the plan's active agents, a one-off in the past…) is shown on the
  * step it belongs to. Analysts and Agency partners, and a Manager on an
- * agent that isn't theirs, see a read-only line with Ask your Admin. From a
+ * agent that isn't theirs, see a read-only line with Ask your Admin. Under
+ * the Approvals table, an Admin's "Publish and send on its own" box
+ * (AUTONOMOUS-GO-LIVE §7.2), saved after the agent as its own request. From a
  * ready-to-use agent (Agent Center › Ready to use), the steps open filled
  * with it and named after it; it is saved only as the person saves it.
  */
@@ -420,6 +430,15 @@ function AgentFormBody({
   const [busy, setBusy] = useState<'draft' | 'on' | 'save' | null>(null);
   // What a save patches: the agent being edited, or the draft a first save made.
   const [base, setBase] = useState<AgentDetail | null>(agent);
+  // The Admin's go-live box (AUTONOMOUS-GO-LIVE §7.2): ticked, and its daily limit as typed.
+  const [goLive, setGoLive] = useState(() => {
+    const given = agent?.goLive?.permission;
+    return {
+      on: !!given?.on,
+      limit: String(given?.on ? given.dailyLimit : GO_LIVE_LIMIT_DEFAULT),
+    };
+  });
+  const [goLiveTried, setGoLiveTried] = useState(false);
   // Where the focus goes after a render: a new step's title, or the first problem.
   const [focusAsk, setFocusAsk] = useState<{ to: 'title' | 'problem'; n: number } | null>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -452,6 +471,8 @@ function AgentFormBody({
   const ctx = { setup, agent: base, now };
   const problems = stepProblems(step, state, ctx);
   const isAdmin = setup.role === 'admin';
+  // The go-live box shows while CHAT_AUTO_GO_LIVE is on (AUTONOMOUS-GO-LIVE §7.2).
+  const goLiveBoxShown = !!setup.goLive && setup.goLive !== 'hidden';
   // Edit of an agent that is on or paused saves in place; a draft can be saved or turned on.
   const savesInPlace = !!base && base.status !== 'draft';
 
@@ -556,10 +577,32 @@ function AgentFormBody({
     });
   };
 
+  /**
+   * What the go-live box asks of a save: the daily limit to give, null to
+   * take it away, or undefined to leave it as it is (not an Admin, no box,
+   * or a box that can't be changed now: kept as it is, inert).
+   */
+  const goLiveWanted = (): number | null | undefined => {
+    if (!isAdmin || !goLiveBoxShown || goLiveBlock(setup, state.mode)) return undefined;
+    return goLive.on ? goLiveLimitOf(goLive.limit) : null;
+  };
+  /** Whether the saved agent's permission differs from what the box asks. */
+  const goLiveDiffers = (saved: AgentDetail | null) => {
+    const wanted = goLiveWanted();
+    if (wanted === undefined) return false;
+    const given = saved?.goLive?.permission;
+    return wanted === null ? !!given?.on : !(given?.on && given.dailyLimit === wanted);
+  };
+
   const submit = async (intent: 'draft' | 'on' | 'save') => {
     if (busy) return;
     const bad = firstStepWithProblems(state, ctx);
     if (bad !== null) return stopAt(bad);
+    // A ticked box needs a limit of 1 to 20.
+    if (goLiveWanted() === null && goLive.on) {
+      setGoLiveTried(true);
+      return moveTo(2, 'problem');
+    }
     if (isLocked) {
       openUpgrade(tAgents(`asked.${base ? 'edit' : 'create'}`));
       return;
@@ -592,11 +635,16 @@ function AgentFormBody({
           if (!answer.ok) return refuse(answer, false);
           saved = answer.agent;
           setBase(saved);
-        } else if (intent !== 'on' && !created) {
+        } else if (intent !== 'on' && !created && !goLiveDiffers(saved)) {
           toast(tAgents('toast.nothingChanged'));
           router.push(back);
           return;
         }
+      }
+      // The go-live box: its own request, for the version this save left the agent on.
+      if (goLiveDiffers(saved)) {
+        const answer = await setAgentGoLive(saved.id, goLiveWanted() ?? null);
+        if (!answer.ok) return refuse(answer, created || saved.status === 'draft');
       }
       const href = `/dashboard/agents/${saved.id}`;
       if (intent === 'on') {
@@ -730,6 +778,19 @@ function AgentFormBody({
   ];
   const workspaceLocked =
     !isAdmin && setup.workspaceAgentsAdminsOnly && base?.visibility !== 'workspace';
+  // Going live on its own (AUTONOMOUS-GO-LIVE §7.2): what the box makes of publishing.
+  const goLiveLimit =
+    goLiveBoxShown && goLive.on && !goLiveBlock(setup, state.mode)
+      ? goLiveLimitOf(goLive.limit)
+      : null;
+  const publishing =
+    goLiveLimit !== null ? (
+      <span data-slot="agent-go-live-approval" className="text-foreground">
+        {t('goLive.approval', { limit: goLiveLimit })}
+      </span>
+    ) : (
+      <NeedsClick key="nyc">{t('summary.publishing')}</NeedsClick>
+    );
 
   const summaryRows: [string, ReactNode][] = [
     ['name', state.name.trim() || t('summary.none')],
@@ -766,7 +827,7 @@ function AgentFormBody({
     ['runsAs', t('summary.runsAs', { role: tRoles(setup.role) })],
     ['approvals', t('summary.approvals')],
     ['outcome', t('summary.outcome')],
-    ['publishing', <NeedsClick key="nyc">{t('summary.publishing')}</NeedsClick>],
+    ['publishing', publishing],
     ['cost', t('summary.cost', { share: percentOf(runShare) })],
   ];
 
@@ -1106,7 +1167,11 @@ function AgentFormBody({
                         </span>
                         <span role="cell" className="text-[11.5px] text-muted-foreground">
                           {outcome === 'click' ? (
-                            <NeedsClick>{t('mode.outcome.click')}</NeedsClick>
+                            goLiveLimit !== null ? (
+                              publishing
+                            ) : (
+                              <NeedsClick>{t('mode.outcome.click')}</NeedsClick>
+                            )
                           ) : (
                             t(`mode.outcome.${outcome}`)
                           )}
@@ -1115,6 +1180,20 @@ function AgentFormBody({
                     );
                   })}
                 </div>
+                {goLiveBoxShown && (
+                  <AgentGoLiveBox
+                    setup={setup}
+                    mode={state.mode}
+                    on={goLive.on}
+                    limit={goLive.limit}
+                    permission={base?.goLive?.permission ?? null}
+                    showProblem={goLiveTried}
+                    onChange={(next) => {
+                      setServer(null);
+                      setGoLive(next);
+                    }}
+                  />
+                )}
               </>
             )}
 

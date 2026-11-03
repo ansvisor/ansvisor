@@ -1,9 +1,13 @@
 import { createTranslator } from 'next-intl';
-import { z } from 'zod';
 import messages from '../../../../messages/en.json';
 import { createChatSchedule } from '@/lib/actions/chat-schedules';
 import { percentOf } from '@/lib/chat/agent-view';
 import { readRunEstimate } from '@/lib/chat/schedule/estimate';
+import {
+  PROMPT_MAX,
+  newSchedule,
+  scheduleInputSchema as inputSchema,
+} from '@/lib/chat/schedule/input';
 import {
   DELIVER_CHOICES,
   checkNewSchedule,
@@ -11,7 +15,6 @@ import {
   madeStep,
   type DeliverChoice,
   type MadeSchedule,
-  type NewSchedule,
 } from '@/lib/chat/schedule/store';
 import {
   WHEN_MAX_LENGTH,
@@ -20,8 +23,6 @@ import {
   whenPhrase,
   type WhenWords,
 } from '@/lib/chat/schedule/when';
-import { MAX_NAME, SKILL_NAME } from '@/lib/chat/skills/format';
-import { contentUuid } from '@/lib/mcp/content-schemas';
 import { FIXTURE_IDS, defineTool, type CardFormValues, type ChatToolContext } from './define-tool';
 
 /**
@@ -41,71 +42,7 @@ const whenT = createTranslator({
   namespace: 'chatSchedules.when',
 }) as unknown as WhenWords;
 
-const PROMPT_MAX = 2000;
-
-const inputSchema = z
-  .object({
-    brand_id: contentUuid
-      .optional()
-      .describe(
-        "The chat's brand id, from list_brands: the job's brand. Leave out for a job about the whole workspace.",
-      ),
-    title: z
-      .string()
-      .trim()
-      .min(1)
-      .max(120)
-      .describe('A short name for the job: "Weekly visibility report".'),
-    when: z
-      .string()
-      .trim()
-      .min(1)
-      .max(WHEN_MAX_LENGTH)
-      .describe(
-        'When it runs, as the person said it, in English: "every Monday at 9:00", "1st of every month", "tomorrow at 3pm", "in 7 days", "ready by Friday" (starts now, due then).',
-      ),
-    prompt: z
-      .string()
-      .trim()
-      .min(1)
-      .max(PROMPT_MAX)
-      .optional()
-      .describe('What Chat is asked each run, as the person would type it.'),
-    skill: z
-      .string()
-      .regex(SKILL_NAME)
-      .max(MAX_NAME)
-      .optional()
-      .describe('A skill the job runs, by its name without the slash ("report").'),
-    deliver_to: z
-      .enum(DELIVER_CHOICES)
-      .default('chat')
-      .describe(
-        'Where results go: chat (the job’s chat and the Inbox), email (to the person), or both.',
-      ),
-    change_only: z
-      .boolean()
-      .default(false)
-      .describe('Recurring jobs: deliver only when the answer changed since the last run.'),
-  })
-  .refine((input) => !!input.prompt || !!input.skill, {
-    message: 'A job asks something: a prompt, a skill, or both.',
-  });
-
-type ScheduleInput = z.output<typeof inputSchema>;
-
 const now = () => new Date();
-
-/** The tool's input as the store reads it. */
-const newSchedule = (input: ScheduleInput): NewSchedule => ({
-  title: input.title,
-  when: input.when,
-  prompt: input.prompt,
-  skill: input.skill,
-  brandId: input.brand_id ?? null,
-  deliver: input.deliver_to,
-  changeOnly: input.change_only,
-});
 
 const makerOf = (ctx: ChatToolContext) => ({
   userId: ctx.userId,

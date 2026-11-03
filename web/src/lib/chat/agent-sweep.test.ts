@@ -26,6 +26,14 @@ const fakes = vi.hoisted(() => ({
 }));
 vi.mock('./key-notice', () => ({ notifyOwnKeyFailure: fakes.notify }));
 vi.mock('@/lib/mcp/account', () => ({ getAiUsageFor: fakes.usage }));
+const keyCap = vi.hoisted(() => ({
+  reached: null as { reached: boolean; renewsAt: string | null } | null,
+  read: null as { reached: boolean; renewsAt: string | null } | null,
+}));
+vi.mock('./own-key-cap', () => ({
+  ownKeyCapReached: vi.fn(async () => keyCap.reached),
+  readOwnKeyCap: vi.fn(async () => keyCap.read),
+}));
 vi.mock('./key', () => ({
   resolveChatModelKey: vi.fn(async () => ({ source: 'ansvisor' })),
   failingOwnKey: vi.fn(async () => null),
@@ -131,6 +139,8 @@ const agent = (id: string, over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
+  keyCap.reached = null;
+  keyCap.read = null;
   vi.clearAllMocks();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('CHAT_AGENTIC', 'true');
@@ -198,6 +208,37 @@ describe('the agents’ sweep', () => {
     expect((await sweepAgents(NOW, driver)).pausedForFailures).toBe(1);
     expect(agentRow()).toMatchObject({ status: 'paused', paused_reason: 'failures' });
     expect(agentRow(OTHER_AGENT).status).toBe('active');
+  });
+
+  it('resumes agents paused at the own key’s monthly limit once there is room again (AGENT-OWN-KEY §4.2)', async () => {
+    fakes.onOwnKey.mockResolvedValue(true);
+    db.tables.chat_agents = [
+      agent(AGENT, { status: 'paused', paused_reason: 'own_key_cap' }),
+      agent(OTHER_AGENT, { status: 'paused', paused_reason: 'manual' }),
+    ];
+    // Still reached, or not read: they wait.
+    keyCap.read = { reached: true, renewsAt: '2026-11-20T09:00:00.000Z' };
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(0);
+    keyCap.read = null;
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(0);
+    expect(agentRow().status).toBe('paused');
+
+    // The period renewed, or an Admin raised the limit.
+    keyCap.read = { reached: false, renewsAt: '2026-12-20T09:00:00.000Z' };
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
+    expect(agentRow()).toMatchObject({
+      status: 'active',
+      paused_reason: null,
+      activated_at: NOW.toISOString(),
+    });
+    expect(agentRow(OTHER_AGENT).status).toBe('paused');
+
+    // Chat no longer runs on the key: it resumes on the AI limit, unread.
+    Object.assign(agentRow(), { status: 'paused', paused_reason: 'own_key_cap' });
+    fakes.onOwnKey.mockResolvedValue(false);
+    keyCap.read = null;
+    expect((await sweepAgents(NOW, driver)).resumed).toBe(1);
+    expect(agentRow().status).toBe('active');
   });
 
   it('resumes an agent paused for the AI limit once there is room, and stops its triggered runs held there', async () => {

@@ -77,10 +77,18 @@ export function ScheduleDetail({
 
   const reading = useMemo(() => readWhen(when, { now, timeZone: zone }), [when, now, zone]);
   const hint = useMemo(() => whenHint(when, zone, now, tWhen), [when, zone, now, tWhen]);
+  // A When left as it was, on the job's own zone, keeps the job's timing (the
+  // server doesn't read it again), so a one-time job whose time passed still
+  // saves its other edits.
+  const kept =
+    zone === job.timezone &&
+    job.when !== null &&
+    when.trim() === whenPhrase(job.when, job.timezone) &&
+    !reading.ok;
   const upcoming = reading.ok ? nextRuns(reading.when, zone, now, 3) : [];
   const recurring = reading.ok && reading.when.kind === 'recurring';
   const editable = job.canEdit;
-  const blocked = !title.trim() || !reading.ok || (!prompt.trim() && !job.skill);
+  const blocked = !title.trim() || !(reading.ok || kept) || (!prompt.trim() && !job.skill);
 
   const reload = async () => {
     const next = await getChatSchedule(job.id).catch(() => null);
@@ -184,15 +192,15 @@ export function ScheduleDetail({
           <Field
             id="schedule-when"
             label={tDetail('when')}
-            hint={hint.hint}
-            problem={editable && !hint.ok}
+            hint={kept ? undefined : hint.hint}
+            problem={editable && !hint.ok && !kept}
           >
             <Input
               id="schedule-when"
               data-action="schedule.when"
               value={when}
               disabled={!editable || busy}
-              aria-invalid={(editable && !hint.ok) || undefined}
+              aria-invalid={(editable && !hint.ok && !kept) || undefined}
               onChange={(e) => setWhen(e.target.value)}
               className="text-[13px]"
             />

@@ -570,6 +570,8 @@ export interface ClaimMark {
 export interface SourceRead {
   competitorDomains: string[];
   pageType: string | null;
+  /** The sites the brand trusts (00449): primary sources. */
+  trustedDomains?: readonly string[];
   /** Weak or competitors' sources the person chose to keep, by their address. */
   kept: ReadonlySet<string>;
   /** The model's reads of sites the rules can't place (part b), by site. */
@@ -759,6 +761,7 @@ export function trust({
       brandDomains,
       competitorDomains: kinds!.competitorDomains,
       pageType: kinds!.pageType,
+      trustedDomains: kinds!.trustedDomains,
     });
     const site = normalizeDomain(l.url);
     // A site the model doesn't know is left out, as one the rules can't
@@ -902,7 +905,8 @@ export function unplacedSites(
     competitorDomains,
     pageType,
     kept,
-  }: Pick<SourceRead, 'competitorDomains' | 'pageType' | 'kept'>,
+    trustedDomains,
+  }: Pick<SourceRead, 'competitorDomains' | 'pageType' | 'kept' | 'trustedDomains'>,
 ): string[] {
   const links = new Map<string, string[]>();
   for (const l of byUrl(pageLinks(blocks, brandDomains).filter((link) => link.external))) {
@@ -910,7 +914,7 @@ export function unplacedSites(
     if (
       site &&
       askableSite(site) &&
-      !sourceClass(l.url, { brandDomains, competitorDomains, pageType })
+      !sourceClass(l.url, { brandDomains, competitorDomains, pageType, trustedDomains })
     ) {
       links.set(site, [...(links.get(site) ?? []), l.url]);
     }

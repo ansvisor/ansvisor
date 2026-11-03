@@ -10,7 +10,7 @@ import {
   readForIds,
 } from '@/lib/shopping/catalog-read';
 import { readiness, type ReadinessCheck } from '@/lib/shopping/products';
-import { brandInOrg, planIncludes } from './data';
+import { brandAllowed, planIncludes } from './data';
 
 /**
  * A brand's product catalog (#1263) for the MCP tools get_catalog_sources and
@@ -49,7 +49,7 @@ export async function getCatalogSourcesFor(
   auth: McpAuthContext,
   brandId: string,
 ): Promise<McpCatalogSource[] | null> {
-  if (!(await brandInOrg(auth, brandId))) return null;
+  if (!(await brandAllowed(auth, brandId))) return null;
   const sources = await readCatalogSources(supabaseAdmin, brandId);
   return sources.map((s) => ({
     id: s.id,
@@ -146,7 +146,7 @@ export async function listCatalogProductsFor(
   auth: McpAuthContext,
   params: { brandId: string; search?: string; limit?: number; offset?: number },
 ): Promise<McpCatalogPage | null> {
-  if (!(await brandInOrg(auth, params.brandId))) return null;
+  if (!(await brandAllowed(auth, params.brandId))) return null;
   const analytics = await planIncludes(auth.organizationId!, 'shopping_analytics');
   const limit = Math.min(Math.max(params.limit ?? PRODUCTS_DEFAULT, 1), PRODUCTS_MAX);
   const offset = Math.max(params.offset ?? 0, 0);

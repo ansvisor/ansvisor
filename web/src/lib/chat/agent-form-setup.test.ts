@@ -23,6 +23,14 @@ const key = vi.hoisted(() => {
   }
   return { own: false, unreadable: false, OwnKeyUnreadableError };
 });
+const keyCap = vi.hoisted(() => ({
+  reached: null as { reached: boolean; renewsAt: string | null } | null,
+  read: null as { reached: boolean; renewsAt: string | null } | null,
+}));
+vi.mock('./own-key-cap', () => ({
+  ownKeyCapReached: vi.fn(async () => keyCap.reached),
+  readOwnKeyCap: vi.fn(async () => keyCap.read),
+}));
 vi.mock('./key', () => ({
   OwnKeyUnreadableError: key.OwnKeyUnreadableError,
   resolveChatModelKey: vi.fn(async () => {

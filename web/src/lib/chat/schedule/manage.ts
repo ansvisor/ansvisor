@@ -12,7 +12,7 @@ import {
   type DeliverChoice,
 } from './store';
 import { canSeeJob, type ScheduleReader } from './views';
-import { readWhen, whenHint, type WhenWords } from './when';
+import { readWhen, whenHint, whenPhrase, type ScheduleWhen, type WhenWords } from './when';
 
 /**
  * What the Scheduled page changes (CHAT-12 items 22–25; W3-03), checked for
@@ -167,6 +167,8 @@ export async function takeOverSchedule(
   const next = nextFromNow(job, now);
   if (!next) return refused('passed');
   if (!(await hasRoomFor(plan, job))) return refused('limit');
+  // Its notices are its old creator's: closed while the job is still theirs.
+  await closeJobNotices(id, now);
   const { error } = await supabaseAdmin
     .from('chat_schedules')
     .update({
@@ -181,7 +183,6 @@ export async function takeOverSchedule(
     })
     .eq('id', id);
   if (error) throw new Error(`Could not take the job over: ${error.message}`);
-  await closeJobNotices(id, now);
   return { ok: true };
 }
 
@@ -196,11 +197,27 @@ export interface ScheduleEdits {
   timezone?: string;
 }
 
+/** The When a job keeps now, as its page reads it; null for a follow-up check. */
+function whenOfJob(job: ManagedJob): ScheduleWhen | null {
+  if (job.kind === 'recurring' && job.rrule) return { kind: 'recurring', rrule: job.rrule };
+  if (job.kind === 'once' && job.due_at) {
+    return { kind: 'once', runMode: job.run_mode, dueAt: job.due_at };
+  }
+  return null;
+}
+
+const sameWhen = (a: ScheduleWhen, b: ScheduleWhen) =>
+  a.kind === 'recurring'
+    ? b.kind === 'recurring' && a.rrule === b.rrule
+    : b.kind === 'once' && a.runMode === b.runMode && Date.parse(a.dueAt) === Date.parse(b.dueAt);
+
 /**
  * Saves its creator's edits, with no confirm card (item 23): When read on
  * the job's own clock (the zone the page sets, else the one it has), its
  * next run from now when it is on. The person's Settings › Account zone
- * never moves a job: only this does.
+ * never moves a job: only this does. A When left as it was, on the same
+ * zone, keeps the job's timing: a one-time job that already ran isn't run
+ * again, and one whose time passed still saves its other edits.
  */
 export async function updateSchedule(
   reader: ScheduleReader,
@@ -215,9 +232,16 @@ export async function updateSchedule(
   }
   if (edits.timezone !== undefined && !isTimeZone(edits.timezone)) return refused('zone');
   const zone = edits.timezone ?? job.timezone;
-  const reading = readWhen(edits.when, { now, timeZone: zone });
-  if (!reading.ok) {
-    return refused('when', whenHint(edits.when, zone, now, whenT).hint);
+  // A new zone reads When again on the new clock and makes the next run again.
+  const moved = zone !== job.timezone;
+  const kept = whenOfJob(job);
+  let when: ScheduleWhen | null = null;
+  if (!kept || moved || edits.when.trim() !== whenPhrase(kept, job.timezone)) {
+    const reading = readWhen(edits.when, { now, timeZone: zone });
+    if (!reading.ok) {
+      return refused('when', whenHint(edits.when, zone, now, whenT).hint);
+    }
+    if (!kept || moved || !sameWhen(reading.when, kept)) when = reading.when;
   }
   const { data: current, error: readError } = await supabaseAdmin
     .from('chat_schedules')
@@ -229,22 +253,25 @@ export async function updateSchedule(
   if (!prompt && !(current as { skill_name: string | null } | null)?.skill_name) {
     return refused('prompt');
   }
-  const when = reading.when;
-  const recurring = when.kind === 'recurring';
-  const next = firstRunOf(when, zone, now);
+  const recurring = (when ?? kept)?.kind === 'recurring';
+  const timing = when
+    ? {
+        kind: when.kind,
+        run_mode: when.kind === 'once' ? when.runMode : 'run_at',
+        due_at: when.kind === 'once' ? when.dueAt : null,
+        rrule: when.kind === 'recurring' ? when.rrule : null,
+        ...(job.enabled ? { next_run_at: firstRunOf(when, zone, now), retry_at: null } : {}),
+      }
+    : {};
   const { error } = await supabaseAdmin
     .from('chat_schedules')
     .update({
       title: edits.title.trim(),
       prompt: prompt || null,
-      kind: when.kind,
-      run_mode: when.kind === 'once' ? when.runMode : 'run_at',
-      due_at: when.kind === 'once' ? when.dueAt : null,
-      rrule: recurring ? when.rrule : null,
+      ...timing,
       timezone: zone,
       deliver_to: deliverToOf(edits.deliver),
       change_only: recurring && edits.changeOnly,
-      ...(job.enabled ? { next_run_at: next, retry_at: null } : {}),
     })
     .eq('id', id);
   if (error) throw new Error(`Could not save the job: ${error.message}`);

@@ -44,6 +44,8 @@ const OPEN_ACTIONS: Record<string, string> = {
     "the person's own profile: the time zone their own times are read in, nothing that costs",
   'chat-notices.ts:markChatNoticesRead':
     "the person's own record of seeing a notice (00441), nothing that runs or costs",
+  'chat-notices.ts:closeChatNotice':
+    "the person's own record of opening a notice about an agent (00446), nothing that runs or costs",
   'chat-prefs.ts:saveChatMenuOpen': "the person's own Chat layout, no cost",
   'chat-prefs.ts:saveChatRailOpen': "the person's own Chat layout, no cost",
   'chat-prefs.ts:saveChatGeneralSettings':
@@ -88,6 +90,7 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-settings.ts:resetToolPolicies': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:setChatSwitch': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:setManagerExecute': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:setAutoGoLive': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:removeAutoChoice':
     "removes the person's own Don't ask again tick: takes an auto-approval back, never gives one",
   // An add-on pack (CHAT-18): only on an active, paid plan.
