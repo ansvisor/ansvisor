@@ -4,7 +4,7 @@ description: "Turns site audit findings into fixes you approve."
 license: MIT
 metadata:
   title: "Site audit fixes"
-  filters: "content"
+  filters: "content technical"
 ---
 
 # Site audit fixes
@@ -28,7 +28,7 @@ The site audit's findings, ordered by what matters most for AI answers, each tur
 1. Start from the latest audit. When there is none, or it is old, offer `run_site_audit`; the app asks the person first. A page with an audit running gets that audit back, with no new audit used. A page audited in the last 10 minutes isn't started again: ask whether to open that audit or audit it again, and only then run it again with force.
 2. Order the findings by what matters for AI answers: whether AI crawlers can reach the pages, then missing direct answers, structured data, titles and descriptions, then the rest.
 3. For each of the top findings: why it matters for AI answers, and the fix, ready to apply: the corrected markup, text or setting.
-4. When the person wants a page change kept, save it as a draft with `create_draft`; the app asks them first when it should.
+4. When the person wants a page change kept, save it as a draft with `create_draft`; the app asks them first when it should. In an agent's run nobody is there to ask: always save it with its tool, and the app holds it for approval where the agent's mode needs it.
 5. Settings outside the page, such as the robots file or the CMS, are the person's to change: write the change for them.
 
 ## Output

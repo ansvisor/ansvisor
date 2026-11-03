@@ -11,6 +11,7 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { readFocusFill, readHomeShortcuts, readSinceYouLeft } from '@/lib/actions/chat-home';
 import { track } from '@/lib/analytics';
 import type { FocusArea } from '@/lib/chat/focus';
+import { startChatRun } from '@/lib/chat/start-chat';
 import {
   focusGreeting,
   focusNews,
@@ -494,31 +495,16 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       return;
     }
     setStarting(true);
-    const res = await fetch('/api/chat/runs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        brandId: brandId ?? undefined,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        ...(shortcutId ? { shortcutId } : {}),
-      }),
-    }).catch(() => null);
-    const chatId = res?.ok ? res.headers.get('x-chat-conversation') : null;
-    if (!res?.ok || !chatId) {
+    const started = await startChatRun(message, brandId ?? null, { shortcutId });
+    if (!started.ok) {
       setStarting(false);
-      const body = (await res?.json().catch(() => null)) as {
-        code?: string;
-        error?: string;
-      } | null;
       // A read-only workspace, or a chat on the demo brand: the plans.
-      if (body?.code === 'subscription_inactive' || body?.code === 'demo_brand') openUpgrade();
-      else toast.error(body?.error ?? t('startFailed'));
+      if (started.code === 'subscription_inactive' || started.code === 'demo_brand') openUpgrade();
+      else toast.error(started.error ?? t('startFailed'));
       return;
     }
     // The run goes on without this page: the chat picks up its stream.
-    void res.body?.cancel().catch(() => undefined);
-    router.push(`/dashboard/chat/${chatId}`);
+    router.push(`/dashboard/chat/${started.chatId}`);
   }
 
   // The counts of the brand open now: none while another brand's are shown.

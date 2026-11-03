@@ -42,9 +42,9 @@ import {
   validTimezone,
   type ChatActor,
 } from './engine';
-import { OPEN_RUN_STATUSES, loadRun, newProgress, type LoadedRun } from './engine-store';
+import { OPEN_RUN_STATUSES, loadRun, type LoadedRun } from './engine-store';
 import { chatAgenticEnabled } from './flag';
-import { startTouchedBrands } from './touched-brands';
+import { openHeadlessRun } from './headless-run';
 
 /**
  * The agent run driver (CHAT-21 §H, CHAT-27 §E; W2-16): runs a started
@@ -63,7 +63,8 @@ import { startTouchedBrands } from './touched-brands';
  * brand lacks (connection, §H item 42; agent-connections.ts); a missing
  * Optional one is said in the run's message, and the run does the rest.
  * A read-only workspace starts nothing. Then
- * the run gets a chat of its own (origin agent, agent_run_id; §H item 36),
+ * the run gets a chat of its own (origin agent, agent_run_id; §H item 36;
+ * written as every headless run is, headless-run.ts),
  * owned by the person it acts as, so it shows in their chat list and Inbox:
  * the agent's skills, instructions and what fired it as the message, the
  * evidence as its scope; the version's mode and effort. The Chat engine
@@ -193,6 +194,8 @@ function pauseFor(refusal: AgentRefusal): Exclude<AgentPausedReason, 'manual'> |
   if (refusal.code === 'ai_limit') return 'cap';
   // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4).
   if (refusal.code === 'own_key_failed') return 'own_key';
+  // A skill it runs was turned off, rejected, deleted or changed (CHAT-13).
+  if (refusal.code === 'skill_off') return 'skill_off';
   // All agents reached the month's limit on the workspace's own key (AGENT-OWN-KEY §4.2).
   if (refusal.code === 'own_key_cap') return 'own_key_cap';
   return null;
@@ -348,20 +351,6 @@ function runScope(
   return { context: { route: '/dashboard/agents', chips }, ...onAction };
 }
 
-async function insertId(table: string, row: Record<string, unknown>, what: string) {
-  const { data, error } = await supabaseAdmin
-    .from(table as 'chat_messages')
-    .insert(row as never)
-    .select('id')
-    .single();
-  if (error || !data) {
-    const failure = new Error(`Could not ${what}: ${error?.message ?? 'no row'}`);
-    (failure as Error & { code?: string }).code = error?.code;
-    throw failure;
-  }
-  return (data as { id: string }).id;
-}
-
 /**
  * Makes a started agent run's Chat run, after the checks (above), or ends
  * the run when it can't start. Null when there is nothing to drive: the run
@@ -464,74 +453,38 @@ export async function openAgentRun(
     missing: gaps.optional,
   });
 
-  let conversationId: string;
-  try {
-    conversationId = await insertId(
-      'chat_conversations',
-      {
-        organization_id: organizationId,
-        user_id: actingUserId,
-        brand_id: brand.id,
-        title: (action
+  // Its chat, owned by the person it acts as; one per agent run: a second driver leaves it.
+  const opened = await openHeadlessRun({
+    origin: 'agent',
+    organizationId,
+    userId: actingUserId,
+    chat: {
+      create: {
+        brandId: brand.id,
+        title: action
           ? runnerT('actionTitle', { agent: agent.row.name, action: action.title })
-          : runnerT('title', { agent: agent.row.name, brand: brand.name })
-        ).slice(0, 200),
-        origin: 'agent',
-        agent_run_id: run.id,
+          : runnerT('title', { agent: agent.row.name, brand: brand.name }),
+        agentRunId: run.id,
       },
-      "start the agent run's chat",
-    );
-  } catch (err) {
-    // One chat per agent run: another driver made it already.
-    if ((err as { code?: string }).code === '23505') return null;
-    throw err;
-  }
-  // Its chat keeps the brands it touches from its own on (00436), before anything is in it.
-  await startTouchedBrands(conversationId);
-  await insertId(
-    'chat_messages',
-    {
-      conversation_id: conversationId,
-      role: 'user',
-      content_md: text,
-      context_json: runScope(words, evidence, false) as unknown as Json,
     },
-    "keep the agent run's message",
-  );
-  const answerId = await insertId(
-    'chat_messages',
-    { conversation_id: conversationId, role: 'assistant', content_md: '', timezone },
-    "make the agent run's answer",
-  );
-  // Started already: the agent's slot (chat_start_next_agent_run) is its place in line.
-  const chatRunId = await insertId(
-    'chat_runs',
-    {
-      message_id: answerId,
-      conversation_id: conversationId,
-      status: 'running',
-      // The agent's model preference and effort (CHAT-16): the engine picks Auto's models today.
-      model: version.model,
-      effort: version.effort,
-      started_at: now.toISOString(),
-    },
-    "make the agent run's Chat run",
-  );
-  const { error: stateError } = await supabaseAdmin.from('chat_run_state').insert({
-    run_id: chatRunId,
-    organization_id: organizationId,
-    user_id: actingUserId,
+    message: { text, context: runScope(words, evidence, false) as unknown as Json },
+    timezone,
+    brandId: brand.id,
     mode: version.mode,
+    // The agent's model preference and effort (CHAT-16): the engine picks Auto's models today.
+    model: version.model,
+    effort: version.effort,
+    // Started already: the agent's slot (chat_start_next_agent_run) is its place in line.
+    status: 'running',
     progress: {
-      ...newProgress(timezone, brand.id, 'read'),
-      question: text,
       scope: runScope(words, evidence, true),
       // An action's title and tasks may come from outside: every change is a card (§16a).
       ...(action ? { tainted: true, scopeUntrusted: true } : {}),
-    } as unknown as Json,
-    heartbeat_at: now.toISOString(),
+    },
+    now,
   });
-  if (stateError) throw new Error(`Could not keep the agent run: ${stateError.message}`);
+  if (!opened) return null;
+  const { conversationId, chatRunId } = opened;
   if (actingUserId !== run.acting_user_id) {
     const { error } = await supabaseAdmin
       .from('chat_agent_runs')
