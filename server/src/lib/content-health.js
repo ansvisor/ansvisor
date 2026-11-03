@@ -34,12 +34,12 @@ const HEALTH_INDUSTRY = 'healthcare';
 /**
  * The words that make a brand a health one, in its industry (a person's own
  * past the list: "Dietary supplements"), name or description, English and
- * Turkish. A site's or an account's health ("site health", "a health check")
- * isn't one, nor hospitality.
+ * Turkish. A site's, an account's or a team's health ("site health", "a health
+ * check", "pipeline health") isn't one, nor hospitality.
  */
 const HEALTH_BRAND = new RegExp(
   [
-    String.raw`(?<!(?:site|website|seo|brand|account|system|server|data|code|app|network|business|customer|financial|portfolio|credit|link|domain)\s)health(?!\s+(?:checks?|scores?|reports?|monitor))\p{L}*`,
+    String.raw`(?<!(?:site|website|seo|brand|account|system|server|data|code|app|network|business|customer|financial|portfolio|credit|link|domain|pipeline|team|revenue|sales|inbox|email|store|deliverability|product|codebase|project|campaign|funnel)\s)health(?!\s+(?:checks?|scores?|reports?|monitor))\p{L}*`,
     String.raw`supplements?|vitamins?|probiotics?|nutraceuticals?|nutrition\p{L}*|dietary|pharma\p{L}*|medic\p{L}*|clinic\p{L}*|hospitals?|wellness|herbal|homeopath\p{L}*|ayurved\p{L}*|naturopath\p{L}*|therap(?:y|ies|ists?|eutic\p{L}*)|dental|dentists?`,
     String.raw`sağlı\p{L}*|takviye\p{L}*|eczane\p{L}*|ilaç\p{L}*|klinik\p{L}*|hastane\p{L}*|bitkisel|probiyotik\p{L}*|vitamin\p{L}*|tıbbi|terapi\p{L}*`,
   ]
@@ -120,19 +120,26 @@ const HEALTH_CLAIM = new RegExp(
 /**
  * An English disclaimer before a claim: "does not help", "not intended to
  * diagnose, treat, cure or prevent", within its clause ("…, but it helps"
- * is a claim again).
+ * is a claim again). A comma ends the clause unless a list of claim verbs
+ * goes on past it: "If you can't sleep, it helps you relax" is a claim.
  */
-const NEGATED_BEFORE =
-  /\b(?:not intended to|not meant to|does not|do not|did not|is not|are not|doesn['’]t|don['’]t|didn['’]t|isn['’]t|aren['’]t|won['’]t|can['’]t|cannot|never|not(?!\s+only))\b(?:(?!\b(?:but|however|although|though|yet|while|whereas)\b)[^.!?\n:;—–]){0,40}$/i;
+const NEGATED_BEFORE = new RegExp(
+  String.raw`\b(?:not intended to|not meant to|does not|do not|did not|is not|are not|doesn['’]t|don['’]t|didn['’]t|isn['’]t|aren['’]t|won['’]t|can['’]t|cannot|never|not(?!\s+only))\b(?:(?!\b(?:but|however|although|though|yet|while|whereas)\b)(?:[^.!?\n:;—–,]|,\s*(?=(?:diagnos\p{L}*|${VERB_EN})(?!\p{L})))){0,40}$`,
+  'iu',
+);
 /** A Turkish claim's verb said in the negative: "yardımcı olmaz", "azaltmaz", "önlemediği". */
 const NEGATED_VERB_TR = /(?:m[ae]z|m[ae]m[ıiuü]ş|m[ae]y[ae]n|m[ae]d[ıiuü])\p{L}*$/iu;
 /** A Turkish disclaimer after a claim: "… amacıyla kullanılmaz", "… yerine geçmez". */
 const NEGATED_AFTER_TR =
   /^[^.!?\n]{0,60}?(?<!\p{L})(?:değil\p{L}*|amaçlanmamış\p{L}*|kullanılmaz|yerine\s+geçmez|iddia\s+etmez|garanti\s+etmez|amacı\s+taşımaz)/iu;
 
-/** A question a buyer asks, with or without its "?": "Does it help you sleep", "uykuya yardımcı olur mu". */
+/**
+ * A question a buyer asks, with or without its "?": "Does it help you sleep",
+ * "uykuya yardımcı olur mu". A verb or an adverb after the modal makes it a
+ * list item's claim instead: "May also help", "Is clinically proven".
+ */
 const QUESTION_START = new RegExp(
-  String.raw`^\s*["“'‘(]*(?:(?:how|what|why|when|which|who|where)\s+)?(?:does|do|did|can|could|is|are|was|were|will|would|should|may|might|has|have)\s+(?!(?:help|be|${VERB_EN})\b)`,
+  String.raw`^\s*["“'‘(]*(?:(?:how|what|why|when|which|who|where)\s+)?(?:does|do|did|can|could|is|are|was|were|will|would|should|may|might|has|have)\s+(?!(?:help|be|been|${VERB_EN}|also|even|still|further|often|actually|naturally|gently|proven|shown|known|made|(?!(?:daily|family|early|only|weekly|monthly)\b)\p{L}{3,}ly|\p{L}{3,}ed)\b)`,
   'iu',
 );
 /** Turkish asks with its particle after a word: "olur mu", "güvenli midir" (never "5 mi", miles). */

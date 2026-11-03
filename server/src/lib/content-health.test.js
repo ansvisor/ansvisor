@@ -106,6 +106,12 @@ describe('isHealthBrand', () => {
       }),
     ).toBe(false);
     expect(
+      isHealthBrand({
+        industry: 'B2B Software (SaaS)',
+        description: 'Pipeline health and forecasting for revenue teams, with team health surveys.',
+      }),
+    ).toBe(false);
+    expect(
       isHealthBrand({ industry: 'Travel & Hospitality', description: 'Boutique hotels' }),
     ).toBe(false);
     expect(isHealthBrand({ industry: 'Food & Beverage', description: 'Coffee roaster' })).toBe(
@@ -131,6 +137,15 @@ describe('healthClaimsIn', () => {
     );
     expect(healthClaimsIn('Take 2 capsules daily with water.')).toEqual(['Take 2 capsules']);
     expect(healthClaimsIn('May help you relax after a long day.')).toEqual(['help you relax']);
+    // A list item that starts with a modal and an adverb is no buyer's question.
+    expect(healthClaimsIn('May also help reduce stress.')).toEqual(['help reduce stress']);
+    expect(healthClaimsIn('Can naturally support restful sleep.')).toEqual([
+      'support restful sleep',
+    ]);
+    expect(healthClaimsIn('Is clinically proven to reduce anxiety.')).toEqual([
+      'clinically proven',
+      'reduce anxiety',
+    ]);
   });
 
   it('reads no claim in a question a buyer asks, nor in a disclaimer or a safety line', () => {
@@ -143,6 +158,14 @@ describe('healthClaimsIn', () => {
     expect(healthClaimsIn('It is not a cure, but it helps you relax.')).toEqual([
       'helps you relax',
     ]);
+    // A negation in a clause before the claim's doesn't make it a disclaimer.
+    expect(healthClaimsIn('If you can’t sleep, magnesium glycinate helps you relax.')).toEqual([
+      'helps you relax',
+    ]);
+    expect(
+      healthClaimsIn('When you don’t get enough rest, our formula supports deeper sleep.'),
+    ).toEqual(['supports deeper sleep']);
+    expect(healthClaimsIn('It does not cure, treat or prevent insomnia.')).toEqual([]);
   });
 
   it('reads Turkish: a claim, a question and a disclaimer', () => {
