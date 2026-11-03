@@ -5,8 +5,8 @@
  * 2026-11-02). Each model Chat may run is listed with `tested`: only a tested
  * one is offered in the menu, asked of the price catalog, or run by the
  * engine; a chat or an agent that picked one not tested runs Auto. At launch
- * that is Haiku 5.5 and Sonnet 5.5, which Auto runs already; Opus 5.5 waits
- * for its run of the persona and permission test set (W1-22). Each has its id
+ * that was Haiku 5.5 and Sonnet 5.5, which Auto runs already; Opus 5.5 since
+ * it passed the test set twice in a row (2026-11-03). Each has its id
  * in OpenRouter's catalog, which the API server prices and labels by
  * (lib/model-menu.js), and its id in its provider's own API. Shared by the
  * browser and the server: no keys here.
@@ -45,8 +45,8 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     provider: 'anthropic',
     tested: true,
   },
-  // Not yet: hidden until a real run of the test set passes (owner, 2026-11-02).
-  { id: 'anthropic/claude-opus-5.5', api: 'claude-opus-5-5', provider: 'anthropic', tested: false },
+  // Passed the whole test set twice in a row on Anthropic's API, cache on (2026-11-03, W4-35).
+  { id: 'anthropic/claude-opus-5.5', api: 'claude-opus-5-5', provider: 'anthropic', tested: true },
 ];
 
 /** The models the menu offers, the catalog is asked for and the engine runs: the tested ones. */

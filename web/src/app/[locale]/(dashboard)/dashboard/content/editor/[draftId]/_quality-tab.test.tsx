@@ -100,13 +100,18 @@ const onChangeType = vi.fn();
 const onConfirmAuthor = vi.fn();
 const onConfirmIntro = vi.fn();
 
-async function render(quality: QualityRead | Readability | null, handOff: HandOff | null = null) {
+async function render(
+  quality: QualityRead | Readability | null,
+  handOff: HandOff | null = null,
+  focusRequest: { to: 'todos' | 'trust'; n: number } | null = null,
+) {
   const q = quality && 'eeat' in quality ? quality : read(quality as Readability | null);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <QualityTab
           quality={q}
+          focusRequest={focusRequest}
           onShow={onShow}
           onShowPlaceholder={onShowPlaceholder}
           onPickAuthor={onPickAuthor}
@@ -275,10 +280,14 @@ describe('QualityTab', () => {
   it('shows the three scores with their bands, labelled an Ansvisor estimate', async () => {
     await render(result);
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
-    expect(scores.textContent).toContain('E-E-A-T100Strong');
+    // Each name says in plain words what it scores (editor UX review 2026-11-03).
+    expect(scores.textContent).toContain('E-E-A-TWho stands behind the page100Strong');
     // No Trust check is live for a page without agent claims: no fake points.
-    expect(scores.textContent).toContain('TrustNot scored yet');
-    expect(scores.textContent).toContain('Readability71Can improve');
+    expect(scores.textContent).toContain('TrustSources, links and dated factsNot scored yet');
+    expect(scores.textContent).toContain('ReadabilityHow easily it reads71Can improve');
+    expect(scores.textContent).toContain(
+      '80 and up: Strong · 60 to 79: Can improve · under 60: Needs work',
+    );
     expect(scores.textContent).toContain(
       "Ansvisor estimates based on Google's published quality signals. Not a Google score.",
     );
@@ -293,8 +302,66 @@ describe('QualityTab', () => {
       '+9 Readability3 sentences over 35 wordsSplit each into two. Show goes to the first.Show',
       '+5 ReadabilitySentences average 22.4 wordsAim for 15–20 words: shorter sentences read faster, and AI answers quote them whole.',
     ]);
+    // A gain is an estimate, and says so: no exact promise.
+    expect(suggestions.querySelector('li [title]')!.getAttribute('title')).toBe(
+      'Could raise Readability by about 10 (an estimate)',
+    );
     await act(async () => suggestions.querySelector<HTMLButtonElement>('li button')!.click());
     expect(onShow).toHaveBeenCalledWith('A very long sentence.');
+  });
+
+  it('shows the part the Next step names in the panel’s own scroll, marked, Quality open or not (editor test 2026-11-03)', async () => {
+    vi.useFakeTimers();
+    // The panel's own scroll: where a part shown scrolls to, not the page.
+    const box = document.createElement('div');
+    box.setAttribute('data-panel-scroll', '');
+    box.appendChild(container);
+    document.body.appendChild(box);
+    const tops: number[] = [];
+    box.scrollTo = ((options: ScrollToOptions) => {
+      tops.push(options.top ?? -1);
+    }) as typeof box.scrollTo;
+    // jsdom has no layout: the panel at 100px, its to-dos at 180px, what raises it at 260px.
+    const at: Record<string, number> = { 'Your to-dos': 180, 'What would raise it': 260 };
+    const rect = HTMLElement.prototype.getBoundingClientRect;
+    HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
+      const top = this === box ? 100 : (at[this.getAttribute('aria-label') ?? ''] ?? 140);
+      return { top, left: 0, right: 0, bottom: top, width: 0, height: 0, x: 0, y: top } as DOMRect;
+    };
+    // The page itself never scrolls (editor UX review 2026-11-03: at 1024×768 Next and
+    // Mark ready went out of sight).
+    const had = HTMLElement.prototype.scrollIntoView;
+    let pageScrolled = 0;
+    HTMLElement.prototype.scrollIntoView = () => {
+      pageScrolled += 1;
+    };
+    try {
+      // To-dos open: Show to-dos brings them to the panel's top, less a little room.
+      await render(read(result, null), null, { to: 'todos', n: 1 });
+      const todos = container.querySelector<HTMLElement>('[aria-label="Your to-dos"]')!;
+      expect(tops).toEqual([72]);
+      expect(todos.tabIndex).toBe(-1);
+      expect(todos.className).toContain('ring-2');
+      // The same request again (a render) does nothing; a new one, with Quality open, does.
+      await render(read(result, null), null, { to: 'todos', n: 1 });
+      expect(tops).toHaveLength(1);
+      await render(read(result, null), null, { to: 'trust', n: 2 });
+      expect(tops).toEqual([72, 152]);
+      // The mark goes after a moment.
+      await act(async () => vi.advanceTimersByTime(2_000));
+      expect(
+        container.querySelector('[aria-label="What would raise it"]')!.className,
+      ).not.toContain('ring-2');
+      // No to-do left: Show to-dos goes to what raises the scores instead.
+      await render(result, null, { to: 'todos', n: 3 });
+      expect(tops.at(-1)).toBe(152);
+      expect(pageScrolled).toBe(0);
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = rect;
+      HTMLElement.prototype.scrollIntoView = had;
+      box.remove();
+      vi.useRealTimers();
+    }
   });
 
   it('asks for shorter words and sentences under English’s band', async () => {
@@ -368,14 +435,14 @@ describe('QualityTab', () => {
     await act(async () => box()[1].click());
     expect(onConfirmAuthor).toHaveBeenLastCalledWith('profile', true);
     expect(container.querySelector('[aria-label="Quality scores"]')!.textContent).toContain(
-      'E-E-A-T60',
+      'Who stands behind the page60',
     );
   });
 
   it("lists picking the page's author as a to-do, and opens the menu", async () => {
     await render(read(result, null));
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
-    expect(scores.textContent).toContain('E-E-A-T0Needs work');
+    expect(scores.textContent).toContain('Who stands behind the page0Needs work');
     const todos = container.querySelector('[aria-label="Your to-dos"]')!;
     expect(todos.querySelector('h4')!.textContent).toBe(
       'Your to-dos 2 left · only you can do these',
@@ -635,7 +702,7 @@ describe('QualityTab', () => {
     await render({ ...read(null), trust: result });
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
     // Figures 0 of 30, fresh 0 of 7, links 1.5 of 3: 4 of 100.
-    expect(scores.textContent).toContain('Trust4Needs work');
+    expect(scores.textContent).toContain('Sources, links and dated facts4Needs work');
     const suggestions = container.querySelector('[aria-label="What would raise it"]')!;
     const rows = [...suggestions.querySelectorAll('li')].map((li) => li.textContent);
     expect(rows).toContainEqual(expect.stringContaining('1 sentence with a figure has no source'));
@@ -980,7 +1047,7 @@ describe('QualityTab', () => {
     });
     await render({ ...read(null), trust: result });
     const scores = container.querySelector('[aria-label="Quality scores"]')!;
-    expect(scores.textContent).toContain('TrustNot scored yet');
+    expect(scores.textContent).toContain('Sources, links and dated factsNot scored yet');
     const rows = [...container.querySelectorAll('li')].map((li) => li.textContent);
     // 3 of the 40 Phase 1 points.
     expect(rows).toContainEqual(expect.stringContaining("+8 Trust1 link doesn't work"));
