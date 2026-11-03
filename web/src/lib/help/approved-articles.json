@@ -1109,7 +1109,7 @@
         },
         {
           "heading": "An API key in your message",
-          "text": "If your message holds something that looks like an API key, Chat doesn't send it: the key would end up in the chat. A line under the box says so, and **Send** waits. Click **Remove** to take the key out and keep the rest of your message. To run Chat on your own AI key, an Admin saves it in **Settings › AI Providers**; own keys come with Enterprise."
+          "text": "If your message holds something that looks like an API key, Chat doesn't send it: the key would end up in the chat. A line under the box says so, and **Send** waits. Click **Remove** to take the key out and keep the rest of your message. Admins can click **Save securely** instead: the key goes into a short form that saves it in **Settings › AI Providers**, never into the chat. Own keys come with Enterprise."
         },
         {
           "heading": "Watch the work",
