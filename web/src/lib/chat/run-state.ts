@@ -125,6 +125,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
     case 'text.delta':
       next.text = run.text + event.data.text;
       return next;
+    case 'text.replaced':
+      next.text = event.data.text;
+      return next;
     case 'confirm.required':
       next.confirm = event.data;
       next.status = 'waiting';

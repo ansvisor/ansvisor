@@ -1,9 +1,10 @@
 /**
  * Daily Search Console sync (#644).
  *
- * For every active brand mapped to a GSC property (whose org connection is
- * live), pulls the last SYNC_WINDOW_DAYS of per-query daily stats through
- * Composio and upserts them into gsc_query_stats, the same per page into
+ * For every active brand mapped to a GSC property (whose connection is live:
+ * the Google sign-in it uses, lib/brand-integrations.js), pulls the last
+ * SYNC_WINDOW_DAYS of per-query daily stats through Composio and upserts
+ * them into gsc_query_stats, the same per page into
  * gsc_page_stats (AT-008: which pages lose clicks while impressions rise),
  * and the pages Google showed in its shopping results into
  * gsc_shopping_page_stats (00377: Product Visibility's Readiness). A
@@ -17,8 +18,12 @@
 
 import supabaseAdmin from '../config/supabase.js';
 import { activeOrgFilter } from './active-subscriptions.js';
+import { composioTarget, connectedBrands } from './brand-integrations.js';
+import { selectInChunks } from './chunked-in.js';
 import { isComposioConfigured, queryGscSearchAnalytics } from './composio.js';
 import { logger } from './logger.js';
+
+const GSC = 'google-search-console';
 
 const SYNC_WINDOW_DAYS = 28;
 const ROW_LIMIT = 5000;
@@ -91,11 +96,10 @@ function daysSince(date, now) {
  * through the result set up to the row cap. Returns the rows written.
  */
 async function pullWindow(brand, { dimension, table, onConflict, map }, { from, to }) {
-  const entityId = `org_${brand.organization_id}`;
   let total = 0;
 
   for (let page = 0; page < MAX_PAGES; page++) {
-    const rows = await queryGscSearchAnalytics(entityId, {
+    const rows = await queryGscSearchAnalytics(composioTarget(brand.connection), {
       site_url: brand.gsc_property,
       start_date: utcDateString(from),
       end_date: utcDateString(to),
@@ -168,7 +172,7 @@ export function mapShoppingRows(brandId, appearance, rows) {
  * the rows written.
  */
 async function syncBrandShopping(brand, now = Date.now()) {
-  const entityId = `org_${brand.organization_id}`;
+  const target = composioTarget(brand.connection);
   if (brand.gsc_shopping_property && brand.gsc_shopping_property !== brand.gsc_property) {
     const { error } = await supabaseAdmin
       .from('gsc_shopping_page_stats')
@@ -184,7 +188,7 @@ async function syncBrandShopping(brand, now = Date.now()) {
     aggregation_type: 'auto',
     data_state: 'final',
   };
-  const types = await queryGscSearchAnalytics(entityId, {
+  const types = await queryGscSearchAnalytics(target, {
     ...window,
     // As the page rows below are counted, so their sums compare.
     aggregation_type: 'byPage',
@@ -202,7 +206,7 @@ async function syncBrandShopping(brand, now = Date.now()) {
     if (!appearance) continue;
     const rows = [];
     for (let page = 0; page < MAX_PAGES; page++) {
-      const batch = await queryGscSearchAnalytics(entityId, {
+      const batch = await queryGscSearchAnalytics(target, {
         ...window,
         dimensions: ['page', 'date'],
         row_limit: ROW_LIMIT,
@@ -331,37 +335,34 @@ async function syncBrandPages(brand) {
  * Returns per-brand counts.
  */
 export async function runGscSync({ organizationId, brandId } = {}) {
-  if (!isComposioConfigured('google-search-console')) return { synced: 0, skipped: 0, results: [] };
+  if (!isComposioConfigured(GSC)) return { synced: 0, skipped: 0, results: [] };
 
-  // Orgs with a live connection…
-  let connQuery = supabaseAdmin
-    .from('integration_connections')
-    .select('organization_id')
-    .eq('provider', 'google-search-console')
-    .eq('status', 'connected');
-  if (organizationId) connQuery = connQuery.eq('organization_id', organizationId);
-  const { data: connections, error: connError } = await connQuery;
-  if (connError) throw new Error(connError.message);
-  // …on an active subscription: once the plan has ended, nothing is synced.
-  const orgIds = [...new Set((connections || []).map((c) => c.organization_id))];
+  // Brands whose Google sign-in is live (00470)…
+  const connections = await connectedBrands(GSC, { organizationId, brandId });
+  // …in organizations on an active subscription: once the plan has ended,
+  // nothing is synced.
+  const orgIds = [...new Set(connections.map((c) => c.organizationId))];
   const isActive = await activeOrgFilter(orgIds);
-  const connectedOrgIds = orgIds.filter(isActive);
-  if (connectedOrgIds.length === 0) return { synced: 0, skipped: 0, results: [] };
+  const live = new Map(
+    connections.filter((c) => isActive(c.organizationId)).map((c) => [c.brandId, c]),
+  );
+  if (live.size === 0) return { synced: 0, skipped: 0, results: [] };
 
-  // …and their active brands with a mapped property.
-  let brandQuery = supabaseAdmin
-    .from('brands')
-    .select(
-      'id, organization_id, gsc_property, gsc_pages_backfilled_property, gsc_pages_backfill_from, gsc_shopping_property',
-    )
-    .eq('is_active', true)
-    // A demo brand's figures (00380) are sample data, never synced.
-    .eq('is_demo', false)
-    .not('gsc_property', 'is', null)
-    .in('organization_id', connectedOrgIds);
-  if (brandId) brandQuery = brandQuery.eq('id', brandId);
-  const { data: brands, error: brandError } = await brandQuery;
+  // …that are active and have a mapped property.
+  const { data: rows, error: brandError } = await selectInChunks([...live.keys()], (ids) =>
+    supabaseAdmin
+      .from('brands')
+      .select(
+        'id, organization_id, gsc_property, gsc_pages_backfilled_property, gsc_pages_backfill_from, gsc_shopping_property',
+      )
+      .eq('is_active', true)
+      // A demo brand's figures (00380) are sample data, never synced.
+      .eq('is_demo', false)
+      .not('gsc_property', 'is', null)
+      .in('id', ids),
+  );
   if (brandError) throw new Error(brandError.message);
+  const brands = (rows || []).map((brand) => ({ ...brand, connection: live.get(brand.id) }));
 
   const results = [];
   let synced = 0;

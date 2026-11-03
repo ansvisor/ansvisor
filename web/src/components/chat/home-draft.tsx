@@ -18,7 +18,12 @@ export function HomeDraftProvider({ children }: { children: ReactNode }) {
   const [draft, setDraft] = useState<ComposerDraft | null>(null);
   return (
     <HomeDraft.Provider
-      value={{ draft, fill: (text) => setDraft((was) => ({ nonce: (was?.nonce ?? 0) + 1, text })) }}
+      value={{
+        draft,
+        // Its own nonces, never the page's (?compose= is 1): each Show me fills the box again.
+        fill: (text) =>
+          setDraft((was) => ({ nonce: Math.max(Date.now(), (was?.nonce ?? 0) + 1), text })),
+      }}
     >
       {children}
     </HomeDraft.Provider>
