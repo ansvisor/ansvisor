@@ -839,7 +839,7 @@
         },
         {
           "heading": "When an agent sends a page on its own",
-          "text": "Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. The notice leaves Needs you once you open it. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.\n\nWhen an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves."
+          "text": "Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. A published page's notice also has **Take down**, for Admins and Managers. The notice leaves Needs you once you open it. A page someone took down never goes live on its own again. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.\n\nWhen an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves."
         },
         {
           "heading": "On your own AI key",
@@ -1005,7 +1005,15 @@
         "create a report",
         "optimize a page",
         "find opportunities",
-        "improve with audit"
+        "improve with audit",
+        "brand facts",
+        "approved facts",
+        "/facts",
+        "/wrongclaim",
+        "fact check",
+        "api key in message",
+        "paste api key",
+        "remove key"
       ],
       "synonyms": [
         "assistant",
@@ -1014,7 +1022,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1070,7 +1078,11 @@
         },
         {
           "heading": "Send or publish a page from Chat",
-          "text": "A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. A live page, or a send to your webhook, goes from the Content Editor.\n\nSending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat."
+          "text": "A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. A live page, or a send to your webhook, goes from the Content Editor.\n\nSending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat.\n\nTo take a published page back down to a draft in its CMS, ask Chat, or click **Take down** on its row in **Activity** for 30 days. It always waits for your click, and Managers can do it even when publishing is off for them."
+        },
+        {
+          "heading": "Your brand facts",
+          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims a person approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact."
         },
         {
           "heading": "Open a web page",
@@ -1107,6 +1119,10 @@
         {
           "heading": "Attach files",
           "text": "Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until they are up. If a file can't go, the box says why, and **Retry** sends a failed one again.\n\nAttached files are data for Chat to read, not files you made: they don't show in **Files**, and they are kept for 90 days.\n\nIn **＋**, **Connect a tool** opens **Settings › Integrations** for Admins; others send their Admin a request in one click."
+        },
+        {
+          "heading": "An API key in your message",
+          "text": "If your message holds something that looks like an API key, Chat doesn't send it: the key would end up in the chat. A line under the box says so, and **Send** waits. Click **Remove** to take the key out and keep the rest of your message. To run Chat on your own AI key, an Admin saves it in **Settings › AI Providers**; own keys come with Enterprise."
         },
         {
           "heading": "Watch the work",
@@ -1363,20 +1379,20 @@
         "used skill",
         "save a skill",
         "my skills",
-        "skills page",
-        "turn off a skill",
-        "schedule a skill",
-        "import a skill",
-        "upload a skill",
-        "skill from github",
-        "review a skill",
         "faq from fan-outs",
         "weekly report",
         "win back citations",
         "ready to publish",
         "buyer questions",
         "rival brief",
-        "listing gaps"
+        "listing gaps",
+        "skills page",
+        "turn off a skill",
+        "schedule a skill",
+        "import a skill",
+        "upload a skill",
+        "skill from github",
+        "review a skill"
       ],
       "synonyms": [
         "slash commands",
@@ -1841,7 +1857,9 @@
         "mark published",
         "history",
         "export",
-        "site audit estimate"
+        "site audit estimate",
+        "health claims",
+        "supplements"
       ],
       "synonyms": [
         "write an article",
@@ -1850,7 +1868,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1875,6 +1893,10 @@
         {
           "heading": "Facts and your input",
           "text": "The Content Agent looks up the facts a page needs, such as a price, a plan's limits or a statistic, and links each to the page it came from, never a forum or a social post. A fact no trusted page has is left out of its sentence.\n\nA fact it couldn't look up stays in square brackets for you, as do up to three only your brand has, such as your customer count. Each is tinted amber; **Your input needed** in the toolbar counts them and jumps to the next one, selected so you can type over it.\n\nOnes in alt text, structured data or HTML count too. **Send to CMS** waits until none is left. With Quality on, **Export** offers **Fill now** or **Export without them**, which drops those sentences. One in the title or a heading has to be filled."
+        },
+        {
+          "heading": "Health and supplement brands",
+          "text": "The Content Agent never writes a health benefit, a treatment, a prevention or a dose your brand didn't give in its own words, such as that a product helps you sleep or eases stress, and never looks one up. One it wrote anyway is taken out of the page, or its suggestion is dropped. A claim your page, your brand's description or **Your input** already makes can stay, and safety lines such as \"talk to your doctor\" always do.\n\nA brand counts as a health brand when its industry is Healthcare, or its industry, name or description names supplements, vitamins, a pharmacy, a clinic or wellness."
         },
         {
           "heading": "The side panel",
@@ -1927,7 +1949,10 @@
         "drafts",
         "draft status",
         "archive",
-        "export drafts"
+        "export drafts",
+        "made in",
+        "open chat",
+        "from chat"
       ],
       "synonyms": [
         "content list",
@@ -1936,7 +1961,7 @@
         "draft list"
       ],
       "plan": "all",
-      "updated": "2026-10-30",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1948,7 +1973,7 @@
         },
         {
           "heading": "Columns and filters",
-          "text": "The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. While the Content Agent writes a draft, its Status reads **Agent writing…**, and **Agent failed** if it couldn't finish; where your workspace has Chat, each comes with the same dot Chat shows for a run. The **Created** filter narrows the list to the last 7, 30 or 90 days. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published."
+          "text": "The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Made in (Content Editor, Chat, Action Center, Agent or MCP), Status, Created and Updated. A draft made in your own chat has **Open chat**, and the editor shows **From chat** with its title. While the Content Agent writes a draft, its Status reads **Agent writing…**, and **Agent failed** if it couldn't finish; where your workspace has Chat, each comes with the same dot Chat shows for a run. The **Created** filter narrows the list to the last 7, 30 or 90 days, and **Made in** to one place, once drafts come from more than one. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published."
         },
         {
           "heading": "The row menu",
@@ -2017,7 +2042,7 @@
         },
         {
           "heading": "No duplicates",
-          "text": "Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is written, the message says so and counts any duplicates it skipped.\n\nFor a second take on the same need, use **Another angle** on the opportunity."
+          "text": "Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is written, the message says so and counts any duplicates it skipped.\n\nA question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.\n\nFor a second take on the same need, use **Another angle** on the opportunity."
         },
         {
           "heading": "How many you get",
@@ -2296,7 +2321,9 @@
         "last send",
         "qualified reviewer",
         "reviewer metadata",
-        "reviewed by"
+        "reviewed by",
+        "take down",
+        "unpublish"
       ],
       "synonyms": [
         "push to cms",
@@ -2307,11 +2334,11 @@
         "reviewer field"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-02",
       "sections": [
         {
           "heading": null,
-          "text": "**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Ansvisor never publishes on its own: you publish in your CMS. Only admins and managers can send pages."
+          "text": "**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Send to CMS never publishes: you publish in your CMS. Only admins and managers can send pages."
         },
         {
           "heading": "Send one page",
@@ -2331,11 +2358,15 @@
         },
         {
           "heading": "See how a send went",
-          "text": "Beside each row's status, the Library shows the last send: a clock while it's on its way, a paper plane once it's sent, a red warning when it failed (hover it to see why), and a blue link once it's published (click it to open the live page).\n\nThe **Last send** filter beside **Created** lists the pages that were **Never sent**, **Sending**, **Sent**, **Failed** or **Published**. A send to your workflow isn't retried on its own: send a failed page again from the Library."
+          "text": "Beside each row's status, the Library shows the last send: a clock while it's on its way, a paper plane once it's sent, a red warning when it failed (hover it to see why), a blue link once it's published (click it to open the live page), and a crossed-out cloud once it was taken down.\n\nThe **Last send** filter beside **Created** lists the pages that were **Never sent**, **Sending**, **Sent**, **Failed** or **Published**; a page taken down counts as **Sent**. A send to your workflow isn't retried on its own: send a failed page again from the Library."
         },
         {
           "heading": "When a page becomes Published",
           "text": "Once you publish the item in Webflow or Framer, or the post in WordPress or Wix, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one."
+        },
+        {
+          "heading": "Take a published page down",
+          "text": "A page published through Ansvisor in Webflow, WordPress or Wix can be taken down: pick **Take down** in its row's **…** menu. It leaves your site at once and goes back to a draft in your CMS, and the Library shows **Taken down** beside its status. Links to it, and AI answers that cited it, may still point to it for a while.\n\nAdmins and managers can take a page down, even when publishing is off for managers. A page someone took down never goes live on its own again: an agent's next publish of it waits for a click. Framer publishes the whole site, and a send to your workflow is your workflow's: take those down there."
         },
         {
           "heading": "Sending a page again",
@@ -2788,7 +2819,9 @@
         "estimate",
         "confidence",
         "volume range",
-        "estimate badge"
+        "estimate badge",
+        "head terms",
+        "opportunity volume"
       ],
       "synonyms": [
         "how many people ask",
@@ -2797,15 +2830,15 @@
         "est. ai volume"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
-          "text": "AI assistants don't publish how often people ask them something, so every AI search volume in Ansvisor is an estimate. It is shown as a range, such as 540–2k, never as a single number. Totals, averages and a prompt's own page add a dashed **Estimate** badge; in tables the range alone marks an estimate."
+          "text": "AI assistants don't publish how often people ask them something, so every AI search volume in Ansvisor is an estimate. It is shown as a range, such as 540–2k, never as a single number. Totals, averages, a prompt's own page, a content opportunity, the **Prompt Volumes** chart and the Action Center's volumes add a dashed **Estimate** badge; in other tables the range alone marks an estimate."
         },
         {
           "heading": "How it's estimated",
-          "text": "The estimate is the median monthly Google searches for the prompt's related keywords, times the share of Google searches that now get an AI answer (45% by default; a self-hosted server can change it).\n\nWhen a prompt's volume is analyzed, Ansvisor picks five short Google keywords for its category and reads their monthly Google searches. Keywords Google has no data for are left out, and the median of the rest is the prompt's **Google Vol.** The Insights tab shows the AI share as **AI Adoption Rate**."
+          "text": "The estimate is the median monthly Google searches for the prompt's related keywords, times the share of Google searches that now get an AI answer (45% by default; a self-hosted server can change it).\n\nWhen a prompt's volume is analyzed, Ansvisor picks five short Google keywords for its category and reads their monthly Google searches. Keywords Google has no data for are left out, and the median of the rest is the prompt's **Google Vol. (head terms)**. The Insights tab shows the AI share as **AI Adoption Rate**."
         },
         {
           "heading": "How the range is set",
@@ -2826,6 +2859,10 @@
         {
           "heading": "Totals, single keywords and AI guesses",
           "text": "Some estimates are built differently, and their note says so:\n\n- **Totals and averages** (**Total Est. AI Volume**, **Avg. AI Volume**, and Similar Topics' **Est. AI Volume**): the sum of the lows to the sum of the highs; an average divides both by the prompt count. A total is high-confidence when at least 80% of its volume is, low when more than half is low-confidence, and medium otherwise. The note gives the mix.\n- **One keyword** (each row of Similar Topics): only the AI share is assumed, so it is Medium with a ±25% range, or Low when it has no volume or is over six months old.\n- **An AI's guess** (suggestions from Ansvisor Agents, the Brand Visibility page's Opportunities, and the Action Center's topic opportunities): always Low, from half to twice the guess. Track the prompt to get an estimate from its keywords' Google searches."
+        },
+        {
+          "heading": "A content opportunity's volume",
+          "text": "A content opportunity shows the estimate of its question, the prompt it is shown with, and says it is one of the prompts it answers; it isn't their sum. Its score still weighs all of them.\n\nA long question's estimate comes from short head terms for its category, not its own words, so it says **From head terms** and names the closest measured phrase with that phrase's own estimate, often far lower."
         },
         {
           "heading": "Compare prompts by their ranges",
@@ -2948,7 +2985,7 @@
         "volume analysis"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2960,7 +2997,7 @@
         },
         {
           "heading": "What the tab shows",
-          "text": "For analyzed prompts you see:\n\n- **Prompts Analyzed**, with how many keywords they cover, and **Total Est. AI Volume** and **Avg. AI Volume** across your prompts.\n- Two **Prompt Volumes** cards: a chart of the total by answer engine, and a table with each prompt's **Google Vol.** and **Est. AI Vol.**\n- Each prompt's **Intent**: Comparison, How-to, What is, Best / Top, vs. / Review, Recommendation, Problem Solving or Other.\n- **High Opportunity Prompts**: the prompts with the most estimated AI searches. A low-confidence estimate isn't listed there on its own.\n- **Similar Topics**: the most-searched keyword clusters across your prompts. **See all** opens its own page.\n- **AI Adoption Rate**: the share of Google searches that get an AI answer, used in every estimate."
+          "text": "For analyzed prompts you see:\n\n- **Prompts Analyzed**, with how many keywords they cover, and **Total Est. AI Volume** and **Avg. AI Volume** across your prompts.\n- Two **Prompt Volumes** cards: a chart of the total by answer engine, and a table with each prompt's **Google Vol. (head terms)** and **Est. AI Vol.**\n- Each prompt's **Intent**: Comparison, How-to, What is, Best / Top, vs. / Review, Recommendation, Problem Solving or Other.\n- **High Opportunity Prompts**: the prompts with the most estimated AI searches. A low-confidence estimate isn't listed there on its own.\n- **Similar Topics**: the most-searched keyword clusters across your prompts. **See all** opens its own page.\n- **AI Adoption Rate**: the share of Google searches that get an AI answer, used in every estimate."
         },
         {
           "heading": "Where else estimated volumes show",

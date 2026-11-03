@@ -11,7 +11,18 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
-import { ArrowLeft, Bot, Check, Copy, Download, PanelRight, Send, Target, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bot,
+  Check,
+  Copy,
+  Download,
+  MessageSquare,
+  PanelRight,
+  Send,
+  Target,
+  X,
+} from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -4067,6 +4078,29 @@ export function DraftEditor({
                   link: (chunks) => (
                     <Link
                       href={`/dashboard/action-center/actions?action=${draft.action!.id}`}
+                      className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                    >
+                      {chunks}
+                    </Link>
+                  ),
+                })}
+              </span>
+            </p>
+          )}
+          {/* The chat it was made in (W4-10): "From chat: {title}", with the new Chat on. */}
+          {chatOn && draft.conversation && (
+            <p
+              data-slot="draft-chat-bar"
+              className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-[13px] text-muted-foreground"
+            >
+              <MessageSquare aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">
+                {t.rich('chatBar', {
+                  title: draft.conversation.title || t('chatBarUntitled'),
+                  link: (chunks) => (
+                    <Link
+                      href={`/dashboard/chat/${draft.conversation!.id}`}
+                      data-action="editor.openChat"
                       className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
                     >
                       {chunks}
