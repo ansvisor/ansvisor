@@ -25,6 +25,18 @@ export interface RunApiFailure {
 export const runFailure = (status: number, failure: ApiFailure, code: string, error: string) =>
   NextResponse.json<RunApiFailure>({ ok: false, failure, code, error }, { status });
 
+/**
+ * A message (or a typed answer) that holds an API key (W4-05): refused
+ * before anything keeps it, and the text never goes to a log.
+ */
+export const apiKeyRefusal = () =>
+  runFailure(
+    400,
+    'failed',
+    'api_key',
+    'This looks like an API key. Save it in Settings › AI Providers instead of sending it.',
+  );
+
 /** The engine's refusal as its answer; read-only is the server's own 402 body (the upgrade dialog). */
 export function engineFailureResponse(f: EngineFailure): NextResponse {
   if (f.code === 'subscription_inactive') {

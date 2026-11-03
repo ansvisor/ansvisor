@@ -3520,7 +3520,11 @@
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "webPage": { "name": "Open web pages", "step": "Open page" },
     "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
-    "agents": { "name": "Create and run agents", "step": "Changed an agent" }
+    "agents": { "name": "Create and run agents", "step": "Changed an agent" },
+    "whatsNew": {
+      "name": "Read What’s new",
+      "step": "Read What’s new"
+    }
   },
   "agentic": {
     "avatar": {
@@ -3983,6 +3987,9 @@
       "approvalMismatch": "This changed after you approved it. Approve again?",
       "notFound": "This chat isn't there any more.",
       "attachments": "A file you attached isn't ready or isn't yours any more. Attach it again and send."
+    },
+    "whatsNew": {
+      "step": "{count, plural, =0 {Nothing new for your plan} one {# update for your plan} other {# updates for your plan}}"
     }
   },
   "chatRun": {
@@ -4055,6 +4062,11 @@
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
     "removeChip": "Remove {label}",
+    "keyPaste": {
+      "line": "This looks like an API key. Save it securely instead of sending it?",
+      "remove": "Remove",
+      "save": "Save securely"
+    },
     "usage": {
       "close": "Close"
     },
@@ -7632,11 +7644,23 @@
         "type": "Type",
         "method": "Method",
         "by": "By",
+        "madeIn": "Made in",
         "status": "Status",
         "created": "Created",
         "updated": "Updated",
         "menu": "Row actions",
         "shopping": "Shopping path"
+      },
+      "madeIn": {
+        "label": "Made in",
+        "all": "All",
+        "editor": "Content Editor",
+        "chat": "Chat",
+        "action_center": "Action Center",
+        "agent": "Agent",
+        "mcp": "MCP",
+        "openChat": "Open chat",
+        "in": "in {place}"
       },
       "rowMenu": {
         "label": "Actions for {title}",
@@ -8211,6 +8235,8 @@
       },
       "actionBar": "This draft is the work of <link>Action AC-{no}</link>. Mark ready completes its task there.",
       "actionBarDone": "This draft is the work of <link>Action AC-{no}</link>.",
+      "chatBar": "From chat: <link>{title}</link>",
+      "chatBarUntitled": "Untitled chat",
       "suggestions": {
         "bar": "Agent suggestions",
         "agent": "Content Agent",
