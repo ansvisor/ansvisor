@@ -1797,7 +1797,7 @@ const APP_PERIODS = [DEFAULT_RANGE_DAYS, ...Object.values(DAYS_DEFAULTS), DAYS_M
 /**
  * The figures this answer may state (facts.ts): the question, the chat so
  * far, what was read and every tool result in this run, today's date, the
- * page's scope, the loaded skills' text (their word and character targets)
+ * page's scope, the loaded skills' word and character targets (as lengths only)
  * and the app's periods. Never the model's own earlier text: a figure it
  * made up stays made up.
  */
@@ -1813,7 +1813,8 @@ function runFigures(rc: RunContext): KnownFigures {
     question: `${rc.progress.question ?? ''}\n${todayLine()}`,
     history: [rc.history.summary ?? '', ...rc.history.recent.map((m) => toJson(m.content))],
     reads: [...rc.progress.readLog.map((read) => toJson(read)), ...results],
-    given: [rc.progress.scope ?? null, ...loadedSkillList(rc).map((skill) => skill.body)],
+    given: [rc.progress.scope ?? null],
+    skills: loadedSkillList(rc).map((skill) => skill.body),
     periods: APP_PERIODS,
   });
 }

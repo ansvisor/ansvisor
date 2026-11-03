@@ -144,16 +144,47 @@ describe('checkFigures', () => {
       question: 'Write an FAQ for our pricing page\nToday is 2026-10-30.',
       history: [],
       reads: [],
-      given: [
-        { dateRange: { from: '2026-10-16', to: '2026-10-30', label: 'Last 14 days' } },
-        'Answers of 40 to 80 words each. A meta description of about 155 characters.',
+      given: [{ dateRange: { from: '2026-10-16', to: '2026-10-30', label: 'Last 14 days' } }],
+      skills: [
+        'Answers of 40 to 80 words each. A meta description of about 155 characters. FAQ pages earn 23% more citations; aim for 1,200 visits.',
       ],
       now: NOW,
     });
     const text =
-      'The answers are under the 80-word target; write about 155 characters for the last 14 days.';
+      'The answers are under the 80-word target, at least 40 words; write about 155 characters for the last 14 days.';
     expect(checkFigures(text, known, { now: NOW })).toMatchObject({ text, replaced: [] });
     expect(checkFigures('Aim for 120 words.', known, { now: NOW }).replaced).toEqual(['120']);
+    // A skill's other numbers, and its targets as anything but a length, aren't the brand's.
+    expect(
+      checkFigures('Visibility dropped 23%, from 1,200 visits to 155 visits.', known, { now: NOW })
+        .replaced,
+    ).toEqual(['23%', '1,200', '155']);
+  });
+
+  it('takes from a daily series its first to last date only, never every pair', () => {
+    const series = Array.from({ length: 60 }, (_, i) => ({
+      date: new Date(Date.UTC(2026, 8, 1 + i)).toISOString().slice(0, 10),
+      visibility: 40,
+    }));
+    // 2026-09-01 to 2026-10-30: 59 days apart, 59 and 0 days old on NOW.
+    const known = knownFigures([{ series }], { now: NOW });
+    const kept = 'Over these 59 days, 60 counting both, about 2 months.';
+    expect(checkFigures(kept, known, { now: NOW })).toMatchObject({ text: kept, replaced: [] });
+    expect(
+      checkFigures('Pages get cited within 45 days, results in 33 weeks.', known, {
+        now: NOW,
+      }).replaced,
+    ).toEqual(['45', '33']);
+  });
+
+  it('rounds a span to its unit down or up, never a unit further', () => {
+    // 2025-02-14 is 623 days, about 20.5 months, before NOW.
+    const known = knownFigures(['Updated 2025-02-14'], { now: NOW });
+    const kept = 'Almost 21 months old, over 20 months, 89 weeks, 2 years.';
+    expect(checkFigures(kept, known, { now: NOW })).toMatchObject({ text: kept, replaced: [] });
+    expect(
+      checkFigures('It is 19 months old, or 22 months, or 87 weeks.', known, { now: NOW }).replaced,
+    ).toEqual(['19', '22', '87']);
   });
 
   it('stays linear on a long text', () => {
