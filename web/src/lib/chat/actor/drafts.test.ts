@@ -224,6 +224,27 @@ describe('createContentDraftFor', () => {
     ]);
   });
 
+  it('keeps where it was made: the editor’s unless said, else Chat’s or an agent’s with its chat (00463)', async () => {
+    const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+    const plain = await createContentDraftFor(actor, BRAND, newPage);
+    expect(rowOf(fake.admin, plain)).toMatchObject({ origin: 'editor', conversation_id: null });
+    const fromChat = await createContentDraftFor(actor, BRAND, {
+      ...newPage,
+      origin: 'chat',
+      conversationId: CHAT,
+    });
+    expect(rowOf(fake.admin, fromChat)).toMatchObject({ origin: 'chat', conversation_id: CHAT });
+    const byAgent = await createContentDraftFor(actor, BRAND, {
+      ...newPage,
+      origin: 'agent',
+      conversationId: CHAT,
+    });
+    expect(rowOf(fake.admin, byAgent)).toMatchObject({ origin: 'agent', conversation_id: CHAT });
+    await expect(
+      createContentDraftFor(actor, BRAND, { ...newPage, conversationId: 'nope' }),
+    ).rejects.toThrow('invalid');
+  });
+
   it('is every member’s, as saving a draft is', async () => {
     person({ role: 'analyst' });
     await expect(createContentDraftFor(actor, BRAND, newPage)).resolves.toEqual(expect.any(String));
