@@ -10,10 +10,21 @@ import { logger } from './logger.js';
  *   - 'skipped': not configured or no recipients. Missing config is a silent
  *     no-op, so self-host and misconfigured environments never fail a caller.
  * `replyTo`, when given, is where a reply goes instead of the sender.
+ * `from` sends from another address than RESEND_FROM_EMAIL (it must be on
+ * a domain Resend has verified), and `attachments` carries files:
+ * `{ filename, content }`, the content in base64.
  */
-export async function deliverEmail({ to, subject, html, headers, replyTo }) {
+export async function deliverEmail({
+  to,
+  subject,
+  html,
+  headers,
+  replyTo,
+  from: sender,
+  attachments,
+}) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
+  const from = sender || process.env.RESEND_FROM_EMAIL;
   if (!apiKey || !from || !to.length) return 'skipped';
 
   try {
@@ -30,6 +41,7 @@ export async function deliverEmail({ to, subject, html, headers, replyTo }) {
         html,
         ...(headers ? { headers } : {}),
         ...(replyTo ? { reply_to: replyTo } : {}),
+        ...(attachments?.length ? { attachments } : {}),
       }),
       signal: AbortSignal.timeout(15000),
     });

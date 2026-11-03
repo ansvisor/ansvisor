@@ -145,6 +145,31 @@ export function reportCardStore(db = supabaseAdmin) {
       if (error) fail('release', error);
     },
 
+    /** Requests whose card is ready or failed and whose e-mail hasn't gone, oldest first. */
+    async undeliveredRequests(limit) {
+      const { data, error } = await db
+        .from('report_card_requests')
+        .select(
+          'id, first_name, email, outcome, report_cards!report_card_requests_report_card_id_fkey!inner(id, status, payload, site, created_at)',
+        )
+        .is('emailed_at', null)
+        .in('report_cards.status', ['ready', 'failed'])
+        .order('created_at', { ascending: true })
+        .limit(limit);
+      if (error) fail('undelivered', error);
+      return data ?? [];
+    },
+
+    /** What became of a request's e-mail; a request is e-mailed once. */
+    async markEmailed(requestId, status, at) {
+      const { error } = await db
+        .from('report_card_requests')
+        .update({ email_status: status, emailed_at: at.toISOString() })
+        .eq('id', requestId)
+        .is('emailed_at', null);
+      if (error) fail('mark', error);
+    },
+
     /** Deletes the requests older than `before` (12 months: the privacy notice). */
     async pruneRequests(before) {
       const { error, count } = await db

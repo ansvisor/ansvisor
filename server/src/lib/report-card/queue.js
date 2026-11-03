@@ -1,15 +1,17 @@
 import cron from 'node-cron';
 import logger from '../logger.js';
 import { estimatedCardUsd, reportCardLimits } from './config.js';
+import { deliverReportCards } from './deliver.js';
 import { buildReportCard, costMeter, failureReason } from './run.js';
 import { reportCardStore } from './store.js';
 
 /**
  * The report card queue (REPORT-CARD §7), on the cloud server only: every
  * minute it starts the cards that are due, REPORT_CARD_CONCURRENCY at a
- * time, within the day's cap and the month's budget; a card the cap stops
- * waits for the next tick. A run lost to a restart is taken again once, then
- * failed. Daily, the requests older than 12 months are deleted.
+ * time, within the day's cap and the month's budget, and sends the e-mails
+ * waiting (deliver.js); a card the cap stops waits for the next tick. A
+ * run lost to a restart is taken again once, then failed. Daily, the
+ * requests older than 12 months are deleted.
  */
 
 export const QUEUE_SCHEDULE = '* * * * *';
@@ -81,6 +83,7 @@ export async function tickReportCards({
   limits = reportCardLimits(),
   now = new Date(),
   run = runCard,
+  deliver = deliverReportCards,
 } = {}) {
   const running = await store.runningCards();
   let busy = 0;
@@ -115,6 +118,9 @@ export async function tickReportCards({
     today += 1;
     run(card, { store }).catch((err) => logger.error({ err }, '[report-card] run crashed'));
   }
+
+  // The e-mails waiting: ready cards, cards sent again, failed cards' notes.
+  await deliver({ store }).catch((err) => logger.error({ err }, '[report-card] delivery failed'));
   return started;
 }
 
