@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00472: a brand's Google properties are set by the server
+-- 00473: a brand's Google properties are set by the server
 -- ============================================================================
 -- A brand's Search Console site (gsc_property) and Analytics property
 -- (ga_property_id) are picked from the list of the Google sign-in the brand
