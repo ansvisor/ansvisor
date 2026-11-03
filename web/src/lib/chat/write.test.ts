@@ -1292,6 +1292,7 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     expect(CHAT_TOOLS.filter((tool) => tool.class === 'execute').map((tool) => tool.name)).toEqual([
       'push_cms_draft',
       'publish_cms',
+      'unpublish_cms',
     ]);
     const publish = chatTool('publish_cms')!;
     expect(publish.executeGroup).toBe('publishing');

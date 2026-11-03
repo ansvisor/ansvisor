@@ -114,6 +114,8 @@ describe('dataBlock', () => {
 
   it('trusts only the reads of the workspace’s own numbers', () => {
     expect(isUntrustedRead('get_visibility_summary')).toBe(false);
+    // Words from the brand's site, but only those a person in the workspace approved.
+    expect(isUntrustedRead('get_brand_facts')).toBe(false);
     expect(isUntrustedRead('list_mentions')).toBe(true);
     expect(isUntrustedRead('a_tool_added_later')).toBe(true);
     expect(TRUSTED_READS.has('list_ai_answers')).toBe(false);

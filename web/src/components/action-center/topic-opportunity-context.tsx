@@ -6,6 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { useMemo } from 'react';
 import { guessedVolumeEstimate } from '@/lib/volume-estimate';
 import {
+  EstimateBadge,
   EstimateNoteTooltip,
   EstimateRange,
   createEstimateNoteHandle,
@@ -69,18 +70,22 @@ export function TopicOpportunityContext({ payload }: { payload: Record<string, u
         <div>
           <p className="text-xs font-medium text-muted-foreground">{t('demand')}</p>
           {demand !== null && (
-            <p className="mt-1 tabular-nums">
-              {/* The suggestions' AI-guessed demand: a grey range (PROMPT-013). */}
-              {t.rich('demandValue', {
-                count: suggestions.length,
-                range: () => (
-                  <EstimateRange
-                    estimate={guessedVolumeEstimate(demand, null)}
-                    kind="total"
-                    perMonth
-                  />
-                ),
-              })}
+            <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 tabular-nums">
+              {/* The suggestions' AI-guessed demand: a grey range (PROMPT-013),
+                  with the badge that says it is an estimate and from where. */}
+              <span>
+                {t.rich('demandValue', {
+                  count: suggestions.length,
+                  range: () => (
+                    <EstimateRange
+                      estimate={guessedVolumeEstimate(demand, null)}
+                      kind="total"
+                      perMonth
+                    />
+                  ),
+                })}
+              </span>
+              <EstimateBadge estimate={guessedVolumeEstimate(demand, null)} kind="total" />
             </p>
           )}
           <ul className="mt-1.5 space-y-1 text-xs">
