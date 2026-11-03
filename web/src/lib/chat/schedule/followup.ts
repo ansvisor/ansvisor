@@ -109,7 +109,10 @@ export function followUpDateWords(dueAt: string, timeZone: string, now: Date): s
 /**
  * The checks before the card, and again before the check is made: an Admin
  * or a Manager with the brand in their access, and a target of the brand
- * (its prompts, its action). Answers the refusal the model is told, or null.
+ * (its prompts, its action). A page or an action alone is read from the
+ * impact ledger's measurement of its change, so it needs a ship event of
+ * the brand's: without one the check would have nothing to read. Answers
+ * the refusal the model is told, or null.
  */
 export async function checkNewFollowUp(
   maker: Pick<FollowUpMaker, 'userId' | 'organizationId'>,
@@ -162,7 +165,29 @@ export async function checkNewFollowUp(
     if (error) throw new Error(`Could not read a check's action: ${error.message}`);
     if (!data) return refuse('not_found', t('tool.notFound'));
   }
+  if (!prompts.length && !(await hasShipEvent(input.brandId, target))) {
+    return refuse('invalid', t('tool.notShipped'));
+  }
   return null;
+}
+
+/** Whether the brand has a ship event for the page or the action, as the evaluator reads them. */
+async function hasShipEvent(brandId: string, target: FollowUpTarget): Promise<boolean> {
+  for (const [column, value] of [
+    ['action_id', target.action_id],
+    ['url', target.url],
+  ] as const) {
+    if (!value) continue;
+    const { data, error } = await supabaseAdmin
+      .from('ship_events')
+      .select('id')
+      .eq('brand_id', brandId)
+      .eq(column, value)
+      .limit(1);
+    if (error) throw new Error(`Could not read a check's changes: ${error.message}`);
+    if ((data ?? []).length > 0) return true;
+  }
+  return false;
 }
 
 /** The chat a run is in: where the check's result goes. */

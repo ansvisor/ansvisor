@@ -4,8 +4,10 @@ import { fakeDb } from './__fixtures__/fake-db.js';
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('node-cron', () => ({ default: { schedule: vi.fn() } }));
+vi.mock('../access.js', () => ({ brandReaders: vi.fn() }));
 
 const cron = (await import('node-cron')).default;
+const { brandReaders } = await import('../access.js');
 const { FOLLOW_UP_SCHEDULE, RETRY_MS, runFollowUpChecks, startFollowUpChecks, resultLine } =
   await import('./follow-up.js');
 
@@ -59,6 +61,8 @@ let db;
 beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+  // Its creator still reaches the brand.
+  brandReaders.mockReset().mockResolvedValue(new Map([[USER, new Set(['b1'])]]));
   db = fakeDb({
     chat_schedules: [job()],
     chat_schedule_runs: [],
@@ -241,6 +245,56 @@ describe('runFollowUpChecks', () => {
       failed: 0,
     });
     expect(db.calls).toEqual([]);
+  });
+
+  it('closes a check whose creator no longer reaches the brand, delivering nothing', async () => {
+    brandReaders.mockResolvedValue(new Map());
+    expect(await runFollowUpChecks({ db, now: NOW })).toMatchObject({ due: 1, done: 1 });
+    expect(brandReaders).toHaveBeenCalledWith(ORG, ['b1']);
+    expect(db.tables.chat_messages).toEqual([]);
+    expect(db.tables.chat_notices).toEqual([]);
+    expect(db.calls.some((c) => c.table === 'insights_prompt_daily')).toBe(false);
+    expect(db.tables.chat_schedule_runs).toEqual([
+      expect.objectContaining({ schedule_id: 'job-1', status: 'skipped' }),
+    ]);
+    expect(db.tables.chat_schedules[0]).toMatchObject({
+      next_run_at: null,
+      last_run_at: NOW.toISOString(),
+    });
+  });
+
+  it('reads only the workspaces Chat is on for, so others’ checks never fill the read', async () => {
+    const OTHER = '22222222-2222-2222-2222-222222222222';
+    vi.stubEnv('CHAT_AGENTIC_ORGS', ORG);
+    db.tables.chat_schedules = [
+      ...Array.from({ length: 100 }, (_, i) =>
+        job({ id: `other-${i}`, organization_id: OTHER, next_run_at: SET }),
+      ),
+      job(),
+    ];
+    expect(await runFollowUpChecks({ db, now: NOW })).toMatchObject({ due: 1, done: 1 });
+    expect(db.tables.chat_notices).toEqual([
+      expect.objectContaining({ dedupe_key: 'followup:job-1' }),
+    ]);
+  });
+
+  it('reads every baseline row, past the 1000-row page', async () => {
+    db.tables.insights_prompt_daily = [
+      // Before it was set: 1000 rows naming it, 1000 not (50%), on many regions.
+      ...Array.from({ length: 1000 }, (_, i) => ({
+        ...day('2026-10-20', 'p1', 1, 0),
+        region: `r${String(i).padStart(4, '0')}`,
+      })),
+      ...Array.from({ length: 1000 }, (_, i) => ({
+        ...day('2026-10-21', 'p1', 1, 1),
+        region: `r${String(i).padStart(4, '0')}`,
+      })),
+      day('2026-11-16', 'p1', 20, 10),
+    ];
+    await runFollowUpChecks({ db, now: NOW });
+    expect(db.tables.chat_notices[0].payload.reason).toBe(
+      'No meaningful change · Visibility 50% → 50% (0 pts)',
+    );
   });
 
   it('tries a check that fails again later, and goes on with the next', async () => {

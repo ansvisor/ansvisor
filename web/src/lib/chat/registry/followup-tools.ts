@@ -56,8 +56,14 @@ const inputSchema = z.object({
         .max(2048)
         .refine(isHttpUrl, 'url must be an http(s) address')
         .optional()
-        .describe('A page whose citations are checked.'),
-      action_id: contentUuid.optional().describe('An Action Center action, from list_actions.'),
+        .describe(
+          'A shipped page (published or marked shipped) whose measured change is checked. Without prompt_ids it needs a ship event.',
+        ),
+      action_id: contentUuid
+        .optional()
+        .describe(
+          'A shipped Action Center action, from list_actions. Without prompt_ids it needs a ship event.',
+        ),
       prompt_ids: z
         .array(contentUuid)
         .max(FOLLOW_UP_MAX_PROMPTS)

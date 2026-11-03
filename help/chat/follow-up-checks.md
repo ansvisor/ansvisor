@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: false
 sources: [web/messages/en.json, help/chat/scheduling.md]
 ---
-A follow-up check looks again at something you changed, on a later day, and tells you what happened. Chat offers one after a change you made or approved, such as a refreshed page or a fix. It can check a page's citations, an Action Center action, or tracked prompts.
+A follow-up check looks again at something you changed, on a later day, and tells you what happened. Chat offers one after a change you made or approved, such as a refreshed page or a fix. It can check tracked prompts, or a page or an Action Center action once its change is shipped (published or marked as shipped).
 
 ## Set a check
 
@@ -29,7 +29,7 @@ The result is one of **Improved**, **No meaningful change**, **Declined** or **N
 
 ## Where the result goes
 
-The result comes to the chat that set the check, and to the top of your **Inbox** with **Open**.
+The result comes to the chat that set the check, and to the top of your **Inbox** with **Open**. If you no longer have the brand, or have left the workspace, by the check's day, the check closes without a result.
 
 ## Agents
 

@@ -49,7 +49,15 @@ beforeEach(() => {
   seedWorkspace(db);
   db.tables.chat_schedules = [];
   db.tables.chat_runs = [{ id: RUN, conversation_id: CHAT }];
-  db.tables.actions = [{ id: 'a1', brand_id: BRAND }];
+  db.tables.actions = [
+    { id: 'a1', brand_id: BRAND },
+    { id: 'a2', brand_id: BRAND },
+  ];
+  // The page and the first action shipped: the ledger has a change to read.
+  db.tables.ship_events = [
+    { id: 's1', brand_id: BRAND, url: 'https://acme.example/pricing', action_id: null },
+    { id: 's2', brand_id: BRAND, url: null, action_id: 'a1' },
+  ];
 });
 
 describe('createFollowUpCheck', () => {
@@ -121,6 +129,42 @@ describe('createFollowUpCheck', () => {
       reason: 'invalid',
     });
     expect(db.tables.chat_schedules).toEqual([]);
+  });
+
+  it('refuses a page or an action alone with no shipped change to read; prompts make it readable', async () => {
+    const unshipped = { url: 'https://acme.example/blog' };
+    expect(
+      await followup.createFollowUpCheck(maker(), check({ target: unshipped }), NOW),
+    ).toMatchObject({
+      ok: false,
+      reason: 'invalid',
+      message: expect.stringContaining('list_prompts'),
+    });
+    expect(
+      await followup.createFollowUpCheck(maker(), check({ target: { action_id: 'a2' } }), NOW),
+    ).toMatchObject({ ok: false, reason: 'invalid' });
+    // Another brand's ship event of the same page isn't this brand's.
+    db.tables.ship_events.push({
+      id: 's3',
+      brand_id: 'other-brand',
+      url: 'https://acme.example/blog',
+      action_id: null,
+    });
+    expect(
+      await followup.createFollowUpCheck(maker(), check({ target: unshipped }), NOW),
+    ).toMatchObject({ ok: false, reason: 'invalid' });
+    expect(db.tables.chat_schedules).toEqual([]);
+
+    expect(
+      await followup.createFollowUpCheck(maker(), check({ target: { action_id: 'a1' } }), NOW),
+    ).toMatchObject({ ok: true });
+    expect(
+      await followup.createFollowUpCheck(
+        maker(),
+        check({ target: { ...unshipped, prompt_ids: [PROMPT] } }),
+        NOW,
+      ),
+    ).toMatchObject({ ok: true });
   });
 });
 

@@ -25,15 +25,19 @@
  * The result goes to the chat that set the check (an assistant message) and
  * to its creator's Inbox (a followup_result notice), and is the check's one
  * run (chat_schedule_runs, done): Scheduled shows it ran, and its Undo is
- * closed (last_run_at). A check that fails is tried again in RETRY_MS.
+ * closed (last_run_at). A check whose creator left the workspace or lost the
+ * brand is closed as skipped, nothing read or delivered. A check that fails
+ * is tried again in RETRY_MS.
  * Logs carry counts and codes only, never a customer's names or pages.
  */
 
 import cron from 'node-cron';
 import supabaseAdmin from '../../config/supabase.js';
-import { chatAgenticDeployed, chatAgenticEnabled } from '../chat-flag.js';
+import { brandReaders } from '../access.js';
+import { chatAgenticDeployed, chatAgenticEnabled, chatAgenticOrgs } from '../chat-flag.js';
 import { logger } from '../logger.js';
 import { BASELINE_DAYS, MIN_EFFECT_PTS, addDays, runOutcome, utcDay } from './method.js';
+import { readAll } from './ship.js';
 
 /** Hourly at :17: a check due at 09:00 reads that day's tracking once it is in. */
 export const FOLLOW_UP_SCHEDULE = '17 * * * *';
@@ -174,17 +178,24 @@ async function fromTracking(db, job, now) {
     return { outcome: 'not_measurable', reason: 'no_targets' };
   const platforms = Array.isArray(target.platforms) ? target.platforms : [];
   const metric = job.metric === 'citations' ? 'citations' : 'visibility';
-  const rollups = async (from, to) => {
-    let query = db
-      .from('insights_prompt_daily')
-      .select('day, prompt_id, platform, answer_count, mentioning_answers, citation_answers')
-      .eq('brand_id', job.brand_id)
-      .in('prompt_id', promptIds)
-      .gte('day', from)
-      .lte('day', to);
-    if (platforms.length) query = query.in('platform', platforms);
-    return check('rollups read', await query.order('day')) ?? [];
-  };
+  // Paged: 14 days of 20 prompts on every platform, model and region pass max_rows.
+  const rollups = (from, to) =>
+    readAll('rollups read', () => {
+      let query = db
+        .from('insights_prompt_daily')
+        .select('day, prompt_id, platform, answer_count, mentioning_answers, citation_answers')
+        .eq('brand_id', job.brand_id)
+        .in('prompt_id', promptIds)
+        .gte('day', from)
+        .lte('day', to);
+      if (platforms.length) query = query.in('platform', platforms);
+      return query
+        .order('day')
+        .order('prompt_id')
+        .order('platform')
+        .order('model_used')
+        .order('region');
+    });
   const setDay = utcDay(job.created_at);
   const dueDay = utcDay(job.due_at ?? job.next_run_at ?? now.toISOString());
   const after = await rollups(dueDay, addDays(dueDay, FIRST_DAY_WITHIN - 1));
@@ -279,18 +290,54 @@ export function resultMessage(job, result) {
 
 // ─── The run ────────────────────────────────────────────────────────────────
 
-/** Writes the result: its run, the chat's message, the creator's notice, and the check closed. */
-async function deliver(db, job, result, now) {
-  const at = now.toISOString();
+/**
+ * Whether the check's creator still gets its result: still of its workspace
+ * and, for a brand's check, still reaching the brand (as a scheduled job's
+ * e-mail is checked when it is sent).
+ */
+async function creatorReaches(db, job) {
+  if (!job.created_by) return false;
+  if (job.brand_id) {
+    const readers = await brandReaders(job.organization_id, [job.brand_id]);
+    return !!readers.get(job.created_by)?.has(job.brand_id);
+  }
+  const members = check(
+    'creator read',
+    await db
+      .from('profiles')
+      .select('id')
+      .eq('id', job.created_by)
+      .eq('organization_id', job.organization_id),
+  );
+  return (members ?? []).length > 0;
+}
+
+/** The check's one run: done, or skipped with its reason. */
+async function writeRun(db, job, at, skipped = null) {
   const run = await db.from('chat_schedule_runs').insert({
     schedule_id: job.id,
     slot_at: job.due_at ?? job.next_run_at ?? at,
     attempt: 1,
-    status: 'done',
+    status: skipped ? 'skipped' : 'done',
+    ...(skipped ? { reason: skipped } : {}),
     started_at: at,
     ended_at: at,
   });
   if (run.error && run.error.code !== '23505') throw new FollowUpDbError('run write', run.error);
+}
+
+/** Closes the check: nothing is due again, and its Undo is over. */
+async function closeCheck(db, job, at) {
+  check(
+    'check close',
+    await db.from('chat_schedules').update({ last_run_at: at }).eq('id', job.id),
+  );
+}
+
+/** Writes the result: its run, the chat's message, the creator's notice, and the check closed. */
+async function deliver(db, job, result, now) {
+  const at = now.toISOString();
+  await writeRun(db, job, at);
   if (job.conversation_id) {
     check(
       'message write',
@@ -327,10 +374,7 @@ async function deliver(db, job, result, now) {
       throw new FollowUpDbError('notice write', notice.error);
     }
   }
-  check(
-    'check close',
-    await db.from('chat_schedules').update({ last_run_at: at }).eq('id', job.id),
-  );
+  await closeCheck(db, job, at);
 }
 
 /**
@@ -345,16 +389,18 @@ export async function runFollowUpChecks({ db = supabaseAdmin, now = new Date() }
   if (!chatAgenticDeployed()) return tally;
   let jobs;
   try {
+    let query = db
+      .from('chat_schedules')
+      .select(COLUMNS)
+      .eq('kind', 'followup_check')
+      .eq('enabled', true)
+      .lte('next_run_at', now.toISOString());
+    // Narrowed to some workspaces: only theirs, so others' checks never fill the read.
+    const orgs = chatAgenticOrgs();
+    if (orgs.length) query = query.in('organization_id', orgs);
     jobs = check(
       'due checks read',
-      await db
-        .from('chat_schedules')
-        .select(COLUMNS)
-        .eq('kind', 'followup_check')
-        .eq('enabled', true)
-        .lte('next_run_at', now.toISOString())
-        .order('next_run_at', { ascending: true })
-        .limit(TICK_ROWS),
+      await query.order('next_run_at', { ascending: true }).limit(TICK_ROWS),
     );
   } catch (err) {
     tally.failed++;
@@ -373,6 +419,14 @@ export async function runFollowUpChecks({ db = supabaseAdmin, now = new Date() }
     if (claimed.error || (claimed.data ?? []).length === 0) continue;
     tally.due++;
     try {
+      // Its creator gone from the workspace or the brand: closed, nothing delivered.
+      if (!(await creatorReaches(db, job))) {
+        const at = now.toISOString();
+        await writeRun(db, job, at, 'The person who set it can no longer see this brand.');
+        await closeCheck(db, job, at);
+        tally.done++;
+        continue;
+      }
       const result = await evaluateFollowUp(db, job, now);
       if (!result) {
         await db.from('chat_schedules').update({ next_run_at: later }).eq('id', job.id);

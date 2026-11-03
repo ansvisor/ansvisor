@@ -6036,6 +6036,10 @@ describe('follow-up checks (W3-05, CHAT-20 §13)', () => {
     vi.stubEnv('CHAT_AGENTIC', 'true');
     vi.stubEnv('CHAT_AGENTIC_ORGS', '');
     db.tables.chat_schedules = [];
+    // The page shipped: the check has a change to read.
+    db.tables.ship_events = [
+      { id: 's1', brand_id: BRAND, url: 'https://acme.example/pricing', action_id: null },
+    ];
   });
 
   it('asks with one click in Auto: Set check or Not now, and nothing before it', async () => {

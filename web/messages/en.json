@@ -6573,7 +6573,8 @@
     "tool": {
       "noTarget": "A follow-up check reads a page, an Action Center action or tracked prompts: name one.",
       "role": "Only Admins and Managers can set follow-up checks.",
-      "notFound": "That page, action or prompt isn’t one of this brand’s, or the person can’t use the brand."
+      "notFound": "That page, action or prompt isn’t one of this brand’s, or the person can’t use the brand.",
+      "notShipped": "That page or action has no shipped change on record, so a check on it alone would have nothing to read. Name the tracked prompts it should move (from list_prompts), or mark the change shipped first."
     }
   },
   "chatSchedules": {
