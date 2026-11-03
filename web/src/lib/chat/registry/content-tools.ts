@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { publishDraftToCms, sendDraftToCms } from '@/lib/actions/cms-send';
+import { takeDownDraft } from '@/lib/actions/cms-take-down';
 import { updateContentDraft } from '@/lib/actions/content-drafts';
 import { actorOf } from '@/lib/chat/actor/access';
 import { updateContentDraftFor } from '@/lib/chat/actor/drafts';
@@ -19,9 +20,12 @@ import { draftPage, draftTitle, pageChanges } from './targets';
  * drafts; the API sends pages for Admins and Managers). Publishing a new page
  * live in Webflow, WordPress or Wix (publish_cms, row 59, AUTONOMOUS-GO-LIVE
  * PR 9) is an EXECUTE too; Framer publishes whole sites, so it isn't offered.
- * The send is the one row an agent an Admin allowed may take on its own
- * (AUTONOMOUS-GO-LIVE §4 row 1, its goLive): the engine sends it through
- * the API's internal route as the run's person, after its checks.
+ * The send and the publish are the rows an agent an Admin allowed may take
+ * on its own (AUTONOMOUS-GO-LIVE §4 rows 1 and 2, their goLive): the engine
+ * sends them through the API's internal route as the run's person, after
+ * its checks. Taking a published page down (unpublish_cms, PR 10) is always
+ * the person's click: outside the go-live groups, a Manager may even while
+ * publishing is off for Managers, as it only lowers what is live.
  */
 
 const ITEM = FIXTURE_IDS.item;
@@ -146,5 +150,32 @@ export const CONTENT_TOOLS = [
         .join(' ');
     },
     fixture: { input: { draft_id: ITEM, destination: 'webflow' } },
+  }),
+  defineTool({
+    name: 'unpublish_cms',
+    // Takes a page that went live back down to a draft in its CMS (§6.4): an EXECUTE, only
+    // ever the person's click, never an agent on its own (no goLive, no group).
+    class: 'execute',
+    executeGroup: null,
+    area: 'content',
+    description:
+      'Take a page published through Ansvisor (Webflow, WordPress or Wix) down to a draft in that CMS: it leaves the site at once, and links and AI answers that cited it may still point to it for a while. Only when the person asked for this page to come down.',
+    minRole: 'manager',
+    planGate: null,
+    brandOf: { lookup: 'content_drafts', idField: 'draft_id' },
+    costClass: 'C1',
+    labelKey: 'takeDownFromCms',
+    route: '/dashboard/content/library',
+    mcpTool: null,
+    specRow: '59',
+    inputSchema: z.object({
+      draft_id: contentUuid.describe('The published draft, from list_content_drafts.'),
+    }),
+    run: (_ctx, input) => takeDownDraft(input.draft_id),
+    target: async (input) => {
+      const title = await draftTitle(input.draft_id);
+      return title ? `“${title}”` : null;
+    },
+    fixture: { input: { draft_id: ITEM } },
   }),
 ];
