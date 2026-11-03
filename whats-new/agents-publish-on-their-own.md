@@ -4,6 +4,7 @@ home_line: An Admin can now let chosen agents publish pages without waiting for 
 route: /dashboard/settings/chat
 plans: [growth, enterprise]
 plan_mode: show_upgrade
+requires: auto_go_live
 published: 2026-11-03
 approved: true
 ---

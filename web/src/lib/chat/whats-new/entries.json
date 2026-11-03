@@ -10,6 +10,7 @@
         "enterprise"
       ],
       "planMode": "show_upgrade",
+      "requires": "auto_go_live",
       "published": "2026-11-03",
       "lines": [
         "Routine pages waited for a click even when the agent's work was ready.",
