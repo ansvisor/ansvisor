@@ -128,6 +128,21 @@ describe('buildReportCard', () => {
     expect(meter.total()).toBeCloseTo(0.014 + 0.006 + 0.075, 6);
   });
 
+  it('names the brand named most instead on page 4 under one spelling', async () => {
+    const deps = fakes({
+      competitors: vi.fn(async () => ({
+        byAnswer: new Map([
+          [0, ['Jolly Tur']],
+          [1, ['Jolly', 'Setur']],
+        ]),
+        costUsd: 0,
+      })),
+    });
+    const { payload } = await buildReportCard(card, deps);
+    expect(payload.competitors[0]).toEqual({ name: 'Jolly Tur', answers: 2 });
+    expect(payload.questionRows.map((row) => row.instead)).toEqual(['Jolly Tur', 'Jolly Tur']);
+  });
+
   it('tells the competitor reader a publisher’s audience', async () => {
     const deps = fakes({
       write: vi.fn(async () => ({ questions, audience: 'readers', costUsd: 0.01 })),

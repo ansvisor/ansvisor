@@ -142,7 +142,8 @@ export async function buildReportCard(
       }
       marks[engine] = figures.namedAnswers.has(`${index}:${engine}`) ? 'named' : 'missed';
       for (const name of named.get(`${index}:${engine}`) ?? []) {
-        counts.set(name, (counts.get(name) ?? 0) + 1);
+        const merged = figures.competitorName(name);
+        counts.set(merged, (counts.get(merged) ?? 0) + 1);
       }
     }
     const instead = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
