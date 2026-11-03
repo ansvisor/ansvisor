@@ -89,9 +89,17 @@ function getClient() {
  * Start the hosted OAuth flow for an entity. Returns the URL the client
  * opens in a popup plus the pending connected-account id.
  */
-export async function initiateConnection(provider, entityId, callbackUrl) {
+export async function initiateConnection(
+  provider,
+  entityId,
+  callbackUrl,
+  { allowMultiple = false } = {},
+) {
+  // A brand's own Google login (BRAND-ACCESS PR 15) is one more account under
+  // the Account's entity: link refuses a second ACTIVE one without allowMultiple.
   const request = await getClient().connectedAccounts.link(entityId, authConfigId(provider), {
     callbackUrl,
+    ...(allowMultiple ? { allowMultiple: true } : {}),
   });
   return {
     redirectUrl: request.redirectUrl,
@@ -114,6 +122,12 @@ export async function getActiveConnection(provider, entityId, accountId = null) 
   const items = connections.items ?? [];
   if (accountId) return items.find((item) => item.id === accountId) ?? null;
   return items[0] ?? null;
+}
+
+/** A connected account's status on Composio: 'ACTIVE', 'INITIATED', 'EXPIRED'… */
+export async function connectedAccountStatus(connectedAccountId) {
+  const account = await getClient().connectedAccounts.get(connectedAccountId);
+  return account?.status ?? null;
 }
 
 export async function deleteConnection(connectedAccountId) {

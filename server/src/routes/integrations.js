@@ -9,14 +9,24 @@ import {
   initiateConnection,
   getActiveConnection,
   deleteConnection,
+  connectedAccountStatus,
   listGscSites,
   listGaProperties,
 } from '../lib/composio.js';
-import { brandConnection, composioTarget } from '../lib/brand-integrations.js';
+import {
+  BRAND_GOOGLE_PROVIDERS,
+  activateBrandAccount,
+  brandConnection,
+  composioTarget,
+  removeBrandAccount,
+  startBrandAccount,
+  usableAccounts,
+  useAccountForBrand,
+} from '../lib/brand-integrations.js';
 import { runGscSync } from '../lib/gsc-sync.js';
 import { runGaSync } from '../lib/ga-sync.js';
 import { detectPageOpportunitiesInWindow } from '../lib/page-opportunities.js';
-import { assertBrandAccess, assertAllBrands } from '../lib/access.js';
+import { assertBrandAccess, assertAllBrands, brandAccessOf } from '../lib/access.js';
 
 const router = Router();
 
@@ -450,6 +460,221 @@ router.get('/google-analytics/page-opportunities', async (req, res) => {
   } catch (err) {
     if (!err.status) req.log.error({ err }, 'integrations GA page opportunities error');
     return res.status(err.status || 500).json({ error: err.message, code: err.code });
+  }
+});
+
+// ─── A brand's own Google sign-in (BRAND-ACCESS PR 15) ──────────────────────
+// Brand settings › Integrations. Anyone who can access the brand reads it;
+// an admin or manager who can access it changes it (§3.3). Every brand uses
+// the Account's sign-in until one of these changes it.
+
+const brandParams = z.object({ brandId: z.guid() });
+const accountBody = z.object({ accountId: z.guid() });
+
+/** The brand, for someone who may read it; with `write`, change it too. */
+async function brandFor(req, { write = false, columns } = {}) {
+  const parsed = brandParams.safeParse(req.params);
+  if (!parsed.success) throw Object.assign(new Error('Invalid request'), { status: 400 });
+  const { brand, role } = await assertBrandAccess(parsed.data.brandId, req.user.id, { columns });
+  if (write && !WRITE_ROLES.includes(role)) {
+    throw Object.assign(new Error('Only admins and managers can change integrations.'), {
+      status: 403,
+    });
+  }
+  // The demo brand is everyone's sample data: it connects nothing.
+  if (write && brand.is_demo) {
+    throw Object.assign(new Error('The sample brand connects nothing.'), { status: 409 });
+  }
+  return brand;
+}
+
+/** The ids of the organization's brands the person can access. */
+async function reachableBrandIds(userId, organizationId) {
+  const access = await brandAccessOf(userId);
+  if (!access.all) return [...access.brandIds];
+  const { data, error } = await supabaseAdmin
+    .from('brands')
+    .select('id')
+    .eq('organization_id', organizationId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((b) => b.id);
+}
+
+/** A Google product the brand may connect on its own, or null (404). */
+function brandProvider(req, res) {
+  const provider = resolveProvider(req, res);
+  if (!provider) return null;
+  if (!BRAND_GOOGLE_PROVIDERS.includes(provider)) {
+    res.status(404).json({ error: 'Unknown integration provider.' });
+    return null;
+  }
+  return provider;
+}
+
+function sendError(req, res, err, what) {
+  if (!err.status) req.log.error({ err }, what);
+  return res.status(err.status || 500).json({ error: err.message, code: err.code });
+}
+
+/**
+ * GET /api/integrations/brands/:brandId
+ * The brand's Google sign-ins, and the ones it could use instead: per
+ * product, the sign-in it uses (connected or not, and whether it is the
+ * Account's own) and the connected sign-ins brands the person reaches use.
+ * No token, entity or Composio id leaves.
+ */
+router.get('/brands/:brandId', async (req, res) => {
+  try {
+    const brand = await brandFor(req, { columns: 'gsc_property, ga_property_id' });
+    const brandIds = await reachableBrandIds(req.user.id, brand.organization_id);
+    const products = await Promise.all(
+      BRAND_GOOGLE_PROVIDERS.map(async (provider) => {
+        const [current, usable] = await Promise.all([
+          brandConnection(brand.id, provider),
+          usableAccounts(brand.organization_id, provider, brandIds),
+        ]);
+        const own = usable.find((a) => a.accountId === current?.accountId);
+        return {
+          provider,
+          configured: isComposioConfigured(provider),
+          // The brand's property: the Search Console site or GA4 property id.
+          property:
+            (provider === 'google-analytics' ? brand.ga_property_id : brand.gsc_property) ?? null,
+          current: current
+            ? {
+                accountId: current.accountId,
+                label: current.label,
+                status: current.status,
+                connected: current.connected,
+                accountLevel: own?.accountLevel ?? false,
+                connectedBy: own?.connectedBy ?? null,
+                connectedAt: own?.connectedAt ?? null,
+              }
+            : null,
+          usable: usable.map(
+            ({ accountId, label, accountLevel, connectedBy, connectedAt, brandIds: ids }) => ({
+              accountId,
+              label,
+              accountLevel,
+              connectedBy,
+              connectedAt,
+              brandIds: ids,
+            }),
+          ),
+        };
+      }),
+    );
+    return res.json({ brandId: brand.id, products });
+  } catch (err) {
+    return sendError(req, res, err, 'brand integrations read error');
+  }
+});
+
+/**
+ * POST /api/integrations/:provider/brands/:brandId/use  { accountId }
+ * "Use the same account as {brand}" (D6): the brand uses another brand's
+ * connected sign-in, or the Account's, from now on.
+ */
+router.post('/:provider/brands/:brandId/use', async (req, res) => {
+  try {
+    const provider = brandProvider(req, res);
+    if (!provider) return;
+    const body = accountBody.safeParse(req.body ?? {});
+    if (!body.success) return res.status(400).json({ error: 'Invalid request' });
+    const brand = await brandFor(req, { write: true });
+    const brandIds = await reachableBrandIds(req.user.id, brand.organization_id);
+    await useAccountForBrand(
+      { brand, provider, accountId: body.data.accountId, brandIds },
+      { deleteRemote: deleteConnection },
+    );
+    return res.json({ success: true });
+  } catch (err) {
+    return sendError(req, res, err, 'brand integration use error');
+  }
+});
+
+/**
+ * POST /api/integrations/:provider/brands/:brandId/connect  { callbackUrl }
+ * "Connect another Google account": a login of the brand's own. Returns the
+ * address to open and the new sign-in's id, which /activate takes once the
+ * person has signed in.
+ */
+router.post('/:provider/brands/:brandId/connect', async (req, res) => {
+  try {
+    const provider = brandProvider(req, res);
+    if (!provider) return;
+    if (!isComposioConfigured(provider)) return notConfigured(res, provider);
+    const brand = await brandFor(req, { write: true });
+    const { callbackUrl } = req.body ?? {};
+    if (typeof callbackUrl !== 'string' || !/^https?:\/\//.test(callbackUrl)) {
+      return res.status(400).json({ error: 'callbackUrl is required' });
+    }
+    const appUrl = process.env.PUBLIC_APP_URL;
+    if (appUrl) {
+      try {
+        if (new URL(callbackUrl).origin !== new URL(appUrl).origin) {
+          return res.status(400).json({ error: 'callbackUrl must be on the app origin' });
+        }
+      } catch {
+        return res.status(400).json({ error: 'callbackUrl is not a valid URL' });
+      }
+    }
+    const started = await startBrandAccount(
+      {
+        brand,
+        provider,
+        userId: req.user.id,
+        entityId: entityIdFor(brand.organization_id),
+      },
+      {
+        initiate: (entityId) =>
+          initiateConnection(provider, entityId, callbackUrl, { allowMultiple: true }),
+      },
+    );
+    return res.json(started);
+  } catch (err) {
+    return sendError(req, res, err, 'brand integration connect error');
+  }
+});
+
+/**
+ * POST /api/integrations/:provider/brands/:brandId/activate  { accountId }
+ * Whether the brand's new login is done: { status: 'connected' } once
+ * Composio says it is active (and the brand uses it), else 'pending'.
+ */
+router.post('/:provider/brands/:brandId/activate', async (req, res) => {
+  try {
+    const provider = brandProvider(req, res);
+    if (!provider) return;
+    if (!isComposioConfigured(provider)) return notConfigured(res, provider);
+    const body = accountBody.safeParse(req.body ?? {});
+    if (!body.success) return res.status(400).json({ error: 'Invalid request' });
+    const brand = await brandFor(req, { write: true });
+    const status = await activateBrandAccount(
+      { brand, provider, accountId: body.data.accountId, userId: req.user.id },
+      { status: connectedAccountStatus, deleteRemote: deleteConnection },
+    );
+    return res.json({ status });
+  } catch (err) {
+    return sendError(req, res, err, 'brand integration activate error');
+  }
+});
+
+/**
+ * DELETE /api/integrations/:provider/brands/:brandId
+ * Disconnect on the brand's card: the brand uses no sign-in for the
+ * product. Its own login goes when no other brand uses it; the Account's
+ * stays for the other brands.
+ */
+router.delete('/:provider/brands/:brandId', async (req, res) => {
+  try {
+    const provider = brandProvider(req, res);
+    if (!provider) return;
+    const brand = await brandFor(req, { write: true });
+    await removeBrandAccount({ brand, provider }, { deleteRemote: deleteConnection });
+    return res.json({ success: true });
+  } catch (err) {
+    return sendError(req, res, err, 'brand integration disconnect error');
   }
 });
 

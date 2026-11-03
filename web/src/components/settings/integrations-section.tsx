@@ -49,6 +49,7 @@ import { MERCHANT_CENTER_LABEL } from '@/lib/catalog';
 import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-card';
 import { CatalogCategoryPages } from './catalog-category-pages';
 import { FramerCard } from './framer-card';
+import { GoogleAccountsOverview } from '@/components/settings/google-accounts-overview';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
 import { SampleDataBadge } from './sample-data-badge';
@@ -145,6 +146,9 @@ export function IntegrationsSection() {
         >
           <GaPropertyMapping />
         </IntegrationCard>
+
+        {/* Which Google account each brand uses: changed in the brand's own settings. */}
+        {!isDemo && <GoogleAccountsOverview />}
 
         <IntegrationGroup title={t('integrations_stores')}>
           {/* On the demo brand it shows, as Coming soon (lib/demo/integrations). */}
