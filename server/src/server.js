@@ -29,6 +29,7 @@ import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js
 import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
 import internalChatNoticesRoutes from './routes/internal-chat-notices.js';
 import internalChatPagesRoutes from './routes/internal-chat-pages.js';
+import internalChatModelsRoutes from './routes/internal-chat-models.js';
 import internalChatGoLiveRoutes from './routes/internal-chat-go-live.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
@@ -666,6 +667,11 @@ app.use('/api/internal/chat/notices', internalChatNoticesRoutes);
 // fetch_page (CHAT-10 §B): a public page opened through safe-fetch's rules and
 // read on the server; only what Chat reads of it goes back (routes/internal-chat-pages.js).
 app.use('/api/internal/chat/pages', internalChatPagesRoutes);
+
+// --- Internal Chat model menu (CRON_SECRET auth, called by the web's Chat) ---
+// Each offered model's multiplier against Auto and whether the catalog still
+// lists it, from the daily price sync; never a price (routes/internal-chat-models.js).
+app.use('/api/internal/chat/models', internalChatModelsRoutes);
 
 // --- Internal Chat go-live (CRON_SECRET auth, called by the web's Chat engine) ---
 // An agent's going-live step on its own (AUTONOMOUS-GO-LIVE §5.4): every
