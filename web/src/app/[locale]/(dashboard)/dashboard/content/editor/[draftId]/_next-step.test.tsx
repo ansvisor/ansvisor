@@ -49,6 +49,7 @@ async function render(
     todoLine = null as string | null,
     blocked = (() => null) as (action: string) => string | null,
     working = null as { run: AgentRun | null; onStop: () => void; stopping: boolean } | null,
+    raises = [] as { line: string; gain: string | null }[],
   } = {},
 ) {
   await act(async () => {
@@ -65,13 +66,14 @@ async function render(
           onSkip={onSkip}
           blocked={blocked}
           working={working}
+          raises={raises}
         />
       </NextIntlClientProvider>,
     );
   });
 }
 const trigger = () => container.querySelector('button')!;
-const popup = () => document.querySelector('[data-slot="popover-content"]');
+const popup = () => document.querySelector('[data-slot="dialog-content"]');
 const button = (name: string) =>
   [...(popup()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === name);
 const path = () => [...popup()!.querySelectorAll('ol li')].map((li) => li.textContent);
@@ -165,7 +167,7 @@ describe('NextStepButton', () => {
     // The note says what is still the person's: never crossed out, by
     // itself or by what holds it.
     const note = [...step.querySelectorAll('span')].find(
-      (s) => s.textContent === '· done by Content Agent, the rest is in Rules',
+      (s) => s.textContent === 'done by Content Agent, the rest is in Rules',
     )!;
     expect(note.className).not.toContain('line-through');
     expect(name.parentElement!.className).not.toContain('line-through');
@@ -291,6 +293,36 @@ describe('the step’s words (editor UX review 2026-11-03)', () => {
     expect([...popup()!.querySelectorAll('button')].map((b) => b.textContent)).toContain(
       'Add sources',
     );
+  });
+});
+
+describe('the window (the user, 2026-11-03)', () => {
+  it('says who takes the step and what raises the score, the most first, with its points', async () => {
+    await render(state({ quality: { trust: 54, trustLow: true, todos: [] } }), {
+      raises: [
+        { line: 'Fill 5 placeholders', gain: '+15 E-E-A-T' },
+        { line: '4 links don’t work', gain: '+38 Trust' },
+        { line: 'Direct answer under each H2', gain: null },
+      ],
+    });
+    const right = popup()!.querySelector('section')!;
+    expect(right.textContent).toContain('Only you can take this step');
+    expect(right.textContent).toContain('Add proof and author');
+    const items = [...right.querySelectorAll('ul li')].map((li) => li.textContent);
+    expect(items).toEqual([
+      '+15 E-E-A-TFill 5 placeholders',
+      '+38 Trust4 links don’t work',
+      'Direct answer under each H2',
+    ]);
+    // Every step on the left.
+    expect(popup()!.querySelectorAll('aside ol li')).toHaveLength(5);
+    // The agent's step says so.
+    await render(state({ openRules: ['faq'] }));
+    expect(popup()!.querySelector('section')!.textContent).toContain(
+      'Content Agent takes this step',
+    );
+    // Nothing to list: no heading for it.
+    expect(popup()!.textContent).not.toContain('What raises it');
   });
 });
 

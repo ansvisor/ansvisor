@@ -3365,6 +3365,33 @@ export function DraftEditor({
   // The bottom nudge names a to-do: only while Next's step is the person's too.
   const nudgeFits = stepActor(next.step) === 'you' && next.step.id !== 'review';
   const todoLine = firstTodo && quality ? todoCopy(firstTodo, quality).next : null;
+  // What raises the score on Next's step, for its window (the user, 2026-11-03):
+  // the person's to-dos and Quality's suggestions with their points, or the
+  // rules the agent's step closes.
+  const nextRaises = (() => {
+    const id = next.step.id;
+    if ((id === 'proof' || id === 'check') && quality) {
+      return [
+        ...todos
+          .filter((todo) => !todo.done)
+          .map((todo) => ({
+            line: todoCopy(todo, quality).title,
+            gain:
+              todo.gain > 0
+                ? tQuality('gain', { gain: todo.gain, score: tQuality(`names.${todo.score}`) })
+                : null,
+          })),
+        ...qualitySuggestions(tQuality, quality).map((s) => ({
+          line: s.line,
+          gain: tQuality('gain', { gain: s.gain, score: tQuality(`names.${s.score}`) }),
+        })),
+      ];
+    }
+    if (id === 'fixRules' || id === 'length' || id === 'review') {
+      return nextState.openRules.map((key) => ({ line: tRules(`names.${key}`), gain: null }));
+    }
+    return [];
+  })();
   const skipStep = (id: NextStepId) => {
     const skips = { ...liveSkips(nextState), [id]: stepState(id, nextState) };
     setSkipped(skips);
@@ -3536,7 +3563,8 @@ export function DraftEditor({
   const planned = nextState.hasBrief === true;
   useEffect(() => {
     if (!qualityOn) return;
-    if (nextShownOnce.current === 'no' && startsNew) {
+    // Never by itself while an agent works (the user, 2026-11-03).
+    if (nextShownOnce.current === 'no' && startsNew && !agentBusy) {
       nextShownOnce.current = 'open';
       setNextFocus(false);
       setNextOpen(true);
@@ -3544,7 +3572,8 @@ export function DraftEditor({
       nextShownOnce.current = 'done';
       setNextOpen(false);
     }
-  }, [qualityOn, startsNew, planned]);
+    // agentBusy: a run that ends lets it open then, once.
+  }, [qualityOn, startsNew, planned, agentBusy]);
   /** Why a step's button can't run now, as the buttons it stands for say. */
   const nextBlocked = (action: NextAction): string | null => {
     switch (action) {
@@ -3886,6 +3915,7 @@ export function DraftEditor({
                 onAction={runNext}
                 onSkip={skipStep}
                 blocked={nextBlocked}
+                raises={nextRaises}
                 working={
                   agentWorking
                     ? {

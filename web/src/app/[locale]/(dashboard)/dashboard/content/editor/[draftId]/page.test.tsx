@@ -6742,7 +6742,7 @@ describe('the side panel', () => {
     afterEach(() => {
       delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
     });
-    const basket = () => document.querySelector('[data-slot="popover-content"]');
+    const basket = () => document.querySelector('[data-slot="dialog-content"]');
     const inBasket = (name: string) =>
       [...(basket()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === name);
     const nextButton = () =>
@@ -6884,30 +6884,22 @@ describe('the side panel', () => {
       expect(inBasket('Skip this step')).toBeUndefined();
     });
 
-    it('leaves focus where a click outside the basket put it', async () => {
+    it('opens as a window in the page’s middle, closing on Escape with focus back on Next (the user, 2026-11-03)', async () => {
       getContentDraft.mockResolvedValue(draft({ method: 'create' }));
       await renderPage();
       await act(async () => nextButton()!.click());
       expect(basket()).not.toBeNull();
-      // The page's own text, as a reader clicks back into it: a button put in
-      // the document after the basket opened reads as another app's, which a
-      // popover doesn't close for.
-      const elsewhere = container.querySelector<HTMLElement>('.ProseMirror')!;
-      // ProseMirror reads a click's place from the point: jsdom has none.
-      document.elementFromPoint = () => null;
-      try {
-        await act(async () => {
-          elsewhere.focus();
-          for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
-            elsewhere.dispatchEvent(new MouseEvent(type, { bubbles: true }));
-          }
-        });
-        await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
-        expect(basket()).toBeNull();
-        expect(document.activeElement).toBe(elsewhere);
-      } finally {
-        delete (document as { elementFromPoint?: unknown }).elementFromPoint;
-      }
+      // Every step on the left, the one to take on the right.
+      expect(basket()!.querySelector('aside ol[aria-label="All steps"]')).not.toBeNull();
+      expect(basket()!.querySelector('section')!.textContent).toContain('Plan the page');
+      await act(async () => {
+        (document.activeElement ?? document.body).dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+        );
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 150)));
+      expect(basket()).toBeNull();
+      expect(document.activeElement).toBe(nextButton());
     });
 
     it('keeps a skip while the sources load again, as the fan-out rules read them', async () => {
@@ -7152,7 +7144,7 @@ describe('the side panel', () => {
         // The path says it was passed, not done.
         await act(async () => nextButton()!.click());
         expect(basket()!.textContent).toContain(
-          'Fix open rules· done by Content Agent, the rest is in Rules',
+          'Fix open rulesdone by Content Agent, the rest is in Rules',
         );
         // Passed with what the page read then: the rule left open, and its batch.
         expect(JSON.parse(localStorage.getItem('aeo:next-step-third-try:d1')!)).toEqual({

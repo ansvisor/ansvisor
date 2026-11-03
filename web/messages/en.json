@@ -9042,6 +9042,9 @@
         "marking": "Marking it ready…",
         "saving": "Saving the page first…",
         "tipsTitle": "If you see…",
+        "byAgent": "Content Agent takes this step",
+        "byYou": "Only you can take this step",
+        "raisesTitle": "What raises it",
         "tipLine": "{state} →",
         "states": {
           "done": "done",

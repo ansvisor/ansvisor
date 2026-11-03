@@ -4,7 +4,13 @@ import { useEffect, useId, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTitle, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import type { AgentRun } from '@/lib/content/agent-runs';
 import {
   FEW_OPEN_RULES,
@@ -245,6 +251,7 @@ export function NextStepButton({
   onSkip,
   blocked,
   working,
+  raises = [],
 }: {
   next: NextPath;
   state: NextStepState;
@@ -260,6 +267,11 @@ export function NextStepButton({
   blocked: (action: NextAction) => string | null;
   /** The agent's run under way from this page, with Stop; null while none. */
   working: { run: AgentRun | null; onStop: () => void; stopping: boolean } | null;
+  /**
+   * What raises the score on this step, the most first: each with its points
+   * ("+15 E-E-A-T"), or none for a rule the agent closes.
+   */
+  raises?: { line: string; gain: string | null }[];
 }) {
   const t = useTranslations('contentEditor.editor.nextStep');
   const { step, path, tips } = next;
@@ -277,9 +289,51 @@ export function NextStepButton({
     primaryRef.current?.focus();
   }, [step.id]);
 
+  const actor = stepActor(step);
+  const path_ = (
+    <ol aria-label={t('path')} className="space-y-1.5">
+      {path.map((p, i) => (
+        <li
+          key={p.id}
+          aria-current={p.state === 'now' ? 'step' : undefined}
+          className={cn(
+            'flex items-start gap-2 text-[13px]',
+            p.state === 'done' && 'text-muted-foreground line-through',
+            p.state === 'now' && 'font-medium',
+            (p.state === 'ahead' || p.state === 'skipped' || p.state === 'passed') &&
+              'text-muted-foreground',
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold no-underline',
+              PATH_DOT[p.state],
+            )}
+          >
+            {behind(p.state) ? <Check className="h-2.5 w-2.5" /> : i + 1}
+          </span>
+          <span className="min-w-0 [overflow-wrap:anywhere]">
+            {/* A step the agent took is crossed out as a done one is; its
+                note, the person's part, isn't (editor test 2026-10-27). */}
+            <span className={cn(p.state === 'passed' && 'line-through')}>
+              {stepName(t, p.id, state)}
+            </span>
+            {(p.state === 'skipped' || p.state === 'passed') && (
+              <span aria-hidden className="block text-xs no-underline">
+                {t(p.state).replace(/^· /, '')}
+              </span>
+            )}
+            <span className="sr-only"> · {t(`states.${p.state}`)}</span>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogTrigger
         render={<Button variant="outline" size="sm" />}
         aria-label={t('button', { step: name })}
         title={t('button', { step: name })}
@@ -290,164 +344,166 @@ export function NextStepButton({
         <span className="hidden max-w-48 truncate xl:inline">
           {t('buttonStep', { step: name })}
         </span>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        className="w-[340px] space-y-3"
-        initialFocus={focusOnOpen}
-        // Closing leaves focus where it went (a click into the page, a dialog,
-        // a menu or a tab a step opened), else back on the button: Base UI's
-        // own rule, which a finalFocus function would turn off.
+      </DialogTrigger>
+      {/* One large window in the page's middle (the user, 2026-11-03): every
+          step on the left, the one to take on the right with why, what
+          raises the score, who takes it and its one button. */}
+      <DialogContent
+        className="gap-0 overflow-hidden p-0 sm:max-w-3xl"
+        initialFocus={focusOnOpen ? primaryRef : undefined}
       >
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-            {t('label')}
-          </span>
-          <Bars path={path} className="ml-auto" />
-          <span className="sr-only">
-            {now >= 0
-              ? t('stepOf', { n: now + 1, total: path.length })
-              : stepsLeft(path) > 0
-                ? t('stepsLeft', { count: stepsLeft(path) })
-                : t('allDone')}
-          </span>
-        </div>
-
-        {working ? (
-          <div className="space-y-2">
-            <PopoverTitle className="flex items-center">
-              {t('working')}
-              <WorkingDots />
-            </PopoverTitle>
-            {working.run && <RunSteps run={working.run} />}
-            {working.run && (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={working.stopping}
-                onClick={working.onStop}
-              >
-                {t('stop')}
-              </Button>
-            )}
-          </div>
-        ) : (
-          // A step that changes (Skip, a run's end) is read out.
-          <div className="space-y-2" aria-live="polite">
-            <PopoverTitle>{name}</PopoverTitle>
-            <p className="text-[13px] text-muted-foreground [overflow-wrap:anywhere]">
-              {stepReason(t, step, state, todoLine, path)}
-            </p>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Button
-                ref={primaryRef}
-                size="sm"
-                disabled={why !== null}
-                aria-describedby={why ? whyId : undefined}
-                onClick={() => onAction(step.primary)}
-              >
-                {t(`actions.${step.primary}`)}
-              </Button>
-              {step.alternative && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={whyAlternative !== null}
-                  aria-describedby={!why && whyAlternative ? whyId : undefined}
-                  onClick={() => onAction(step.alternative!)}
-                >
-                  {t(`actions.${step.alternative}`)}
-                </Button>
-              )}
-              {step.skippable && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    skipped.current = true;
-                    onSkip(step.id);
-                  }}
-                >
-                  {t('skip')}
-                </Button>
-              )}
+        <div className="grid max-h-[calc(100dvh-4rem)] overflow-y-auto md:grid-cols-[15rem_minmax(0,1fr)]">
+          <aside className="space-y-3 border-b bg-muted/40 p-5 md:border-r md:border-b-0">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                {t('label')}
+              </span>
+              <Bars path={path} className="ml-auto" />
             </div>
-            {/* The step's own button first; else why the other one is held
-                (Mark published on an archived page). */}
-            {(why ?? whyAlternative) && (
-              <p
-                id={whyId}
-                className="text-xs text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400"
-              >
-                {why ?? whyAlternative}
-              </p>
-            )}
-          </div>
-        )}
-
-        <ol aria-label={t('path')} className="space-y-1 border-t pt-3">
-          {path.map((p, i) => (
-            <li
-              key={p.id}
-              aria-current={p.state === 'now' ? 'step' : undefined}
-              className={cn(
-                'flex items-center gap-2 text-[13px]',
-                p.state === 'done' && 'text-muted-foreground line-through',
-                p.state === 'now' && 'font-medium',
-                (p.state === 'ahead' || p.state === 'skipped' || p.state === 'passed') &&
-                  'text-muted-foreground',
-              )}
-            >
-              <span
-                aria-hidden
-                className={cn(
-                  'flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold no-underline',
-                  PATH_DOT[p.state],
-                )}
-              >
-                {behind(p.state) ? <Check className="h-2.5 w-2.5" /> : i + 1}
-              </span>
-              <span className="min-w-0 [overflow-wrap:anywhere]">
-                {/* A step the agent took is crossed out as a done one is; its
-                    note, the person's part, isn't (editor test 2026-10-27). */}
-                <span className={cn(p.state === 'passed' && 'line-through')}>
-                  {stepName(t, p.id, state)}
-                </span>
-                {(p.state === 'skipped' || p.state === 'passed') && (
-                  <span aria-hidden className="ml-1.5 text-xs no-underline">
-                    {t(p.state)}
-                  </span>
-                )}
-                <span className="sr-only"> · {t(`states.${p.state}`)}</span>
-              </span>
-            </li>
-          ))}
-        </ol>
-
-        {/* The lines' buttons start runs: none while one is under way. */}
-        {tips.length > 0 && !working && (
-          <div className="space-y-1 border-t pt-3">
-            <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-              {t('tipsTitle')}
+            <p className="text-xs text-muted-foreground">
+              {now >= 0
+                ? t('stepOf', { n: now + 1, total: path.length })
+                : stepsLeft(path) > 0
+                  ? t('stepsLeft', { count: stepsLeft(path) })
+                  : t('allDone')}
             </p>
-            {tips.map((tip) => (
-              <p key={tip.id} className="text-[13px] text-muted-foreground">
-                {t('tipLine', {
-                  state: t(`tips.${tip.id}`, { gate: TRUST_GATE, max: FEW_OPEN_RULES }),
-                })}{' '}
-                <button
-                  type="button"
-                  disabled={blocked(tip.action) !== null}
-                  onClick={() => onAction(tip.action)}
-                  className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
-                >
-                  {t(`actions.${tip.action}`)}
-                </button>
-              </p>
-            ))}
-          </div>
-        )}
-      </PopoverContent>
-    </Popover>
+            {path_}
+          </aside>
+
+          <section className="min-w-0 space-y-4 p-5 pr-12">
+            {working ? (
+              <div className="space-y-3">
+                <DialogTitle className="flex items-center text-lg">
+                  {t('working')}
+                  <WorkingDots />
+                </DialogTitle>
+                {working.run && <RunSteps run={working.run} />}
+                {working.run && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={working.stopping}
+                    onClick={working.onStop}
+                  >
+                    {t('stop')}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              // A step that changes (Skip, a run's end) is read out.
+              <div className="space-y-4" aria-live="polite">
+                <div className="space-y-1.5">
+                  <span
+                    className={cn(
+                      'inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                      actor === 'agent'
+                        ? 'border-primary/30 text-foreground'
+                        : 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+                    )}
+                  >
+                    {t(actor === 'agent' ? 'byAgent' : 'byYou')}
+                  </span>
+                  <DialogTitle className="text-lg">{name}</DialogTitle>
+                  <DialogDescription className="text-sm [overflow-wrap:anywhere]">
+                    {stepReason(t, step, state, todoLine, path)}
+                  </DialogDescription>
+                </div>
+
+                {raises.length > 0 && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-medium text-muted-foreground">
+                      {t('raisesTitle')}
+                    </h4>
+                    <ul className="space-y-1.5">
+                      {raises.slice(0, 5).map((raise) => (
+                        <li
+                          key={raise.line}
+                          className="flex items-start gap-2 rounded-lg border px-3 py-2 text-[13px]"
+                        >
+                          {raise.gain && (
+                            <span className="mt-0.5 shrink-0 rounded-md bg-emerald-50 px-1.5 text-[11px] font-medium text-emerald-700 tabular-nums dark:bg-emerald-950 dark:text-emerald-300">
+                              {raise.gain}
+                            </span>
+                          )}
+                          <span className="min-w-0 [overflow-wrap:anywhere]">{raise.line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    ref={primaryRef}
+                    disabled={why !== null}
+                    aria-describedby={why ? whyId : undefined}
+                    onClick={() => onAction(step.primary)}
+                  >
+                    {t(`actions.${step.primary}`)}
+                  </Button>
+                  {step.alternative && (
+                    <Button
+                      variant="outline"
+                      disabled={whyAlternative !== null}
+                      aria-describedby={!why && whyAlternative ? whyId : undefined}
+                      onClick={() => onAction(step.alternative!)}
+                    >
+                      {t(`actions.${step.alternative}`)}
+                    </Button>
+                  )}
+                  {step.skippable && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto text-muted-foreground"
+                      onClick={() => {
+                        skipped.current = true;
+                        onSkip(step.id);
+                      }}
+                    >
+                      {t('skip')}
+                    </Button>
+                  )}
+                </div>
+                {/* The step's own button first; else why the other one is held
+                    (Mark published on an archived page). */}
+                {(why ?? whyAlternative) && (
+                  <p
+                    id={whyId}
+                    className="text-xs text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400"
+                  >
+                    {why ?? whyAlternative}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* The lines' buttons start runs: none while one is under way. */}
+            {tips.length > 0 && !working && (
+              <div className="space-y-1 border-t pt-3">
+                <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                  {t('tipsTitle')}
+                </p>
+                {tips.map((tip) => (
+                  <p key={tip.id} className="text-[13px] text-muted-foreground">
+                    {t('tipLine', {
+                      state: t(`tips.${tip.id}`, { gate: TRUST_GATE, max: FEW_OPEN_RULES }),
+                    })}{' '}
+                    <button
+                      type="button"
+                      disabled={blocked(tip.action) !== null}
+                      onClick={() => onAction(tip.action)}
+                      className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none disabled:opacity-50"
+                    >
+                      {t(`actions.${tip.action}`)}
+                    </button>
+                  </p>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
