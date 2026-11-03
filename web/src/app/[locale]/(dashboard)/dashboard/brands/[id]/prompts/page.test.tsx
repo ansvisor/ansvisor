@@ -234,14 +234,16 @@ describe('Manage prompts on a read-only workspace', () => {
     expect(openUpgrade).not.toHaveBeenCalled();
   });
 
-  // Tracking the prompts now is for admins and managers (2026-11-03).
-  it('offers Analyze Prompts to an admin or a manager only', async () => {
+  // Changing locations and tracking the prompts now are for admins and managers (2026-11-03).
+  it('offers Locations and Analyze Prompts to an admin or a manager only', async () => {
     await render(false);
+    expect(button('Locations')).toBeDefined();
     expect(button('Analyze Prompts')).toBeDefined();
     act(() => root.unmount());
     root = createRoot(container);
     viewer.canManage = false;
     await render(false);
+    expect(button('Locations')).toBeUndefined();
     expect(button('Analyze Prompts')).toBeUndefined();
   });
 });
