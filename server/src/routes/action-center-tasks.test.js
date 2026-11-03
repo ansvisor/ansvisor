@@ -205,6 +205,27 @@ describe('sendTask', () => {
     expect(sendTaskToContent).not.toHaveBeenCalled();
   });
 
+  it('refuses an analyst the webhook before anything is sent, and sends to Content', async () => {
+    assertRole.mockRejectedValueOnce(
+      Object.assign(new Error('Only admins and managers can send tasks to the webhook.'), {
+        status: 403,
+        code: 'forbidden',
+      }),
+    );
+    await expect(sendTask('t1', { to: 'webhook' }, 'u1')).rejects.toMatchObject({ status: 403 });
+    expect(assertRole).toHaveBeenCalledWith(
+      'u1',
+      ['admin', 'manager'],
+      'Only admins and managers can send tasks to the webhook.',
+    );
+    expect(sendTaskToWebhook).not.toHaveBeenCalled();
+
+    assertRole.mockClear();
+    await sendTask('t1', { to: 'content' }, 'u1');
+    expect(assertRole).not.toHaveBeenCalled();
+    expect(sendTaskToContent).toHaveBeenCalled();
+  });
+
   it('sends where it was asked, with the text the drawer shows', async () => {
     expect(await sendTask('t1', { to: 'content', title: 'Refresh /a' }, 'u1')).toEqual({
       opportunityId: 'o1',
