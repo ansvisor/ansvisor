@@ -878,6 +878,8 @@ interface RunContext {
   batchAnswer?: string;
   /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
   agentRunId: string | null;
+  /** The language the person set Chat to answer in (Settings › Chat); null: their question's. */
+  answerLanguage: Language | null;
   /** The brands this request noted on the chat already (touched-brands.ts); '*': the workspace. */
   touchedNoted?: Set<string>;
   /**
@@ -1032,6 +1034,22 @@ async function waitForSlot(
 }
 
 /** Everything a run's steps need, read once per request; null when the run ended here. */
+/**
+ * The language the person set Chat to answer in (Settings › Chat › General,
+ * chat_user_prefs.answer_language, 00408); null for "Same as my question",
+ * one Chat doesn't read, or a read that fails.
+ */
+async function readAnswerLanguage(userId: string): Promise<Language | null> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_user_prefs')
+    .select('answer_language')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) return null;
+  const value = (data as { answer_language?: string | null } | null)?.answer_language;
+  return value && Object.hasOwn(LANGUAGES, value) ? (value as Language) : null;
+}
+
 async function openContext(
   actor: ChatActor,
   run: LoadedRun,
@@ -1069,6 +1087,7 @@ async function openContext(
   }
   const brand = progress.brandId ? await readBrand(progress.brandId, actor.organizationId) : null;
   const { agentRunId, scheduleId } = await readChatOwner(run.conversationId);
+  const answerLanguage = await readAnswerLanguage(actor.userId);
   const scope: RunScope = {
     brandId: brand?.id ?? null,
     brandIsDemo: brand ? await readBrandIsDemo(brand.id) : false,
@@ -1103,6 +1122,7 @@ async function openContext(
     offered: new Map(offered.map((tool) => [tool.name, tool])),
     refused,
     agentRunId,
+    answerLanguage,
     // The job's own run only: a person's message in its chat is theirs.
     scheduleId: progress.scheduled ? scheduleId : null,
     sessionUserId,
@@ -1816,7 +1836,7 @@ function turnMessage(rc: RunContext, phase: ChatPhase): ModelMessage {
     parts.push({ type: 'text', text: INJECTION_NOTE });
   }
   // Last, after pages of English data: the question's language, named (language.ts).
-  const language = phase === 'write' ? languageLine(question) : null;
+  const language = phase === 'write' ? languageLine(question, rc.answerLanguage) : null;
   if (language) parts.push({ type: 'text', text: language });
   return { role: 'user', content: parts };
 }
@@ -4396,7 +4416,7 @@ function summaryOf(progress: RunProgress, workingMs: number): ChatRunSummary {
 /** The answer is written: kept with when it was made and the newest data it read (CHAT-20 §15a). */
 async function finish(rc: RunContext): Promise<void> {
   // An answer in English to a question in another language is rewritten once (language.ts).
-  const language = rewriteLanguage(rc.progress.question ?? '', rc.progress.text);
+  const language = rewriteLanguage(rc.progress.question ?? '', rc.progress.text, rc.answerLanguage);
   if (language) await rewriteAnswer(rc, language);
   // A Stop during the rewrite ends the run as stopped, with the answer as it was.
   if (rc.signal.aborted) return stopNow(rc);
@@ -4479,7 +4499,9 @@ async function rewriteAnswer(rc: RunContext, language: Language): Promise<void> 
     if (rc.signal.aborted) return budget.keep();
     await budget.charge(stepUsage(await result.usage), Date.now() - called);
     const rewritten = out.join('').trim();
-    if (!rewritten || rewriteLanguage(rc.progress.question ?? '', rewritten)) return;
+    if (!rewritten || rewriteLanguage(rc.progress.question ?? '', rewritten, rc.answerLanguage)) {
+      return;
+    }
     // The same guards as streamed text (answer-guards.ts): no call written out, no raw tool name.
     const call = callAsTextAt(rewritten);
     const shown = maskToolNames(

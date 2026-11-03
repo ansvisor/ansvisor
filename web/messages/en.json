@@ -5006,11 +5006,16 @@
       },
       "language": {
         "label": "Answer language",
-        "note": "The app stays in English; Chat answers in this language",
+        "note": "Chat answers in this language unless your message asks for another; the app stays in English",
         "same": "Same as my question",
         "en": "English",
         "tr": "Türkçe",
-        "de": "Deutsch"
+        "de": "Deutsch",
+        "fr": "Français",
+        "es": "Español",
+        "it": "Italiano",
+        "pt": "Português",
+        "nl": "Nederlands"
       },
       "notify": {
         "label": "Notify me when an agent needs me",

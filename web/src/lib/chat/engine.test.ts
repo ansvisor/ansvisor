@@ -1185,6 +1185,27 @@ describe("the answer's language: the question's (CHAT-05 item 2)", () => {
     return parts.at(-1)?.text;
   };
 
+  it("follows the language the person set, over the question's, unless the message asks for one", async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, answer_language: 'tr' }];
+    const english = 'Visibility on Perplexity fell this week, and the CRM prompts lost the most.';
+    const turkish = 'Perplexity görünürlüğü bu hafta düştü, en çok CRM soruları kaybetti.';
+    const { sonnet } = useModels([READY, READY], [text(english), text(turkish), text(english)]);
+    const set = await turn(ADMIN, 'Why did our visibility fall this week?');
+    expect(lastLine(sonnet.seen[0])).toBe(
+      'The person set Chat to answer in Turkish: answer in Turkish, whatever the language of their message or the data, unless they ask for another language.',
+    );
+    // An English answer: rewritten into the set language once.
+    expect(sonnet.seen).toHaveLength(2);
+    expect(answerOf(set)).toBe(turkish);
+
+    const asked = await turn(ADMIN, 'Why did our visibility fall this week? Answer in English.');
+    expect(lastLine(sonnet.seen[2])).toBe(
+      'The person asked for the answer in English: answer in English.',
+    );
+    expect(sonnet.seen).toHaveLength(3);
+    expect(answerOf(asked)).toBe(english);
+  });
+
   it("names the question's language as the writer's last line", async () => {
     const { haiku, sonnet } = useModels([READY], [text('Perplexity görünürlüğü bu hafta düştü.')]);
     await turn(ADMIN, TURKISH);
