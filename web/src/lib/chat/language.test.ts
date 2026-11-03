@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectLanguage, languageLine, rewriteLanguage } from './language';
+import { asksForLanguage, detectLanguage, languageLine, rewriteLanguage } from './language';
 
 /** The language of a Chat answer: the question's (language.ts). */
 
@@ -25,12 +25,38 @@ describe('detectLanguage', () => {
   });
 });
 
+describe('asksForLanguage', () => {
+  it('hears the person ask for an answer in a language, in English or Turkish', () => {
+    for (const asked of [
+      "Bu hafta Perplexity'de neden düştük? Answer in English.",
+      'Bu hafta neden düştük? İngilizce cevap ver.',
+      'İngilizce bir blog yazısı yaz: neden AI görünürlüğü önemli?',
+      'Schreib es auf Deutsch, bitte.',
+    ]) {
+      expect(asksForLanguage(asked), asked).toBe(true);
+    }
+  });
+
+  it('hears no ask in a language named in passing', () => {
+    for (const question of [
+      'Why do Turkish users search less on Perplexity?',
+      "Bu hafta Perplexity'de neden düştük?",
+      'Türkçe sorular neden daha az görünür?',
+    ]) {
+      expect(asksForLanguage(question), question).toBe(false);
+    }
+  });
+});
+
 describe('languageLine', () => {
   it("names the question's language for the writer, or nothing when unclear", () => {
     expect(languageLine("Bu hafta Perplexity'de neden düştük?")).toBe(
       'The person wrote in Turkish: answer in Turkish, whatever the language of the data, unless they ask for another language.',
     );
     expect(languageLine('Perplexity?')).toBeNull();
+    expect(languageLine("Bu hafta Perplexity'de neden düştük? Answer in English.")).toBe(
+      'The person asked for the answer in a language they named: answer in that language.',
+    );
   });
 });
 
@@ -59,5 +85,6 @@ describe('rewriteLanguage', () => {
       rewriteLanguage('İngilizce bir blog yazısı yaz: neden AI görünürlüğü önemli?', ENGLISH),
     ).toBeNull();
     expect(rewriteLanguage('Bu sayfayı in English yaz, lütfen ve hemen', ENGLISH)).toBeNull();
+    expect(rewriteLanguage(`${TURKISH} Answer in English.`, ENGLISH)).toBeNull();
   });
 });

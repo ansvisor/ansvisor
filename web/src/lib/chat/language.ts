@@ -230,15 +230,34 @@ export function detectLanguage(text: string): Language | null {
   return best.language;
 }
 
-/** A language named in a question ("in English", "İngilizce", "auf Deutsch"): the person picked one. */
-const NAMES_A_LANGUAGE =
-  /\b(english|turkish|german|french|spanish|italian|portuguese|dutch|englisch|anglais|inglés|ingles|inglese|inglês|engels|deutsch|français|español|italiano|português|nederlands)\b|ingilizce|türkçe|almanca|fransızca|ispanyolca|italyanca|portekizce|felemenkçe/i;
+const LANGUAGE_NAMES =
+  'english|turkish|german|french|spanish|italian|portuguese|dutch|englisch|deutsch|anglais|français|inglés|ingles|español|inglese|italiano|inglês|português|engels|nederlands|ingilizce|türkçe|almanca|fransızca|ispanyolca|italyanca|portekizce|felemenkçe';
 
 /**
- * The turn's last line for the writer: the question's language, named, so
- * pages of English data don't set it. Null when the language is unclear.
+ * The person asks for the answer in a language they name ("answer in
+ * English", "İngilizce cevap ver", "İngilizce bir blog yazısı yaz", "auf
+ * Deutsch"): that language, whatever they wrote in (owner, 2026-11-03).
+ * Naming one in passing ("why do Turkish users search less?") isn't asking.
+ */
+const ASKS_FOR_LANGUAGE = new RegExp(
+  `\\b(?:in|into|auf|en)\\s+(?:${LANGUAGE_NAMES})|(?:${LANGUAGE_NAMES})(?:\\s+\\S+){0,3}?\\s+(?:cevap|yanıt|yaz|anlat|çevir|olarak|please|only|version|translation)`,
+  'i',
+);
+
+/** Whether a question asks for the answer in a language it names; Turkish's İ folds to i. */
+export function asksForLanguage(question: string): boolean {
+  return ASKS_FOR_LANGUAGE.test(question.replace(/İ/g, 'i'));
+}
+
+/**
+ * The turn's last line for the writer: the language the person asked for,
+ * else the question's, named, so pages of English data don't set it. Null
+ * when the language is unclear.
  */
 export function languageLine(question: string): string | null {
+  if (asksForLanguage(question)) {
+    return 'The person asked for the answer in a language they named: answer in that language.';
+  }
   const language = detectLanguage(question);
   if (!language) return null;
   const name = LANGUAGES[language];
@@ -248,12 +267,11 @@ export function languageLine(question: string): string | null {
 /**
  * The language an answer is rewritten in, once, when it came out in English
  * for a question in another language; null otherwise: the same language, one
- * of them unclear, or a question that names a language (an English blog
+ * of them unclear, or a question that asks for a language (an English blog
  * post asked for in Turkish is English on purpose).
  */
 export function rewriteLanguage(question: string, answer: string): Language | null {
-  // Turkish's dotted capital İ ("İngilizce") folds to i for the check.
-  if (NAMES_A_LANGUAGE.test(question.replace(/İ/g, 'i'))) return null;
+  if (asksForLanguage(question)) return null;
   const asked = detectLanguage(question);
   if (!asked || asked === 'en') return null;
   return detectLanguage(answer) === 'en' ? asked : null;

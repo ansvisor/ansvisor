@@ -1158,6 +1158,18 @@ describe("the answer's language: the question's (CHAT-05 item 2)", () => {
     expect(runRow(runId).status).toBe('done');
   });
 
+  it('answers in the language the person asks for, whatever they wrote in', async () => {
+    const answer = 'Visibility on Perplexity fell this week, and the CRM prompts lost the most.';
+    const { sonnet } = useModels([READY], [text(answer)]);
+    const runId = await turn(ADMIN, `${TURKISH} Answer in English.`);
+    expect(lastLine(sonnet.seen[0])).toBe(
+      'The person asked for the answer in a language they named: answer in that language.',
+    );
+    // Asked for: no rewrite.
+    expect(sonnet.seen).toHaveLength(1);
+    expect(answerOf(runId)).toBe(answer);
+  });
+
   it('keeps an English answer the person asked for, and one whose rewrite is still English', async () => {
     const { sonnet } = useModels(
       [READY, READY],
