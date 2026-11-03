@@ -56,11 +56,10 @@ export const TRACKING_READS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Reads never kept: opening a page of the app reads no data, a web page's
- * words are kept nowhere (CHAT-10 §B), and What's new changes as the
- * person reads it (CHAT-11 §E).
+ * Reads never kept: opening a page of the app reads no data, and a web
+ * page's words are kept nowhere (CHAT-10 §B).
  */
-const NOT_KEPT: ReadonlySet<string> = new Set(['open_page', 'fetch_page', 'get_whats_new']);
+const NOT_KEPT: ReadonlySet<string> = new Set(['open_page', 'fetch_page']);
 
 export interface CachePolicy {
   /** The longest a result holds. */

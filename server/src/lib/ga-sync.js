@@ -1,9 +1,8 @@
 /**
  * Daily Google Analytics sync (#704).
  *
- * For every active brand mapped to a GA4 property (#694) whose connection is
- * live (the Google sign-in it uses, lib/brand-integrations.js), pulls four
- * reports through Composio and upserts them:
+ * For every active brand mapped to a GA4 property (#694) whose org connection
+ * is live, pulls four reports through Composio and upserts them:
  *
  *   ga_ai_traffic_stats  AI-sourced sessions per landing page
  *   ga_channel_stats     sessions per default channel group (AT-005)
@@ -20,8 +19,6 @@
 
 import supabaseAdmin from '../config/supabase.js';
 import { activeOrgFilter } from './active-subscriptions.js';
-import { composioTarget, connectedBrands } from './brand-integrations.js';
-import { selectInChunks } from './chunked-in.js';
 import { isComposioConfigured, runGaReport } from './composio.js';
 import { AI_SOURCES_VERSION, classifyAiSurface } from './ai-sources.js';
 import {
@@ -31,8 +28,6 @@ import {
   gaAiPlatform,
 } from './ga-sources.js';
 import { logger } from './logger.js';
-
-const GA = 'google-analytics';
 
 /** First sync pulls this much history; later runs only refresh the tail. */
 const BACKFILL_DAYS = 90;
@@ -338,7 +333,7 @@ async function mapWithConcurrency(items, limit, task) {
  */
 async function syncDay({
   brand,
-  target,
+  entityId,
   date,
   dimensions,
   metrics,
@@ -348,7 +343,7 @@ async function syncDay({
   table,
   onConflict,
 }) {
-  const report = await runGaReport(target, brand.ga_property_id, {
+  const report = await runGaReport(entityId, brand.ga_property_id, {
     dateRanges: [{ startDate: date, endDate: date }],
     dimensions,
     metrics,
@@ -382,9 +377,9 @@ async function isFirstSync(brandId) {
  * "the top pages of the whole quarter", which on a large property is less than
  * a single day's worth and silently biases everything computed from it.
  */
-async function syncDays({ brand, target, days, label, ...report }) {
+async function syncDays({ brand, entityId, days, label, ...report }) {
   const outcomes = await mapWithConcurrency(days, DAY_CONCURRENCY, (date) =>
-    syncDay({ brand, target, date, ...report }),
+    syncDay({ brand, entityId, date, ...report }),
   );
 
   const stored = outcomes.reduce((sum, o) => sum + o.stored, 0);
@@ -434,7 +429,7 @@ export const GA_AI_FILTER = {
 };
 
 async function syncBrand(brand, { aiHistory = false } = {}) {
-  const target = composioTarget(brand.connection);
+  const entityId = `org_${brand.organization_id}`;
   const first = await isFirstSync(brand.id);
   const days = dayRange(first ? BACKFILL_DAYS : REFRESH_DAYS);
   const dateRanges = [{ startDate: days[days.length - 1], endDate: days[0] }];
@@ -444,7 +439,7 @@ async function syncBrand(brand, { aiHistory = false } = {}) {
   // The AI slice is small enough to take in one call — a live property
   // produced 96 rows over 90 days — so it keeps the full entry URL and needs
   // no ceiling.
-  const aiReport = await runGaReport(target, brand.ga_property_id, {
+  const aiReport = await runGaReport(entityId, brand.ga_property_id, {
     dateRanges: [{ startDate: aiDays[aiDays.length - 1], endDate: aiDays[0] }],
     dimensions: [
       { name: 'date' },
@@ -477,7 +472,7 @@ async function syncBrand(brand, { aiHistory = false } = {}) {
 
   // Every channel's sessions over the same days (AT-005): a dozen rows a
   // day, so one call. Organic Search is the AI Traffic page's comparison.
-  const channelReport = await runGaReport(target, brand.ga_property_id, {
+  const channelReport = await runGaReport(entityId, brand.ga_property_id, {
     dateRanges: [{ startDate: aiDays[aiDays.length - 1], endDate: aiDays[0] }],
     dimensions: [{ name: 'date' }, { name: 'sessionDefaultChannelGroup' }],
     metrics,
@@ -491,7 +486,7 @@ async function syncBrand(brand, { aiHistory = false } = {}) {
 
   const pageRows = await syncDays({
     brand,
-    target,
+    entityId,
     days,
     label: 'pages',
     table: 'ga_page_stats',
@@ -510,7 +505,7 @@ async function syncBrand(brand, { aiHistory = false } = {}) {
   try {
     itemRows = await syncDays({
       brand,
-      target,
+      entityId,
       days,
       label: 'items',
       table: 'ga_item_stats',
@@ -537,7 +532,7 @@ async function syncBrand(brand, { aiHistory = false } = {}) {
   // so a newly popular assistant shows up in the logs instead of silently
   // failing the filter above forever.
   try {
-    const report = await runGaReport(target, brand.ga_property_id, {
+    const report = await runGaReport(entityId, brand.ga_property_id, {
       dateRanges,
       dimensions: [{ name: 'sessionSource' }],
       metrics: [{ name: 'sessions' }],
@@ -571,32 +566,35 @@ async function prune(table) {
  * Returns per-brand counts.
  */
 export async function runGaSync({ organizationId, brandId, aiHistory = false } = {}) {
-  if (!isComposioConfigured(GA)) return { synced: 0, skipped: 0, results: [] };
+  if (!isComposioConfigured('google-analytics')) return { synced: 0, skipped: 0, results: [] };
 
-  // Brands whose Google sign-in is live (00470)…
-  const connections = await connectedBrands(GA, { organizationId, brandId });
-  // …in organizations on an active subscription: once the plan has ended,
-  // nothing is synced.
-  const orgIds = [...new Set(connections.map((c) => c.organizationId))];
+  // Orgs with a live connection…
+  let connQuery = supabaseAdmin
+    .from('integration_connections')
+    .select('organization_id')
+    .eq('provider', 'google-analytics')
+    .eq('status', 'connected');
+  if (organizationId) connQuery = connQuery.eq('organization_id', organizationId);
+  const { data: connections, error: connError } = await connQuery;
+  if (connError) throw new Error(connError.message);
+  // …on an active subscription: once the plan has ended, nothing is synced.
+  const orgIds = [...new Set((connections || []).map((c) => c.organization_id))];
   const isActive = await activeOrgFilter(orgIds);
-  const live = new Map(
-    connections.filter((c) => isActive(c.organizationId)).map((c) => [c.brandId, c]),
-  );
-  if (live.size === 0) return { synced: 0, skipped: 0, results: [] };
+  const connectedOrgIds = orgIds.filter(isActive);
+  if (connectedOrgIds.length === 0) return { synced: 0, skipped: 0, results: [] };
 
-  // …that are active and have a mapped property.
-  const { data: rows, error: brandError } = await selectInChunks([...live.keys()], (ids) =>
-    supabaseAdmin
-      .from('brands')
-      .select('id, organization_id, ga_property_id')
-      .eq('is_active', true)
-      // A demo brand's figures (00380) are sample data, never synced.
-      .eq('is_demo', false)
-      .not('ga_property_id', 'is', null)
-      .in('id', ids),
-  );
+  // …and their active brands with a mapped property.
+  let brandQuery = supabaseAdmin
+    .from('brands')
+    .select('id, organization_id, ga_property_id')
+    .eq('is_active', true)
+    // A demo brand's figures (00380) are sample data, never synced.
+    .eq('is_demo', false)
+    .not('ga_property_id', 'is', null)
+    .in('organization_id', connectedOrgIds);
+  if (brandId) brandQuery = brandQuery.eq('id', brandId);
+  const { data: brands, error: brandError } = await brandQuery;
   if (brandError) throw new Error(brandError.message);
-  const brands = (rows || []).map((brand) => ({ ...brand, connection: live.get(brand.id) }));
 
   const results = [];
   let synced = 0;

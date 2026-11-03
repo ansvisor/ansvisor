@@ -58,8 +58,7 @@ export type CmsSendError =
 export interface CmsDelivery {
   id: string;
   draftId: string;
-  /** taken_down: a person took the published page down to a draft in its CMS (00460). */
-  status: 'queued' | 'sent' | 'failed' | 'published' | 'taken_down';
+  status: 'queued' | 'sent' | 'failed' | 'published';
   /** What the webhook answered, when it did. */
   http_status?: number | null;
   /** Why it failed, as the server wrote it ("The webhook could not be reached"). */

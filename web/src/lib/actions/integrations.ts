@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
-import { readBrandIntegrations, type BrandIntegration } from '@/lib/brand-integrations';
 import { assertWritable } from '@/lib/subscription-guard';
 
 /** Providers that expose the shared connect / status / disconnect flow. */
@@ -20,8 +19,8 @@ export type IntegrationStatus = 'not_configured' | 'not_connected' | 'connected'
  */
 const CONFIG_TIMEOUT_MS = 10_000;
 const DISCONNECT_TIMEOUT_MS = 20_000;
-/** Saving a property reads the brand's sign-in's list from Google first. */
-const PROPERTY_SAVE_TIMEOUT_MS = 20_000;
+/** The API answers a sync at once and runs it in the background. */
+const SYNC_START_TIMEOUT_MS = 5_000;
 
 async function authHeaders(): Promise<Record<string, string>> {
   const supabase = await createClient();
@@ -61,9 +60,8 @@ export async function getMerchantCenterOffered(): Promise<boolean> {
  * Deliberately does NOT read the provider's status. That resolves the live
  * state against Composio and re-syncs our row, which costs ~450ms per
  * provider — measured — and made the panel appear well after the suggestions
- * it sits above. This reads the sign-in the brand uses (00470,
- * lib/brand-integrations.ts), which follows the row Composio's own status
- * check maintains, plus the brand's property mapping.
+ * it sits above. This reads the row Composio's own status check maintains,
+ * plus the brand's property mapping, in a single query.
  *
  * The trade-off is that a connection revoked on Google's side still reads as
  * connected here until Settings runs its authoritative check and rewrites the
@@ -123,36 +121,30 @@ export async function getSuggestionSourceStates(brandId: string): Promise<Sugges
       .limit(1)
       .maybeSingle();
 
-  const [configRes, brandRes, integrations, gscFirst, gaFirst, gscLast, gaLast] = await Promise.all(
-    [
-      fetch(`${API_BASE_URL}/api/integrations/config`, {
-        headers: await authHeaders(),
-        cache: 'no-store',
-        signal: AbortSignal.timeout(CONFIG_TIMEOUT_MS),
-      })
-        .then((r) => (r.ok ? (r.json() as Promise<ConfigBody>) : ({} as ConfigBody)))
-        .catch(() => ({}) as ConfigBody),
-      supabase
-        .from('brands')
-        .select('gsc_property, ga_property_id')
-        .eq('id', brandId)
-        .maybeSingle(),
-      // A failed read is "not connected", as the Account's row read was.
-      readBrandIntegrations(supabase, brandId).catch(() => new Map<string, BrandIntegration>()),
-      firstRow('gsc_query_stats'),
-      firstRow('ga_page_stats'),
-      latestRow('gsc_query_stats'),
-      latestRow('ga_page_stats'),
-    ],
-  );
+  const [configRes, brandRes, connRes, gscFirst, gaFirst, gscLast, gaLast] = await Promise.all([
+    fetch(`${API_BASE_URL}/api/integrations/config`, {
+      headers: await authHeaders(),
+      cache: 'no-store',
+      signal: AbortSignal.timeout(CONFIG_TIMEOUT_MS),
+    })
+      .then((r) => (r.ok ? (r.json() as Promise<ConfigBody>) : ({} as ConfigBody)))
+      .catch(() => ({}) as ConfigBody),
+    supabase.from('brands').select('gsc_property, ga_property_id').eq('id', brandId).maybeSingle(),
+    supabase.from('integration_connections').select('provider, status'),
+    firstRow('gsc_query_stats'),
+    firstRow('ga_page_stats'),
+    latestRow('gsc_query_stats'),
+    latestRow('ga_page_stats'),
+  ]);
 
-  const connected = (provider: IntegrationProvider) =>
-    Boolean(integrations.get(provider)?.connected);
+  const connected = new Set(
+    (connRes.data ?? []).filter((r) => r.status === 'connected').map((r) => r.provider),
+  );
 
   return {
     gsc: {
       configured: Boolean(configRes.googleSearchConsole),
-      connected: connected('google-search-console'),
+      connected: connected.has('google-search-console'),
       mapped: Boolean(brandRes.data?.gsc_property),
       firstDataAt: gscFirst.data?.created_at ?? null,
       lastDataAt: gscLast.data?.created_at ?? null,
@@ -160,7 +152,7 @@ export async function getSuggestionSourceStates(brandId: string): Promise<Sugges
     },
     ga: {
       configured: Boolean(configRes.googleAnalytics),
-      connected: connected('google-analytics'),
+      connected: connected.has('google-analytics'),
       mapped: Boolean(brandRes.data?.ga_property_id),
       firstDataAt: gaFirst.data?.created_at ?? null,
       lastDataAt: gaLast.data?.created_at ?? null,
@@ -183,29 +175,22 @@ export async function disconnectIntegration(provider: IntegrationProvider): Prom
 // ─── Property mapping (#642) ─────────────────────────────────────────────────
 
 /**
- * Save a brand's property pick (null clears it) through the API, which checks
- * it against the brand's own Google sign-in, so a pick can't name a site the
- * brand's sign-in doesn't hold, and starts a freshly mapped brand's first
- * sync in the background. Without that sync the data only lands with the
- * nightly run, and suggestions generated in the meantime cannot draw on it.
+ * Start a freshly mapped brand's first sync. Without it the data only lands
+ * with the nightly run, and suggestions generated in the meantime cannot draw
+ * on it. The server answers at once and syncs in the background. Best effort:
+ * the property pick is already saved, and the nightly run is the fallback.
  */
-async function saveBrandProperty(
-  provider: 'google-search-console' | 'google-analytics',
-  brandId: string,
-  property: string | null,
-): Promise<void> {
-  await assertWritable({ brandId });
-  const res = await fetch(
-    `${API_BASE_URL}/api/integrations/${provider}/brands/${encodeURIComponent(brandId)}/property`,
-    {
-      method: 'PUT',
+async function startBrandSync(provider: IntegrationProvider, brandId: string): Promise<void> {
+  try {
+    await fetch(`${API_BASE_URL}/api/integrations/${provider}/sync`, {
+      method: 'POST',
       headers: await authHeaders(),
-      body: JSON.stringify({ property }),
-      signal: AbortSignal.timeout(PROPERTY_SAVE_TIMEOUT_MS),
-    },
-  );
-  const body = (await res.json().catch(() => ({}))) as { error?: string };
-  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
+      body: JSON.stringify({ brandId }),
+      signal: AbortSignal.timeout(SYNC_START_TIMEOUT_MS),
+    });
+  } catch {
+    // The nightly sync picks the brand up.
+  }
 }
 
 export interface GscProperty {
@@ -236,9 +221,16 @@ export async function getGscBrandMappings(): Promise<GscBrandMapping[]> {
   }));
 }
 
-/** Persist a brand's property pick (null clears it): admin/manager (saveBrandProperty). */
+/** Persist a brand's property pick (null clears it). RLS: admin/manager. */
 export async function setBrandGscProperty(brandId: string, property: string | null): Promise<void> {
-  await saveBrandProperty('google-search-console', brandId, property);
+  await assertWritable({ brandId });
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('brands')
+    .update({ gsc_property: property })
+    .eq('id', brandId);
+  if (error) throw new Error(error.message);
+  if (property) await startBrandSync('google-search-console', brandId);
 }
 
 // ─── Google Analytics property mapping (#694) ────────────────────────────────
@@ -275,10 +267,17 @@ export async function getGaBrandMappings(): Promise<GaBrandMapping[]> {
   }));
 }
 
-/** Persist a brand's GA property pick (null clears it): admin/manager (saveBrandProperty). */
+/** Persist a brand's GA property pick (null clears it). RLS: admin/manager. */
 export async function setBrandGaProperty(
   brandId: string,
   propertyId: string | null,
 ): Promise<void> {
-  await saveBrandProperty('google-analytics', brandId, propertyId);
+  await assertWritable({ brandId });
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('brands')
+    .update({ ga_property_id: propertyId })
+    .eq('id', brandId);
+  if (error) throw new Error(error.message);
+  if (propertyId) await startBrandSync('google-analytics', brandId);
 }

@@ -53,13 +53,12 @@ export function measuredAfter(actions) {
 
 /**
  * Re-opens the brand's done opportunities that have a reason to be worked on
- * again. `measure(clusterIds)` scores clusters as generation does; `skip`
- * keeps one closed, as when another open opportunity answers its question.
+ * again. `measure(clusterIds)` scores clusters as generation does.
  *
  * @returns {Promise<number>} how many were re-opened
  */
-export async function reopenStrengthened(brandId, opportunities, measure, { skip } = {}) {
-  const done = opportunities.filter((o) => o.status === 'done' && o.cluster_id && !skip?.(o));
+export async function reopenStrengthened(brandId, opportunities, measure) {
+  const done = opportunities.filter((o) => o.status === 'done' && o.cluster_id);
   if (!done.length) return 0;
 
   const { data: actions, error } = await supabaseAdmin

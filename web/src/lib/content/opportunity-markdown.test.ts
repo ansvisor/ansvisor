@@ -17,8 +17,7 @@ const base: ContentOpportunity = {
   sourceData: {
     clusterLabel: 'Shoes for flat feet',
     topicName: 'Running shoes',
-    estAiVolume: 37320,
-    questionVolume: 18660,
+    estAiVolume: 18660,
     visibilityScore: 0,
     competitorsCited: ['Rival One', 'Rival Two'],
     prompts: ['Best shoes for flat feet?', 'Running shoes for overpronation'],
@@ -83,25 +82,16 @@ describe('opportunityToMarkdown', () => {
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
 
     expect(md).toContain('- Flat feet shoe comparison (Comparison page, Owned, Expand)');
-    // No current estimate given: its question's volume kept on it, half to twice.
+    // No current estimates given: the volume kept on it, half to twice.
     expect(md).toContain(
-      '- Est. AI volume: 9.3–38k/mo\n- Volume type: Estimate, kept when it was made or last updated\n- Volume confidence: Low\n- Volume of: Its related prompt, one of 2 prompts',
+      '- Est. AI volume: 9.3–38k/mo\n- Volume type: Estimate, kept when it was made or last updated\n- Volume confidence: Low',
     );
     expect(md).not.toContain('18,660');
     expect(md).toContain('- Visibility: 0%');
     expect(md).toContain('1. What flat feet need\n   - Arch support\n   - Stability\n2. The shoes');
   });
 
-  it("keeps no volume for a group that kept only its prompts' sum", () => {
-    const sd = { ...base.sourceData, questionVolume: undefined };
-    const md = opportunityToMarkdown({ ...base, sourceData: sd }, brief);
-    expect(md).not.toContain('Est. AI volume');
-    // A single prompt's sum is that prompt's own.
-    const single = opportunityToMarkdown({ ...base, clusterId: null, sourceData: sd }, brief);
-    expect(single).toContain('- Est. AI volume: 18–75k/mo');
-  });
-
-  it("writes its question's current estimate when the page has it (PROMPT-013)", () => {
+  it("writes its prompts' current estimate when the page has it (PROMPT-013)", () => {
     const now = new Date('2026-10-20T00:00:00Z');
     const volume = sumEstimates([
       keywordVolumeEstimate(10000, 0.5, '2026-10-01T00:00:00Z', now),

@@ -324,9 +324,6 @@ describe('createContentDraft', () => {
       opportunity_id: OPPORTUNITY,
       prompt_ids: [PROMPT, 'p2'],
       source_url: null,
-      // Made in the editor (00463, W4-10).
-      origin: 'editor',
-      conversation_id: null,
     });
   });
 
@@ -341,23 +338,6 @@ describe('createContentDraft', () => {
     };
     await createContentDraft(BRAND, start({ typePicked: true }));
     expect(inserted()).toMatchObject({ page_type: 'solution_page', page_type_source: 'user' });
-  });
-
-  it('is made in the editor unless said, and in a chat of the person’s with its id (00463)', async () => {
-    reads = {
-      content_opportunities: {
-        id: OPPORTUNITY,
-        prompt_id: PROMPT,
-        cluster_id: null,
-        related_cluster_ids: [],
-      },
-    };
-    await createContentDraft(BRAND, start());
-    expect(inserted()).toMatchObject({ origin: 'editor', conversation_id: null });
-    calls.length = 0;
-    const CHAT = 'cccccccc-0000-4000-8000-000000000001';
-    await createContentDraft(BRAND, start({ origin: 'chat', conversationId: CHAT }));
-    expect(inserted()).toMatchObject({ origin: 'chat', conversation_id: CHAT });
   });
 
   it('takes the one prompt of an opportunity with no clusters', async () => {
@@ -767,8 +747,6 @@ describe('startDraftFromAction', () => {
           action_id: ACTION,
           // The live page's own length, raised to the Length rule's least.
           rules: expect.objectContaining({ importLength: 100 }),
-          // Made from an Action Center task (00463, W4-10).
-          origin: 'action_center',
         }),
       },
     ]);

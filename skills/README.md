@@ -179,7 +179,7 @@ skills/
   to the list in `web/src/lib/chat/skills/library.test.ts` and to
   `SKILL_ORDER` in `web/src/lib/chat/skills/library.ts`.
 - `description` says what it does in one line; `metadata.title` and
-  `metadata.filters` (content, visibility, reports, product); `license: MIT`.
+  `metadata.filters` (content, visibility, product, technical, reports); `license: MIT`.
 - The body names only tools Chat has (`web/src/lib/chat/registry`), and
   never asks Chat to skip an approval, publish, or send anything.
 - Refresh `library.json` with `yarn test -u src/lib/chat/skills` in `web/`

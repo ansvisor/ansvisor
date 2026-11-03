@@ -13,7 +13,7 @@ import { planFactsFromOrgRow, type PlanFacts } from '../plan-facts';
 import { parseTeamRole } from '../precedence';
 import { SHORTCUT_IDS } from '../shortcuts';
 import { MAX_BYTES, MAX_DESCRIPTION, MAX_NAME, checkSkillFile } from './format';
-import { SKILL_LIBRARY, enabledSkills } from './library';
+import { SKILL_LIBRARY, enabledSkills, type SkillFilter } from './library';
 
 /**
  * A workspace's own skills (CHAT-13 items 10, 12, 18–19; Chat Wave 3
@@ -505,6 +505,8 @@ export interface LibrarySkillView {
   name: string;
   title: string;
   description: string;
+  /** The Skills page's filter chips it shows under (W3-07). */
+  filters: SkillFilter[];
   /** Off when the workspace turned it off. */
   enabled: boolean;
 }
@@ -602,6 +604,7 @@ export async function listSkills(viewer: SkillViewer): Promise<SkillList> {
       name: skill.name,
       title: skill.title,
       description: skill.description,
+      filters: [...skill.filters],
       enabled: !disabled.has(skill.name),
     })),
     skills: ((rows.data ?? []) as ListRow[])
