@@ -82,7 +82,10 @@ export function RunSteps({
     end = t('stepsClock', { steps: count, clock: runClock(workingMs) });
   } else if (single) {
     title = single.detail ? `${single.label} · ${single.detail}` : single.label;
-    end = single.rowCount !== undefined ? t('rows', { count: single.rowCount }) : '';
+    end =
+      single.rowCount !== undefined
+        ? t(single.scope?.unit === 'items' ? 'items' : 'rows', { count: single.rowCount })
+        : '';
   } else if (status === 'done') {
     title = t('workedFor', { duration });
     end = sources > 0 ? t('stepsSources', { steps: count, sources }) : t('steps', { count });

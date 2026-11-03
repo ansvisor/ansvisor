@@ -150,6 +150,16 @@ export interface RunProgress {
   fromTaintedMove?: boolean;
   /** Question cards asked so far (CHAT-07 §B: at most 4 a run). */
   asks?: number;
+  /**
+   * A run a scheduled job started (CHAT-12 item 11), not a person's message
+   * in the job's chat: nobody watches it, and it is metered as the job's.
+   */
+  scheduled?: boolean;
+  /**
+   * The Recommended options a scheduled job's run took for nobody watching
+   * (CHAT-12 item 12): listed at the top of its answer.
+   */
+  assumptions?: string[];
   /** Why did it move analyses kept so far: the next one's card is n = whys + 1. */
   whys?: number;
   /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */

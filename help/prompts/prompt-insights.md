@@ -4,8 +4,8 @@ route: /dashboard/prompts/insights
 keywords: [prompt insights, analyze volumes, refresh volumes, intent, similar topics, high opportunity prompts]
 synonyms: [prompt volume, search demand, keyword volume, volume analysis]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-01
+last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -29,7 +29,7 @@ On plans with a monthly analysis limit, each analysis counts against it, and the
 For analyzed prompts you see:
 
 - **Prompts Analyzed**, with how many keywords they cover, and **Total Est. AI Volume** and **Avg. AI Volume** across your prompts.
-- Two **Prompt Volumes** cards: a chart of the total by answer engine, and a table with each prompt's **Google Vol.** and **Est. AI Vol.**
+- Two **Prompt Volumes** cards: a chart of the total by answer engine, and a table with each prompt's **Google Vol. (head terms)** and **Est. AI Vol.**
 - Each prompt's **Intent**: Comparison, How-to, What is, Best / Top, vs. / Review, Recommendation, Problem Solving or Other.
 - **High Opportunity Prompts**: the prompts with the most estimated AI searches. A low-confidence estimate isn't listed there on its own.
 - **Similar Topics**: the most-searched keyword clusters across your prompts. **See all** opens its own page.
