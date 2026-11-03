@@ -407,7 +407,8 @@ export function EditorSidePanel({
           ))}
         </TabsList>
       </Tabs>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      {/* The panel's own scroll: a part shown in it scrolls here, never the page (scrollInPanel). */}
+      <div data-panel-scroll className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
         <div hidden={tab !== 'instructions'} className="space-y-4">
           <DataNote />
           <div
