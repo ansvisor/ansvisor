@@ -37,6 +37,10 @@ describe('asksForLanguage', () => {
       'Neden düştük? In English please.',
       'In German: why did we drop on Perplexity this week?',
       'Summarize this week for my boss in French.',
+      'Can you explain this in Turkish?',
+      'Answer in German only.',
+      'Neden düştük? In English.',
+      'FRANSIZCA cevap ver.',
     ]) {
       expect(asksForLanguage(asked), asked).toBe(true);
     }
@@ -51,6 +55,13 @@ describe('asksForLanguage', () => {
       'Why did we drop in Spanish answers this week?',
       'Explain why we dropped in German answers this week.',
       'Why did we drop in Spanish?',
+      'Can you tell me why we dropped in Spanish?',
+      'Explain why we dropped in German.',
+      'Tell me why we dropped in German and French prompts.',
+      'Give me the visibility in German for CRM prompts.',
+      'Explain how we rank in Spanish this week',
+      'How many German only prompts do we track?',
+      'Show the prompts we track in German.',
     ]) {
       expect(asksForLanguage(question), question).toBe(false);
     }
@@ -68,6 +79,9 @@ describe('languageLine', () => {
     );
     expect(languageLine('İngilizce bir blog yazısı yaz: neden AI görünürlüğü önemli?')).toBe(
       'The person asked for the answer in English: answer in English.',
+    );
+    expect(languageLine('FRANSIZCA cevap ver.')).toBe(
+      'The person asked for the answer in French: answer in French.',
     );
     expect(languageLine('Schreib es auf Deutsch, bitte.')).toBe(
       'The person asked for the answer in German: answer in German.',

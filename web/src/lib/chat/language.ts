@@ -252,39 +252,55 @@ const NAMES: Record<Language, readonly string[]> = {
   nl: ['dutch', 'nederlands', 'felemenkçe'],
 };
 
+/** Turkish's dotless ı is I in capitals ("FRANSIZCA"), which a case-blind match and toLowerCase both miss. */
+const fold = (name: string) => name.toLowerCase().replace(/ı/g, 'i');
 const NAMED = new Map(
   (Object.keys(NAMES) as Language[]).flatMap((language) =>
-    NAMES[language].map((name) => [name, language] as const),
+    NAMES[language].map((name) => [fold(name), language] as const),
   ),
 );
-const L = `(${[...NAMED.keys()].join('|')})`;
-/** After "in <language>": the end, a mark, or a word that doesn't make the language a noun's ("in German prompts"). */
-const ENDS = String.raw`(?=\s*(?:$|[.,;:!?)]|(?:please|only|instead|too|and|about|for|with|so|rather|this|that|the|a|an|but|if|using)\b))`;
+const L = `(${(Object.values(NAMES) as string[][])
+  .flat()
+  .map((name) => name.replace(/ı/g, '[ıi]'))
+  .join('|')})`;
+/**
+ * After an answer verb's "in <language>": the end, a mark, or a word that
+ * only shapes the ask. "the", "for", "and" and the like go on to make the
+ * language a qualifier ("in German for CRM prompts", "in German and French
+ * prompts", "in Spanish this week").
+ */
+const ENDS = String.raw`(?=\s*(?:$|[.;:!?)]|,\s*(?:please|thanks|thank)\b|(?:please|only|instead|too|rather)\b))`;
+/**
+ * The words between an answer verb and "in <language>": the answer's object
+ * ("the summary for my team"), never a clause of its own ("me why we
+ * dropped", "how we rank"), which the language then belongs to.
+ */
+const OBJECT = String.raw`(?:\s+(?!(?:why|how|what|where|when|which|who|whom|whose|whether|if|we|they|i|you|he|she|our|their|us|them|do|does|did|is|are|was|were|has|have|had|can|could|will|would)\b)\S+){0,6}?`;
 
 /**
  * The person asks for the answer in a language they name ("answer in
  * English", "İngilizce cevap ver", "İngilizce bir blog yazısı yaz", "auf
  * Deutsch"): that language, whatever they wrote in (owner, 2026-11-03).
  * Naming one in passing ("why do Turkish users search less?", "how visible
- * are we in German prompts?", "why did we drop in Spanish?") isn't asking:
- * "in <language>" asks only after an answer verb, before "please" or
- * "only", at the very start, or as the last words of a message that isn't
- * a question.
+ * are we in German prompts?", "can you tell me why we dropped in Spanish?",
+ * "how many German only prompts do we track?") isn't asking: "in <language>"
+ * asks only after an answer verb and its object, before "please" or
+ * "instead", or on its own at the start or end of the message.
  */
 const ASKS_FOR_LANGUAGE = [
   new RegExp(
-    String.raw`\b(?:answer|answers|respond|response|reply|write|rewrite|translate|say|explain|summari[sz]e|tell|describe|draft|put|give)\b(?:\s+\S+){0,6}?\s+(?:in|into)\s+${L}${ENDS}`,
+    String.raw`\b(?:answer|answers|respond|response|reply|write|rewrite|translate|say|explain|summari[sz]e|summary|tell|describe|draft|put)\b${OBJECT}\s+(?:in|into)\s+${L}${ENDS}`,
     'i',
   ),
-  new RegExp(String.raw`\b(?:in|into)\s+${L}\s*,?\s+(?:please|only|instead)\b`, 'i'),
+  new RegExp(String.raw`\b(?:in|into)\s+${L}\s*,?\s+(?:please|instead)\b`, 'i'),
   new RegExp(String.raw`^\s*in\s+${L}\s*[,:]`, 'i'),
-  new RegExp(String.raw`\bin\s+${L}\s*[.!]*\s*$`, 'i'),
+  new RegExp(String.raw`(?:^|[.!?:;,]\s*)in\s+${L}\s*[.!]*\s*$`, 'i'),
   new RegExp(String.raw`\b(?:auf|en)\s+${L}`, 'i'),
   new RegExp(
     String.raw`${L}(?:\s+\S+){0,3}?\s+(?:cevap|yanıt|yaz|anlat|çevir|olarak|version|translation)`,
     'i',
   ),
-  new RegExp(String.raw`${L}\s*,?\s+(?:please|only)\b`, 'i'),
+  new RegExp(String.raw`${L}\s*,?\s+please\b`, 'i'),
 ];
 
 /** The language a question asks the answer to be in, by name; null when it asks for none. Turkish's İ folds to i. */
@@ -292,7 +308,8 @@ export function askedLanguage(question: string): Language | null {
   const text = question.replace(/İ/g, 'i');
   for (const pattern of ASKS_FOR_LANGUAGE) {
     const name = pattern.exec(text)?.[1];
-    if (name) return NAMED.get(name.toLowerCase()) ?? null;
+    const language = name ? NAMED.get(fold(name)) : undefined;
+    if (language) return language;
   }
   return null;
 }
