@@ -498,7 +498,8 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     const started = await startChatRun(message, brandId ?? null, { shortcutId });
     if (!started.ok) {
       setStarting(false);
-      if (started.code === 'subscription_inactive') openUpgrade();
+      // A read-only workspace, or a chat on the demo brand: the plans.
+      if (started.code === 'subscription_inactive' || started.code === 'demo_brand') openUpgrade();
       else toast.error(started.error ?? t('startFailed'));
       return;
     }

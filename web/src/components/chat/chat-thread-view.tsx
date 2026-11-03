@@ -434,7 +434,8 @@ export function ChatThreadView({
         code?: string;
       } | null;
       setTurns((all) => all.filter((turn) => turn.key !== answerKey && turn.key !== questionKey));
-      if (body?.code === 'subscription_inactive') openUpgrade();
+      // A read-only workspace, or a chat on the demo brand: the plans.
+      if (body?.code === 'subscription_inactive' || body?.code === 'demo_brand') openUpgrade();
       else toast.error(body?.error ?? t('sendFailed'));
       return false;
     }
