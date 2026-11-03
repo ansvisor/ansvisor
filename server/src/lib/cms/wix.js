@@ -386,3 +386,23 @@ export async function publishDraftPost(siteId, apiKey, id, { request, base } = {
   if (!after) throw new WixError('not_found', 'Wix has no such post.');
   return after;
 }
+
+/**
+ * Takes a published post down (AUTONOMOUS-GO-LIVE PR 10): Wix reverts it to
+ * a draft post (UPDATE_REVERT_TO_DRAFT), so it leaves the blog; its content
+ * stays. The draft post after it.
+ */
+export async function revertToDraft(siteId, apiKey, id, { request, base } = {}) {
+  const path = postPath(id);
+  if (!path) throw new WixError('not_found', 'Wix has no such post.');
+  return draftOf(
+    await call(`/blog/v3/draft-posts/${path}`, {
+      siteId,
+      apiKey,
+      method: 'PATCH',
+      body: { draftPost: { id: path }, action: 'UPDATE_REVERT_TO_DRAFT' },
+      request,
+      base,
+    }),
+  );
+}

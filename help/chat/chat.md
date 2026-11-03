@@ -117,6 +117,8 @@ A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. 
 
 Sending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat.
 
+To take a published page back down to a draft in its CMS, ask Chat, or click **Take down** on its row in **Activity** for 30 days. It always waits for your click, and Managers can do it even when publishing is off for them.
+
 ## Open a web page
 
 Chat can open a public web page you name, such as a page of your site, a competitor's, or one AI answers cite. It reads the page's title, description, headings, structured data and main text, and the step says "Opened acme.com/pricing", or why a page couldn't be opened.

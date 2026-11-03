@@ -3512,6 +3512,10 @@
     "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
     "publishToCms": { "name": "Publish pages on your site", "step": "Published page on your site" },
+    "takeDownFromCms": {
+      "name": "Take pages down from your site",
+      "step": "Took page down from your site"
+    },
     "makeReport": { "name": "Make reports", "step": "Made report" },
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
     "webPage": { "name": "Open web pages", "step": "Open page" },
@@ -3869,6 +3873,7 @@
       "copied": "The page repeats a long passage from a page it read.",
       "foreign_link": "The page links to {host}, which isn’t your site or one of its sources.",
       "live_page": "The page is live already: an update stays your click.",
+      "taken_down": "Someone took this page down before.",
       "quality_off": "Content Quality is off, so the page can’t be checked.",
       "quality_unread": "The page’s Quality couldn’t be read in full.",
       "quality_unread_cap": "The page’s Quality needs AI checks, and this run reached its limit.",
@@ -4733,6 +4738,7 @@
         "published": "{agent} published “{title}” on {site}",
         "wentLiveDetail": "On its own, after Quality and your brand facts",
         "publishedDetail": "Live on {site} · on its own, after Quality and your brand facts",
+        "takenDown": "Taken down · a draft in {cms} again",
         "openPage": "Open page",
         "openRun": "Open run",
         "goLiveOff": "{agent} no longer publishes on its own",
@@ -5494,6 +5500,7 @@
       "reviseDraftUndo": "Put the draft “{title}” back as it was",
       "sendToCms": "Sent the draft “{title}” to {cms}",
       "publishToCms": "Published the page “{title}” through {cms}",
+      "takeDownFromCms": "Took the page “{title}” down from {cms}",
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
@@ -7359,6 +7366,17 @@
       "cancel": "Cancel",
       "save": "Mark published"
     },
+    "takeDown": {
+      "action": "Take down",
+      "title": "Take down “{title}”?",
+      "body": "It leaves {site} now and goes back to a draft in {cms}. Links to it, and AI answers that cited it, may still point to it for a while.",
+      "keep": "Keep it live",
+      "confirm": "Take down",
+      "working": "Taking down…",
+      "done": "Taken down. It’s a draft in {cms} again.",
+      "doneShort": "Taken down",
+      "failed": "The page couldn’t be taken down. Try again."
+    },
     "plan": {
       "title": "Content plan",
       "description": "What to create, optimize or protect next.",
@@ -7634,13 +7652,15 @@
         "forbidden": "Only admins and managers can archive or delete content.",
         "newerDraft": "A newer draft does this task's work. Archive or delete it first, then restore this one.",
         "sendToCms": "Send to CMS",
-        "sendFailed": "Couldn't open the page to send. Try again."
+        "sendFailed": "Couldn't open the page to send. Try again.",
+        "takeDown": "Take down"
       },
       "cms": {
         "queued": "Sending to your CMS since {when}",
         "sent": "Sent to your CMS {when}",
         "failed": "The last send to your CMS failed, {when}",
         "published": "Published {when}",
+        "taken_down": "Taken down {when}",
         "openLive": "Published {when}: open the live page in a new tab",
         "answered": "The webhook answered {status}.",
         "onItsOwn": "Sent by {agent} · on its own",
@@ -7649,19 +7669,22 @@
           "queued": "Sending to Webflow since {when}",
           "sent": "In Webflow as a draft item since {when}",
           "failed": "The last send to Webflow failed, {when}",
-          "published": "Published {when}"
+          "published": "Published {when}",
+          "taken_down": "Taken down {when}: a draft item in Webflow again"
         },
         "wordpress": {
           "queued": "Sending to WordPress since {when}",
           "sent": "In WordPress as a draft post since {when}",
           "failed": "The last send to WordPress failed, {when}",
-          "published": "Published {when}"
+          "published": "Published {when}",
+          "taken_down": "Taken down {when}: a draft post in WordPress again"
         },
         "wix": {
           "queued": "Sending to Wix since {when}",
           "sent": "In Wix as a draft post since {when}",
           "failed": "The last send to Wix failed, {when}",
-          "published": "Published {when}"
+          "published": "Published {when}",
+          "taken_down": "Taken down {when}: a draft post in Wix again"
         },
         "framer": {
           "queued": "Sending to Framer since {when}",
@@ -8830,6 +8853,7 @@
         "failed": "Couldn't export the page. Try again."
       },
       "sentChip": {
+        "takenDown": "Taken down",
         "webflow": {
           "queued": "Sending to Webflow…",
           "sent": "In Webflow · draft",

@@ -839,7 +839,7 @@
         },
         {
           "heading": "When an agent sends a page on its own",
-          "text": "Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. The notice leaves Needs you once you open it. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.\n\nWhen an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves."
+          "text": "Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. A published page's notice also has **Take down**, for Admins and Managers. The notice leaves Needs you once you open it. A page someone took down never goes live on its own again. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.\n\nWhen an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves."
         },
         {
           "heading": "On your own AI key",
@@ -1070,7 +1070,7 @@
         },
         {
           "heading": "Send or publish a page from Chat",
-          "text": "A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. A live page, or a send to your webhook, goes from the Content Editor.\n\nSending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat."
+          "text": "A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. A live page, or a send to your webhook, goes from the Content Editor.\n\nSending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat.\n\nTo take a published page back down to a draft in its CMS, ask Chat, or click **Take down** on its row in **Activity** for 30 days. It always waits for your click, and Managers can do it even when publishing is off for them."
         },
         {
           "heading": "Open a web page",
@@ -2275,7 +2275,9 @@
         "last send",
         "qualified reviewer",
         "reviewer metadata",
-        "reviewed by"
+        "reviewed by",
+        "take down",
+        "unpublish"
       ],
       "synonyms": [
         "push to cms",
@@ -2286,11 +2288,11 @@
         "reviewer field"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-02",
       "sections": [
         {
           "heading": null,
-          "text": "**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Ansvisor never publishes on its own: you publish in your CMS. Only admins and managers can send pages."
+          "text": "**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Send to CMS never publishes: you publish in your CMS. Only admins and managers can send pages."
         },
         {
           "heading": "Send one page",
@@ -2310,11 +2312,15 @@
         },
         {
           "heading": "See how a send went",
-          "text": "Beside each row's status, the Library shows the last send: a clock while it's on its way, a paper plane once it's sent, a red warning when it failed (hover it to see why), and a blue link once it's published (click it to open the live page).\n\nThe **Last send** filter beside **Created** lists the pages that were **Never sent**, **Sending**, **Sent**, **Failed** or **Published**. A send to your workflow isn't retried on its own: send a failed page again from the Library."
+          "text": "Beside each row's status, the Library shows the last send: a clock while it's on its way, a paper plane once it's sent, a red warning when it failed (hover it to see why), a blue link once it's published (click it to open the live page), and a crossed-out cloud once it was taken down.\n\nThe **Last send** filter beside **Created** lists the pages that were **Never sent**, **Sending**, **Sent**, **Failed** or **Published**; a page taken down counts as **Sent**. A send to your workflow isn't retried on its own: send a failed page again from the Library."
         },
         {
           "heading": "When a page becomes Published",
           "text": "Once you publish the item in Webflow or Framer, or the post in WordPress or Wix, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one."
+        },
+        {
+          "heading": "Take a published page down",
+          "text": "A page published through Ansvisor in Webflow, WordPress or Wix can be taken down: pick **Take down** in its row's **…** menu. It leaves your site at once and goes back to a draft in your CMS, and the Library shows **Taken down** beside its status. Links to it, and AI answers that cited it, may still point to it for a while.\n\nAdmins and managers can take a page down, even when publishing is off for managers. A page someone took down never goes live on its own again: an agent's next publish of it waits for a click. Framer publishes the whole site, and a send to your workflow is your workflow's: take those down there."
         },
         {
           "heading": "Sending a page again",

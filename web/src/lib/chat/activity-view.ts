@@ -46,6 +46,16 @@ export interface ActivityRow {
   status: 'done' | 'undone' | 'undo_conflict';
   canUndo: boolean;
   undoneAt: string | null;
+  /**
+   * A page this row published, still live, an Admin or a Manager may take
+   * down from here for 30 days (AUTONOMOUS-GO-LIVE §6.4, PR 10); else null.
+   */
+  takeDown: {
+    draftId: string;
+    title: string;
+    url: string | null;
+    target: 'webflow' | 'wordpress' | 'wix';
+  } | null;
 }
 
 /** How a row ran, as the Approval column says it. */

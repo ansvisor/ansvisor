@@ -3517,6 +3517,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'update_draft',
     'push_cms_draft',
     'publish_cms',
+    'unpublish_cms',
     'build_report',
     'run_site_audit',
   ];
@@ -5785,6 +5786,7 @@ describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
     page: 'ready',
     text: { hold: null },
     liveItem: false,
+    takenDown: false,
     gate: { pass: true, scores: { eeat: 81, trust: 80, readability: 79, average: 80 } },
     usage: { used: 1, counted: false, nextAt: '2026-11-02T15:30:00.000Z' },
   };
