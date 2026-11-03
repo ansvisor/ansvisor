@@ -273,6 +273,44 @@ describe('ScheduleDetail', () => {
     expect(container.textContent).not.toContain('$');
   });
 
+  it('saves a title edit of a one-time job whose time passed, until When is changed', async () => {
+    const past = {
+      ...JOB,
+      kind: 'once' as const,
+      when: {
+        kind: 'once' as const,
+        runMode: 'run_at' as const,
+        dueAt: '2026-10-30T06:00:00.000Z',
+      },
+      nextRunAt: null,
+      dueAt: '2026-10-30T06:00:00.000Z',
+    };
+    actions.updateChatSchedule.mockClear();
+    actions.getChatSchedule.mockResolvedValue({ job: past, runs: [] });
+    await render(<ScheduleDetail initial={{ job: past, runs: [] }} now={NOW} />);
+    const when = $('[data-action="schedule.when"]') as HTMLInputElement;
+    const kept = when.value;
+    expect(when.getAttribute('aria-invalid')).toBeNull();
+    const title = $('[data-action="schedule.title"]') as HTMLInputElement;
+    const type = async (el: HTMLInputElement, value: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, value);
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    await type(title, 'Launch recap');
+    const save = $('[data-action="schedule.save"]') as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    await click(save);
+    expect(actions.updateChatSchedule).toHaveBeenCalledWith(
+      JOB.id,
+      expect.objectContaining({ title: 'Launch recap', when: kept }),
+    );
+    // A When typed to another past time is still refused.
+    await type(when, '29 Oct 2026 at 09:00');
+    expect(when.getAttribute('aria-invalid')).toBe('true');
+    expect(($('[data-action="schedule.save"]') as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('lets an Admin switch or delete a teammate’s job, not edit it', async () => {
     const theirs = { ...JOB, mine: false, canEdit: false, chatHref: null };
     await render(<ScheduleDetail initial={{ job: theirs, runs: [] }} now={NOW} />);

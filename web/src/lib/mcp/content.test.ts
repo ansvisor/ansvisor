@@ -48,8 +48,12 @@ vi.mock('@/lib/supabase/admin', () => ({
   },
 }));
 
-const brandInOrg = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/mcp/data', () => ({ brandInOrg }));
+const brandAllowed = vi.hoisted(() => vi.fn());
+// A draft's brand is checked as the tools check it: the key owner's access (BRAND-ACCESS).
+vi.mock('@/lib/mcp/data', async (importOriginal) => ({
+  brandAllowed,
+  mayUseBrand: (await importOriginal<typeof import('@/lib/mcp/data')>()).mayUseBrand,
+}));
 
 const {
   createContentDraftFor,
@@ -65,6 +69,7 @@ const auth: McpAuthContext = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'key-1',
+  brandAccess: 'all',
   role: 'admin',
 };
 
@@ -96,7 +101,7 @@ beforeEach(() => {
   db.selects = [];
   db.writes = [];
   db.filters = [];
-  brandInOrg.mockReset().mockResolvedValue(true);
+  brandAllowed.mockReset().mockResolvedValue(true);
 });
 
 describe('getContentDraftFor', () => {
@@ -208,7 +213,7 @@ describe('createContentDraftFor', () => {
   });
 
   it('writes nothing for a brand outside the organization', async () => {
-    brandInOrg.mockResolvedValue(false);
+    brandAllowed.mockResolvedValue(false);
     await expect(
       createContentDraftFor(auth, {
         brandId: 'b9',
@@ -332,6 +337,25 @@ describe('suggestContentChangesFor', () => {
       ]),
     ).resolves.toBe('published');
     expect(db.writes).toEqual([]);
+  });
+});
+
+describe('a draft of a brand the key owner may not use', () => {
+  it('reads as not found, and nothing is written', async () => {
+    db.rows.content_drafts = draftRow();
+    db.rows.actions = { payload: {} };
+    db.rows.action_tasks = [{ id: 't-optimize', status: 'in_progress' }];
+    const selected: McpAuthContext = { ...auth, role: 'manager', brandAccess: ['b2'] };
+    await expect(getContentDraftFor(selected, 'd1')).resolves.toBeNull();
+    await expect(getContentImpactFor(selected, 'd1', 30)).resolves.toBeNull();
+    await expect(setContentDraftReadyFor(selected, 'd1')).resolves.toBeNull();
+    expect(db.writes).toEqual([]);
+    expect(db.rpcCalls).toEqual([]);
+
+    // Shared with them, it reads as before.
+    await expect(
+      getContentDraftFor({ ...selected, brandAccess: ['b1'] }, 'd1'),
+    ).resolves.toMatchObject({ id: 'd1' });
   });
 });
 

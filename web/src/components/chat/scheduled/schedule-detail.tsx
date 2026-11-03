@@ -79,10 +79,14 @@ export function ScheduleDetail({
     () => whenHint(when, job.timezone, now, tWhen),
     [when, job.timezone, now, tWhen],
   );
+  // A When left as it was keeps the job's timing (the server doesn't read it
+  // again), so a one-time job whose time passed still saves its other edits.
+  const kept =
+    job.when !== null && when.trim() === whenPhrase(job.when, job.timezone) && !reading.ok;
   const upcoming = reading.ok ? nextRuns(reading.when, job.timezone, now, 3) : [];
   const recurring = reading.ok && reading.when.kind === 'recurring';
   const editable = job.canEdit;
-  const blocked = !title.trim() || !reading.ok || (!prompt.trim() && !job.skill);
+  const blocked = !title.trim() || !(reading.ok || kept) || (!prompt.trim() && !job.skill);
 
   const reload = async () => {
     const next = await getChatSchedule(job.id).catch(() => null);
@@ -185,15 +189,15 @@ export function ScheduleDetail({
           <Field
             id="schedule-when"
             label={tDetail('when')}
-            hint={hint.hint}
-            problem={editable && !hint.ok}
+            hint={kept ? undefined : hint.hint}
+            problem={editable && !hint.ok && !kept}
           >
             <Input
               id="schedule-when"
               data-action="schedule.when"
               value={when}
               disabled={!editable || busy}
-              aria-invalid={(editable && !hint.ok) || undefined}
+              aria-invalid={(editable && !hint.ok && !kept) || undefined}
               onChange={(e) => setWhen(e.target.value)}
               className="text-[13px]"
             />

@@ -768,3 +768,21 @@ describe('Run now (W3-03, CHAT-12 item 23)', () => {
     });
   });
 });
+
+describe('settling a Run now', () => {
+  it('neither retries a failed Run now nor counts it toward the job’s failed runs', async () => {
+    seedJob({ fail_count: 2 });
+    expect(await worker.runJobNow(JOB, NOW, driver)).toEqual({ kind: 'started' });
+    chatEnds(runsOf()[0].id, 'error');
+    expect(await worker.settleScheduleRun(runsOf()[0].id as string, { now: minutes(1) })).toBe(
+      'failed',
+    );
+    expect(jobRow()).toMatchObject({
+      enabled: true,
+      paused_reason: null,
+      fail_count: 2,
+      retry_at: null,
+      next_run_at: SLOT,
+    });
+  });
+});

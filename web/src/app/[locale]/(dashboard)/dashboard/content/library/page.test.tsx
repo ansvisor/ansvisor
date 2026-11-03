@@ -36,7 +36,7 @@ const chat = vi.hoisted(() => ({ on: false }));
 vi.mock('@/components/providers/chat-agentic-provider', () => ({ useChatAgentic: () => chat.on }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
 // Start's Team: its assignee picker reads the team, and the sent task is assigned.
-vi.mock('@/lib/actions/team', () => ({ listMembers: vi.fn(async () => []) }));
+vi.mock('@/lib/actions/team', () => ({ listBrandMembers: vi.fn(async () => []) }));
 vi.mock('@/lib/actions/action-center', () => ({ assignAction: vi.fn() }));
 const push = vi.fn();
 vi.mock('@/i18n/navigation', () => ({
@@ -505,6 +505,9 @@ describe('Send to CMS from a Library row (#1331)', () => {
           reviewerId: null,
           authorConfirmed: false,
           language: null,
+          pageType: null,
+          isNew: false,
+          schemaLeftOut: false,
         },
       ],
       rest: [],
@@ -937,6 +940,9 @@ describe('Send to CMS from a Library row (#1331)', () => {
             authorId: null,
             authorConfirmed: false,
             language: null,
+            pageType: null,
+            isNew: false,
+            schemaLeftOut: false,
           },
         ],
         rest: [],

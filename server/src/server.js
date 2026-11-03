@@ -30,6 +30,7 @@ import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
 import internalChatNoticesRoutes from './routes/internal-chat-notices.js';
 import internalChatSchedulesRoutes from './routes/internal-chat-schedules.js';
 import internalChatPagesRoutes from './routes/internal-chat-pages.js';
+import internalChatGoLiveRoutes from './routes/internal-chat-go-live.js';
 import { pruneBotEvents } from './lib/bot-ingest.js';
 import { pruneContentVersions } from './lib/content-history.js';
 import { pruneLlmVerdicts } from './lib/audit/llm-verdicts.js';
@@ -40,6 +41,7 @@ import {
   cleanupStalePendingTasks,
 } from './lib/job-manager.js';
 import { runTrackingJob, recoverWaitingJobs } from './lib/job-runner.js';
+import { joinPersonRoom } from './lib/socket-rooms.js';
 import { listDailyTrackingBrands } from './lib/tracking-brands.js';
 import { rebuildQueuedInsightsRollups, sweepInsightsRollups } from './lib/insights-rollups.js';
 import { rebuildQueuedCitationRollups, REBUILD_QUEUE_SCHEDULE } from './lib/citations-rollups.js';
@@ -168,6 +170,9 @@ io.use((socket, next) => Middleware.decodeTokenForSocket(socket, next));
 
 io.on('connection', (socket) => {
   logger.debug({ socketId: socket.id, userId: socket.user?.id }, 'socket connected');
+  // Its person's room only: job events go to the people who may reach the
+  // brand (lib/socket-rooms.js), never to every client.
+  joinPersonRoom(socket);
 
   socket.on('disconnect', () => {
     logger.debug({ socketId: socket.id }, 'socket disconnected');
@@ -668,6 +673,12 @@ app.use('/api/internal/chat/schedules', internalChatSchedulesRoutes);
 // fetch_page (CHAT-10 §B): a public page opened through safe-fetch's rules and
 // read on the server; only what Chat reads of it goes back (routes/internal-chat-pages.js).
 app.use('/api/internal/chat/pages', internalChatPagesRoutes);
+
+// --- Internal Chat go-live (CRON_SECRET auth, called by the web's Chat engine) ---
+// An agent's going-live step on its own (AUTONOMOUS-GO-LIVE §5.4): every
+// condition checked again here, then the page sent as the run's person
+// (routes/internal-chat-go-live.js).
+app.use('/api/internal/chat/go-live', internalChatGoLiveRoutes);
 
 // --- Internal Improve send endpoint (CRON_SECRET auth, called by web MCP layer) ---
 // The web MCP layer verifies the caller's `ans_` API key org owns the prompt

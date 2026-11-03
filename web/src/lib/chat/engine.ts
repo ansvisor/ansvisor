@@ -4,6 +4,7 @@ import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
 import type { AiProvider } from '@/lib/agent/providers';
+import { hasBrandAccess } from '@/lib/brand-access';
 import { searchHelp } from '@/lib/help/search';
 import { platformName } from '@/lib/signals/names';
 import { SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
@@ -90,7 +91,10 @@ import {
   allowedTools,
   decideOrDeny,
   decideToolCall,
+  goLiveCandidate,
   listingDenial,
+  type ChatMode,
+  type GoLiveHold,
   type PrecedenceContext,
   type ToolCall,
   type ToolDecision,
@@ -108,11 +112,23 @@ import {
   type PageSites,
 } from './page-sites';
 import { readBrandIsDemo, readPrecedenceContext, readToolCall } from './precedence-context';
+import {
+  noteTouchedBrands,
+  referenceTouches,
+  startTouchedBrands,
+  touchedByCall,
+  type TouchedBrands,
+} from './touched-brands';
 import type { ExplainChangeOutput } from '@/lib/mcp/why';
 import { stepPrompt, todayLine } from './prompt';
 import { INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
 import { whyView } from './why/view';
-import { batchSize, type ChatTool, type ChatToolContext } from './registry/define-tool';
+import {
+  batchSize,
+  runsWithoutSession,
+  type ChatTool,
+  type ChatToolContext,
+} from './registry/define-tool';
 import { CHAT_TOOLS, chatTool, chatToolByKey } from './registry/tools';
 import { abortDriver, publishRunEnd, registerDriver, unregisterDriver } from './run-hub';
 import {
@@ -142,8 +158,11 @@ import {
   type CachedRead,
 } from './tool-cache';
 import { dataBlock, guardData, isUntrustedRead } from './untrusted';
+import { keepShingles, textsOf } from './go-live-checks';
+import { readGoLiveFacts, type GoLivePage } from './go-live-facts';
+import { reserveGoLive } from './go-live-send';
 import { undoRule } from './undo';
-import { runLoggedWrite } from './write';
+import { runLoggedWrite, type WriteRequest } from './write';
 import { fileChatOutput } from './file-output';
 import { originPageSchema } from './origin';
 import { CHAT_REFERENCE_TYPES, MAX_REFERENCES } from './references';
@@ -156,6 +175,7 @@ import {
   startAction,
   weekEndIn,
 } from './task-strip';
+import { messageShortcut, playbookPlanNote, playbookTools } from './shortcut-playbooks';
 import {
   PARTS_RULE,
   PARTS_TOOL,
@@ -167,7 +187,6 @@ import {
   partsToolInput,
   personPresent,
 } from './partial-limit';
-import { messageShortcut, playbookPlanNote, playbookTools } from './shortcut-playbooks';
 import {
   MAX_SKILL_BODIES,
   USE_SKILL_TOOL,
@@ -629,6 +648,10 @@ export async function startChatRun(
     if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
     if (!data) return failure(404, 'not_found', t('error.notFound'));
     brandId = (data as { brand_id: string | null }).brand_id;
+    // A chat about a brand the person can no longer use is hidden, and kept (BRAND-ACCESS §9 Q4).
+    if (brandId && !hasBrandAccess(ctx.brandAccess, brandId)) {
+      return failure(404, 'not_found', t('error.notFound'));
+    }
     earlier = await readEarlierRuns(conversationId, input.message);
     fromRun = input.fromRunId ? await fromTaintedRun(conversationId, input.fromRunId) : false;
   } else {
@@ -640,7 +663,10 @@ export async function startChatRun(
         .eq('organization_id', actor.organizationId)
         .maybeSingle();
       if (error) throw new Error(`Chat could not read the brand: ${error.message}`);
-      if (!data) return failure(404, 'not_found', t('error.notFound'));
+      // A brand of the workspace the person can't use is as one that isn't there.
+      if (!data || !hasBrandAccess(ctx.brandAccess, input.brandId)) {
+        return failure(404, 'not_found', t('error.notFound'));
+      }
       brandId = input.brandId;
     }
     conversationId = await insertRow(
@@ -656,6 +682,12 @@ export async function startChatRun(
       },
       'start a chat',
     );
+    // A new chat keeps the brands it touches from here on (00436), before anything is in it.
+    await startTouchedBrands(conversationId);
+  }
+  // What the message references with @ goes in with it: its brands are noted first.
+  if (!(await noteTouchedBrands(conversationId, await referenceTouches(input)))) {
+    throw new Error("Chat could not note the brands of the message's references");
   }
 
   const timezone = validTimezone(input.timezone);
@@ -794,6 +826,8 @@ interface RunContext {
   batchAnswer?: string;
   /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
   agentRunId: string | null;
+  /** The brands this request noted on the chat already (touched-brands.ts); '*': the workspace. */
+  touchedNoted?: Set<string>;
   /**
    * The scheduled job whose run this is (CHAT-12 item 11): its steps are
    * metered as the job's, and nobody watches it (schedule/unattended.ts).
@@ -803,10 +837,15 @@ interface RunContext {
   /**
    * Whose session the request driving the run carries: a change runs as the
    * signed-in person. When it isn't the actor (an agent run nobody's session
-   * is behind), every change asks first (askWithoutSession).
+   * is behind), a change asks first (askWithoutSession), unless its row runs
+   * for its person without one (sessionFree: its runFor makes it).
    */
   sessionUserId: string | null;
 }
+
+/** No session of the run's person is behind it: an agent run on its own, or in another's request. */
+const withoutSession = (rc: Pick<RunContext, 'actor' | 'sessionUserId'>) =>
+  rc.sessionUserId !== rc.actor.userId;
 
 const workedMs = (rc: Pick<RunContext, 'run' | 'segmentStart'>) =>
   rc.run.workingMs + (Date.now() - rc.segmentStart);
@@ -874,8 +913,9 @@ export async function driveRun(
     const fresh = !resume && rc.progress.steps === 0 && rc.progress.modelSteps === 0;
     const typed = fresh ? (await loadShortcut(rc)) + (await loadTypedSkills(rc)) : 0;
     // A skill's run starts only when the AI limit left covers its answer (CHAT-04 item 17a).
-    if (fresh && typed > 0 && (await coveredUnits(rc, 1, { reads: true })) === 0) {
-      return pauseAtCap(rc, 'month');
+    if (fresh && typed > 0) {
+      const covered = await coveredUnits(rc, 1, { reads: true });
+      if (covered.fits === 0) return pauseAtCap(rc, covered.limit);
     }
     if (fresh && typed === 0 && (await helpTurn(rc)) === 'ended') return;
     await modelLoop(rc);
@@ -1921,15 +1961,76 @@ async function handleCalls(
   return 'continue';
 }
 
-/** What a call's precedence context is read with: an injection found in the run asks first (§16a rule 3). */
-const contextFor = (rc: RunContext) =>
+/**
+ * What a call's precedence context is read with: an injection found in the
+ * run asks first (§16a rule 3). `mode`: the run's mode now, for a change
+ * (agentModeNow); the mode it started in otherwise.
+ */
+const contextFor = (rc: RunContext, mode: ChatMode = rc.run.mode) =>
   readPrecedenceContext({
     userId: rc.actor.userId,
     organizationId: rc.actor.organizationId,
-    mode: rc.progress.injection ? 'ask_first' : rc.run.mode,
+    mode: rc.progress.injection ? 'ask_first' : mode,
     surface: 'chat',
     injectionDetected: rc.progress.injection === true,
+    // An agent run's own mode, for going live on its own (step 4b): an injection holds it there.
+    agent: rc.agentRunId ? { runId: rc.agentRunId, mode: rc.run.mode } : null,
   });
+
+const MODE_RANK: Record<ChatMode, number> = { ask_first: 0, auto: 1, full_auto: 2 };
+
+/**
+ * An agent run's mode for a change, read fresh for each one (a run a
+ * trigger started goes on for minutes with no one watching): the mode it
+ * started in, or the agent's own mode now when it was set lower since, and
+ * Ask me first once an Admin turned Full auto off for agents (Settings ›
+ * Chat) under a run that started in it. What can't be read asks first. A
+ * person's own chat keeps its mode: they change it themselves.
+ */
+async function agentModeNow(rc: RunContext): Promise<ChatMode> {
+  const started = rc.run.mode;
+  if (!rc.agentRunId || started === 'ask_first') return started;
+  try {
+    const [run, settings] = await Promise.all([
+      supabaseAdmin
+        .from('chat_agent_runs')
+        .select('agent_id')
+        .eq('id', rc.agentRunId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('chat_settings')
+        .select('agents_full_auto')
+        .eq('organization_id', rc.actor.organizationId)
+        .maybeSingle(),
+    ]);
+    if (run.error) throw new Error(run.error.message);
+    if (settings.error) throw new Error(settings.error.message);
+    if (started === 'full_auto' && settings.data?.agents_full_auto === false) return 'ask_first';
+    const agentId = (run.data as { agent_id: string | null } | null)?.agent_id;
+    if (!agentId) return 'ask_first';
+    const { data: agent, error: agentError } = await supabaseAdmin
+      .from('chat_agents')
+      .select('version')
+      .eq('id', agentId)
+      .eq('organization_id', rc.actor.organizationId)
+      .maybeSingle();
+    if (agentError) throw new Error(agentError.message);
+    if (!agent) return 'ask_first';
+    const { data: version, error: versionError } = await supabaseAdmin
+      .from('chat_agent_versions')
+      .select('mode')
+      .eq('agent_id', agentId)
+      .eq('version', (agent as { version: number }).version)
+      .maybeSingle();
+    if (versionError) throw new Error(versionError.message);
+    const now = CHAT_MODES.find((mode) => mode === (version as { mode?: string } | null)?.mode);
+    if (!now) return 'ask_first';
+    return MODE_RANK[now] < MODE_RANK[started] ? now : started;
+  } catch (err) {
+    console.error("[chat/engine] could not read an agent's mode now:", err);
+    return 'ask_first';
+  }
+}
 
 /** The read that opens a web page (CHAT-10 §B): its own step, words and rules. */
 const PAGE_TOOL = 'fetch_page';
@@ -1987,7 +2088,8 @@ async function runSites(rc: RunContext): Promise<PageSites> {
 
 /** Keeps the sites a read listed in its structured fields, when the run may open pages. */
 function keepReadSites(rc: RunContext, toolName: string, value: unknown) {
-  if (!rc.offered.has(PAGE_TOOL)) return;
+  // An agent's page may link to them too when it goes live on its own (AUTONOMOUS-GO-LIVE §6.3).
+  if (!rc.offered.has(PAGE_TOOL) && !rc.agentRunId) return;
   const found = sitesFromRead(toolName, value);
   if (found.hosts.length + found.domains.length + found.urls.length === 0) return;
   rc.progress.pageSites = joinSites(rc.progress.pageSites ?? NO_SITES, found);
@@ -2005,7 +2107,8 @@ function readRefusal(output: unknown): { code: string; message: string } | null 
 }
 
 async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, unknown>) {
-  const ctx = await contextFor(rc);
+  // A change is decided in the mode the run has now; a read runs in any.
+  const ctx = await contextFor(rc, tool.class === 'read' ? rc.run.mode : await agentModeNow(rc));
   const call: ToolCall = ctx
     ? await readToolCall(
         ctx,
@@ -2017,6 +2120,33 @@ async function callFacts(rc: RunContext, tool: ChatTool, input: Record<string, u
     : { brandId: null, brandIsDemo: false, tainted: false };
   return { ctx, call };
 }
+
+/**
+ * Notes the brands a call touches on its chat (touched-brands.ts), once a
+ * run: false when the note failed, and the call must not run.
+ */
+async function noteCallBrands(
+  rc: RunContext,
+  tool: ChatTool,
+  brandId: string | null,
+  ctx: PrecedenceContext | null,
+): Promise<boolean> {
+  const touched = touchedByCall(tool, brandId, ctx?.brandAccess ?? null);
+  // The chat's own brand is in its set from its start (startTouchedBrands).
+  const noted = (rc.touchedNoted ??= new Set(rc.brand ? [rc.brand.id] : []));
+  const fresh: TouchedBrands =
+    touched === 'workspace'
+      ? noted.has(WHOLE_WORKSPACE)
+        ? []
+        : 'workspace'
+      : touched.filter((id) => !noted.has(id));
+  if (!(await noteTouchedBrands(rc.run.conversationId, fresh))) return false;
+  for (const id of fresh === 'workspace' ? [WHOLE_WORKSPACE] : fresh) noted.add(id);
+  return true;
+}
+
+/** touchedNoted's key for the whole workspace. */
+const WHOLE_WORKSPACE = '*';
 
 /** One call, decided on facts read for it now (CHAT-20 §4 "Role change mid-run"). */
 async function handleCall(
@@ -2064,7 +2194,22 @@ async function handleCall(
   }
 
   const { ctx, call: facts } = await callFacts(rc, tool, input);
-  const decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
+  let decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
+  // What it may read or change is noted on the chat first (BRAND-ACCESS §10, 00436): a shared
+  // chat with no brand then shows only to people who can use every brand it touched.
+  if (decision.kind !== 'deny' && !(await noteCallBrands(rc, tool, facts.brandId, ctx))) {
+    return result(call, { code: 'failed' }, true);
+  }
+  // Step 4b's guards, read for a candidate only, with the page they were read on (its send).
+  let page: GoLivePage | null = null;
+  if (decision.kind === 'click' && ctx && goLiveCandidate(tool, ctx)) {
+    const read = await goLiveFactsOf(rc, tool, input, ctx);
+    if (read) {
+      facts.goLive = read.facts;
+      page = read.page;
+      decision = askWithoutSession(rc, tool, decideForEngine(tool, ctx, facts));
+    }
+  }
   // A change its own check refuses before its card (Send to Action Center's duplicate): no card.
   if (decision.kind !== 'deny' && tool.class !== 'read') {
     const refused = await precheckOf(rc, tool, input, ctx);
@@ -2075,6 +2220,7 @@ async function handleCall(
       return result(call, await deny(rc, tool, ctx, facts, decision.denial, input), true);
     case 'run': {
       if (tool.class === 'read') return readCall(rc, tool, call, input, ctx, facts.brandId);
+      if (decision.via === 'go_live') return goLiveCall(rc, tool, call, input, facts, ctx, page);
       // A change that runs without a card: Always, Full auto or the person's tick.
       const approval = approvalFor(decision);
       if (!approval || approval.kind === 'run') return result(call, { code: 'failed' }, true);
@@ -2091,13 +2237,160 @@ async function handleCall(
  * own, or in another person's request): its tool acts as the signed-in
  * person, so what would run by itself (Full auto, Always, a tick) asks
  * first, with no "Don't ask again". The card waits in the owner's Inbox,
- * and their Approve runs it in their own request.
+ * and their Approve runs it in their own request. A sessionFree row whose
+ * way is open (runsWithoutSession) keeps the precedence's decision, read for
+ * the run's person as any call's is (role, plan, policy, mode): it runs as
+ * them through its runFor (writeCall).
  */
 function askWithoutSession(rc: RunContext, tool: ChatTool, decision: ToolDecision): ToolDecision {
-  if (decision.kind !== 'run' || tool.class === 'read' || rc.sessionUserId === rc.actor.userId) {
+  // Going live on its own needs no session: the API sends it as the run's person (§5.4).
+  if (
+    decision.kind !== 'run' ||
+    decision.via === 'go_live' ||
+    tool.class === 'read' ||
+    !withoutSession(rc) ||
+    runsWithoutSession(tool)
+  ) {
     return decision;
   }
   return { kind: 'ask', reason: 'no_session', offerDontAskAgain: false };
+}
+
+/**
+ * Step 4b's facts for a candidate (AUTONOMOUS-GO-LIVE §6): read in the
+ * guards' order, on the page as it would go out. Null for a row that can't
+ * go live on its own, or outside an agent run.
+ */
+async function goLiveFactsOf(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  ctx: PrecedenceContext,
+) {
+  if (!rc.agentRunId || !tool.goLive) return null;
+  return readGoLiveFacts({
+    ctx,
+    step: tool.goLive(input as never),
+    actingUserId: rc.actor.userId,
+    runId: rc.run.id,
+    agentRunId: rc.agentRunId,
+    progress: rc.progress,
+    runSites: () => runSites(rc),
+  });
+}
+
+/**
+ * A step an allowed agent takes live on its own (AUTONOMOUS-GO-LIVE §5.4,
+ * §6.1): its slot of the agent's daily limit reserved first, at once, then
+ * the page its guards read sent through the API as the run's person (which
+ * checks it all again), logged as gone live on its own. A limit reached
+ * since the check, or a slot that can't be reserved, keeps its click card,
+ * saying why; so does a send that fails (writeCall).
+ */
+async function goLiveCall(
+  rc: RunContext,
+  tool: ChatTool,
+  call: PendingCall,
+  input: Record<string, unknown>,
+  facts: ToolCall,
+  ctx: PrecedenceContext | null,
+  page: GoLivePage | null,
+): Promise<CallOutcome> {
+  const agent = ctx?.agent;
+  const step = tool.goLive?.(input as never);
+  const held = (hold: GoLiveHold) =>
+    openCard(rc, tool, call, input, facts, { kind: 'click', held: hold });
+  if (!ctx || !agent?.goLive || !step || !page || !rc.agentRunId || !facts.brandId) {
+    return held({ code: 'unchecked' });
+  }
+  let reservationId: string | null;
+  try {
+    reservationId = await reserveGoLive({
+      organizationId: rc.actor.organizationId,
+      agentId: agent.id,
+      runId: rc.run.id,
+      agentRunId: rc.agentRunId,
+      brandId: facts.brandId,
+      toolKey: tool.labelKey,
+      step,
+      dailyLimit: agent.goLive.dailyLimit,
+    });
+  } catch (err) {
+    console.error('[chat/engine] could not reserve a go-live slot:', err);
+    return held({ code: 'unchecked' });
+  }
+  if (!reservationId) {
+    return held({
+      code: 'limit',
+      agent: agent.name,
+      limit: agent.goLive.dailyLimit,
+      nextAt: facts.goLive?.usage?.nextAt ?? null,
+    });
+  }
+  return writeCall(rc, tool, call, input, facts, ctx, { kind: 'auto', via: 'go_live' }, null, {
+    agentId: agent.id,
+    reservationId,
+    page,
+  });
+}
+
+/** A clock time in the run's time zone, for a held card's "at {time}". */
+function heldTime(at: string, timezone: string | undefined): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: validTimezone(timezone),
+    weekday: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(at));
+}
+
+/** Why an allowed agent's step waits for a click, in the card's words (§7.3 chatEngine.held). */
+function heldWords(rc: RunContext, held: GoLiveHold): string {
+  let reason: string;
+  switch (held.code) {
+    case 'foreign_link':
+      reason = t('held.foreign_link', { host: held.host });
+      break;
+    case 'quality_unread':
+      reason = t(
+        held.why === 'run_cap'
+          ? 'held.quality_unread_cap'
+          : held.why === 'ai_budget'
+            ? 'held.quality_unread_budget'
+            : 'held.quality_unread',
+      );
+      break;
+    case 'facts':
+      reason = t('held.facts', { page: held.page, fact: held.fact });
+      break;
+    case 'qualityLow':
+      reason = t('held.qualityLow', { check: t(`held.checks.${held.check}`), score: held.score });
+      break;
+    case 'quality':
+      reason = t('held.quality', { score: held.score });
+      break;
+    case 'limit':
+      reason = held.nextAt
+        ? t('held.limit', {
+            agent: held.agent,
+            limit: held.limit,
+            time: heldTime(held.nextAt, rc.progress.timezone),
+          })
+        : t('held.limitSoon', { agent: held.agent, limit: held.limit });
+      break;
+    case 'failed':
+      reason = t('held.failed', { why: held.why });
+      break;
+    default:
+      reason = t(`held.${held.code}`);
+  }
+  return t('card.held', { reason });
+}
+
+/** A card's notes, with why an allowed agent's step still waits for its click first. */
+function withHeld(rc: RunContext, notes: ReturnType<typeof cardNotes>, held?: GoLiveHold) {
+  if (!held) return notes;
+  return { ...notes, note: [heldWords(rc, held), notes.note].filter(Boolean).join(' ') };
 }
 
 /** A refusal: the out-of-permission answer to the browser, its record, and its words to the model. */
@@ -2148,7 +2441,8 @@ async function deny(
  * A WRITE's own check before its card (its row's `precheck`, CHAT-20 §12):
  * the refusal the model is told, in its §11a code and words, with what it
  * says beside them (the action that covers a finding). Null to go on, and
- * when the check itself fails: the change checks again.
+ * when the check itself fails: the change checks again. In a run with no
+ * session, only the row's precheckFor checks, as the run's person.
  */
 async function precheckOf(
   rc: RunContext,
@@ -2156,9 +2450,19 @@ async function precheckOf(
   input: Record<string, unknown>,
   ctx: PrecedenceContext | null,
 ): Promise<Record<string, unknown> | null> {
-  if (!tool.precheck) return null;
+  // With no session behind the run, the row's own check as its person, while its way is open;
+  // else none: a request's session there isn't the person's (the change checks again).
+  const which = withoutSession(rc)
+    ? runsWithoutSession(tool)
+      ? ('precheckFor' as const)
+      : null
+    : ('precheck' as const);
+  if (!which || !tool[which]) return null;
   try {
-    const out = await tool.precheck(toolContext(rc, ctx?.role ?? rc.role), input as never);
+    const out = await tool[which]!(
+      toolContext(rc, ctx?.role ?? rc.role, ctx?.brandAccess),
+      input as never,
+    );
     const said = saidFailure(out);
     return said ? { ...said, ...besideRefusal(out) } : null;
   } catch (err) {
@@ -2326,7 +2630,12 @@ async function openCard(
   rc.sink.emit('step.started', { step: clientStep(row) });
   const digest = cardDigest(tool, input);
   const offerDontAskAgain = decision.kind === 'ask' && decision.offerDontAskAgain;
-  const notes = cardNotes(tool);
+  // Why an allowed agent's step still waits for the click (step 4b's held reason).
+  const notes = withHeld(
+    rc,
+    cardNotes(tool),
+    decision.kind === 'click' ? decision.held : undefined,
+  );
   // Why a change its mode would make by itself asks: no session is behind the run.
   if (decision.kind === 'ask' && decision.reason === 'no_session') {
     notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
@@ -2451,14 +2760,15 @@ async function openQuestion(
 /**
  * How many of a job's `units` parts the AI limit left covers (CHAT-04 item
  * 17a), each one write step at worst: its prompt as it stands (`reads`: with
- * what the run's reads may still add) and all it may write. All of them when
+ * what the run's reads may still add) and all it may write, and which limit
+ * binds: the agent run's own cap ('run') or the month's. All of them when
  * the check gets no answer: each step is still held on its own.
  */
 async function coveredUnits(
   rc: RunContext,
   units: number,
   { reads = false }: { reads?: boolean } = {},
-): Promise<number> {
+): Promise<{ fits: number; limit: 'run' | 'month' }> {
   const choice = rc.models.pick('write');
   const { system, messages } = stepInput(rc, 'write', choice.claude);
   const prompt = estimateInputTokens([system, messages, toolSchemas(rc, 'write')]);
@@ -2473,7 +2783,7 @@ async function coveredUnits(
     source: rc.models.source,
     agentRunId: rc.agentRunId,
   });
-  return fit.ok ? fit.fits : units;
+  return fit.ok ? { fits: fit.fits, limit: fit.limit } : { fits: units, limit: 'month' };
 }
 
 /**
@@ -2489,21 +2799,23 @@ async function checkParts(rc: RunContext, call: PendingCall): Promise<CallOutcom
     return result(call, { code: 'invalid_input', issues }, true);
   }
   const { parts, unit } = parsed.data;
-  const fit = partsFit(await coveredUnits(rc, parts), parts);
+  const covered = await coveredUnits(rc, parts);
+  const fit = partsFit(covered.fits, parts);
   if (fit.kind === 'all') return result(call, partsResult(parts, parts, unit));
+  // At the agent run's own cap ('run'), not the month's, its run ends at its limit.
   if (fit.kind === 'none') {
-    await pauseAtCap(rc, 'month');
+    await pauseAtCap(rc, covered.limit);
     return { kind: 'ended' };
   }
   if (!personPresent(rc)) {
-    rc.progress.limitStop = true;
+    rc.progress.limitStop = covered.limit;
     return result(call, partsResult(fit.fits, parts, unit));
   }
   // The run's questions used up: the recommended option, which the answer says.
   if ((rc.progress.asks ?? 0) >= MAX_ASKS_PER_RUN) {
     return result(call, partsResult(fit.fits, parts, unit));
   }
-  rc.progress.parts = { fits: fit.fits, parts, unit };
+  rc.progress.parts = { fits: fit.fits, parts, unit, limit: covered.limit };
   return openQuestion(rc, call, partsQuestion(fit.fits, parts, unit));
 }
 
@@ -2517,7 +2829,7 @@ async function partsAnswered(rc: RunContext, answered: CallResult, answer: AskAn
   rc.progress.parts = undefined;
   const choice = partsChoice(answer);
   if (choice === 'credits') {
-    await pauseAtCap(rc, 'month');
+    await pauseAtCap(rc, parts?.limit ?? 'month');
     return null;
   }
   if (choice === 'cancel') {
@@ -2715,6 +3027,7 @@ async function runRead(
   input: Record<string, unknown>,
   role: PrecedenceContext['role'],
   pageSites?: ChatToolContext['pageSites'],
+  brandAccess?: PrecedenceContext['brandAccess'],
 ): Promise<{ ok: true; value: unknown } | { ok: false; timedOut: boolean; error: string }> {
   let last: { timedOut: boolean; error: string } = { timedOut: false, error: '' };
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -2724,7 +3037,9 @@ async function runRead(
     try {
       const value = await Promise.race([
         tool.run(
-          pageSites ? { ...toolContext(rc, role), pageSites } : toolContext(rc, role),
+          pageSites
+            ? { ...toolContext(rc, role, brandAccess), pageSites }
+            : toolContext(rc, role, brandAccess),
           input as never,
         ),
         new Promise<never>((_, reject) => {
@@ -2749,8 +3064,16 @@ async function runRead(
 
 class ReadTimeout extends Error {}
 
-/** Who a tool acts as: the signed-in person, with their live role (lib/agent/auth.ts's shape). */
-function toolContext(rc: RunContext, role: PrecedenceContext['role']): ChatToolContext {
+/**
+ * Who a tool acts as: the signed-in person, with their live role (lib/agent/auth.ts's
+ * shape), and the brands they may use as this call's precedence read them, so a read
+ * that lists brands doesn't read them again.
+ */
+function toolContext(
+  rc: RunContext,
+  role: PrecedenceContext['role'],
+  brandAccess?: PrecedenceContext['brandAccess'],
+): ChatToolContext {
   return {
     userId: rc.actor.userId,
     email: rc.actor.email,
@@ -2759,6 +3082,7 @@ function toolContext(rc: RunContext, role: PrecedenceContext['role']): ChatToolC
     apiKeyId: 'agent-internal',
     // A schedule's date phrase reads on the person's clock (CHAT-12 item 2).
     timezone: rc.progress.timezone,
+    ...(brandAccess !== undefined ? { brandAccess } : {}),
   };
 }
 
@@ -2860,7 +3184,7 @@ async function readCall(
   if (kept) {
     read = kept;
   } else {
-    const outcome = await runRead(rc, tool, input, rc.role, pageSites);
+    const outcome = await runRead(rc, tool, input, rc.role, pageSites, ctx?.brandAccess);
     // A page that couldn't be opened says why ({ ok: false, code, message }).
     const refusal = outcome.ok ? readRefusal(outcome.value) : null;
     if (!outcome.ok || refusal) {
@@ -2921,6 +3245,13 @@ async function readCall(
   // Outside text (§16a): the run is tainted, kept or not.
   if (untrusted) rc.progress.tainted = true;
   if (read.injection) rc.progress.injection = true;
+  // An agent's page may not copy it whole to go live on its own (AUTONOMOUS-GO-LIVE §6.3).
+  if (untrusted && rc.agentRunId) {
+    rc.progress.untrustedShingles = keepShingles(
+      rc.progress.untrustedShingles,
+      textsOf(read.value),
+    );
+  }
   const rows = read.rows ?? undefined;
   const asOf = read.dataAsOf;
   const room = Math.min(rc.budget.resultChars, rc.budget.dataChars - rc.progress.dataChars);
@@ -3118,6 +3449,9 @@ function typedFailure(output: unknown): string | null {
   return typeof record.reason === 'string' ? record.reason : 'failed';
 }
 
+/** A run with no session whose write the API server took as no one: it asks instead (writeCall). */
+const ACTING_REFUSED = 'acting_refused';
+
 /** The refusals an action says in its own words, as CHAT-20 §11a's codes. */
 const SAID_FAILURES: Record<string, string> = {
   quota_exceeded: 'quota_exceeded',
@@ -3132,6 +3466,12 @@ const SAID_FAILURES: Record<string, string> = {
   live_item: 'live_item',
   // An Admin turned publishing off for Managers since the card was decided (push_cms_draft).
   execute_off: 'execute_off',
+  // The CMS didn't put the page live: it stays a draft there, with the CMS's words (publish_cms).
+  publish_refused: 'failed',
+  // A run with no session, writing through the API server as its person (lib/chat/actor/api.ts):
+  // Chat off for the workspace, or the server took no one to act as.
+  chat_off: 'chat_off',
+  acting_refused: 'acting_refused',
 };
 
 /**
@@ -3149,7 +3489,8 @@ function saidFailure(output: unknown): { code: string; message: string } | null 
 /**
  * A change: run once under its approval (runLoggedWrite logs it, with Undo),
  * on its own step, or on the card's step once approved. An approval used for
- * other arguments (approval_mismatch) shows the card again.
+ * other arguments (approval_mismatch) shows the card again. With no session
+ * of the run's person behind it, its row's runFor makes it, as them.
  */
 async function writeCall(
   rc: RunContext,
@@ -3160,6 +3501,8 @@ async function writeCall(
   ctx: PrecedenceContext | null,
   approval: Exclude<ActivityApproval, { kind: 'run' }>,
   cardStepId: string | null,
+  /** A step an allowed agent takes live on its own: its slot and page (goLiveCall). */
+  goLive?: WriteRequest['goLive'],
 ): Promise<CallOutcome> {
   const target = await cardTarget(rc.brand, tool, input, facts.brandId);
   let row;
@@ -3184,43 +3527,44 @@ async function writeCall(
   const outcome = await runLoggedWrite({
     tool,
     input,
-    ctx: toolContext(rc, ctx?.role ?? rc.role),
+    ctx: toolContext(rc, ctx?.role ?? rc.role, ctx?.brandAccess),
     organizationId: rc.actor.organizationId,
     userId: rc.actor.userId,
     brandId: facts.brandId,
     surface: 'chat',
     mode: rc.run.mode,
     approval,
-    place: { conversationId: rc.run.conversationId, runId: rc.run.id, stepId },
-    approvalKey: stepId,
+    place: {
+      conversationId: rc.run.conversationId,
+      runId: rc.run.id,
+      stepId,
+      agentRunId: rc.agentRunId,
+    },
+    // On its own, a key of its own: the person's click on the card it may turn into runs anew.
+    approvalKey: goLive ? `${stepId}:go_live` : stepId,
+    ...(goLive ? { goLive } : {}),
+    // No session behind the run: only a sessionFree row's change runs then (askWithoutSession);
+    // a card's Approve runs in its person's own request.
+    withoutSession: withoutSession(rc),
   });
 
-  if (outcome.code === 'approval_mismatch') {
-    row = await updateStep(stepId, { status: 'waiting' });
-    rc.sink.emit('step.updated', { step: clientStep(row) });
-    const digest = cardDigest(tool, input);
-    rc.sink.emit('confirm.required', {
-      n: row.position,
-      action: toolWords(tool, 'name'),
-      target,
-      digest,
-      canDontAskAgain: false,
-      ...cardNotes(tool),
-      ...(await cardDetailsOf(tool, input, placeOf(rc))),
+  // The API server took no one to act as for a run with no session (lib/chat/actor/api.ts):
+  // nothing changed, so it asks its person, as a change with no way of its own does.
+  const wayRefused =
+    outcome.code === 'ok' && typedFailure(outcome.output) === ACTING_REFUSED && !cardStepId;
+  if (outcome.code === 'approval_mismatch' || wayRefused) {
+    return cardAgain(rc, tool, input, target, stepId, {
+      ...(wayRefused ? { noSession: { toolCallId: call.toolCallId } } : {}),
     });
-    return {
-      kind: 'pause',
-      card: {
-        stepId,
-        n: row.position,
-        digest,
-        kind: tool.class === 'execute' ? 'click' : 'ask',
-        offerDontAskAgain: false,
-      },
-    };
   }
 
   const failed = outcome.code !== 'ok' ? outcome.code : typedFailure(outcome.output);
+  // Gone wrong on its own: never tried again by itself; the step waits for the click, saying why.
+  if (failed && goLive) {
+    const said = outcome.code === 'ok' ? (outcome.output as { message?: unknown } | null) : null;
+    const why = typeof said?.message === 'string' ? maskIds(said.message) : t('goLive.notSent');
+    return cardAgain(rc, tool, input, target, stepId, { held: { code: 'failed', why } });
+  }
   if (failed) {
     const said = outcome.code === 'ok' ? saidFailure(outcome.output) : null;
     row = await updateStep(stepId, {
@@ -3286,6 +3630,51 @@ function doneStepOf(tool: ChatTool, input: Record<string, unknown>, output: unkn
     console.error('[chat/engine] could not name a change’s step:', err);
     return null;
   }
+}
+
+/**
+ * The step's card again, waiting on the person: an approval used for other
+ * arguments (approval_mismatch), a run with no session whose write the API
+ * server took as no one (noSession: its Approve is its person's), or an
+ * agent's step that went wrong on its own, which waits for the click with why
+ * (held).
+ */
+async function cardAgain(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  target: string,
+  stepId: string,
+  opts: { held?: GoLiveHold; noSession?: { toolCallId: string } } = {},
+): Promise<CallOutcome> {
+  const row = await updateStep(stepId, {
+    status: 'waiting',
+    // Its card's Approve is the person's: not a change made by itself (History's mode).
+    ...(opts.noSession ? { debug: { input, toolCallId: opts.noSession.toolCallId } } : {}),
+  });
+  rc.sink.emit('step.updated', { step: clientStep(row) });
+  const digest = cardDigest(tool, input);
+  const notes = withHeld(rc, cardNotes(tool), opts.held);
+  if (opts.noSession) notes.note = [t('card.noSession'), notes.note].filter(Boolean).join(' ');
+  rc.sink.emit('confirm.required', {
+    n: row.position,
+    action: toolWords(tool, 'name'),
+    target,
+    digest,
+    canDontAskAgain: false,
+    ...notes,
+    ...(await cardDetailsOf(tool, input, placeOf(rc))),
+  });
+  return {
+    kind: 'pause',
+    card: {
+      stepId,
+      n: row.position,
+      digest,
+      kind: tool.class === 'execute' ? 'click' : 'ask',
+      offerDontAskAgain: false,
+    },
+  };
 }
 
 /** What a change made, as a card with its Open (its row's resultCard, CHAT-09 item 19). */
@@ -3802,7 +4191,7 @@ async function finish(rc: RunContext): Promise<void> {
   // one stopped at the limit too.
   rc.progress.text = withAssumptions(rc.progress.text, rc.progress.assumptions);
   // No one was there to ask: the parts that fit are done and filed, and it stops at the limit.
-  if (rc.progress.limitStop) return pauseAtCap(rc, 'month');
+  if (rc.progress.limitStop) return pauseAtCap(rc, rc.progress.limitStop);
   if (!(await moveRun(rc.run.id, ['running'], 'done', { finished: true }))) return stopNow(rc);
   const generatedAt = new Date().toISOString();
   const workingMs = workedMs(rc);

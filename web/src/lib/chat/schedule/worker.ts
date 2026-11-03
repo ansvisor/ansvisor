@@ -74,7 +74,7 @@ const TICK_ROWS = 200;
 
 const JOB_COLUMNS =
   'id, organization_id, kind, run_mode, due_at, next_run_at, rrule, timezone, title, prompt, skill_name, brand_id, created_by, conversation_id, mode, enabled, paused_reason, fail_count, retry_at, change_only, last_fingerprint';
-const RUN_COLUMNS = 'id, schedule_id, slot_at, attempt, run_id, status, started_at';
+const RUN_COLUMNS = 'id, schedule_id, slot_at, attempt, run_now, run_id, status, started_at';
 
 /** Run statuses still open: working, waiting on a person, or held at the AI limit. */
 const OPEN_RUN = ['running', 'needs_you', 'paused_cap'] as const;
@@ -111,6 +111,7 @@ interface RunRow {
   schedule_id: string;
   slot_at: string;
   attempt: number;
+  run_now?: boolean;
   run_id: string | null;
   status: string;
   started_at: string;
@@ -855,10 +856,11 @@ export async function settleScheduleRun(
   }
   let jobOn = true;
   if (target.status === 'paused_cap') await pauseJob(run.schedule_id, 'cap');
-  if (target.status === 'done' || target.status === 'unchanged') {
+  // A Run now is outside the job's slots: it isn't retried or counted toward its failed runs.
+  if (!run.run_now && (target.status === 'done' || target.status === 'unchanged')) {
     jobOn = await countRun(run.schedule_id, run.attempt, false, now);
   }
-  if (target.status === 'failed') {
+  if (!run.run_now && target.status === 'failed') {
     jobOn = await countRun(run.schedule_id, run.attempt, true, now);
   }
   // Its parts, fingerprint and notices (W3-04a: deliver.ts).

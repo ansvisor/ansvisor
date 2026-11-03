@@ -264,17 +264,47 @@ export function republishOf(ships, sentAt) {
  *   draft's first noted as published again), and whether something failed
  *   on the way (logged; the nightly job counts it)
  */
+/**
+ * The agent a send was an agent run's (content_draft_deliveries.agent_run_id,
+ * 00444), and the Chat run, from its go-live step (00443): what the ship
+ * event names it by (00447). Nulls for a person's own send; a step that
+ * can't be read leaves the run out, never the agent run.
+ */
+async function agentOrigin(db, delivery) {
+  const none = { runId: null, agentId: null, agentRunId: null };
+  if (!delivery.agent_run_id) return none;
+  const [{ data: step, error: stepError }, { data: run, error: runError }] = await Promise.all([
+    db
+      .from('chat_agent_go_live_events')
+      .select('run_id, agent_id')
+      .eq('agent_run_id', delivery.agent_run_id)
+      .eq('content_draft_id', delivery.draft_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    db.from('chat_agent_runs').select('agent_id').eq('id', delivery.agent_run_id).maybeSingle(),
+  ]);
+  if (stepError) logger.warn({ err: stepError }, 'go-live step not read for the ship event');
+  if (runError) throw new ImpactDbError('agent run read', runError);
+  return {
+    runId: step?.run_id ?? null,
+    agentId: step?.agent_id ?? run?.agent_id ?? null,
+    agentRunId: delivery.agent_run_id,
+  };
+}
+
 export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supabaseAdmin }) {
   const none = { id: null, created: false, failed: false };
   if (!chatAgenticDeployed()) return none;
   try {
     const { data: delivery, error } = await db
       .from('content_draft_deliveries')
-      .select('id, organization_id, brand_id, draft_id, sent_by, title')
+      .select('id, organization_id, brand_id, draft_id, sent_by, title, agent_run_id')
       .eq('id', deliveryId)
       .maybeSingle();
     if (error) throw new ImpactDbError('delivery read', error);
     if (!delivery || !chatAgenticEnabled(delivery.organization_id)) return none;
+    const origin = await agentOrigin(db, delivery);
 
     let draft = null;
     if (delivery.draft_id) {
@@ -306,8 +336,12 @@ export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supaba
       p_action_id: ship.action_id,
       p_shipped_at: publishedAt,
       p_shipped_by: delivery.sent_by ?? null,
-      p_execution_mode: delivery.sent_by ? 'assisted' : 'automated',
+      // An agent's own publish is automated; a person's send they then published, assisted.
+      p_execution_mode: origin.agentRunId || !delivery.sent_by ? 'automated' : 'assisted',
       p_republish_days: REPUBLISH_DAYS,
+      p_run_id: origin.runId,
+      p_agent_id: origin.agentId,
+      p_agent_run_id: origin.agentRunId,
     });
     if (shipError) throw new ImpactDbError('ship event write', shipError);
     const row = (Array.isArray(shipped) ? shipped : [shipped]).find(Boolean);

@@ -45,6 +45,14 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: vi.fn(),
   updateContentDraft: vi.fn(),
 }));
+vi.mock('@/lib/chat/actor/drafts', () => ({
+  createContentDraftFor: vi.fn(),
+  updateContentDraftFor: vi.fn(),
+}));
+vi.mock('@/lib/chat/actor/api-writes', () => ({
+  updateOpportunityStatusFor: vi.fn(),
+  dismissSuggestionFor: vi.fn(),
+}));
 vi.mock('@/lib/actions/cms-send', () => ({ sendDraftToCms: vi.fn() }));
 vi.mock('@/lib/actions/reports', () => ({ createReport: vi.fn() }));
 vi.mock('@/lib/actions/audits', () => ({ startSiteAudits: vi.fn(), getAuditQuota: vi.fn() }));
@@ -86,6 +94,8 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
+const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
 const { sendDraftToCms } = await import('@/lib/actions/cms-send');
 const { createReport } = await import('@/lib/actions/reports');
 const { startSiteAudits } = await import('@/lib/actions/audits');
@@ -158,6 +168,7 @@ const INPUTS: Record<string, unknown> = {
   set_task_ready_for_review: { brand_id: BRAND, task_id: '99999999-9999-4999-8999-999999999999' },
   update_draft: { draft_id: DRAFT, title: 'Pricing FAQ for teams' },
   push_cms_draft: { draft_id: DRAFT, destination: 'webflow' },
+  publish_cms: { draft_id: DRAFT, destination: 'webflow' },
   build_report: {
     brand_id: BRAND,
     template: 'weekly_visibility',
@@ -174,7 +185,7 @@ const INPUTS: Record<string, unknown> = {
   },
 };
 /** The rows that change or send a Library draft find one. */
-const NEEDS_DRAFT = new Set(['update_draft', 'push_cms_draft']);
+const NEEDS_DRAFT = new Set(['update_draft', 'push_cms_draft', 'publish_cms']);
 const toolCtx = {} as never;
 let step = 0;
 const nextStep = () => `step-${++step}`;
@@ -185,6 +196,12 @@ beforeEach(() => {
   seedWorkspace(db);
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
   vi.mocked(updateContentDraft).mockImplementation(fakeUpdateContentDraft(db) as never);
+  vi.mocked(createContentDraftFor).mockImplementation((_actor, brandId, start) =>
+    fakeCreateDraft(db)(brandId, start),
+  );
+  vi.mocked(updateContentDraftFor).mockImplementation(
+    (_actor, id, change) => fakeUpdateContentDraft(db)(id, change) as never,
+  );
   vi.mocked(sendDraftToCms).mockImplementation(fakeSendDraftToCms() as never);
   vi.mocked(createReport).mockImplementation(fakeCreateReport(db) as never);
   vi.mocked(startSiteAudits).mockImplementation(fakeStartSiteAudits() as never);
@@ -343,6 +360,95 @@ describe('every WRITE that ran is in the Activity log (§21)', () => {
     expect(activitySummary('dismissSuggestionUndo', { text: 'best crm' })).toBe(
       'Brought back the prompt suggestion “best crm”',
     );
+  });
+});
+
+describe('a change with no session behind it (an agent run on its own)', () => {
+  /** The run's person, as the engine's tool context names them. */
+  const person = {
+    userId: PEOPLE.admin,
+    email: 'admin@example.com',
+    organizationId: ORG,
+    role: 'admin' as const,
+    apiKeyId: 'agent-internal',
+  };
+  const write = (tool: ChatTool, approvalKey: string) =>
+    runLoggedWrite({
+      tool,
+      input: tool.inputSchema.parse(INPUTS[tool.name]),
+      ctx: person,
+      organizationId: ORG,
+      userId: PEOPLE.admin,
+      brandId: BRAND,
+      surface: 'chat',
+      mode: 'full_auto',
+      approval: { kind: 'auto', via: 'full_auto' },
+      place: { conversationId: 'chat-1', runId: 'run-1', stepId: approvalKey },
+      approvalKey,
+      withoutSession: true,
+    });
+
+  it.each([
+    ['create_draft', () => createContentDraftFor, () => createContentDraft],
+    ['update_draft', () => updateContentDraftFor, () => updateContentDraft],
+  ] as const)(
+    '%s: its runFor makes it as the run’s person, logged with its Undo',
+    async (name, ownWrite, sessionAction) => {
+      if (NEEDS_DRAFT.has(name)) seedDraft(db);
+      const outcome = await write(chatTool(name)!, 'step-1');
+      expect(outcome).toMatchObject({ code: 'ok', repeated: false });
+      expect(sessionAction()).not.toHaveBeenCalled();
+      expect(ownWrite()).toHaveBeenCalledTimes(1);
+      // The person comes from the run's context, never from the input.
+      expect(vi.mocked(ownWrite()).mock.calls[0][0]).toEqual({
+        userId: PEOPLE.admin,
+        organizationId: ORG,
+      });
+      const [row] = db.tables.chat_activity_log;
+      expect(row).toMatchObject({
+        user_id: PEOPLE.admin,
+        approval_kind: 'auto',
+        auto_via: 'full_auto',
+        run_id: 'run-1',
+        tool_key: chatTool(name)!.labelKey,
+      });
+      expect(row.undo_json).toEqual(expect.any(Object));
+      // A repeat of the approval makes nothing again.
+      expect(await write(chatTool(name)!, 'step-1')).toMatchObject({ code: 'ok', repeated: true });
+      expect(ownWrite()).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('refuses a row whose way is closed or that has none, before anything runs', async () => {
+    // Through the API server, with no CHAT_ACTING_SECRET here; and a row with no runFor.
+    for (const name of ['update_opportunity', 'add_topic']) {
+      await expect(write(chatTool(name)!, 'step-2')).rejects.toThrow(
+        /only with its person's session/,
+      );
+    }
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
+    expect(updateOpportunityStatusFor).not.toHaveBeenCalled();
+    expect(addBrandTopic).not.toHaveBeenCalled();
+    expect(db.tables.chat_activity_log).toEqual([]);
+    expect(db.tables.chat_idempotency_keys ?? []).toEqual([]);
+  });
+
+  it('writes through the API server as the run’s person while that way is open, with its Undo', async () => {
+    vi.stubEnv('CHAT_ACTING_SECRET', 'k'.repeat(64));
+    vi.mocked(updateOpportunityStatusFor).mockImplementation(
+      (_actor, id, status, reason) => fakeUpdateOpportunity(db)(id, status, reason) as never,
+    );
+    expect(await write(chatTool('update_opportunity')!, 'step-3')).toMatchObject({ code: 'ok' });
+    expect(updateOpportunityStatus).not.toHaveBeenCalled();
+    expect(vi.mocked(updateOpportunityStatusFor).mock.calls[0]).toEqual([
+      { userId: PEOPLE.admin, organizationId: ORG },
+      OPPORTUNITY,
+      'dismissed',
+      'not_relevant',
+    ]);
+    const [row] = db.tables.chat_activity_log;
+    expect(row).toMatchObject({ user_id: PEOPLE.admin, tool_key: 'opportunityStatus' });
+    expect(row.undo_json).toEqual(expect.any(Object));
   });
 });
 
@@ -512,6 +618,221 @@ describe('what is logged', () => {
     });
     expect(approvalFor({ kind: 'click' })).toEqual({ kind: 'click' });
     expect(approvalFor({ kind: 'deny', denial: { code: 'policy_never' } })).toBeNull();
+  });
+});
+
+describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
+  const AGENT = '12121212-1212-4212-8212-121212121212';
+  const AGENT_RUN = '34343434-3434-4434-8434-343434343434';
+  const RUN = '56565656-5656-4656-8656-565656565656';
+  const SLOT = '78787878-7878-4878-8878-787878787878';
+  const page = {
+    draftId: DRAFT,
+    title: 'Pricing FAQ',
+    slug: 'pricing-faq',
+    metaTitle: 'Pricing FAQ',
+    metaDescription: '',
+    html: '<p>Prices.</p>',
+    author: null,
+    reviewer: null,
+    featuredImage: null,
+  };
+  const sent = vi.fn();
+  const request = (over: Record<string, unknown> = {}) => ({
+    tool: chatTool('push_cms_draft')!,
+    input: INPUTS.push_cms_draft,
+    ctx: toolCtx,
+    organizationId: ORG,
+    userId: PEOPLE.admin,
+    brandId: BRAND,
+    surface: 'chat' as const,
+    mode: 'full_auto' as const,
+    approval: { kind: 'auto' as const, via: 'go_live' as const },
+    place: { conversationId: null, runId: RUN, stepId: null, agentRunId: AGENT_RUN },
+    approvalKey: nextStep(),
+    goLive: { agentId: AGENT, reservationId: SLOT, page },
+    ...over,
+  });
+  beforeEach(() => {
+    vi.stubEnv('CRON_SECRET', 'secret');
+    sent.mockReset();
+    sent.mockImplementation(async () =>
+      Response.json({ success: true, delivery: { id: 'd1', status: 'sent', updated: false } }),
+    );
+    vi.stubGlobal('fetch', sent);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('sends the checked page through the API as the run’s person, logged as gone live on its own', async () => {
+    const first = request();
+    const outcome = await runLoggedWrite(first);
+    expect(outcome).toMatchObject({
+      code: 'ok',
+      output: { ok: true, target: 'webflow', status: 'sent' },
+    });
+    // Never the person's own send: no session is behind the run.
+    expect(sendDraftToCms).not.toHaveBeenCalled();
+    expect(sent).toHaveBeenCalledTimes(1);
+    const [url, init] = sent.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/api\/internal\/chat\/go-live\/send$/);
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret');
+    expect(JSON.parse(init.body as string)).toEqual({
+      orgId: ORG,
+      agentRunId: AGENT_RUN,
+      runId: RUN,
+      actingUserId: PEOPLE.admin,
+      draftId: DRAFT,
+      target: 'webflow',
+      kind: 'cms_draft',
+      reservationId: SLOT,
+      page,
+    });
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({
+        class: 'execute',
+        tool_key: 'sendToCms',
+        approval_kind: 'auto',
+        auto_via: 'go_live',
+        agent_id: AGENT,
+        agent_run_id: AGENT_RUN,
+        undo_json: null,
+        undo_until: null,
+      }),
+    ]);
+    // A repeat of the same approval (a reconnect) sends nothing again.
+    expect(await runLoggedWrite({ ...first })).toMatchObject({ code: 'ok', repeated: true });
+    expect(sent).toHaveBeenCalledTimes(1);
+    expect(db.tables.chat_activity_log).toHaveLength(1);
+  });
+
+  it('runs an EXECUTE without a click only for an agent run with its slot, and only a row that may', async () => {
+    const refused = [
+      request({ place: { conversationId: null, runId: RUN, stepId: null } }),
+      request({
+        place: { conversationId: null, runId: null, stepId: null, agentRunId: AGENT_RUN },
+      }),
+      request({ goLive: undefined }),
+      // A row that can't go out on its own, and a WRITE: never.
+      request({ tool: { ...chatTool('push_cms_draft')!, goLive: undefined } }),
+      request({ tool: chatTool('update_draft')!, input: INPUTS.update_draft }),
+    ];
+    for (const req of refused) {
+      await expect(runLoggedWrite(req as never)).rejects.toThrow(/on its own|click only/);
+    }
+    // Full auto is not a click either.
+    await expect(
+      runLoggedWrite(request({ approval: { kind: 'auto', via: 'full_auto' } })),
+    ).rejects.toThrow("An EXECUTE runs on the person's click only");
+    expect(sent).not.toHaveBeenCalled();
+    expect(db.tables.chat_activity_log ?? []).toEqual([]);
+  });
+
+  it('logs nothing for a send the API or the CMS refused, and says why', async () => {
+    sent.mockImplementationOnce(async () =>
+      Response.json({ success: false, code: 'switch_off' }, { status: 403 }),
+    );
+    expect(await runLoggedWrite(request())).toMatchObject({
+      code: 'ok',
+      output: { ok: false, reason: 'forbidden_role' },
+    });
+    sent.mockImplementationOnce(async () =>
+      Response.json({
+        success: true,
+        delivery: { id: 'd2', status: 'failed', error: 'Collection is archived' },
+      }),
+    );
+    expect(await runLoggedWrite(request())).toMatchObject({
+      code: 'ok',
+      output: {
+        ok: false,
+        reason: 'failed',
+        message: 'Webflow refused it: Collection is archived',
+      },
+    });
+    expect(db.tables.chat_activity_log ?? []).toEqual([]);
+  });
+
+  it('publishes a new page through the same route, and answers where it went live (PR 9)', async () => {
+    sent.mockImplementationOnce(async () =>
+      Response.json({
+        success: true,
+        delivery: {
+          id: 'd3',
+          status: 'published',
+          published_url: 'https://acme.example/blog/pricing-faq',
+        },
+      }),
+    );
+    const outcome = await runLoggedWrite(
+      request({ tool: chatTool('publish_cms')!, input: INPUTS.publish_cms }),
+    );
+    expect(outcome).toMatchObject({
+      code: 'ok',
+      output: { ok: true, target: 'webflow', url: 'https://acme.example/blog/pricing-faq' },
+    });
+    const body = JSON.parse((sent.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body).toMatchObject({ kind: 'publish', target: 'webflow', draftId: DRAFT });
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({ tool_key: 'publishToCms', auto_via: 'go_live' }),
+    ]);
+    // A page live already: said as it is, nothing logged.
+    sent.mockImplementationOnce(async () =>
+      Response.json(
+        { success: false, code: 'live_item', message: 'Live already.' },
+        { status: 409 },
+      ),
+    );
+    expect(
+      await runLoggedWrite(request({ tool: chatTool('publish_cms')!, input: INPUTS.publish_cms })),
+    ).toMatchObject({ output: { ok: false, reason: 'live_item' } });
+    // The CMS refused the publish itself: its words, never "not connected".
+    sent.mockImplementationOnce(async () =>
+      Response.json(
+        { success: false, code: 'publish_refused', message: 'Wix didn’t publish it.' },
+        { status: 502 },
+      ),
+    );
+    expect(
+      await runLoggedWrite(request({ tool: chatTool('publish_cms')!, input: INPUTS.publish_cms })),
+    ).toMatchObject({
+      output: { ok: false, reason: 'publish_refused', message: 'Wix didn’t publish it.' },
+    });
+  });
+
+  it('frees its slot when the API has no secret to be reached with: nothing went', async () => {
+    vi.stubEnv('CRON_SECRET', '');
+    const finished: unknown[] = [];
+    db.rpcs.finish_agent_go_live = (args) => {
+      finished.push(args);
+      return true;
+    };
+    expect(await runLoggedWrite(request())).toMatchObject({
+      output: { ok: false, reason: 'failed' },
+    });
+    expect(sent).not.toHaveBeenCalled();
+    expect(finished).toEqual([expect.objectContaining({ p_id: SLOT, p_status: 'failed' })]);
+  });
+
+  it('keeps go_live in the log to an agent run’s EXECUTE', async () => {
+    const entry = {
+      organizationId: ORG,
+      userId: PEOPLE.admin,
+      brandId: BRAND,
+      place: { conversationId: null, runId: RUN, stepId: null },
+      surface: 'chat' as const,
+      tool: chatTool('push_cms_draft')!,
+      mode: 'full_auto' as const,
+      approval: { kind: 'auto' as const, via: 'go_live' as const },
+      target: { type: 'content_draft', id: DRAFT },
+      summary: { key: 'sendToCms', params: {} },
+      undo: null,
+    };
+    await expect(logActivity(entry)).rejects.toThrow(/agent run/);
+    await expect(
+      logActivity({ ...entry, agentRunId: AGENT_RUN, tool: chatTool('update_draft')! }),
+    ).rejects.toThrow(/Only an EXECUTE/);
+    expect(await logActivity({ ...entry, agentRunId: AGENT_RUN })).toEqual(expect.any(String));
+    expect(approvalFor({ kind: 'run', via: 'go_live' })).toEqual({ kind: 'auto', via: 'go_live' });
   });
 });
 
@@ -845,7 +1166,12 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
   });
 
   it('never offers a CMS send to an Analyst or an Agency partner, in any mode', async () => {
-    db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
+    db.tables.profiles.push({
+      id: AGENCY,
+      role: 'agency_partner',
+      organization_id: ORG,
+      brand_scope: 'all',
+    });
     const tool = chatTool('push_cms_draft')!;
     for (const userId of [PEOPLE.analyst, AGENCY]) {
       for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
@@ -971,10 +1297,18 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     expect(tool.description).not.toMatch(/webhook\)/);
   });
 
-  it('has no row that goes live in a CMS: its one EXECUTE sends a draft, and publishing stays the person’s', () => {
+  it('publishes a new page live only as an EXECUTE, never in Framer nor to a webhook (AUTONOMOUS-GO-LIVE PR 9)', () => {
     expect(CHAT_TOOLS.filter((tool) => tool.class === 'execute').map((tool) => tool.name)).toEqual([
       'push_cms_draft',
+      'publish_cms',
     ]);
-    expect(chatTool('publish_cms')).toBeUndefined();
+    const publish = chatTool('publish_cms')!;
+    expect(publish.executeGroup).toBe('publishing');
+    for (const destination of ['webflow', 'wordpress', 'wix']) {
+      expect(publish.inputSchema.safeParse({ draft_id: DRAFT, destination }).success).toBe(true);
+    }
+    for (const destination of ['framer', 'webhook']) {
+      expect(publish.inputSchema.safeParse({ draft_id: DRAFT, destination }).success).toBe(false);
+    }
   });
 });

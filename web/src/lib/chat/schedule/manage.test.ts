@@ -21,6 +21,7 @@ const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const views = await import('./views');
 const manage = await import('./manage');
+const { whenPhrase } = await import('./when');
 
 const OTHER_BRAND = '33333333-3333-4333-8333-333333333333';
 // Monday 2 November 2026, 12:00 in Istanbul.
@@ -224,6 +225,13 @@ describe('the page’s changes', () => {
       reason: 'limit',
     });
     job('c', { enabled: false, paused_reason: 'owner_role', created_by: PEOPLE.otherManager });
+    db.tables.chat_notices.push({
+      id: 'n1',
+      user_id: PEOPLE.otherManager,
+      kind: 'schedule_paused',
+      payload: { scheduleId: 'c' },
+      resolved_at: null,
+    });
     expect(await manage.setScheduleOn(as('admin'), growth, 'c', true, NOW)).toMatchObject({
       ok: false,
       reason: 'owner',
@@ -237,6 +245,8 @@ describe('the page’s changes', () => {
       conversation_id: null,
       next_run_at: '2026-11-09T06:00:00.000Z',
     });
+    // Its old creator's "is paused" notice closes.
+    expect(db.tables.chat_notices[0].resolved_at).toBe(NOW.toISOString());
     // Only an Admin, only a job paused for its creator.
     expect(await manage.takeOverSchedule(as('manager'), growth, 'b', NOW)).toMatchObject({
       ok: false,
@@ -316,5 +326,82 @@ describe('the page’s changes', () => {
         NOW,
       ),
     ).toMatchObject({ ok: false, reason: 'forbidden' });
+  });
+
+  it('keeps a job’s timing when When is left as it was: a one-time job that ran isn’t run again', async () => {
+    const edits = (when: string) => ({
+      title: 'Renamed',
+      prompt: 'Draft it',
+      when,
+      deliver: 'chat' as const,
+      changeOnly: false,
+    });
+    // A ready-by job that already ran: on, with no next run.
+    job('r', {
+      kind: 'once',
+      run_mode: 'ready_by',
+      rrule: null,
+      due_at: '2026-11-06T06:00:00.000Z',
+      next_run_at: null,
+      last_run_at: '2026-11-02T08:00:00.000Z',
+    });
+    const readyBy = whenPhrase(
+      { kind: 'once', runMode: 'ready_by', dueAt: '2026-11-06T06:00:00.000Z' },
+      'Europe/Istanbul',
+    );
+    expect(await manage.updateSchedule(as('manager'), 'r', edits(readyBy), NOW)).toEqual({
+      ok: true,
+    });
+    expect(row('r')).toMatchObject({
+      title: 'Renamed',
+      kind: 'once',
+      run_mode: 'ready_by',
+      due_at: '2026-11-06T06:00:00.000Z',
+      next_run_at: null,
+    });
+    // The same time in other words is the same When.
+    expect(
+      await manage.updateSchedule(as('manager'), 'r', edits(`${readyBy.toUpperCase()} `), NOW),
+    ).toMatchObject({ ok: true });
+    expect(row('r').next_run_at).toBeNull();
+
+    // A run-at job whose time passed still saves its other edits.
+    job('p', {
+      kind: 'once',
+      rrule: null,
+      due_at: '2026-10-30T06:00:00.000Z',
+      next_run_at: null,
+      last_run_at: '2026-10-30T06:00:30.000Z',
+    });
+    const passed = whenPhrase(
+      { kind: 'once', runMode: 'run_at', dueAt: '2026-10-30T06:00:00.000Z' },
+      'Europe/Istanbul',
+    );
+    expect(await manage.updateSchedule(as('manager'), 'p', edits(passed), NOW)).toEqual({
+      ok: true,
+    });
+    expect(row('p')).toMatchObject({
+      title: 'Renamed',
+      due_at: '2026-10-30T06:00:00.000Z',
+      next_run_at: null,
+    });
+
+    // A recurring job keeps its next slot; a new When moves it.
+    job('w', { retry_at: '2026-11-02T09:10:00.000Z' });
+    const weekly = whenPhrase(
+      { kind: 'recurring', rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0' },
+      'Europe/Istanbul',
+    );
+    expect(await manage.updateSchedule(as('manager'), 'w', edits(weekly), NOW)).toEqual({
+      ok: true,
+    });
+    expect(row('w')).toMatchObject({
+      next_run_at: '2026-11-09T06:00:00.000Z',
+      retry_at: '2026-11-02T09:10:00.000Z',
+    });
+    expect(await manage.updateSchedule(as('manager'), 'r', edits('in 3 days'), NOW)).toEqual({
+      ok: true,
+    });
+    expect(row('r')).toMatchObject({ run_mode: 'run_at', next_run_at: '2026-11-05T06:00:00.000Z' });
   });
 });

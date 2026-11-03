@@ -3,6 +3,7 @@ import type { Json } from '@/types/supabase';
 import { newProgress, type RunProgress } from './engine-store';
 import type { ChatMode } from './precedence';
 import type { ChatEffort } from './run-limits';
+import { startTouchedBrands } from './touched-brands';
 
 /**
  * A Chat run nobody's browser started (CHAT-21 §H item 36, CHAT-12 item
@@ -108,6 +109,8 @@ export async function openHeadlessRun(input: HeadlessRunInput): Promise<Headless
       if ((err as { code?: string }).code === '23505') return null;
       throw err;
     }
+    // A new chat keeps the brands it touches from its own on (00436), before anything is in it.
+    await startTouchedBrands(conversationId);
   }
   // One after the other, so the question comes before its answer.
   const questionId = await insertId(
