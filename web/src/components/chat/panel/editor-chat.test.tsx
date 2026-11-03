@@ -6,8 +6,8 @@ import messages from '../../../../messages/en.json';
 import type { DraftConversation } from '@/lib/content/drafts';
 
 /**
- * The Content Editor's Chat tab (CHAT-25 §5, W4-16): a draft Chat made
- * continues its chat, any other the one kept here or a new one, from the
+ * The Content Editor's Chat tab (CHAT-25 §5, W4-16): a draft the member's
+ * own chat made continues it, any other the one kept here or a new one, from the
  * panel and the editor's page; the box carries the page as "This draft",
  * which the person may remove; suggestions the agent left are handed on.
  */
@@ -86,8 +86,8 @@ async function render(conversation: DraftConversation | null = null) {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 }
 
-const thread = (id: string, title: string | null) => ({
-  thread: { conversationId: id, title, brandId: null, mine: true, messages: [] },
+const thread = (id: string, title: string | null, mine = true) => ({
+  thread: { conversationId: id, title, brandId: null, mine, messages: [] },
   row: { id },
 });
 
@@ -104,7 +104,7 @@ afterEach(() => act(() => root.unmount()));
 describe('EditorChat', () => {
   it('continues the chat that made the draft, with Open in full page', async () => {
     threads.readThread.mockResolvedValue(thread(CHAT, 'FAQ for /pricing'));
-    await render({ id: CHAT, title: 'FAQ for /pricing' });
+    await render({ id: CHAT, title: 'FAQ for /pricing', mine: true });
     expect(threads.readThread).toHaveBeenCalledWith(CHAT);
     expect(container.textContent).toContain('Continued from your chat “FAQ for /pricing”');
     const full = container.querySelector('[data-action="editorChat.openFull"]')!;
@@ -144,6 +144,32 @@ describe('EditorChat', () => {
     expect(view.props!.chips).toEqual([]);
     (view.props!.onSuggestions as (count: number) => void)(2);
     expect(onSuggestions).toHaveBeenCalledWith(2);
+  });
+
+  it('starts the member’s own chat beside a draft a teammate’s shared chat made', async () => {
+    // Their chat would open read-only, its box closed: not continued.
+    await render({ id: CHAT, title: 'FAQ for /pricing', mine: false });
+    expect(threads.readThread).not.toHaveBeenCalled();
+    expect(view.props).toMatchObject({ thread: null });
+    expect(container.textContent).not.toContain('Continued from');
+
+    // The one this browser kept for the draft, when there is one.
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    store.set(`aeo:editor-chat:${DRAFT}`, KEPT);
+    threads.readThread.mockResolvedValue(thread(KEPT, 'Shorter intro'));
+    await render({ id: CHAT, title: 'FAQ for /pricing', mine: false });
+    expect(threads.readThread).toHaveBeenCalledWith(KEPT);
+    expect(view.props).toMatchObject({ thread: { conversationId: KEPT } });
+    expect(container.textContent).not.toContain('Continued from');
+  });
+
+  it('starts a new chat when the one it opens on reads as only shared', async () => {
+    store.set(`aeo:editor-chat:${DRAFT}`, KEPT);
+    threads.readThread.mockResolvedValue(thread(KEPT, 'Shorter intro', false));
+    await render();
+    expect(view.props).toMatchObject({ thread: null });
+    expect(container.querySelector('[data-action="editorChat.openFull"]')).toBeNull();
   });
 
   it('opens a new chat when the kept one is gone, and shows nothing without Chat', async () => {

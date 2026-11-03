@@ -156,14 +156,17 @@ export type DraftOrigin = (typeof DRAFT_ORIGINS)[number];
 export interface DraftConversation {
   id: string;
   title: string;
+  /** The member's own chat, not one a teammate shared with them. */
+  mine: boolean;
 }
 
 /**
  * The embed that reads a draft's chat (00463's conversation_id), named by
- * its foreign key: through the member's session, another's chat reads as none.
+ * its foreign key: through the member's session, another's chat reads as none
+ * unless it was shared with them.
  */
 export const DRAFT_CHAT =
-  'conversation:chat_conversations!content_drafts_conversation_id_fkey(id, title)';
+  'conversation:chat_conversations!content_drafts_conversation_id_fkey(id, title, user_id)';
 
 /** A row's origin: one of DRAFT_ORIGINS, else the editor's (the column's default). */
 export const draftOriginOf = (value: unknown): DraftOrigin =>
@@ -172,11 +175,20 @@ export const draftOriginOf = (value: unknown): DraftOrigin =>
 /**
  * The chat an embed of chat_conversations (00463's conversation_id) gives,
  * or null: none, or one the member's session can't read (another's chat).
+ * Mine when the member (`me`) started it, not when a teammate shared it.
  */
-export function draftConversationOf(row: unknown): DraftConversation | null {
-  const chat = (Array.isArray(row) ? row[0] : row) as { id?: unknown; title?: unknown } | null;
+export function draftConversationOf(row: unknown, me: string | null): DraftConversation | null {
+  const chat = (Array.isArray(row) ? row[0] : row) as {
+    id?: unknown;
+    title?: unknown;
+    user_id?: unknown;
+  } | null;
   if (!chat || typeof chat.id !== 'string') return null;
-  return { id: chat.id, title: typeof chat.title === 'string' && chat.title ? chat.title : '' };
+  return {
+    id: chat.id,
+    title: typeof chat.title === 'string' && chat.title ? chat.title : '',
+    mine: me !== null && chat.user_id === me,
+  };
 }
 
 /**

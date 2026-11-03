@@ -1463,7 +1463,9 @@ describe('the content editor', () => {
 
   it('links the chat it was made in, with the new Chat on (W4-10)', async () => {
     const CHAT = 'cccccccc-0000-4000-8000-000000000001';
-    getContentDraft.mockResolvedValue(draft({ conversation: { id: CHAT, title: 'Pricing FAQ' } }));
+    getContentDraft.mockResolvedValue(
+      draft({ conversation: { id: CHAT, title: 'Pricing FAQ', mine: true } }),
+    );
     await renderPage('admin', { chatOn: true });
     const bar = container.querySelector('[data-slot="draft-chat-bar"]')!;
     expect(bar.textContent).toBe('From chat: Pricing FAQ');
@@ -3057,7 +3059,9 @@ describe('the side panel', () => {
   it('puts Chat first with the new Chat on, opens a chat-made draft on it, and Ctrl J opens it (W4-16)', async () => {
     const CHAT = 'cccccccc-0000-4000-8000-000000000001';
     chatPanel.value = { setup: { enabled: true } };
-    getContentDraft.mockResolvedValue(draft({ conversation: { id: CHAT, title: 'Pricing FAQ' } }));
+    getContentDraft.mockResolvedValue(
+      draft({ conversation: { id: CHAT, title: 'Pricing FAQ', mine: true } }),
+    );
     localStorage.setItem('aeo:content-editor-panel', '1');
     try {
       await renderPage('admin', { chatOn: true });
@@ -3066,7 +3070,7 @@ describe('the side panel', () => {
       expect(selectedTab()).toBe('Chat');
       expect(editorChat.props).toMatchObject({
         draftId: 'd1',
-        conversation: { id: CHAT, title: 'Pricing FAQ' },
+        conversation: { id: CHAT, title: 'Pricing FAQ', mine: true },
       });
       // The Content Agent's suggestions for a request typed there: the page reads them.
       getDraftSuggestions.mockClear();
@@ -3078,6 +3082,24 @@ describe('the side panel', () => {
         window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true }));
       });
       expect(selectedTab()).toBe('Chat');
+    } finally {
+      chatPanel.value = null;
+      localStorage.removeItem('aeo:content-editor-panel');
+    }
+  });
+
+  it('opens on Instructions when a teammate’s shared chat made the draft (W4-16)', async () => {
+    const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+    chatPanel.value = { setup: { enabled: true } };
+    getContentDraft.mockResolvedValue(
+      draft({ conversation: { id: CHAT, title: 'Pricing FAQ', mine: false } }),
+    );
+    localStorage.setItem('aeo:content-editor-panel', '1');
+    try {
+      await renderPage('manager', { chatOn: true });
+      const tabs = [...panel()!.querySelectorAll('[role="tab"]')].map(tabName);
+      expect(tabs).toEqual(['Chat', 'Instructions', 'Sources', 'Live page']);
+      expect(selectedTab()).toBe('Instructions');
     } finally {
       chatPanel.value = null;
       localStorage.removeItem('aeo:content-editor-panel');

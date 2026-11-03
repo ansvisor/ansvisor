@@ -269,11 +269,13 @@ export function EditorSidePanel({
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
-  // A draft Chat made opens on its chat, continued (CHAT-25 §5, W4-16).
-  const [tab, setTab] = useState<PanelTab>(chat?.conversation ? 'chat' : 'instructions');
+  // A draft the member's own chat made opens on that chat, continued (CHAT-25 §5, W4-16); a
+  // teammate's shared chat doesn't.
+  const ownChat = !!chat?.conversation?.mine;
+  const [tab, setTab] = useState<PanelTab>(ownChat ? 'chat' : 'instructions');
   const [segment, setSegment] = useState<InstructionSegment>('rules');
   const [opened, setOpened] = useState<Set<PanelTarget>>(
-    () => new Set(['instructions', 'rules', ...(chat?.conversation ? (['chat'] as const) : [])]),
+    () => new Set(['instructions', 'rules', ...(ownChat ? (['chat'] as const) : [])]),
   );
   const describeRule = useRuleDescriber();
   // A read-only workspace (plan not active): Your input's changes open the

@@ -39,8 +39,8 @@ type TabView =
 
 /**
  * The Content Editor's Chat tab (CHAT-25 §5, CHAT-15 §A; W4-16): Chat
- * beside the page, first in the editor's side panel. A draft Chat made
- * continues its chat ("Continued from your chat …"); any other continues
+ * beside the page, first in the editor's side panel. A draft the member's
+ * own chat made continues it ("Continued from your chat …"); any other continues
  * the one this browser had with it here, else starts one, from the panel
  * and the editor's page. The box carries the page as "This draft", so what
  * the person asks about it comes back as the Content Agent's suggestions
@@ -61,8 +61,9 @@ export function EditorChat({
   const t = useTranslations('contentEditor.editor.chat');
   const panel = useChatPanel();
   const route = `${CONTENT_EDITOR_PATH}/${draftId}`;
-  // The chat it opens on, read once: the draft's own, else the one kept here.
-  const [opening] = useState(() => conversation?.id ?? keptChat(draftId));
+  // The chat it opens on, read once: the draft's own when it is the member's, else the one
+  // kept here. A teammate's shared chat would open read-only, so it isn't continued.
+  const [opening] = useState(() => (conversation?.mine ? conversation.id : keptChat(draftId)));
   const [view, setView] = useState<TabView>(() =>
     opening ? { status: 'loading' } : { status: 'ready', thread: null, continued: null },
   );
@@ -75,14 +76,15 @@ export function EditorChat({
     const id = opening;
     void readThread(id).then((read) => {
       if (!live) return;
-      // A chat gone or not theirs any more: a new one.
-      setChatId(read ? id : null);
+      // A chat gone or not theirs any more (only shared): a new one.
+      const own = read?.thread.mine ? read : null;
+      setChatId(own ? id : null);
       setView({
         status: 'ready',
-        thread: read?.thread ?? null,
+        thread: own?.thread ?? null,
         continued:
-          read && conversation?.id === id
-            ? read.thread.title || conversation.title || t('untitled')
+          own && conversation?.id === id
+            ? own.thread.title || conversation.title || t('untitled')
             : null,
       });
     });
