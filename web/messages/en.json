@@ -3753,6 +3753,7 @@
           "approval": "Approval card",
           "question": "Question card",
           "openPage": "Where should we open this page? (W4-11)",
+          "pageVersions": "A page's versions in chat (W4-12a)",
           "execute": "Click card (EXECUTE)",
           "result": "Result card",
           "denial": "Out-of-permission answer",
@@ -3761,6 +3762,8 @@
         },
         "states": {
           "openPage": "After Chat writes a page · none Recommended; Open here comes with W4-15",
+          "pageVersion1": "Version 1: the page Chat wrote · no Undo",
+          "pageVersion2": "Version 2 after a change · Rules, Quality, Optimize, Mark ready and Send to CMS come with W4-12b",
           "planAuto": "Auto, ask before changes",
           "planFullAuto": "Full auto, a tool not connected",
           "planReadOnly": "Analyst: read-only",
