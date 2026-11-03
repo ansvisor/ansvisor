@@ -4423,6 +4423,7 @@
       "inbox": "Inbox",
       "inboxLabel": "Inbox · {count, plural, one {# item} other {# items}}",
       "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# needs you} other {# need you}}",
+      "skills": "Skills",
       "governance": "Governance",
       "activity": "Activity",
       "capabilities": "What Chat can do",
@@ -6581,6 +6582,68 @@
     "share": {
       "asked": "Share the skill /{name} with the workspace",
       "rule": "Sharing a skill with the workspace is for Admins."
+    },
+    "page": {
+      "title": "Skills",
+      "subtitle": "What Chat knows how to do. Run one, schedule it, or build an agent on it.",
+      "agents": "Agents",
+      "tabs": { "ansvisor": "Ansvisor skills", "mine": "My skills" },
+      "limit": "{used} of {max} in your plan",
+      "search": "Search skills",
+      "filters": {
+        "all": "All",
+        "content": "Content",
+        "visibility": "Brand Visibility",
+        "product": "Product Visibility",
+        "technical": "Technical",
+        "reports": "Reports"
+      },
+      "empty": "No skills match.",
+      "mineEmpty": "No skills of your own yet. Ask Chat to save one, and it shows here.",
+      "loadFailed": "Skills couldn't be loaded.",
+      "retry": "Retry",
+      "run": "Run",
+      "starting": "Starting…",
+      "runFailed": "Couldn't start the skill. Try again.",
+      "schedule": "Schedule",
+      "scheduleText": "Every Monday at 9:00, /{name} ",
+      "createAgent": "Create agent",
+      "connect": "Connect {name}",
+      "notConnected": "{name} · not connected",
+      "toggle": "/{name} on for the workspace",
+      "turnedOn": "/{name} is on for the workspace.",
+      "turnedOff": "/{name} is off for the workspace.",
+      "changeFailed": "Couldn't change the skill. Try again.",
+      "badges": {
+        "off": "Off",
+        "pending_review": "Waiting for review",
+        "approved": "Approved",
+        "rejected": "Rejected",
+        "blocked": "Blocked",
+        "private": "Only you",
+        "workspace": "Workspace"
+      },
+      "source": {
+        "library": "Ansvisor library",
+        "you": "Made in Chat by you",
+        "workspace": "Made in Chat by a teammate",
+        "upload": "Uploaded",
+        "repo": "Imported from {repo} on GitHub"
+      },
+      "details": {
+        "source": "From",
+        "license": "License",
+        "status": "Status",
+        "warnings": "What the review noted",
+        "close": "Close",
+        "share": "Share with workspace",
+        "askShare": "Ask an Admin to share",
+        "shared": "Shared with the workspace.",
+        "requested": "Asked your Admins to share it.",
+        "delete": "Delete",
+        "deleteConfirm": "Delete /{name}? Agents that use it pause until you pick another skill.",
+        "deleted": "Deleted /{name}."
+      }
     }
   },
   "chatMemory": {
