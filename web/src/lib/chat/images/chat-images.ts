@@ -10,6 +10,7 @@ import type { ChatToolContext } from '../registry/define-tool';
 import {
   imageKey,
   imageKeySource,
+  imageModelOn,
   imageModelOptions,
   percentOf,
   type ImageKey,
@@ -47,10 +48,12 @@ export interface ImageModelQuestion {
  */
 export async function imageModelQuestion(ctx: {
   organizationId: string | null;
-}): Promise<ImageModelQuestion | { code: 'not_found' }> {
+}): Promise<ImageModelQuestion | { code: 'not_found' } | { code: 'off'; message: string }> {
   const organizationId = ctx.organizationId;
   if (!organizationId) return { code: 'not_found' };
   const { models, ownKey } = await imageModelOptions(organizationId);
+  // Every image model's maker turned off (W4-34): nothing to ask.
+  if (models.length === 0) return { code: 'off', message: t('providersOff') };
   const described = (option: ImageModelOption) => {
     const key = IMAGE_MODELS.find((model) => model.id === option.id)?.key;
     return key ? t(`models.${key}` as Parameters<typeof t>[0]) : null;
@@ -155,6 +158,11 @@ export async function imagePrecheck(
 ) {
   const organizationId = ctx.organizationId;
   if (!organizationId) return null;
+  // A model whose maker an Admin turned off (W4-34): no card, nothing sent to it.
+  if (!(await imageModelOn(organizationId, input.model).catch(() => false))) {
+    const label = IMAGE_MODELS.find((m) => m.id === input.model)?.label ?? input.model;
+    return refusal('unavailable', t('providerOff', { model: label }));
+  }
   const storage = await readChatStorage(organizationId).catch(() => null);
   if (storage && !storageFits(storage, input.count * 2 * 1024 * 1024)) {
     return refusal('unavailable', t('storageFull'));
@@ -188,6 +196,10 @@ export async function makeChatImages(ctx: ChatToolContext, input: ImageRequestIn
   if (!organizationId || !runId) return refusal('unavailable', t('unavailable'));
   const model = IMAGE_MODELS.find((m) => m.id === input.model);
   if (!model) return refusal('invalid', t('unavailable'));
+  // Its maker turned off since the card (W4-34): nothing goes to it.
+  if (!(await imageModelOn(organizationId, model.id))) {
+    return refusal('unavailable', t('providerOff', { model: model.label }));
+  }
 
   let key: ImageKey | null;
   try {
@@ -227,7 +239,10 @@ export async function makeChatImages(ctx: ChatToolContext, input: ImageRequestIn
     throw err;
   }
   // What it cost as the provider said, else each image made at its price (none made: nothing).
-  await held.budget.charge({ produced: made.images.length, costUsd: made.costUsd });
+  // None made and none billed (every request refused): the hold goes, as for a step that billed
+  // nothing; else what the provider said it cost, or each image made at its price.
+  if (made.images.length === 0 && made.costUsd === 0) await held.budget.release();
+  else await held.budget.charge({ produced: made.images.length, costUsd: made.costUsd });
   if (made.images.length === 0) {
     const why = (made.refusals[0] ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
     return refusal('refused', t('refused', { why: why || '—' }));

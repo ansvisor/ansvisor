@@ -313,6 +313,12 @@ interface ImageSet {
 
 const IMAGE_NAME = /^image-(\d{1,2})\.(png|jpg|webp)$/;
 
+/** An image's type by its name's extension. */
+const mimeOfName = (name: string) => {
+  const ext = IMAGE_NAME.exec(name)?.[2];
+  return ext === 'jpg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png';
+};
+
 /**
  * A run's n-th deliverable as a set of images (CHAT-15 items 22, 24): the
  * person's own chat or one shared with them, and an image file. Null for
@@ -373,7 +379,7 @@ export async function readRunImage(
     .from(CHAT_FILES_BUCKET)
     .download(`${set.folder}/${name}`);
   if (error || !blob) throw new Error(`Could not read the image: ${error?.message ?? 'missing'}`);
-  return { bytes: new Uint8Array(await blob.arrayBuffer()), mimeType: set.row.mime_type };
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), mimeType: mimeOfName(name) };
 }
 
 /**
@@ -391,9 +397,14 @@ export async function selectRunImage(
   const name = set?.names[image - 1];
   if (!set || !name) return 'not_found';
   if (!set.mine) return 'forbidden';
+  // Its type and format follow the image picked: a set may mix them.
   const { error } = await supabaseAdmin
     .from('chat_files')
-    .update({ storage_path: `${set.folder}/${name}` })
+    .update({
+      storage_path: `${set.folder}/${name}`,
+      mime_type: mimeOfName(name),
+      formats: [IMAGE_NAME.exec(name)![2]],
+    })
     .eq('id', set.row.id)
     .eq('organization_id', actor.organizationId);
   if (error) throw new Error(`Could not pick the image: ${error.message}`);

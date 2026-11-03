@@ -12,6 +12,9 @@ const fakes = vi.hoisted(() => ({
   chatKey: null as unknown,
   ownProvider: null as string | null,
   shares: [] as { model: string; percent: number | null }[],
+  // chat_settings.model_providers (W4-34), or the read's error.
+  providers: null as Record<string, boolean> | null,
+  providersError: null as { code?: string; message: string } | null,
 }));
 
 vi.mock('../flag', () => ({ chatAgenticEnabled: () => fakes.agentic }));
@@ -30,7 +33,20 @@ vi.mock('../budget', () => ({
     ),
   ),
 }));
-vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
+vi.mock('@/lib/supabase/admin', () => ({
+  supabaseAdmin: {
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({
+            data: fakes.providers && { model_providers: fakes.providers },
+            error: fakes.providersError,
+          }),
+        }),
+      }),
+    }),
+  },
+}));
 
 const access = await import('./access');
 const { OwnKeyUnreadableError } = await import('../key');
@@ -50,6 +66,8 @@ beforeEach(() => {
   fakes.agentic = true;
   fakes.chatKey = ansvisorKey;
   fakes.ownProvider = null;
+  fakes.providers = null;
+  fakes.providersError = null;
   // Starter's $5: Lite 0.77%, Nano Banana 2 1.55%, Pro 3.1%, GPT 0.88% (W4-07's prices).
   fakes.shares = [
     { model: LITE, percent: 0.77 },
@@ -149,5 +167,38 @@ describe('the image models with their costs', () => {
       '12x',
     ]);
     expect([0.774, 1.55, 3.1, 12.6].map(access.percentOf)).toEqual(['0.77', '1.6', '3.1', '13']);
+  });
+});
+
+describe('the image models an Admin turned off (W4-34)', () => {
+  it('lists only the models whose maker is on, the cheapest of them recommended', async () => {
+    fakes.providers = { google: false };
+    expect(await access.imageModelOptions('org-1')).toEqual({
+      ownKey: false,
+      models: [
+        {
+          id: GPT,
+          label: 'GPT-5 Image Mini',
+          multiplier: '1x',
+          sharePercent: 0.88,
+          recommended: true,
+        },
+      ],
+    });
+    expect(await access.imageModelOn('org-1', LITE)).toBe(false);
+    expect(await access.imageModelOn('org-1', GPT)).toBe(true);
+    fakes.providers = { openai: false, google: false };
+    expect((await access.imageModelOptions('org-1')).models).toEqual([]);
+  });
+
+  it('reads every maker on its default before the setting exists, and off when it can’t be read', async () => {
+    fakes.providersError = {
+      code: '42703',
+      message: 'column chat_settings.model_providers does not exist',
+    };
+    expect(await access.imageModelOn('org-1', LITE)).toBe(true);
+    fakes.providersError = { message: 'timeout' };
+    expect(await access.imageModelOn('org-1', LITE)).toBe(false);
+    expect(await access.imageModelOn('org-1', GPT)).toBe(false);
   });
 });

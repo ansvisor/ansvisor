@@ -3994,7 +3994,9 @@
       "limit": "Your remaining AI limit doesn't cover these images.",
       "storageFull": "Files is full, so the images would have nowhere to go. Make room or get more storage first.",
       "refused": "The image model didn't make an image for this prompt: {why}",
-      "notFiled": "The images were made but couldn't be saved to Files."
+      "notFiled": "The images were made but couldn't be saved to Files.",
+      "providerOff": "{model}'s maker is turned off for this workspace in Settings › Chat. Pick another image model.",
+      "providersOff": "Every image model's maker is turned off for this workspace in Settings › Chat, so Chat can't make images here. An Admin can turn one on."
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",

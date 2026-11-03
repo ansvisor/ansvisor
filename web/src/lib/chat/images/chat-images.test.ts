@@ -21,6 +21,8 @@ const fakes = vi.hoisted(() => ({
   file: vi.fn(),
   storage: { usedBytes: 0, limitBytes: null as number | null, fileCount: 0 },
   brandOrg: 'org-1' as string | null,
+  // chat_settings.model_providers (W4-34): the Admin's choices.
+  providers: null as Record<string, boolean> | null,
 }));
 
 vi.mock('../flag', () => ({ chatAgenticEnabled: () => fakes.agentic }));
@@ -49,11 +51,17 @@ vi.mock('../file-output', async (importOriginal) => ({
 vi.mock('./provider', () => ({ generateImages: fakes.generate }));
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
-    from: () => ({
+    from: (table: string) => ({
       select: () => ({
         eq: () => ({
           maybeSingle: async () => ({
-            data: fakes.brandOrg ? { organization_id: fakes.brandOrg } : null,
+            data:
+              table === 'chat_settings'
+                ? fakes.providers && { model_providers: fakes.providers }
+                : fakes.brandOrg
+                  ? { organization_id: fakes.brandOrg }
+                  : null,
+            error: null,
           }),
         }),
       }),
@@ -113,6 +121,7 @@ beforeEach(() => {
   ];
   fakes.storage = { usedBytes: 0, limitBytes: null, fileCount: 0 };
   fakes.brandOrg = 'org-1';
+  fakes.providers = null;
   fakes.charge.mockReset().mockResolvedValue(undefined);
   fakes.release.mockReset().mockResolvedValue(undefined);
   fakes.reserve.mockReset().mockResolvedValue({
@@ -310,8 +319,12 @@ describe('a request', () => {
       message:
         "The image model didn't make an image for this prompt: Request blocked by safety filters",
     });
-    expect(fakes.charge).toHaveBeenCalledWith({ produced: 0, costUsd: 0 });
+    // Billed nothing: the hold goes. A refusal that billed is charged what it said.
+    expect(fakes.release).toHaveBeenCalled();
     expect(fakes.file).not.toHaveBeenCalled();
+    fakes.generate.mockResolvedValue({ images: [], costUsd: 0.002, refusals: ['Blocked'] });
+    await images.makeChatImages(ctx, input);
+    expect(fakes.charge).toHaveBeenCalledWith({ produced: 0, costUsd: 0.002 });
   });
 
   it('makes nothing past the AI limit, without a key, or on an own key it can’t read', async () => {
@@ -349,5 +362,36 @@ describe('a request', () => {
       message: "The images were made but couldn't be saved to Files.",
     });
     expect(fakes.charge).toHaveBeenCalled();
+  });
+});
+
+describe('the model providers an Admin turned off (W4-34)', () => {
+  it('never offers or runs an image model whose maker is off', async () => {
+    fakes.providers = { google: false };
+    const asked = await images.imageModelQuestion(ctx);
+    if (!('options' in asked)) throw new Error('no options');
+    expect(asked.models.map((m) => m.id)).toEqual([GPT]);
+    expect(asked.options[0]).toMatchObject({ label: 'GPT-5 Image Mini', recommended: true });
+
+    expect(await images.imagePrecheck(ctx, { model: LITE, count: 4 })).toEqual({
+      ok: false,
+      reason: 'unavailable',
+      message:
+        "Nano Banana 2 Lite's maker is turned off for this workspace in Settings › Chat. Pick another image model.",
+    });
+    expect(await images.makeChatImages(ctx, input)).toMatchObject({
+      ok: false,
+      reason: 'unavailable',
+    });
+    expect(fakes.reserve).not.toHaveBeenCalled();
+    expect(fakes.generate).not.toHaveBeenCalled();
+  });
+
+  it('says images can’t be made when every image model’s maker is off', async () => {
+    fakes.providers = { google: false, openai: false };
+    expect(await images.imageModelQuestion(ctx)).toEqual({
+      code: 'off',
+      message: expect.stringContaining("Chat can't make images here"),
+    });
   });
 });

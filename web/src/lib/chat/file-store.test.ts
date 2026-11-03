@@ -457,6 +457,21 @@ describe('a set of images Chat made (W4-08, CHAT-15 items 22, 24)', () => {
     expect(await exportChatFile(download!, 'md')).toBeNull();
   });
 
+  it('keeps the picked image’s own type in a set that mixes them', async () => {
+    const filed = await file([
+      jpeg(1),
+      { bytes: new Uint8Array(4).fill(9), mimeType: 'image/png' },
+    ]);
+    if (!filed.ok) throw new Error(filed.failure);
+    expect((await store.readRunImage(ACTOR, RUN, 1, 2))?.mimeType).toBe('image/png');
+    expect(await store.selectRunImage(ACTOR, RUN, 1, 2)).toBe('ok');
+    expect(db.tables.chat_files[0]).toMatchObject({
+      storage_path: `${ORG}/${filed.id}/image-2.png`,
+      mime_type: 'image/png',
+      formats: ['png'],
+    });
+  });
+
   it('lets a teammate see a shared chat’s set but not pick, and nobody else see it', async () => {
     const filed = await file([jpeg(1), jpeg(2)]);
     if (!filed.ok) throw new Error(filed.failure);
