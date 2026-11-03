@@ -277,6 +277,42 @@ describe('creating an agent', () => {
     expect((await create(PEOPLE.admin, { maxMonthShare: 0.3 })).maxMonthShare).toBe(0.3);
   });
 
+  it('lets an agent run others of the workspace on Growth: never itself, an archived one or another’s', async () => {
+    const callee = (await create(PEOPLE.manager, { name: 'FAQ writer' })).id;
+    const caller = await create(PEOPLE.manager, { canCall: [callee] });
+    expect(rows('chat_agent_versions').find((v) => v.agent_id === caller.id)?.can_call).toEqual([
+      callee,
+    ]);
+    const ctx = await ctxOf(PEOPLE.manager);
+    expect(
+      await agents.createAgent(ctx, input({ name: 'Theirs', canCall: [FOREIGN] }), NOW),
+    ).toMatchObject({ ok: false, refusal: { status: 400, code: 'agent_not_found' } });
+    expect(
+      await agents.updateAgent(
+        ctx,
+        caller.id,
+        updateAgentInput.parse({ canCall: [caller.id], expectedVersion: 1 }),
+        NOW,
+      ),
+    ).toMatchObject({ ok: false, refusal: { code: 'agent_not_found' } });
+    agentRow(callee).status = 'archived';
+    expect(
+      await agents.createAgent(ctx, input({ name: 'Another', canCall: [callee] }), NOW),
+    ).toMatchObject({ ok: false, refusal: { code: 'agent_not_found' } });
+    agentRow(callee).status = 'draft';
+    db.tables.organizations[0].plan = 'starter';
+    expect(
+      await agents.createAgent(
+        await ctxOf(PEOPLE.manager),
+        input({ name: 'Another', canCall: [callee] }),
+        NOW,
+      ),
+    ).toMatchObject({
+      ok: false,
+      refusal: { code: 'plan_locked', denial: { needsPlan: 'Growth' } },
+    });
+  });
+
   it('takes only the workspace’s brands and topics, never the demo brand', async () => {
     const ctx = await ctxOf(PEOPLE.manager);
     expect(
@@ -1139,6 +1175,60 @@ describe('reading', () => {
     const body = JSON.stringify(detail);
     expect(body).not.toMatch(/usd|cost|\$|dddddddd-0000/i);
     for (const trigger of rows('chat_agent_triggers')) expect(body).not.toContain(trigger.id);
+  });
+
+  it('says which agent called a run, and opens a run’s calls with their shares', async () => {
+    const caller = await create(PEOPLE.manager, { name: 'Weekly report' });
+    const callee = await create(PEOPLE.manager, { name: 'FAQ writer' });
+    // Can call offers agents that are on or paused: a draft hasn't passed its checks.
+    agentRow(callee.id).status = 'active';
+    const run = (id: string, agentId: string, over: Record<string, unknown> = {}) =>
+      db.tables.chat_agent_runs.push({
+        id,
+        organization_id: ORG,
+        agent_id: agentId,
+        agent_version: 1,
+        brand_id: BRAND,
+        trigger_kind: 'schedule',
+        acting_user_id: PEOPLE.manager,
+        status: 'done',
+        skipped_reason: null,
+        stop_reason: null,
+        max_share: 0.1,
+        usage_share: 0.04,
+        outcome: null,
+        outcome_confidence: null,
+        queued_at: '2026-10-28T09:00:00.000Z',
+        started_at: '2026-10-28T09:00:01.000Z',
+        finished_at: '2026-10-28T09:05:00.000Z',
+        called_by_run_id: null,
+        ...over,
+      });
+    run('dddddddd-0000-4000-8000-000000000001', caller.id);
+    run('dddddddd-0000-4000-8000-000000000002', callee.id, {
+      trigger_kind: 'agent',
+      called_by_run_id: 'dddddddd-0000-4000-8000-000000000001',
+      max_share: 0.06,
+      usage_share: 0.015,
+      queued_at: '2026-10-28T09:01:00.000Z',
+    });
+    const ctx = await ctxOf(PEOPLE.manager);
+    const callerView = await agents.readAgent(ctx, caller.id, NOW);
+    expect(callerView).toMatchObject({
+      recentRuns: [
+        {
+          triggerKind: 'schedule',
+          calls: [{ agent: 'FAQ writer', status: 'done', usageShare: 0.015, maxShare: 0.06 }],
+        },
+      ],
+      // Can call's choices: the workspace's other agents, never itself.
+      canCall: { options: [{ id: callee.id, name: 'FAQ writer' }], locked: false },
+    });
+    const calleeView = await agents.readAgent(ctx, callee.id, NOW);
+    expect(calleeView).toMatchObject({
+      recentRuns: [{ triggerKind: 'agent', calledBy: 'Weekly report' }],
+    });
+    expect(JSON.stringify(calleeView)).not.toContain('dddddddd-0000');
   });
 
   it('gives a run whose chat was deleted no chat to open', async () => {

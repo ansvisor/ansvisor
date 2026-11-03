@@ -3602,6 +3602,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'publish_cms',
     'build_report',
     'run_site_audit',
+    // W4-26: an agent's run only, for the agents its Can call names.
+    'run_agent',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -3673,8 +3675,9 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     expect(explains).toEqual({ admin: false, manager: false, analyst: true, agency_partner: true });
     expect(offered).toEqual({
       // Admins have no one to ask: no request to the Admins, and nothing to explain about it.
-      admin: CHANGES.filter((name) => name !== 'request_access').sort(),
-      manager: [...CHANGES].sort(),
+      // run_agent only in an agent's run with an agent to call: never a person's own chat.
+      admin: CHANGES.filter((name) => name !== 'request_access' && name !== 'run_agent').sort(),
+      manager: CHANGES.filter((name) => name !== 'run_agent').sort(),
       // A Manager's write and going live stay out for both; an Agency partner doesn't dismiss
       // suggestions.
       analyst: ['create_draft', 'dismiss_prompt_suggestion', 'request_access'],

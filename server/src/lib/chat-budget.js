@@ -120,7 +120,31 @@ async function agentRunCapUsd(orgId, agentRunId, includedUsd) {
   if (error) throw new Error(error.message);
   if (!data) throw new ChatBudgetError('not_found', 404, 'Agent run not found.');
   if (includedUsd === null || !(includedUsd > 0)) return null;
-  return (Number(data.max_share) || 0) * includedUsd;
+  const cap = (Number(data.max_share) || 0) * includedUsd;
+  // The agents it ran share its cap (CHAT-27 item 21): what they spent comes out of it.
+  return Math.max(0, cap - (await calledRunsSpentUsd(agentRunId)));
+}
+
+/**
+ * What the agent runs a run started with run_agent spent (00466's
+ * called_by_run_id; CHAT-27 phase 2), own-key steps included as the cap's
+ * measure is: a called run's slice is held out of its caller's cap, and
+ * what it didn't spend comes back.
+ */
+async function calledRunsSpentUsd(agentRunId) {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .select('id')
+    .eq('called_by_run_id', agentRunId);
+  if (error) throw new Error(error.message);
+  const ids = (data ?? []).map((row) => row.id);
+  if (ids.length === 0) return 0;
+  const { data: rows, error: spentError } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .select('cost_usd')
+    .in('agent_run_id', ids);
+  if (spentError) throw new Error(spentError.message);
+  return (rows ?? []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
 }
 
 /**

@@ -105,6 +105,9 @@ vi.mock('@/lib/actions/audits', () => ({
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
 }));
+vi.mock('@/lib/actions/chat-agent-calls', () => ({
+  runAgentFromChat: tracked.track('actions/chat-agent-calls.runAgentFromChat'),
+}));
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
 }));
@@ -552,10 +555,10 @@ describe('the Chat tool registry', () => {
         { title: 'Pitch G2 a review', type: 'outreach', where: 'g2.com', done_when: 'Sent' },
       ],
     });
-    expect(send.target!(input)).toBe(
+    expect(send.target!(input, { organizationId: 'org-1' })).toBe(
       '“Win back pricing citations on /pricing” · Recover · 2 tasks',
     );
-    await expect(send.cardDetails!(input)).resolves.toEqual({
+    await expect(send.cardDetails!(input, { organizationId: 'org-1' })).resolves.toEqual({
       items: [
         {
           title: 'Add a FAQ to /pricing',
@@ -660,6 +663,8 @@ describe('approval policies', () => {
       publish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
+      // An agent running another agent (CHAT-27 phase 2): Admins and Managers, as agents are.
+      run_agent: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
@@ -989,7 +994,11 @@ describe("the model's tool list on the registry's rows", () => {
       'request_access',
     ]);
     expect(list('agency_partner', growth)).toEqual([...reads, 'create_draft', 'request_access']);
-    expect(list('manager', starter)).toEqual([...withoutShopping, ...writes]);
+    // Running another agent is Growth and up (CHAT-27 decision 4).
+    expect(list('manager', starter)).toEqual([
+      ...withoutShopping,
+      ...writes.filter((name) => name !== 'run_agent'),
+    ]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
     expect(list('analyst', facts(null, false))).toEqual([
       ...reads,

@@ -954,6 +954,28 @@ describe('an agent run’s step, within its own cap (CHAT-27 items 21–22)', ()
     ).rejects.toMatchObject({ name: 'PlanLimitError', statusCode: 429 });
   });
 
+  it('takes what the agents it ran spent out of its cap: their unused slice comes back', async () => {
+    const CALLED = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0c';
+    agentRuns.push({
+      id: CALLED,
+      organization_id: 'o1',
+      max_share: 0.05,
+      usage_share: 0,
+      called_by_run_id: AGENT_RUN,
+    });
+    // The called agent spent $0.20 of its $0.25 slice: $0.30 of the caller's $0.50 is left.
+    ledger.push({
+      id: 'called',
+      feature: 'agent',
+      cost_usd: 0.2,
+      own_key: false,
+      agent_run_id: CALLED,
+      used_at: '2026-10-29T10:00:00.000Z',
+    });
+    await budget.reserveChatStep('o1', step({ feature: 'agent', agentRunId: AGENT_RUN }));
+    expect(rpcCalls.at(-1).args.p_run_cap).toBeCloseTo(0.3, 10);
+  });
+
   it('refuses an agent run that isn’t the workspace’s', async () => {
     agentRuns[0].organization_id = 'o2';
     await expect(

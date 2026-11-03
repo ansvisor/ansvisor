@@ -86,7 +86,9 @@ export type ToolArea =
   /** Opening a page of the app (CHAT-19 §2). */
   | 'navigation'
   /** Opening a page on the web (CHAT-10 §B). */
-  | 'web';
+  | 'web'
+  /** An agent running another agent (CHAT-27 phase 2). */
+  | 'agents';
 
 /**
  * What the plan decides about a call (CHAT-20 §7), null when nothing. The
@@ -263,7 +265,11 @@ interface ToolFields<S extends z.ZodObject> {
    * don't (a list, an id): read from the data if need be, in the person's
    * words. Without it the engine reads the input's title, name or text.
    */
-  target?(input: z.output<S>): string | null | Promise<string | null>;
+  target?(
+    input: z.output<S>,
+    /** The run's workspace: a row reading an id it can't scope by brand reads within it. */
+    run: { organizationId: string },
+  ): string | null | Promise<string | null>;
   /**
    * What a call made, for the answer's output card and Files (CHAT-06
    * items 1, 9): filed as it is made. Null when the call made nothing to
@@ -282,7 +288,10 @@ interface ToolFields<S extends z.ZodObject> {
    * What its card shows beyond the target, read in the person's words where
    * the input has ids: an action's tasks, why, goal and targets.
    */
-  cardDetails?(input: z.output<S>): ToolCardDetails | Promise<ToolCardDetails>;
+  cardDetails?(
+    input: z.output<S>,
+    run: { organizationId: string },
+  ): ToolCardDetails | Promise<ToolCardDetails>;
   /**
    * A call this input makes shows its card in every mode, Full auto too:
    * a choice that is the person's (Create anyway, CHAT-09 item 18a).
@@ -290,6 +299,20 @@ interface ToolFields<S extends z.ZodObject> {
   alwaysCardWhen?(input: z.output<S>): boolean;
   /** What it made, as a card with its Open (CHAT-09 item 19); null when nothing. */
   resultCard?(input: z.output<S>, output: unknown): ToolResultCard | null;
+  /** Its step once the change is made ("Scheduled: Weekly report"), when its words say more than the row's. */
+  doneStep?(input: z.output<S>, output: unknown): { label: string; detail?: string } | null;
+  /**
+   * Whether the row is offered in this run at all (run_agent: only in an
+   * agent's run whose Can call names an agent, CHAT-27 item 14). Without it,
+   * every run that the precedence allows gets it. Not offered, it isn't
+   * explained as refused either.
+   */
+  offerIn?(run: { agentRunId: string | null }): Promise<boolean>;
+  /**
+   * What the change answers is untrusted data (another agent's words): the
+   * run is tainted after it, so every later change shows a card (CHAT-20 §16a).
+   */
+  taintsRun?: true;
   /** A valid input, for the registry's tests and the permission fixtures (CHAT-20 §19). */
   fixture: { input: z.input<S> };
 }

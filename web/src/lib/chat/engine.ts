@@ -316,6 +316,32 @@ interface RunScope {
   brandIsDemo: boolean;
 }
 
+/**
+ * The rows a run is offered at all (their offerIn, W4-26: run_agent only in
+ * an agent's run with an agent to call), and refused ones it may explain:
+ * a row not offered here isn't explained either. A check that fails leaves
+ * the row out.
+ */
+async function offeredInRun(
+  tools: ReturnType<typeof engineTools>,
+  run: { agentRunId: string | null },
+): Promise<ReturnType<typeof engineTools>> {
+  const hidden = new Set<string>();
+  for (const tool of CHAT_TOOLS) {
+    if (!tool.offerIn) continue;
+    const here = await tool.offerIn(run).catch((err) => {
+      console.error('[chat/engine] could not tell whether a tool is offered:', err);
+      return false;
+    });
+    if (!here) hidden.add(tool.name);
+  }
+  if (hidden.size === 0) return tools;
+  return {
+    offered: tools.offered.filter((tool) => !hidden.has(tool.name)),
+    refused: tools.refused.filter((r) => !hidden.has(r.tool.name)),
+  };
+}
+
 /** The rows an Admin is never offered: a request to the Admins (CHAT-20 row 80a). */
 const NOT_FOR_ADMINS: ReadonlySet<string> = new Set(['request_access']);
 
@@ -1020,8 +1046,9 @@ async function openContext(
   const tools = engineTools(ctx, scope);
   // A shortcut's run reads only its data plan (W2-09).
   const playbook = shortcutPlaybook(actor.organizationId, progress.shortcut);
-  const offered = playbook ? playbookTools(tools.offered, playbook) : tools.offered;
-  const { refused } = tools;
+  const shown = await offeredInRun(tools, { agentRunId });
+  const offered = playbook ? playbookTools(shown.offered, playbook) : shown.offered;
+  const { refused } = shown;
   const budget = readBudget(run.effort);
   const history = await readHistory(run, budget.historyChars);
   // One model does both on a single-model key: the run writes from the start.
@@ -2491,10 +2518,14 @@ const cardText = (text: string, max: number) => {
  * targets, as they'll be frozen (CHAT-09 item 18). Nothing when it can't be
  * read: the card still shows its target.
  */
-async function cardDetailsOf(tool: ChatTool, input: Record<string, unknown>) {
+async function cardDetailsOf(
+  tool: ChatTool,
+  input: Record<string, unknown>,
+  organizationId: string,
+) {
   if (!tool.cardDetails) return {};
   try {
-    const details = await tool.cardDetails(input as never);
+    const details = await tool.cardDetails(input as never, { organizationId });
     const items = (details.items ?? []).slice(0, 8).map((item) => ({
       title: cardText(item.title, 200),
       ...(item.detail ? { detail: cardText(item.detail, 300) } : {}),
@@ -2556,11 +2587,12 @@ async function cardTarget(
   tool: ChatTool,
   input: Record<string, unknown>,
   brandId: string | null,
+  organizationId: string,
 ) {
   let own: string | null = null;
   if (tool.target) {
     try {
-      own = await tool.target(input as never);
+      own = await tool.target(input as never, { organizationId });
     } catch (err) {
       console.error('[chat/engine] could not name a card’s target:', err);
     }
@@ -2597,7 +2629,7 @@ async function openCard(
 ): Promise<CallOutcome> {
   const n = ++rc.progress.steps;
   const execute = decision.kind === 'click';
-  const target = await cardTarget(rc.brand, tool, input, facts.brandId);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor.organizationId);
   const row = await insertStep(rc.run.id, {
     position: n,
     kind: execute ? 'execute' : 'write',
@@ -2628,7 +2660,7 @@ async function openCard(
     canDontAskAgain: offerDontAskAgain,
     // A WRITE whose change can't be undone once made (§9) says so on its card.
     ...notes,
-    ...(await cardDetailsOf(tool, input)),
+    ...(await cardDetailsOf(tool, input, rc.actor.organizationId)),
   });
   return {
     kind: 'pause',
@@ -3482,7 +3514,7 @@ async function writeCall(
   /** A step an allowed agent takes live on its own: its slot and page (goLiveCall). */
   goLive?: WriteRequest['goLive'],
 ): Promise<CallOutcome> {
-  const target = await cardTarget(rc.brand, tool, input, facts.brandId);
+  const target = await cardTarget(rc.brand, tool, input, facts.brandId, rc.actor.organizationId);
   let row;
   if (cardStepId) {
     row = await updateStep(cardStepId, { status: 'running' });
@@ -3568,10 +3600,17 @@ async function writeCall(
   // What the change touched is read again: the chat's kept results go (tool-cache.ts).
   await dropCached(rc.run.conversationId);
   const auto = approval.kind === 'auto';
+  // A row's own words for what it made ("Scheduled: Weekly report"), when it has them.
+  const done = outcome.code === 'ok' ? doneStepOf(tool, input, outcome.output) : null;
+  // Another agent's answer is untrusted: every later change asks (CHAT-20 §16a).
+  if (tool.taintsRun && outcome.code === 'ok') rc.progress.tainted = true;
   row = await updateStep(stepId, {
     status: 'done',
-    label: toolWords(tool, 'step'),
-    detail: [target || null, auto ? t('step.auto') : null].filter(Boolean).join(' · ') || null,
+    label: done?.label ?? toolWords(tool, 'step'),
+    detail:
+      [done ? (done.detail ?? null) : target || null, auto ? t('step.auto') : null]
+        .filter(Boolean)
+        .join(' · ') || null,
     debug: { input, output: outcome.code === 'ok' ? outcome.output : null },
     measure: { latencyMs: Date.now() - started },
   });
@@ -3623,7 +3662,7 @@ async function cardAgain(
     digest,
     canDontAskAgain: false,
     ...notes,
-    ...(await cardDetailsOf(tool, input)),
+    ...(await cardDetailsOf(tool, input, rc.actor.organizationId)),
   });
   return {
     kind: 'pause',
@@ -3635,6 +3674,19 @@ async function cardAgain(
       offerDontAskAgain: false,
     },
   };
+}
+
+/** A row's step once its change is made (its doneStep), or null for the row's own words. */
+function doneStepOf(tool: ChatTool, input: Record<string, unknown>, output: unknown) {
+  try {
+    const done = tool.doneStep?.(input as never, output) ?? null;
+    return done
+      ? { label: cardText(done.label, 200), detail: done.detail && cardText(done.detail, 300) }
+      : null;
+  } catch (err) {
+    console.error('[chat/engine] could not name a change’s step:', err);
+    return null;
+  }
 }
 
 /** What a change made, as a card with its Open (its row's resultCard, CHAT-09 item 19). */
@@ -4065,11 +4117,11 @@ export async function prepareResume(
       sink.emit('confirm.required', {
         n: pending.n,
         action: toolWords(tool, 'name'),
-        target: await cardTarget(brand, tool, input, brand?.id ?? null),
+        target: await cardTarget(brand, tool, input, brand?.id ?? null, actor.organizationId),
         digest: pending.digest,
         canDontAskAgain: pending.offerDontAskAgain,
         ...cardNotes(tool),
-        ...(await cardDetailsOf(tool, input)),
+        ...(await cardDetailsOf(tool, input, actor.organizationId)),
       });
       await sink.flush();
       publishRunEnd(runId);
