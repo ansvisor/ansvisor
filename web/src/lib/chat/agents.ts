@@ -197,6 +197,8 @@ export type AgentRefusalCode =
   | 'go_live_mode'
   /** Can call names an agent that isn't one of the workspace's, is archived, or is itself. */
   | 'agent_not_found'
+  /** Can call names one of the demo brand's sample agents (00475), which nothing runs. */
+  | 'demo_agent'
   | 'failed';
 
 export type AgentRefusal =
@@ -257,6 +259,7 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   go_live_off: 409,
   go_live_mode: 409,
   agent_not_found: 400,
+  demo_agent: 400,
   failed: 500,
 };
 
@@ -1223,7 +1226,7 @@ export async function listAgentRuns(
  * its topics belong to its brands, and the people it tells are members.
  * Can call names agents the person saving it sees (another is as not
  * found), bar those already on the agent (`keptCallees`), which an Admin
- * may have picked.
+ * may have picked, and never one of the demo brand's sample agents (00475).
  */
 async function referencesRefusal(
   ctx: AgentContext,
@@ -1269,13 +1272,15 @@ async function referencesRefusal(
     if (agentId && callees.includes(agentId)) return refused('agent_not_found');
     const { data, error } = await supabaseAdmin
       .from('chat_agents')
-      .select('id, status')
+      .select('id, status, demo_brand_id')
       .eq('organization_id', organizationId)
       .in('id', callees);
     if (error) throw new Error(`Could not read the agents it calls: ${error.message}`);
-    const live = ((data ?? []) as { id: string; status: string }[]).filter(
-      (a) => a.status !== 'archived',
-    );
+    const found = (data ?? []) as { id: string; status: string; demo_brand_id: string | null }[];
+    // Never the demo brand's sample agents (00475), as Can call's options leave them out
+    // (runnableAgents): nothing runs them. One picked before is refused too, as an archived one is.
+    if (found.some((a) => a.demo_brand_id)) return refused('demo_agent');
+    const live = found.filter((a) => a.status !== 'archived');
     if (live.length !== callees.length) return refused('agent_not_found');
     for (const id of callees) {
       if (keptCallees.includes(id)) continue;

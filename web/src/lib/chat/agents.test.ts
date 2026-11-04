@@ -1566,4 +1566,45 @@ describe('the demo brand’s sample agents (00475)', () => {
     expect(workspace).toMatchObject({ active: 5, activeInWorkspace: 5, activeLimit: 5 });
     expect((await agents.runnableAgents(manager)).map((a) => a.row.id)).not.toContain(DEMO_AGENT);
   });
+
+  it('never lets Can call name it, not even one stored before: the save is refused', async () => {
+    const admin = await ctxOf(PEOPLE.admin);
+    const named = await agents.createAgent(
+      admin,
+      input({ name: 'Caller', canCall: [DEMO_AGENT] }),
+      NOW,
+    );
+    expect(named).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 400,
+        code: 'demo_agent',
+        message: expect.stringContaining('sample agent of the demo brand'),
+      },
+    });
+    expect(rows('chat_agents').map((a) => a.name)).not.toContain('Caller');
+
+    // One a Can call stored before (picked when nothing refused it): a change keeping it is refused.
+    const faq = (await create(PEOPLE.admin, { name: 'FAQ writer' })).id;
+    const caller = await create(PEOPLE.admin, { name: 'Weekly report' });
+    rows('chat_agent_versions').find((v) => v.agent_id === caller.id)!.can_call = [DEMO_AGENT];
+    expect(
+      await agents.updateAgent(
+        admin,
+        caller.id,
+        updateAgentInput.parse({ canCall: [DEMO_AGENT, faq], expectedVersion: 1 }),
+        NOW,
+      ),
+    ).toMatchObject({ ok: false, refusal: { code: 'demo_agent' } });
+    expect(rows('chat_agent_versions').filter((v) => v.agent_id === caller.id)).toHaveLength(1);
+    // Taking it out saves.
+    expect(
+      await agents.updateAgent(
+        admin,
+        caller.id,
+        updateAgentInput.parse({ canCall: [], expectedVersion: 1 }),
+        NOW,
+      ),
+    ).toMatchObject({ ok: true });
+  });
 });
