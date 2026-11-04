@@ -7,6 +7,7 @@ import { importLegacyChats } from '@/lib/chat/legacy-import';
 import { chatRunsOnOwnKey } from '@/lib/chat/key';
 import { failingKeyFor } from '@/lib/chat/key-health';
 import { CAREFUL_SETUP, composerSetupOf, type ChatComposerSetup } from '@/lib/chat/composer-setup';
+import { pageOpenOf } from '@/lib/chat/page-open';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
 import { skillMenuFor } from '@/lib/chat/skills/store';
 import { isChatStaff } from '@/lib/chat/staff';
@@ -158,7 +159,7 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
   const [{ data: prefs }, ctx, onOwnKey] = await Promise.all([
     supabase
       .from('chat_user_prefs')
-      .select('default_mode, usage_notice_period, focus')
+      .select('default_mode, usage_notice_period, focus, page_open')
       .eq('user_id', user.id)
       .maybeSingle(),
     readPrecedenceContext({
@@ -179,5 +180,6 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
       await skillMenuFor(profile.organization_id, user.id),
       focusOf(prefs?.focus) ?? [],
     ),
+    pageOpen: pageOpenOf(prefs?.page_open),
   };
 }

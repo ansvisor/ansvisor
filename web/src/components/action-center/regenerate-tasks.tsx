@@ -29,7 +29,8 @@ const KNOWN_ERRORS = [
 /**
  * "Regenerate tasks" (AC-004): the action's tasks written again from its
  * evidence. It replaces work on the list, so it asks first, and it says what
- * stays.
+ * stays. A model writes them, so it is for admins and managers, as the server
+ * allows it (2026-11-03).
  */
 export function RegenerateTasks({
   actionId,
@@ -45,7 +46,6 @@ export function RegenerateTasks({
   onDone: () => void | Promise<void>;
 }) {
   const t = useTranslations('actionCenter.actionsPage.drawer.regenerate');
-  // Needs review is an admin's or a manager's tab: anyone else is told who reviews.
   const { canManage } = useUserRole();
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -61,10 +61,7 @@ export function RegenerateTasks({
       if ('written' in result) {
         toast.success(
           result.reviews > 0
-            ? t(canManage ? 'doneWithReviews' : 'doneWithReviewsMember', {
-                count: result.written,
-                reviews: result.reviews,
-              })
+            ? t('doneWithReviews', { count: result.written, reviews: result.reviews })
             : t('done', { count: result.written }),
         );
         await onDone();
@@ -83,6 +80,8 @@ export function RegenerateTasks({
       onBusyChange(false);
     }
   };
+
+  if (!canManage) return null;
 
   if (busy) {
     return (
