@@ -58,6 +58,35 @@ describe('renderReportCardEmail', () => {
     expect(html).not.toMatch(/guarantee/i);
   });
 
+  it('heads with Starter’s engines and names Growth’s apart', () => {
+    const { html } = renderReportCardEmail({
+      firstName: 'Ayşe',
+      payload: {
+        ...payload,
+        questionCount: 20,
+        mainEngines: ['chatgpt-web', 'copilot-web'],
+        engines: [
+          { engine: 'chatgpt-web', answers: 20, named: 3 },
+          { engine: 'copilot-web', answers: 20, named: 1 },
+          { engine: 'gemini-web', answers: 20, named: 9 },
+          { engine: 'google-aio', answers: 15, named: 5 },
+        ],
+      },
+      kind: 'new',
+      madeAt: '2026-11-04T10:00:00Z',
+    });
+    expect(html).toContain(
+      'We asked ChatGPT and Microsoft Copilot, the engines in Ansvisor Starter, 20 questions your buyers ask, in the United States.',
+    );
+    expect(html).toContain(
+      'We asked Gemini and Google AI Overviews too: they are in Ansvisor Growth, and the PDF shows them apart.',
+    );
+    expect(html).toContain('10%');
+    expect(html).toContain(
+      'AI visibility in ChatGPT and Microsoft Copilot: named in 4 of 40 answers',
+    );
+  });
+
   it('speaks of a publisher’s readers', () => {
     const { html } = renderReportCardEmail({
       firstName: 'Ayşe',

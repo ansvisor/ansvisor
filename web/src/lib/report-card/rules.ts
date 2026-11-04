@@ -174,6 +174,29 @@ const QUESTION_MAX = 110;
 export const percent = (part: number, whole: number): number =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
 
+/** Ansvisor Starter's engines: a card's main result (owner decision 2026-11-04). */
+export const STARTER_ENGINES: readonly ReportCardEngine[] = ['chatgpt-web', 'copilot-web'];
+
+type EngineRow = ReportCardPayload['engines'][number];
+
+/** The engines the card's headline counts: Starter's; every engine on an older card. */
+export function mainEngineRows(card: ReportCardPayload): EngineRow[] {
+  const main = card.mainEngines;
+  if (!main?.length) return card.engines;
+  return card.engines.filter((e) => main.includes(e.engine));
+}
+
+/** The engines shown apart, in Growth's band: none on an older card. */
+export function growthEngineRows(card: ReportCardPayload): EngineRow[] {
+  const main = card.mainEngines;
+  if (!main?.length) return [];
+  return card.engines.filter((e) => !main.includes(e.engine));
+}
+
+/** "ChatGPT and Microsoft Copilot". */
+export const engineList = (rows: readonly EngineRow[]): string =>
+  listOf(rows.map((e) => engineLabel(e.engine)));
+
 export interface Totals {
   answers: number;
   named: number;
@@ -181,10 +204,19 @@ export interface Totals {
   visibility: number;
 }
 
+/** Every engine's answers: what the card's competitors and sites are counted over. */
 export function totals(card: ReportCardPayload): Totals {
   const answers = card.engines.reduce((sum, e) => sum + e.answers, 0);
   const named = card.engines.reduce((sum, e) => sum + e.named, 0);
   return { answers, named, visibility: percent(named, answers) };
+}
+
+/**
+ * The headline: the share of the main engines' answers that name the
+ * company (Starter's, ChatGPT and Microsoft Copilot).
+ */
+export function mainTotals(card: ReportCardPayload): Totals {
+  return totals({ ...card, engines: mainEngineRows(card) });
 }
 
 // ─── Page 1: three things to do now ──────────────────────────────────────────
@@ -258,13 +290,14 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
     });
   }
 
-  const weakest = [...card.engines].sort(
+  const mainRows = mainEngineRows(card);
+  const weakest = [...mainRows].sort(
     (a, b) => percent(a.named, a.answers) - percent(b.named, b.answers),
   )[0];
   if (weakest) {
     wins.push({
       title: `Look at what ${engineLabel(weakest.engine)} says about your market`,
-      detail: `It names you in ${weakest.named} of ${weakest.answers} answers, the fewest of the four engines.`,
+      detail: `It names you in ${weakest.named} of ${weakest.answers} answers${mainRows.length > 1 ? `, the fewest of ${engineList(mainRows)}` : ''}.`,
     });
   }
 

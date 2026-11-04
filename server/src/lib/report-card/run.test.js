@@ -116,6 +116,8 @@ describe('buildReportCard', () => {
       questionCount: 2,
       products,
       engines: [{ engine: 'chatgpt-web', answers: 2, named: 1 }],
+      // Starter's engines that answered: the card's main result.
+      mainEngines: ['chatgpt-web'],
       competitors: [{ name: 'Ridge', answers: 2 }],
       citedSites: [{ domain: 'ridge.example', answers: 1, own: false, kind: 'competitor' }],
       marketplaces: [],

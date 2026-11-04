@@ -28,6 +28,10 @@ import {
   money,
   percent,
   planOffers,
+  engineList,
+  growthEngineRows,
+  mainEngineRows,
+  mainTotals,
   questionGroups,
   questionSummary,
   quickWins,
@@ -174,7 +178,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  qCell: { width: 52, textAlign: 'center' },
+  qCell: { width: 46, textAlign: 'center' },
   footer: {
     position: 'absolute',
     bottom: 24,
@@ -275,7 +279,10 @@ function alsoNamed(card: ReportCardPayload): string[] {
 
 /** Page 1: the results. */
 function ResultsPage({ card }: { card: ReportCardPayload }) {
-  const { answers, named, visibility } = totals(card);
+  const { answers, named } = totals(card);
+  const headline = mainTotals(card);
+  const main = mainEngineRows(card);
+  const growth = growthEngineRows(card);
   const leader = card.competitors[0];
   const rivals = card.competitors.slice(0, 3);
   const most = Math.max(named, ...rivals.map((c) => c.answers), 1);
@@ -294,9 +301,10 @@ function ResultsPage({ card }: { card: ReportCardPayload }) {
       <View style={[styles.section, styles.row]} wrap={false}>
         <View style={styles.kpiBox}>
           <Text style={styles.kpiLabel}>AI visibility</Text>
-          <Text style={styles.kpiValue}>{visibility}%</Text>
+          <Text style={styles.kpiValue}>{headline.visibility}%</Text>
           <Text style={styles.kpiSub}>
-            named in {named} of {answers} answers
+            {growth.length ? `in ${engineList(main)}: ` : ''}named in {headline.named} of{' '}
+            {headline.answers} answers
           </Text>
         </View>
         <View style={styles.kpiBox}>
@@ -322,7 +330,7 @@ function ResultsPage({ card }: { card: ReportCardPayload }) {
 
       <View style={styles.section} wrap={false}>
         <Text style={styles.sectionTitle}>Visibility by engine</Text>
-        {card.engines.map((e) => (
+        {main.map((e) => (
           <Bar
             key={e.engine}
             label={engineLabel(e.engine)}
@@ -331,6 +339,23 @@ function ResultsPage({ card }: { card: ReportCardPayload }) {
             color={INK}
           />
         ))}
+        {growth.length > 0 && (
+          <View style={[styles.box, { marginTop: 4, padding: 6, paddingBottom: 0 }]}>
+            <Text style={[styles.small, { marginBottom: 4 }]}>
+              In Ansvisor Growth: Google’s AI engines, measured too. Starter tracks{' '}
+              {engineList(main)}; Growth adds these.
+            </Text>
+            {growth.map((e) => (
+              <Bar
+                key={e.engine}
+                label={engineLabel(e.engine)}
+                pct={percent(e.named, e.answers)}
+                value={`${e.named} of ${e.answers} · ${percent(e.named, e.answers)}%`}
+                color={COMPETITOR}
+              />
+            ))}
+          </View>
+        )}
       </View>
 
       <View style={[styles.section, styles.row]} wrap={false}>
@@ -397,8 +422,10 @@ function ResultsPage({ card }: { card: ReportCardPayload }) {
             : ', from your site'}
           , and asked each one once in {card.engines.map((e) => engineLabel(e.engine)).join(', ')}{' '}
           in {countryName(card.country)}, in {card.language}, on {date}. AI answers change from day
-          to day, so this is a snapshot. Visibility here is the share of answers that name you; the
-          AI Visibility Score in Ansvisor also weighs citations and how early you’re named.
+          to day, so this is a snapshot. Visibility here is the share of{' '}
+          {growth.length ? `${engineList(main)}’s answers` : 'answers'} that name you; competitors
+          and sites are counted over every engine’s answers. The AI Visibility Score in Ansvisor
+          also weighs citations and how early you’re named.
           {(card.questionRows?.length ?? 0) > 0
             ? ` All ${card.questionRows?.length} questions are on page 4.`
             : ''}
@@ -653,6 +680,7 @@ function OutcomesPage({ card }: { card: ReportCardPayload }) {
 /** The engines' short names, for page 4's narrow columns. */
 const SHORT_ENGINE: Record<string, string> = {
   'chatgpt-web': 'ChatGPT',
+  'copilot-web': 'Copilot',
   'gemini-web': 'Gemini',
   'google-aio': 'AI Overviews',
   'google-aimode': 'AI Mode',

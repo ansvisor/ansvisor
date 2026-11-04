@@ -5,7 +5,7 @@ import { brandKey, citedHosts, competitorsIn, summarize } from './analyze.js';
 import { reportCardLimits } from './config.js';
 import { countryName, languageName } from './countries.js';
 import { keywordFigures, keywordKey, medianCpc } from './cpc.js';
-import { askEngines } from './engines.js';
+import { MAIN_ENGINES, askEngines } from './engines.js';
 import { pickQuestions, writeQuestions } from './questions.js';
 import { sortNames } from './names.js';
 import { siteOutline } from './site.js';
@@ -195,6 +195,11 @@ export async function buildReportCard(
     // The main products or categories the questions were written from.
     products: products.map((p) => ({ name: p.name, nameEn: p.nameEn, url: p.url })),
     engines: figures.engines.filter((e) => e.answers > 0),
+    // The card's main result: Starter's engines that answered. The others
+    // are shown apart, as Growth's.
+    mainEngines: figures.engines
+      .filter((e) => e.answers > 0 && MAIN_ENGINES.includes(e.engine))
+      .map((e) => e.engine),
     competitors: figures.competitors,
     marketplaces: figures.marketplaces,
     otherNames: figures.otherNames,

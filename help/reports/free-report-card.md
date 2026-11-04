@@ -11,11 +11,11 @@ app_version: 0.3.0
 approved: false
 sources: [docs/api-reference/report-card.mdx]
 ---
-The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 15 to 20 that match what you sell best and that people search for most, asks each one once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: asking again within that time sends the same card again.
+The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 15 to 20 that match what you sell best and that people search for most, asks each one once in ChatGPT, Microsoft Copilot, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: asking again within that time sends the same card again.
 
 ## What the card measured
 
-- **AI visibility**: the share of the answers that name your brand or your site.
+- **AI visibility**: the share of ChatGPT's and Microsoft Copilot's answers that name your brand or your site. These are the engines Ansvisor Starter tracks. Gemini, Google AI Overviews and Google AI Mode, which Growth adds, are shown apart in an "In Ansvisor Growth" band. Competitors and cited sites are counted over every engine's answers.
 - The same share for each engine.
 - The competitors the answers named most, and the sites they cite, with yours, your competitors' and marketplaces marked.
 - Three things to do now, and an action plan of four to six steps with the Ansvisor features that work on each. Both are picked from your results by fixed rules.

@@ -7,7 +7,7 @@ const { REPORT_CARD_ENGINES, askEngines } = await import('./engines.js');
 const questions = [{ text: 'q one' }, { text: 'q two' }];
 
 describe('askEngines', () => {
-  it('asks every question in the four engines from the country', async () => {
+  it('asks every question in the five engines from the country, Starter’s first', async () => {
     const submit = vi.fn(async (text, engine) => ({ taskId: `${engine}|${text}` }));
     const poll = vi.fn(async (taskId) => ({
       text: `answer to ${taskId}`,
@@ -19,9 +19,16 @@ describe('askEngines', () => {
       supported: new Map(),
     });
     expect(engines).toEqual(REPORT_CARD_ENGINES);
-    expect(tasks).toBe(8);
+    expect(engines).toEqual([
+      'chatgpt-web',
+      'copilot-web',
+      'gemini-web',
+      'google-aio',
+      'google-aimode',
+    ]);
+    expect(tasks).toBe(10);
     expect(submit).toHaveBeenCalledWith('q one', 'chatgpt-web', 'TR');
-    expect(answers).toHaveLength(8);
+    expect(answers).toHaveLength(10);
     expect(answers[0]).toEqual({
       question: 0,
       engine: 'chatgpt-web',
@@ -68,7 +75,7 @@ describe('askEngines', () => {
     expect(of('gemini-web')).toEqual(['failed', 'failed']);
     expect(of('google-aimode')).toEqual([null, 'failed']);
     // Submitted: all but the refused submission.
-    expect(tasks).toBe(7);
+    expect(tasks).toBe(9);
   });
 
   it('keeps at most the tasks in flight it is given', async () => {

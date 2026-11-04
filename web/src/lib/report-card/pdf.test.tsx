@@ -71,7 +71,8 @@ describe('ReportCardPdfDocument', () => {
     const [results] = draw(SAMPLE_REPORT_CARD);
     expect(results).toContain('How visible is Brewline Coffee in AI answers?');
     expect(results).toContain('18%');
-    expect(results).toContain('named in 18 of 100 answers');
+    expect(results).toContain('in ChatGPT and Microsoft Copilot: named in 9 of 50 answers');
+    expect(results).toContain('In Ansvisor Growth: Google’s AI engines, measured too.');
     for (const engine of ['ChatGPT', 'Google Gemini', 'Google AI Overviews', 'Google AI Mode']) {
       expect(results).toContain(engine);
     }
@@ -128,16 +129,16 @@ describe('ReportCardPdfDocument', () => {
     const pages = draw(SAMPLE_REPORT_CARD);
     const questions = pages[3];
     expect(questions).toContain('The 25 questions we asked');
-    expect(questions).toContain('Named in 18 of 100 answers: 14 of the 25 questions.');
+    expect(questions).toContain('Named in 20 of 125 answers: 14 of the 25 questions.');
     // The key above the table: a tick, a dash and n/a, each with its meaning.
     expect(questions).toContain('Named–Not namedn/aNo answer');
     expect(questions).toContain('best coffee beans for espresso at home');
     expect(questions).toContain('best coffee beans under 20 dollars');
     expect(questions).toContain('Named instead');
     expect(questions).toContain('Ridgeline Roasters');
-    // 7 + 4 + 5 + 2 answers named Brewline: one tick each, and one in the key.
+    // 7 + 2 + 4 + 5 + 2 answers named Brewline: one tick each, and one in the key.
     const ticks = container.querySelectorAll('section')[3].querySelectorAll('[data-tick]');
-    expect(ticks).toHaveLength(19);
+    expect(ticks).toHaveLength(21);
   });
 
   it('has no page 4 for a card without its questions', () => {

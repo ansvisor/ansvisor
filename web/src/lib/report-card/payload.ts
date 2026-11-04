@@ -8,9 +8,15 @@ import { SITE_TYPES } from '@/lib/content/page-types';
  * and picks its advice from them by fixed rules (./rules.ts).
  */
 
-/** The engines a card asks, in the order it lists them. */
+/**
+ * The engines a card asks, in the order it lists them: Ansvisor Starter's
+ * (ChatGPT and Microsoft Copilot), then the Google engines only Growth
+ * tracks (owner decision 2026-11-04). Cards made before then asked the
+ * four without Copilot.
+ */
 export const REPORT_CARD_ENGINES = [
   'chatgpt-web',
+  'copilot-web',
   'gemini-web',
   'google-aio',
   'google-aimode',
@@ -67,6 +73,12 @@ export const reportCardPayloadSchema = z.object({
   engines: z
     .array(z.object({ engine: z.enum(REPORT_CARD_ENGINES), answers: count, named: count }))
     .min(1),
+  /**
+   * The engines whose answers are the card's main result: Starter's that
+   * answered. The others are Growth's, shown apart. Absent on cards made
+   * before 2026-11-04, whose engines are all the main result.
+   */
+  mainEngines: z.array(z.enum(REPORT_CARD_ENGINES)).optional(),
   /** Competitors by the answers that name them, most first. */
   competitors: z.array(z.object({ name: text(100), answers: count })).max(10),
   /**
