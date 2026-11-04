@@ -474,13 +474,17 @@ export function RulesTab({
                   note={
                     rule.key === 'length' && state.lengthConflict
                       ? t('lengthConflict', state.lengthConflict)
-                      : rule.key === 'sentence' && held.has('sentence') && status.state === 'bad'
-                        ? t('heldSentence')
-                        : tried.has(rule.key) && status.state === 'bad'
-                          ? t('triedNote')
-                          : rule.key === 'shopLinksLive'
-                            ? shoppingNote(t, status)
-                            : undefined
+                      : // Said where the Length is set, not only in Run Agent's card
+                        // (editor test 2026-11-03: a Length set lower seemed ignored).
+                        rule.key === 'length' && outOfReach
+                        ? t('lengthOutOfReachNote', { least: outOfReach.least })
+                        : rule.key === 'sentence' && held.has('sentence') && status.state === 'bad'
+                          ? t('heldSentence')
+                          : tried.has(rule.key) && status.state === 'bad'
+                            ? t('triedNote')
+                            : rule.key === 'shopLinksLive'
+                              ? shoppingNote(t, status)
+                              : undefined
                   }
                 />
               ))}

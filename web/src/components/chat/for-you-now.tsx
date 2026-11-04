@@ -35,6 +35,11 @@ export interface ForYouNowProps {
   onAsk: (message: string, shortcutId?: ShortcutId) => void;
   /** The person's focus (CHAT-24 §4): its areas' shortcuts in turn, in place of the jobs. */
   focus?: readonly FocusArea[];
+  /**
+   * The What's new chip after Ask anything (CHAT-08 v2, CHAT-11 item 19),
+   * with a small dot while the person has unread updates; none until read.
+   */
+  whatsNew?: { unread: boolean } | null;
 }
 
 /** A chip: the job or shortcut, its skill, its count when it has one, and what it asks. */
@@ -78,6 +83,7 @@ export function ForYouNow({
   starting,
   onAsk,
   focus = [],
+  whatsNew = null,
 }: ForYouNowProps) {
   const t = useTranslations('chatShell.home.forYou');
   const tf = useTranslations('chatShell.home.byFocus.shortcuts');
@@ -129,6 +135,8 @@ export function ForYouNow({
               };
     return job && { ...job, area };
   };
+  // Ask anything, and What's new when it shows, take their places among the six.
+  const room = MAX_CHIPS - (whatsNew ? 2 : 1);
   const jobs =
     focus.length > 0
       ? inTurn(
@@ -137,10 +145,10 @@ export function ForYouNow({
               .map((shortcut) => shortcutJob(shortcut, area))
               .filter((job) => job !== null),
           ),
-          MAX_CHIPS - 1,
+          room,
           (job) => job.key,
         )
-      : [tasks, winBack, publish].filter((job) => job !== null).slice(0, MAX_CHIPS - 1);
+      : [tasks, winBack, publish].filter((job) => job !== null).slice(0, room);
 
   return (
     <div className="mb-4">
@@ -161,6 +169,26 @@ export function ForYouNow({
         >
           {t('askAnything')}
         </button>
+        {whatsNew && (
+          <button
+            type="button"
+            data-action="home.whatsNew"
+            disabled={starting}
+            className={CHIP}
+            onClick={() => {
+              track('chat_whats_new_chip_clicked', { unread: whatsNew.unread });
+              onAsk(t('whatsNewMessage'));
+            }}
+          >
+            {t('whatsNew')}
+            {whatsNew.unread && (
+              <>
+                <span aria-hidden className="size-1.5 rounded-full bg-foreground/70" />
+                <span className="sr-only">{t('whatsNewUnread')}</span>
+              </>
+            )}
+          </button>
+        )}
         {jobs.map((job) => (
           <button
             key={job.key}

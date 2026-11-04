@@ -115,6 +115,7 @@ const starter: PlanCard = {
 
 const access = (over: Partial<ChatAccess> = {}): ChatAccess => ({
   role: 'manager',
+  brands: { scope: 'all', names: [] },
   plan: starter,
   yourAccess: [
     { key: 'read', class: 'read', value: 'yes' },
@@ -144,8 +145,17 @@ const members: RoleMember[] = [
     role: 'admin',
     lastActiveAt: '2026-10-29T11:48:00Z',
     isYou: false,
+    brands: { scope: 'all', names: [] },
   },
-  { userId: 'u2', name: 'alex', email: null, role: 'manager', lastActiveAt: null, isYou: true },
+  {
+    userId: 'u2',
+    name: 'alex',
+    email: null,
+    role: 'manager',
+    lastActiveAt: null,
+    isYou: true,
+    brands: { scope: 'selected', names: ['Acme', 'Brewline Coffee'] },
+  },
 ];
 
 describe('YourPlanCard', () => {
@@ -198,6 +208,17 @@ describe('YourAccessCard', () => {
     );
     expect(container.querySelector('a[href="/dashboard/chat/capabilities"]')).not.toBeNull();
   });
+
+  it('lists the brands an Admin chose for someone with Selected brands (BRAND-ACCESS §3.2)', async () => {
+    await render(
+      <YourAccessCard
+        access={access({ brands: { scope: 'selected', names: ['Acme', 'Brewline Coffee'] } })}
+      />,
+    );
+    expect(text()).toContain('Acme, Brewline Coffee');
+    expect(text()).toContain('An Admin chose these brands for you.');
+    expect(text()).not.toContain('All brands');
+  });
 });
 
 describe('RolesAccessSection', () => {
@@ -227,6 +248,31 @@ describe('RolesAccessSection', () => {
     expect(text()).not.toContain('read-only here');
     expect(text()).toContain('sam@ansvisor.example');
     expect(container.querySelectorAll('[aria-label="Role"]')).toHaveLength(1);
+  });
+
+  it("shows each member's brands: All brands, or how many and which", async () => {
+    getChatAccess.mockResolvedValue({ ok: true, access: access({ role: 'admin' }) });
+    listRoleMembers.mockResolvedValue({
+      ok: true,
+      members: [
+        ...members,
+        {
+          userId: 'u3',
+          name: 'Kim',
+          email: null,
+          role: 'analyst',
+          lastActiveAt: null,
+          isYou: false,
+          // Someone else's brands, to a viewer who may not see them.
+          brands: { scope: 'selected', names: null },
+        },
+      ],
+    });
+    await render(<RolesAccessSection />);
+    const rows = [...container.querySelectorAll('tbody tr')].map((row) => row.textContent ?? '');
+    expect(rows.find((row) => row.includes('Sam Lee'))).toContain('All brands');
+    expect(rows.find((row) => row.includes('alex'))).toContain('2 brandsAcme, Brewline Coffee');
+    expect(rows.find((row) => row.includes('Kim'))).toContain('Selected brands');
   });
 
   it('says so in plain words when it cannot be read, and reads again on Retry', async () => {

@@ -8751,10 +8751,11 @@ describe('the side panel', () => {
     const page = () => container.querySelector('.ProseMirror')!.textContent;
 
     it('reads what the last rewrite came to as the toolbar counts it, shown or decided since', async () => {
+      // Still longer than the rewrite came to (it wasn't taken): another won't get further.
       getContentDraft.mockResolvedValue(
         draft({
           pageType: 'blog_post',
-          bodyHtml: `<h1>Pipeline forecasting</h1><p>${'Teams forecast from the pipeline. '.repeat(12).trim()}</p>`,
+          bodyHtml: `<h1>Pipeline forecasting</h1><p>${'Teams forecast from the pipeline. '.repeat(40).trim()}</p>`,
           rules: {
             set: null,
             source: null,
