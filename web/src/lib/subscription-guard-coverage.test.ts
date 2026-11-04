@@ -157,6 +157,9 @@ const OPEN_ROUTES: Record<string, string> = {
   // Skipped, and runs nothing (fireDueJobs).
   'internal/chat/schedules/tick:POST':
     "the server's cron; it runs no scheduled job in a read-only workspace",
+  // The API server's report card queue (CRON_SECRET): Ansvisor's own free report card, no workspace.
+  'internal/report-card/pdf:POST':
+    "draws a free report card's PDF for the API server; no workspace, nothing written",
 };
 
 /** What checks a route's plan before it writes. */

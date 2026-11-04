@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * "Regenerate tasks" (AC-004): off unless the deployment writes tasks,
- * checked against the caller's organization first, and a rewrite that wrote
- * nothing says why.
+ * checked against the caller's organization first, for admins and managers
+ * only (a model writes them), and a rewrite that wrote nothing says why.
  */
 
 let action;
@@ -21,7 +21,13 @@ vi.mock('../config/supabase.js', () => ({
 }));
 
 const assertBrandAccess = vi.fn();
-vi.mock('../lib/access.js', () => ({ assertBrandAccess: (...args) => assertBrandAccess(...args) }));
+// The caller's role, as assertRole reads it (2026-11-03: admins and managers write tasks again).
+const assertRole = vi.fn(async () => 'manager');
+vi.mock('../lib/access.js', () => ({
+  MANAGER_ROLES: ['admin', 'manager'],
+  assertBrandAccess: (...args) => assertBrandAccess(...args),
+  assertRole: (...args) => assertRole(...args),
+}));
 vi.mock('../lib/action-center/priority-data.js', () => ({ rescoreActionsForSignal: vi.fn() }));
 
 let enabled;
@@ -87,6 +93,22 @@ describe('regenerateTasks', () => {
     assertBrandAccess.mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { status: 403 }));
     await expect(regenerateTasks('a1', 'u1')).rejects.toThrow('Forbidden');
     expect(assertBrandAccess).toHaveBeenCalledWith('b1', 'u1');
+    expect(writeTasksForAction).not.toHaveBeenCalled();
+  });
+
+  it('refuses an analyst before anything is written (a model writes them)', async () => {
+    assertRole.mockRejectedValueOnce(
+      Object.assign(new Error('Only admins and managers can write the tasks again.'), {
+        status: 403,
+        code: 'forbidden',
+      }),
+    );
+    await expect(regenerateTasks('a1', 'u1')).rejects.toMatchObject({ status: 403 });
+    expect(assertRole).toHaveBeenCalledWith(
+      'u1',
+      ['admin', 'manager'],
+      'Only admins and managers can write the tasks again.',
+    );
     expect(writeTasksForAction).not.toHaveBeenCalled();
   });
 
@@ -181,6 +203,27 @@ describe('sendTask', () => {
     await expect(sendTask('t1', { to: 'content' }, 'u1')).rejects.toThrow('Forbidden');
     expect(assertBrandAccess).toHaveBeenCalledWith('b1', 'u1');
     expect(sendTaskToContent).not.toHaveBeenCalled();
+  });
+
+  it('refuses an analyst the webhook before anything is sent, and sends to Content', async () => {
+    assertRole.mockRejectedValueOnce(
+      Object.assign(new Error('Only admins and managers can send tasks to the webhook.'), {
+        status: 403,
+        code: 'forbidden',
+      }),
+    );
+    await expect(sendTask('t1', { to: 'webhook' }, 'u1')).rejects.toMatchObject({ status: 403 });
+    expect(assertRole).toHaveBeenCalledWith(
+      'u1',
+      ['admin', 'manager'],
+      'Only admins and managers can send tasks to the webhook.',
+    );
+    expect(sendTaskToWebhook).not.toHaveBeenCalled();
+
+    assertRole.mockClear();
+    await sendTask('t1', { to: 'content' }, 'u1');
+    expect(assertRole).not.toHaveBeenCalled();
+    expect(sendTaskToContent).toHaveBeenCalled();
   });
 
   it('sends where it was asked, with the text the drawer shows', async () => {

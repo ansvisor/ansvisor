@@ -29,3 +29,7 @@ In **Settings › Team**, click **Invite member**, enter their e-mail and role, 
 Each person's row in **Settings › Team** shows **All brands** or how many brands they see, for admins. Click it to open **Edit brands**, change the choice and click **Save**. They see the change on their next page.
 
 Only admins change brand access, a manager's included. **Roles & access** and **Your access** show each person's brands too.
+
+## See who can see a brand
+
+A brand's **Settings › People** lists everyone who can see it, with their role. Admins also see why: **All brands**, or **Shared with them**. To change it, use **Edit brands** in **Settings › Team**.
