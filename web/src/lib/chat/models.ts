@@ -15,15 +15,22 @@
 /** What a run's `model` is when the person picked nothing: Haiku reads, Sonnet writes. */
 export const AUTO_MODEL = 'auto';
 
-/** The providers an offered model runs on, by their own API. */
-export type OfferedModelProvider = 'anthropic';
+/**
+ * How an offered model is called: Anthropic's own API (on Ansvisor's key or
+ * the workspace's own Anthropic key), or OpenRouter (Ansvisor's
+ * OPENROUTER_API_KEY; offered only where it is set). None of OpenRouter's is
+ * offered yet.
+ */
+export type OfferedModelProvider = 'anthropic' | 'openrouter';
 
 export interface OfferedModel {
   /** The catalog's id ("anthropic/claude-sonnet-5.5"): what a run keeps as its model. */
   id: string;
-  /** The provider's own API id ("claude-sonnet-5-5"). */
+  /** The provider's own API id ("claude-sonnet-5-5"); OpenRouter's is its catalog id. */
   api: string;
   provider: OfferedModelProvider;
+  /** Its name on the composer's model button, a product name ("Sonnet 5.5"). */
+  label: string;
   /**
    * It passed Chat's test set in a real run: only then is it offered and run.
    * Set to true in the same pull request that records its passing run.
@@ -37,20 +44,65 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     id: 'anthropic/claude-haiku-5.5',
     api: 'claude-haiku-5-5',
     provider: 'anthropic',
+    label: 'Haiku 5.5',
     tested: true,
   },
   {
     id: 'anthropic/claude-sonnet-5.5',
     api: 'claude-sonnet-5-5',
     provider: 'anthropic',
+    label: 'Sonnet 5.5',
     tested: true,
   },
   // Passed the whole test set twice in a row on Anthropic's API, cache on (2026-11-03, W4-35).
-  { id: 'anthropic/claude-opus-5.5', api: 'claude-opus-5-5', provider: 'anthropic', tested: true },
+  {
+    id: 'anthropic/claude-opus-5.5',
+    api: 'claude-opus-5-5',
+    provider: 'anthropic',
+    label: 'Opus 5.5',
+    tested: true,
+  },
 ];
 
 /** The models the menu offers, the catalog is asked for and the engine runs: the tested ones. */
 export const OFFERED_MODELS: readonly OfferedModel[] = CHAT_MODELS.filter((model) => model.tested);
+
+/** How hard a run works (CHAT-16 item 12): Normal, High, Max; higher uses the limit faster. */
+export const CHAT_EFFORTS = ['normal', 'high', 'max'] as const;
+export type ChatModelEffort = (typeof CHAT_EFFORTS)[number];
+
+/** A run's model and effort, as the composer sends them and a chat keeps them. */
+export interface ChatModelChoice {
+  model: string;
+  effort: ChatModelEffort;
+}
+
+export const AUTO_CHOICE: ChatModelChoice = { model: AUTO_MODEL, effort: 'normal' };
+
+/**
+ * Whether the person may pick a model and effort (Wave 4 decision 2 B):
+ * from Starter up. The free trial runs Auto at Normal only: its AI limit is
+ * small, and one long run at Max on a costly model could use it up. Self-hosted: open.
+ */
+export function modelChoiceOpen(plan: { selfHosted: boolean; isTrial: boolean }): boolean {
+  return plan.selfHosted || !plan.isTrial;
+}
+
+/**
+ * The choice a run starts with: what was asked when the plan lets the
+ * person choose and the model is offered, else Auto at Normal.
+ */
+export function runChoiceOf(
+  asked: { model?: string | null; effort?: string | null },
+  open: boolean,
+): ChatModelChoice {
+  if (!open) return AUTO_CHOICE;
+  const model = isChatModelChoice(asked.model) ? asked.model : AUTO_MODEL;
+  const effort = (CHAT_EFFORTS as readonly string[]).includes(asked.effort ?? '')
+    ? (asked.effort as ChatModelEffort)
+    : 'normal';
+  return { model, effort };
+}
 
 /** An offered (tested) model by its catalog id; null for Auto, one not tested, or one not listed. */
 export function offeredModel(id: string | null | undefined): OfferedModel | null {
@@ -67,4 +119,14 @@ export function isCatalogId(value: unknown): value is string {
   return (
     typeof value === 'string' && /^[A-Za-z0-9._~:-]{1,100}\/[A-Za-z0-9._~:-]{1,100}$/.test(value)
   );
+}
+
+/** The choice of a chat's latest run, as runChoiceOf reads it; Auto at Normal with none. */
+export function latestChoice(
+  runs: readonly { model?: string | null; effort?: string | null; created_at?: string | null }[],
+): ChatModelChoice {
+  const latest = [...runs].sort((a, b) =>
+    String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')),
+  )[0];
+  return latest ? runChoiceOf(latest, true) : AUTO_CHOICE;
 }

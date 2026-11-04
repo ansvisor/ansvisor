@@ -21,6 +21,7 @@ import { isRedirect, postJson } from '../lib/safe-post.js';
 import { webhookTestLimiter } from '../middleware/rate-limiter.js';
 import {
   MANAGER_ROLES,
+  allowRole,
   assertBrandAccess,
   assertOpportunitiesAccess,
   assertOpportunityAccess,
@@ -882,6 +883,9 @@ router.post('/bulk/send-webhook', async (req, res) => {
     }
 
     await assertOpportunitiesAccess(ids, req.user.id);
+    // Sends them out to the brand's automation: admins and managers, who set the webhook (2026-11-03).
+    const refusal = 'Only admins and managers can send opportunities to the webhook.';
+    if (!(await allowRole(res, req.user.id, MANAGER_ROLES, refusal))) return;
 
     const { data: opportunities, error: oppErr } = await supabaseAdmin
       .from('content_opportunities')
@@ -1101,6 +1105,9 @@ router.post('/:id/send-webhook', async (req, res) => {
 
     // What the workflow receives reads the way the page shows it.
     const stored = await assertOpportunityAccess(id, req.user.id);
+    // Out to the brand's automation: admins and managers, who set the webhook (2026-11-03).
+    const refusal = 'Only admins and managers can send opportunities to the webhook.';
+    if (!(await allowRole(res, req.user.id, MANAGER_ROLES, refusal))) return;
     const opportunity = cleanStoredOpportunity(stored, await competitorNames(stored.brand_id));
 
     const { data: webhookConfig } = await supabaseAdmin

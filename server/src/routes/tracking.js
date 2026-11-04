@@ -3,7 +3,7 @@ import { createJob, getJob, cancelJob } from '../lib/job-manager.js';
 import { runTrackingJob } from '../lib/job-runner.js';
 import supabaseAdmin from '../config/supabase.js';
 import { enforceOnDemandTrackingQuota, TrackingQuotaError } from '../lib/tracking-quota.js';
-import { assertBrandAccess } from '../lib/access.js';
+import { MANAGER_ROLES, allowRole, assertBrandAccess, assertRole } from '../lib/access.js';
 import { selectInChunks } from '../lib/chunked-in.js';
 
 const router = Router();
@@ -27,6 +27,10 @@ async function brandFor(res, brandId, userId, columns) {
   }
 }
 
+/** Runs on demand spend the plan's tracking: admins and managers start or stop them (2026-11-03). */
+const RUN_TRACKING_REFUSAL = 'Only admins and managers can run tracking.';
+const STOP_TRACKING_REFUSAL = 'Only admins and managers can stop a tracking run.';
+
 /**
  * POST /api/tracking/check
  * Body: { brandId, platformId?, promptId? }
@@ -43,6 +47,7 @@ router.post('/check', async (req, res) => {
     // The caller's brand, and whether it is paused.
     const brand = await brandFor(res, brandId, req.user.id, 'is_active');
     if (!brand) return;
+    if (!(await allowRole(res, req.user.id, MANAGER_ROLES, RUN_TRACKING_REFUSAL))) return;
 
     // A paused brand spends nothing — block on-demand runs too, not just the
     // daily cron. Resume the brand to track it again.
@@ -96,6 +101,7 @@ router.post('/analyze-new', async (req, res) => {
 
     const brand = await brandFor(res, brandId, req.user.id, 'is_active');
     if (!brand) return;
+    if (!(await allowRole(res, req.user.id, MANAGER_ROLES, RUN_TRACKING_REFUSAL))) return;
 
     // A paused brand spends nothing — block on-demand runs too, not just the
     // daily cron. Resume the brand to track it again.
@@ -347,6 +353,7 @@ router.delete('/job/:jobId', async (req, res) => {
     if (job) {
       await assertBrandAccess(job.brand_id, req.user.id);
     }
+    await assertRole(req.user.id, MANAGER_ROLES, STOP_TRACKING_REFUSAL);
     await cancelJob(req.params.jobId);
     return res.json({ success: true, message: 'Job cancelled' });
   } catch (error) {

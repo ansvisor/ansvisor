@@ -4,13 +4,27 @@ import { AGENT_PROVIDER_OPTIONS, buildAgentModel } from '@/lib/agent/model';
 import { chatModelId, type AiProvider } from '@/lib/agent/providers';
 import { resolveChatModelKey, type ChatKeySource } from './key';
 import { ownKeyFailure } from './key-health';
+import {
+  AUTO_CHOICE,
+  AUTO_MODEL,
+  offeredModel,
+  type ChatModelChoice as RunModelChoice,
+  type ChatModelEffort,
+  type OfferedModel,
+} from './models';
 
 /**
- * The models a Chat run calls (CHAT-16 items 5 and 23). Auto, the default:
- * Claude Haiku 5.5 reads (picks and runs the reads), Claude Sonnet 5.5
- * writes (the answer and any change). On Ansvisor's key, or the workspace's
- * own Anthropic key, the run has both phases; on another provider's own key
- * one model does both, in one phase. The key comes from key.ts. Server only.
+ * The models a Chat run calls (CHAT-16 items 5, 12 and 23; W4-03). Auto, the
+ * default: Claude Haiku 5.5 reads (picks and runs the reads), Claude Sonnet
+ * 5.5 writes (the answer and any change). A model picked in the composer's
+ * menu (lib/chat/models.ts) does both: a Claude model on Ansvisor's key or
+ * the workspace's own Anthropic key keeps the two phases; a model through
+ * OpenRouter (none offered yet) runs in one phase on OPENROUTER_API_KEY, and
+ * without that key the run takes Auto. On another provider's own key that
+ * key's model does both, in one phase, whatever was picked. The effort
+ * (Normal, High, Max) is the provider's own setting, and a larger output
+ * allowance for the thinking it brings. The key comes from key.ts. Server
+ * only.
  *
  * Claude 5.5's Messages API (as #1743 found for the Content Editor):
  *   - no temperature, top_p or top_k: it turns sampling settings away, so
@@ -55,6 +69,8 @@ export interface ChatModelChoice {
 export interface ChatModels {
   /** Whose key the steps run on: the budget meters Ansvisor's. */
   source: ChatKeySource;
+  /** The model the run uses: 'auto' or an offered model's catalog id (W4-03). */
+  model: string;
   /** The key's provider, for its errors' words (AGENT-OWN-KEY §5.2). */
   provider: AiProvider;
   /**
@@ -72,25 +88,79 @@ const CLAUDE_OPTIONS: ProviderOptions = {
   anthropic: { structuredOutputMode: 'outputFormat' },
 };
 
+/** How much more a step may write at each effort, its thinking included. */
+export const EFFORT_OUTPUT_SCALE: Readonly<Record<ChatModelEffort, number>> = {
+  normal: 1,
+  high: 1.5,
+  max: 2,
+};
+
+/**
+ * Claude's effort setting for each of ours (output_config.effort): Normal
+ * leaves the model's own default (medium on Haiku 5.5 and Opus 5.5, high on
+ * Sonnet 5.5); High is one level up from it; Max is max.
+ */
+export function claudeEffort(
+  api: string,
+  effort: ChatModelEffort,
+): 'high' | 'xhigh' | 'max' | undefined {
+  if (effort === 'normal') return undefined;
+  if (effort === 'max') return 'max';
+  return api.startsWith('claude-sonnet-') ? 'xhigh' : 'high';
+}
+
+/** One Claude model's step: its id, its price's id, its output allowance and settings. */
+function claudeStep(
+  anthropic: ReturnType<typeof createAnthropic>,
+  model: { api: string; catalog: string },
+  maxOutputTokens: number,
+  effort: ChatModelEffort,
+): ChatModelChoice {
+  const level = claudeEffort(model.api, effort);
+  return {
+    model: anthropic(model.api),
+    budgetModel: model.catalog,
+    maxOutputTokens: Math.round(maxOutputTokens * EFFORT_OUTPUT_SCALE[effort]),
+    providerOptions: level
+      ? { anthropic: { ...CLAUDE_OPTIONS.anthropic, effort: level } }
+      : CLAUDE_OPTIONS,
+    claude: true,
+  };
+}
+
 /** Auto on an Anthropic key: Haiku 5.5 reads, Sonnet 5.5 writes. */
-export function autoModels(apiKey: string, source: ChatKeySource): ChatModels {
+export function autoModels(
+  apiKey: string,
+  source: ChatKeySource,
+  effort: ChatModelEffort = 'normal',
+): ChatModels {
   const anthropic = createAnthropic({ apiKey });
-  const read: ChatModelChoice = {
-    model: anthropic(AUTO_READ_MODEL.api),
-    budgetModel: AUTO_READ_MODEL.catalog,
-    maxOutputTokens: READ_MAX_OUTPUT_TOKENS,
-    providerOptions: CLAUDE_OPTIONS,
-    claude: true,
-  };
-  const write: ChatModelChoice = {
-    model: anthropic(AUTO_WRITE_MODEL.api),
-    budgetModel: AUTO_WRITE_MODEL.catalog,
-    maxOutputTokens: WRITE_MAX_OUTPUT_TOKENS,
-    providerOptions: CLAUDE_OPTIONS,
-    claude: true,
-  };
+  const read = claudeStep(anthropic, AUTO_READ_MODEL, READ_MAX_OUTPUT_TOKENS, effort);
+  const write = claudeStep(anthropic, AUTO_WRITE_MODEL, WRITE_MAX_OUTPUT_TOKENS, effort);
   return {
     source,
+    model: AUTO_MODEL,
+    provider: 'anthropic',
+    keyFailing: false,
+    phases: 'auto',
+    pick: (phase) => (phase === 'read' ? read : write),
+  };
+}
+
+/** A Claude model picked in the menu, on an Anthropic key: it reads and writes, two phases. */
+export function pickedClaudeModels(
+  apiKey: string,
+  source: ChatKeySource,
+  picked: OfferedModel,
+  effort: ChatModelEffort = 'normal',
+): ChatModels {
+  const anthropic = createAnthropic({ apiKey });
+  const model = { api: picked.api, catalog: picked.id };
+  const read = claudeStep(anthropic, model, READ_MAX_OUTPUT_TOKENS, effort);
+  const write = claudeStep(anthropic, model, WRITE_MAX_OUTPUT_TOKENS, effort);
+  return {
+    source,
+    model: picked.id,
     provider: 'anthropic',
     keyFailing: false,
     phases: 'auto',
@@ -99,18 +169,63 @@ export function autoModels(apiKey: string, source: ChatKeySource): ChatModels {
 }
 
 /**
- * The run's models, from the key it runs on (resolveChatModelKey); null when
- * the workspace has no key Chat may use. Throws OwnKeyUnreadableError when
- * the workspace's own key can't be read. On the own key, its health is read
- * once here (a read that fails reads as working).
+ * A model picked through OpenRouter, on Ansvisor's OpenRouter key: one
+ * model does both, in one phase, as on another provider's own key. Its
+ * effort is OpenRouter's reasoning effort.
  */
-export async function resolveChatModels(organizationId: string): Promise<ChatModels | null> {
+export function openRouterModels(
+  apiKey: string,
+  picked: OfferedModel,
+  effort: ChatModelEffort = 'normal',
+): ChatModels {
+  const single: ChatModelChoice = {
+    model: buildAgentModel({ provider: 'openrouter', apiKey, settings: { model: picked.api } }),
+    budgetModel: picked.id,
+    maxOutputTokens: Math.round(WRITE_MAX_OUTPUT_TOKENS * EFFORT_OUTPUT_SCALE[effort]),
+    providerOptions:
+      effort === 'normal'
+        ? AGENT_PROVIDER_OPTIONS
+        : { ...AGENT_PROVIDER_OPTIONS, openai: { store: false, reasoningEffort: 'high' } },
+    claude: false,
+  };
+  return {
+    source: 'ansvisor',
+    model: picked.id,
+    provider: 'openrouter',
+    keyFailing: false,
+    phases: 'single',
+    pick: () => single,
+  };
+}
+
+/**
+ * The run's models, from the key it runs on (resolveChatModelKey) and the
+ * model and effort it was started with (already checked against the plan,
+ * runChoiceOf); null when the workspace has no key Chat may use. Throws
+ * OwnKeyUnreadableError when the workspace's own key can't be read. On the
+ * own key, its health is read once here (a read that fails reads as
+ * working).
+ */
+export async function resolveChatModels(
+  organizationId: string,
+  choice: RunModelChoice = AUTO_CHOICE,
+): Promise<ChatModels | null> {
   const key = await resolveChatModelKey(organizationId);
   if (!key) return null;
   const keyFailing =
     key.source === 'own' && (await ownKeyFailure(organizationId).catch(() => null)) !== null;
+  const picked = offeredModel(choice.model);
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  if (picked?.provider === 'openrouter' && key.source === 'ansvisor' && openRouterKey) {
+    return openRouterModels(openRouterKey, picked, choice.effort);
+  }
   if (key.config.provider === 'anthropic') {
-    return { ...autoModels(key.config.apiKey, key.source), keyFailing };
+    return picked?.provider === 'anthropic'
+      ? {
+          ...pickedClaudeModels(key.config.apiKey, key.source, picked, choice.effort),
+          keyFailing,
+        }
+      : { ...autoModels(key.config.apiKey, key.source, choice.effort), keyFailing };
   }
   // Another provider's own key: its model, as Settings › AI Providers names it, does both.
   const single: ChatModelChoice = {
@@ -122,6 +237,7 @@ export async function resolveChatModels(organizationId: string): Promise<ChatMod
   };
   return {
     source: key.source,
+    model: single.budgetModel,
     provider: key.config.provider,
     keyFailing,
     phases: 'single',

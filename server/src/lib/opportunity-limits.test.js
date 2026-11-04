@@ -7,10 +7,12 @@ import {
   SCORE_WEIGHTS,
   clusterMetrics,
   coveredClusterIds,
+  dismissedLongAgo,
   openOpportunityOn,
   openlyCoveredClusterIds,
   opportunityScore,
   pickClusters,
+  requestScope,
   scoreComponents,
 } from './opportunity-limits.js';
 
@@ -100,6 +102,32 @@ describe('cluster selection', () => {
     expect([...covered].sort()).toEqual(['c1', 'c2', 'c3']);
   });
 
+  it('lets a need dismissed over 90 days ago be suggested again, as the dismiss dialog says', () => {
+    const now = Date.parse('2026-11-03T12:00:00Z');
+    const daysAgo = (n) => new Date(now - n * 86_400_000).toISOString();
+    const rows = [
+      {
+        cluster_id: 'c1',
+        related_cluster_ids: ['c2'],
+        status: 'dismissed',
+        updated_at: daysAgo(91),
+      },
+      { cluster_id: 'c3', related_cluster_ids: [], status: 'dismissed', updated_at: daysAgo(89) },
+      { cluster_id: 'c4', related_cluster_ids: [], status: 'dismissed' },
+      { cluster_id: 'c5', related_cluster_ids: [], status: 'done', updated_at: daysAgo(400) },
+      { cluster_id: 'c6', related_cluster_ids: [], status: 'archived', updated_at: daysAgo(400) },
+    ];
+    expect([...coveredClusterIds(rows, now)].sort()).toEqual(['c3', 'c4', 'c5', 'c6']);
+    expect(dismissedLongAgo(rows[0], now)).toBe(true);
+    expect(dismissedLongAgo(rows[4], now)).toBe(false);
+  });
+
+  it('reads the date coverage needs with the opportunities', () => {
+    expect(source('./open-opportunities.js')).toMatch(
+      /'id, title, status, created_at, updated_at,/,
+    );
+  });
+
   it("holds a prompt's own request back only with an open opportunity (PROMPT-006)", () => {
     const rows = [
       { cluster_id: 'c1', related_cluster_ids: ['c2'], status: 'in_progress' },
@@ -166,6 +194,44 @@ describe('cluster selection', () => {
       'b1',
       'a2',
     ]);
+  });
+});
+
+describe('requestScope', () => {
+  const candidates = [
+    { id: 'c1', topicId: 't1', metrics: { tested: 3 } },
+    { id: 'c2', topicId: 't1', metrics: { tested: 2 } },
+    { id: 'c3', topicId: 't1', metrics: { tested: 0 } },
+    { id: 'c4', topicId: 't2', metrics: { tested: 5 } },
+  ];
+
+  it("counts the focus's needs, the covered ones and those with no answers yet", () => {
+    expect(
+      requestScope(candidates, {
+        covered: new Set(['c1', 'c4']),
+        inFocus: (c) => c.topicId === 't1',
+        requested: 3,
+        focus: 'topic',
+      }),
+    ).toEqual({ focus: 'topic', requested: 3, needs: 3, covered: 1, noAnswers: 1 });
+  });
+
+  it('counts a covered need without answers as covered only', () => {
+    expect(
+      requestScope(candidates, {
+        covered: new Set(['c3']),
+        inFocus: () => true,
+        requested: 2,
+        focus: 'auto',
+      }),
+    ).toMatchObject({ needs: 4, covered: 1, noAnswers: 0 });
+  });
+
+  it('is what the generator reports with each request', () => {
+    const code = source('./opportunity-generator.js');
+    expect(code).toContain('requestScope(candidates');
+    expect(code.match(/\.\.\.scope,/g)).toHaveLength(2);
+    expect(code).toContain('limited: true, ...scope');
   });
 });
 

@@ -1,3 +1,4 @@
+import { autoGoLiveEnabled } from '@/lib/chat/flag';
 import { planFactsOf } from '@/lib/mcp/chat-facts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import {
@@ -7,6 +8,7 @@ import {
   isPublished,
   matchesFeature,
   plansLine,
+  type EntryFlag,
   type EntryPlan,
   type WhatsNewEntry,
 } from './entries';
@@ -51,6 +53,8 @@ export interface WhatsNewPick {
 
 export interface PickOptions {
   plan: EntryPlan;
+  /** The switches on for the workspace: an entry that `requires` one shows only then. */
+  flags?: ReadonlySet<EntryFlag>;
   read: ReadonlySet<string>;
   now: Date;
   /** Unread ones only. */
@@ -70,13 +74,16 @@ export interface PickOptions {
 
 /**
  * The entries to show (CHAT-11 item 10): the named one first, then the
- * unread, then the newest; only those whose day has come and the plan
- * shows. Pure.
+ * unread, then the newest; only those whose day has come, the plan
+ * shows and whose switch (`requires`) is on. Pure.
  */
 export function pickWhatsNew(options: PickOptions): WhatsNewPick {
   const { plan, read, now } = options;
   const shown = (options.entries ?? WHATS_NEW_ENTRIES).filter(
-    (entry) => isPublished(entry, now) && entryAccess(entry, plan) !== 'hidden',
+    (entry) =>
+      isPublished(entry, now) &&
+      entryAccess(entry, plan) !== 'hidden' &&
+      (!entry.requires || !!options.flags?.has(entry.requires)),
   );
   const hasUnread = shown.some(
     (entry) => !read.has(entry.slug) && daysSince(entry, now) <= UNREAD_DAYS,
@@ -123,9 +130,17 @@ export async function readWhatsNewReads(userId: string): Promise<Set<string>> {
   return new Set(((data ?? []) as { entry_slug: string }[]).map((row) => row.entry_slug));
 }
 
+/** The switches on for a workspace, for entries that `requires` one. */
+export function whatsNewFlags(organizationId: string): Set<EntryFlag> {
+  const flags = new Set<EntryFlag>();
+  if (autoGoLiveEnabled(organizationId)) flags.add('auto_go_live');
+  return flags;
+}
+
 /**
- * What's new for the person: their plan's entries, read or not, as
- * pickWhatsNew picks them, and the plan's name. Server only.
+ * What's new for the person: their plan's entries (and those of the
+ * switches on for the workspace), read or not, as pickWhatsNew picks them,
+ * and the plan's name. Server only.
  */
 export async function readWhatsNew(
   params: { userId: string; organizationId: string; now?: Date } & Omit<
@@ -136,7 +151,7 @@ export async function readWhatsNew(
   const { userId, organizationId, now = new Date(), ...options } = params;
   const [facts, read] = await Promise.all([planFactsOf(organizationId), readWhatsNewReads(userId)]);
   return {
-    ...pickWhatsNew({ ...options, plan: facts, read, now }),
+    ...pickWhatsNew({ ...options, plan: facts, flags: whatsNewFlags(organizationId), read, now }),
     planName: facts.planName,
   };
 }

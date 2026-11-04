@@ -10,6 +10,7 @@
  */
 
 import { INTENT_WEIGHTS, logScale, round, weightedScore } from './priority-core.js';
+import { DISMISSED_BLOCK_DAYS } from './opportunity-dedup.js';
 
 /**
  * Opportunities one generation run may produce. A short list that gets read
@@ -110,18 +111,55 @@ export function opportunityScore(components) {
   return round(weightedScore(components, SCORE_WEIGHTS, 100).total);
 }
 
+const DAY_MS = 86_400_000;
+
+/**
+ * Whether a dismissed opportunity was dismissed over DISMISSED_BLOCK_DAYS ago,
+ * going by its last change. Without a date it still counts as recent.
+ */
+export function dismissedLongAgo(row, now = Date.now()) {
+  if (row.status !== 'dismissed') return false;
+  const at = Date.parse(row.updated_at);
+  return Number.isFinite(at) && now - at >= DISMISSED_BLOCK_DAYS * DAY_MS;
+}
+
 /**
  * Clusters that already have an opportunity, as its own cluster or a merged
  * one. Any status counts: a cluster gets one opportunity, and a dismissed one
- * is not suggested again in other words.
+ * is not suggested again in other words — for DISMISSED_BLOCK_DAYS, as the
+ * dismiss dialog and the duplicate check (CONTENT-004) say. After that its
+ * need may be suggested again.
  */
-export function coveredClusterIds(rows) {
+export function coveredClusterIds(rows, now = Date.now()) {
   const ids = new Set();
   for (const r of rows || []) {
+    if (dismissedLongAgo(r, now)) continue;
     if (r.cluster_id) ids.add(r.cluster_id);
     for (const id of r.related_cluster_ids || []) ids.add(id);
   }
   return ids;
+}
+
+/**
+ * What a request could draw on (CONTENT-003), so the page can say why fewer
+ * came back than were asked for: the needs (clusters) in its focus, how many
+ * of them already have an opportunity, and how many have no tracked answers
+ * to write from yet. Read before the run's own duplicate checks add to
+ * `covered`; the run reports those separately.
+ *
+ * @param {{ id: string, metrics: { tested: number } }[]} candidates
+ * @param {{ covered: Set<string>, inFocus: (c: object) => boolean, requested: number, focus: string }} opts
+ */
+export function requestScope(candidates, { covered, inFocus, requested, focus }) {
+  const needs = candidates.filter(inFocus);
+  const isCovered = (c) => covered.has(c.id);
+  return {
+    focus,
+    requested,
+    needs: needs.length,
+    covered: needs.filter(isCovered).length,
+    noAnswers: needs.filter((c) => !isCovered(c) && !(c.metrics.tested > 0)).length,
+  };
 }
 
 /** Statuses that still stand for a need's content work. */

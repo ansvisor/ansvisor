@@ -1,4 +1,5 @@
 import type { FailingKey } from './key-health';
+import type { PageOpen } from './page-open';
 import { CHAT_MODES, type ChatMode, type PrecedenceContext } from './precedence';
 
 /**
@@ -39,6 +40,8 @@ export interface ChatComposerSetup {
   keyFailure: FailingKey | null;
   /** The / menu's Skills group: the skills the person may use (skillMenuFor); none while the new Chat is off. */
   skills: ChatSkillItem[];
+  /** Where a page Chat writes opens (W4-11, Settings › Chat): ask when not given. */
+  pageOpen?: PageOpen;
 }
 
 /** The modes part of the setup, from the person's saved mode and the precedence facts. */
