@@ -9,6 +9,7 @@ import {
   type ChatActionSent,
   type ChatStep,
   type ChatTaskStrip,
+  type ChatWhatsNewEntry,
 } from './events';
 import { clientMove } from './next-moves';
 import { applyChatEvent, emptyRun } from './run-state';
@@ -58,6 +59,8 @@ export interface ThreadRun {
   tasks: ChatTaskStrip | null;
   /** The Why did it move analyses it kept (CHAT-22 §1), in order. */
   why: ChatWhy[];
+  /** What's new's cards (CHAT-11 item 10). */
+  whatsNew: ChatWhatsNewEntry[];
 }
 
 export interface ThreadMessage {
@@ -102,6 +105,8 @@ const END_EVENTS = ['run.finished', 'run.stopped', 'run.error', 'run.paused_cap'
 const SENT_EVENT = 'action.sent';
 /** "Remember this?" (W4-33): the line a finished run offered to remember. */
 const REMEMBER_EVENT = 'remember.offered';
+/** What's new's cards (CHAT-11 item 10), read back the same way. */
+const WHATS_NEW_EVENT = 'whats_new.ready';
 
 /** What an ended run's events keep: its end, and what it sent to the Action Center. */
 interface RunEnd {
@@ -110,6 +115,7 @@ interface RunEnd {
   keyFailed: boolean;
   sent: ChatActionSent[];
   remember: string | null;
+  whatsNew: ChatWhatsNewEntry[];
 }
 const ENDED: readonly string[] = ['done', 'stopped', 'error', 'paused_cap'];
 
@@ -127,7 +133,7 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
     .from('chat_run_events')
     .select('run_id, seq, type, data')
     .in('run_id', runIds)
-    .in('type', [...END_EVENTS, SENT_EVENT, REMEMBER_EVENT])
+    .in('type', [...END_EVENTS, SENT_EVENT, REMEMBER_EVENT, WHATS_NEW_EVENT])
     .order('seq', { ascending: true });
   if (error) {
     console.error("[chat/thread] could not read the runs' ends:", error.message);
@@ -146,7 +152,16 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
       keyFailed: false,
       sent: [],
       remember: null,
+      whatsNew: [],
     };
+    if (row.type === WHATS_NEW_EVENT) {
+      const cards = (row.data as { entries?: unknown }).entries;
+      ends.set(row.run_id, {
+        ...kept,
+        whatsNew: Array.isArray(cards) ? (cards as ChatWhatsNewEntry[]) : [],
+      });
+      continue;
+    }
     if (row.type === SENT_EVENT) {
       ends.set(row.run_id, { ...kept, sent: [...kept.sent, row.data as ChatActionSent] });
       continue;
@@ -347,6 +362,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         sent: ends.get(run.id)?.sent ?? [],
         tasks: strips.get(run.id) ?? null,
         why: whyByRun.get(run.id) ?? [],
+        whatsNew: ends.get(run.id)?.whatsNew ?? [],
       },
     ]),
   );

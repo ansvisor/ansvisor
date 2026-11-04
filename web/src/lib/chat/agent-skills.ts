@@ -45,6 +45,26 @@ export const CMS_CONNECTION = 'cms';
 /** Any source of the brand's product catalog. */
 export const CATALOG_CONNECTION = 'catalog';
 
+/** The kinds a brand's connections are read as, and the products saved agents may name for them. */
+const KIND_OF: Record<string, string> = {
+  [CMS_CONNECTION]: CMS_CONNECTION,
+  webflow: CMS_CONNECTION,
+  wordpress: CMS_CONNECTION,
+  framer: CMS_CONNECTION,
+  wix: CMS_CONNECTION,
+  webhook: CMS_CONNECTION,
+  [CATALOG_CONNECTION]: CATALOG_CONNECTION,
+  shopify: CATALOG_CONNECTION,
+  merchant_center: CATALOG_CONNECTION,
+  google_search_console: 'google_search_console',
+  gsc: 'google_search_console',
+  google_analytics: 'google_analytics',
+  ga4: 'google_analytics',
+};
+
+/** A connection key as the kind it is read as (agent-connections.ts), or null for one not read. */
+export const connectionKindOf = (key: string): string | null => KIND_OF[key] ?? null;
+
 const optional = (key: string): SkillConnection => ({ key, required: false });
 const required = (key: string): SkillConnection => ({ key, required: true });
 

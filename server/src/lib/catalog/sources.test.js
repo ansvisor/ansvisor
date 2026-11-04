@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // The module reaches the supabase admin client at import time, whose config
 // hard-exits when SUPABASE_* env is absent (as in CI).
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
+// The brand's Merchant Center sign-in (BRAND-ACCESS PR 16, 00470); none: the workspace's entity.
+const brandConnection = vi.hoisted(() => vi.fn(async () => null));
+vi.mock('../brand-integrations.js', () => ({ brandConnection }));
 // The plan's product cap (ECOM-019): none unless a test sets one.
 const getCatalogProductCap = vi.hoisted(() => vi.fn(async () => -1));
 vi.mock('../plan-guard.js', async (importOriginal) => ({
@@ -478,9 +481,13 @@ describe('syncSource with the workspace sign-in (#1270)', () => {
       readMs: 20,
       connectors: { merchant_center: gmc },
     });
-    expect(signInRequest).toHaveBeenCalledWith('google-merchant-center', 'org_org-1', {
-      hosts: ['merchantapi.googleapis.com'],
-    });
+    expect(signInRequest).toHaveBeenCalledWith(
+      'google-merchant-center',
+      { entityId: 'org_org-1', accountId: null },
+      {
+        hosts: ['merchantapi.googleapis.com'],
+      },
+    );
     expect(signals).toHaveLength(2);
     expect(signals[0]).toBeInstanceOf(AbortSignal);
     expect(signals[1]).toBe(signals[0]);

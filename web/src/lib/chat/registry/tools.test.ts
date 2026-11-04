@@ -72,6 +72,12 @@ vi.mock('@/lib/mcp/pages', async (importOriginal) =>
 vi.mock('@/lib/mcp/why', async (importOriginal) =>
   tracked.all('mcp/why', await importOriginal<Record<string, unknown>>()),
 );
+vi.mock('@/lib/mcp/brand-facts-reads', async (importOriginal) =>
+  tracked.all('mcp/brand-facts-reads', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/whats-new', async (importOriginal) =>
+  tracked.all('mcp/whats-new', await importOriginal<Record<string, unknown>>()),
+);
 vi.mock('@/lib/actions/content', () => ({
   updateOpportunityStatus: tracked.track('actions/content.updateOpportunityStatus'),
 }));
@@ -95,6 +101,9 @@ vi.mock('@/lib/actions/cms-send', () => ({
   sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
   publishDraftToCms: tracked.track('actions/cms-send.publishDraftToCms'),
 }));
+vi.mock('@/lib/actions/cms-take-down', () => ({
+  takeDownDraft: tracked.track('actions/cms-take-down.takeDownDraft'),
+}));
 vi.mock('@/lib/actions/reports', () => ({
   createReport: tracked.track('actions/reports.createReport'),
 }));
@@ -107,6 +116,9 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
 }));
 vi.mock('@/lib/actions/chat-schedules', () => ({
   createChatSchedule: tracked.track('actions/chat-schedules.createChatSchedule'),
+}));
+vi.mock('@/lib/actions/chat-agent-calls', () => ({
+  runAgentFromChat: tracked.track('actions/chat-agent-calls.runAgentFromChat'),
 }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
@@ -380,6 +392,9 @@ describe('the Chat tool registry', () => {
             source: { kind: 'opportunity', id: item },
             bodyHtml: undefined,
             sourceUrl: undefined,
+            // Made in Chat (00463, W4-10); no chat in this context.
+            origin: 'chat',
+            conversationId: null,
           },
         ],
       ],
@@ -467,6 +482,23 @@ describe('the Chat tool registry', () => {
       'chat/actor/drafts.updateContentDraftFor',
       [person, item, { title: 'Plans', bodyHtml: undefined }],
     ]);
+    // Made in the run's chat; an agent's run's own write is the agent's (00463, W4-10).
+    calls.length = 0;
+    const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+    const inChat = {
+      ...ctx,
+      chat: {
+        conversationId: CHAT,
+        runId: 'run-1',
+        agentRunId: 'agent-run-1',
+        approvalKey: 'k',
+        executionMode: 'automated' as const,
+      },
+    };
+    await create.run(inChat, start);
+    await create.runFor!(inChat, start);
+    expect(calls[0].args[1]).toMatchObject({ origin: 'chat', conversationId: CHAT });
+    expect(calls[1].args[2]).toMatchObject({ origin: 'agent', conversationId: CHAT });
     // A context with no workspace has no one to act for.
     await expect(create.runFor!({ ...ctx, organizationId: null }, start)).rejects.toThrow(
       /workspace/,
@@ -683,15 +715,19 @@ describe('approval policies', () => {
       update_draft: ['admin', 'manager'],
       push_cms_draft: ['admin', 'manager'],
       publish_cms: ['admin', 'manager'],
+      // Take down (AUTONOMOUS-GO-LIVE PR 10): as the API's route, a Manager even while publishing is off.
+      unpublish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
+      // Scheduled work (CHAT-20 §4: Admins and Managers create schedules).
+      create_schedule: ['admin', 'manager'],
       // A skill of one's own (W3-06, CHAT-13 v2): Admins and Managers save skills.
       save_skill: ['admin', 'manager'],
       // Memory (W3-11, CHAT-14 item 25): every role has its Me; the store checks the scope.
       save_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
       forget_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
-      // Scheduled work (CHAT-20 §4: Admins and Managers create schedules).
-      create_schedule: ['admin', 'manager'],
+      // An agent running another agent (CHAT-27 phase 2): Admins and Managers, as agents are.
+      run_agent: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
@@ -884,6 +920,11 @@ describe('approval policies', () => {
     // The registry: Send to CMS may, every other row may not.
     const onItsOwn = CHAT_TOOLS.filter((tool) => tool.flags.goLiveOnOwn).map((tool) => tool.name);
     expect(onItsOwn).toEqual(['push_cms_draft', 'publish_cms']);
+    // Take down (PR 10): an EXECUTE outside the go-live groups, which never goes live itself.
+    expect(chatTool('unpublish_cms')).toMatchObject({ class: 'execute', executeGroup: null });
+    expect(() => defineTool({ ...execute, executeGroup: null, goLive } as never)).toThrow(
+      /outside the groups never goes live/,
+    );
     expect(chatTool('publish_cms')?.goLive?.({ draft_id: 'd', destination: 'wordpress' })).toEqual({
       kind: 'publish',
       draftId: 'd',
@@ -1034,7 +1075,11 @@ describe("the model's tool list on the registry's rows", () => {
       'request_access',
       ...memory,
     ]);
-    expect(list('manager', starter)).toEqual([...withoutShopping, ...writes]);
+    // Running another agent is Growth and up (CHAT-27 decision 4).
+    expect(list('manager', starter)).toEqual([
+      ...withoutShopping,
+      ...writes.filter((name) => name !== 'run_agent'),
+    ]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
     expect(list('analyst', facts(null, false))).toEqual([
       ...reads,

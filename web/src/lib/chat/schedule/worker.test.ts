@@ -134,6 +134,9 @@ beforeEach(() => {
   db.tables.chat_messages = [];
   db.tables.chat_runs = [];
   db.tables.chat_run_state = [];
+  db.tables.chat_notices = [];
+  db.tables.chat_files = [];
+  db.unique = { ...db.unique, chat_notices: [['user_id', 'dedupe_key']] };
   db.rpcs = {
     chat_run_limits: () => ({
       workspaceRunning: busy.workspace,
@@ -668,5 +671,113 @@ describe('the driver', () => {
       undefined,
       { sessionUserId: null },
     );
+  });
+});
+
+describe('delivering a run (W3-04a)', () => {
+  const notices = () => db.tables.chat_notices;
+  const FINGERPRINT = 'a'.repeat(64);
+
+  it('asks a change-only run to stop on no change, keeps "No change" and the last delivered fingerprint', async () => {
+    seedJob({ change_only: true, last_fingerprint: FINGERPRINT });
+    await worker.fireDueJobs(NOW, driver);
+    const state = db.tables.chat_run_state.find((s) => s.run_id === runsOf()[0].run_id)!;
+    expect(state.progress).toMatchObject({ scheduled: true, changeOnly: { last: FINGERPRINT } });
+
+    chatEnds(runsOf()[0].id, 'done', { unchanged: true, fingerprint: FINGERPRINT });
+    await worker.settleOpenRuns(minutes(1));
+    expect(runsOf()[0]).toMatchObject({ status: 'unchanged', fingerprint: FINGERPRINT });
+    expect(jobRow()).toMatchObject({ fail_count: 0, last_fingerprint: FINGERPRINT });
+
+    // The next run read something new: delivered, and its fingerprint is the job's last.
+    const NEW = 'b'.repeat(64);
+    await worker.fireDueJobs(new Date(Date.parse(NEXT_SLOT) + 30_000), driver);
+    chatEnds(runsOf()[1].id, 'done', { fingerprint: NEW });
+    await worker.settleOpenRuns(new Date(Date.parse(NEXT_SLOT) + 60_000));
+    expect(runsOf()[1]).toMatchObject({ status: 'done', fingerprint: NEW });
+    expect(jobRow().last_fingerprint).toBe(NEW);
+    expect(worker.scheduleRunStateOf({ status: 'done', progress: {} as never })).toEqual({
+      status: 'done',
+    });
+  });
+
+  it('counts its parts: the files it made, or its task strip’s tasks ready', async () => {
+    seedJob();
+    await worker.fireDueJobs(NOW, driver);
+    const chatRunId = runsOf()[0].run_id;
+    db.tables.chat_files.push({ id: 'f1', run_id: chatRunId }, { id: 'f2', run_id: chatRunId });
+    await worker.settleOpenRuns(minutes(1));
+    // Still working: "2 of 2 ready" so far.
+    expect(runsOf()[0]).toMatchObject({ status: 'running', parts_done: 2, parts_total: 2 });
+  });
+
+  it('tells the creator a run failed only after its retry, in plain words', async () => {
+    seedJob();
+    await worker.fireDueJobs(NOW, driver);
+    chatEnds(runsOf()[0].id, 'error');
+    await worker.settleOpenRuns(minutes(1));
+    expect(notices()).toEqual([]);
+
+    await worker.fireDueJobs(minutes(11), driver);
+    chatEnds(runsOf()[1].id, 'error');
+    await worker.settleOpenRuns(minutes(12));
+    expect(notices()).toEqual([
+      expect.objectContaining({
+        organization_id: ORG,
+        user_id: PEOPLE.manager,
+        kind: 'schedule_failed',
+        payload: expect.objectContaining({
+          scheduleId: JOB,
+          title: 'Weekly visibility report',
+          reason: 'Something went wrong.',
+        }),
+      }),
+    ]);
+
+    // The next run goes through: its notice closes.
+    await worker.fireDueJobs(new Date(Date.parse(NEXT_SLOT) + 30_000), driver);
+    chatEnds(runsOf()[2].id, 'done');
+    await worker.settleOpenRuns(new Date(Date.parse(NEXT_SLOT) + 60_000));
+    expect(notices()[0].resolved_at).toBeTruthy();
+  });
+
+  it('tells the creator, once, when the job turns itself off, and closes it when it goes on', async () => {
+    seedJob({ fail_count: 2 });
+    await worker.fireDueJobs(NOW, driver);
+    chatEnds(runsOf()[0].id, 'error');
+    await worker.settleOpenRuns(minutes(1));
+    expect(notices()).toEqual([
+      expect.objectContaining({
+        kind: 'schedule_paused',
+        payload: expect.objectContaining({
+          reason: 'It failed 3 times in a row, so it was turned off.',
+        }),
+      }),
+    ]);
+
+    // At the AI limit: told why, and on again after the reset with the notice closed.
+    db.tables.chat_schedules = [];
+    db.tables.chat_schedule_runs = [];
+    db.tables.chat_notices = [];
+    seedJob();
+    await worker.fireDueJobs(NOW, driver);
+    chatEnds(runsOf()[0].id, 'paused_cap', { capHit: 'month' });
+    await worker.settleOpenRuns(minutes(1));
+    expect(notices()).toHaveLength(1);
+    expect(notices()[0]).toMatchObject({ kind: 'schedule_paused' });
+    expect(notices()[0].resolved_at ?? null).toBeNull();
+    fakes.usage.mockResolvedValue({ active_plan: true, unlimited: false, percent_used: 0 });
+    await worker.resumeCapPausedJobs(new Date('2026-11-10T08:00:00.000Z'));
+    expect(notices()[0].resolved_at).toBe('2026-11-10T08:00:00.000Z');
+  });
+
+  it('tells the creator when it turns off before a run: its brand gone', async () => {
+    seedJob();
+    db.tables.brands = [];
+    await worker.fireDueJobs(NOW, driver);
+    expect(jobRow()).toMatchObject({ enabled: false, paused_reason: 'missing_source' });
+    expect(notices().map((n) => [n.kind, (n.payload as { reason: string }).reason])).toEqual([
+      ['schedule_paused', 'Its brand or what it worked on is gone.'],
+    ]);
   });
 });

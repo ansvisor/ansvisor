@@ -339,7 +339,7 @@ export function gapsIn(text, known, { heading = false, own = new Set(), products
  * the space after it, the last with the space before it (unless the
  * sentence before it went too, and took it).
  */
-function dropEdits(spans, drop) {
+export function dropEdits(spans, drop) {
   const edits = [];
   spans.forEach((span, i) => {
     if (!drop.has(i)) return;

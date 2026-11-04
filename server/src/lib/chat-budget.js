@@ -108,19 +108,59 @@ async function agentRunSpentUsd(agentRunId) {
  * plan's included monthly budget (`includedUsd`, credits left out), worked
  * out here so no dollar leaves the server. Null without a budget to share
  * (self-hosted: no cap). ChatBudgetError 404 when the run isn't the
- * workspace's.
+ * workspace's. A run another agent ran (called_by_run_id) is held within
+ * what is left of its caller's cap too, after the caller's own spend and
+ * that of the other agents it ran, so calls one after another can't pass it.
  */
 async function agentRunCapUsd(orgId, agentRunId, includedUsd) {
   const { data, error } = await supabaseAdmin
     .from('chat_agent_runs')
-    .select('max_share')
+    .select('max_share, called_by_run_id')
     .eq('id', agentRunId)
     .eq('organization_id', orgId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new ChatBudgetError('not_found', 404, 'Agent run not found.');
   if (includedUsd === null || !(includedUsd > 0)) return null;
-  return (Number(data.max_share) || 0) * includedUsd;
+  const cap = (Number(data.max_share) || 0) * includedUsd;
+  // The agents it ran share its cap (CHAT-27 item 21): what they spent comes out of it.
+  const own = Math.max(0, cap - (await calledRunsSpentUsd(agentRunId)));
+  if (!data.called_by_run_id) return own;
+  const { data: caller, error: callerError } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .select('max_share')
+    .eq('id', data.called_by_run_id)
+    .eq('organization_id', orgId)
+    .maybeSingle();
+  if (callerError) throw new Error(callerError.message);
+  if (!caller) return own;
+  const callerLeft =
+    (Number(caller.max_share) || 0) * includedUsd -
+    (await agentRunSpentUsd(data.called_by_run_id)) -
+    (await calledRunsSpentUsd(data.called_by_run_id, agentRunId));
+  return Math.max(0, Math.min(own, callerLeft));
+}
+
+/**
+ * What the agent runs a run started with run_agent spent (00466's
+ * called_by_run_id; CHAT-27 phase 2), own-key steps included as the cap's
+ * measure is: a called run's slice is held out of its caller's cap, and
+ * what it didn't spend comes back. `exceptRunId` leaves one of them out.
+ */
+async function calledRunsSpentUsd(agentRunId, exceptRunId = null) {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .select('id')
+    .eq('called_by_run_id', agentRunId);
+  if (error) throw new Error(error.message);
+  const ids = (data ?? []).map((row) => row.id).filter((id) => id !== exceptRunId);
+  if (ids.length === 0) return 0;
+  const { data: rows, error: spentError } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .select('cost_usd')
+    .in('agent_run_id', ids);
+  if (spentError) throw new Error(spentError.message);
+  return (rows ?? []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
 }
 
 /**
@@ -313,6 +353,39 @@ export async function refreshAgentRunShare(orgId, agentRunId) {
 }
 
 /**
+ * Keeps a scheduled job's run's use (chat_schedule_runs.usage_share,
+ * CHAT-12 item 24: "0.6%" in its run history) as its Chat run's spend on
+ * Ansvisor's key over the plan's included monthly budget: after each charge
+ * or release of one of its steps. Own-key steps don't draw on the limit,
+ * so they don't count. Never dollars. Without a budget (self-hosted) there
+ * is no share. A failure is logged: the step is settled all the same.
+ */
+export async function refreshScheduleRunShare(orgId, chatRunId) {
+  if (!chatRunId) return;
+  try {
+    const { includedUsd } = await aiBudgetOf(orgId, { credits: false });
+    if (includedUsd === null || !(includedUsd > 0)) return;
+    const { data, error } = await supabaseAdmin
+      .from('prompt_improve_usage')
+      .select('cost_usd')
+      .eq('organization_id', orgId)
+      .eq('chat_run_id', chatRunId)
+      .eq('own_key', false);
+    if (error) throw new Error(error.message);
+    const spent = (data ?? []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
+    // numeric(7, 4): a share to 0.01%, at most 999.9999.
+    const share = Math.min(999.9999, Math.round((spent / includedUsd) * 10_000) / 10_000);
+    const { error: keepError } = await supabaseAdmin
+      .from('chat_schedule_runs')
+      .update({ usage_share: share })
+      .eq('run_id', chatRunId);
+    if (keepError) throw new Error(keepError.message);
+  } catch (err) {
+    logger.error({ err, orgId, chatRunId }, '[chat-budget] could not keep a scheduled run’s use');
+  }
+}
+
+/**
  * The step's real cost in place of its hold: what its model used, priced 1x
  * (generationCostUsd), its prompt cache's reads at the cache-read rate and
  * writes at the write premium. Only the workspace's own Chat rows:
@@ -344,12 +417,13 @@ export async function chargeChatStep(orgId, usageId, { modelId, usage, latencyMs
     .eq('id', usageId)
     .eq('organization_id', orgId)
     .in('feature', CHAT_BUDGET_FEATURES)
-    .select('id, agent_run_id');
+    .select('id, agent_run_id, schedule_id, chat_run_id');
   if (error) throw new Error(error.message);
   if (!data?.length) throw new ChatBudgetError('not_found', 404, 'Chat step usage not found.');
   await drawOnCredits(orgId, usageId);
   // After the draw: the run's use counts the step's credit parts too.
   if (data[0].agent_run_id) await refreshAgentRunShare(orgId, data[0].agent_run_id);
+  if (data[0].schedule_id) await refreshScheduleRunShare(orgId, data[0].chat_run_id);
 }
 
 /**
@@ -382,10 +456,11 @@ export async function releaseChatStep(orgId, usageId) {
     .eq('id', usageId)
     .eq('organization_id', orgId)
     .in('feature', CHAT_BUDGET_FEATURES)
-    .select('agent_run_id');
+    .select('agent_run_id, schedule_id, chat_run_id');
   if (error) throw new Error(error.message);
-  const agentRunId = (data ?? [])[0]?.agent_run_id;
-  if (agentRunId) await refreshAgentRunShare(orgId, agentRunId);
+  const released = (data ?? [])[0];
+  if (released?.agent_run_id) await refreshAgentRunShare(orgId, released.agent_run_id);
+  if (released?.schedule_id) await refreshScheduleRunShare(orgId, released.chat_run_id);
 }
 
 /**

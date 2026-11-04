@@ -45,6 +45,8 @@ import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { WhyCard } from './run/why-card';
+import { WhatsNewCards } from './run/whats-new-cards';
+import { useHomeDraft } from './home-draft';
 import { useFormAssist } from './run/form-assist';
 import { NextMoves } from './run/next-moves';
 import { RememberThis } from './run/remember-this';
@@ -116,6 +118,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         nextMoves: message.run.nextMoves ?? [],
         remember: message.run.remember ?? null,
         why: message.run.why ?? [],
+        whatsNew: message.run.whatsNew ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
@@ -243,6 +246,8 @@ export function ChatThreadView({
       : null;
   });
   const brandId = thread?.brandId ?? activeBrandId ?? null;
+  // On Chat Home, what its page put in the box (What's new's Show me).
+  const homeDraft = useHomeDraft();
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
@@ -439,7 +444,8 @@ export function ChatThreadView({
         code?: string;
       } | null;
       setTurns((all) => all.filter((turn) => turn.key !== answerKey && turn.key !== questionKey));
-      if (body?.code === 'subscription_inactive') openUpgrade();
+      // A read-only workspace, or a chat on the demo brand: the plans.
+      if (body?.code === 'subscription_inactive' || body?.code === 'demo_brand') openUpgrade();
       else toast.error(body?.error ?? t('sendFailed'));
       return false;
     }
@@ -698,7 +704,7 @@ export function ChatThreadView({
           onRemoveChip={onRemoveChip}
           references={asking ? undefined : pageReferences}
           skills={skills}
-          draft={draft}
+          draft={homeDraft ?? draft}
           onSend={(message, sent) =>
             asking && last
               ? answerQuestion(last, composerAnswer(asking, message), 'composer')
@@ -846,6 +852,7 @@ function Answer({
         </ApprovalCard>
       )}
       {turn.runId && run.why.map((why) => <WhyCard key={why.n} runId={turn.runId!} why={why} />)}
+      <WhatsNewCards entries={run.whatsNew} />
       {turn.runId &&
         run.deliverables.map((deliverable, i) => (
           <DeliverableCard
