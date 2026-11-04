@@ -73,7 +73,12 @@ describe('ReportCardPdfDocument', () => {
     expect(status).toContain('A one-time snapshot: we asked each question once, on Nov 4, 2026.');
     expect(status).toContain('How we understood brewlinecoffee.example: you sell');
     expect(status).toContain('Whole bean coffee');
-    expect(status).toContain('in ChatGPT and Microsoft Copilot: named in 8 of 50 answers');
+    // The headline's base spelled out: 25 questions in Starter's two engines.
+    expect(status).toContain(
+      'named in 8 of 50 answers: 25 questions × 2 engines (ChatGPT and Microsoft Copilot)',
+    );
+    expect(status).toContain('in 5 AI engines: 122 answers (3 got no answer)');
+    expect(status).toContain('named in 52 of all 122 answers, every engine');
     expect(status).toContain('In Ansvisor Growth: Google’s AI engines, measured too.');
     expect(status).toContain('6 of 25 · 24%');
     expect(status).toContain('Brewline Coffee (you)');
@@ -106,7 +111,9 @@ describe('ReportCardPdfDocument', () => {
   it('page 2 is the question grid, by product, with searches and who is named instead', () => {
     const [, questions] = draw(SAMPLE_REPORT_CARD);
     expect(questions).toContain('The 25 questions, and what each engine said');
-    expect(questions).toContain('Named in 8 of 50 answers, in 6 of the 25 questions.');
+    expect(questions).toContain(
+      'Named in 6 of the 25 questions: in 8 of the 50 answers from ChatGPT and Microsoft Copilot.',
+    );
     expect(questions).toContain('Whole bean coffee · 14 questions · brewlinecoffee.example/beans');
     expect(questions).toContain('2,900');
     expect(questions).toContain('(a need your buyers also have)');

@@ -71,17 +71,25 @@ export const en = {
         : `How we understood ${domain}: you sell`,
     understoodNote: 'The questions on page 2 are about these.',
     kpiVisibility: 'AI visibility',
-    kpiVisibilitySub: (engines: string | null, named: number, answers: number) =>
-      `${engines ? `in ${engines}: ` : ''}named in ${named} of ${answers} answers`,
+    /** The headline's base spelled out: the questions times the engines it counts. */
+    kpiVisibilitySub: (
+      engines: string,
+      named: number,
+      answers: number,
+      questions: number,
+      engineCount: number,
+    ) =>
+      `named in ${named} of ${answers} answers: ${questions} questions × ${plural(engineCount, 'engine', 'engines')} (${engines})`,
     kpiQuestions: 'Questions asked',
-    kpiQuestionsSub: (engines: number, answers: number) =>
-      `in ${plural(engines, 'AI engine', 'AI engines')}: ${answers} answers`,
+    kpiQuestionsSub: (engines: number, answers: number, unanswered: number) =>
+      `in ${plural(engines, 'AI engine', 'AI engines')}: ${answers} answers${unanswered > 0 ? ` (${unanswered} got no answer)` : ''}`,
     kpiLeader: 'Top competitor',
     kpiLeaderNone: 'None named',
-    kpiLeaderSub: (answers: number, total: number) => `named in ${answers} of ${total} answers`,
+    kpiLeaderSub: (answers: number, total: number) =>
+      `named in ${answers} of all ${total} answers, every engine`,
     kpiLeaderNoneSub: 'in these answers',
     kpiCited: 'Your site cited',
-    kpiCitedSub: (total: number) => `of ${total} answers cite a page of yours`,
+    kpiCitedSub: (total: number) => `of all ${total} answers, every engine, cite a page of yours`,
     startTitle: 'Your starting point',
     startCited: (engines: string, cited: number) =>
       `${engines} don’t name you yet, but AI already reads your site: it cited your pages in ${plural(cited, 'answer', 'answers')} without saying your name. That is where to start.`,
@@ -219,10 +227,16 @@ export const en = {
       products
         ? `Written from the main products on ${domain}, kept for how closely they match what you sell and how often people search for them, and asked in ${country}, in ${language}.`
         : `As asked in ${country}, in ${language}.`,
-    summaryNone: (company: string, answers: number) =>
-      `${company} wasn’t named in any of the ${answers} answers.`,
-    summary: (named: number, answers: number, questions: number, total: number) =>
-      `Named in ${named} of ${answers} answers, in ${questions} of the ${total} questions.`,
+    summaryNone: (
+      company: string,
+      answers: number,
+      total: number,
+      engines: string,
+      engineCount: number,
+    ) =>
+      `${company} wasn’t named in any of the ${total} questions: ${answers} answers from ${engines} (${total} questions × ${plural(engineCount, 'engine', 'engines')}).`,
+    summary: (named: number, answers: number, questions: number, total: number, engines: string) =>
+      `Named in ${questions} of the ${total} questions: in ${named} of the ${answers} answers from ${engines}.`,
     legendNamed: 'Named you',
     legendMissed: 'Answered, didn’t name you',
     legendNone: 'No answer',
