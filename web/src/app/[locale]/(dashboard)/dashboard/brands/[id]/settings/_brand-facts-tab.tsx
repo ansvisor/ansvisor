@@ -17,6 +17,7 @@ import {
 } from '@/lib/content/brand-facts';
 import { cn } from '@/lib/utils';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 
 /**
  * Brand settings › Brand facts (Quality spec §10, CE-047): the facts the API
@@ -40,6 +41,9 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
   // (it reads the site) open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
+  // What Chat's /facts holds drafts to, and a read of the site: admins and managers (2026-11-03).
+  const { canManage } = useUserRole();
+  const tManagers = useTranslations('managersOnly');
 
   useEffect(() => {
     let cancelled = false;
@@ -174,36 +178,38 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
           )}
         </p>
       </div>
-      <div className="flex shrink-0 gap-1.5">
-        {fact.status !== 'approved' && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-7"
-            disabled={busy !== null || reading}
-            aria-label={t('approveFact', { fact: valueOf(fact) })}
-            onClick={guard(() => void review(fact, 'approved'), {
-              action: tActions('reviewBrandFacts'),
-            })}
-          >
-            {t('approve')}
-          </Button>
-        )}
-        {fact.status !== 'rejected' && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7"
-            disabled={busy !== null || reading}
-            aria-label={t('rejectFact', { fact: valueOf(fact) })}
-            onClick={guard(() => void review(fact, 'rejected'), {
-              action: tActions('reviewBrandFacts'),
-            })}
-          >
-            {t('reject')}
-          </Button>
-        )}
-      </div>
+      {canManage && (
+        <div className="flex shrink-0 gap-1.5">
+          {fact.status !== 'approved' && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7"
+              disabled={busy !== null || reading}
+              aria-label={t('approveFact', { fact: valueOf(fact) })}
+              onClick={guard(() => void review(fact, 'approved'), {
+                action: tActions('reviewBrandFacts'),
+              })}
+            >
+              {t('approve')}
+            </Button>
+          )}
+          {fact.status !== 'rejected' && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7"
+              disabled={busy !== null || reading}
+              aria-label={t('rejectFact', { fact: valueOf(fact) })}
+              onClick={guard(() => void review(fact, 'rejected'), {
+                action: tActions('reviewBrandFacts'),
+              })}
+            >
+              {t('reject')}
+            </Button>
+          )}
+        </div>
+      )}
     </li>
   );
 
@@ -211,7 +217,10 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
     <Card>
       <CardHeader>
         <CardTitle>{t('title')}</CardTitle>
-        <CardDescription>{t('description')}</CardDescription>
+        <CardDescription>
+          {t('description')}
+          {!canManage && <span className="mt-1 block">{tManagers('reviewBrandFacts')}</span>}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {!read ? (
@@ -257,16 +266,18 @@ export function BrandFactsTab({ brandId }: { brandId: string }) {
                   })}
                 </ul>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={!canReadAgain}
-                title={canReadAgain ? undefined : t('readAgainSoon')}
-                onClick={guard(() => void readAgain(), { action: tActions('readBrandFacts') })}
-              >
-                {reading && <LoadingDots />}
-                {t('readAgain')}
-              </Button>
+              {canManage && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!canReadAgain}
+                  title={canReadAgain ? undefined : t('readAgainSoon')}
+                  onClick={guard(() => void readAgain(), { action: tActions('readBrandFacts') })}
+                >
+                  {reading && <LoadingDots />}
+                  {t('readAgain')}
+                </Button>
+              )}
             </div>
 
             {read.paused && (

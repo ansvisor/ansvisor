@@ -10,6 +10,7 @@ import {
   renderToBuffer,
 } from '@react-pdf/renderer';
 import type { DraftBlock, DraftRun } from '@/lib/content/draft-export';
+import { withInter } from '@/lib/pdf-font';
 import { answerDocumentBlocks, answerTitle, type ExportAnswer } from './export';
 
 /**
@@ -21,6 +22,7 @@ import { answerDocumentBlocks, answerTitle, type ExportAnswer } from './export';
  * here, so emphasis and quotes are set in grey instead.
  */
 
+/** The font family's name; each PDF registers its own, numbered (withInter). */
 const FAMILY = 'ChatExportInter';
 const TEXT = '#111827';
 const MUTED = '#6b7280';
@@ -33,26 +35,11 @@ const BORDER = '#e5e7eb';
  */
 const LINE = 1.45;
 
-let fontsFrom: string | null = null;
-
-/** Inter from `dir` (public/fonts by default), registered once per server. */
-function registerFonts(dir: string) {
-  if (fontsFrom) return;
-  fontsFrom = dir;
-  Font.register({
-    family: FAMILY,
-    fonts: [
-      { src: path.join(dir, 'Inter-Regular.ttf'), fontWeight: 400 },
-      { src: path.join(dir, 'Inter-Bold.ttf'), fontWeight: 700 },
-    ],
-  });
-  // Word-splitting hyphenation looks broken in tables; wrap whole words only.
-  Font.registerHyphenationCallback((word) => [word]);
-}
+// Word-splitting hyphenation looks broken in tables; wrap whole words only.
+Font.registerHyphenationCallback((word) => [word]);
 
 const styles = StyleSheet.create({
   page: {
-    fontFamily: FAMILY,
     fontSize: 10,
     color: TEXT,
     paddingTop: 56,
@@ -210,11 +197,18 @@ export function pdfBlocks(
   return { blocks: take(blocks), cut };
 }
 
-export function AnswerPdfDocument({ answer }: { answer: ExportAnswer }) {
+/** The PDF's document; `fontFamily` is the Inter registered for it (withInter). */
+export function AnswerPdfDocument({
+  answer,
+  fontFamily,
+}: {
+  answer: ExportAnswer;
+  fontFamily: string;
+}) {
   const { blocks, cut } = pdfBlocks(answerDocumentBlocks(answer));
   return (
     <Document title={answerTitle(answer) || undefined}>
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={[styles.page, { fontFamily }]}>
         <Text fixed style={styles.header}>
           {answer.stamp}
         </Text>
@@ -241,6 +235,13 @@ export async function answerPdf(
   answer: ExportAnswer,
   fontDir: string = path.join(process.cwd(), 'public', 'fonts'),
 ): Promise<Uint8Array> {
-  registerFonts(fontDir);
-  return new Uint8Array(await renderToBuffer(<AnswerPdfDocument answer={answer} />));
+  // Inter of its own for each PDF: one shared by several PDFs lost letters (see withInter).
+  return withInter(
+    FAMILY,
+    fontDir,
+    async (fontFamily) =>
+      new Uint8Array(
+        await renderToBuffer(<AnswerPdfDocument answer={answer} fontFamily={fontFamily} />),
+      ),
+  );
 }

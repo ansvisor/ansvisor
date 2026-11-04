@@ -11,6 +11,7 @@ import {
   type MemoryTextProblem,
 } from '@/lib/chat/memory/rules';
 import { readWhen, whenHint, type WhenWords } from '@/lib/chat/schedule/when';
+import { readSkillName } from '@/lib/chat/skills/skill-name';
 
 /**
  * The help an editable card gives as the person types, by what it makes:
@@ -20,7 +21,10 @@ import { readWhen, whenHint, type WhenWords } from '@/lib/chat/schedule/when';
  *     "Notify only if the answer changed" only on a recurring job;
  *   - a memory (W3-12a): the line's counter, why memory can't keep it (a
  *     secret, personal data, a rule change: Save stays off), and "Replaces"
- *     only while the line still goes to the replaced one's scope.
+ *     only while the line still goes to the replaced one's scope;
+ *   - a skill's draft (W3-08): why its /name can't be kept (the format, an
+ *     Ansvisor skill's or a shortcut's name), which keeps Save skill off
+ *     until it can.
  *
  * The server checks the same again on Save: this only says it sooner.
  */
@@ -28,6 +32,7 @@ export function useFormAssist(
   form: ChatConfirmForm | undefined,
 ): ((values: FormCardValues) => FormCardAssist) | undefined {
   const t = useTranslations('chatSchedules.when') as unknown as WhenWords;
+  const tSkill = useTranslations('chatSkills.card');
   const tMemory = useTranslations('chatMemory');
   const kind = form?.kind;
   const zone = form?.zone ?? 'UTC';
@@ -46,6 +51,13 @@ export function useFormAssist(
     },
     [zone, t],
   );
+  const skill = useCallback(
+    (values: FormCardValues): FormCardAssist => {
+      const { name, problem } = readSkillName(typeof values.name === 'string' ? values.name : '');
+      return { problems: { name: problem ? tSkill(problem, { name }) : undefined } };
+    },
+    [tSkill],
+  );
   const firstScope = form?.fields.find((field) => field.name === 'scope')?.value;
   const memory = useCallback(
     (values: FormCardValues) =>
@@ -56,6 +68,7 @@ export function useFormAssist(
     [firstScope, tMemory],
   );
   if (kind === 'schedule') return schedule;
+  if (kind === 'skill') return skill;
   return kind === 'memory' ? memory : undefined;
 }
 

@@ -12,6 +12,7 @@ import {
   openlyCoveredClusterIds,
   opportunityScore,
   pickClusters,
+  requestScope,
   scoreComponents,
 } from './opportunity-limits.js';
 
@@ -122,7 +123,9 @@ describe('cluster selection', () => {
   });
 
   it('reads the date coverage needs with the opportunities', () => {
-    expect(source('./open-opportunities.js')).toMatch(/'id, title, status, updated_at,/);
+    expect(source('./open-opportunities.js')).toMatch(
+      /'id, title, status, created_at, updated_at,/,
+    );
   });
 
   it("holds a prompt's own request back only with an open opportunity (PROMPT-006)", () => {
@@ -191,6 +194,44 @@ describe('cluster selection', () => {
       'b1',
       'a2',
     ]);
+  });
+});
+
+describe('requestScope', () => {
+  const candidates = [
+    { id: 'c1', topicId: 't1', metrics: { tested: 3 } },
+    { id: 'c2', topicId: 't1', metrics: { tested: 2 } },
+    { id: 'c3', topicId: 't1', metrics: { tested: 0 } },
+    { id: 'c4', topicId: 't2', metrics: { tested: 5 } },
+  ];
+
+  it("counts the focus's needs, the covered ones and those with no answers yet", () => {
+    expect(
+      requestScope(candidates, {
+        covered: new Set(['c1', 'c4']),
+        inFocus: (c) => c.topicId === 't1',
+        requested: 3,
+        focus: 'topic',
+      }),
+    ).toEqual({ focus: 'topic', requested: 3, needs: 3, covered: 1, noAnswers: 1 });
+  });
+
+  it('counts a covered need without answers as covered only', () => {
+    expect(
+      requestScope(candidates, {
+        covered: new Set(['c3']),
+        inFocus: () => true,
+        requested: 2,
+        focus: 'auto',
+      }),
+    ).toMatchObject({ needs: 4, covered: 1, noAnswers: 0 });
+  });
+
+  it('is what the generator reports with each request', () => {
+    const code = source('./opportunity-generator.js');
+    expect(code).toContain('requestScope(candidates');
+    expect(code.match(/\.\.\.scope,/g)).toHaveLength(2);
+    expect(code).toContain('limited: true, ...scope');
   });
 });
 
