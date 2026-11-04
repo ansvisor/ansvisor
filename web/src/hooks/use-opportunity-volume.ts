@@ -1,16 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getOpportunityBasket } from '@/lib/actions/content';
-import { getPromptDemand } from '@/lib/actions/action-center';
+import { getOpportunityBasket, getQuestionVolume } from '@/lib/actions/content';
 import { keptVolume } from '@/lib/content/opportunity-markdown';
-import { sumEstimates, type VolumeEstimate } from '@/lib/volume-estimate';
+import type { QuestionVolume } from '@/lib/content/question-volume';
+import type { VolumeEstimate } from '@/lib/volume-estimate';
 import type { ContentOpportunity, OpportunityBasket } from '@/types';
 
 /**
- * The opportunity's basket, read once for its card, and its AI volume
- * (PROMPT-013): the sum of its prompts' current estimates, or the volume kept
- * on it if those can't be read. `volume` is undefined while it is read.
+ * The opportunity's basket, read once for its card, and its AI volume: its
+ * question's, the prompt it is shown with (question-volume.ts), or the
+ * question's volume kept on it if that can't be read. `volume` is undefined
+ * while it is read; `prompts` is how many prompts it answers, the question
+ * one of them.
  */
 export function useOpportunityVolume(opportunity: ContentOpportunity | null) {
   const id = opportunity?.id;
@@ -22,9 +24,7 @@ export function useOpportunityVolume(opportunity: ContentOpportunity | null) {
     basket: OpportunityBasket | null;
     failed: boolean;
   } | null>(null);
-  const [live, setLive] = useState<{ key: string; estimates: VolumeEstimate[] | null } | null>(
-    null,
-  );
+  const [live, setLive] = useState<{ key: string; question: QuestionVolume | null } | null>(null);
 
   useEffect(() => {
     if (!id || !clusterId) return;
@@ -37,46 +37,36 @@ export function useOpportunityVolume(opportunity: ContentOpportunity | null) {
     };
   }, [id, clusterId]);
 
-  const read = basket?.id === id ? basket : null;
-  // Its prompts: a cluster's members once its basket is in (none if it can't
-  // be read: its prompt_id is only the cluster's representative), else its one prompt.
-  const ready = !!id && (!clusterId || read !== null);
-  const promptIds = !ready
-    ? null
-    : clusterId
-      ? [...new Set(read?.basket?.clusters.flatMap((c) => c.prompts.map((p) => p.id)) ?? [])]
-      : promptId
-        ? [promptId]
-        : [];
-  const key = promptIds?.length && brandId ? `${brandId}:${promptIds.join(',')}` : null;
-
+  const key = id && brandId && promptId ? `${brandId}:${promptId}` : null;
   useEffect(() => {
     if (!key) return;
     let cancelled = false;
-    // The key is "brand:prompt,prompt", all UUIDs.
-    const [brand, ids] = key.split(':');
-    getPromptDemand(brand, ids.split(','))
-      .then((byPrompt) => !cancelled && setLive({ key, estimates: Object.values(byPrompt) }))
-      .catch(() => !cancelled && setLive({ key, estimates: null }));
+    const [brand, prompt] = key.split(':');
+    getQuestionVolume(brand, prompt)
+      .then((question) => !cancelled && setLive({ key, question }))
+      .catch(() => !cancelled && setLive({ key, question: null }));
     return () => {
       cancelled = true;
     };
   }, [key]);
 
-  const estimates = live?.key === key ? live.estimates : undefined;
-  // A cluster's prompts are summed, even one; a lone prompt keeps its own note.
-  const current = !estimates?.length
-    ? null
-    : clusterId || estimates.length > 1
-      ? sumEstimates(estimates)
-      : estimates[0];
+  const read = basket?.id === id ? basket : null;
+  const question = live?.key === key ? live.question : undefined;
   const kept = opportunity && keptVolume(opportunity);
-  const volume = !promptIds
-    ? undefined
-    : !key
-      ? kept
-      : estimates === undefined
-        ? undefined
-        : (current ?? kept);
-  return { basket: read?.basket ?? null, basketFailed: read?.failed ?? false, volume };
+  const volume: VolumeEstimate | null | undefined = !key
+    ? kept
+    : question === undefined
+      ? undefined
+      : (question?.estimate ?? kept);
+  // Its prompts: a cluster's members once its basket is in, else those it kept.
+  const members = read?.basket
+    ? new Set(read.basket.clusters.flatMap((c) => c.prompts.map((p) => p.id))).size
+    : (opportunity?.sourceData.prompts?.length ?? 0);
+  return {
+    basket: read?.basket ?? null,
+    basketFailed: read?.failed ?? false,
+    volume,
+    question: question ?? null,
+    prompts: Math.max(1, members),
+  };
 }
