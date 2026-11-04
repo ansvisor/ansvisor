@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [generate image, ai image, cover image, image with ai, nano banana, image model, alt text, ai-generated]
 synonyms: [make an image, create a picture, blog cover, featured image, illustration, hero image]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-04
+last_checked: 2026-11-04
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -25,12 +25,14 @@ Images never show a product's screens, realistic people, or charts with numbers.
 
 ## Pick a model and how many
 
-The first model is marked **Recommended**: it uses your AI limit most slowly. Each model shows how fast it uses your monthly AI limit compared with that one (**1x**, **2x**, **4x**) and about how much one image uses. Choose 2, 3 or 4 options. The button shows about how much of your monthly AI limit they use together. On your workspace's own OpenRouter key, models say **Your key** and don't use your limit.
+The first model is marked **Recommended**: it uses your AI limit most slowly. Each model shows how fast it uses your monthly AI limit compared with that one (**1x**, **2x**, **4x**) and about how much one image uses. Choose 2, 3 or 4 options. Under the generate button you see about how much of your monthly AI limit they use together. On your workspace's own OpenRouter key, models say **Your key** and don't use your limit.
 
 ## Pick one and add it
 
-Click **Generate**. Click the option you like, check the **Alt text** (it says what the image shows, for people who can't see it and for search), and click **Use this image**. **Regenerate** makes new options and uses your AI limit again.
+Click **Generate 2 images** (or 3 or 4). Click the option you like, check the **Alt text** (it says what the image shows, for people who can't see it and for search), and click **Use this image**. Only that one is added to the page. **Regenerate** makes new options and uses your AI limit again.
+
+If what's left of your monthly AI limit doesn't cover the options you chose, none is made: choose fewer. The demo brand makes no images.
 
 ## Where AI images count
 
-An AI image is marked as one wherever the page goes: in the editor, in exports and when sent to your CMS, with its alt text. Page quality never counts it as the page's own visual proof, and you can't confirm it as your own image. Add a photo or screenshot you took for that.
+In the editor, an AI image shows **AI-generated** under it. The page keeps a note that AI made it, and its alt text, in **Copy HTML**, the HTML export and what goes to a CMS that takes images. Page quality never counts it as the page's own visual proof, and you can't confirm it as your own image. Add a photo or screenshot you took for that.

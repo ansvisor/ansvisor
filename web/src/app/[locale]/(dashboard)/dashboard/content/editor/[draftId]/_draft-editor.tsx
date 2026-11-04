@@ -4328,8 +4328,9 @@ export function DraftEditor({
               placeholders={{ hidden: hiddenPlaceholders, onShowHidden: showHiddenPlaceholder }}
               // + Insert › Products, from an online shop's catalog (shopping path, part 5).
               productsBrandId={siteType === 'ecommerce' ? draft.brandId : null}
-              // Image › Generate with AI, and on an empty line (W4-09).
-              aiImages={{ draftId: draft.id, title }}
+              // Image › Generate with AI, and on an empty line (W4-09): only
+              // with Chat on, whose AI budget and image models it runs on.
+              aiImages={chatOn ? { draftId: draft.id, title } : null}
             />
           )}
 

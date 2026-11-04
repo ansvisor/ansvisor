@@ -8952,7 +8952,7 @@
           "failed": {
             "unavailable": "Image generation isn't available in this workspace right now.",
             "own_key": "Your workspace's own OpenRouter key can't be read. An Admin can replace it in Settings › AI Providers.",
-            "ai_limit": "Your monthly AI limit is used up, so no image was made.",
+            "ai_limit": "What's left of your monthly AI limit doesn't cover {count} images, so none was made.",
             "refused": "The image model didn't make an image for this description: {why} Try describing it another way.",
             "demo": "The demo brand makes no images. Switch to your brand to generate one.",
             "failed": "Couldn't generate images. Try again.",

@@ -72,9 +72,13 @@ export function AiImagePanel({
   const [selected, setSelected] = useState(0);
   const [alt, setAlt] = useState('');
   const [busy, setBusy] = useState<'generate' | 'use' | null>(null);
-  const [failure, setFailure] = useState<{ code: Failure; why?: string; upload?: string } | null>(
-    null,
-  );
+  const [failure, setFailure] = useState<{
+    code: Failure;
+    why?: string;
+    upload?: string;
+    /** How many images the request asked for: what the AI limit left didn't cover. */
+    count?: number;
+  } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -131,7 +135,7 @@ export function AiImagePanel({
       const code = (['unavailable', 'own_key', 'ai_limit', 'refused', 'demo'] as const).find(
         (c) => c === body?.code,
       );
-      setFailure({ code: code ?? 'failed', why: body?.why });
+      setFailure({ code: code ?? 'failed', why: body?.why, count });
     } catch {
       setFailure({ code: 'failed' });
     } finally {
@@ -294,7 +298,10 @@ export function AiImagePanel({
         >
           {failure.code === 'upload' && failure.upload
             ? failure.upload
-            : t(`failed.${failure.code}`, { why: failure.why ?? '' })}
+            : t(`failed.${failure.code}`, {
+                why: failure.why ?? '',
+                count: failure.count ?? count,
+              })}
         </p>
       )}
 

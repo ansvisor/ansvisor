@@ -145,9 +145,11 @@ describe('AiImagePanel', () => {
   it('says why no image came, and why an upload failed', async () => {
     await render();
     generateAnswer = { status: 429, body: { ok: false, code: 'ai_limit', trial: false } };
+    await click('[data-count="3"]');
     await click('[data-action="ai-image.generate"]');
+    // What the limit left doesn't cover the options asked for: fewer may still fit.
     expect($('[role="alert"]').textContent).toBe(
-      'Your monthly AI limit is used up, so no image was made.',
+      "What's left of your monthly AI limit doesn't cover 3 images, so none was made.",
     );
     generateAnswer = { status: 422, body: { ok: false, code: 'refused', why: 'Blocked.' } };
     await click('[data-action="ai-image.generate"]');
