@@ -32,7 +32,7 @@ import {
   type TaskCardResult,
 } from '@/lib/actions/chat-task-card';
 import type { ChatDeliverable, ChatTaskStrip } from '@/lib/chat/events';
-import { VersionDetails, useVersionLine } from './version-card';
+import { SendPageButton, VersionDetails, useVersionLine } from './version-card';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 
@@ -259,6 +259,10 @@ export function DeliverableCard({
               </DropdownMenu>
             )}
           </>
+        )}
+        {/* A page made or changed in chat goes to the CMS from its card (CHAT-25 §6, W4-12b). */}
+        {filed && canChange && deliverable.version && deliverable.href && (
+          <SendPageButton href={deliverable.href} className={ACTION} />
         )}
         {deliverable.filed === 'storage_full' && openGetMore && (
           <button

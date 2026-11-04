@@ -191,7 +191,8 @@ const FAQ_PAGE: Omit<ChatDeliverable, 'version'> = {
   type: 'document',
   formats: ['html', 'md', 'docx', 'pdf'],
   status: 'draft',
-  href: '/dashboard/content/editor/preview',
+  // A draft id's shape, so the card offers Send to CMS (no such draft: nothing is sent).
+  href: '/dashboard/content/editor/00000000-0000-4000-8000-000000000412',
   filed: 'in_files',
 };
 const FAQ_SECTIONS = [
@@ -233,6 +234,12 @@ export const PAGE_VERSIONS: ChatDeliverable[] = [
       canUndo: true,
     },
   },
+];
+
+/** The next moves after a version with nothing left to fill (W4-12b): Mark ready first. */
+export const PAGE_MOVES = [
+  { label: 'Mark ready', prompt: 'Mark this page ready', ghost: true },
+  { label: 'Make the answers shorter', prompt: 'Make the answers shorter' },
 ];
 
 /** Two questions asked together before a FAQ draft (CHAT-07 §A). */

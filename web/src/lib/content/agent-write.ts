@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { getCitedPassages, getDraftSources, getMyRuleSets } from '@/lib/actions/content-drafts';
 import { rebuildSources, type RebuildSources } from './brief';
-import { MAX_PASSAGES } from './cited-passages';
+import { pagePassages } from './cited-passages';
 import { isPageType, type DraftMethod } from './drafts';
 import {
   NOT_FOR_AGENT,
@@ -114,15 +114,6 @@ export function rulesForBrief(
     checked.filter(({ rule }) => rule.key !== 'keywords' || rule.changed),
     describe,
   );
-}
-
-/** The page's headings and paragraphs, as the editor's passages. */
-function pagePassages(html: string): string[] {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
-  return [...doc.querySelectorAll('h1, h2, h3, h4, h5, h6, p')]
-    .map((el) => (el.textContent ?? '').trim().slice(0, 5_000))
-    .filter(Boolean)
-    .slice(0, MAX_PASSAGES);
 }
 
 /**

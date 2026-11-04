@@ -104,6 +104,10 @@ A **Schedule** trigger runs at its time on the clock of the time zone it was set
 
 Signals that come close together don't each start a run. Signals within 15 minutes join one run, a brand gets at most one signal run every 6 hours, and your plan sets how many signal runs an agent may start a day. A signal that had to wait is listed in the agent's next run, and in **Run history** as **Skipped** with the reason.
 
+## A schedule's time zone
+
+A new **Schedule** trigger starts on your time zone from **Settings › Account** (your browser's when that's **Automatic**), shown beside its time. Changing your time zone later doesn't move a trigger you already have.
+
 ## How a run works
 
 Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox.
