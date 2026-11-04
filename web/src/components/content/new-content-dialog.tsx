@@ -920,7 +920,8 @@ export function NewContentDialog({
                       <p className="truncate text-sm font-medium" title={content.title}>
                         {content.title}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      {/* The page's address wraps anywhere: unbroken, it ran under the clear button. */}
+                      <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
                         {[
                           content.fileName ?? (content.sourceUrl && pagePath(content.sourceUrl)),
                           t('content.summary', {
@@ -1178,7 +1179,8 @@ function OverlapCheck({
               )}
             />
             <span className="min-w-0">
-              <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+              {/* A long address with no break in it (a slug in %-escapes) wraps, not widens the dialog. */}
+              <span className="flex flex-wrap items-center gap-1.5 text-sm font-medium [overflow-wrap:anywhere]">
                 {text.title}
               </span>
               <span className="block text-xs text-muted-foreground">{text.reason}</span>

@@ -1,4 +1,5 @@
 import supabaseAdmin from '../../config/supabase.js';
+import { readAllRpcRows } from '../rpc-pages.js';
 
 /**
  * The report card's reads and writes (00472), with the service-role client:
@@ -29,17 +30,26 @@ export function reportCardStore(db = supabaseAdmin) {
       return data?.[0] ?? null;
     },
 
-    /** Dollars spent by cards made since `since`, and how many are still to run. */
+    /**
+     * Dollars spent by cards made since `since`, and how many are still to run.
+     * Read in pages: PostgREST stops at 1000 rows whatever `limit` asks for,
+     * and a month at the daily cap holds several thousand cards.
+     */
     async spendSince(since) {
-      const { data, error } = await db
-        .from('report_cards')
-        .select('cost_usd, status')
-        .gte('created_at', since.toISOString())
-        .limit(100_000);
+      const { data, error } = await readAllRpcRows('report_cards spend', (from, to) =>
+        db
+          .from('report_cards')
+          .select('id, cost_usd, status')
+          .gte('created_at', since.toISOString())
+          .order('id', { ascending: true })
+          .range(from, to),
+      );
       if (error) fail('spend', error);
+      // A card written between two pages can repeat at the boundary: once each.
+      const cards = new Map((data ?? []).map((row) => [row.id, row]));
       let spent = 0;
       let pending = 0;
-      for (const row of data ?? []) {
+      for (const row of cards.values()) {
         spent += Number(row.cost_usd) || 0;
         if (row.status === 'queued' || row.status === 'running') pending += 1;
       }

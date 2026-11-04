@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   FAILED,
   FORBIDDEN,
+  NOT_FOUND,
   coverRequest,
   coverResult,
   placeIn,
@@ -15,8 +16,13 @@ import type {
   CreateChatActionResult,
 } from '@/lib/actions/chat-action-center';
 import type { ChatWritePlace } from '@/lib/chat/registry/define-tool';
+import {
+  markReadyForReview,
+  readyForReviewFailed,
+  type ReadyForReviewResult,
+} from '@/lib/action-center/ready-for-review';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { assertWritableFor, isManagerFor, type RunActor } from './access';
+import { assertWritableFor, canAccessBrandFor, isManagerFor, type RunActor } from './access';
 import { actingRefusalOf, apiAs, type ActingRefusal } from './api';
 
 /**
@@ -83,5 +89,35 @@ export async function createChatActionFor(
     if (refused) return refused;
     console.error('[chat/actor] could not send to Action Center:', err);
     return FAILED("The action couldn't be sent.");
+  }
+}
+
+/**
+ * setTaskReadyForReview for the run's person, in an agent's run with no
+ * session behind it (sessionFree): the same checks as the person's own
+ * click (a workspace that can be written, their live role an Admin's or a
+ * Manager's, the brand theirs to use, the change on a step of their own
+ * chat), then the same change, its History naming them. Full auto only lets
+ * it run without a card where the agent may (the precedence decides).
+ */
+export async function setTaskReadyForReviewFor(
+  actor: RunActor,
+  brandId: string,
+  taskId: string,
+  place?: ChatWritePlace,
+): Promise<ReadyForReviewResult> {
+  try {
+    await assertWritableFor(actor, brandId);
+    if (!(await isManagerFor(actor, actor.organizationId))) return FORBIDDEN;
+    if (!(await canAccessBrandFor(actor, brandId))) return NOT_FOUND('task');
+    const where = await placeIn((id) => ownChatFor(actor, id), place, 'set_task_ready_for_review');
+    return await markReadyForReview(supabaseAdmin, {
+      brandId,
+      taskId,
+      where,
+      actorId: actor.userId,
+    });
+  } catch (err) {
+    return readyForReviewFailed(err);
   }
 }

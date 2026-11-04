@@ -1,11 +1,12 @@
 import { NextResponse, after } from 'next/server';
 import type { ApiFailure } from '@/lib/api-failure';
-import { SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
+import { DEMO_BRAND, SUBSCRIPTION_INACTIVE } from '@/lib/subscription-guard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import { driveRun, type ChatActor, type EngineFailure, type ResumeAction } from './engine';
 import { STORED_EVENTS } from './engine-store';
 import { chatAgenticEnabled } from './flag';
+import { readBrandIsDemo } from './precedence-context';
 import { sseResponse, tailRunEvents } from './run-hub';
 
 /**
@@ -36,6 +37,35 @@ export const apiKeyRefusal = () =>
     'api_key',
     'This looks like an API key. Save it in Settings › AI Providers instead of sending it.',
   );
+
+/**
+ * A message in a chat about the demo brand, or a new chat on it: refused
+ * (402, the server's demo_brand body, which opens the plans) before
+ * anything is kept or run. The demo's chats are sample data (the server's
+ * lib/demo/chat.js), and an answer on the demo brand would still use the
+ * workspace's AI. Null when the chat or brand is another, or isn't there
+ * (the engine answers for that).
+ */
+export async function demoBrandRefusal(
+  actor: ChatActor,
+  body: unknown,
+): Promise<NextResponse | null> {
+  if (!body || typeof body !== 'object') return null;
+  const { conversationId, brandId } = body as { conversationId?: unknown; brandId?: unknown };
+  let brand = typeof brandId === 'string' ? brandId : null;
+  if (typeof conversationId === 'string') {
+    const { data, error } = await supabaseAdmin
+      .from('chat_conversations')
+      .select('brand_id')
+      .eq('id', conversationId)
+      .eq('organization_id', actor.organizationId)
+      .maybeSingle();
+    if (error) throw new Error(`Could not read the chat's brand: ${error.message}`);
+    brand = data?.brand_id ?? brand;
+  }
+  if (!brand || !(await readBrandIsDemo(brand))) return null;
+  return NextResponse.json({ ok: false, failure: 'subscription', ...DEMO_BRAND }, { status: 402 });
+}
 
 /** The engine's refusal as its answer; read-only is the server's own 402 body (the upgrade dialog). */
 export function engineFailureResponse(f: EngineFailure): NextResponse {

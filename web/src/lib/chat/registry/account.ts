@@ -46,7 +46,7 @@ export const ACCOUNT_READS = [
     namesBrands: true,
     costClass: 'C0',
     labelKey: 'connections',
-    route: '/dashboard/settings/integrations',
+    route: '/dashboard/chat/connections',
     mcpTool: null,
     specRow: '9',
     inputSchema: none,

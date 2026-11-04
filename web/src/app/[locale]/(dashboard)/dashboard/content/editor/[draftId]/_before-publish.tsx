@@ -47,6 +47,8 @@ export interface ReadyAnyway {
 }
 
 type RowState = 'ok' | 'missing' | 'check';
+/** The groups the rows show in, in this order: to fix, to check, in place. */
+const GROUPS: RowState[] = ['missing', 'check', 'ok'];
 type Row = {
   state: RowState;
   title: string;
@@ -122,7 +124,14 @@ export function BeforePublish({
   reviewer = null,
   reviewerRequired = false,
   reviewerLd = null,
+  openWork = null,
 }: {
+  /**
+   * What is still open as it is marked ready (editor UX review 2026-11-03,
+   * decision a): the rules not met, the to-dos not done. Counted, never
+   * "all done"; Mark ready stays open.
+   */
+  openWork?: { rules: number; todos: number } | null;
   /**
    * The page's shopping links against the catalog now (shopping path, part
    * 6): the products that no longer sell, the category page, the products
@@ -457,6 +466,8 @@ export function BeforePublish({
       : []),
     { ...readyRow(t, paste, linksPending), fill: paste.placeholders > 0 },
   ];
+  const counts: Record<RowState, number> = { missing: 0, check: 0, ok: 0 };
+  for (const row of rows) counts[row.state] += 1;
   // Nothing to ask about as Send opens it: straight on to the Send dialog.
   // Only once all is read: Trust, the authors, a category's products and the
   // shopping links not read yet may still have something to ask. A Trust
@@ -529,6 +540,11 @@ export function BeforePublish({
             </div>
           </div>
         )}
+        {mode === 'markReady' && openWork && openWork.rules + openWork.todos > 0 && (
+          <p role="status" className="text-xs text-muted-foreground">
+            {t('openWork', openWork)}
+          </p>
+        )}
         {linksPending > 0 && (
           <p role="status" className="text-xs text-muted-foreground">
             {t('linksPending', { count: linksPending })}
@@ -544,85 +560,101 @@ export function BeforePublish({
             {t('pageReading')}
           </p>
         )}
-        <ul className="divide-y rounded-xl border text-sm">
-          {rows.map((row) => (
-            <li key={row.title} className="flex items-start gap-2.5 px-3 py-2.5">
-              <span
-                aria-hidden
-                className={cn(
-                  'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold',
-                  row.state === 'ok'
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
-                    : row.state === 'missing'
-                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                      : 'bg-muted text-muted-foreground',
-                )}
-              >
-                {row.state === 'ok' ? (
-                  <Check className="h-3 w-3" />
-                ) : row.state === 'missing' ? (
-                  '!'
-                ) : (
-                  '?'
-                )}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-medium">
-                  {row.title}
-                  {row.pill && (
-                    <span className="ml-1.5 inline-flex rounded-full bg-emerald-50 px-1.5 py-px align-[1px] text-[11px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
-                      {row.pill}
+        {/* One line first, then the rows in three groups (editor UX review
+            2026-11-03): what to fix, what to check yourself, what is in place. */}
+        {(counts.missing > 0 || counts.check > 0) && (
+          <p className="text-sm font-medium">
+            {t('summary', { fix: counts.missing, check: counts.check })}
+          </p>
+        )}
+        {GROUPS.filter((group) => counts[group] > 0).map((group) => (
+          <section key={group} aria-label={t(`groups.${group}`)} className="space-y-1.5">
+            <h3 className="text-xs font-medium text-muted-foreground">{t(`groups.${group}`)}</h3>
+            <ul className="divide-y rounded-xl border text-sm">
+              {rows
+                .filter((row) => row.state === group)
+                .map((row) => (
+                  <li key={row.title} className="flex items-start gap-2.5 px-3 py-2.5">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold',
+                        row.state === 'ok'
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                          : row.state === 'missing'
+                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+                            : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {row.state === 'ok' ? (
+                        <Check className="h-3 w-3" />
+                      ) : row.state === 'missing' ? (
+                        '!'
+                      ) : (
+                        '?'
+                      )}
                     </span>
-                  )}
-                  <span className="sr-only">
-                    {' · '}
-                    {t(`states.${row.state}`)}
-                  </span>
-                </p>
-                <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
-                  {row.detail}
-                </p>
-              </div>
-              {row.fill && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => {
-                    fixing.current = true;
-                    onFillNow();
-                  }}
-                >
-                  {t('paste.fill')}
-                </Button>
-              )}
-              {row.schema && onSchemaLeftOut && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  data-action={row.schema === 'leaveOut' ? 'schema.leaveOut' : 'schema.addBack'}
-                  onClick={() => onSchemaLeftOut(row.schema === 'leaveOut')}
-                >
-                  {t(row.schema === 'leaveOut' ? 'schema.leaveOut' : 'schema.addBack')}
-                </Button>
-              )}
-              {row.add && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => {
-                    onAddDisclosure?.(row.add!);
-                    setAdded(true);
-                  }}
-                >
-                  {t('disclosure.add')}
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium">
+                        {row.title}
+                        {row.pill && (
+                          <span className="ml-1.5 inline-flex rounded-full bg-emerald-50 px-1.5 py-px align-[1px] text-[11px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
+                            {row.pill}
+                          </span>
+                        )}
+                        <span className="sr-only">
+                          {' · '}
+                          {t(`states.${row.state}`)}
+                        </span>
+                      </p>
+                      <p className="text-xs text-muted-foreground [overflow-wrap:anywhere]">
+                        {row.detail}
+                      </p>
+                    </div>
+                    {row.fill && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0"
+                        onClick={() => {
+                          fixing.current = true;
+                          onFillNow();
+                        }}
+                      >
+                        {t('paste.fill')}
+                      </Button>
+                    )}
+                    {row.schema && onSchemaLeftOut && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0"
+                        data-action={
+                          row.schema === 'leaveOut' ? 'schema.leaveOut' : 'schema.addBack'
+                        }
+                        onClick={() => onSchemaLeftOut(row.schema === 'leaveOut')}
+                      >
+                        {t(row.schema === 'leaveOut' ? 'schema.leaveOut' : 'schema.addBack')}
+                      </Button>
+                    )}
+                    {row.add && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0"
+                        onClick={() => {
+                          onAddDisclosure?.(row.add!);
+                          setAdded(true);
+                        }}
+                      >
+                        {t('disclosure.add')}
+                      </Button>
+                    )}
+                  </li>
+                ))}
+            </ul>
+          </section>
+        ))}
         {jsonLd && (
           <div className="space-y-1.5">
             {mode === 'send' && (
