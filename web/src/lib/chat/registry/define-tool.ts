@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { Feature, PlanId } from '@/config/plans';
 import type { McpAuthContext } from '@/lib/mcp-auth';
+import type { ChatConfirmForm } from '../events';
 
 /**
  * Chat's tool registry (CHAT-20 §9): one row per tool Chat may call, saying
@@ -86,7 +87,15 @@ export type ToolArea =
   /** Opening a page of the app (CHAT-19 §2). */
   | 'navigation'
   /** Opening a page on the web (CHAT-10 §B). */
-  | 'web';
+  | 'web'
+  /** Work Chat does later or on repeat (CHAT-12). */
+  | 'scheduling'
+  /** The workspace's own skills (CHAT-13). */
+  | 'skills'
+  /** What Chat remembers between chats (CHAT-14). */
+  | 'memory'
+  /** An agent running another agent (CHAT-27 phase 2). */
+  | 'agents';
 
 /**
  * What the plan decides about a call (CHAT-20 §7), null when nothing. The
@@ -136,6 +145,8 @@ export interface GoLiveStep {
 export interface ChatWritePlace {
   conversationId: string | null;
   runId: string | null;
+  /** The agent run the chat is (CHAT-27): its drafts are made by an agent (00463). */
+  agentRunId?: string | null;
   approvalKey: string;
   /** assisted: the person approved it (a card, a click); automated: it ran by itself. */
   executionMode: 'assisted' | 'automated';
@@ -150,7 +161,23 @@ export interface ChatWritePlace {
 export type ChatToolContext = McpAuthContext & {
   chat?: ChatWritePlace;
   pageSites?: { hosts: readonly string[]; domains: readonly string[] };
+  /** The run's time zone (the person's): what a schedule's date phrase is read in. */
+  timezone?: string;
 };
+
+/**
+ * What an editable card's fields are made and read with: the run's zone,
+ * workspace and person (whose role a memory's scopes follow, W3-12a), now.
+ */
+export interface CardFormContext {
+  timezone: string;
+  organizationId: string;
+  userId: string;
+  now: Date;
+}
+
+/** The values an editable card sends back with its Approve, by field name. */
+export type CardFormValues = Record<string, string | boolean>;
 
 /** A line of what a card's change carries (the approval card's items): a task to create. */
 export interface ToolCardItem {
@@ -160,8 +187,13 @@ export interface ToolCardItem {
   body?: string;
 }
 
+/** The run a card is read for: its workspace, the only one its words may come from. */
+export interface ToolCardRun {
+  organizationId: string;
+}
+
 /** What a card's targets are, by kind: the browser names each kind from en.json. */
-export type ToolCardTargetKind = 'prompts' | 'pages' | 'competitors' | 'platforms';
+export type ToolCardTargetKind = 'prompts' | 'pages' | 'competitors' | 'platforms' | 'aiUse';
 
 /**
  * What a card shows of a change beyond its target (CHAT-09 item 18: what is
@@ -262,8 +294,9 @@ interface ToolFields<S extends z.ZodObject> {
    * What its card and step name as the target when the input's own words
    * don't (a list, an id): read from the data if need be, in the person's
    * words. Without it the engine reads the input's title, name or text.
+   * `run`: the run's workspace, the only one it may read from.
    */
-  target?(input: z.output<S>): string | null | Promise<string | null>;
+  target?(input: z.output<S>, run: ToolCardRun): string | null | Promise<string | null>;
   /**
    * What a call made, for the answer's output card and Files (CHAT-06
    * items 1, 9): filed as it is made. Null when the call made nothing to
@@ -280,9 +313,10 @@ interface ToolFields<S extends z.ZodObject> {
   precheck?(ctx: ChatToolContext, input: z.output<S>): Promise<unknown>;
   /**
    * What its card shows beyond the target, read in the person's words where
-   * the input has ids: an action's tasks, why, goal and targets.
+   * the input has ids: an action's tasks, why, goal and targets. `run` as
+   * for `target`.
    */
-  cardDetails?(input: z.output<S>): ToolCardDetails | Promise<ToolCardDetails>;
+  cardDetails?(input: z.output<S>, run: ToolCardRun): ToolCardDetails | Promise<ToolCardDetails>;
   /**
    * A call this input makes shows its card in every mode, Full auto too:
    * a choice that is the person's (Create anyway, CHAT-09 item 18a).
@@ -290,6 +324,39 @@ interface ToolFields<S extends z.ZodObject> {
   alwaysCardWhen?(input: z.output<S>): boolean;
   /** What it made, as a card with its Open (CHAT-09 item 19); null when nothing. */
   resultCard?(input: z.output<S>, output: unknown): ToolResultCard | null;
+  /**
+   * The kind of step its card and its change are (CHAT-03): `schedule` for a
+   * job Chat schedules. Without it, a write's step is `write`.
+   */
+  stepKind?: 'schedule';
+  /**
+   * An editable card (ChatConfirm.form; W3-02): its fields, read from the
+   * input, and the input the person's edited values make, or why they make
+   * none. The engine checks what `apply` makes against the input schema
+   * again before the change runs: what runs is what the card was sent with.
+   */
+  form?: {
+    fields(input: z.output<S>, ctx: CardFormContext): ChatConfirmForm | Promise<ChatConfirmForm>;
+    apply(
+      input: z.output<S>,
+      values: CardFormValues,
+      ctx: CardFormContext,
+    ): { ok: true; input: Record<string, unknown> } | { ok: false; error: string };
+  };
+  /** Its step once the change is made ("Scheduled: Weekly report"), when its words say more than the row's. */
+  doneStep?(input: z.output<S>, output: unknown): { label: string; detail?: string } | null;
+  /**
+   * Whether the row is offered in this run at all (run_agent: only in an
+   * agent's run whose Can call names an agent, CHAT-27 item 14). Without it,
+   * every run that the precedence allows gets it. Not offered, it isn't
+   * explained as refused either.
+   */
+  offerIn?(run: { agentRunId: string | null }): Promise<boolean>;
+  /**
+   * What the change answers is untrusted data (another agent's words): the
+   * run is tainted after it, so every later change shows a card (CHAT-20 §16a).
+   */
+  taintsRun?: true;
   /** A valid input, for the registry's tests and the permission fixtures (CHAT-20 §19). */
   fixture: { input: z.input<S> };
 }
@@ -320,8 +387,13 @@ type ClassFields =
     }
   | {
       class: 'execute';
-      /** Its go-live group, which the Manager switch in Settings › Chat covers. */
-      executeGroup: ExecuteGroup;
+      /**
+       * Its go-live group, which the Manager switch in Settings › Chat covers.
+       * Null for one that only takes back what went out (unpublish_cms,
+       * AUTONOMOUS-GO-LIVE PR 10): outside every group, it never goes out on
+       * its own, and a Manager may even while publishing is off for Managers.
+       */
+      executeGroup: ExecuteGroup | null;
       flags?: Partial<Pick<ToolFlags, 'costCard'>>;
     };
 
@@ -452,7 +524,9 @@ export function defineTool<S extends z.ZodObject>(def: ToolDefinition<S>): ChatT
     ) {
       throw new Error(`${def.name}: an execute always needs the user's click`);
     }
-    if (!EXECUTE_GROUPS.includes(def.executeGroup)) {
+    if (def.executeGroup === null) {
+      if (def.goLive) throw new Error(`${def.name}: an execute outside the groups never goes live`);
+    } else if (!EXECUTE_GROUPS.includes(def.executeGroup)) {
       throw new Error(`${def.name}: an execute belongs to a go-live group`);
     }
     return { ...def, defaultPolicy: 'click', maxPolicy: 'click', flags, excludeRoles };

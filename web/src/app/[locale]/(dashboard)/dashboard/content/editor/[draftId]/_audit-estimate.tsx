@@ -5,15 +5,15 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { LoadingDots } from '@/components/ui/loading-dots';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
-import { CATEGORY_META, barColor, scoreColor } from '@/components/audit/audit-report';
+import { CATEGORY_META } from '@/components/audit/audit-report';
 import {
   AI_CHECKS,
   readAuditEstimate,
   type AiVerdict,
   type AuditEstimate,
 } from '@/lib/content/audit-estimate';
+import { BAND_BAR_CLASSES, BAND_TEXT_CLASSES, qualityBand } from '@/lib/content/quality';
 import { cn } from '@/lib/utils';
 
 /** How long after the page settles the estimate is read again: a pause, not each keystroke. */
@@ -138,7 +138,7 @@ export function AuditEstimateCard({
         <span
           className={cn(
             'ml-auto text-lg font-semibold tabular-nums',
-            score === null ? 'text-muted-foreground' : scoreColor(score / 100),
+            score === null ? 'text-muted-foreground' : BAND_TEXT_CLASSES[qualityBand(score)],
           )}
         >
           {score === null ? state.failed ? '—' : <LoadingDots /> : t('score', { score })}
@@ -164,9 +164,11 @@ export function AuditEstimateCard({
                   </span>
                   <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
                     <span
+                      // Red only for what blocks (editor UX review 2026-11-03):
+                      // a low category is amber, as Quality's scores are.
                       className={cn(
                         'block h-full rounded-full',
-                        barColor(value === null ? null : value / 100),
+                        value === null ? 'bg-muted' : BAND_BAR_CLASSES[qualityBand(value)],
                       )}
                       style={{ width: `${value ?? 0}%` }}
                     />
@@ -207,44 +209,5 @@ export function AuditEstimateCard({
         state.failed && <p className="text-xs text-muted-foreground">{t('failed')}</p>
       )}
     </div>
-  );
-}
-
-/**
- * The header's Audit chip (customer priorities item 9): the estimate's
- * score, there whatever Quality's phase; it opens the estimate's card.
- */
-export function AuditEstimateChip({ state }: { state: AuditEstimateState }) {
-  const t = useTranslations('contentEditor.editor.auditEstimate');
-  const score = state.estimate?.score ?? null;
-  if (score === null && state.failed) return null;
-  return (
-    <Popover>
-      <PopoverTrigger
-        title={t('chipHint')}
-        className={cn(
-          'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium tabular-nums',
-          score === null
-            ? 'bg-muted/40 text-muted-foreground'
-            : score >= 70
-              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
-              : score >= 40
-                ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300'
-                : 'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300',
-        )}
-      >
-        <span
-          aria-hidden
-          className={cn(
-            'h-1.5 w-1.5 rounded-full bg-current',
-            !state.settled && 'animate-pulse motion-reduce:animate-none',
-          )}
-        />
-        {score === null ? t('chipReading') : t('chip', { score })}
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 p-0">
-        <AuditEstimateCard state={state} className="border-0" />
-      </PopoverContent>
-    </Popover>
   );
 }

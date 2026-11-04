@@ -114,7 +114,7 @@ async function readInOrder(
     featuredImage: packaged.featured_image,
   };
 
-  const [draft, published, sources] = await Promise.all([
+  const [draft, published, takenDown, sources] = await Promise.all([
     supabaseAdmin
       .from('content_drafts')
       .select('published_url, kept_sources')
@@ -127,9 +127,17 @@ async function readInOrder(
       .eq('status', 'published')
       .limit(1)
       .maybeSingle(),
+    // A send taken down (00460); before it, no such status: nothing taken down.
+    supabaseAdmin
+      .from('content_draft_deliveries')
+      .select('id')
+      .eq('draft_id', step.draftId)
+      .eq('status', 'taken_down')
+      .limit(1)
+      .maybeSingle(),
     supabaseAdmin.rpc('content_draft_sources', { p_draft_id: step.draftId, p_days: SOURCES_DAYS }),
   ]);
-  for (const result of [draft, published, sources]) {
+  for (const result of [draft, published, takenDown, sources]) {
     if (result.error) throw new Error(result.error.message);
   }
 
@@ -163,6 +171,9 @@ async function readInOrder(
 
   facts.liveItem = !!draft.data?.published_url || !!published.data;
   if (facts.liveItem) return { facts, page };
+  // A page someone took down never goes live on its own again (PR 10).
+  facts.takenDown = !!takenDown.data;
+  if (facts.takenDown) return { facts, page };
 
   if (ctx.role !== 'admin' && ctx.role !== 'manager') return { facts, page };
   facts.gate = await goLiveGate({

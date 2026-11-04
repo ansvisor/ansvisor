@@ -105,11 +105,30 @@ const runSiteAudit: UndoRule = {
   href: () => '/dashboard/audit',
 };
 
+// ─── run_agent: recorded, no Undo (the agent it ran keeps its own run) ──────
+
+const runAgent: UndoRule = {
+  ...NO_UNDO,
+  targetType: 'agent',
+  async record(input, output): Promise<WriteRecord> {
+    const agent = textOf(asObject(output).agent);
+    return {
+      target: { type: 'agent', id: textOf(asObject(input).agent) },
+      summaryParams: { agent: summaryValue(agent) },
+      undo: null,
+    };
+  },
+  href: (id) => `/dashboard/agents/${id}`,
+};
+
 /** The output rows' records and Undo, by tool name (undo.ts UNDO_RULES). */
 export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   build_report: buildReport,
   push_cms_draft: pushCmsDraft,
   // A page put live (AUTONOMOUS-GO-LIVE PR 9): recorded the same way; Take down is its own click.
   publish_cms: pushCmsDraft,
+  // A page taken down (PR 10): recorded the same way, its CMS from the output; publish it again to undo.
+  unpublish_cms: pushCmsDraft,
   run_site_audit: runSiteAudit,
+  run_agent: runAgent,
 };

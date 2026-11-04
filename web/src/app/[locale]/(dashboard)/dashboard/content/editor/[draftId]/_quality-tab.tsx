@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Check } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
@@ -150,6 +150,7 @@ export interface Suggestion {
  */
 export function QualityTab({
   quality,
+  focusRequest = null,
   onShow,
   onShowPlaceholder,
   onPickAuthor,
@@ -169,6 +170,11 @@ export function QualityTab({
   auditEstimate = null,
 }: {
   quality: QualityRead;
+  /**
+   * A part to show, from the Next step basket: scrolled into view and
+   * marked a moment, Quality open already or not (editor test 2026-11-03).
+   */
+  focusRequest?: { to: QualityFocus; n: number } | null;
   /** Site Audit's estimate of the page (customer priorities item 9), under the scores. */
   auditEstimate?: ReactNode;
   /** Opens the header's page type menu: the checks and weights follow the type (CE-052). */
@@ -221,14 +227,24 @@ export function QualityTab({
   // Every live check has its points: none to raise, none of the person's left
   // (a page too short to read says so instead).
   const allDone = suggestions.length === 0 && todosLeft === 0 && readability?.score !== null;
+  const shown = useFocusRequest(focusRequest, todosLeft > 0, suggestions.length > 0);
 
   return (
     <div className="space-y-4 text-sm">
-      <section aria-label={t('scores')} className="space-y-2">
+      <section
+        ref={shown.ref('scores')}
+        tabIndex={-1}
+        aria-label={t('scores')}
+        className={cn('space-y-2', shown.mark('scores'))}
+      >
         <div className="grid grid-cols-3 gap-2">
           {scores.map(({ name, score, empty }) => (
             <div key={name} className="min-w-0 rounded-xl border bg-card px-2.5 py-2">
               <p className="truncate text-xs text-muted-foreground">{t(`names.${name}`)}</p>
+              {/* What it measures, in plain words (editor UX review 2026-11-03). */}
+              <p className="text-[11px] leading-tight text-muted-foreground">
+                {t(`about.${name}`)}
+              </p>
               {score === null ? (
                 <p className="mt-0.5 text-xs text-muted-foreground">{empty}</p>
               ) : (
@@ -247,6 +263,7 @@ export function QualityTab({
             </div>
           ))}
         </div>
+        <p className="text-xs text-muted-foreground">{t('bandsLegend')}</p>
         <p className="text-xs text-muted-foreground">{t('estimate')}</p>
         {weightsFor && (
           <p className="text-xs text-muted-foreground">
@@ -297,7 +314,12 @@ export function QualityTab({
       {handOff && <HandOffCard handOff={handOff} />}
 
       {todos.length > 0 && (
-        <section aria-label={t('todos.title')} className="space-y-2">
+        <section
+          ref={shown.ref('todos')}
+          tabIndex={-1}
+          aria-label={t('todos.title')}
+          className={cn('space-y-2', shown.mark('todos'))}
+        >
           <h4 className="text-xs text-muted-foreground">
             <span className="font-medium">{t('todos.title')}</span>{' '}
             {t('todos.left', { count: todosLeft })}
@@ -326,7 +348,12 @@ export function QualityTab({
       )}
 
       {(suggestions.length > 0 || allDone) && (
-        <section aria-label={t('suggestionsLabel')} className="space-y-2">
+        <section
+          ref={shown.ref('trust')}
+          tabIndex={-1}
+          aria-label={t('suggestionsLabel')}
+          className={cn('space-y-2', shown.mark('trust'))}
+        >
           <h4 className="text-xs font-medium text-muted-foreground">{t('suggestionsLabel')}</h4>
           {allDone ? (
             <p className="text-xs text-muted-foreground">{t('nothingToRaise')}</p>
@@ -335,7 +362,9 @@ export function QualityTab({
               {suggestions.map((s) => (
                 <li key={s.key} className="flex items-start gap-2.5 rounded-xl border px-3 py-2.5">
                   <span className="mt-0.5 shrink-0 rounded-md bg-emerald-50 px-1.5 text-[11px] font-medium text-emerald-700 tabular-nums dark:bg-emerald-950 dark:text-emerald-300">
-                    {t('gain', { gain: s.gain, score: t(`names.${s.score}`) })}
+                    <span title={t('gainLong', { gain: s.gain, score: t(`names.${s.score}`) })}>
+                      {t('gain', { gain: s.gain, score: t(`names.${s.score}`) })}
+                    </span>
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium [overflow-wrap:anywhere]">
@@ -441,6 +470,74 @@ export function QualityTab({
       )}
     </div>
   );
+}
+
+/** Quality's parts the Next step basket shows: its to-dos, or what raises Trust. */
+export type QualityFocus = 'todos' | 'trust';
+type FocusPart = QualityFocus | 'scores';
+
+/**
+ * Brings a part of the side panel to the top of the panel's own scroll
+ * (`data-panel-scroll`), leaving the page where it is: scrollIntoView moves
+ * every scroll it sits in, and at 1024×768 took the header with Next and
+ * Mark ready out of sight (editor UX review 2026-11-03). Outside the panel,
+ * as near as it needs.
+ */
+export function scrollInPanel(el: HTMLElement) {
+  const box = el.closest<HTMLElement>('[data-panel-scroll]');
+  if (!box) {
+    el.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+    return;
+  }
+  const top = box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top;
+  box.scrollTo?.({ top: Math.max(0, top - 8), behavior: 'smooth' });
+}
+
+/** How long a part shown from the basket stays marked. */
+const FOCUS_MARK_MS = 1600;
+
+/**
+ * The part a request names, scrolled into view, focused and marked a moment
+ * (once per request): its to-dos with one open, else what raises the
+ * scores, else the scores themselves.
+ */
+function useFocusRequest(
+  request: { to: QualityFocus; n: number } | null,
+  hasTodos: boolean,
+  hasSuggestions: boolean,
+) {
+  const parts = useRef<Partial<Record<FocusPart, HTMLElement | null>>>({});
+  const handled = useRef<number | null>(null);
+  const [marked, setMarked] = useState<FocusPart | null>(null);
+  useEffect(() => {
+    if (!request || handled.current === request.n) return;
+    handled.current = request.n;
+    const order: FocusPart[] =
+      request.to === 'todos' ? ['todos', 'trust', 'scores'] : ['trust', 'todos', 'scores'];
+    const part = order.find(
+      (p) => (p === 'scores' || (p === 'todos' ? hasTodos : hasSuggestions)) && parts.current[p],
+    );
+    const el = part ? parts.current[part] : null;
+    if (!part || !el) return;
+    scrollInPanel(el);
+    el.focus({ preventScroll: true });
+    setMarked(part);
+    const timer = setTimeout(() => setMarked(null), FOCUS_MARK_MS);
+    return () => clearTimeout(timer);
+    // Only a new request shows a part.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [request?.n]);
+  return {
+    ref: (part: FocusPart) => (el: HTMLElement | null) => {
+      parts.current[part] = el;
+    },
+    mark: (part: FocusPart) =>
+      cn(
+        'rounded-xl outline-none transition-shadow duration-500',
+        marked === part &&
+          'ring-2 ring-amber-300 ring-offset-2 ring-offset-background dark:ring-amber-700',
+      ),
+  };
 }
 
 /** A to-do's words: its title, the nudge's "Next for you" phrase and its detail line. */
@@ -715,7 +812,9 @@ function TodoRow({
             <>
               {' · '}
               <span className="font-medium whitespace-nowrap text-emerald-700 tabular-nums dark:text-emerald-300">
-                {t('gain', { gain: todo.gain, score: t(`names.${todo.score}`) })}
+                <span title={t('gainLong', { gain: todo.gain, score: t(`names.${todo.score}`) })}>
+                  {t('gain', { gain: todo.gain, score: t(`names.${todo.score}`) })}
+                </span>
               </span>
             </>
           )}
