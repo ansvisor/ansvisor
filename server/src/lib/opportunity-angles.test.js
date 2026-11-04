@@ -94,6 +94,47 @@ describe('angleCandidates', () => {
   });
 });
 
+describe('angleCandidates, against the same run and the brand’s other opportunities', () => {
+  it('counts an opportunity reopened in this run, or lately, from its reopening', () => {
+    const candidates = [cand('c1'), cand('c2'), cand('c3')];
+    const rows = [
+      // Reopened by this run: old, but open again from now.
+      row('o1', 'c1', { status: 'new', reopenedAt: new Date(now).toISOString() }),
+      row('o2', 'c2', { status: 'new', reopenedAt: daysAgo(ANGLE_AFTER_DAYS - 1) }),
+      row('o3', 'c3', { status: 'new', reopenedAt: daysAgo(ANGLE_AFTER_DAYS) }),
+    ];
+    expect(pick(candidates, rows)).toEqual(['c3']);
+  });
+
+  it('skips a need another open opportunity holds or answers (one per question, #1923)', () => {
+    const rep = (id, text) => ({
+      metrics: { tested: 3, visibility: 5, representative: { id, text } },
+    });
+    const candidates = [
+      cand('c1', rep('p1', 'Best coffee subscription 2026?')),
+      cand('c2', rep('p2', 'How to brew cold brew?')),
+      cand('c3', rep('p3', 'Is decaf healthy?')),
+      cand('c4', rep('p4', 'Coffee grinder for espresso?')),
+    ];
+    const rows = ['c1', 'c2', 'c3', 'c4'].map((c, i) => row(`o${i + 1}`, c));
+    const openRows = [
+      ...rows,
+      // A Send to Content opportunity holding c1 as a related cluster.
+      { id: 'x1', status: 'new', cluster_id: null, related_cluster_ids: ['c1'], source_data: {} },
+      // An open one on another cluster answering c2's question (years aside).
+      {
+        id: 'x2',
+        status: 'in_progress',
+        cluster_id: 'c9',
+        source_data: { promptText: 'How to brew cold brew?' },
+      },
+      // One for c3's prompt, but done: it doesn't hold the need.
+      { id: 'x3', status: 'done', prompt_id: 'p3', cluster_id: null, source_data: {} },
+    ];
+    expect(pick(candidates, rows, { openRows })).toEqual(['c3', 'c4']);
+  });
+});
+
 describe('angleLine', () => {
   it('tells the model what the need has and that this one must differ', () => {
     const line = angleLine({ title: 'Compare coffee subscriptions', decision: 'create' });
@@ -113,7 +154,7 @@ describe('the generator', () => {
       'const angleRoom = !targeted && count !== undefined && !promptId ? count - fresh.length : 0;',
     );
     expect(code).toContain(
-      'angleCandidates(candidates, existing, { covered: coveredBefore, inFocus })',
+      'angleCandidates(candidates, existing, {\n          covered: coveredBefore,\n          inFocus,\n          openRows: rows,\n        })',
     );
   });
 

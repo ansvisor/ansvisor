@@ -14,6 +14,7 @@
  */
 
 import { OPEN_OPPORTUNITY_STATUSES } from './opportunity-limits.js';
+import { clustersOf, findSameQuestion, isOpen } from './opportunity-same-question.js';
 
 /** Brand visibility (% of answers mentioning or citing it) below which a need is still barely seen. */
 export const STILL_LOW_VISIBILITY = 20;
@@ -32,30 +33,60 @@ function onCluster(rows, clusterId) {
   );
 }
 
+/**
+ * Since when an open opportunity has had its chance: when it was made, or
+ * when it was last reopened (opportunity-reopen.js), whichever is later. A
+ * done opportunity the same run reopened starts its 30 days again.
+ */
+function openSince(row) {
+  const times = [row.created_at, row.reopenedAt]
+    .map((t) => (t ? Date.parse(t) : NaN))
+    .filter(Number.isFinite);
+  return times.length ? Math.max(...times) : NaN;
+}
+
 /** Whether this opportunity's work has had its chance, so its need may get another angle. */
 function hadItsChance(row, now) {
   if (row.status === 'done') return true;
   if (row.status === 'dismissed') return row.dismissReason !== 'not_relevant';
   if (!OPEN_OPPORTUNITY_STATUSES.includes(row.status)) return false;
-  const since = Date.parse(row.created_at);
+  const since = openSince(row);
   return Number.isFinite(since) && now - since >= ANGLE_AFTER_DAYS * DAY_MS;
+}
+
+/**
+ * Whether an open opportunity other than the need's own already answers it
+ * (one open opportunity per question, #1923): one holding the need as a
+ * related cluster (a Send to Content or task opportunity), or one answering
+ * the need's question. An angle there would sit next to it, unmerged.
+ */
+function answeredElsewhere(c, own, openRows) {
+  const others = openRows.filter((r) => isOpen(r) && !own.has(r.id));
+  if (others.some((r) => clustersOf(r).includes(c.id))) return true;
+  const question = c.metrics.representative;
+  return !!findSameQuestion(
+    { question: question?.text ?? null, promptId: question?.id ?? null, clusterIds: [c.id] },
+    others,
+  );
 }
 
 /**
  * Covered needs a request may write another angle on, best score first:
  * with answers, the brand still under STILL_LOW_VISIBILITY, and every
- * opportunity on the need past its chance (hadItsChance). Each comes with the
- * opportunity it's an angle on: the newest on the need.
+ * opportunity on the need past its chance (hadItsChance), and no other open
+ * opportunity in `openRows` answering it (answeredElsewhere). Each comes with
+ * the opportunity it's an angle on: the newest on the need.
  *
  * @param {{ id: string, score: number, metrics: { tested: number, visibility: number } }[]} candidates
- * @param {{ id: string, title: string, status: string, created_at?: string, dismissReason?: string|null, decision?: string|null, cluster_id: string, related_cluster_ids?: string[] }[]} rows
- * @param {{ covered: Set<string>, inFocus?: (c: object) => boolean, now?: number }} opts
+ * @param {{ id: string, title: string, status: string, created_at?: string, reopenedAt?: string|null, dismissReason?: string|null, decision?: string|null, cluster_id: string, related_cluster_ids?: string[] }[]} rows
+ * @param {{ covered: Set<string>, inFocus?: (c: object) => boolean, now?: number, openRows?: object[] }} opts
+ *   `openRows`: every opportunity of the brand, as loadOpportunityBaskets reads them
  * @returns {(object & { angleOf: { id: string, title: string, decision: string|null } })[]}
  */
 export function angleCandidates(
   candidates,
   rows,
-  { covered, inFocus = () => true, now = Date.now() },
+  { covered, inFocus = () => true, now = Date.now(), openRows = [] },
 ) {
   const picked = [];
   for (const c of candidates) {
@@ -63,6 +94,7 @@ export function angleCandidates(
     if (!(c.metrics.tested > 0) || !(c.metrics.visibility < STILL_LOW_VISIBILITY)) continue;
     const on = onCluster(rows, c.id);
     if (!on.length || !on.every((r) => hadItsChance(r, now))) continue;
+    if (answeredElsewhere(c, new Set(on.map((r) => r.id)), openRows)) continue;
     const latest = [...on].sort(
       (a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0),
     )[0];

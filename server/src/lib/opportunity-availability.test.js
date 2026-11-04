@@ -54,6 +54,20 @@ describe('needAvailability', () => {
     expect(result.topics.t1.angles).toBe(1);
   });
 
+  it('rounds a need’s visibility as the generator does, so 19.96% counts no angle', () => {
+    const now = Date.parse('2026-11-03T12:00:00Z');
+    const old = new Date(now - 40 * 86_400_000).toISOString();
+    const angles = (visibility) =>
+      needAvailability({
+        clusters,
+        opportunities: opportunities.map((o) => ({ ...o, created_at: old })),
+        promptMetrics: new Map([...promptMetrics, ['p3', { cells: 20, visibility }]]),
+        now,
+      }).angles;
+    expect(angles(19.96)).toBe(0);
+    expect(angles(19.94)).toBe(1);
+  });
+
   it('reads an empty brand as nothing to write for', () => {
     expect(needAvailability({ clusters: [], opportunities: [], promptMetrics: new Map() })).toEqual(
       {

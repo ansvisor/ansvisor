@@ -20,6 +20,7 @@ import {
   openOpportunityOn,
 } from './opportunity-limits.js';
 import { angleCandidates } from './opportunity-angles.js';
+import { round } from './priority-core.js';
 
 /** The no-topic scope's key in `topics`. */
 export const NO_TOPIC = 'none';
@@ -44,8 +45,9 @@ export function needAvailability({ clusters, opportunities, promptMetrics, now =
   const candidates = clusters.map((c) => {
     const tested = c.prompt_ids.map((p) => promptMetrics.get(p)).filter((m) => m?.cells > 0);
     const cells = tested.reduce((sum, m) => sum + m.cells, 0);
+    // Rounded to one place, as clusterMetrics rounds it: 19.96 is 20, no angle.
     const visibility = cells
-      ? tested.reduce((sum, m) => sum + m.visibility * m.cells, 0) / cells
+      ? round(tested.reduce((sum, m) => sum + m.visibility * m.cells, 0) / cells, 1)
       : 0;
     return { id: c.id, score: 0, metrics: { tested: tested.length, visibility } };
   });

@@ -595,10 +595,11 @@ export async function generateContentOpportunities(
   const angleRoom = !targeted && count !== undefined && !promptId ? count - fresh.length : 0;
   const angles =
     angleRoom > 0
-      ? angleCandidates(candidates, existing, { covered: coveredBefore, inFocus }).slice(
-          0,
-          angleRoom,
-        )
+      ? angleCandidates(candidates, existing, {
+          covered: coveredBefore,
+          inFocus,
+          openRows: rows,
+        }).slice(0, angleRoom)
       : [];
   const wanted = [...fresh, ...angles];
   // Their own baskets, for the prompt and the new opportunity's searches.
