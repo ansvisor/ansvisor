@@ -30,6 +30,7 @@ vi.mock('@/i18n/navigation', () => ({
 vi.mock('@/components/agentic/runs-tray', () => ({
   RunsTray: () => <button type="button" data-action="runs.toggleTray" />,
 }));
+vi.mock('@/lib/actions/chat-schedules', () => ({ countChatSchedules: vi.fn(async () => 2) }));
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatMenuOpen: vi.fn(async () => ({ ok: true })),
 }));
@@ -178,9 +179,19 @@ describe('ChatMenuView', () => {
     // Agent Center, out of Chat, with "New" until it is first opened (governance mockup #cnav).
     expect(action('chatMenu.openAgents')[0].getAttribute('href')).toBe('/dashboard/agents');
     expect(action('chatMenu.openAgents')[0].textContent).toBe('Agent CenterNew');
-    // Skills (W3-07); Scheduled isn't built yet.
+    // Skills (W3-07).
     expect(action('chatMenu.openSkills')[0].getAttribute('href')).toBe('/dashboard/chat/skills');
-    expect(action('chatMenu.openScheduled')).toHaveLength(0);
+    // Scheduled (W3-03), with no count while no job is on.
+    expect(action('chatMenu.openScheduled')[0].getAttribute('href')).toBe(
+      '/dashboard/chat/scheduled',
+    );
+    expect(action('chatMenu.openScheduled')[0].textContent).toBe('Scheduled');
+    await render(menu([], { scheduled: 3, pathname: '/dashboard/chat/scheduled/x' }));
+    const scheduled = action('chatMenu.openScheduled')[0];
+    expect(scheduled.textContent).toBe('Scheduled3');
+    expect(scheduled.getAttribute('aria-label')).toBe('Scheduled, 3 jobs on');
+    expect(scheduled.getAttribute('aria-current')).toBe('page');
+    await render(menu([]));
     expect(text()).toContain('No chats yet.');
     expect(action('chatMenu.searchChats')[0].getAttribute('placeholder')).toBe(
       'Search chats · Ctrl K',
@@ -386,7 +397,14 @@ describe('ChatShell', () => {
     );
     expect(
       [...popup.querySelectorAll('[data-action="search.openPage"]')].map((b) => b.textContent),
-    ).toEqual(['☰All chats', '✦Agent Center', '▤Files', '⇄Connections', '⚙Settings']);
+    ).toEqual([
+      '☰All chats',
+      '✦Agent Center',
+      '⏲Scheduled',
+      '▤Files',
+      '⇄Connections',
+      '⚙Settings',
+    ]);
     await act(async () =>
       (popup.querySelector('[data-action="search.openPage"]') as HTMLElement).click(),
     );

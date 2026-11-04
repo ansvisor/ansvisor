@@ -1,18 +1,24 @@
 import { z } from 'zod';
 import { publishDraftToCms, sendDraftToCms } from '@/lib/actions/cms-send';
 import { takeDownDraft } from '@/lib/actions/cms-take-down';
-import { updateContentDraft } from '@/lib/actions/content-drafts';
+import {
+  setContentDraftReady,
+  suggestDraftChanges,
+  updateContentDraft,
+} from '@/lib/actions/content-drafts';
 import { actorOf } from '@/lib/chat/actor/access';
 import { updateContentDraftFor } from '@/lib/chat/actor/drafts';
 import { CHAT_CMS_TARGETS, CMS_NAMES } from '@/lib/content/cms-names';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
+import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { contentUuid } from '@/lib/mcp/content-schemas';
+import { readPageVersion } from '../page-versions';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 import { draftPage, draftTitle, pageChanges } from './targets';
 
 /**
- * Chat's Content Library rows beyond create_draft (CHAT-20 §9 rows 55, 58):
- * changing a draft (a WRITE), and sending one to the brand's CMS as a draft
+ * Chat's Content Library rows beyond create_draft (CHAT-20 §9 rows 55, 57, 58):
+ * changing a draft and marking it Ready (WRITEs), and sending one to the brand's CMS as a draft
  * (an EXECUTE in the publishing group: it leaves Ansvisor). Each calls a
  * server action over the editor's own path, as the signed-in member; a
  * change also has its write for a run without a session (runFor). Both
@@ -30,13 +36,20 @@ import { draftPage, draftTitle, pageChanges } from './targets';
 
 const ITEM = FIXTURE_IDS.item;
 
+/** A change update_draft made, with the History version that kept the page before it. */
+const changed = (output: unknown): output is { ok: true; beforeVersionId: string } =>
+  !!output &&
+  typeof output === 'object' &&
+  (output as { ok?: unknown }).ok === true &&
+  typeof (output as { beforeVersionId?: unknown }).beforeVersionId === 'string';
+
 export const CONTENT_TOOLS = [
   defineTool({
     name: 'update_draft',
     class: 'write',
     area: 'content',
     description:
-      'Change a draft in the Content Library (its id from list_content_drafts): its title, its page as HTML, or both. History keeps the page before the change. Only what the person asked to change; send the whole page when changing it.',
+      'Change a draft in the Content Library (its id from list_content_drafts): its title, its page as HTML, or both. History keeps the page before the change. Only what the person asked to change; send the whole page when changing it. Not for the page open in the Content Editor beside this chat (the page context’s draft chip): use suggest_draft_changes for that one.',
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
     minRole: 'manager',
@@ -68,6 +81,29 @@ export const CONTENT_TOOLS = [
         title: input.title,
         bodyHtml: input.body_html,
       }),
+    // The page's next version in this chat (CHAT-25 §6, W4-12a): filed as the page Chat made is,
+    // its card saying what changed. A change of the title alone makes none.
+    deliverable: (input, output) =>
+      changed(output) && input.body_html !== undefined
+        ? {
+            title: input.title ?? '',
+            type: 'document',
+            formats: ['html', 'md', 'docx', 'pdf'],
+            body: sanitizeDraftHtml(input.body_html),
+            mimeType: 'text/html',
+            fileName: 'page.html',
+            href: `/dashboard/content/editor/${input.draft_id}`,
+            contentDraftId: input.draft_id,
+          }
+        : null,
+    versionOf: (input, output, place) =>
+      changed(output)
+        ? readPageVersion({
+            draftId: input.draft_id,
+            conversationId: place.conversationId,
+            beforeVersionId: output.beforeVersionId,
+          })
+        : Promise.resolve(null),
     target: async (input) => {
       const now = await draftPage(input.draft_id);
       if (!now) return input.title ? `“${input.title}”` : null;
@@ -81,6 +117,68 @@ export const CONTENT_TOOLS = [
         : title;
     },
     fixture: { input: { draft_id: ITEM, title: 'Pricing FAQ for teams' } },
+  }),
+  defineTool({
+    name: 'suggest_draft_changes',
+    // The page open in the Content Editor beside the chat (CHAT-25 §4 item 5, W4-14): never
+    // changed from here. The Content Agent leaves suggestions for the person's Accept or
+    // Reject in the editor; the engine offers it only then. A WRITE like any (AskFA).
+    class: 'write',
+    area: 'content',
+    description:
+      'For the page open in the Content Editor beside this chat (the page context’s draft chip): pass the person’s request in their own words; the Content Agent leaves suggestions in the editor for them to accept or reject, with the editor’s guards (kept quotes, known links, no invented facts). The page doesn’t change until they accept. One request a call.',
+    defaultPolicy: 'ask_full_auto',
+    maxPolicy: 'always',
+    minRole: 'manager',
+    planGate: null,
+    brandOf: { lookup: 'content_drafts', idField: 'draft_id' },
+    costClass: 'C2',
+    labelKey: 'editorSuggestions',
+    route: '/dashboard/content/library',
+    mcpTool: null,
+    specRow: '55',
+    inputSchema: z.object({
+      draft_id: contentUuid.describe('The draft open in the editor, from the page context.'),
+      request: z
+        .string()
+        .trim()
+        .min(1)
+        .max(500)
+        .describe('What the person asked to change, in their words.'),
+    }),
+    run: (_ctx, input) => suggestDraftChanges(input.draft_id, input.request),
+    target: async (input) => {
+      const title = await draftTitle(input.draft_id);
+      return title ? `“${title}”` : null;
+    },
+    fixture: { input: { draft_id: ITEM, request: 'Make answer 3 shorter' } },
+  }),
+  defineTool({
+    name: 'set_draft_ready',
+    // The editor's Mark ready (CHAT-25 §6): a WRITE, Undo for 7 days. Nothing is published.
+    class: 'write',
+    area: 'content',
+    description:
+      "Mark a Library draft Ready to publish (its id from list_content_drafts), as the Content Editor's Mark ready does: its Action Center task for the page is done. Nothing is published or sent. Only when the person asked for the page to be marked ready.",
+    defaultPolicy: 'ask_full_auto',
+    maxPolicy: 'always',
+    minRole: 'manager',
+    planGate: null,
+    brandOf: { lookup: 'content_drafts', idField: 'draft_id' },
+    costClass: 'C0',
+    labelKey: 'markDraftReady',
+    route: '/dashboard/content/library',
+    mcpTool: null,
+    specRow: '57',
+    inputSchema: z.object({
+      draft_id: contentUuid.describe('The draft, from list_content_drafts.'),
+    }),
+    run: (_ctx, input) => setContentDraftReady(input.draft_id),
+    target: async (input) => {
+      const title = await draftTitle(input.draft_id);
+      return title ? `“${title}”` : null;
+    },
+    fixture: { input: { draft_id: ITEM } },
   }),
   defineTool({
     name: 'push_cms_draft',

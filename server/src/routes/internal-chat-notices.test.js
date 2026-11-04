@@ -17,6 +17,10 @@ const tellGoLiveOff = vi.fn();
 vi.mock('../lib/chat-notices/go-live.js', () => ({
   tellGoLiveOff: (...args) => tellGoLiveOff(...args),
 }));
+const tellNeedsYou = vi.fn();
+vi.mock('../lib/chat-notices/needs-you.js', () => ({
+  tellNeedsYou: (...args) => tellNeedsYou(...args),
+}));
 vi.mock('../lib/logger.js', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 
 const { default: router } = await import('./internal-chat-notices.js');
@@ -116,5 +120,31 @@ describe('POST /api/internal/chat/notices/go-live-off', () => {
     expect(tellGoLiveOff).not.toHaveBeenCalled();
     tellGoLiveOff.mockRejectedValueOnce(new Error('db down'));
     expect((await post({ orgId: ORG, agentId: AGENT, version: 3 })).status).toBe(500);
+  });
+});
+
+describe('POST /api/internal/chat/notices/needs-you', () => {
+  const RUN = '33333333-3333-4333-8333-333333333333';
+  const send = (body, secret = 'shh') =>
+    fetch(`${baseUrl}/needs-you`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
+      body: JSON.stringify(body),
+    });
+
+  it('tells the run’s person, only for the web, and says what went out', async () => {
+    tellNeedsYou.mockReset().mockResolvedValue({ notices: 1, emails: 1 });
+    expect((await send({ orgId: ORG, agentRunId: RUN }, 'nope')).status).toBe(401);
+    const res = await send({ orgId: ORG, agentRunId: RUN });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, notices: 1, emails: 1 });
+    expect(tellNeedsYou).toHaveBeenCalledWith({ orgId: ORG, agentRunId: RUN });
+  });
+
+  it('refuses a body it can’t read, and says so when telling fails', async () => {
+    tellNeedsYou.mockReset().mockRejectedValueOnce(new Error('down'));
+    expect((await send({ orgId: ORG, agentRunId: 'run-1' })).status).toBe(400);
+    expect(tellNeedsYou).not.toHaveBeenCalled();
+    expect((await send({ orgId: ORG, agentRunId: RUN })).status).toBe(500);
   });
 });

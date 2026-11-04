@@ -42,6 +42,17 @@ vi.mock('@/components/providers/upgrade-gate', () => ({
   }),
 }));
 
+// The Send dialog loads on the click (version-send.tsx): here, what it was opened for.
+vi.mock('./version-send', () => ({
+  VersionSendDialog: ({ draftId, onClose }: { draftId: string; onClose: () => void }) => (
+    <div data-slot="version-send" data-draft={draftId}>
+      <button type="button" data-action="test.closeSend" onClick={onClose}>
+        Close
+      </button>
+    </div>
+  ),
+}));
+
 const { DeliverableCard, filedNumbers } = await import('./deliverable-card');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -317,5 +328,106 @@ describe('DeliverableCard and its task (CHAT-09 items 12–16)', () => {
     await render(page, { canChange: true });
     expect(container.querySelector('[data-slot="deliverable-task"]')).toBeNull();
     expect(action('deliverable.attachAndMarkDone')).toBeNull();
+  });
+});
+
+describe('DeliverableCard for a page’s version (CHAT-25 §6, W4-12a)', () => {
+  const version = (n: number, extra: Partial<NonNullable<ChatDeliverable['version']>> = {}) => ({
+    n,
+    counts: { questions: 3, sections: 3, characters: 1250 },
+    changes: {
+      shortened: [{ heading: 'Can I change plans?', before: 212, after: 27 }],
+      added: ['Can I get a refund?'],
+      placeholders: ['[REFUND PERIOD]'],
+    },
+    sections: [
+      { heading: 'Which AI platforms does it track?', text: 'Starter: ChatGPT and Copilot.' },
+      { heading: 'Can I change plans?', text: 'Yes, any time from Billing.' },
+      { heading: 'Can I get a refund?', text: 'Yes, within [REFUND PERIOD].' },
+    ],
+    ...extra,
+  });
+  const versionCard = (n = 2, extra = {}): ChatDeliverable => ({
+    ...page,
+    version: version(n, n > 1 ? { canUndo: true, ...extra } : extra),
+  });
+
+  it('says its version and what changed, and previews its first questions', async () => {
+    await render(versionCard());
+    expect(container.textContent).toContain('Version 2 · 3 questions · 1,250 characters');
+    expect(container.textContent).not.toContain('Document · In Files');
+    const changes = container.querySelector('[data-slot="version-changes"]')!.textContent;
+    expect(changes).toContain('“Can I change plans?” shortened: 212 → 27 characters');
+    expect(changes).toContain('New question: “Can I get a refund?”');
+    expect(changes).toContain('1 placeholder to fill: [REFUND PERIOD]');
+    const preview = () => container.querySelectorAll('[data-slot="version-preview"] dt');
+    expect(preview()).toHaveLength(2);
+    await click(action('version.showAll')!);
+    expect(preview()).toHaveLength(3);
+    expect(action('version.showAll')!.textContent).toBe('Show less');
+    expect(container.textContent).toContain('Saved to the Library as a draft after each change');
+  });
+
+  it('shows a first version’s placeholders only, with nothing to undo', async () => {
+    await render(versionCard(1));
+    expect(container.textContent).toContain('Version 1 · 3 questions');
+    const changes = container.querySelector('[data-slot="version-changes"]')!.textContent;
+    expect(changes).toContain('[REFUND PERIOD]');
+    expect(changes).not.toContain('shortened');
+    expect(action('version.undo')).toBeNull();
+  });
+
+  it('puts the version before back, by the run’s n-th file', async () => {
+    fetchMock.mockImplementationOnce(async () => Response.json({ ok: true }));
+    await render(versionCard());
+    await click(action('version.undo')!);
+    expect(fetchMock).toHaveBeenCalledWith(`/api/chat/runs/${RUN}/files/2/undo`, {
+      method: 'POST',
+    });
+    expect(toast).toHaveBeenCalledWith('Version 1 is back in the draft.');
+    expect(action('version.undo')!.textContent).toBe('Back to version 1');
+    expect(action('version.undo')!.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('says when it couldn’t, and opens the plan dialog in a read-only workspace', async () => {
+    fetchMock.mockImplementationOnce(async () => new Response(null, { status: 404 }));
+    await render(versionCard());
+    await click(action('version.undo')!);
+    expect(toast.error).toHaveBeenCalledWith(
+      'The version before couldn’t be put back. Try again from the editor’s History.',
+    );
+    plan.locked = true;
+    fetchMock.mockClear();
+    await render(versionCard(3));
+    await click(action('version.undo')!);
+    expect(plan.openUpgrade).toHaveBeenCalledWith(messages.readOnly.actions.restoreVersion);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends the page to the CMS from its card, for an Admin or a Manager in their chat (W4-12b)', async () => {
+    const DRAFT_ID = '55555555-5555-4555-8555-555555555555';
+    const card = { ...versionCard(), href: `/dashboard/content/editor/${DRAFT_ID}` as const };
+    await render(card);
+    expect(action('version.sendToCms')).toBeNull();
+    await render(card, { canChange: true });
+    await click(action('version.sendToCms')!);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(container.querySelector('[data-slot="version-send"]')?.getAttribute('data-draft')).toBe(
+      DRAFT_ID,
+    );
+    expect(action('version.sendToCms')!.hasAttribute('disabled')).toBe(true);
+    await click(action('test.closeSend')!);
+    expect(container.querySelector('[data-slot="version-send"]')).toBeNull();
+    // A read-only workspace: the plan dialog, no Send dialog.
+    plan.locked = true;
+    await click(action('version.sendToCms')!);
+    expect(plan.openUpgrade).toHaveBeenCalledWith(messages.readOnly.actions.sendToCms);
+    expect(container.querySelector('[data-slot="version-send"]')).toBeNull();
+  });
+
+  it('keeps saying it wasn’t saved to Files, with no Undo, when storage is full', async () => {
+    await render({ ...versionCard(), filed: 'storage_full' });
+    expect(container.textContent).toContain('Document · Not saved to Files · Storage is full');
+    expect(action('version.undo')).toBeNull();
   });
 });
