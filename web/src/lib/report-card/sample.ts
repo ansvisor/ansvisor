@@ -100,12 +100,15 @@ export const SAMPLE_REPORT_CARD: ReportCardPayload = {
     { name: 'Sunday Grind', answers: 12 },
   ],
   citedSites: [
-    { domain: 'coffeereview.example', answers: 23, own: false },
-    { domain: 'homebarista.example', answers: 19, own: false },
-    { domain: 'brewguide.example', answers: 14, own: false },
-    { domain: 'beanmarket.example', answers: 9, own: false },
-    { domain: 'brewlinecoffee.example', answers: 4, own: true },
+    { domain: 'ridgelineroasters.example', answers: 26, own: false, kind: 'competitor' },
+    { domain: 'coffeereview.example', answers: 23, own: false, kind: 'guide' },
+    { domain: 'homebarista.example', answers: 19, own: false, kind: 'community' },
+    { domain: 'brewguide.example', answers: 14, own: false, kind: 'publication' },
+    { domain: 'beanmarket.example', answers: 9, own: false, kind: 'marketplace' },
+    { domain: 'brewlinecoffee.example', answers: 4, own: true, kind: 'own' },
   ],
+  marketplaces: [{ name: 'Bean Market', answers: 9 }],
+  otherNames: [{ name: 'Burr & Co Grinders', answers: 6 }],
   ownCitations: 4,
   missedQuestions: [
     {

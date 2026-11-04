@@ -253,13 +253,33 @@ function Footer() {
   );
 }
 
+/** What a cited site's bar adds to its name, by its kind. */
+const SITE_TAG: Partial<Record<string, string>> = {
+  own: ' (you)',
+  competitor: ' (competitor)',
+  marketplace: ' (marketplace)',
+};
+
+/** The marketplaces and other businesses named, apart from the competitors: a line each. */
+function alsoNamed(card: ReportCardPayload): string[] {
+  const names = (list?: { name: string }[]) =>
+    (list ?? [])
+      .slice(0, 4)
+      .map((n) => clip(n.name, 28))
+      .join(', ');
+  return [
+    card.marketplaces?.length ? `Marketplaces also named: ${names(card.marketplaces)}` : null,
+    card.otherNames?.length ? `Other businesses named: ${names(card.otherNames)}` : null,
+  ].filter((line): line is string => line !== null);
+}
+
 /** Page 1: the results. */
 function ResultsPage({ card }: { card: ReportCardPayload }) {
   const { answers, named, visibility } = totals(card);
   const leader = card.competitors[0];
   const rivals = card.competitors.slice(0, 3);
   const most = Math.max(named, ...rivals.map((c) => c.answers), 1);
-  const cited = card.citedSites.slice(0, 5);
+  const cited = card.citedSites.slice(0, 6);
   const mostCited = Math.max(...cited.map((s) => s.answers), 1);
   const date = formatDate(card.generatedAt);
 
@@ -331,6 +351,11 @@ function ResultsPage({ card }: { card: ReportCardPayload }) {
                 strong={'own' in c}
               />
             ))}
+          {alsoNamed(card).map((line) => (
+            <Text key={line} style={[styles.small, { marginTop: 2 }]}>
+              {line}
+            </Text>
+          ))}
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.sectionTitle}>Sites AI cites most</Text>
@@ -340,7 +365,7 @@ function ResultsPage({ card }: { card: ReportCardPayload }) {
           {cited.map((s) => (
             <Bar
               key={s.domain}
-              label={s.own ? `${clip(s.domain, DOMAIN_MAX)} (you)` : clip(s.domain, DOMAIN_MAX)}
+              label={`${clip(s.domain, DOMAIN_MAX)}${SITE_TAG[s.own ? 'own' : (s.kind ?? 'other')] ?? ''}`}
               pct={(s.answers / mostCited) * 100}
               value={`${s.answers} answers`}
               color={s.own ? INK : COMPETITOR}

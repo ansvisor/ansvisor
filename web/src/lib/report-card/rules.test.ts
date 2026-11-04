@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PLANS } from '@/config/plans';
-import type { ReportCardPayload } from './payload';
+import type { CitedSiteKind, ReportCardPayload } from './payload';
 import {
   MIN_CPC_KEYWORDS,
   PLAN_STEPS_MAX,
@@ -15,7 +15,10 @@ import {
   money,
   planOffers,
   quickWins,
+  brandKey,
+  isTargetSite,
   productLabel,
+  siteBrandKey,
   questionGroups,
   questionLines,
   questionSummary,
@@ -52,6 +55,49 @@ describe('totals', () => {
   });
 });
 
+describe('target sites', () => {
+  it('suggests guides, publications, official sources and communities, by kind', () => {
+    const site = (domain: string, kind: CitedSiteKind | null) => ({
+      domain,
+      answers: 5,
+      own: false,
+      kind,
+    });
+    const titles = (['guide', 'publication', 'official', 'community'] as const).map(
+      (kind) => quickWins(card({ citedSites: [site(`${kind}.example`, kind)] }))[1]?.title,
+    );
+    expect(titles).toEqual([
+      'Get Brewline Coffee reviewed or listed on guide.example',
+      'Pitch publication.example a story or an expert comment',
+      'Make sure official.example lists Brewline Coffee correctly',
+      'Answer questions about your market on community.example',
+    ]);
+    for (const kind of ['competitor', 'marketplace', 'other'] as const) {
+      expect(isTargetSite(site('x.example', kind), SAMPLE_REPORT_CARD)).toBe(false);
+    }
+  });
+
+  it('on an older card, never suggests a site whose address names a competitor', () => {
+    const old = card({
+      competitors: [{ name: 'Jolly Tur', answers: 18 }],
+      citedSites: [
+        { domain: 'jollytur.com', answers: 34, own: false },
+        { domain: 'businessofapps.com', answers: 20, own: false },
+        { domain: 'sikayetvar.com', answers: 11, own: false },
+      ],
+    });
+    expect(isTargetSite(old.citedSites[0], old)).toBe(false);
+    expect(isTargetSite(old.citedSites[2], old)).toBe(true);
+    const mmr = card({
+      competitors: [{ name: 'Business of Apps', answers: 33 }],
+      citedSites: [{ domain: 'www.businessofapps.com', answers: 31, own: false }],
+    });
+    expect(isTargetSite(mmr.citedSites[0], mmr)).toBe(false);
+    expect(brandKey('Jolly')).toBe(brandKey('Jolly Tur'));
+    expect(siteBrandKey('jollytur.com.tr')).toBe('jolly');
+  });
+});
+
 describe('quickWins', () => {
   it('starts with the missed question competitors win, then the cited site, then own pages', () => {
     const wins = quickWins(SAMPLE_REPORT_CARD);
@@ -62,7 +108,8 @@ describe('quickWins', () => {
     expect(wins[0].detail).toContain(
       'AI names Ridgeline Roasters, Harborline Beans and Copper Kettle Coffee for it, and not Brewline Coffee.',
     );
-    expect(wins[1].title).toBe('Get Brewline Coffee onto coffeereview.example');
+    // Not ridgelineroasters.example, a competitor's site, though AI cites it most.
+    expect(wins[1].title).toBe('Get Brewline Coffee reviewed or listed on coffeereview.example');
     expect(wins[1].detail).toContain('23 of 100 answers');
     expect(wins[2].title).toBe('Make your own pages easy to cite');
   });
@@ -164,7 +211,9 @@ describe('quotedQuestion', () => {
         { text: '在哪里买咖啡豆', textEn: null, competitors: ['Ridgeline Roasters'] },
       ],
     };
-    expect(quickWins(card)[0].title).toBe('Get Brewline Coffee onto coffeereview.example');
+    expect(quickWins(card)[0].title).toBe(
+      'Get Brewline Coffee reviewed or listed on coffeereview.example',
+    );
   });
 
   it('puts the English in the first thing to do for a Japanese card', () => {

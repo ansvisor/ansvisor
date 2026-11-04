@@ -1,12 +1,13 @@
 import logger from '../logger.js';
 import { fetchPage } from '../safe-fetch.js';
 import { detectSiteType, pageExcerpt } from '../site-type-detect.js';
-import { competitorsIn, summarize } from './analyze.js';
+import { brandKey, citedHosts, competitorsIn, summarize } from './analyze.js';
 import { reportCardLimits } from './config.js';
 import { countryName, languageName } from './countries.js';
 import { keywordFigures, keywordKey, medianCpc } from './cpc.js';
 import { askEngines } from './engines.js';
 import { pickQuestions, writeQuestions } from './questions.js';
+import { sortNames } from './names.js';
 import { siteOutline } from './site.js';
 
 /**
@@ -59,6 +60,7 @@ export async function buildReportCard(
     write = writeQuestions,
     ask = askEngines,
     competitors = competitorsIn,
+    sort = sortNames,
     figuresOf = keywordFigures,
   } = {},
 ) {
@@ -109,8 +111,10 @@ export async function buildReportCard(
   const answered = asked.answers.filter((a) => typeof a.text === 'string' && a.text.trim());
   if (!answered.length) throw new Error('No engine answered');
 
-  // The competitors each answer names: one model call per engine.
-  const named = new Map();
+  // The competitors each answer names, and the other businesses: one model
+  // call per engine.
+  const read = new Map();
+  const readOthers = new Map();
   const about = excerpt ? excerpt.slice(0, 600) : null;
   for (const engine of asked.engines) {
     const rows = answered
@@ -125,19 +129,30 @@ export async function buildReportCard(
         audience: written.audience ?? 'buyers',
       });
       meter.models += found.costUsd;
-      for (const [index, names] of found.byAnswer) named.set(`${index}:${engine}`, names);
+      for (const [index, names] of found.byAnswer) read.set(`${index}:${engine}`, names);
+      for (const [index, rest] of found.others ?? []) readOthers.set(`${index}:${engine}`, rest);
     } catch (err) {
       // The card goes on without that engine's competitors.
       logger.warn({ engine, err: err.message }, '[report-card] competitors not read');
     }
   }
 
-  const figures = summarize(questions, asked.answers, named, {
-    companyName,
-    site,
-    domain,
-    engines: asked.engines,
+  // Every name and cited site sorted once for the whole card, so a brand is
+  // a competitor, a marketplace or something else on every row; without
+  // that call, each answer's reading stands.
+  const { named, others, siteKinds } = await sortCard(read, readOthers, asked.answers, {
+    sort,
+    meter,
+    company: { companyName, site, about, audience: written.audience ?? 'buyers' },
   });
+
+  const figures = summarize(
+    questions,
+    asked.answers,
+    named,
+    { companyName, site, domain, engines: asked.engines },
+    { others, siteKinds },
+  );
 
   // Page 4: every question, what each engine did with it, and the brand
   // its answers named most.
@@ -181,6 +196,8 @@ export async function buildReportCard(
     products: products.map((p) => ({ name: p.name, nameEn: p.nameEn, url: p.url })),
     engines: figures.engines.filter((e) => e.answers > 0),
     competitors: figures.competitors,
+    marketplaces: figures.marketplaces,
+    otherNames: figures.otherNames,
     citedSites: figures.citedSites,
     ownCitations: figures.ownCitations,
     missedQuestions: figures.missedQuestions,
@@ -208,6 +225,7 @@ export async function buildReportCard(
             : {
                 named: figures.namedAnswers.has(`${index}:${a.engine}`),
                 competitors: named.get(`${index}:${a.engine}`) ?? [],
+                others: others.get(`${index}:${a.engine}`) ?? [],
                 cited: [...new Set(a.citations.map((c) => c?.url).filter(Boolean))].slice(0, 10),
               },
         ]),
@@ -215,6 +233,53 @@ export async function buildReportCard(
   }));
 
   return { payload, questions: kept };
+}
+
+/**
+ * Each answer's names sorted by the card's one names-and-sites call: the
+ * competitors, the marketplaces and others, and each cited site's kind.
+ */
+async function sortCard(read, readOthers, answers, { sort, meter, company }) {
+  const tally = new Map();
+  const count = (name, kind) => {
+    const key = brandKey(name);
+    if (!key) return;
+    const entry = tally.get(key) ?? { name, kind, answers: 0 };
+    entry.answers += 1;
+    tally.set(key, entry);
+  };
+  for (const names of read.values()) for (const name of names) count(name, 'competitor');
+  for (const rest of readOthers.values()) for (const o of rest) count(o.name, o.kind);
+  const listed = [...tally.values()].sort((a, b) => b.answers - a.answers);
+
+  let kinds = new Map();
+  let siteKinds = new Map();
+  try {
+    const sorted = await sort(listed, citedHosts(answers), company);
+    meter.models += sorted.costUsd;
+    kinds = sorted.names;
+    siteKinds = sorted.sites;
+  } catch (err) {
+    logger.warn({ err: err.message }, '[report-card] names and sites not sorted');
+  }
+
+  const named = new Map();
+  const others = new Map();
+  for (const key of new Set([...read.keys(), ...readOthers.keys()])) {
+    const all = [
+      ...(read.get(key) ?? []).map((name) => ({ name, kind: 'competitor' })),
+      ...(readOthers.get(key) ?? []),
+    ].map((n) => ({ name: n.name, kind: kinds.get(brandKey(n.name)) ?? n.kind }));
+    named.set(
+      key,
+      all.filter((n) => n.kind === 'competitor').map((n) => n.name),
+    );
+    others.set(
+      key,
+      all.filter((n) => n.kind !== 'competitor'),
+    );
+  }
+  return { named, others, siteKinds };
 }
 
 /** Why a card failed, in plain words for the admin view. */

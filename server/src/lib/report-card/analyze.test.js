@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../ai-provider.js', () => ({ resolveModel: (id) => ({ id }) }));
 
-const { brandKey, competitorsIn, summarize } = await import('./analyze.js');
+const { brandKey, citedHosts, competitorsIn, siteBrandKey, summarize } =
+  await import('./analyze.js');
 
 const company = {
   companyName: 'Acme Coffee',
@@ -67,9 +68,9 @@ describe('summarize', () => {
   it('counts a site once an answer, and the company’s own subdomains as its own', () => {
     const figures = summarize(questions, answers, competitors, company);
     expect(figures.citedSites).toEqual([
-      { domain: 'coffeereview.example', answers: 2, own: false },
-      { domain: 'blog.acme.example', answers: 1, own: true },
-      { domain: 'shop.acme.example', answers: 1, own: true },
+      { domain: 'coffeereview.example', answers: 2, own: false, kind: null },
+      { domain: 'blog.acme.example', answers: 1, own: true, kind: 'own' },
+      { domain: 'shop.acme.example', answers: 1, own: true, kind: 'own' },
     ]);
     expect(figures.ownCitations).toBe(2);
   });
@@ -86,6 +87,71 @@ describe('summarize', () => {
         competitors: ['Ridge Roasters'],
         answers: 1,
       },
+    ]);
+  });
+});
+
+describe('names and sites sorted', () => {
+  const answers = [
+    answer(0, 'chatgpt-web', 'Jolly Tur, Etstur, Tatilbudur.', [
+      'https://www.jollytur.com/a',
+      'https://www.tatilbudur.com/b',
+      'https://www.kultur.gov.tr/c',
+    ]),
+    answer(1, 'chatgpt-web', 'Jolly and Tatilbudur; Hizmetgo too.', ['https://jollytur.com.tr/x']),
+  ];
+  const competitors = new Map([
+    ['0:chatgpt-web', ['Jolly Tur', 'Etstur']],
+    ['1:chatgpt-web', ['Jolly']],
+  ]);
+  const others = new Map([
+    ['0:chatgpt-web', [{ name: 'Tatilbudur', kind: 'marketplace' }]],
+    [
+      '1:chatgpt-web',
+      [
+        { name: 'Tatilbudur', kind: 'marketplace' },
+        { name: 'Hizmetgo', kind: 'other' },
+      ],
+    ],
+  ]);
+
+  it('lists marketplaces and others apart from competitors, each once an answer', () => {
+    const figures = summarize(questions, answers, competitors, company, { others });
+    expect(figures.competitors).toEqual([
+      { name: 'Jolly Tur', answers: 2 },
+      { name: 'Etstur', answers: 1 },
+    ]);
+    expect(figures.marketplaces).toEqual([{ name: 'Tatilbudur', answers: 2 }]);
+    expect(figures.otherNames).toEqual([{ name: 'Hizmetgo', answers: 1 }]);
+  });
+
+  it('marks a competitor’s or marketplace’s site by its address, else as the call sorted it', () => {
+    const siteKinds = new Map([
+      ['kultur.gov.tr', 'official'],
+      ['jollytur.com', 'guide'],
+    ]);
+    const figures = summarize(questions, answers, competitors, company, { others, siteKinds });
+    expect(Object.fromEntries(figures.citedSites.map((s) => [s.domain, s.kind]))).toEqual({
+      'jollytur.com': 'competitor',
+      'jollytur.com.tr': 'competitor',
+      'tatilbudur.com': 'marketplace',
+      'kultur.gov.tr': 'official',
+    });
+  });
+
+  it('reads the brand in a site’s address', () => {
+    expect(siteBrandKey('www.jollytur.com')).toBe(brandKey('Jolly Tur'));
+    expect(siteBrandKey('jollytur.com.tr')).toBe(brandKey('Jolly'));
+    expect(siteBrandKey('blog.acme.co.uk')).toBe('acme');
+    expect(siteBrandKey('businessofapps.com')).toBe(brandKey('Business of Apps'));
+  });
+
+  it('counts the sites cited, once an answer, most first', () => {
+    expect(citedHosts(answers)).toEqual([
+      { domain: 'jollytur.com', answers: 1 },
+      { domain: 'jollytur.com.tr', answers: 1 },
+      { domain: 'kultur.gov.tr', answers: 1 },
+      { domain: 'tatilbudur.com', answers: 1 },
     ]);
   });
 });
@@ -202,6 +268,37 @@ describe('competitorsIn for a publisher', () => {
 });
 
 describe('competitorsIn', () => {
+  it('keeps the marketplaces and other businesses apart, never an AI assistant', async () => {
+    const generate = vi.fn(async () => ({
+      object: {
+        answers: [
+          {
+            index: 0,
+            brands: ['Etstur'],
+            others: [
+              { name: 'Tatilbudur', kind: 'marketplace' },
+              { name: 'ChatGPT', kind: 'other' },
+              { name: 'etstur', kind: 'other' },
+              { name: 'Hizmetgo', kind: 'other' },
+            ],
+          },
+        ],
+      },
+      usage: {},
+    }));
+    const { byAnswer, others } = await competitorsIn(
+      [{ index: 0, question: 'q', text: 't' }],
+      { companyName: 'TuraDahil', site: 'turadahil.com', about: null },
+      { generate, env: {} },
+    );
+    expect(byAnswer.get(0)).toEqual(['Etstur']);
+    expect(others.get(0)).toEqual([
+      { name: 'Tatilbudur', kind: 'marketplace' },
+      { name: 'Hizmetgo', kind: 'other' },
+    ]);
+    expect(generate.mock.calls[0][0].system).toContain('"marketplace" for a marketplace, booking');
+  });
+
   it('never counts an AI assistant or its company as a competitor', async () => {
     const generate = vi.fn(async () => ({
       object: {

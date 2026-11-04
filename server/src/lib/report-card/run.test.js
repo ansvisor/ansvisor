@@ -80,6 +80,7 @@ function fakes(patch = {}) {
       costUsd: 0.004,
     })),
     figuresOf: vi.fn(async () => ({ figures, called: true })),
+    sort: vi.fn(async () => ({ names: new Map(), sites: new Map(), costUsd: 0.002 })),
     ...patch,
   };
 }
@@ -116,7 +117,9 @@ describe('buildReportCard', () => {
       products,
       engines: [{ engine: 'chatgpt-web', answers: 2, named: 1 }],
       competitors: [{ name: 'Ridge', answers: 2 }],
-      citedSites: [{ domain: 'ridge.example', answers: 1, own: false }],
+      citedSites: [{ domain: 'ridge.example', answers: 1, own: false, kind: 'competitor' }],
+      marketplaces: [],
+      otherNames: [],
       ownCitations: 0,
       missedCount: 1,
       audience: 'buyers',
@@ -154,11 +157,16 @@ describe('buildReportCard', () => {
       ],
     });
     expect(kept[0].answers).toEqual({
-      'chatgpt-web': { named: true, competitors: ['Ridge'], cited: ['https://ridge.example/a'] },
+      'chatgpt-web': {
+        named: true,
+        competitors: ['Ridge'],
+        others: [],
+        cited: ['https://ridge.example/a'],
+      },
       'google-aio': { missing: 'no_answer' },
     });
-    // $0.01 + $0.004 in models, 3 answers at $0.002, the keyword call $0.075.
-    expect(meter.total()).toBeCloseTo(0.014 + 0.006 + 0.075, 6);
+    // $0.01 + $0.004 + $0.002 in models, 3 answers at $0.002, the keyword call $0.075.
+    expect(meter.total()).toBeCloseTo(0.016 + 0.006 + 0.075, 6);
   });
 
   it('names the brand named most instead on page 4 under one spelling', async () => {
@@ -174,6 +182,48 @@ describe('buildReportCard', () => {
     const { payload } = await buildReportCard(card, deps);
     expect(payload.competitors[0]).toEqual({ name: 'Jolly Tur', answers: 2 });
     expect(payload.questionRows.map((row) => row.instead)).toEqual(['Jolly Tur', 'Jolly Tur']);
+  });
+
+  it('sorts every name once: a marketplace or another business is never a competitor', async () => {
+    const deps = fakes({
+      competitors: vi.fn(async () => ({
+        byAnswer: new Map([
+          [0, ['Jolly Tur', 'Hizmetgo']],
+          [1, ['Jolly', 'Blue Moon Pirate Boat']],
+        ]),
+        others: new Map([[0, [{ name: 'Tatilbudur', kind: 'other' }]]]),
+        costUsd: 0,
+      })),
+      sort: vi.fn(async () => ({
+        names: new Map([
+          ['hizmetgo', 'other'],
+          ['bluemoonpirateboat', 'other'],
+          ['tatilbudur', 'marketplace'],
+        ]),
+        sites: new Map([['ridge.example', 'guide']]),
+        costUsd: 0,
+      })),
+    });
+    const { payload } = await buildReportCard(card, deps);
+    expect(payload.competitors).toEqual([{ name: 'Jolly Tur', answers: 2 }]);
+    expect(payload.marketplaces).toEqual([{ name: 'Tatilbudur', answers: 1 }]);
+    expect(payload.otherNames.map((n) => n.name)).toEqual(['Blue Moon Pirate Boat', 'Hizmetgo']);
+    expect(payload.questionRows.map((row) => row.instead)).toEqual(['Jolly Tur', 'Jolly Tur']);
+    expect(payload.citedSites[0].kind).toBe('guide');
+    const [names, sites] = deps.sort.mock.calls[0];
+    expect(names.map((n) => [n.name, n.kind, n.answers])).toEqual([
+      ['Jolly Tur', 'competitor', 2],
+      ['Hizmetgo', 'competitor', 1],
+      ['Blue Moon Pirate Boat', 'competitor', 1],
+      ['Tatilbudur', 'other', 1],
+    ]);
+    expect(sites).toEqual([{ domain: 'ridge.example', answers: 1 }]);
+  });
+
+  it('keeps each answer’s reading when the sorting call fails', async () => {
+    const deps = fakes({ sort: vi.fn().mockRejectedValue(new Error('model down')) });
+    const { payload } = await buildReportCard(card, deps);
+    expect(payload.competitors).toEqual([{ name: 'Ridge', answers: 2 }]);
   });
 
   it('tells the competitor reader a publisher’s audience', async () => {
