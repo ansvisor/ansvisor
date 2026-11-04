@@ -46,6 +46,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: vi.fn(),
   updateContentDraft: vi.fn(),
   setContentDraftReady: vi.fn(),
+  suggestDraftChanges: vi.fn(),
 }));
 vi.mock('@/lib/chat/actor/drafts', () => ({
   createContentDraftFor: vi.fn(),
@@ -82,7 +83,7 @@ vi.mock('@/lib/actions/chat-memory', () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { createContentDraft, setContentDraftReady, updateContentDraft } =
+const { createContentDraft, setContentDraftReady, suggestDraftChanges, updateContentDraft } =
   await import('@/lib/actions/content-drafts');
 const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
 const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
@@ -163,6 +164,7 @@ const INPUTS: Record<string, unknown> = {
   },
   set_task_ready_for_review: { brand_id: BRAND, task_id: '99999999-9999-4999-8999-999999999999' },
   update_draft: { draft_id: DRAFT, title: 'Pricing FAQ for teams' },
+  suggest_draft_changes: { draft_id: DRAFT, request: 'Make answer 3 shorter' },
   set_draft_ready: { draft_id: DRAFT },
   push_cms_draft: { draft_id: DRAFT, destination: 'webflow' },
   publish_cms: { draft_id: DRAFT, destination: 'webflow' },
@@ -182,7 +184,13 @@ const INPUTS: Record<string, unknown> = {
   forget_memory: { memory_id: MEMORY_LINE },
 };
 /** The rows that change or send a Library draft find one. */
-const NEEDS_DRAFT = new Set(['update_draft', 'set_draft_ready', 'push_cms_draft', 'publish_cms']);
+const NEEDS_DRAFT = new Set([
+  'update_draft',
+  'suggest_draft_changes',
+  'set_draft_ready',
+  'push_cms_draft',
+  'publish_cms',
+]);
 const toolCtx = {} as never;
 let step = 0;
 const nextStep = () => `step-${++step}`;
@@ -194,6 +202,8 @@ beforeEach(() => {
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
   vi.mocked(updateContentDraft).mockImplementation(fakeUpdateContentDraft(db) as never);
   vi.mocked(setContentDraftReady).mockImplementation(fakeSetDraftReady(db) as never);
+  // The Content Agent's suggestions in the editor beside the chat (W4-14): the page doesn't change.
+  vi.mocked(suggestDraftChanges).mockImplementation(async () => ({ ok: true, count: 2 }));
   vi.mocked(createContentDraftFor).mockImplementation((_actor, brandId, start) =>
     fakeCreateDraft(db)(brandId, start),
   );

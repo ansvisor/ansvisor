@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { publishDraftToCms, sendDraftToCms } from '@/lib/actions/cms-send';
 import { takeDownDraft } from '@/lib/actions/cms-take-down';
-import { setContentDraftReady, updateContentDraft } from '@/lib/actions/content-drafts';
+import {
+  setContentDraftReady,
+  suggestDraftChanges,
+  updateContentDraft,
+} from '@/lib/actions/content-drafts';
 import { actorOf } from '@/lib/chat/actor/access';
 import { updateContentDraftFor } from '@/lib/chat/actor/drafts';
 import { CHAT_CMS_TARGETS, CMS_NAMES } from '@/lib/content/cms-names';
@@ -45,7 +49,7 @@ export const CONTENT_TOOLS = [
     class: 'write',
     area: 'content',
     description:
-      'Change a draft in the Content Library (its id from list_content_drafts): its title, its page as HTML, or both. History keeps the page before the change. Only what the person asked to change; send the whole page when changing it.',
+      'Change a draft in the Content Library (its id from list_content_drafts): its title, its page as HTML, or both. History keeps the page before the change. Only what the person asked to change; send the whole page when changing it. Not for the page open in the Content Editor beside this chat (the page context’s draft chip): use suggest_draft_changes for that one.',
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
     minRole: 'manager',
@@ -113,6 +117,41 @@ export const CONTENT_TOOLS = [
         : title;
     },
     fixture: { input: { draft_id: ITEM, title: 'Pricing FAQ for teams' } },
+  }),
+  defineTool({
+    name: 'suggest_draft_changes',
+    // The page open in the Content Editor beside the chat (CHAT-25 §4 item 5, W4-14): never
+    // changed from here. The Content Agent leaves suggestions for the person's Accept or
+    // Reject in the editor; the engine offers it only then. A WRITE like any (AskFA).
+    class: 'write',
+    area: 'content',
+    description:
+      'For the page open in the Content Editor beside this chat (the page context’s draft chip): pass the person’s request in their own words; the Content Agent leaves suggestions in the editor for them to accept or reject, with the editor’s guards (kept quotes, known links, no invented facts). The page doesn’t change until they accept. One request a call.',
+    defaultPolicy: 'ask_full_auto',
+    maxPolicy: 'always',
+    minRole: 'manager',
+    planGate: null,
+    brandOf: { lookup: 'content_drafts', idField: 'draft_id' },
+    costClass: 'C2',
+    labelKey: 'editorSuggestions',
+    route: '/dashboard/content/library',
+    mcpTool: null,
+    specRow: '55',
+    inputSchema: z.object({
+      draft_id: contentUuid.describe('The draft open in the editor, from the page context.'),
+      request: z
+        .string()
+        .trim()
+        .min(1)
+        .max(500)
+        .describe('What the person asked to change, in their words.'),
+    }),
+    run: (_ctx, input) => suggestDraftChanges(input.draft_id, input.request),
+    target: async (input) => {
+      const title = await draftTitle(input.draft_id);
+      return title ? `“${title}”` : null;
+    },
+    fixture: { input: { draft_id: ITEM, request: 'Make answer 3 shorter' } },
   }),
   defineTool({
     name: 'set_draft_ready',

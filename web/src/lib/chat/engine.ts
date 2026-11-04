@@ -226,6 +226,7 @@ import {
   type StepToSave,
 } from './skills/save-steps';
 import { placeholderWords } from '@/lib/content/page-version';
+import { openDraftOf } from './editor-page';
 import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
 import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
@@ -945,6 +946,8 @@ interface RunContext {
   budget: ReadBudget;
   offered: Map<string, ChatTool>;
   refused: { tool: ChatTool; denial: ToolDenial }[];
+  /** The draft open in the Content Editor beside the chat, by its chip (W4-14); null when none. */
+  openDraft: string | null;
   /**
    * The skills the person may use (CHAT-13 items 3–4): every enabled one
    * (the library's and the workspace's, skills/store.ts), and the ones the
@@ -1191,7 +1194,11 @@ async function openContext(
   // A shortcut's run reads only its data plan (W2-09).
   const playbook = shortcutPlaybook(actor.organizationId, progress.shortcut);
   const shown = await offeredInRun(tools, { agentRunId });
-  const offered = playbook ? playbookTools(shown.offered, playbook) : shown.offered;
+  // Suggestions in the editor are only for the page open there beside the chat (W4-14).
+  const openDraft = openDraftOf(progress.scope);
+  const offered = (playbook ? playbookTools(shown.offered, playbook) : shown.offered).filter(
+    (tool) => tool.name !== SUGGEST_TOOL || openDraft !== null,
+  );
   const { refused } = shown;
   // An agent's run reads what its skills list (run-limits.ts AGENT_READS).
   const budget = readBudget(choice.effort, { agent: agentRunId !== null });
@@ -1218,6 +1225,7 @@ async function openContext(
     budget,
     offered: new Map(offered.map((tool) => [tool.name, tool])),
     refused,
+    openDraft,
     agentRunId,
     answerLanguage,
     // The job's own run only: a person's message in its chat is theirs.
@@ -2530,6 +2538,8 @@ async function handleCall(
     return result(call, { code: 'invalid_input', issues }, true);
   }
   const input = parsed.data as Record<string, unknown>;
+  const notHere = openPageRefusal(rc, tool, input);
+  if (notHere) return result(call, notHere, true);
   // A change asked with a question waits for its answer: the model calls it again then.
   if (tool.class !== 'read' && (rc.stepCalls ?? []).some((c) => c.toolName === ASK_TOOL)) {
     return result(
@@ -2601,6 +2611,43 @@ async function handleCall(
     case 'click':
       return openCard(rc, tool, call, input, facts, decision);
   }
+}
+
+/** The editor's suggestions for the page open beside the chat (W4-14). */
+const SUGGEST_TOOL = 'suggest_draft_changes';
+
+/**
+ * The page open in the Content Editor beside the chat (W4-14): only the
+ * person's Accept there changes it, so update_draft refuses it, and the
+ * suggestions go to that page only. Said to the model, which asks again.
+ */
+function openPageRefusal(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+): { code: string; message: string } | null {
+  const draftId = typeof input.draft_id === 'string' ? input.draft_id.toLowerCase() : null;
+  if (tool.name === 'update_draft' && rc.openDraft !== null && draftId === rc.openDraft) {
+    return {
+      code: 'open_in_editor',
+      message:
+        'This page is open in the Content Editor beside the chat: it changes only when the person accepts a suggestion there. Call suggest_draft_changes with their request instead.',
+    };
+  }
+  if (tool.name === SUGGEST_TOOL && draftId !== rc.openDraft) {
+    return {
+      code: 'not_open',
+      message: 'Only for the page open in the Content Editor beside this chat.',
+    };
+  }
+  return null;
+}
+
+/** How many suggestions a suggest_draft_changes call left in the editor; 0 for any other call. */
+function suggestedCount(tool: ChatTool, output: unknown): number {
+  if (tool.name !== SUGGEST_TOOL || !output || typeof output !== 'object') return 0;
+  const done = output as { ok?: unknown; count?: unknown };
+  return done.ok === true && typeof done.count === 'number' ? done.count : 0;
 }
 
 /**
@@ -3999,6 +4046,9 @@ async function writeCall(
   const output = outcome.code === 'ok' ? outcome.output : null;
   const fileId = await deliver(rc, tool, input, output, facts.brandId);
   showResultCard(rc, tool, input, output);
+  // The Content Agent's suggestions, waiting in the editor beside the chat (W4-14).
+  const suggested = suggestedCount(tool, output);
+  if (suggested > 0) rc.sink.emit('suggestion.created', { count: suggested });
   // Ready for review (W2-10) is Chat's status in the strip: it shows it.
   if (tool.name === 'set_task_ready_for_review') {
     rc.progress.taskStrip = true;

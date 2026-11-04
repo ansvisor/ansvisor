@@ -1,4 +1,5 @@
 import { classifyDomain, normalizeDomain, type SourceCategory } from '@/lib/citations/classify';
+import { parseHtml } from './dom';
 
 /**
  * The editor's Sources tab (Content Editor CE-008, spec §10): every source a
@@ -137,7 +138,8 @@ export interface DraftDoc {
 
 /** Reads the draft's headings, paragraphs and links from its HTML. */
 export function readDraftDoc(html: string): DraftDoc {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  // The content DOM's parser (dom.ts): the browser's, or jsdom's on the server (W4-14).
+  const doc = parseHtml(html);
   const headings = [...doc.querySelectorAll('h1, h2, h3')].map((h) => {
     const text = (h.textContent ?? '').trim();
     return { level: Number(h.tagName.slice(1)), text, words: new Set(wordsOf(text)) };
