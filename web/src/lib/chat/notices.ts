@@ -7,8 +7,9 @@ import type { CmsTarget } from '@/lib/content/cms-send-client';
  * their workspace's own AI key fails (AGENT-OWN-KEY §5.3), or its agents
  * reached 80% or all of their monthly limit on it (§4.2 item 4, PR 10); an
  * agent sent a page out on its own, or an edit stopped it from doing so
- * (AUTONOMOUS-GO-LIVE §6.4, §7.2). Pure, for the server action that reads
- * them (lib/actions/chat-notices.ts).
+ * (AUTONOMOUS-GO-LIVE §6.4, §7.2); a scheduled job's run failed after its
+ * retry, or the job turned itself off (CHAT-12 items 16, 26–27; 00461).
+ * Pure, for the server action that reads them (lib/actions/chat-notices.ts).
  */
 
 interface NoticeBase {
@@ -53,7 +54,20 @@ export type ChatNotice =
       /** An agent an edit stopped from going live on its own (§7.2). */
       agent: string;
       agentId: string;
-    });
+    })
+  | ScheduleNotice;
+
+/**
+ * A scheduled job's notice (CHAT-12 items 16, 26–27; 00461): a run failed
+ * after its retry, or the job turned itself off, with why in plain words.
+ */
+export interface ScheduleNotice extends NoticeBase {
+  kind: 'schedule_failed' | 'schedule_paused';
+  title: string;
+  reason: string;
+  /** Where Open goes: the job's chat, or Chat when it has none yet. */
+  href: `/dashboard/${string}`;
+}
 
 /** A row as the Inbox reads it: its kind, what the words need, and whether it was read. */
 export interface NoticeRow {
@@ -111,6 +125,21 @@ export function noticeOf(row: NoticeRow): ChatNotice | null {
     const { agent, agentId } = payload;
     if (typeof agent !== 'string' || typeof agentId !== 'string') return null;
     return { ...base, kind: 'agent_go_live_off', agent, agentId };
+  }
+  if (row.kind === 'schedule_failed' || row.kind === 'schedule_paused') {
+    const { title, reason, conversationId } = payload;
+    if (typeof title !== 'string' || typeof reason !== 'string') return null;
+    const chat =
+      typeof conversationId === 'string' && /^[0-9a-f-]{36}$/i.test(conversationId)
+        ? conversationId
+        : null;
+    return {
+      ...base,
+      kind: row.kind,
+      title: title.slice(0, 120),
+      reason: reason.slice(0, 200),
+      href: chat ? `/dashboard/chat/${chat}` : '/dashboard/chat',
+    };
   }
   return null;
 }

@@ -125,6 +125,26 @@ vi.mock('@/lib/actions/chat-schedules', () => ({
     },
   ),
 }));
+// Remember and Forget through the person's session (W3-12a): here, as the run's person.
+vi.mock('@/lib/actions/chat-memory', () => ({
+  saveChatMemory: vi.fn(async (input: Record<string, string>) => {
+    const store = await import('./memory/store');
+    const { ORG, PEOPLE } = await import('./testing/chat-fixtures');
+    const viewer = await store.readMemoryViewer({ userId: PEOPLE.admin, organizationId: ORG });
+    const saved = await store.saveMemory(
+      viewer!,
+      {
+        scope: input.scope,
+        text: input.text,
+        brandId: input.brand_id ?? null,
+        replaces: input.replaces ?? null,
+      },
+      'chat',
+    );
+    return saved.ok ? saved.value : store.saidRefusal(saved.refusal);
+  }),
+  forgetChatMemory: vi.fn(),
+}));
 // The schedule card's use line (W3-02): no server to ask in a test.
 vi.mock('./schedule/estimate', () => ({
   readRunEstimate: vi.fn(async () => ({ kind: 'share', share: 0.02 })),
@@ -1215,6 +1235,27 @@ describe("the answer's language: the question's (CHAT-05 item 2)", () => {
     const parts = turn.content as { type: string; text?: string }[];
     return parts.at(-1)?.text;
   };
+
+  it("follows the language the person set, over the question's, unless the message asks for one", async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, answer_language: 'tr' }];
+    const english = 'Visibility on Perplexity fell this week, and the CRM prompts lost the most.';
+    const turkish = 'Perplexity görünürlüğü bu hafta düştü, en çok CRM soruları kaybetti.';
+    const { sonnet } = useModels([READY, READY], [text(english), text(turkish), text(english)]);
+    const set = await turn(ADMIN, 'Why did our visibility fall this week?');
+    expect(lastLine(sonnet.seen[0])).toBe(
+      'The person set Chat to answer in Turkish: answer in Turkish, whatever the language of their message or the data, unless they ask for another language.',
+    );
+    // An English answer: rewritten into the set language once.
+    expect(sonnet.seen).toHaveLength(2);
+    expect(answerOf(set)).toBe(turkish);
+
+    const asked = await turn(ADMIN, 'Why did our visibility fall this week? Answer in English.');
+    expect(lastLine(sonnet.seen[2])).toBe(
+      'The person asked for the answer in English: answer in English.',
+    );
+    expect(sonnet.seen).toHaveLength(3);
+    expect(answerOf(asked)).toBe(english);
+  });
 
   it("names the question's language as the writer's last line", async () => {
     const { haiku, sonnet } = useModels([READY], [text('Perplexity görünürlüğü bu hafta düştü.')]);
@@ -3978,6 +4019,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     // W3-11's memory: every role keeps its own Me; the store checks the scope.
     'save_memory',
     'forget_memory',
+    // W4-26: an agent's run only, for the agents its Can call names.
+    'run_agent',
   ];
   const dismiss = toolCall('w1', 'update_opportunity', {
     opportunity_id: OPPORTUNITY,
@@ -4049,8 +4092,9 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     expect(explains).toEqual({ admin: false, manager: false, analyst: true, agency_partner: true });
     expect(offered).toEqual({
       // Admins have no one to ask: no request to the Admins, and nothing to explain about it.
-      admin: CHANGES.filter((name) => name !== 'request_access').sort(),
-      manager: [...CHANGES].sort(),
+      // run_agent only in an agent's run with an agent to call: never a person's own chat.
+      admin: CHANGES.filter((name) => name !== 'request_access' && name !== 'run_agent').sort(),
+      manager: CHANGES.filter((name) => name !== 'run_agent').sort(),
       // A Manager's write and going live stay out for both; an Agency partner doesn't dismiss
       // suggestions.
       analyst: [
@@ -6484,6 +6528,62 @@ describe('the schedule card (W3-02, CHAT-12 items 7–9)', () => {
   });
 });
 
+describe('"Notify only if the answer changed" (W3-04a, CHAT-12 item 20)', () => {
+  const JOB = '88888888-8888-4888-8888-888888888888';
+  const readStep = () => calls(toolCall('r1', 'read_visibility', { brand_id: BRAND }));
+
+  /** A scheduled run of the job, change-only with `last` when given; its run id. */
+  async function jobRun(last?: string | null) {
+    const started = await engine.startChatRun(ADMIN, { message: 'Weekly check', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    scheduledRun(started, JOB);
+    if (last !== undefined) {
+      const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+      state.progress = { ...(state.progress as object), changeOnly: { last } };
+    }
+    await engine.driveRun(ADMIN, started.runId, undefined, { sessionUserId: null });
+    return started.runId;
+  }
+  const progressOf = (runId: string) =>
+    db.tables.chat_run_state.find((s) => s.run_id === runId)!.progress as {
+      fingerprint?: string;
+      unchanged?: boolean;
+    };
+
+  it('stops before the writing step when the job read what its last delivered run read', async () => {
+    useModels([readStep(), READY], [text('Up 12% this week.')]);
+    const first = await jobRun(null);
+    expect(runRow(first).status).toBe('done');
+    const fingerprint = progressOf(first).fingerprint!;
+    expect(fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(progressOf(first).unchanged).toBeUndefined();
+
+    const { sonnet } = useModels([readStep(), READY], [text('Up 12% this week.')]);
+    const second = await jobRun(fingerprint);
+    expect(runRow(second).status).toBe('done');
+    expect(progressOf(second).unchanged).toBe(true);
+    // No writing step: the writing model is never called, and the answer says why.
+    expect(sonnet.seen).toHaveLength(0);
+    expect(
+      db.tables.chat_messages.find((m) => m.id === runRow(second).message_id)?.content_md,
+    ).toContain('No change since the last run');
+  });
+
+  it('writes as usual when the data changed, or for a job that isn’t change-only', async () => {
+    useModels([readStep(), READY], [text('Up 12%.')]);
+    const first = await jobRun();
+    fakes.readRun.mockResolvedValue({
+      rows: [{ prompt: 'best crm' }],
+      change_pct: 3,
+      data_as_of: DATA_AS_OF,
+    });
+    const { sonnet } = useModels([readStep(), READY], [text('Up 3%.')]);
+    const second = await jobRun(progressOf(first).fingerprint!);
+    expect(progressOf(second).unchanged).toBeUndefined();
+    expect(sonnet.seen.length).toBeGreaterThan(0);
+  });
+});
+
 describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
   type Sent = { role: string; content: unknown };
   const systemsOf = (options: CallOptions) =>
@@ -6606,6 +6706,71 @@ describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
       target: '“Write in US English” · Me',
       canDontAskAgain: false,
     });
+    expect(db.tables.chat_memory_items).toEqual([]);
+  });
+
+  it('saves the Remember card as it was edited, and names the scope under its step (W3-12a)', async () => {
+    seedLine({ text: 'Write in UK English' });
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'save_memory', {
+            scope: 'user',
+            text: 'Write in US English',
+            brand_id: BRAND,
+            replaces: 'dddddddd-0000-4000-8000-' + String(lines).padStart(12, '0'),
+          }),
+        ),
+        text('Saved.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Remember that we write in US English now');
+    const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    expect(confirm.form).toMatchObject({ kind: 'memory', submit: 'Save' });
+    expect(confirm.form!.fields.map((f) => f.name)).toEqual(['text', 'scope', 'replace']);
+    expect(db.tables.chat_memory_items).toHaveLength(1);
+
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { text: 'Blog posts use US English', scope: 'brand', replace: true },
+    });
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    await engine.driveRun(ADMIN, runId, prepared.resume);
+    expect(db.tables.chat_memory_items.map((row) => [row.scope, row.text])).toEqual([
+      ['user', 'Write in UK English'],
+      ['brand', 'Blog posts use US English'],
+    ]);
+    expect(stepsOf(runId).find((s) => s.kind === 'write')).toMatchObject({
+      status: 'done',
+      label: 'Saved to memory',
+      detail: 'Brand: Northwind',
+    });
+  });
+
+  it('keeps the Remember card open when its edit is one memory can’t keep', async () => {
+    useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'save_memory', { scope: 'user', text: 'Write in US English' })),
+        text('Ok.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Remember that we write in US English');
+    const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    const refused = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { text: 'Email me at a@b.example', scope: 'user' },
+    });
+    expect(refused).toMatchObject({
+      ok: false,
+      status: 400,
+      message: "I can't save that. Memory doesn't keep secrets or personal details.",
+    });
+    expect(runRow(runId).status).toBe('waiting');
     expect(db.tables.chat_memory_items).toEqual([]);
   });
 

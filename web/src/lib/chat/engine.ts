@@ -124,7 +124,7 @@ import { stepPrompt, todayLine } from './prompt';
 import { ANSWER_NOTE, INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './rules';
 import { LANGUAGES, languageLine, rewriteLanguage, type Language } from './language';
 import { whyView } from './why/view';
-import { WHATS_NEW_TOOL, whatsNewStepDetail } from './whats-new/run';
+import { WHATS_NEW_TOOL, showWhatsNew, whatsNewStepDetail } from './whats-new/run';
 import {
   batchSize,
   runsWithoutSession,
@@ -221,6 +221,7 @@ import { answerUnattended, withAssumptions } from './schedule/unattended';
 import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
 import { memoryChoseTarget } from './memory/rules';
 import { memoryStep, runMemory, type RunMemory } from './memory/store';
+import { readUnchanged } from './schedule/fingerprint';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -355,6 +356,32 @@ export const EXPLAIN_TOOL = 'explain_unavailable';
 interface RunScope {
   brandId: string | null;
   brandIsDemo: boolean;
+}
+
+/**
+ * The rows a run is offered at all (their offerIn, W4-26: run_agent only in
+ * an agent's run with an agent to call), and refused ones it may explain:
+ * a row not offered here isn't explained either. A check that fails leaves
+ * the row out.
+ */
+async function offeredInRun(
+  tools: ReturnType<typeof engineTools>,
+  run: { agentRunId: string | null },
+): Promise<ReturnType<typeof engineTools>> {
+  const hidden = new Set<string>();
+  for (const tool of CHAT_TOOLS) {
+    if (!tool.offerIn) continue;
+    const here = await tool.offerIn(run).catch((err) => {
+      console.error('[chat/engine] could not tell whether a tool is offered:', err);
+      return false;
+    });
+    if (!here) hidden.add(tool.name);
+  }
+  if (hidden.size === 0) return tools;
+  return {
+    offered: tools.offered.filter((tool) => !hidden.has(tool.name)),
+    refused: tools.refused.filter((r) => !hidden.has(r.tool.name)),
+  };
 }
 
 /** The rows an Admin is never offered: a request to the Admins (CHAT-20 row 80a). */
@@ -880,6 +907,8 @@ interface RunContext {
   batchAnswer?: string;
   /** The agent run this chat is (CHAT-21 §H item 36): its steps are held within its cap too. */
   agentRunId: string | null;
+  /** The language the person set Chat to answer in (Settings › Chat); null: their question's. */
+  answerLanguage: Language | null;
   /** The brands this request noted on the chat already (touched-brands.ts); '*': the workspace. */
   touchedNoted?: Set<string>;
   /**
@@ -1034,6 +1063,22 @@ async function waitForSlot(
 }
 
 /** Everything a run's steps need, read once per request; null when the run ended here. */
+/**
+ * The language the person set Chat to answer in (Settings › Chat › General,
+ * chat_user_prefs.answer_language, 00408); null for "Same as my question",
+ * one Chat doesn't read, or a read that fails.
+ */
+async function readAnswerLanguage(userId: string): Promise<Language | null> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_user_prefs')
+    .select('answer_language')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) return null;
+  const value = (data as { answer_language?: string | null } | null)?.answer_language;
+  return value && Object.hasOwn(LANGUAGES, value) ? (value as Language) : null;
+}
+
 async function openContext(
   actor: ChatActor,
   run: LoadedRun,
@@ -1071,6 +1116,7 @@ async function openContext(
   }
   const brand = progress.brandId ? await readBrand(progress.brandId, actor.organizationId) : null;
   const { agentRunId, scheduleId } = await readChatOwner(run.conversationId);
+  const answerLanguage = await readAnswerLanguage(actor.userId);
   const scope: RunScope = {
     brandId: brand?.id ?? null,
     brandIsDemo: brand ? await readBrandIsDemo(brand.id) : false,
@@ -1078,8 +1124,9 @@ async function openContext(
   const tools = engineTools(ctx, scope);
   // A shortcut's run reads only its data plan (W2-09).
   const playbook = shortcutPlaybook(actor.organizationId, progress.shortcut);
-  const offered = playbook ? playbookTools(tools.offered, playbook) : tools.offered;
-  const { refused } = tools;
+  const shown = await offeredInRun(tools, { agentRunId });
+  const offered = playbook ? playbookTools(shown.offered, playbook) : shown.offered;
+  const { refused } = shown;
   // An agent's run reads what its skills list (run-limits.ts AGENT_READS).
   const budget = readBudget(run.effort, { agent: agentRunId !== null });
   const history = await readHistory(run, budget.historyChars);
@@ -1105,6 +1152,7 @@ async function openContext(
     offered: new Map(offered.map((tool) => [tool.name, tool])),
     refused,
     agentRunId,
+    answerLanguage,
     // The job's own run only: a person's message in its chat is theirs.
     scheduleId: progress.scheduled ? scheduleId : null,
     sessionUserId,
@@ -1562,6 +1610,11 @@ async function modelLoop(rc: RunContext): Promise<void> {
 
     if (phase === 'read') {
       if (step.toolCalls.length === 0) {
+        // A change-only job that read what it read last time stops here: No change (CHAT-12 item 20).
+        if (readUnchanged(rc.progress)) {
+          rc.progress.text = t('step.unchanged');
+          return finish(rc);
+        }
         // Read enough: Sonnet writes from what was read.
         rc.progress.phase = 'write';
         continue;
@@ -1814,7 +1867,7 @@ function turnMessage(rc: RunContext, phase: ChatPhase): ModelMessage {
     parts.push({ type: 'text', text: INJECTION_NOTE });
   }
   // Last, after pages of English data: the question's language, named (language.ts).
-  const language = phase === 'write' ? languageLine(question) : null;
+  const language = phase === 'write' ? languageLine(question, rc.answerLanguage) : null;
   if (language) parts.push({ type: 'text', text: language });
   return { role: 'user', content: parts };
 }
@@ -2697,7 +2750,7 @@ const cardText = (text: string, max: number) => {
 async function cardDetailsOf(
   tool: ChatTool,
   input: Record<string, unknown>,
-  place: { timezone: string; organizationId: string },
+  place: { timezone: string; organizationId: string; userId: string },
 ) {
   // An editable card's form (W3-02: a schedule's), as the change would be made.
   const form = await cardFormOf(tool, input, { ...place, now: new Date() });
@@ -2798,6 +2851,7 @@ function cardNotes(tool: ChatTool): { noUndo?: true; note?: string } {
 const placeOf = (rc: RunContext) => ({
   timezone: rc.progress.timezone,
   organizationId: rc.actor.organizationId,
+  userId: rc.actor.userId,
 });
 
 /** The hash of the arguments a card shows: what an approval is bound to (CHAT-20 §6). */
@@ -3488,6 +3542,12 @@ async function readCall(
   const opened = (page !== null ? read.value : {}) as { title?: unknown };
   // Each run keeps its own analysis, a kept read's too: its Why card is the run's.
   if (tool.name === WHY_TOOL) await keepWhyAnalysis(rc, input, kept ? read.value : output);
+  // What's new's cards, read as they show (CHAT-11 items 10, 18).
+  if (tool.name === WHATS_NEW_TOOL) {
+    await showWhatsNew(read.value, rc.actor.userId, (cards) =>
+      rc.sink.emit('whats_new.ready', cards),
+    );
+  }
   row = await updateStep(
     row.id,
     page !== null
@@ -3800,6 +3860,8 @@ async function writeCall(
   const auto = approval.kind === 'auto';
   // A row's own words for what it made ("Scheduled: Weekly report"), when it has them.
   const done = outcome.code === 'ok' ? doneStepOf(tool, input, outcome.output) : null;
+  // Another agent's answer is untrusted: every later change asks (CHAT-20 §16a).
+  if (tool.taintsRun && outcome.code === 'ok') rc.progress.tainted = true;
   row = await updateStep(stepId, {
     status: 'done',
     label: done?.label ?? toolWords(tool, 'step'),
@@ -4329,6 +4391,7 @@ export async function prepareResume(
         ...(await cardDetailsOf(tool, input, {
           timezone: progress.timezone,
           organizationId: actor.organizationId,
+          userId: actor.userId,
         })),
       });
       await sink.flush();
@@ -4347,6 +4410,7 @@ export async function prepareResume(
       ? editedInput(tool, asked.data as Record<string, unknown>, body.form, {
           timezone: (run.progress as Progress).timezone,
           organizationId: actor.organizationId,
+          userId: actor.userId,
           now: new Date(),
         })
       : { ok: false as const, error: null };
@@ -4394,7 +4458,7 @@ function summaryOf(progress: RunProgress, workingMs: number): ChatRunSummary {
 /** The answer is written: kept with when it was made and the newest data it read (CHAT-20 §15a). */
 async function finish(rc: RunContext): Promise<void> {
   // An answer in English to a question in another language is rewritten once (language.ts).
-  const language = rewriteLanguage(rc.progress.question ?? '', rc.progress.text);
+  const language = rewriteLanguage(rc.progress.question ?? '', rc.progress.text, rc.answerLanguage);
   if (language) await rewriteAnswer(rc, language);
   // A Stop during the rewrite ends the run as stopped, with the answer as it was.
   if (rc.signal.aborted) return stopNow(rc);
@@ -4477,7 +4541,9 @@ async function rewriteAnswer(rc: RunContext, language: Language): Promise<void> 
     if (rc.signal.aborted) return budget.keep();
     await budget.charge(stepUsage(await result.usage), Date.now() - called);
     const rewritten = out.join('').trim();
-    if (!rewritten || rewriteLanguage(rc.progress.question ?? '', rewritten)) return;
+    if (!rewritten || rewriteLanguage(rc.progress.question ?? '', rewritten, rc.answerLanguage)) {
+      return;
+    }
     // The same guards as streamed text (answer-guards.ts): no call written out, no raw tool name.
     const call = callAsTextAt(rewritten);
     const shown = maskToolNames(

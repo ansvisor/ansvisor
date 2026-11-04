@@ -143,7 +143,7 @@ describe('listInvitations', () => {
   };
 
   it.each(['admin', 'analyst'])(
-    'lists the pending invitations to an %s from the server, without their token or brands (00390)',
+    'lists the pending invitations to an %s from the server, without their token (00390)',
     async (role) => {
       sessionRole = role;
       adminAnswers['invitations.select'] = { data: [PENDING], error: null };
@@ -154,7 +154,8 @@ describe('listInvitations', () => {
         {
           table: 'invitations',
           op: 'select',
-          columns: 'id, email, role, status, invited_by, expires_at, created_at, accepted_at',
+          columns:
+            'id, email, role, status, invited_by, expires_at, created_at, accepted_at, brand_scope, brand_ids',
           filters: [
             ['organization_id', ORG],
             ['status', 'pending'],
@@ -174,10 +175,25 @@ describe('listInvitations', () => {
           expiresAt: '2026-11-07T00:00:00Z',
           createdAt: '2026-10-31T00:00:00Z',
           acceptedAt: null,
+          brandAccess: { scope: 'all', brandIds: [] },
         },
       ]);
     },
   );
+
+  it('names the brands an invitation shares to admins only (BRAND-ACCESS §3.2)', async () => {
+    const BRAND = '55555555-5555-4555-8555-555555555555';
+    adminAnswers['invitations.select'] = {
+      data: [{ ...PENDING, brand_scope: 'selected', brand_ids: [BRAND] }],
+      error: null,
+    };
+    expect((await listInvitations())[0].brandAccess).toEqual({
+      scope: 'selected',
+      brandIds: [BRAND],
+    });
+    sessionRole = 'analyst';
+    expect((await listInvitations())[0].brandAccess).toEqual({ scope: 'all', brandIds: [] });
+  });
 
   it('says so when the invitations could not be read', async () => {
     adminAnswers['invitations.select'] = { data: null, error: { message: 'down' } };
