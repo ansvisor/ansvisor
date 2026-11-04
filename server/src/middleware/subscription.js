@@ -56,6 +56,9 @@ export const COST_STOPPING = [
   { method: 'DELETE', path: /^\/tracking\/job\/[^/]+\/?$/ },
   // Stops the Content Agent's run on a draft (content-drafts.js, CE-027).
   { method: 'POST', path: /^\/content-drafts\/[^/]+\/stop\/?$/ },
+  // Takes a published page down to a draft in its CMS (content-drafts.js,
+  // AUTONOMOUS-GO-LIVE PR 10): it only lowers what is live.
+  { method: 'POST', path: /^\/content-drafts\/[^/]+\/take-down\/?$/ },
   // Disconnects Search Console or Analytics (integrations.js).
   { method: 'DELETE', path: /^\/integrations\/[^/]+\/?$/ },
   // Disconnects a brand's Webflow site (cms.js).

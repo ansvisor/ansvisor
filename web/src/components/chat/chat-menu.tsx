@@ -12,6 +12,7 @@ import type { ChatListItem } from '@/lib/chat/conversations';
 import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
 import { readAgentsSeen } from './agents/agents-seen';
+import { ConnectionsMenu } from './connections/connections-menu';
 import { useChatList, type ChatListStatus } from './chat-list-provider';
 import { ChatRowMenu } from './chat-menus';
 import { ChatRow } from './chat-row';
@@ -20,10 +21,18 @@ import { MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
 
 /** The menu's sections the person folded, remembered in this browser. */
 const SECTIONS_KEY = 'ansvisor.chatMenu.sections';
-type Section = 'menu' | 'atWork' | 'chats';
+type Section = 'menu' | 'atWork' | 'chats' | 'connections';
+
+/** As the menu opens: every section shown, but Connections' list (agentic plan §6: closed by default). */
+const FOLDED: Record<Section, boolean> = {
+  menu: false,
+  atWork: false,
+  chats: false,
+  connections: true,
+};
 
 function readFolded(): Record<Section, boolean> {
-  const none = { menu: false, atWork: false, chats: false };
+  const none = FOLDED;
   try {
     const raw = JSON.parse(window.localStorage.getItem(SECTIONS_KEY) ?? '{}');
     return { ...none, ...(typeof raw === 'object' && raw ? raw : {}) };
@@ -238,11 +247,7 @@ export function ChatMenuView({
   const t = useTranslations('chatShell.menu');
   const tAttention = useTranslations('agentic.attention');
   const isMac = useIsMac();
-  const [folded, setFolded] = useState<Record<Section, boolean>>({
-    menu: false,
-    atWork: false,
-    chats: false,
-  });
+  const [folded, setFolded] = useState<Record<Section, boolean>>(FOLDED);
   const [allRuns, setAllRuns] = useState(false);
   const [query, setQuery] = useState('');
   const found = useChatSearch(query);
@@ -386,6 +391,21 @@ export function ChatMenuView({
             {t('agents')}
             {agentsNew && <NewPill className="ml-auto" />}
           </MenuItem>
+          <MenuItem
+            href="/dashboard/chat/skills"
+            action="chatMenu.openSkills"
+            active={pathname === '/dashboard/chat/skills'}
+            onNavigate={onNavigate}
+          >
+            {t('skills')}
+          </MenuItem>
+          {/* Connections right under Skills (agentic plan §6). */}
+          <ConnectionsMenu
+            open={!folded.connections}
+            onToggle={() => fold('connections')}
+            active={pathname === '/dashboard/chat/connections'}
+            onNavigate={onNavigate}
+          />
           <MenuItem
             href="/dashboard/chat/settings"
             action="chatMenu.openSettings"

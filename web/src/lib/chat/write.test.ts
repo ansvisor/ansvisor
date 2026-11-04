@@ -72,6 +72,12 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
   checkChatActionCover: vi.fn(),
 }));
 
+vi.mock('@/lib/actions/chat-skills', () => ({ saveChatSkill: vi.fn() }));
+vi.mock('@/lib/actions/chat-memory', () => ({
+  saveChatMemory: vi.fn(),
+  forgetChatMemory: vi.fn(),
+}));
+
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
@@ -86,6 +92,10 @@ const { addTopicPrompts, pauseBrandPrompts } = await import('@/lib/actions/promp
 const { addBrandTopic, renameBrandTopic } = await import('@/lib/actions/topic');
 const { addCompetitors, removeBrandCompetitor } = await import('@/lib/actions/competitor');
 const chatActionCenter = await import('@/lib/actions/chat-action-center');
+const { saveChatSkill } = await import('@/lib/actions/chat-skills');
+const skillStore = await import('./skills/store');
+const { saveChatMemory, forgetChatMemory } = await import('@/lib/actions/chat-memory');
+const memoryStore = await import('./memory/store');
 const acFixtures = await import('./testing/action-center-fixtures');
 const { runLoggedWrite } = await import('./write');
 const { activitySummary, approvalFor, logActivity, recordActivity } = await import('./activity');
@@ -98,6 +108,8 @@ type ChatMode = import('./precedence').ChatMode;
 type ChatTool = import('./registry/define-tool').ChatTool;
 
 const WRITES = CHAT_TOOLS.filter((tool) => tool.class === 'write');
+/** The Admin's own Me line, which forget_memory removes. */
+const MEMORY_LINE = 'dddddddd-0000-4000-8000-000000000001';
 const INPUTS: Record<string, unknown> = {
   create_draft: {
     brand_id: BRAND,
@@ -157,6 +169,13 @@ const INPUTS: Record<string, unknown> = {
     date_to: '2026-10-07',
   },
   run_site_audit: { brand_id: BRAND, urls: ['https://acme.example/pricing'] },
+  save_skill: {
+    name: 'pricing-faq',
+    description: 'Writes a pricing FAQ in our tone.',
+    instructions: 'Read the pricing page first. Answer in two sentences.',
+  },
+  save_memory: { scope: 'user', text: 'Write blog posts in US English' },
+  forget_memory: { memory_id: MEMORY_LINE },
 };
 /** The rows that change or send a Library draft find one. */
 const NEEDS_DRAFT = new Set(['update_draft', 'push_cms_draft', 'publish_cms']);
@@ -201,6 +220,41 @@ beforeEach(() => {
   vi.mocked(chatActionCenter.setTaskReadyForReview).mockImplementation(
     acFixtures.fakeSetTaskReadyForReview(db) as never,
   );
+  // The session's person is the test's Admin; the store's rules are the real ones.
+  vi.mocked(saveChatSkill).mockImplementation(async (input) =>
+    skillStore.saveSkill(
+      (await skillStore.readSkillViewer({ userId: PEOPLE.admin, organizationId: ORG }))!,
+      input,
+    ),
+  );
+  db.tables.chat_memory_items = [
+    {
+      id: MEMORY_LINE,
+      organization_id: ORG,
+      scope: 'user',
+      user_id: PEOPLE.admin,
+      brand_id: null,
+      text: 'Write in UK English',
+      source: 'chat',
+      edited: false,
+      created_at: '2026-11-01T10:00:00.000Z',
+      deleted_at: null,
+    },
+  ];
+  const admin = async () =>
+    (await memoryStore.readMemoryViewer({ userId: PEOPLE.admin, organizationId: ORG }))!;
+  vi.mocked(saveChatMemory).mockImplementation(async (input) => {
+    const saved = await memoryStore.saveMemory(
+      await admin(),
+      { scope: input.scope, text: input.text, replaces: input.replaces ?? null },
+      'chat',
+    );
+    return saved.ok ? saved.value : memoryStore.saidRefusal(saved.refusal);
+  });
+  vi.mocked(forgetChatMemory).mockImplementation(async (input) => {
+    const removed = await memoryStore.deleteMemory(await admin(), input.memory_id);
+    return removed.ok ? removed.value : memoryStore.saidRefusal(removed.refusal);
+  });
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -254,7 +308,8 @@ describe('every WRITE that ran is in the Activity log (§21)', () => {
       expect(row).toMatchObject({
         organization_id: ORG,
         user_id: PEOPLE.admin,
-        brand_id: BRAND,
+        // A skill is the workspace's, not a brand's.
+        brand_id: tool.brandOf ? BRAND : null,
         surface: 'chat',
         tool_key: tool.labelKey,
         class: 'write',
@@ -1275,6 +1330,7 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     expect(CHAT_TOOLS.filter((tool) => tool.class === 'execute').map((tool) => tool.name)).toEqual([
       'push_cms_draft',
       'publish_cms',
+      'unpublish_cms',
     ]);
     const publish = chatTool('publish_cms')!;
     expect(publish.executeGroup).toBe('publishing');
@@ -1284,5 +1340,150 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     for (const destination of ['framer', 'webhook']) {
       expect(publish.inputSchema.safeParse({ draft_id: DRAFT, destination }).success).toBe(false);
     }
+  });
+});
+
+describe('saving a skill, by role and mode (W3-06, CHAT-20 §9 row 75)', () => {
+  const AGENCY = 'aaaaaaaa-0000-4000-8000-000000000005';
+  async function decide(userId: string, mode: ChatMode, tainted = false) {
+    const tool = chatTool('save_skill')!;
+    const ctx = await readPrecedenceContext({ userId, organizationId: ORG, mode, surface: 'chat' });
+    const call = await readToolCall(ctx!, tool, INPUTS.save_skill as never, tainted);
+    return decideToolCall(tool, ctx!, call);
+  }
+
+  it('Admins and Managers, from a card unless Full auto; Analysts and Agency partners are refused', async () => {
+    db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
+    for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
+      expect(await decide(userId, 'ask_first')).toMatchObject({ kind: 'ask' });
+      expect(await decide(userId, 'auto')).toMatchObject({ kind: 'ask' });
+      expect(await decide(userId, 'full_auto')).toEqual({ kind: 'run', via: 'full_auto' });
+    }
+    for (const userId of [PEOPLE.analyst, AGENCY]) {
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(userId, mode)).toMatchObject({
+          kind: 'deny',
+          denial: { code: 'forbidden_role', roles: ['admin', 'manager'] },
+        });
+      }
+    }
+  });
+
+  it('shows its card even in Full auto once outside text, an imported skill too, shaped it (§16a)', async () => {
+    expect(await decide(PEOPLE.admin, 'full_auto', true)).toMatchObject({
+      kind: 'ask',
+      reason: 'tainted',
+    });
+  });
+
+  it('is in the Activity log, and Undo deletes it while it is still private and as saved', async () => {
+    const tool = chatTool('save_skill')!;
+    await runAs(PEOPLE.admin, tool, 'full_auto');
+    const [log] = db.tables.chat_activity_log;
+    const [saved] = db.tables.chat_skills;
+    expect(log).toMatchObject({
+      target_type: 'chat_skill',
+      target_id: saved.id,
+      summary_params: { name: '/pricing-faq' },
+    });
+    expect(activitySummary(log.summary_key as string, log.summary_params as never)).toBe(
+      'Saved the skill /pricing-faq',
+    );
+    const undo = (id: string) =>
+      UNDO_RULES.save_skill.inverse({ id, brandId: null, data: log.undo_json as never });
+
+    // Shared with the workspace since: someone else's to keep.
+    saved.visibility = 'workspace';
+    expect(await undo(saved.id as string)).toBe('changed');
+    saved.visibility = 'private';
+    expect(await undo(saved.id as string)).toBe('ok');
+    expect(db.tables.chat_skills).toEqual([]);
+    expect(await undo(saved.id as string)).toBe('gone');
+  });
+});
+
+describe('memory, by role and mode (W3-11, CHAT-20 §9 rows 73–74)', () => {
+  const AGENCY = 'aaaaaaaa-0000-4000-8000-000000000005';
+  async function decide(userId: string, name: string, mode: ChatMode, tainted = false) {
+    const tool = chatTool(name)!;
+    const ctx = await readPrecedenceContext({ userId, organizationId: ORG, mode, surface: 'chat' });
+    const call = await readToolCall(ctx!, tool, INPUTS[name] as never, tainted);
+    return decideToolCall(tool, ctx!, call);
+  }
+
+  it('shows save_memory’s card to every role in every mode, Full auto included (item 10)', async () => {
+    db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
+    for (const userId of [PEOPLE.admin, PEOPLE.manager, PEOPLE.analyst, AGENCY]) {
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(userId, 'save_memory', mode)).toMatchObject({
+          kind: 'ask',
+          reason: 'always_card',
+          offerDontAskAgain: false,
+        });
+      }
+    }
+    // An Admin can't set it to Always (CHAT-20 §5 step 4).
+    expect(chatTool('save_memory')!.maxPolicy).toBe('ask');
+  });
+
+  it('removes in Full auto, with a card otherwise, and on a card once outside text shaped the run', async () => {
+    expect(await decide(PEOPLE.admin, 'forget_memory', 'auto')).toMatchObject({ kind: 'ask' });
+    expect(await decide(PEOPLE.admin, 'forget_memory', 'full_auto')).toEqual({
+      kind: 'run',
+      via: 'full_auto',
+    });
+    expect(await decide(PEOPLE.admin, 'forget_memory', 'full_auto', true)).toMatchObject({
+      kind: 'ask',
+      reason: 'tainted',
+    });
+  });
+
+  it('logs a save, and Undo takes it out, or gives a replaced line its old words', async () => {
+    const tool = chatTool('save_memory')!;
+    await runAs(PEOPLE.admin, tool, 'full_auto', { approved: true });
+    const [log] = db.tables.chat_activity_log;
+    const saved = db.tables.chat_memory_items.find((row) => row.id !== MEMORY_LINE)!;
+    expect(log).toMatchObject({ target_type: 'chat_memory_item', target_id: saved.id });
+    expect(activitySummary(log.summary_key as string, log.summary_params as never)).toBe(
+      'Saved “Write blog posts in US English” to Me memory',
+    );
+    const undo = (id: string, data: unknown) =>
+      UNDO_RULES.save_memory.inverse({ id, brandId: null, data: data as never });
+    saved.text = 'Changed since';
+    expect(await undo(saved.id as string, log.undo_json)).toBe('changed');
+    saved.text = 'Write blog posts in US English';
+    expect(await undo(saved.id as string, log.undo_json)).toBe('ok');
+    expect(db.tables.chat_memory_items.map((row) => row.id)).toEqual([MEMORY_LINE]);
+
+    db.tables.chat_activity_log = [];
+    await runAs(PEOPLE.admin, tool, 'full_auto', {
+      approved: true,
+      input: { scope: 'user', text: 'Write in US English', replaces: MEMORY_LINE },
+    });
+    const [replaced] = db.tables.chat_activity_log;
+    expect(db.tables.chat_memory_items[0].text).toBe('Write in US English');
+    expect(await undo(MEMORY_LINE, replaced.undo_json)).toBe('ok');
+    expect(db.tables.chat_memory_items[0].text).toBe('Write in UK English');
+  });
+
+  it('logs a removal, and Undo brings the line back while it is there', async () => {
+    const tool = chatTool('forget_memory')!;
+    await runAs(PEOPLE.admin, tool, 'full_auto');
+    const [log] = db.tables.chat_activity_log;
+    expect(db.tables.chat_memory_items[0].deleted_at).toEqual(expect.any(String));
+    expect(activitySummary(log.summary_key as string, log.summary_params as never)).toBe(
+      'Removed “Write in UK English” from Me memory',
+    );
+    const undo = () =>
+      UNDO_RULES.forget_memory.inverse({
+        id: MEMORY_LINE,
+        brandId: null,
+        data: log.undo_json as never,
+      });
+    expect(await undo()).toBe('ok');
+    expect(db.tables.chat_memory_items[0].deleted_at).toBeNull();
+    expect(await undo()).toBe('changed');
+    db.tables.chat_memory_items = [];
+    expect(await undo()).toBe('gone');
   });
 });

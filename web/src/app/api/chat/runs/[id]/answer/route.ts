@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prepareResume } from '@/lib/chat/engine';
+import { bodyHasApiKey } from '@/lib/chat/key-paste';
 import {
   afterSeqOf,
+  apiKeyRefusal,
   chatActor,
   engineFailureResponse,
   runFailure,
@@ -20,8 +22,9 @@ export const maxDuration = 300;
  * from the composer), or Skip. It is kept on the question once, and the run
  * goes on; its events after `after` stream back as on POST /api/chat/runs.
  * 409 `answered` for a second answer, 409 `not_waiting` when the run no
- * longer waits on that question, 400 for an answer the card doesn't offer,
- * 402 while read-only.
+ * longer waits on that question, 400 for an answer the card doesn't offer
+ * (or `api_key` for typed text that holds an API key, W4-05), 402 while
+ * read-only.
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -30,6 +33,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const runId = runIdOf((await params).id);
     if (!runId) return runFailure(404, 'not_found', 'not_found', 'Not found');
     const body = await req.json().catch(() => null);
+    if (bodyHasApiKey(body, 'other')) return apiKeyRefusal();
     const prepared = await prepareResume(actor, runId, 'answer', body);
     if (!prepared.ok) return engineFailureResponse(prepared);
     return streamRun(req, actor, runId, { resume: prepared.resume, afterSeq: afterSeqOf(req) });

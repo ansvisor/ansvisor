@@ -1513,7 +1513,6 @@ Opportunity:
 
 Related Prompt: "${promptText}"
 ${clusterContext}${decisionContext}${taskContext}Intent: ${sourceData.intent || 'unknown'}
-Est. AI Volume: ${sourceData.estAiVolume || 0}/mo
 Current Visibility: ${sourceData.visibilityScore || 0}%
 Competitor Gap: ${sourceData.competitorGap || 0}%
 Keywords: ${(sourceData.keywords || []).join(', ') || 'none'}
