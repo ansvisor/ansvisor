@@ -56,6 +56,16 @@ export function quotedQuestion(question: { text: string; textEn: string | null }
   return question.textEn && interCanDraw(question.textEn) ? question.textEn : null;
 }
 
+type Missed = ReportCardPayload['missedQuestions'][number];
+
+/** A name as compared: lower case, without accents or punctuation. */
+const nameKey = (name: string) =>
+  name
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+
 /** How long a name or a question may run in the card's sentences. */
 const NAME_MAX = 40;
 const QUESTION_MAX = 110;
@@ -82,15 +92,11 @@ export function totals(card: ReportCardPayload): Totals {
 /** "two", "three", "four": how many engines a card asked. */
 const ENGINE_COUNT: Record<number, string> = { 2: 'two', 3: 'three', 4: 'four' };
 
-/** A name as compared: lower case, letters and digits only ("Acme Inc." → "acmeinc"). */
-const nameKey = (name: string): string =>
-  name
-    .toLowerCase()
-    .replace(/ı/g, 'i')
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
-    .replace(/[\s,]+(inc|llc|ltd|gmbh|co|corp|company|plc)\.?$/u, '')
-    .replace(/[^\p{L}\p{N}]+/gu, '');
+/** A company's name as compared with a site's: nameKey without "Inc.", "Ltd" and the like. */
+const companyKey = (name: string): string =>
+  nameKey(
+    name.replace(/ı/g, 'i').replace(/[\s,]+(inc|llc|ltd|gmbh|co|corp|company|plc)\.?$/iu, ''),
+  );
 
 /**
  * Whether a cited site is a listed competitor's own (as the server's
@@ -98,11 +104,11 @@ const nameKey = (name: string): string =>
  * competitor's name or begins one. For cards made before the server marked it.
  */
 export function competitorSite(domain: string, competitors: readonly { name: string }[]): boolean {
-  const keys = competitors.map((c) => nameKey(c.name)).filter(Boolean);
+  const keys = competitors.map((c) => companyKey(c.name)).filter(Boolean);
   return domain
     .split('.')
     .slice(0, -1)
-    .map(nameKey)
+    .map(companyKey)
     .some(
       (label) =>
         !!label &&
@@ -132,12 +138,29 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
   const company = clip(card.companyName, NAME_MAX);
   const wins: QuickWin[] = [];
 
-  const missed = card.missedQuestions.find((q) => q.competitors.length > 0 && quotedQuestion(q));
+  // A question the main competitors (the top three) win; with none, the
+  // question the most engines answered.
+  const topThree = new Set(card.competitors.slice(0, 3).map((c) => nameKey(c.name)));
+  const main = (q: Missed) => q.competitors.filter((name) => topThree.has(nameKey(name))).length;
+  const quotable = card.missedQuestions.filter((q) => quotedQuestion(q));
+  const missed =
+    quotable
+      .filter((q) => main(q) > 0)
+      .sort((a, b) => main(b) - main(a) || b.competitors.length - a.competitors.length)[0] ??
+    [...quotable].sort((a, b) => (b.answers ?? 0) - (a.answers ?? 0))[0];
   const quoted = missed ? quotedQuestion(missed) : null;
   if (missed && quoted) {
+    const names = [...missed.competitors]
+      .sort((a, b) => Number(topThree.has(nameKey(b))) - Number(topThree.has(nameKey(a))))
+      .slice(0, 3)
+      .map((name) => clip(name, NAME_MAX));
     wins.push({
       title: `Answer “${clip(quoted, QUESTION_MAX)}” on your site`,
-      detail: `AI names ${listOf(missed.competitors.slice(0, 3).map((name) => clip(name, NAME_MAX)))} for it, and not ${company}. A page that answers it directly gives AI engines something of yours to cite.`,
+      detail: `${
+        names.length
+          ? `AI names ${listOf(names)} for it, and not ${company}.`
+          : `None of the answers to it names ${company}.`
+      } A page that answers it directly gives AI engines something of yours to cite.`,
     });
   }
 
@@ -356,9 +379,16 @@ export function planYearly(plan: ComparedPlan): number {
   return PLANS[plan].pricing?.annual ?? planMonthly(plan) * 12;
 }
 
-/** The value table, or null when no keyword had a cost per click. */
+/**
+ * Keywords with a cost per click a value table needs: a median of fewer
+ * swings with one keyword (owner decision 2026-11-03, after a real card's
+ * median came from two).
+ */
+export const MIN_CPC_KEYWORDS = 5;
+
+/** The value table, or null when fewer than MIN_CPC_KEYWORDS keywords had a cost per click. */
 export function valueRows(card: ReportCardPayload): ValueRow[] | null {
-  if (!card.cpc) return null;
+  if (!card.cpc || card.cpc.keywords < MIN_CPC_KEYWORDS) return null;
   const { usd } = card.cpc;
   return VISIT_ROWS.map((visits) => {
     const monthly = Math.round(visits * usd);

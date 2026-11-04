@@ -89,8 +89,42 @@ describe('summarize', () => {
     const figures = summarize(questions, answers, competitors, company);
     expect(figures.missedCount).toBe(1);
     expect(figures.missedQuestions).toEqual([
-      { text: 'how to grind coffee', textEn: null, competitors: ['Ridge Roasters'] },
+      { text: 'how to grind coffee', textEn: null, competitors: ['Ridge Roasters'], answers: 1 },
     ]);
+  });
+});
+
+describe('the questions missed, in order', () => {
+  it('puts first the questions the main competitors win, then the most competitors, then the most answers', () => {
+    const qs = [
+      { text: 'q0', textEn: null },
+      { text: 'q1', textEn: null },
+      { text: 'q2', textEn: null },
+      { text: 'q3', textEn: null },
+    ];
+    const a = (question, engine) => answer(question, engine, 'no company here');
+    const answers = [
+      ...['chatgpt-web', 'gemini-web'].flatMap((e) => [a(0, e), a(1, e), a(2, e)]),
+      a(3, 'chatgpt-web'),
+      a(3, 'gemini-web'),
+      // A third answer to q3.
+      answer(3, 'chatgpt-web', 'x'),
+    ];
+    const rivals = new Map([
+      // q0: three minor names; q1: the leader; q2: nothing; q3: leaders twice.
+      ['0:chatgpt-web', ['Tiny A', 'Tiny B', 'Tiny C']],
+      ['1:chatgpt-web', ['Leader']],
+      ['3:chatgpt-web', ['Leader', 'Second']],
+      ['3:gemini-web', ['Leader', 'Second', 'Third']],
+    ]);
+    const figures = summarize(qs, answers, rivals, company);
+    expect(figures.competitors.slice(0, 3).map((c) => c.name)).toEqual([
+      'Leader',
+      'Second',
+      'Third',
+    ]);
+    expect(figures.missedQuestions.map((q) => q.text)).toEqual(['q3', 'q1', 'q0', 'q2']);
+    expect(figures.missedQuestions.map((q) => q.answers)).toEqual([3, 2, 2, 2]);
   });
 });
 
@@ -99,6 +133,22 @@ describe('brandKey', () => {
     expect(brandKey('Acme Inc.')).toBe(brandKey('ACME'));
     expect(brandKey('Türk Telekom')).toBe(brandKey('turk telekom'));
     expect(brandKey('Kahve Dünyası A.Ş.')).toBe(brandKey('Kahve Dunyasi'));
+  });
+});
+
+describe('competitorsIn for a publisher', () => {
+  it('asks for other publications, not what they write about', async () => {
+    const generate = vi.fn(async () => ({ object: { answers: [] }, usage: {} }));
+    await competitorsIn(
+      [{ index: 0, question: 'best mobile marketing newsletters', text: 't' }],
+      { companyName: 'Reads', site: 'reads.example', about: null, audience: 'readers' },
+      { generate, env: {} },
+    );
+    const { system } = generate.mock.calls[0][0];
+    expect(system).toContain(
+      'the publications it names that compete with the company, a publisher',
+    );
+    expect(system).toContain('Leave out the companies, products and tools the answers write about');
   });
 });
 

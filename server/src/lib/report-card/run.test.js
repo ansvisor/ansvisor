@@ -34,7 +34,7 @@ function fakes(patch = {}) {
     now: () => new Date('2026-11-03T10:00:00Z'),
     fetcher: vi.fn(async () => ({ html: '<title>Acme</title><h1>Fresh coffee</h1>' })),
     detect: vi.fn(async () => ({ siteType: 'ecommerce' })),
-    write: vi.fn(async () => ({ questions, costUsd: 0.01 })),
+    write: vi.fn(async () => ({ questions, audience: 'buyers', costUsd: 0.01 })),
     ask: vi.fn(async () => ({
       engines: ['chatgpt-web', 'google-aio'],
       tasks: 3,
@@ -94,8 +94,14 @@ describe('buildReportCard', () => {
       citedSites: [{ domain: 'ridge.example', answers: 1, own: false }],
       ownCitations: 0,
       missedCount: 1,
+      audience: 'buyers',
       missedQuestions: [
-        { text: 'kahve aboneliği', textEn: 'coffee subscription', competitors: ['Ridge'] },
+        {
+          text: 'kahve aboneliği',
+          textEn: 'coffee subscription',
+          competitors: ['Ridge'],
+          answers: 1,
+        },
       ],
       cpc: { usd: 0.42, keywords: 2 },
       dealValue: { amount: 500, currency: 'TRY' },
@@ -106,6 +112,15 @@ describe('buildReportCard', () => {
     });
     // $0.01 + $0.004 in models, 3 answers at $0.002, the keyword call $0.075.
     expect(meter.total()).toBeCloseTo(0.014 + 0.006 + 0.075, 6);
+  });
+
+  it('tells the competitor reader a publisher’s audience', async () => {
+    const deps = fakes({
+      write: vi.fn(async () => ({ questions, audience: 'readers', costUsd: 0.01 })),
+    });
+    const { payload } = await buildReportCard(card, deps);
+    expect(deps.competitors.mock.calls[0][1]).toMatchObject({ audience: 'readers' });
+    expect(payload.audience).toBe('readers');
   });
 
   it('reads the site’s kind only for a deal value, from the page already read', async () => {
