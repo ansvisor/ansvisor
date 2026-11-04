@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // The plumbing reaches the Supabase admin client at import time, whose config
 // exits without its env (as in CI). Every connector test starts like this.
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
+// The brand's Merchant Center sign-in (BRAND-ACCESS PR 16): none, so the workspace's entity.
+vi.mock('../../lib/brand-integrations.js', () => ({ brandConnection: async () => null }));
 
 import { signInRequest } from '../../lib/catalog/sign-in.js';
 import { logger } from '../../lib/logger.js';
@@ -101,9 +103,13 @@ describe('readCatalog, through the real plumbing', () => {
     } = await runSync(merchantCenter, { account: ACCOUNT }, { signInRequest: factory });
 
     // The workspace's Merchant Center sign-in, a page at a time, at the API's largest page.
-    expect(factory).toHaveBeenCalledWith('google-merchant-center', 'org_org-1', {
-      hosts: ['merchantapi.googleapis.com'],
-    });
+    expect(factory).toHaveBeenCalledWith(
+      'google-merchant-center',
+      { entityId: 'org_org-1', accountId: null },
+      {
+        hosts: ['merchantapi.googleapis.com'],
+      },
+    );
     expect(proxy.mock.calls.map(([, call]) => call.query)).toEqual([
       { pageSize: PAGE_SIZE, pageToken: undefined },
       { pageSize: PAGE_SIZE, pageToken: 'page-2' },

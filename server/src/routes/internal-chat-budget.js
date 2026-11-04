@@ -5,10 +5,14 @@
  * checked the person against.
  *
  * POST /api/internal/chat/budget/reserve
- *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey?, agentRunId? }
+ *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey?, agentRunId?,
+ *     scheduleId? }
  *   An image request (feature 'image', W4-07) sends { images } (1–10) in place
  *   of the token counts: each image is held at the model's image price.
- *   → 201 { usageId }: the step's row, its worst case held (on Ansvisor's key).
+ *   → 201 { usageId }: the step's row, its worst case held (on Ansvisor's key),
+ *     named with the chat's agent run and scheduled job (reserve_chat_ai_usage
+ *     finds both from the run's chat, and refuses a scheduleId or an
+ *     agentRunId that isn't the chat's).
  *   → 429 ai_limit { trial }: the budget can't cover the step; it doesn't start.
  *   → 429 run_cap: the chat's agent run (agentRunId) can't take the step
  *     within its own cap (CHAT-27 item 21); it doesn't start.
@@ -50,6 +54,11 @@
  *     each agent's share of the AI limit this period, or over the last
  *     `days` (1–90), for the Agents list and detail (CHAT-27 items 24–30).
  *   → 402 plan_limit: no active plan. 403 chat_off.
+ * GET /api/internal/chat/budget/run-estimate?orgId=
+ *   → 200 { unlimited, share, runs }: about how much of the AI limit one Chat
+ *     run uses, from the last 30 days' runs (null with none), for the
+ *     schedule card (CHAT-12 item 7).
+ *   → 402 plan_limit: no active plan. 403 chat_off.
  * GET /api/internal/chat/budget/own-key?orgId=
  *   → 200 { reached, usedUsd, capUsd, since, renewsAt }: the key guard
  *     (AGENT-OWN-KEY §4.2): what all agents spent on the workspace's own key
@@ -73,6 +82,7 @@ import {
   MAX_IMAGES,
   agentUsageShares,
   chargeChatStep,
+  chatRunEstimate,
   fitChatUnits,
   imageShares,
   ownKeyAgentSpend,
@@ -117,6 +127,8 @@ const reserveSchema = z
     ownKey: z.boolean().default(false),
     // The chat's agent run: the step is held within its cap too (CHAT-27 item 21).
     agentRunId: z.guid().nullish(),
+    // The chat's scheduled job (CHAT-12 item 14): its row is named with the job.
+    scheduleId: z.guid().nullish(),
   })
   .refine(
     (body) =>
@@ -198,6 +210,7 @@ const sharesSchema = z.strictObject({
   days: z.coerce.number().int().min(1).max(90).optional(),
 });
 
+const estimateSchema = z.strictObject({ orgId: z.guid() });
 const ownKeySchema = z.strictObject({ orgId: z.guid() });
 
 /** The body as `schema` reads it, or null once a 400 is sent. */
@@ -244,6 +257,7 @@ router.post('/reserve', async (req, res) => {
       stepId: body.stepId ?? null,
       ownKey: body.ownKey,
       agentRunId: body.agentRunId ?? null,
+      scheduleId: body.scheduleId ?? null,
       ...(body.images ? { images: body.images } : {}),
     });
     return res.status(201).json({ success: true, usageId });
@@ -344,6 +358,21 @@ router.get('/agent-shares', async (req, res) => {
     return res.json({ success: true, ...shares });
   } catch (err) {
     return fail(err, req, res, 'agent shares');
+  }
+});
+
+router.get('/run-estimate', async (req, res) => {
+  const query = estimateSchema.safeParse(req.query ?? {});
+  if (!query.success) {
+    return res
+      .status(400)
+      .json({ success: false, error: 'invalid_request', message: 'Invalid request' });
+  }
+  try {
+    const estimate = await chatRunEstimate(query.data.orgId);
+    return res.json({ success: true, ...estimate });
+  } catch (err) {
+    return fail(err, req, res, 'run estimate');
   }
 });
 

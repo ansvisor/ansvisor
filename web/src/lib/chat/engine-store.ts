@@ -150,6 +150,25 @@ export interface RunProgress {
   fromTaintedMove?: boolean;
   /** Question cards asked so far (CHAT-07 §B: at most 4 a run). */
   asks?: number;
+  /**
+   * A run a scheduled job started (CHAT-12 item 11), not a person's message
+   * in the job's chat: nobody watches it, and it is metered as the job's.
+   */
+  scheduled?: boolean;
+  /**
+   * A change-only job's run (CHAT-12 item 20): the fingerprint of what its
+   * last delivered run read; null for its first run, which always delivers.
+   */
+  changeOnly?: { last: string | null };
+  /** sha256 of what this scheduled run read (schedule/fingerprint.ts), kept as the job's once delivered. */
+  fingerprint?: string;
+  /** It read what its change-only job's last delivered run read: it stopped before writing ("No change"). */
+  unchanged?: boolean;
+  /**
+   * The Recommended options a scheduled job's run took for nobody watching
+   * (CHAT-12 item 12): listed at the top of its answer.
+   */
+  assumptions?: string[];
   /** Why did it move analyses kept so far: the next one's card is n = whys + 1. */
   whys?: number;
   /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */

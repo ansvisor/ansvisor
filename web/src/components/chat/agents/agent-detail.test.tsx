@@ -488,6 +488,50 @@ describe('AgentDetail', () => {
     expect(action('agent.restore')).toHaveLength(1);
   });
 
+  it('says which agent called a run, and opens the agents a run ran with their AI use', async () => {
+    runs = [
+      run({
+        calls: [
+          { agent: 'FAQ writer', status: 'done', usageShare: 0.015, maxShare: 0.06 },
+          { agent: 'Rival brief', status: 'failed', usageShare: 0.002, maxShare: 0.05 },
+        ],
+      }),
+      run({ triggerKind: 'agent', calledBy: 'Weekly report', chatId: null }),
+    ];
+    await render();
+    const rows = all('[data-slot="agent-run"]');
+    expect(rows[1].textContent).toContain('Called by Weekly report');
+    const toggle = action('agent.toggleRunCalls');
+    expect(toggle).toHaveLength(1);
+    expect(toggle[0].textContent).toContain('Ran 2 agents');
+    expect(toggle[0].getAttribute('aria-expanded')).toBe('false');
+    expect(all('[data-slot="agent-run-call"]')).toHaveLength(0);
+    await click(toggle[0]);
+    const called = all('[data-slot="agent-run-call"]');
+    expect(called.map((r) => r.querySelectorAll('[role="cell"]').length)).toEqual([5, 5]);
+    expect(called[0].textContent).toContain('Ran FAQ writer');
+    expect(called[0].textContent).toContain('Done');
+    expect(called[0].textContent).toContain('1.5% of 6%');
+    expect(called[1].textContent).toContain('Failed');
+    await click(action('agent.toggleRunCalls')[0]);
+    expect(all('[data-slot="agent-run-call"]')).toHaveLength(0);
+  });
+
+  it('lists the agents it may run under Access, by name', async () => {
+    const FAQ = 'cccccccc-0000-4000-8000-000000000001';
+    agent = detail();
+    await render();
+    expect(one('[data-row="canCall"]')?.textContent).toBe('No other agents');
+    agent = detail({
+      settings: { ...detail().settings!, canCall: [FAQ, 'cccccccc-0000-4000-8000-000000000002'] },
+      canCall: { options: [{ id: FAQ, name: 'FAQ writer' }], locked: false },
+    });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(one('[data-row="canCall"]')?.textContent).toBe('FAQ writer, An agent you can’t see');
+  });
+
   it('shows Access, Scope and AI use as shares beside the runs', async () => {
     agent = detail({ maxRunShare: 0.15 });
     await render();
