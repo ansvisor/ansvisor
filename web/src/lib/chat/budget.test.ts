@@ -3,6 +3,7 @@ import {
   RESERVE_TIMEOUT_MS,
   fitChatUnits,
   fitImages,
+  meteredAs,
   readImageShares,
   reserveChatStep,
   reserveImages,
@@ -192,6 +193,29 @@ describe('reserveChatStep', () => {
       retryable: false,
       message: "This run reached its limit, so Chat stopped here. What's done so far is kept.",
     });
+  });
+
+  it('names a scheduled job’s step with its job, as its chat’s feature says (CHAT-12 item 14)', async () => {
+    const JOB = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0a';
+    const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c09';
+    expect(meteredAs({ agentRunId: null, scheduleId: JOB })).toEqual({
+      feature: 'schedule',
+      scheduleId: JOB,
+    });
+    // An agent run's chat is metered as the agent's, within its cap; a person's chat as chat.
+    expect(meteredAs({ agentRunId: AGENT_RUN, scheduleId: null })).toEqual({
+      feature: 'agent',
+      agentRunId: AGENT_RUN,
+    });
+    expect(meteredAs({ agentRunId: null, scheduleId: null })).toEqual({});
+
+    held();
+    budgetOf(await reserveChatStep(step(meteredAs({ agentRunId: null, scheduleId: JOB }))));
+    expect(calls[0].body).toMatchObject({ feature: 'schedule', scheduleId: JOB });
+    expect(calls[0].body).not.toHaveProperty('agentRunId');
+    held();
+    budgetOf(await reserveChatStep(step()));
+    expect(calls[1].body).not.toHaveProperty('scheduleId');
   });
 
   it('says the AI limit is used up, in the trial’s words in the free trial, and starts nothing', async () => {

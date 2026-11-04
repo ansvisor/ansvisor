@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_CHAT_SETTINGS, type PrecedenceContext } from '@/lib/chat/precedence';
+import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
 
 /**
  * The Chat frame's saved choices (chatShellPrefs): none while the new Chat
@@ -72,6 +73,12 @@ const keyHealth = vi.hoisted(() => ({
   failingKeyFor: vi.fn(async (): Promise<unknown> => null),
 }));
 vi.mock('@/lib/chat/key-health', () => keyHealth);
+// The workspace's own skills and the library skills it turned off (W3-06).
+vi.mock('@/lib/supabase/admin', async () => ({
+  supabaseAdmin: (await import('@/lib/chat/testing/fake-supabase')).createFakeSupabase(),
+}));
+const { supabaseAdmin } = await import('@/lib/supabase/admin');
+const skillsDb = supabaseAdmin as unknown as FakeSupabase;
 
 const { importLegacyChats } = await import('@/lib/chat/legacy-import');
 const { chatPageOpen, chatShellPrefs, chatComposerSetup, chatFocusState } =
@@ -86,6 +93,7 @@ beforeEach(() => {
   facts.ctx = null;
   facts.fail = false;
   facts.ownKey = false;
+  skillsDb.tables = {};
   vi.mocked(importLegacyChats).mockClear();
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -236,6 +244,53 @@ describe('chatComposerSetup', () => {
     expect(skills.every((skill) => Object.keys(skill).join() === 'name,title')).toBe(true);
     vi.stubEnv('CHAT_AGENTIC', 'false');
     expect((await chatComposerSetup()).skills).toEqual([]);
+  });
+
+  it("adds the person's own and the shared skills to the / menu, without what the workspace turned off (W3-06)", async () => {
+    facts.ctx = ctxOf('manager', true, true);
+    const own = { organization_id: 'org-1', status: 'approved', enabled: true, source: 'user' };
+    skillsDb.tables.chat_settings = [{ organization_id: 'org-1', disabled_skills: ['faq'] }];
+    skillsDb.tables.chat_skills = [
+      {
+        ...own,
+        id: 's1',
+        name: 'team-brief',
+        title: 'Team brief',
+        visibility: 'private',
+        created_by: 'user-1',
+      },
+      {
+        ...own,
+        id: 's2',
+        name: 'house-tone',
+        title: 'House tone',
+        visibility: 'workspace',
+        created_by: 'user-2',
+      },
+      {
+        ...own,
+        id: 's3',
+        name: 'their-own',
+        title: 'Their own',
+        visibility: 'private',
+        created_by: 'user-2',
+      },
+      {
+        ...own,
+        id: 's4',
+        name: 'switched-off',
+        title: 'Off',
+        visibility: 'workspace',
+        created_by: 'user-1',
+        enabled: false,
+      },
+    ];
+    const { skills } = await chatComposerSetup();
+    expect(skills).toContainEqual({ name: 'team-brief', title: 'Team brief' });
+    expect(skills).toContainEqual({ name: 'house-tone', title: 'House tone' });
+    const names = skills.map((skill) => skill.name);
+    for (const name of ['faq', 'their-own', 'switched-off']) expect(names).not.toContain(name);
+    expect(skills).toHaveLength(22);
   });
 
   it("puts the person's focus's skills first in the / menu (CHAT-24 §1)", async () => {

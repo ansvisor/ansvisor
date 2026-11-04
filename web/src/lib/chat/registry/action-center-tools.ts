@@ -10,7 +10,11 @@ import {
   type ChatActionProposal,
 } from '@/lib/actions/chat-action-center';
 import { actorOf } from '@/lib/chat/actor/access';
-import { checkChatActionCoverFor, createChatActionFor } from '@/lib/chat/actor/action-center';
+import {
+  checkChatActionCoverFor,
+  createChatActionFor,
+  setTaskReadyForReviewFor,
+} from '@/lib/chat/actor/action-center';
 import { actingOpen } from '@/lib/chat/actor/api';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -424,6 +428,11 @@ export const ACTION_CENTER_TOOLS = [
       task_id: contentUuid.describe('The task, from get_action.'),
     }),
     run: (ctx, input) => setTaskReadyForReview(input.brand_id, input.task_id, placeOf(ctx)),
+    // An agent's run with no session (Full auto where the agent may): the same change, as its
+    // person (owner decision 2026-11-03). In every other mode it still waits on its card.
+    sessionFree: true,
+    runFor: (ctx, input) =>
+      setTaskReadyForReviewFor(actorOf(ctx), input.brand_id, input.task_id, placeOf(ctx)),
     target: (input) => taskName(input.task_id, input.brand_id),
     fixture: { input: { brand_id: BRAND, task_id: ITEM } },
   }),
