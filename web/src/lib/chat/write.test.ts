@@ -19,6 +19,7 @@ import {
   fakeKeepDraftVersion,
   fakeSendDraftToCms,
   fakeStartSiteAudits,
+  fakeSetDraftReady,
   fakeUpdateContentDraft,
   fakeAddBrandTopic,
   fakeAddCompetitors,
@@ -44,6 +45,7 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: vi.fn(),
   updateContentDraft: vi.fn(),
+  setContentDraftReady: vi.fn(),
 }));
 vi.mock('@/lib/chat/actor/drafts', () => ({
   createContentDraftFor: vi.fn(),
@@ -80,7 +82,8 @@ vi.mock('@/lib/actions/chat-memory', () => ({
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraft, setContentDraftReady, updateContentDraft } =
+  await import('@/lib/actions/content-drafts');
 const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
 const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
 const { sendDraftToCms } = await import('@/lib/actions/cms-send');
@@ -160,6 +163,7 @@ const INPUTS: Record<string, unknown> = {
   },
   set_task_ready_for_review: { brand_id: BRAND, task_id: '99999999-9999-4999-8999-999999999999' },
   update_draft: { draft_id: DRAFT, title: 'Pricing FAQ for teams' },
+  set_draft_ready: { draft_id: DRAFT },
   push_cms_draft: { draft_id: DRAFT, destination: 'webflow' },
   publish_cms: { draft_id: DRAFT, destination: 'webflow' },
   build_report: {
@@ -178,7 +182,7 @@ const INPUTS: Record<string, unknown> = {
   forget_memory: { memory_id: MEMORY_LINE },
 };
 /** The rows that change or send a Library draft find one. */
-const NEEDS_DRAFT = new Set(['update_draft', 'push_cms_draft', 'publish_cms']);
+const NEEDS_DRAFT = new Set(['update_draft', 'set_draft_ready', 'push_cms_draft', 'publish_cms']);
 const toolCtx = {} as never;
 let step = 0;
 const nextStep = () => `step-${++step}`;
@@ -189,6 +193,7 @@ beforeEach(() => {
   seedWorkspace(db);
   vi.mocked(createContentDraft).mockImplementation(fakeCreateDraft(db) as never);
   vi.mocked(updateContentDraft).mockImplementation(fakeUpdateContentDraft(db) as never);
+  vi.mocked(setContentDraftReady).mockImplementation(fakeSetDraftReady(db) as never);
   vi.mocked(createContentDraftFor).mockImplementation((_actor, brandId, start) =>
     fakeCreateDraft(db)(brandId, start),
   );

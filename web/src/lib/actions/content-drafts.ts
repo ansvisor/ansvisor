@@ -1553,6 +1553,37 @@ export async function markContentDraftReady(
   return { status: current.status, tasksDone: 0 };
 }
 
+export type SetDraftReadyResult =
+  | { ok: true; status: DraftStatus; tasksDone: number }
+  | { ok: false; reason: 'not_found' | 'invalid' | 'failed'; message: string };
+
+/**
+ * Chat's Mark ready (set_draft_ready, CHAT-20 §9 row 57; CHAT-25 §6): the
+ * editor's markContentDraftReady as the signed-in member, its errors as
+ * values. Nothing is published. A draft already ready or published keeps
+ * its status, which `status` says.
+ */
+export async function setContentDraftReady(id: string): Promise<SetDraftReadyResult> {
+  try {
+    await assertWritable();
+    return { ok: true, ...(await markContentDraftReady(id)) };
+  } catch (err) {
+    const code = err instanceof Error ? err.message : '';
+    if (code === 'not_found') {
+      return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
+    }
+    if (code === 'invalid') {
+      return { ok: false, reason: 'invalid', message: 'That isn’t a Library draft.' };
+    }
+    console.error('Failed to mark the draft ready:', err);
+    return {
+      ok: false,
+      reason: 'failed',
+      message: 'The draft couldn’t be marked ready. Try again.',
+    };
+  }
+}
+
 /**
  * Ready, clicked in the editor's header (Next step spec §3b): the page goes
  * back to review, only while it is still ready. One published from the

@@ -4150,7 +4150,11 @@ async function deliver(
   };
   if (paged && paged.version.n > 1) rc.sink.emit('deliverable.updated', card);
   else rc.sink.emit('deliverable.created', card);
-  if (paged) rc.progress.pagePlaceholder = paged.version.changes.placeholders[0] ?? null;
+  if (paged) {
+    rc.progress.pagePlaceholder = paged.version.changes.placeholders[0] ?? null;
+    // A page with nothing left to fill, not Ready yet: Mark ready is a next move (W4-12b).
+    rc.progress.pageMayBeReady = !rc.progress.pagePlaceholder && !paged.done;
+  }
   // Which History version the card's Undo puts back: kept on the server, by its file.
   if (paged?.undoVersionId && filed.ok && made.contentDraftId) {
     rc.progress.pageUndos = {
@@ -4753,9 +4757,10 @@ async function checkedFactsStep(rc: RunContext): Promise<void> {
 async function offerNextMoves(rc: RunContext): Promise<void> {
   const moves = rc.progress.nextMoves ?? [];
   const placeholder = rc.progress.pagePlaceholder;
+  const markReady = rc.progress.pageMayBeReady === true;
   // A person's own chat only: an agent's or a job's run has no one to click it.
   const mayOfferSteps = !rc.agentRunId && !rc.scheduleId;
-  if (moves.length === 0 && !placeholder && !mayOfferSteps) return;
+  if (moves.length === 0 && !placeholder && !markReady && !mayOfferSteps) return;
   try {
     const ctx = await contextFor(rc);
     if (!ctx) return;
@@ -4767,6 +4772,21 @@ async function offerNextMoves(rc: RunContext): Promise<void> {
       clean = [
         { label: fill, prompt: fill, kind: 'continue', class: 'write', continues_this_run: true },
         ...clean.filter((move) => move.kind !== 'continue'),
+      ];
+    }
+    // A page done with its placeholders and not Ready yet: Mark ready, as the editor's (W4-12b).
+    if (markReady) {
+      const label = t('pageMoves.markReady');
+      clean = [
+        ...clean.filter((move) => move.kind === 'continue'),
+        {
+          label,
+          prompt: t('pageMoves.markReadyPrompt'),
+          kind: 'act',
+          class: 'write',
+          continues_this_run: true,
+        },
+        ...clean.filter((move) => move.kind !== 'continue' && move.kind !== 'act'),
       ];
     }
     if (mayOfferSteps && (await offersSaveStepsTo(rc, ctx))) {

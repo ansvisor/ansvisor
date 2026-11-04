@@ -39,6 +39,7 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: vi.fn(),
   updateContentDraft: vi.fn(),
+  setContentDraftReady: vi.fn(),
 }));
 // The drafts' writes for a run with no session (runFor): what the engine hands them is tested here,
 // their checks in actor/drafts.test.ts.
@@ -4107,6 +4108,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'set_task_ready_for_review',
     // W2-07's content rows: Admins and Managers only.
     'update_draft',
+    'set_draft_ready',
     'push_cms_draft',
     'publish_cms',
     'unpublish_cms',
@@ -7697,6 +7699,34 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
     const events = await eventsOf(runId);
     expect(ofType(events, 'deliverable.updated')).toEqual([]);
     expect(ofType(events, 'deliverable.created')).toEqual([]);
+  });
+
+  it('offers Mark ready after a version with nothing left to fill, not once it is Ready (W4-12b)', async () => {
+    const DONE = PAGE.replace('[REFUND PERIOD]', '30 days');
+    const firstMove = async (runId: string) =>
+      db.tables.chat_next_moves
+        .filter((m) => m.run_id === runId)
+        .sort((a, b) => (a.rank as number) - (b.rank as number))
+        .map((m) => [m.label, m.prompt, m.class]);
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: DONE })), text('Done.')],
+    );
+    const runId = await turn(ADMIN, 'Fill the refund period', 'full_auto');
+    expect(await firstMove(runId)).toContainEqual(['Mark ready', 'Mark this page ready', 'write']);
+    // A draft that is Ready already gets no Mark ready.
+    db.tables.content_drafts.find((d) => d.id === DRAFT)!.status = 'ready';
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w2', 'update_draft', { draft_id: DRAFT, body_html: `${DONE}<p>More.</p>` }),
+        ),
+        text('Done.'),
+      ],
+    );
+    const again = await turn(ADMIN, 'Add a line', 'full_auto');
+    expect((await firstMove(again)).map(([label]) => label)).not.toContain('Mark ready');
   });
 
   it('still files an untitled page when its version can’t be read, as a plain card', async () => {

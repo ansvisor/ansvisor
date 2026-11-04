@@ -3511,6 +3511,7 @@
       "note": "Its timeline events go with it. Undo brings the competitor back, not those events."
     },
     "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
+    "markDraftReady": { "name": "Mark drafts ready", "step": "Marked draft ready" },
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
     "publishToCms": { "name": "Publish pages on your site", "step": "Published page on your site" },
     "takeDownFromCms": {
@@ -3786,7 +3787,8 @@
         "states": {
           "openPage": "After Chat writes a page · none Recommended; Open here comes with W4-15",
           "pageVersion1": "Version 1: the page Chat wrote · no Undo",
-          "pageVersion2": "Version 2 after a change · Rules, Quality, Optimize, Mark ready and Send to CMS come with W4-12b",
+          "pageVersion2": "Version 2 after a change, for an Admin or a Manager · Rules, Quality and Optimize come with W4-12b-2",
+          "pageMarkReady": "Next moves once nothing is left to fill (W4-12b)",
           "planAuto": "Auto, ask before changes",
           "planFullAuto": "Full auto, a tool not connected",
           "planReadOnly": "Analyst: read-only",
@@ -3881,6 +3883,8 @@
   "chatEngine": {
     "pageMoves": {
       "fill": "Fill the {what}",
+      "markReady": "Mark ready",
+      "markReadyPrompt": "Mark this page ready",
       "untitled": "Untitled page"
     },
     "actionCard": {
@@ -4400,7 +4404,9 @@
       "undoneShort": "Back to version {n}",
       "undone": "Version {n} is back in the draft.",
       "undoFailed": "The version before couldn’t be put back. Try again from the editor’s History.",
-      "saved": "Saved to the Library as a draft after each change, so the editor can open it anytime."
+      "saved": "Saved to the Library as a draft after each change, so the editor can open it anytime.",
+      "sendToCms": "Send to CMS",
+      "sendFailed": "The page couldn’t be read to send. Try again, or send it from the Content Editor."
     },
     "types": {
       "document": "Document",
@@ -5729,6 +5735,8 @@
       "taskReadyForReviewUndo": "Took {task} back from Ready for review",
       "reviseDraft": "Changed the draft “{title}”",
       "reviseDraftUndo": "Put the draft “{title}” back as it was",
+      "markDraftReady": "Marked the draft “{title}” ready",
+      "markDraftReadyUndo": "Took the draft “{title}” back from Ready",
       "sendToCms": "Sent the draft “{title}” to {cms}",
       "publishToCms": "Published the page “{title}” through {cms}",
       "takeDownFromCms": "Took the page “{title}” down from {cms}",
