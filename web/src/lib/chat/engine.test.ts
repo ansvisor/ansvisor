@@ -1221,6 +1221,26 @@ describe('a step the provider ends in an error, with nothing in it', () => {
     expect(runRow(runId).status).toBe('done');
     expect(runFromEvents(await eventsOf(runId)).text).toBe('Two pages lost most of it.');
   });
+
+  it('stays the run’s one recovery after a card: the run goes on without another', async () => {
+    // A run that waits on a card (an agent's run_agent too, W4-26) goes on as the same run.
+    const { sonnet } = useModels(
+      [READY],
+      [
+        errored,
+        calls(toolCall('w1', 'publish_page', { brand_id: BRAND, title: 'Pricing FAQ' })),
+        empty,
+        text('Never asked.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Publish the pricing FAQ', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    expect(sonnet.seen).toHaveLength(2);
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    expect(sonnet.seen).toHaveLength(3);
+    expect(noted(sonnet.seen[2])).toBe(false);
+    expect(runRow(runId).status).toBe('done');
+  });
 });
 
 describe("the answer's language: the question's (CHAT-05 item 2)", () => {
@@ -6581,6 +6601,23 @@ describe('"Notify only if the answer changed" (W3-04a, CHAT-12 item 20)', () => 
     const second = await jobRun(progressOf(first).fingerprint!);
     expect(progressOf(second).unchanged).toBeUndefined();
     expect(sonnet.seen.length).toBeGreaterThan(0);
+  });
+
+  it('stops so too when the reading step after its reads ends in an error, with no retry', async () => {
+    // A reading step the provider ended with nothing in it is read enough: never run again.
+    const errored = [
+      { type: 'text-start', id: 't' },
+      { type: 'text-end', id: 't' },
+      { type: 'finish', finishReason: { unified: 'other', raw: 'error' }, usage: usage(0, 0) },
+    ];
+    useModels([readStep(), READY], [text('Up 12% this week.')]);
+    const first = await jobRun(null);
+    const { haiku, sonnet } = useModels([readStep(), errored], [text('Never asked.')]);
+    const second = await jobRun(progressOf(first).fingerprint!);
+    expect(haiku.seen).toHaveLength(2);
+    expect(sonnet.seen).toHaveLength(0);
+    expect(progressOf(second).unchanged).toBe(true);
+    expect(runRow(second).status).toBe('done');
   });
 });
 
