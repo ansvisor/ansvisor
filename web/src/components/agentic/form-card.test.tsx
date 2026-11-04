@@ -194,3 +194,95 @@ describe('FormCard', () => {
     expect(container.textContent).toContain('Step 2 skipped · Schedule work');
   });
 });
+
+describe('the Remember card (W3-12a, CHAT-14 item 7)', () => {
+  const MEMORY: ChatConfirmForm = {
+    kind: 'memory',
+    submit: 'Save',
+    fields: [
+      {
+        name: 'text',
+        kind: 'textarea',
+        label: 'Memory',
+        value: 'Write in US English',
+        maxLength: 300,
+        required: true,
+      },
+      {
+        name: 'scope',
+        kind: 'choice',
+        label: 'Save to',
+        value: 'user',
+        options: [
+          { value: 'user', label: 'Me' },
+          { value: 'brand', label: 'Brand: Northwind' },
+          { value: 'workspace', label: 'Workspace', disabled: true },
+        ],
+      },
+      {
+        name: 'replace',
+        kind: 'toggle',
+        label: 'Replaces: “Write in UK English”',
+        value: true,
+        hint: 'Untick to keep both.',
+      },
+    ],
+  };
+
+  function Remember({ onSubmit }: { onSubmit: (v: unknown) => void }) {
+    const assist = useFormAssist(MEMORY);
+    return (
+      <FormCard
+        step={{ n: 1, total: 1 }}
+        title="Save to memory"
+        form={MEMORY}
+        assist={assist}
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+      />
+    );
+  }
+
+  const radio = (label: string) =>
+    [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')].find(
+      (el) => el.textContent === label,
+    )!;
+  async function typeArea(value: string) {
+    const area = container.querySelector('textarea')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(
+        area,
+        value,
+      );
+      area.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+
+  it('counts the line, keeps a scope the role doesn’t change off, and hides Replaces in another scope', async () => {
+    const onSubmit = vi.fn();
+    await render(<Remember onSubmit={onSubmit} />);
+    expect(container.textContent).toContain('19 of 300 characters');
+    expect(container.textContent).toContain('Replaces: “Write in UK English”');
+    expect(radio('Workspace').disabled).toBe(true);
+    await click(radio('Workspace'));
+    expect(radio('Me').getAttribute('aria-checked')).toBe('true');
+
+    await click(radio('Brand: Northwind'));
+    expect(container.textContent).not.toContain('Replaces:');
+    await click(action('formCard.submit'));
+    expect(onSubmit).toHaveBeenCalledWith({
+      text: 'Write in US English',
+      scope: 'brand',
+      replace: true,
+    });
+  });
+
+  it('says why memory can’t keep a line, and keeps Save off', async () => {
+    await render(<Remember onSubmit={vi.fn()} />);
+    await typeArea('My phone is +1 555 123 4567');
+    expect(container.textContent).toContain(
+      "I can't save that. Memory doesn't keep secrets or personal details.",
+    );
+    expect((action('formCard.submit') as HTMLButtonElement).disabled).toBe(true);
+  });
+});

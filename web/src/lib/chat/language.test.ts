@@ -137,3 +137,28 @@ describe('rewriteLanguage', () => {
     ).toBe('tr');
   });
 });
+
+describe('a language the person set (Settings › Chat)', () => {
+  const ENGLISH =
+    'Perplexity visibility fell this week, and the biggest drop is in the CRM prompts.';
+  const TURKISH = 'Perplexity görünürlüğü bu hafta düştü ve en büyük düşüş CRM sorularında.';
+
+  it('names it for the writer over the question’s, and a language asked for in the message over it', () => {
+    expect(languageLine('Why did citations fall this week?', 'tr')).toBe(
+      'The person set Chat to answer in Turkish: answer in Turkish, whatever the language of their message or the data, unless they ask for another language.',
+    );
+    expect(languageLine("Bu hafta Perplexity'de neden düştük? Answer in English.", 'tr')).toBe(
+      'The person asked for the answer in English: answer in English.',
+    );
+  });
+
+  it('rewrites an answer into it across English, and leaves one already in it', () => {
+    expect(rewriteLanguage('Why did citations fall this week?', ENGLISH, 'tr')).toBe('tr');
+    expect(rewriteLanguage("Bu hafta Perplexity'de neden düştük?", TURKISH, 'en')).toBe('en');
+    expect(rewriteLanguage('Why did citations fall this week?', TURKISH, 'tr')).toBeNull();
+    // Asked for in the message: never rewritten away.
+    expect(
+      rewriteLanguage("Bu hafta Perplexity'de neden düştük? Answer in English.", ENGLISH, 'tr'),
+    ).toBeNull();
+  });
+});

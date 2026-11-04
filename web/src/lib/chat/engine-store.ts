@@ -156,6 +156,15 @@ export interface RunProgress {
    */
   scheduled?: boolean;
   /**
+   * A change-only job's run (CHAT-12 item 20): the fingerprint of what its
+   * last delivered run read; null for its first run, which always delivers.
+   */
+  changeOnly?: { last: string | null };
+  /** sha256 of what this scheduled run read (schedule/fingerprint.ts), kept as the job's once delivered. */
+  fingerprint?: string;
+  /** It read what its change-only job's last delivered run read: it stopped before writing ("No change"). */
+  unchanged?: boolean;
+  /**
    * The Recommended options a scheduled job's run took for nobody watching
    * (CHAT-12 item 12): listed at the top of its answer.
    */

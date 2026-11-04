@@ -7,11 +7,12 @@ import {
   scheduleRunDriver,
   settleOpenRuns,
 } from '@/lib/chat/schedule/worker';
+import { checkSkillUpdates } from '@/lib/chat/skills/updates';
 
 // The runs it starts are driven past the answer (after()), within this.
 export const maxDuration = 300;
 
-const JOBS = ['settle', 'resume', 'due'] as const;
+const JOBS = ['settle', 'resume', 'due', 'skill_updates'] as const;
 type Job = (typeof JOBS)[number];
 
 const tickInput = z.strictObject({
@@ -28,8 +29,10 @@ const tickInput = z.strictObject({
  * server's cron right after the agents' tick, with `Authorization: Bearer
  * ${CHAT_INTERNAL_SECRET}` (lib/chat/schedule/worker.ts): settles the runs
  * still open, lets jobs paused at the AI limit go on once it has room, then
- * runs the jobs that are due. `jobs` picks some; all by default. Also called
- * by hand in development, where the server's crons don't run.
+ * runs the jobs that are due; in its daily window, it also checks a few
+ * imported skills' sources for a new SKILL.md (W4-31, skills/updates.ts).
+ * `jobs` picks some; all by default. Also called by hand in development,
+ * where the server's crons don't run: `skill_updates` named checks at once.
  *
  * 404 with the new Chat off, 401 without the secret, 400 a bad body. Each
  * job runs on its own: one that fails doesn't stop the others, and the
@@ -39,7 +42,8 @@ const tickInput = z.strictObject({
 export async function POST(req: Request) {
   const refusal = internalCallRefusal(req);
   if (refusal) return refusal;
-  const input = tickInput.safeParse(await req.json().catch(() => ({})));
+  const raw: unknown = await req.json().catch(() => ({}));
+  const input = tickInput.safeParse(raw);
   if (!input.success) {
     return NextResponse.json({ ok: false, error: 'invalid' }, { status: 400 });
   }
@@ -60,7 +64,10 @@ export async function POST(req: Request) {
   const settled = await run('settle', () => settleOpenRuns(now));
   const resumed = await run('resume', () => resumeCapPausedJobs(now));
   const due = await run('due', () => fireDueJobs(now, scheduleRunDriver));
-  const done = { settled, resumed, due };
+  // Outside the daily window only when named (by hand).
+  const named = Array.isArray((raw as { jobs?: unknown } | null)?.jobs);
+  const skillUpdates = await run('skill_updates', () => checkSkillUpdates(now, { force: named }));
+  const done = { settled, resumed, due, skillUpdates };
   return NextResponse.json(
     failed.length > 0 ? { ok: false, error: 'failed', failed, ...done } : { ok: true, ...done },
     { status: failed.length > 0 ? 500 : 200 },

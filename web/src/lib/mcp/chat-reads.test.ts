@@ -61,10 +61,12 @@ const mocks = vi.hoisted(() => ({
   readMemberEmails: vi.fn(),
   readPrecedenceContext: vi.fn(),
   brandAccessFor: vi.fn(),
+  readMemberBrandAccess: vi.fn(),
 }));
 vi.mock('@/lib/brand-access', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/brand-access')>()),
   brandAccessFor: mocks.brandAccessFor,
+  readMemberBrandAccess: mocks.readMemberBrandAccess,
 }));
 vi.mock('./data', () => ({
   brandAllowed: mocks.brandAllowed,
@@ -109,6 +111,7 @@ beforeEach(() => {
   for (const fn of Object.values(mocks)) fn.mockReset();
   mocks.brandAllowed.mockResolvedValue(true);
   mocks.brandAccessFor.mockResolvedValue('all');
+  mocks.readMemberBrandAccess.mockResolvedValue(new Map());
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -432,6 +435,39 @@ describe('Workspace reads', () => {
     expect(mocks.readMemberEmails).not.toHaveBeenCalled();
     const forAdmin = await listMembersFor(auth('admin'));
     expect(forAdmin?.members[1]).toMatchObject({ email: 'sam@x.example' });
+  });
+
+  it("give each member's real brand access, with names for Admins and the person only", async () => {
+    reads.answers.profiles = [
+      { id: 'u1', full_name: 'Alex Kim', role: 'analyst' },
+      { id: 'u2', full_name: 'Sam Lee', role: 'admin' },
+      { id: 'u3', full_name: 'Ayse Demir', role: 'analyst' },
+    ];
+    reads.answers.brands = [
+      { id: 'b1', name: 'Acme' },
+      { id: 'b2', name: 'Globex' },
+    ];
+    mocks.readMemberEmails.mockResolvedValue(new Map());
+    mocks.readMemberBrandAccess.mockResolvedValue(
+      new Map([
+        ['u1', { scope: 'selected', brandIds: ['b2'] }],
+        ['u2', { scope: 'all', brandIds: [] }],
+        ['u3', { scope: 'selected', brandIds: ['b1'] }],
+      ]),
+    );
+    const forAdmin = await listMembersFor({ ...auth('admin'), userId: 'u2' });
+    expect(forAdmin?.members.map((m) => [m.brand_access, m.brands])).toEqual([
+      ['selected', ['Globex']],
+      ['all', undefined],
+      ['selected', ['Acme']],
+    ]);
+    const forAnalyst = await listMembersFor(auth('analyst'));
+    expect(forAnalyst?.members.map((m) => [m.brand_access, m.brands])).toEqual([
+      ['selected', ['Globex']],
+      ['all', undefined],
+      ['selected', undefined],
+    ]);
+    expect(JSON.stringify(forAnalyst)).not.toContain('Acme');
   });
 
   it("list what is connected, and never read a key's value or a credential", async () => {
