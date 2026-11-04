@@ -99,6 +99,15 @@ describe('pageImages', () => {
       { src: 'https://cdn.example/b.jpg', alt: '' },
     ]);
   });
+
+  it('leaves out an image AI made: it is never the page’s own visual proof (W4-09)', () => {
+    expect(
+      pageImages(
+        '<img src="https://cdn.example/ai.jpg" alt="AI" data-ai-generated="true">' +
+          '<img src="https://cdn.example/own.png" alt="Ours">',
+      ),
+    ).toEqual([{ src: 'https://cdn.example/own.png', alt: 'Ours' }]);
+  });
 });
 
 describe('aiChecksOnPage (CE-050)', () => {

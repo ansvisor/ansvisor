@@ -40,6 +40,8 @@ const SCHEMA = join(__dirname, '../../../supabase/schema.sql');
  */
 const OPEN_ACTIONS: Record<string, string> = {
   'organization.ts:updateAccountName': "the person's own profile",
+  'organization.ts:updateAccountTimeZone':
+    "the person's own profile: the time zone their own times are read in, nothing that costs",
   'chat-notices.ts:markChatNoticesRead':
     "the person's own record of seeing a notice (00441), nothing that runs or costs",
   'chat-notices.ts:closeChatNotice':
@@ -147,6 +149,9 @@ const OPEN_ROUTES: Record<string, string> = {
   'chat/runs/[id]/answer:POST': 'the engine answers 402 (prepareResume) while read-only',
   'chat/runs/[id]/stop:POST': 'stopping a run starts no cost',
   'chat/files/zip:POST': 'reads only: the picked files as one .zip, nothing kept',
+  // The Content Editor's AI image options (W4-09): making them is gated (images:POST).
+  'content/drafts/[id]/images/options:POST':
+    'dropping unused AI image options stays open (cleanup, no cost); keeping one checks the plan (writeRefusal) before it moves',
   // The API server's cron and hooks (CHAT_INTERNAL_SECRET), never a person: the
   // triggers fire nothing in a read-only workspace, and the agent run driver
   // starts no run in one (readArmedOrgs, openAgentRun).
