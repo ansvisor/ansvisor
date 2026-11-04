@@ -2,7 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import type { LanguageModel } from 'ai';
 import { AGENT_PROVIDER_OPTIONS, buildAgentModel } from '@/lib/agent/model';
 import { chatModelId, type AiProvider } from '@/lib/agent/providers';
-import { resolveChatModelKey, type ChatKeySource } from './key';
+import { resolveChatModelKey, resolvePickedModelKey, type ChatKeySource } from './key';
 import { ownKeyFailure } from './key-health';
 import {
   AUTO_CHOICE,
@@ -177,6 +177,7 @@ export function openRouterModels(
   apiKey: string,
   picked: OfferedModel,
   effort: ChatModelEffort = 'normal',
+  source: ChatKeySource = 'ansvisor',
 ): ChatModels {
   const single: ChatModelChoice = {
     model: buildAgentModel({ provider: 'openrouter', apiKey, settings: { model: picked.api } }),
@@ -189,7 +190,7 @@ export function openRouterModels(
     claude: false,
   };
   return {
-    source: 'ansvisor',
+    source,
     model: picked.id,
     provider: 'openrouter',
     keyFailing: false,
@@ -209,23 +210,42 @@ export function openRouterModels(
 export async function resolveChatModels(
   organizationId: string,
   choice: RunModelChoice = AUTO_CHOICE,
+  { ansvisorOnly = false }: { ansvisorOnly?: boolean } = {},
 ): Promise<ChatModels | null> {
-  const key = await resolveChatModelKey(organizationId);
+  const picked = offeredModel(choice.model);
+  if (picked) {
+    // Each provider's own key first, then the own OpenRouter key, then Ansvisor's (W4-06).
+    const pickedKey = await resolvePickedModelKey(organizationId, picked.provider, {
+      ansvisorOnly,
+    });
+    if (pickedKey) {
+      const failing =
+        pickedKey.source === 'own' ? await ownKeyFailure(organizationId).catch(() => null) : null;
+      const keyFailing = failing?.provider === pickedKey.config.provider;
+      if (pickedKey.config.provider === 'anthropic') {
+        return {
+          ...pickedClaudeModels(pickedKey.config.apiKey, pickedKey.source, picked, choice.effort),
+          keyFailing,
+        };
+      }
+      // OpenRouter runs the model by its catalog id.
+      return {
+        ...openRouterModels(
+          pickedKey.config.apiKey,
+          { ...picked, api: picked.id },
+          choice.effort,
+          pickedKey.source,
+        ),
+        keyFailing,
+      };
+    }
+  }
+  const key = await resolveChatModelKey(organizationId, { ansvisorOnly });
   if (!key) return null;
   const keyFailing =
     key.source === 'own' && (await ownKeyFailure(organizationId).catch(() => null)) !== null;
-  const picked = offeredModel(choice.model);
-  const openRouterKey = process.env.OPENROUTER_API_KEY;
-  if (picked?.provider === 'openrouter' && key.source === 'ansvisor' && openRouterKey) {
-    return openRouterModels(openRouterKey, picked, choice.effort);
-  }
   if (key.config.provider === 'anthropic') {
-    return picked?.provider === 'anthropic'
-      ? {
-          ...pickedClaudeModels(key.config.apiKey, key.source, picked, choice.effort),
-          keyFailing,
-        }
-      : { ...autoModels(key.config.apiKey, key.source, choice.effort), keyFailing };
+    return { ...autoModels(key.config.apiKey, key.source, choice.effort), keyFailing };
   }
   // Another provider's own key: its model, as Settings › AI Providers names it, does both.
   const single: ChatModelChoice = {

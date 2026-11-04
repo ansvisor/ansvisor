@@ -17,6 +17,14 @@ describe('sanitizeDraftHtml', () => {
     expect(sanitizeDraftHtml(html)).toBe(html);
   });
 
+  it('keeps that AI made an image (W4-09), and no other data on it', () => {
+    expect(
+      sanitizeDraftHtml(
+        '<img src="https://cdn.example/a.jpg" alt="A" data-ai-generated="true" data-x="1">',
+      ),
+    ).toBe('<img src="https://cdn.example/a.jpg" alt="A" data-ai-generated="true" />');
+  });
+
   it('drops scripts, frames, styles, handlers and javascript: links', () => {
     expect(
       sanitizeDraftHtml(

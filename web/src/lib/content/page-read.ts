@@ -209,12 +209,14 @@ export function proofsOnPage(blocks: TrustBlock[], proofs: readonly ProofAsk[]):
 /**
  * The page's images, in its order, each once by its address (an http(s)
  * one, as the page keeps it): what the person may confirm is their own.
+ * Never an image AI made (W4-09, `data-ai-generated`): it isn't the page's
+ * own visual proof, whoever confirms it.
  */
 export function pageImages(html: string): { src: string; alt: string }[] {
   // The content DOM's parser (dom.ts): the browser's, or jsdom's on the server (go-live gate).
   const doc = parseHtml(html);
   const seen = new Set<string>();
-  return [...doc.querySelectorAll('img[src]')].flatMap((img) => {
+  return [...doc.querySelectorAll('img[src]:not([data-ai-generated="true"])')].flatMap((img) => {
     const src = img.getAttribute('src')!.trim();
     // As the database takes an own image's address (00270): http(s), 8–2048 characters.
     if (!/^https?:\/\//.test(src) || src.length < 8 || src.length > 2048 || seen.has(src)) {

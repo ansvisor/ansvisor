@@ -1,8 +1,13 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isCloud } from '@/config/plans';
-import { readActiveKey, resolveAgentModelConfig } from '@/lib/agent/key';
+import { readActiveKey, readProviderKey, resolveAgentModelConfig } from '@/lib/agent/key';
 import type { AgentModelConfig } from '@/lib/agent/model';
-import { isAiProvider, type AiProvider } from '@/lib/agent/providers';
+import {
+  isAiProvider,
+  keyUsesOf,
+  type AiProvider,
+  type AiProviderSettings,
+} from '@/lib/agent/providers';
 import { chatAgenticEnabled } from './flag';
 import { markKeyFailing, ownKeyFailure, type OwnKeyFailure } from './key-health';
 
@@ -146,16 +151,26 @@ export async function ownKeyAccess(organizationId: string): Promise<OwnKeyAccess
  * Chat: on the cloud the workspace's own key or nothing, never Ansvisor's
  * (resolveAgentModelConfig), and nothing is metered; it reads as 'own'.
  */
-export async function resolveChatModelKey(organizationId: string): Promise<ChatModelKey | null> {
+export async function resolveChatModelKey(
+  organizationId: string,
+  { ansvisorOnly = false }: { ansvisorOnly?: boolean } = {},
+): Promise<ChatModelKey | null> {
   if (!chatAgenticEnabled(organizationId)) {
     const config = await resolveAgentModelConfig(organizationId);
     return config ? { source: 'own', config } : null;
   }
 
-  const access = await ownKeyAccess(organizationId);
-  if (access.state === 'plan' || access.state === 'kept') {
+  // "Use Ansvisor's limit" after the own key failed (W4-06): a person's click, never by itself.
+  const access = ansvisorOnly ? null : await ownKeyAccess(organizationId);
+  if (access?.state === 'plan' || access?.state === 'kept') {
     const own = await readActiveKey(organizationId);
-    if (own.state === 'ready') return { source: 'own', config: own.config };
+    // A key saved for images only isn't Chat's (W4-06's Use for).
+    if (
+      own.state === 'ready' &&
+      keyUsesOf(own.config.provider, own.config.settings).includes('chat')
+    ) {
+      return { source: 'own', config: own.config };
+    }
     if (own.state === 'unreadable') {
       await markKeyFailing(organizationId, own.provider, {
         class: 'unreadable',
@@ -169,6 +184,44 @@ export async function resolveChatModelKey(organizationId: string): Promise<ChatM
   return apiKey
     ? { source: 'ansvisor', config: { provider: 'anthropic', apiKey, settings: {} } }
     : null;
+}
+
+/**
+ * The key a step of a model picked in the menu runs on (W4-06; CHAT-16
+ * item 23), in order:
+ *   1. the workspace's own key for the model's provider, when own keys are
+ *      allowed (ownKeyAccess) and the key is for Chat (its Use for);
+ *   2. its own OpenRouter key for Chat, which runs the model by its catalog id;
+ *   3. Ansvisor's key for the provider (ANTHROPIC_API_KEY or
+ *      OPENROUTER_API_KEY), on the AI budget.
+ * A key for the step that can't be read stops it, as the active key does:
+ * never Ansvisor's in its place. `ansvisorOnly`: the person chose "Use
+ * Ansvisor's limit" after their key failed. Null when no key is there.
+ */
+export async function resolvePickedModelKey(
+  organizationId: string,
+  provider: 'anthropic' | 'openrouter',
+  { ansvisorOnly = false }: { ansvisorOnly?: boolean } = {},
+): Promise<ChatModelKey | null> {
+  const access = ansvisorOnly ? null : await ownKeyAccess(organizationId);
+  if (access?.state === 'plan' || access?.state === 'kept') {
+    for (const candidate of [...new Set([provider, 'openrouter' as const])]) {
+      const own = await readProviderKey(organizationId, candidate);
+      if (own.state === 'unreadable') {
+        await markKeyFailing(organizationId, own.provider, {
+          class: 'unreadable',
+          status: null,
+        }).catch((err) => console.error('[chat/key] could not mark the key failing:', err));
+        throw new OwnKeyUnreadableError(own.provider);
+      }
+      if (own.state === 'ready' && keyUsesOf(candidate, own.config.settings).includes('chat')) {
+        return { source: 'own', config: own.config };
+      }
+    }
+  }
+  const apiKey =
+    provider === 'anthropic' ? process.env.ANTHROPIC_API_KEY : process.env.OPENROUTER_API_KEY;
+  return apiKey ? { source: 'ansvisor', config: { provider, apiKey, settings: {} } } : null;
 }
 
 /**
@@ -196,11 +249,39 @@ export async function ownChatKeyProvider(organizationId: string): Promise<AiProv
   if (access?.state !== 'plan' && access?.state !== 'kept') return null;
   const { data: key } = await supabaseAdmin
     .from('organization_ai_keys')
-    .select('provider, key_encrypted')
+    .select('provider, key_encrypted, settings')
     .eq('organization_id', organizationId)
     .eq('active', true)
     .maybeSingle();
-  return key?.key_encrypted && isAiProvider(key.provider) ? key.provider : null;
+  if (!key?.key_encrypted || !isAiProvider(key.provider)) return null;
+  // A key saved for images only isn't Chat's: Auto runs on Ansvisor's key (W4-06's Use for).
+  return keyUsesOf(key.provider, key.settings as AiProviderSettings).includes('chat')
+    ? key.provider
+    : null;
+}
+
+/**
+ * The providers of every own key a picked model's steps may run on, as
+ * resolvePickedModelKey decides it, without decrypting a key: own keys are
+ * allowed (ownKeyAccess) and the key is for Chat, active or not. The model
+ * menu marks "Your key" from it (W4-06). Empty with Chat off or self-hosted.
+ */
+export async function ownChatKeyProviders(organizationId: string): Promise<AiProvider[]> {
+  if (!isCloud() || !chatAgenticEnabled(organizationId)) return [];
+  const access = await ownKeyAccess(organizationId).catch(() => null);
+  if (access?.state !== 'plan' && access?.state !== 'kept') return [];
+  const { data, error } = await supabaseAdmin
+    .from('organization_ai_keys')
+    .select('provider, key_encrypted, settings')
+    .eq('organization_id', organizationId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).flatMap((key) =>
+    key.key_encrypted &&
+    isAiProvider(key.provider) &&
+    keyUsesOf(key.provider, key.settings as AiProviderSettings).includes('chat')
+      ? [key.provider]
+      : [],
+  );
 }
 
 /**
