@@ -515,6 +515,11 @@ export const startRunInput = z.object({
     .optional(),
   effort: z.enum(CHAT_EFFORTS).optional(),
   /**
+   * "Use Ansvisor's limit" after the workspace's own key failed (W4-06): the
+   * run takes Ansvisor's key and the AI limit. An Admin's click only.
+   */
+  keySource: z.literal('ansvisor').optional(),
+  /**
    * The shortcut the message was sent with (CHAT-08 item 4, W2-09): kept
    * only while the message is still that shortcut's (messageShortcut). One
    * that isn't never refuses the message.
@@ -853,6 +858,8 @@ export async function startChatRun(
       : {}),
     ...(earlier.fromTaintedMove ? { fromTaintedMove: true } : {}),
     ...(scope && options.scopeUntrusted ? { scopeUntrusted: true } : {}),
+    // Ansvisor's key on an Admin's click only: the AI limit is the workspace's.
+    ...(input.keySource === 'ansvisor' && ctx.role === 'admin' ? { ansvisorKey: true } : {}),
     ...(saveSteps ? { saveSteps } : {}),
   };
   const { error: stateError } = await supabaseAdmin.from('chat_run_state').insert({
@@ -898,6 +905,8 @@ type Progress = RunProgress & {
   /** The catalog dropped the picked model: the run takes Auto, and says so once. */
   modelDropped?: boolean;
   modelNoted?: boolean;
+  /** An Admin chose "Use Ansvisor's limit" after the own key failed (W4-06). */
+  ansvisorKey?: boolean;
   /**
    * The run's one recovery from a reply with no answer, by its cause: 'retry' ran a step the
    * provider ended in an error, with nothing in it, again; 'answer' asked the model for the
@@ -1148,7 +1157,11 @@ async function openContext(
   const choice = ctx ? await runModelChoice(run, progress, ctx.plan) : AUTO_CHOICE;
   let models: ChatModels | null = null;
   try {
-    models = ctx ? await resolveChatModels(actor.organizationId, choice) : null;
+    models = ctx
+      ? await resolveChatModels(actor.organizationId, choice, {
+          ansvisorOnly: progress.ansvisorKey === true,
+        })
+      : null;
   } catch (err) {
     if (!(err instanceof OwnKeyUnreadableError)) throw err;
     // Marked failing where it was found (key.ts); the run stops on it, never on Ansvisor's key.

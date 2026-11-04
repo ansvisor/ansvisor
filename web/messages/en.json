@@ -4056,6 +4056,7 @@
     },
     "keyFix": "Open AI Providers",
     "keyAskAdmin": "An Admin can fix it in Settings › AI Providers.",
+    "keyUseAnsvisor": "Use Ansvisor's limit",
     "tasks": {
       "title": "{due, plural, =0 {Action Center tasks} other {Action Center tasks · # due}}",
       "progress": "Tasks ready",
@@ -4273,6 +4274,46 @@
         "full_auto": "Full auto: the agent makes changes without asking. Nothing is published or sent without your click. Every change is in the Activity log."
       }
     }
+  },
+  "chatKeys": {
+    "title": "Add API key",
+    "close": "Close",
+    "loading": "Reading your keys…",
+    "loadFailed": "Couldn't read your keys. Try again.",
+    "failed": "Couldn't save that. Try again.",
+    "needsEnterprise": "Own API keys come with Enterprise. Chat runs on your plan's AI limit.",
+    "askAdmin": "Only Admins add API keys. Ask your Admin to add it in Settings › AI Providers.",
+    "note": "Your key goes straight to Settings › AI Providers, never into the chat. It is tested before it is kept.",
+    "provider": "Provider",
+    "key": "API key",
+    "keyPlaceholder": "Paste the key",
+    "model": "Model on OpenRouter",
+    "useFor": "Use for",
+    "useChat": "Chat",
+    "useImages": "Images",
+    "noImages": "Anthropic has no image models",
+    "save": "Test & save",
+    "saving": "Testing…",
+    "settings": "Open AI Providers",
+    "saved": {
+      "working": "{provider} key saved and working.",
+      "no_credit": "{provider} key saved, but its account is out of credit.",
+      "unchecked": "{provider} key saved. It couldn't be tested just now."
+    },
+    "yourKeys": "Your API keys",
+    "routing": "A model you pick runs on its provider's key, then your OpenRouter key, then your plan's AI limit. Auto runs on the key marked Auto.",
+    "none": "No keys saved yet.",
+    "autoRunsOnIt": "Auto",
+    "failing": "Not working",
+    "test": "Test",
+    "testing": "Testing…",
+    "tested": {
+      "working": "Working.",
+      "no_credit": "The account is out of credit.",
+      "unchecked": "Couldn't test it just now.",
+      "refused": "The provider turned this key down."
+    },
+    "add": "Add API key"
   },
   "chatPage": {
     "sendToActionCenterPrompt": "Send this finding to Action Center as an action.",
