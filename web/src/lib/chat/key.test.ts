@@ -216,6 +216,20 @@ describe('resolveChatModelKey, Chat on', () => {
     expect(await resolveChatModelKey(ORG)).toEqual(ANSVISOR);
     expect(reads).toEqual([]);
   });
+  it('runs on the operator’s OpenRouter env key on self-host', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    vi.stubEnv('OPENROUTER_API_KEY', 'or-key');
+    vi.stubEnv('OPENROUTER_MODEL', 'z-ai/glm-4.6:free');
+    expect(await resolveChatModelKey(ORG)).toEqual({
+      source: 'ansvisor',
+      config: {
+        provider: 'openrouter',
+        apiKey: 'or-key',
+        settings: { model: 'z-ai/glm-4.6:free' },
+      },
+    });
+  });
 });
 
 describe('resolveChatModelKey, Chat off', () => {
