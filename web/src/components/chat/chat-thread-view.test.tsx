@@ -15,8 +15,9 @@ import type { ChatThread } from '@/lib/chat/thread';
  * composer its ghost, and a teammate's shared chat is read only.
  */
 
+const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => nav,
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
       {children}
@@ -49,8 +50,10 @@ vi.mock('@/lib/actions/chat-references', () => ({
   searchChatReferences: vi.fn(async () => ({ ok: true, references: [] })),
 }));
 vi.mock('@/lib/chat/upload-client', () => ({ uploadChatFile: vi.fn(), dropChatUpload: vi.fn() }));
+const prefs = vi.hoisted(() => ({ saveGeneral: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveUsageNoticePeriod: vi.fn(async () => ({ ok: true })),
+  saveChatGeneralSettings: prefs.saveGeneral,
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (s: { activeBrandId: string }) => unknown) =>
@@ -146,7 +149,21 @@ async function enter() {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 }
 
+// A localStorage that works on every Node (CI's Node 20 has jsdom's, newer ones may
+// not), emptied before each test: a page choice one test keeps can't hide another's card.
+const store = new Map<string, string>();
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  value: {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+    clear: () => store.clear(),
+  },
+});
+
 beforeEach(() => {
+  store.clear();
   aiUsage.usage = null;
   aiUsage.refresh.mockClear();
   calls = [];
@@ -276,6 +293,111 @@ describe('ChatThreadView', () => {
     const card = container.querySelector('[data-slot="deliverable-card"]')!;
     expect(card.getAttribute('aria-label')).toBe('Pricing FAQ');
     expect(card.querySelector('a')!.getAttribute('href')).toBe('/dashboard/content/editor/d1');
+  });
+
+  describe('where the page it wrote opens (CHAT-25 §3, W4-11)', () => {
+    const pageThread = (mine = true) =>
+      ({
+        conversationId: CHAT,
+        title: 'Pricing FAQ',
+        brandId: null,
+        mine,
+        messages: [
+          { role: 'user', text: 'Write an FAQ', generatedAt: null, dataAsOf: null, timezone: null },
+          {
+            role: 'assistant',
+            text: 'Here is the FAQ.',
+            generatedAt: '2026-10-30T09:14:00.000Z',
+            dataAsOf: null,
+            timezone: 'UTC',
+            run: {
+              runId: RUN,
+              status: 'done',
+              steps: [],
+              fileId: null,
+              deliverables: [
+                {
+                  title: 'Pricing FAQ',
+                  type: 'document',
+                  formats: ['html'],
+                  status: 'draft',
+                  href: '/dashboard/content/editor/d1',
+                },
+              ],
+            },
+          },
+        ],
+      }) as unknown as ChatThread;
+    const pageCard = () => container.querySelector('[data-slot="open-page-card"]');
+    const pick = (name: string) =>
+      container.querySelector<HTMLElement>(`[data-action="openPage.${name}"]`)!;
+    beforeEach(() => {
+      nav.push.mockReset();
+      nav.refresh.mockReset();
+      prefs.saveGeneral.mockClear();
+    });
+
+    it('asks under the answer, and keeps working in chat without saving a choice', async () => {
+      await render({ thread: pageThread(), variant: 'dock' });
+      expect(pageCard()!.textContent).toContain('Where should we open this page?');
+      await act(async () => pick('chat').click());
+      expect(pageCard()).toBeNull();
+      expect(prefs.saveGeneral).not.toHaveBeenCalled();
+      expect(nav.push).not.toHaveBeenCalled();
+      expect(nav.refresh).not.toHaveBeenCalled();
+    });
+
+    it('opens the editor, and keeps the choice when asked not to ask again', async () => {
+      await render({ thread: pageThread(), variant: 'dock' });
+      await act(async () => pick('dontAskAgain').click());
+      await act(async () => pick('editor').click());
+      expect(prefs.saveGeneral).toHaveBeenCalledWith({ pageOpen: 'editor' });
+      expect(toast).toHaveBeenCalledWith(
+        'Your choice is saved. Change it anytime in Settings › Chat.',
+      );
+      expect(nav.push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+      // The layout's setup (the side panel's) is read again with the choice.
+      expect(nav.refresh).toHaveBeenCalled();
+      expect(pageCard()).toBeNull();
+    });
+
+    it('opens the editor by itself as a run it watched ends, with Content Editor saved', async () => {
+      fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        return new Response(
+          stream([
+            chatEvent('text.delta', 1, { text: 'Here is the FAQ.' }),
+            chatEvent('deliverable.created', 2, {
+              title: 'Pricing FAQ',
+              type: 'document',
+              formats: ['html'],
+              status: 'draft',
+              href: '/dashboard/content/editor/d1',
+            }),
+            ...finished.slice(1).map((e) => ({ ...e, seq: 3 })),
+          ]),
+          { status: 200, headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN } },
+        );
+      });
+      await render({ pageOpen: 'editor' });
+      await type('Write an FAQ');
+      await enter();
+      expect(nav.push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+      expect(pageCard()).toBeNull();
+    });
+
+    it('doesn’t ask with a saved choice, nor on a teammate’s chat', async () => {
+      await render({ thread: pageThread(), variant: 'dock', pageOpen: 'chat' });
+      expect(pageCard()).toBeNull();
+      // A finished answer read back doesn't open the editor by itself.
+      await render({ thread: pageThread(), variant: 'dock', pageOpen: 'editor' });
+      expect(pageCard()).toBeNull();
+      expect(nav.push).not.toHaveBeenCalled();
+      act(() => root.unmount());
+      root = createRoot(container);
+      await render({ thread: pageThread(false), variant: 'dock' });
+      expect(pageCard()).toBeNull();
+    });
   });
 
   it('keeps the text when the run API refuses it', async () => {

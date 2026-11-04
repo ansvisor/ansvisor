@@ -26,13 +26,12 @@ const getReportBranding = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/actions/white-label', () => ({ getReportBranding }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
-vi.mock('./_report-pdf', () => ({ ReportPdfDocument: () => null }));
-/** The props of each document handed to the renderer. */
+/** The report and the kit of each PDF drawn. */
 const drawn = vi.hoisted(() => [] as unknown[]);
-vi.mock('@react-pdf/renderer', () => ({
-  pdf: (document: { props: unknown }) => {
-    drawn.push(document.props);
-    return { toBlob: async () => new Blob(['%PDF']) };
+vi.mock('./_report-pdf', () => ({
+  reportPdf: async (report: unknown, branding: unknown) => {
+    drawn.push({ report, branding });
+    return new Blob(['%PDF']);
   },
 }));
 // jsdom draws no canvas: the logos here are PNGs, handed over as they are.

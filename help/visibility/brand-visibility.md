@@ -4,8 +4,8 @@ route: /dashboard/insights
 keywords: [brand visibility, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, topics vs competitors, opportunities, filters]
 synonyms: [AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -21,7 +21,7 @@ The header shows the brand's name, when the last run finished and when the next 
 - **Export CSV** downloads the answers behind the page, with the current filters.
 - **Reports** opens the Reports page.
 
-A self-hosted instance also has **Test Single Prompt** and **Run All**, to start a run by hand.
+A self-hosted instance also has **Test Single Prompt** and **Run All**, for admins and managers to start a run by hand.
 
 ## The summary line
 

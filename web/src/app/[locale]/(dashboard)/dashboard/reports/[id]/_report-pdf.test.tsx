@@ -87,7 +87,9 @@ afterEach(() => {
 });
 
 async function draw(branding: ReportBranding | null) {
-  await act(async () => root.render(<ReportPdfDocument report={report} branding={branding} />));
+  await act(async () =>
+    root.render(<ReportPdfDocument report={report} branding={branding} fontFamily="Inter-1" />),
+  );
   return container;
 }
 
