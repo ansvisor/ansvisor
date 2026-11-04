@@ -930,6 +930,7 @@
       "keywords": [
         "chat",
         "ask chat",
+        "task finisher",
         "download answer",
         "save to files",
         "export chat",
@@ -1087,6 +1088,10 @@
         {
           "heading": "Work through your Action Center tasks",
           "text": "Type **/tasks**, or click **Complete tasks** under **For you now** on Chat Home, and Chat works through the brand's Action Center tasks: those due this week first, highest Priority Score first.\n\nUnder the answer, **Action Center tasks** lists up to 4 tasks it takes on and how many are ready (\"1 of 3 ready\"). Each row shows the task, \"Priority 86 · Fix\" and where Chat's work stands:\n\n- **Queued**: not started yet.\n- **Writing**: Chat is working on it now.\n- **Ready for review**: Chat finished its part, for you to check.\n- **Done**: you completed it in Action Center.\n\nThese show Chat's work, not the task's Action Center status. Once the run ends, **Close tasks in Action Center** opens your actions: Chat never marks a task done.\n\nAfter the tasks, Chat helps with your open **Getting started** steps. It never marks a step done or skips one."
+        },
+        {
+          "heading": "How many tasks one run finishes",
+          "text": "Chat finishes at most 2 tasks in one run, so you get fewer changes to approve at once. Its answer starts with how many it finished, for example \"2 of 6 tasks done; the rest go in the next run\". The other tasks under **Action Center tasks** stay **Queued** for the next run. The **Task Finisher** agent in Agent Center works the same way: it finishes 2 tasks each time it runs."
         },
         {
           "heading": "Drafts, reports and audits",

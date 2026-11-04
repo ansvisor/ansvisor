@@ -6496,7 +6496,7 @@
       },
       "task-finisher": {
         "name": "Task Finisher",
-        "description": "Works through this week’s Action Center tasks by priority and prepares each one. You close the tasks."
+        "description": "Works through this week’s Action Center tasks by priority and finishes two a run; the rest wait for its next run. You close the tasks."
       },
       "weekly-report": {
         "name": "Weekly Report",
