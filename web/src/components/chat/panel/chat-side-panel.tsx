@@ -494,6 +494,7 @@ export function ChatSidePanel() {
                 keyFailure={setup.keyFailure}
                 usageNoticeSeen={setup.usageNoticeSeen}
                 skills={setup.skills}
+                pageOpen={setup.pageOpen}
                 onConversation={remember}
                 chips={chips}
                 onRemoveChip={(key) =>

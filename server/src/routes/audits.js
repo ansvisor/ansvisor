@@ -15,7 +15,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import logger from '../lib/logger.js';
-import { assertAllBrands, assertBrandAccess } from '../lib/access.js';
+import { MANAGER_ROLES, assertAllBrands, assertBrandAccess, assertRole } from '../lib/access.js';
 import {
   requireFeature,
   enforceSiteAuditQuota,
@@ -1518,6 +1518,8 @@ router.delete('/:id', async (req, res) => {
     }
 
     await assertBrandAccess(audit.brand_id, userId);
+    // Deleting for good is admins' and managers' (2026-11-03); running audits stays everyone's.
+    await assertRole(userId, MANAGER_ROLES, 'Only admins and managers can delete an audit.');
 
     const { error } = await supabaseAdmin.from('site_audits').delete().eq('id', id);
     if (error) throw error;

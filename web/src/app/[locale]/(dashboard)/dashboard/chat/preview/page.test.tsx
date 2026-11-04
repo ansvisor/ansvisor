@@ -173,6 +173,9 @@ describe('the Chat pieces preview', () => {
       'write:pending',
       'write:saving',
       'write:error',
+      // A skill's draft, and one with an Ansvisor skill's name (W3-08).
+      'form:pending',
+      'form:pending',
       'execute:pending',
       'execute:pending',
       'execute:saving',
@@ -181,7 +184,8 @@ describe('the Chat pieces preview', () => {
     expect(slots('question-card')).toHaveLength(3);
     expect(slots('next-moves')).toHaveLength(1);
     expect(slots('question-answered')).toHaveLength(2);
-    expect(slots('done-line')).toHaveLength(2);
+    // Approved, and the saved skill (W3-08).
+    expect(slots('done-line')).toHaveLength(3);
     expect(slots('approval-skipped')).toHaveLength(1);
     expect([...slots('result-card')].map((el) => (el as HTMLElement).dataset.state)).toEqual([
       'done',
