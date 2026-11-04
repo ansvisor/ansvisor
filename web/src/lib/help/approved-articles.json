@@ -1232,6 +1232,9 @@
         "your focus",
         "answer language",
         "chat language",
+        "notify me",
+        "agent needs me",
+        "email when an agent waits",
         "ask chat on every page",
         "full auto"
       ],
@@ -1258,6 +1261,10 @@
         {
           "heading": "Answer language",
           "text": "**Answer language** sets the language Chat answers in. **Same as my question**, the default, answers in the language you write in. Pick a language, such as English, and Chat answers in it whatever language you write in: useful for agencies and teams that write in several languages. Asking for a language in a message, such as \"answer in German\", always wins for that answer. The app itself stays in English."
+        },
+        {
+          "heading": "Notify me when an agent needs me",
+          "text": "When one of your agents stops to ask you something or to wait for your OK on a change, its chat moves to **Needs you** in your Inbox. **Notify me when an agent needs me** sets whether you also get an email: **Inbox + email**, the default, sends one email per run, with a link to open it; **Inbox only** sends none. **Inbox + Slack** comes once Slack can be connected."
         },
         {
           "heading": "Chat on every page",

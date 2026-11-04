@@ -5177,7 +5177,7 @@
       },
       "notify": {
         "label": "Notify me when an agent needs me",
-        "note": "Inbox always; also email or Slack",
+        "note": "When an agent stops to ask you or wait for your OK: your Inbox always, and an email once per run",
         "inbox_email": "Inbox + email",
         "inbox": "Inbox only",
         "inbox_slack": "Inbox + Slack",

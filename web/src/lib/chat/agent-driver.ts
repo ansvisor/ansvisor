@@ -44,6 +44,7 @@ import {
 } from './engine';
 import { OPEN_RUN_STATUSES, loadRun, type LoadedRun } from './engine-store';
 import { chatAgenticEnabled } from './flag';
+import { resolveAgentNeedsYou, tellAgentNeedsYou } from './agent-needs-you';
 import { openHeadlessRun } from './headless-run';
 import { callScopeOf, callableAgentsOf, type CallScope } from './agent-calls';
 
@@ -766,6 +767,10 @@ export async function settleAgentRun(
   ) {
     return (await readAgentRun(run.id))?.status ?? null;
   }
+  // Waiting for its person: an e-mail by their "Notify me when an agent needs me", once a
+  // run (00474); going on or ending closes its notice.
+  if (target.status === 'needs_you') await tellAgentNeedsYou(run.organization_id, run.id);
+  else if (run.status === 'needs_you') await resolveAgentNeedsYou(run.id);
 
   if (run.agent_id) {
     // The month's AI limit (not the run's own cap) pauses the agent until it resets (§L item 55).
