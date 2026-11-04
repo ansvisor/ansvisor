@@ -5,13 +5,13 @@ import { generationCostUsd } from '../improve-cost.js';
 import { objectOptions } from '../structured-output.js';
 import { withRetry } from '../retry.js';
 import { currentYear, yearRule } from '../current-year.js';
-import { CANDIDATE_QUESTIONS, QUESTION_MAX, QUESTION_MIN } from './config.js';
+import { CANDIDATE_QUESTIONS, QUESTION_MAX } from './config.js';
 import { onPage } from './site.js';
 
 /**
  * A report card's questions (REPORT-CARD §1; owner decisions 2026-11-04:
- * questions from the brand's main products, fewer but right, the year and
- * season from the card's date). One model call reads the home page and
+ * questions from the brand's main products, never a weak match, the year
+ * and season from the card's date). One model call reads the home page and
  * names the company's main products or categories, each with the words on
  * the page that show it sells them, then drafts CANDIDATE_QUESTIONS
  * questions a buyer might ask an AI assistant about them (or a reader about
@@ -82,8 +82,8 @@ const questionSchema = z.object({
           ),
       }),
     )
-    .min(QUESTION_MIN)
-    .max(CANDIDATE_QUESTIONS + 8),
+    .min(10)
+    .max(CANDIDATE_QUESTIONS + 10),
 });
 
 const SYSTEM = `You write the questions a company's buyers ask AI assistants (ChatGPT, Microsoft Copilot, Gemini, Google) when they look for what the company offers, so the company can see whether the answers name it.
@@ -255,10 +255,11 @@ export async function writeQuestions(input, { generate = generateObject, env = p
 }
 
 /**
- * The card's questions from the candidates (owner decision 2026-11-04):
+ * The card's questions from the candidates (owner decisions 2026-11-04):
  * the core questions first, taken in turn from each product so every main
- * product is asked about, each product's best-searched first; the related
- * ones only to reach QUESTION_MIN; QUESTION_MAX at most. Each keeps its
+ * product is asked about, each product's best-searched first; then the
+ * related ones, most searched first, to reach QUESTION_MAX; never a weak
+ * one. Each keeps its
  * keyword's Google searches a month (null when unknown) and why it was
  * chosen: "core" (about a main product) or "related".
  *
@@ -302,7 +303,7 @@ export function pickQuestions(candidates, figures = new Map()) {
     }
   }
   for (const q of rows.filter((r) => r.fit === 'related').sort(byVolume)) {
-    if (kept.length >= QUESTION_MIN) break;
+    if (kept.length >= QUESTION_MAX) break;
     take(q);
   }
   // Grouped by product, as the card lists them.

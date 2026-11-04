@@ -17,6 +17,10 @@ import { reportCardStore } from './store.js';
 export const PRIVACY_URL = 'https://www.ansvisor.com/privacy-policy';
 /** Requests one sweep sends at most. */
 const SWEEP_LIMIT = 20;
+/** How often a PDF the web couldn't draw is tried, a sweep apart, before the e-mail is given up. */
+export const MAX_PDF_ATTEMPTS = 30;
+/** The web's answer for figures it will never draw: the only failure given up at once. */
+const UNPROCESSABLE = 422;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const ENGINE_NAMES = {
@@ -160,8 +164,9 @@ export async function renderCardPdf(payload, { fetchImpl = fetch, env = process.
 
 /**
  * Sends the e-mails waiting: one a request, each marked with what became of
- * it, so none goes twice. A PDF the web couldn't draw now waits for the next
- * sweep; one it refuses (4xx) is marked refused.
+ * it, so none goes twice. A PDF the web couldn't draw waits for the next
+ * sweep, behind the e-mails not yet tried, and is given up (refused) after
+ * MAX_PDF_ATTEMPTS; one whose figures it refuses (422) is given up at once.
  */
 export async function deliverReportCards({
   store = reportCardStore(),
@@ -185,10 +190,17 @@ export async function deliverReportCards({
         try {
           pdfs.set(card.id, await render(card.payload));
         } catch (err) {
-          logger.error({ err: err.message, cardId: card.id }, '[report-card] PDF not drawn');
-          if (err.status >= 400 && err.status < 500) {
-            await store.markEmailed(request.id, 'refused', now());
-          }
+          // Only figures the web refuses (422) are given up at once. A 401 (a
+          // CRON_SECRET out of step), a 404 (the web not yet deployed) or a
+          // 5xx is tried again on the next sweep, up to MAX_PDF_ATTEMPTS.
+          const attempts = (request.email_attempts ?? 0) + 1;
+          const giveUp = err.status === UNPROCESSABLE || attempts >= MAX_PDF_ATTEMPTS;
+          logger.error(
+            { err: err.message, status: err.status, cardId: card.id, attempts, giveUp },
+            '[report-card] PDF not drawn',
+          );
+          if (giveUp) await store.markEmailed(request.id, 'refused', now());
+          else await store.markEmailAttempt(request.id, attempts);
           continue;
         }
       }

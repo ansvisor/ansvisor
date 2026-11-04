@@ -5,9 +5,9 @@ import { loadSupportedCountries, supportsCountry } from '../cloro-countries.js';
 /**
  * A report card's questions asked in the five engines (REPORT-CARD §1),
  * through the tracking's own provider (Cloro), from the target country: one
- * answer per question and engine, 100 at most (20 questions). An engine that doesn't answer
- * from the country is left out; a question Google gives no AI Overview for
- * is no answer, not a failure. A few tasks run at a time.
+ * answer per question and engine, 125 at most (25 questions). An engine
+ * that doesn't answer from the country is left out; a question Google gives
+ * no AI Overview for is no answer, not a failure. A few tasks run at a time.
  */
 
 /**
@@ -24,6 +24,9 @@ export const REPORT_CARD_ENGINES = [...MAIN_ENGINES, ...GROWTH_ENGINES];
 const IN_FLIGHT = 12;
 /** How long one answer may take. */
 const MAX_WAIT_MS = 15 * 60 * 1000;
+
+/** Why a task wasn't asked: the run's deadline had passed. */
+export const PAST_DEADLINE = 'The run passed its deadline';
 
 /** Runs `jobs` with at most `limit` at a time, in order; each job's result or error is kept. */
 async function pool(jobs, limit) {
@@ -53,6 +56,9 @@ const noOverview = (err) => /did not return an AI Overview/i.test(String(err?.me
  *
  * @param {{ text: string }[]} questions
  * @param {string} country ISO 3166-1 alpha-2
+ * @param {{ deadline?: number }} [opts] - `deadline` (epoch ms): no task is
+ *   submitted after it, and none is waited for past it, so a run ends in
+ *   time (queue.js RUN_DEADLINE_MS); those left are failed, unpaid.
  * @returns {Promise<{ engines: string[], tasks: number, answers: { question: number, engine: string, text: string|null, citations: { url: string }[], missing: 'no_answer'|'failed'|null }[] }>}
  */
 export async function askEngines(
@@ -64,6 +70,8 @@ export async function askEngines(
     supported = null,
     inFlight = IN_FLIGHT,
     maxWaitMs = MAX_WAIT_MS,
+    deadline = Infinity,
+    clock = Date.now,
   } = {},
 ) {
   const countries = supported ?? (await loadSupportedCountries().catch(() => new Map()));
@@ -74,9 +82,11 @@ export async function askEngines(
   for (const engine of engines) {
     questions.forEach((question, index) => {
       jobs.push(async () => {
+        if (clock() >= deadline) throw new Error(PAST_DEADLINE);
         const { taskId } = await submit(question.text, engine, country);
         try {
-          const answer = await poll(taskId, engine, { maxWaitMs });
+          const left = Math.max(deadline - clock(), 0);
+          const answer = await poll(taskId, engine, { maxWaitMs: Math.min(maxWaitMs, left) });
           return {
             question: index,
             engine,

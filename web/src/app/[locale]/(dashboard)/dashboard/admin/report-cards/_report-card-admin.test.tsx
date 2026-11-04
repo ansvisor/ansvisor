@@ -76,6 +76,34 @@ describe('ReportCardAdmin', () => {
     expect(text).toContain('No engine answered');
   });
 
+  it('lists the cards to check by hand, with why', () => {
+    const text = draw(
+      summarizeReportCards({
+        now: NOW,
+        budgetUsd: 200,
+        dailyCap: 200,
+        cards: [
+          {
+            site: 'few.example',
+            status: 'ready',
+            cost_usd: 0.3,
+            created_at: '2026-11-03T10:00:00Z',
+            started_at: '2026-11-03T10:00:00Z',
+            finished_at: '2026-11-03T10:05:00Z',
+            error: null,
+            check: {
+              reason: 'Only 8 of 40 candidate questions matched the site well enough to ask.',
+            },
+          },
+        ],
+        requests: [],
+      }),
+    );
+    expect(text).toContain('Check by hand');
+    expect(text).toContain('few.example');
+    expect(text).toContain('Only 8 of 40 candidate questions matched the site well enough to ask.');
+  });
+
   it('says so when nothing finished and nothing failed', () => {
     const text = draw(
       summarizeReportCards({ now: NOW, budgetUsd: 200, dailyCap: 200, cards: [], requests: [] }),

@@ -208,6 +208,32 @@ export async function competitorsIn(
 export const siteOf = (url) => extractHostname(url)?.replace(/^www\./, '') ?? null;
 
 /**
+ * Review and complaint sites a card knows by name: a "reviews" site
+ * whatever the sorting call says (owner review 2026-11-04: "get mentioned
+ * on Şikayetvar" reads as "get complained about").
+ */
+export const REVIEW_SITES = [
+  'sikayetvar.com',
+  'trustpilot.com',
+  'tripadvisor.com',
+  'tripadvisor.com.tr',
+  'tripadvisor.co.uk',
+  'g2.com',
+  'capterra.com',
+  'getapp.com',
+  'trustradius.com',
+  'yelp.com',
+  'reviews.io',
+  'sitejabber.com',
+  'productreview.com.au',
+  'glassdoor.com',
+];
+
+/** Whether a site is a known review or complaint site, or under one (maps.google.com is not). */
+export const isReviewSite = (domain) =>
+  REVIEW_SITES.some((site) => domain === site || domain.endsWith(`.${site}`));
+
+/**
  * The brand a site's address names: "jollytur.com" and "www.jollytur.com.tr"
  * are Jolly Tur's, "blog.acme.co.uk" Acme's.
  */
@@ -238,6 +264,23 @@ export function citedHosts(answers, limit = 25) {
     .map(([domain, count]) => ({ domain, answers: count }))
     .sort((a, b) => b.answers - a.answers || a.domain.localeCompare(b.domain))
     .slice(0, limit);
+}
+
+/**
+ * Whether a cited site is a competitor's own: a label of its host (the
+ * top-level domain aside) is a competitor's name, or begins one ("hubspot"
+ * in hubspot.com for "HubSpot CRM"). Such a site is no place to get listed.
+ *
+ * @param {string} host
+ * @param {Set<string>} rivalKeys the competitors' brandKey
+ */
+export function competitorSite(host, rivalKeys) {
+  const labels = String(host).split('.').slice(0, -1).map(brandKey).filter(Boolean);
+  return labels.some(
+    (label) =>
+      rivalKeys.has(label) ||
+      (label.length >= 4 && [...rivalKeys].some((key) => key.startsWith(label))),
+  );
 }
 
 /** Whether a site is the company's: its site or its e-mail's domain, or under either. */
@@ -381,6 +424,7 @@ export function summarize(
     const key = siteBrandKey(entry.domain);
     if (rivalCounts.has(key)) return 'competitor';
     if (otherKinds.get(key) === 'marketplace') return 'marketplace';
+    if (isReviewSite(entry.domain)) return 'reviews';
     return siteKinds.get(entry.domain) ?? null;
   };
   const listOthers = (kind) =>
@@ -398,10 +442,14 @@ export function summarize(
     competitors: ranked,
     marketplaces: listOthers('marketplace'),
     otherNames: listOthers('other'),
+    // A competitor's own site is marked: the card never says to get onto it.
     citedSites: [...siteCounts.values()]
       .sort((a, b) => b.answers - a.answers || a.domain.localeCompare(b.domain))
       .slice(0, TOP_SITES)
-      .map((entry) => ({ ...entry, kind: siteKind(entry) })),
+      .map((entry) => {
+        const competitor = !entry.own && competitorSite(entry.domain, new Set(rivalCounts.keys()));
+        return { ...entry, competitor, kind: competitor ? 'competitor' : siteKind(entry) };
+      }),
     ownCitations,
     missedQuestions,
     missedCount: missed.length,

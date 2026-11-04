@@ -99,7 +99,7 @@ describe('buildReportCard', () => {
         now: new Date('2026-11-03T10:00:00Z'),
       }),
     );
-    expect(deps.ask).toHaveBeenCalledWith(picked, 'TR');
+    expect(deps.ask).toHaveBeenCalledWith(picked, 'TR', { deadline: Infinity });
     // One competitor call for the engine that answered.
     expect(deps.competitors).toHaveBeenCalledTimes(1);
     expect(deps.figuresOf).toHaveBeenCalledWith(['kahve', 'kahve abonelik'], {
@@ -226,6 +226,24 @@ describe('buildReportCard', () => {
     const deps = fakes({ sort: vi.fn().mockRejectedValue(new Error('model down')) });
     const { payload } = await buildReportCard(card, deps);
     expect(payload.competitors).toEqual([{ name: 'Ridge', answers: 2 }]);
+  });
+
+  it('flags a card with fewer than 10 questions for staff, and still makes it', async () => {
+    const { payload } = await buildReportCard(card, fakes());
+    expect(payload.checkByHand).toEqual({
+      reason: 'Only 2 of 2 candidate questions matched the site well enough to ask.',
+    });
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      ...questions[0],
+      text: `soru ${i}`,
+      keyword: `kahve ${i}`,
+    }));
+    const deps = fakes({
+      write: vi.fn(async () => ({ products, candidates: many, audience: 'buyers', costUsd: 0 })),
+    });
+    const { payload: full } = await buildReportCard(card, deps);
+    expect(full.questionCount).toBe(12);
+    expect(full.checkByHand).toBeUndefined();
   });
 
   it('tells the competitor reader a publisher’s audience', async () => {

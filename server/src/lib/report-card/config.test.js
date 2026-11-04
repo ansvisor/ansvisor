@@ -36,8 +36,8 @@ describe('reportCardLimits', () => {
     });
   });
 
-  it('expects a card to cost about a third of a dollar', () => {
-    expect(estimatedCardUsd(reportCardLimits({}))).toBeCloseTo(0.325, 3);
+  it('expects a card to cost under 40 cents', () => {
+    expect(estimatedCardUsd(reportCardLimits({}))).toBeCloseTo(0.375, 3);
   });
 });
 

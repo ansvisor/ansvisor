@@ -110,26 +110,76 @@ const TARGET_KINDS = new Set<CitedSiteKind>(['guide', 'publication', 'official',
 type CitedSite = ReportCardPayload['citedSites'][number];
 
 /**
+ * Review and complaint sites the card knows by name (server
+ * lib/report-card/analyze.js REVIEW_SITES, kept in step): on a card made
+ * before sites were sorted, these are reviews sites.
+ */
+const REVIEW_SITES = [
+  'sikayetvar.com',
+  'trustpilot.com',
+  'tripadvisor.com',
+  'tripadvisor.com.tr',
+  'tripadvisor.co.uk',
+  'g2.com',
+  'capterra.com',
+  'getapp.com',
+  'trustradius.com',
+  'yelp.com',
+  'reviews.io',
+  'sitejabber.com',
+  'productreview.com.au',
+  'glassdoor.com',
+];
+
+/** A cited site's kind: as sorted, or a known reviews site on an older card. */
+function kindOf(site: CitedSite): CitedSiteKind | null {
+  const domain = site.domain.toLowerCase().replace(/^www\./, '');
+  if (!site.own && REVIEW_SITES.some((r) => domain === r || domain.endsWith(`.${r}`))) {
+    return 'reviews';
+  }
+  return site.kind ?? null;
+}
+
+/**
  * Whether the card may suggest getting onto a cited site: a guide,
  * publication, official source or community. A card made before sites were
  * sorted suggests any site that isn't the company's and whose address
  * doesn't name a competitor or marketplace the answers named.
  */
 export function isTargetSite(site: CitedSite, card: ReportCardPayload): boolean {
-  if (site.own) return false;
-  if (site.kind) return TARGET_KINDS.has(site.kind);
+  if (site.own || site.competitor) return false;
+  const kind = kindOf(site);
+  if (kind) return TARGET_KINDS.has(kind);
   if (card.citedSites.some((s) => s.kind)) return false;
   const brands = new Set(
     [...card.competitors, ...(card.marketplaces ?? [])].map((c) => brandKey(c.name)),
   );
-  return !brands.has(siteBrandKey(site.domain));
+  return !brands.has(siteBrandKey(site.domain)) && !competitorSite(site.domain, card.competitors);
+}
+
+/**
+ * The site the card suggests working on: the guide, publication, official
+ * source or community AI cites most; else the reviews site it cites most,
+ * whose step is to answer what customers say (owner review 2026-11-04).
+ */
+export function targetSite(card: ReportCardPayload): CitedSite | null {
+  return (
+    card.citedSites.find((s) => isTargetSite(s, card)) ??
+    card.citedSites.find((s) => !s.own && kindOf(s) === 'reviews') ??
+    null
+  );
 }
 
 /** What a target site's step says, by its kind. */
 function targetWin(site: CitedSite, company: string, answers: number): QuickWin {
   const domain = clip(site.domain, NAME_MAX);
   const cited = `AI engines cite it in ${site.answers} of ${answers} answers about your market.`;
-  switch (site.kind) {
+  switch (kindOf(site)) {
+    case 'reviews':
+      return {
+        title: `Check and answer what customers say about ${company} on ${domain}`,
+        detail: `A reviews site: ${cited} Replies to reviews and complaints, and a complete profile, are what they read about you.`,
+      };
     case 'guide':
       return {
         title: `Get ${company} reviewed or listed on ${domain}`,
@@ -221,6 +271,33 @@ export function mainTotals(card: ReportCardPayload): Totals {
 
 // ─── Page 1: three things to do now ──────────────────────────────────────────
 
+/** "two", "three", "four": how many engines a card asked. */
+const ENGINE_COUNT: Record<number, string> = { 2: 'two', 3: 'three', 4: 'four' };
+
+/** A company's name as compared with a site's: nameKey without "Inc.", "Ltd" and the like. */
+const companyKey = (name: string): string =>
+  nameKey(
+    name.replace(/ı/g, 'i').replace(/[\s,]+(inc|llc|ltd|gmbh|co|corp|company|plc)\.?$/iu, ''),
+  );
+
+/**
+ * Whether a cited site is a listed competitor's own (as the server's
+ * competitorSite): a label of its host, the top-level domain aside, is a
+ * competitor's name or begins one. For cards made before the server marked it.
+ */
+export function competitorSite(domain: string, competitors: readonly { name: string }[]): boolean {
+  const keys = competitors.map((c) => companyKey(c.name)).filter(Boolean);
+  return domain
+    .split('.')
+    .slice(0, -1)
+    .map(companyKey)
+    .some(
+      (label) =>
+        !!label &&
+        keys.some((key) => key === label || (label.length >= 4 && key.startsWith(label))),
+    );
+}
+
 export interface QuickWin {
   title: string;
   detail: string;
@@ -271,7 +348,7 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
   }
 
   // A site AI cites that the brand can get onto: never a competitor's or a marketplace's.
-  const target = card.citedSites.find((s) => isTargetSite(s, card));
+  const target = targetSite(card);
   if (target) wins.push(targetWin(target, company, answers));
 
   if (percent(card.ownCitations, answers) < 10) {
@@ -290,14 +367,29 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
     });
   }
 
+  // Among Starter's engines (every engine on an older card), and only when
+  // they differ: with one engine, or all alike, none is the weakest.
   const mainRows = mainEngineRows(card);
+  const shares = mainRows.map((e) => percent(e.named, e.answers));
   const weakest = [...mainRows].sort(
     (a, b) => percent(a.named, a.answers) - percent(b.named, b.answers),
   )[0];
-  if (weakest) {
+  if (weakest && Math.min(...shares) < Math.max(...shares)) {
     wins.push({
       title: `Look at what ${engineLabel(weakest.engine)} says about your market`,
-      detail: `It names you in ${weakest.named} of ${weakest.answers} answers${mainRows.length > 1 ? `, the fewest of ${engineList(mainRows)}` : ''}.`,
+      detail: `It names you in ${weakest.named} of ${weakest.answers} answers, the fewest of ${
+        card.mainEngines?.length
+          ? engineList(mainRows)
+          : `the ${ENGINE_COUNT[mainRows.length] ?? mainRows.length} engines`
+      }.`,
+    });
+  }
+
+  // A company that leads everywhere, named alike by every engine, still gets one step.
+  if (!wins.length) {
+    wins.push({
+      title: `Keep ${company} where it is`,
+      detail: `AI names you in ${named} of ${answers} answers, alike in every engine. Answers change as engines update, so check them again each month.`,
     });
   }
 

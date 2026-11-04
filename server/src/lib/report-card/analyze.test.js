@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../ai-provider.js', () => ({ resolveModel: (id) => ({ id }) }));
 
-const { brandKey, citedHosts, competitorsIn, siteBrandKey, summarize } =
+const { brandKey, citedHosts, competitorSite, competitorsIn, siteBrandKey, summarize } =
   await import('./analyze.js');
 
 const company = {
@@ -24,6 +24,17 @@ const answer = (question, engine, text, urls = []) => ({
   text,
   citations: urls.map((url) => ({ url })),
   missing: null,
+});
+
+describe('competitorSite', () => {
+  it('marks a cited site whose host names a competitor, never a review or media site', () => {
+    const keys = new Set(['hubspotcrm', 'ridgelineroasters', 'g2']);
+    expect(competitorSite('hubspot.com', keys)).toBe(true);
+    expect(competitorSite('shop.ridgelineroasters.example', keys)).toBe(true);
+    expect(competitorSite('g2.com', keys)).toBe(true);
+    expect(competitorSite('coffeereview.example', keys)).toBe(false);
+    expect(competitorSite('com', keys)).toBe(false);
+  });
 });
 
 describe('summarize', () => {
@@ -68,9 +79,9 @@ describe('summarize', () => {
   it('counts a site once an answer, and the company’s own subdomains as its own', () => {
     const figures = summarize(questions, answers, competitors, company);
     expect(figures.citedSites).toEqual([
-      { domain: 'coffeereview.example', answers: 2, own: false, kind: null },
-      { domain: 'blog.acme.example', answers: 1, own: true, kind: 'own' },
-      { domain: 'shop.acme.example', answers: 1, own: true, kind: 'own' },
+      { domain: 'coffeereview.example', answers: 2, own: false, competitor: false, kind: null },
+      { domain: 'blog.acme.example', answers: 1, own: true, competitor: false, kind: 'own' },
+      { domain: 'shop.acme.example', answers: 1, own: true, competitor: false, kind: 'own' },
     ]);
     expect(figures.ownCitations).toBe(2);
   });
@@ -97,6 +108,7 @@ describe('names and sites sorted', () => {
       'https://www.jollytur.com/a',
       'https://www.tatilbudur.com/b',
       'https://www.kultur.gov.tr/c',
+      'https://www.sikayetvar.com/turadahil',
     ]),
     answer(1, 'chatgpt-web', 'Jolly and Tatilbudur; Hizmetgo too.', ['https://jollytur.com.tr/x']),
   ];
@@ -127,6 +139,7 @@ describe('names and sites sorted', () => {
 
   it('marks a competitor’s or marketplace’s site by its address, else as the call sorted it', () => {
     const siteKinds = new Map([
+      ['sikayetvar.com', 'guide'],
       ['kultur.gov.tr', 'official'],
       ['jollytur.com', 'guide'],
     ]);
@@ -136,6 +149,8 @@ describe('names and sites sorted', () => {
       'jollytur.com.tr': 'competitor',
       'tatilbudur.com': 'marketplace',
       'kultur.gov.tr': 'official',
+      // Known by name, whatever the call said.
+      'sikayetvar.com': 'reviews',
     });
   });
 
@@ -151,6 +166,7 @@ describe('names and sites sorted', () => {
       { domain: 'jollytur.com', answers: 1 },
       { domain: 'jollytur.com.tr', answers: 1 },
       { domain: 'kultur.gov.tr', answers: 1 },
+      { domain: 'sikayetvar.com', answers: 1 },
       { domain: 'tatilbudur.com', answers: 1 },
     ]);
   });
