@@ -18,6 +18,14 @@ import index from './entries.json';
 export const PLAN_MODES = ['hide', 'show_upgrade'] as const;
 export type PlanMode = (typeof PLAN_MODES)[number];
 
+/**
+ * A switch staff turn on per workspace that an entry's feature needs, beyond
+ * its plan: `auto_go_live` is CHAT_AUTO_GO_LIVE (autoGoLiveEnabled). An
+ * entry with `requires:` shows only where it is on.
+ */
+export const ENTRY_FLAGS = ['auto_go_live'] as const;
+export type EntryFlag = (typeof ENTRY_FLAGS)[number];
+
 export interface WhatsNewEntry {
   slug: string;
   /** "Agent Center" */
@@ -29,6 +37,8 @@ export interface WhatsNewEntry {
   /** The plans that include it. */
   plans: PlanId[];
   planMode: PlanMode;
+  /** The switch the feature needs on, beyond its plan; absent for none. */
+  requires?: EntryFlag;
   /** YYYY-MM-DD: it shows from this day on. */
   published: string;
   /** Three or four lines, one sentence each. */
@@ -144,6 +154,8 @@ export function entryProblems(entry: ParsedEntry, pageExists: PageCheck): string
   }
   if (!PLAN_MODES.includes(meta.plan_mode as PlanMode))
     say('plan_mode must be hide or show_upgrade');
+  if (meta.requires !== undefined && !ENTRY_FLAGS.includes(meta.requires as EntryFlag))
+    say(`requires must be one of ${ENTRY_FLAGS.join(', ')}`);
   const published = meta.published;
   if (
     typeof published !== 'string' ||
@@ -183,6 +195,7 @@ export function approvedEntry(entry: ParsedEntry, pageExists: PageCheck): WhatsN
     route: meta.route as WhatsNewEntry['route'],
     plans: PLAN_ORDER.filter((plan) => meta.plans.includes(plan)),
     planMode: meta.plan_mode as PlanMode,
+    ...(meta.requires ? { requires: meta.requires as EntryFlag } : {}),
     published: meta.published,
     lines: entry.lines,
   };

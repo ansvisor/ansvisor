@@ -56,7 +56,7 @@ export const MEMORY_TOOLS = [
     brandOf: null,
     costClass: 'C0',
     labelKey: 'memorySave',
-    route: null,
+    route: '/dashboard/chat/memory',
     mcpTool: null,
     specRow: '73',
     inputSchema: z.object({
@@ -119,7 +119,7 @@ export const MEMORY_TOOLS = [
     brandOf: null,
     costClass: 'C0',
     labelKey: 'memoryForget',
-    route: null,
+    route: '/dashboard/chat/memory',
     mcpTool: null,
     specRow: '74',
     inputSchema: z.object({
