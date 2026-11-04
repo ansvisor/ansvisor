@@ -415,9 +415,9 @@ Call to action: ${opportunityBrief.callToAction || '—'}`;
  * suggestions should do about it: a page told only the Length doesn't know
  * it's already twice as long (editor test 2026-10-26).
  */
-export function lengthNow(now, target) {
-  const top = Math.round(target * (1 + LENGTH_TOLERANCE));
-  const bottom = Math.round(target * (1 - LENGTH_TOLERANCE));
+export function lengthNow(now, target, band = null) {
+  const top = band?.max ?? Math.round(target * (1 + LENGTH_TOLERANCE));
+  const bottom = band?.min ?? Math.round(target * (1 - LENGTH_TOLERANCE));
   if (now > top) {
     return `The page is about ${now} characters now, over its Length: suggest cuts (repetition, filler, the least useful detail) before anything new, and keep each addition short.`;
   }
@@ -425,6 +425,16 @@ export function lengthNow(now, target) {
     return `The page is about ${now} characters now, under its Length: add what the questions and rules ask for.`;
   }
   return `The page is about ${now} characters now: keep it about this long.`;
+}
+
+/**
+ * The Length as the model is told it: about so many characters, or within
+ * the range the person set (editor test 2026-11-03).
+ */
+export function lengthLine({ length, lengthBand }) {
+  return lengthBand
+    ? `between ${lengthBand.min} and ${lengthBand.max} characters, about ${length}.`
+    : `about ${length} characters.`;
 }
 
 /**
@@ -479,7 +489,7 @@ Industry: ${brand?.industry || 'Not specified'}
 ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
 
 Page type: ${pageTypeFormat(draft.page_type)}
-Length: about ${sources.length} characters.${now === null ? '' : ` ${lengthNow(now, sources.length)}`}
+Length: ${lengthLine(sources)}${now === null ? '' : ` ${lengthNow(now, sources.length, sources.lengthBand)}`}
 
 Brief:
 ${brief}
@@ -786,6 +796,8 @@ async function rewritePage({
   const ruleKeys = new Set(input.rules.map((r) => r.key));
   // The Length rule's target; with Length off, the page keeps its length.
   const length = ruleKeys.has('length') ? input.sources.length : textLength(draft.body_html);
+  // A range the person set: the cut pass keeps the page within it.
+  const band = ruleKeys.has('length') ? (input.sources.lengthBand ?? null) : null;
   // Where it may link: the brand's pages and the draft's sources (A).
   // …and its shopping path's shop pages (shopping path, part 4).
   const targets = withShopping(
@@ -819,7 +831,7 @@ async function rewritePage({
   if (!isPageHtml(object.html)) throw new Error('The agent answered with no page in HTML');
   // Well past its Length: one more pass that only cuts.
   const answer = ruleKeys.has('length')
-    ? await cutToLength({ answer: object, page, length, brand, draft, model, modelId, run })
+    ? await cutToLength({ answer: object, page, length, band, brand, draft, model, modelId, run })
     : object;
   await advanceRun(run, 3);
 
@@ -937,9 +949,9 @@ async function rewritePage({
  * shorter and keeps every kept line; else, or when it fails, the first
  * rewrite stands (logged). A stop goes through.
  */
-async function cutToLength({ answer, page, length, brand, draft, model, modelId, run }) {
+async function cutToLength({ answer, page, length, band, brand, draft, model, modelId, run }) {
   const total = ownText({ ...page, html: answer.html }) + page.keptChars;
-  const max = Math.round(length * (1 + LENGTH_TOLERANCE));
+  const max = band?.max ?? Math.round(length * (1 + LENGTH_TOLERANCE));
   if (total <= max) return answer;
   const budget = await reserveAiBudget(brand.organization_id, {
     feature: 'content',
@@ -1001,7 +1013,7 @@ async function cutToLength({ answer, page, length, brand, draft, model, modelId,
 function cutPrompt({ html, page, total, length, max }) {
   return `Your rewrite below is about ${total} characters of text, ${page.keptChars} of them in kept blocks, which count toward Length. Its Length is ${length} characters, up to ${max}. Cut it to about ${length}.
 
-Cut repetition, filler, long examples and the least useful detail first. Keep the H1 and every heading, a short answer under each heading, every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, each {{find: …}} and {{ask: …}} exactly as it is, and any placeholders in square brackets. Add nothing new. Return the whole page.
+Cut repetition, filler, long examples and the least useful detail first. Keep the H1, a short answer under each heading you keep (merge or drop the least useful sections when the Length can't hold them all), every [[${page.word} n]] line exactly as it is and on its own, the links on their words, the facts, each {{find: …}} and {{ask: …}} exactly as it is, and any placeholders in square brackets. Add nothing new. Return the whole page.
 
 ${html}
 

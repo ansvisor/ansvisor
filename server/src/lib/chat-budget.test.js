@@ -121,13 +121,20 @@ function reserveAiUsage(args) {
     model: args.p_model,
     cost_usd: Math.max(args.p_cost, 0),
     own_key: false,
+    content_draft_id: args.p_content_draft_id ?? null,
     used_at: new Date().toISOString(),
   });
   return { data: id, error: null };
 }
 
+// content_drafts and brands: a draft of the workspace's brand, and one of another's (W4-09).
+let drafts;
+let brands;
+
 const tables = () => ({
   prompt_improve_usage: ledger,
+  content_drafts: drafts,
+  brands,
   ai_credit_grants: grants,
   chat_agent_runs: agentRuns,
   chat_schedule_runs: scheduleRuns,
@@ -178,8 +185,10 @@ function query(table) {
       };
     }
     if (op.kind === 'insert') {
-      for (const row of [op.value].flat()) list.push({ id: `u${nextId++}`, ...row });
-      return { data: null, error: null };
+      const made = [op.value].flat().map((row) => ({ id: `u${nextId++}`, ...row }));
+      list.push(...made);
+      // .select().single() answers the row it wrote.
+      return { data: op.one ? { id: made[0].id } : null, error: null };
     }
     let found = list.filter(matches);
     for (const [col, ascending] of [...op.orders].reverse()) {
@@ -239,6 +248,14 @@ beforeEach(async () => {
   runs = new Set([RUN]);
   nextId = 1;
   agentShareRows = [];
+  drafts = [
+    { id: 'draft-1', brand_id: 'brand-1' },
+    { id: 'draft-other', brand_id: 'brand-other' },
+  ];
+  brands = [
+    { id: 'brand-1', organization_id: 'o1' },
+    { id: 'brand-other', organization_id: 'o2' },
+  ];
   lock = Promise.resolve();
   vi.doMock('../config/supabase.js', () => ({
     default: {
@@ -770,6 +787,270 @@ describe('each agent’s share of the AI limit', () => {
     expect(rpcCalls).toEqual([]);
     vi.stubEnv('CHAT_AGENTIC', 'false');
     await expect(budget.agentUsageShares('o1')).rejects.toMatchObject({ code: 'chat_off' });
+  });
+});
+
+describe('an image request on the AI budget (W4-07)', () => {
+  // Nano Banana 2 Lite's catalog price: $30 per million image tokens, 1,290 a 1K image.
+  const IMAGE = 'google/gemini-3.1-flash-lite-image';
+  const UNIT = (30 * 1290) / 1_000_000;
+  // What the provider said one image cost (OpenRouter's usage.cost): a little over the list price.
+  const X = 0.0391;
+  // GPT-5 Image Mini: $8 per million image tokens, but a high-quality 1024² image and its text side.
+  const GPT_IMAGE = 'openai/gpt-5-image-mini';
+  let cache;
+  beforeEach(async () => {
+    cache = await import('./model-price-cache.js');
+    cache.setSyncedPrices([
+      {
+        model_id: IMAGE,
+        input_per_m: 0.25,
+        output_per_m: 1.5,
+        image_output_per_m: 30,
+        overrides: [],
+      },
+      {
+        model_id: GPT_IMAGE,
+        input_per_m: 2.5,
+        output_per_m: 2,
+        image_output_per_m: 8,
+        overrides: [],
+      },
+    ]);
+  });
+  afterEach(() => cache.setSyncedPrices([]));
+  const images = (count, over = {}) => ({
+    feature: 'image',
+    modelId: IMAGE,
+    images: count,
+    runId: RUN,
+    ...over,
+  });
+  const usedPercent = async () => (await guard.getAiUsage('o1')).percentUsed;
+
+  it('holds each image at its price, then takes from the budget exactly what the provider said one cost', async () => {
+    const id = await budget.reserveChatStep('o1', images(1));
+    expect(rpcCalls[0].args).toMatchObject({ p_feature: 'image', p_model: IMAGE });
+    expect(rpcCalls[0].args.p_cost).toBeCloseTo(UNIT, 12);
+    expect(ledger.find((r) => r.id === id)).toMatchObject({ feature: 'image', units: 1 });
+
+    const before = nonOwnSpend() - ledger.find((r) => r.id === id).cost_usd;
+    await budget.chargeChatStep('o1', id, {
+      modelId: IMAGE,
+      usage: {},
+      images: { produced: 1, costUsd: X },
+    });
+    // Exactly X: the provider's own cost, no markup, no multiplier.
+    expect(ledger.find((r) => r.id === id).cost_usd).toBe(X);
+    expect(nonOwnSpend() - before).toBeCloseTo(X, 12);
+  });
+
+  it('takes exactly X from the credits once the month’s included budget is spent', async () => {
+    spent(5);
+    grants.push({
+      id: 'g1',
+      organization_id: 'o1',
+      usd_total: 5,
+      usd_used: 0,
+      expires_at: '2027-09-01T00:00:00.000Z',
+      created_at: '2026-09-01T00:00:00.000Z',
+    });
+    const id = await budget.reserveChatStep('o1', images(1));
+    await budget.chargeChatStep('o1', id, {
+      modelId: IMAGE,
+      usage: {},
+      images: { produced: 1, costUsd: X },
+    });
+    expect(ledger.find((r) => r.id === id)).toMatchObject({ cost_usd: X, grant_id: 'g1' });
+    expect(grants[0].usd_used).toBeCloseTo(X, 12);
+  });
+
+  it('charges a request of 4 images exactly 4 × X, and the price of each one made when the provider says nothing', async () => {
+    const four = await budget.reserveChatStep('o1', images(4));
+    expect(rpcCalls[0].args.p_cost).toBeCloseTo(4 * UNIT, 12);
+    await budget.chargeChatStep('o1', four, {
+      modelId: IMAGE,
+      usage: {},
+      images: { produced: 4, costUsd: 4 * X },
+    });
+    expect(ledger.find((r) => r.id === four)).toMatchObject({ units: 4 });
+    expect(ledger.find((r) => r.id === four).cost_usd).toBeCloseTo(4 * X, 12);
+
+    // 3 of 4 came and the provider reported no cost: 3 at the model's image price.
+    const three = await budget.reserveChatStep('o1', images(4));
+    await budget.chargeChatStep('o1', three, {
+      modelId: IMAGE,
+      usage: {},
+      images: { produced: 3 },
+    });
+    expect(ledger.find((r) => r.id === three)).toMatchObject({ units: 3 });
+    expect(ledger.find((r) => r.id === three).cost_usd).toBeCloseTo(3 * UNIT, 12);
+  });
+
+  it('takes nothing from the limit on the workspace’s own key', async () => {
+    const percent = await usedPercent();
+    const id = await budget.reserveChatStep('o1', images(4, { ownKey: true }));
+    await budget.chargeChatStep('o1', id, {
+      modelId: IMAGE,
+      usage: {},
+      images: { produced: 4, costUsd: 4 * X },
+    });
+    expect(ledger.find((r) => r.id === id)).toMatchObject({ own_key: true });
+    expect(nonOwnSpend()).toBe(0);
+    expect(await usedPercent()).toBe(percent);
+  });
+
+  it('shows one image as its price over the plan’s monthly limit, ×2 nowhere', async () => {
+    // Starter's $5: $0.0387 is 0.77% of it.
+    expect(await budget.imageShares('o1', [IMAGE])).toEqual([{ model: IMAGE, percent: 0.77 }]);
+    // Growth's $25: 0.15%.
+    org.plan = 'growth';
+    expect(await budget.imageShares('o1', [IMAGE])).toEqual([{ model: IMAGE, percent: 0.15 }]);
+    // A model the catalog doesn't price: held at the fallback, never at nothing.
+    expect(budget.imageUnitUsd('acme/unknown-image')).toBe(budget.IMAGE_FALLBACK_USD);
+  });
+
+  it('prices an OpenAI image at its own tokens, so the cheapest by price is the cheapest billed', async () => {
+    // 5,500 tokens at $8/M: $0.044, above the $0.041 it really cost and above
+    // Nano Banana 2 Lite's $0.0387 (which billed $0.0336), as on the bill.
+    expect(budget.imageUnitUsd(GPT_IMAGE)).toBeCloseTo(0.044, 12);
+    expect(budget.imageUnitUsd(GPT_IMAGE)).toBeGreaterThan(UNIT);
+    expect(await budget.imageShares('o1', [IMAGE, GPT_IMAGE])).toEqual([
+      { model: IMAGE, percent: 0.77 },
+      { model: GPT_IMAGE, percent: 0.88 },
+    ]);
+  });
+
+  it('never lets two image requests at once pass the limit', async () => {
+    // $0.05 left of Starter's $5: room for one image at $0.0387, not two.
+    spent(4.95);
+    const results = await Promise.allSettled([
+      budget.reserveChatStep('o1', images(1)),
+      budget.reserveChatStep('o1', images(1)),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'rejected')[0].reason).toMatchObject({
+      statusCode: 429,
+    });
+    expect(nonOwnSpend()).toBeLessThanOrEqual(5 + 1e-12);
+  });
+
+  it('counts how many images the limit left covers', async () => {
+    spent(4.9);
+    // $0.10 left: two images at $0.0387, not three.
+    expect(await budget.fitChatUnits('o1', { modelId: IMAGE, units: 4, image: true })).toEqual({
+      fits: 2,
+      limit: 'month',
+    });
+  });
+});
+
+describe('an image request in the Content Editor, on a draft (W4-09)', () => {
+  const IMAGE = 'google/gemini-3.1-flash-lite-image';
+  const UNIT = (30 * 1290) / 1_000_000;
+  const X = 0.0336;
+  let cache;
+  beforeEach(async () => {
+    cache = await import('./model-price-cache.js');
+    cache.setSyncedPrices([
+      {
+        model_id: IMAGE,
+        input_per_m: 0.25,
+        output_per_m: 1.5,
+        image_output_per_m: 30,
+        overrides: [],
+      },
+    ]);
+  });
+  afterEach(() => cache.setSyncedPrices([]));
+  const draftImages = (count, over = {}) => ({
+    modelId: IMAGE,
+    images: count,
+    draftId: 'draft-1',
+    ...over,
+  });
+
+  it('holds each image at its price with no Chat run, tied to the draft, then takes exactly what the provider said', async () => {
+    const id = await budget.reserveDraftImages('o1', draftImages(2));
+    expect(rpcCalls[0]).toMatchObject({
+      fn: 'reserve_ai_usage',
+      args: {
+        p_organization_id: 'o1',
+        p_feature: 'image',
+        p_model: IMAGE,
+        p_content_draft_id: 'draft-1',
+        p_since: '2026-10-20T09:00:00.000Z',
+        p_budget: 5,
+      },
+    });
+    expect(rpcCalls[0].args.p_cost).toBeCloseTo(2 * UNIT, 12);
+    expect(ledger.find((r) => r.id === id)).toMatchObject({
+      feature: 'image',
+      units: 2,
+      content_draft_id: 'draft-1',
+    });
+
+    await budget.chargeChatStep('o1', id, {
+      modelId: IMAGE,
+      usage: {},
+      images: { produced: 2, costUsd: 2 * X },
+    });
+    expect(ledger.find((r) => r.id === id).cost_usd).toBe(2 * X);
+    expect(nonOwnSpend()).toBe(2 * X);
+  });
+
+  it('lets the hold go when nothing was made', async () => {
+    const id = await budget.reserveDraftImages('o1', draftImages(4));
+    await budget.releaseChatStep('o1', id);
+    expect(ledger).toEqual([]);
+  });
+
+  it('writes the workspace’s own key’s images as its own, holding nothing', async () => {
+    spent(5);
+    const id = await budget.reserveDraftImages('o1', draftImages(3, { ownKey: true }));
+    expect(rpcCalls).toEqual([]);
+    expect(ledger.find((r) => r.id === id)).toMatchObject({
+      feature: 'image',
+      own_key: true,
+      cost_usd: 0,
+      units: 3,
+      content_draft_id: 'draft-1',
+    });
+    await budget.chargeChatStep('o1', id, {
+      modelId: IMAGE,
+      usage: {},
+      images: { produced: 3, costUsd: 3 * X },
+    });
+    expect(nonOwnSpend()).toBe(5);
+  });
+
+  it('refuses once the budget is spent, and a draft of another workspace', async () => {
+    spent(5);
+    await expect(budget.reserveDraftImages('o1', draftImages(1))).rejects.toMatchObject({
+      statusCode: 429,
+    });
+    await expect(
+      budget.reserveDraftImages('o1', draftImages(1, { draftId: 'draft-other' })),
+    ).rejects.toMatchObject({ code: 'not_found', statusCode: 404 });
+    await expect(
+      budget.reserveDraftImages('o1', draftImages(1, { draftId: 'nope' })),
+    ).rejects.toMatchObject({ code: 'not_found' });
+  });
+
+  it('records with nothing held on a plan without a limit (self-hosted)', async () => {
+    org.plan = 'self_hosted';
+    vi.stubEnv('IS_CLOUD', 'false');
+    const id = await budget.reserveDraftImages('o1', draftImages(2));
+    expect(rpcCalls).toEqual([]);
+    expect(ledger.find((r) => r.id === id)).toMatchObject({ own_key: false, units: 2 });
+    expect(ledger.find((r) => r.id === id).cost_usd).toBeCloseTo(2 * UNIT, 12);
+  });
+
+  it('isn’t there with Chat off', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    await expect(budget.reserveDraftImages('o1', draftImages(1))).rejects.toMatchObject({
+      code: 'chat_off',
+    });
   });
 });
 

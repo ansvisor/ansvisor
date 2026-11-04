@@ -95,6 +95,7 @@ export async function reopenStrengthened(brandId, opportunities, measure, { skip
       .single();
     if (readErr) throw new Error(readErr.message);
     const sd = row.source_data || {};
+    const reopenedAt = new Date().toISOString();
 
     const { error: writeErr } = await supabaseAdmin
       .from('content_opportunities')
@@ -112,7 +113,7 @@ export async function reopenStrengthened(brandId, opportunities, measure, { skip
           actions: {},
           pastActions: [...(sd.pastActions || []), ...Object.values(sd.actions || {})],
           reopened: {
-            at: new Date().toISOString(),
+            at: reopenedAt,
             reason,
             previousScore,
             score: current.score,
@@ -125,6 +126,9 @@ export async function reopenStrengthened(brandId, opportunities, measure, { skip
       .eq('id', opp.id)
       .eq('status', 'done');
     if (writeErr) throw new Error(writeErr.message);
+    // The run reads its rows on: this one is open again, from now (another angle skips it).
+    opp.status = 'new';
+    opp.reopenedAt = reopenedAt;
     reopened += 1;
     logger.info(
       { brandId, opportunityId: opp.id, reason, previousScore, score: current.score },

@@ -31,6 +31,9 @@ vi.mock('../config/supabase.js', () => ({
 }));
 vi.mock('../lib/access.js', () => ({
   assertBrandAccess: (...args) => assertBrandAccess(...args),
+  // The caller may (the role rule's own tests: run-roles.test.js).
+  MANAGER_ROLES: ['admin', 'manager'],
+  assertRole: vi.fn(async () => 'manager'),
 }));
 vi.mock('../lib/brand-facts.js', () => ({
   readBrandFacts: (...args) => readBrandFacts(...args),

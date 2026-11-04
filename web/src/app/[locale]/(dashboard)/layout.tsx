@@ -13,6 +13,7 @@ import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provide
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
+import { pageOpenOf } from '@/lib/chat/page-open';
 import { panelSizeOf } from '@/lib/chat/panel';
 import { planFactsFromOrgRow } from '@/lib/chat/plan-facts';
 import { DEFAULT_CHAT_SETTINGS, parseTeamRole } from '@/lib/chat/precedence';
@@ -85,7 +86,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       ? supabase
           .from('chat_user_prefs')
           .select(
-            'panel_on_pages, panel_size, default_mode, usage_notice_period, legacy_imported_at',
+            'panel_on_pages, panel_size, default_mode, usage_notice_period, legacy_imported_at, page_open',
           )
           .eq('user_id', user.id)
           .maybeSingle()
@@ -204,6 +205,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // Read only where Chat runs on the own key (AGENT-OWN-KEY §5.2 item 5).
     keyFailure: chatOnOwnKey ? await failingKeyFor(profile.organization_id) : null,
     skills: await skillMenuFor(profile.organization_id, user.id),
+    // Where a page Chat writes opens (W4-11), as Chat's pages read it.
+    pageOpen: pageOpenOf(chatPrefs?.page_open),
   };
 
   return (
