@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULTS, estimatedCardUsd, reportCardLimits, reportCardOrigins } from './config.js';
-import { countryLanguage, countryName, isCountry, languageName } from './countries.js';
+import {
+  countryInSentence,
+  countryLanguage,
+  countryName,
+  isCountry,
+  languageName,
+} from './countries.js';
 
 describe('reportCardLimits', () => {
   it('falls back to 200 a day, $200 a month, 30 days and 5 an hour', () => {
@@ -58,6 +64,11 @@ describe('countries', () => {
     expect(countryLanguage('US')).toBe('en');
     expect(countryLanguage('DE')).toBe('de');
     expect(languageName('tr')).toBe('Turkish');
+  });
+
+  it('puts "the" before the countries whose name takes it', () => {
+    expect(countryInSentence('US')).toBe('the United States');
+    expect(countryInSentence('TR', 'Türkiye')).toBe('Türkiye');
   });
 
   it('asks in English where no main language is named', () => {
