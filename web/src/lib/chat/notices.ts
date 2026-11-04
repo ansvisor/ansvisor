@@ -65,7 +65,7 @@ export interface ScheduleNotice extends NoticeBase {
   kind: 'schedule_failed' | 'schedule_paused';
   title: string;
   reason: string;
-  /** Where Open goes: the job's chat, or Chat when it has none yet. */
+  /** Where Open goes: the job's page in Scheduled. */
   href: `/dashboard/${string}`;
 }
 
@@ -127,18 +127,17 @@ export function noticeOf(row: NoticeRow): ChatNotice | null {
     return { ...base, kind: 'agent_go_live_off', agent, agentId };
   }
   if (row.kind === 'schedule_failed' || row.kind === 'schedule_paused') {
-    const { title, reason, conversationId } = payload;
+    const { title, reason, scheduleId } = payload;
     if (typeof title !== 'string' || typeof reason !== 'string') return null;
-    const chat =
-      typeof conversationId === 'string' && /^[0-9a-f-]{36}$/i.test(conversationId)
-        ? conversationId
-        : null;
+    // Open goes to the job's page (Scheduled, W3-03): its runs, Run now, on and off.
+    const job =
+      typeof scheduleId === 'string' && /^[0-9a-f-]{36}$/i.test(scheduleId) ? scheduleId : null;
     return {
       ...base,
       kind: row.kind,
       title: title.slice(0, 120),
       reason: reason.slice(0, 200),
-      href: chat ? `/dashboard/chat/${chat}` : '/dashboard/chat',
+      href: job ? `/dashboard/chat/scheduled/${job}` : '/dashboard/chat/scheduled',
     };
   }
   return null;

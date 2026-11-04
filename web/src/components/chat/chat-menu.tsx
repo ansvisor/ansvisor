@@ -8,6 +8,7 @@ import { NewPill } from '@/components/agentic/new-pill';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
+import { countChatSchedules } from '@/lib/actions/chat-schedules';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { AT_WORK_ROWS, chatMenuLists, type DayGroup } from '@/lib/chat/menu-groups';
 import { cn } from '@/lib/utils';
@@ -213,6 +214,8 @@ export interface ChatMenuViewProps {
   /** Each row's ⋯ menu. */
   rowActions?: (chat: ChatListItem) => ReactNode;
   now?: Date;
+  /** The person's scheduled jobs that are on (W3-03): Scheduled's count. */
+  scheduled?: number;
 }
 
 /**
@@ -220,14 +223,14 @@ export interface ChatMenuViewProps {
  * CHAT-mockup-v2.html, the menu on every #s-… screen): the toggle and
  * "＋ New chat"; Menu (Home; Inbox, with its count and an amber dot while
  * something needs the person; Agents, with "New" until it is first opened
- * (governance mockup #cnav); Settings, with the month's AI usage; Files); Governance (Activity, What Chat can do, Tool
+ * (governance mockup #cnav); Settings, with the month's AI usage; Scheduled, with the
+ * person's jobs on; Files); Governance (Activity, What Chat can do, Tool
  * policy: the governance mockup's menu, #cnav); Agents at work (needs you,
  * running, unread results: three rows, See all, Show less, the dots'
  * legend); Chats with its count, Search chats (typing lists the chats
  * whose title or messages match, in place of the days; Ctrl K opens the
  * palette under it), Pinned, then by day, and All chats and Archived at the
- * end. Items whose pages aren't built yet stay out (Skills, Integrations,
- * Scheduled). Sections fold, remembered in this
+ * end. Items whose pages aren't built yet stay out (Skills, Integrations). Sections fold, remembered in this
  * browser.
  */
 export function ChatMenuView({
@@ -243,6 +246,7 @@ export function ChatMenuView({
   onNavigate,
   rowActions,
   now: nowProp,
+  scheduled = 0,
 }: ChatMenuViewProps) {
   const t = useTranslations('chatShell.menu');
   const tAttention = useTranslations('agentic.attention');
@@ -414,6 +418,20 @@ export function ChatMenuView({
           >
             {t('settings')}
             <UsageMeter />
+          </MenuItem>
+          <MenuItem
+            href="/dashboard/chat/scheduled"
+            action="chatMenu.openScheduled"
+            active={pathname.startsWith('/dashboard/chat/scheduled')}
+            onNavigate={onNavigate}
+            label={scheduled ? t('scheduledLabel', { count: scheduled }) : undefined}
+          >
+            {t('scheduled')}
+            {scheduled > 0 && (
+              <span className="ml-auto min-w-[22px] rounded-md bg-foreground/10 px-1.5 text-center text-[11px] leading-[18px] text-foreground/80 tabular-nums">
+                {scheduled}
+              </span>
+            )}
           </MenuItem>
           <MenuItem
             href="/dashboard/chat/files"
@@ -612,8 +630,20 @@ export function ChatMenu(
 ) {
   const { status, chats, total, archived, refresh } = useChatList();
   const pathname = usePathname();
+  // Scheduled's count: read again as the person moves between Chat's pages.
+  const [scheduled, setScheduled] = useState(0);
+  useEffect(() => {
+    let live = true;
+    void countChatSchedules()
+      .then((count) => live && setScheduled(count))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [pathname]);
   return (
     <ChatMenuView
+      scheduled={scheduled}
       rowActions={(chat) => <ChatRowMenu chat={chat} />}
       {...props}
       status={status}
