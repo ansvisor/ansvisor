@@ -533,7 +533,7 @@ describe('the card’s language', () => {
       'coffeereview.example sitesinde Brewline Coffee markasını listeletin',
     );
     expect(questionSummary(turkish, tr)).toBe(
-      '50 yanıtın 8 tanesinde, 25 sorunun 6 tanesinde adınız geçti.',
+      '25 sorunun 6 tanesinde adınız geçti: ChatGPT ve Microsoft Copilot motorlarının 50 yanıtından 8 tanesinde.',
     );
   });
 

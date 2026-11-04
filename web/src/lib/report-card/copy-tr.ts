@@ -46,16 +46,18 @@ export const tr: CardCopy = {
         : `${domain} sitesini şöyle anladık: sattıklarınız`,
     understoodNote: '2. sayfadaki sorular bunlarla ilgili.',
     kpiVisibility: 'Yapay zekâ görünürlüğü',
-    kpiVisibilitySub: (engines, named, answers) =>
-      `${engines ? `${engines} yanıtlarında: ` : ''}${answers} yanıtın ${named} tanesinde adınız geçiyor`,
+    kpiVisibilitySub: (engines, named, answers, questions, engineCount) =>
+      `${answers} yanıtın ${named} tanesinde adınız geçiyor: ${questions} soru × ${engineCount} motor (${engines})`,
     kpiQuestions: 'Sorulan soru',
-    kpiQuestionsSub: (engines, answers) => `${engines} yapay zekâ motorunda: ${answers} yanıt`,
+    kpiQuestionsSub: (engines, answers, unanswered) =>
+      `${engines} yapay zekâ motorunda: ${answers} yanıt${unanswered > 0 ? ` (${unanswered} kez yanıt gelmedi)` : ''}`,
     kpiLeader: 'Öne çıkan rakip',
     kpiLeaderNone: 'Rakip yok',
-    kpiLeaderSub: (answers, total) => `${total} yanıtın ${answers} tanesinde geçiyor`,
+    kpiLeaderSub: (answers, total) =>
+      `tüm motorlardaki ${total} yanıtın ${answers} tanesinde geçiyor`,
     kpiLeaderNoneSub: 'bu yanıtlarda',
     kpiCited: 'Sitenize kaynak gösterilen',
-    kpiCitedSub: (total) => `${total} yanıttan; sayfanızı kaynak gösteren yanıt sayısı`,
+    kpiCitedSub: (total) => `tüm motorlardaki ${total} yanıttan sayfanızı kaynak gösterenler`,
     startTitle: 'Başlangıç noktanız',
     startCited: (engines, cited) =>
       `${engines} adınızı henüz anmıyor; ama yapay zekâ sitenizi zaten okuyor: ${cited} yanıtta sayfalarınızı kaynak gösterdi, adınızı söylemedi. Başlanacak yer burası.`,
@@ -183,9 +185,10 @@ export const tr: CardCopy = {
       products
         ? `${domain} sitesindeki ana ürünlerden yazıldı; sattıklarınızla ne kadar örtüştüğüne ve ne sıklıkla arandığına göre seçildi; ${country} konumundan, ${language} soruldu.`
         : `${country} konumundan, ${language} soruldu.`,
-    summaryNone: (company, answers) => `${answers} yanıtın hiçbirinde ${company} markası anılmadı.`,
-    summary: (named, answers, questions, total) =>
-      `${answers} yanıtın ${named} tanesinde, ${total} sorunun ${questions} tanesinde adınız geçti.`,
+    summaryNone: (company, answers, total, engines, engineCount) =>
+      `${company} markası ${total} sorunun hiçbirinde anılmadı: ${engines} motorlarından ${answers} yanıt (${total} soru × ${engineCount} motor).`,
+    summary: (named, answers, questions, total, engines) =>
+      `${total} sorunun ${questions} tanesinde adınız geçti: ${engines} motorlarının ${answers} yanıtından ${named} tanesinde.`,
     legendNamed: 'Adınızı andı',
     legendMissed: 'Yanıtladı, adınızı anmadı',
     legendNone: 'Yanıt yok',
