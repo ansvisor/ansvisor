@@ -818,6 +818,7 @@ function ValuePage({ card, t, font }: PageProps) {
                 <Text style={[styles.td, { flex: 1, textAlign: 'right' }]}>{usd(row.yearly)}</Text>
               </View>
             ))}
+            <Text style={[styles.small, { marginTop: 3 }]}>{v.tableNote}</Text>
           </>
         )}
       </View>

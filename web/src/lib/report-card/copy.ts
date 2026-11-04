@@ -297,7 +297,9 @@ export const en = {
     noAds: (country: string) =>
       `Not enough ad data for your questions in ${country}: no visits are priced on this card.`,
     oddAds: (cpc: string, keywords: number) =>
-      `Ad prices for your keywords are too uneven to price visits with (a median of ${cpc} from ${plural(keywords, 'keyword', 'keywords')}): no visits are priced on this card.`,
+      `The ad prices found for your keywords look wrong (a median of ${cpc} from ${plural(keywords, 'keyword', 'keywords')}): no visits are priced on this card.`,
+    tableNote:
+      'Scenarios, not a forecast: what these visits would cost in ads if AI answers sent them to you.',
     revenueTitle: 'A revenue scenario',
     revenue: (kind: 'order' | 'deal', value: string, low: string, high: string) =>
       `Your average ${kind} value: ${value}. Assumption: ${low} to ${high} of AI visits ${kind === 'order' ? 'place an order' : 'become a deal'}, no better than other visits.`,

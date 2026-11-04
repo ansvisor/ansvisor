@@ -220,12 +220,13 @@ describe('page 4: value', () => {
     expect(adsVerdict(card({ cpc: { usd: 2, keywords: MIN_CPC_KEYWORDS - 1 } }))).toEqual({
       kind: 'none',
     });
-    // A real card: $47.10 from 8 keywords priced 1,000 visits at $47,100 a month.
+    // A real B2B card's $47.10 from 8 keywords is priced, scaled to its own searches.
     expect(adsVerdict(card({ cpc: { usd: 47.1, keywords: 8 } }))).toEqual({
-      kind: 'odd',
+      kind: 'ok',
       usd: 47.1,
       keywords: 8,
     });
+    expect(adsVerdict(card({ cpc: { usd: 150, keywords: 8 } }))).toMatchObject({ kind: 'odd' });
     expect(valueRows(card({ cpc: { usd: MAX_CPC_USD + 0.01, keywords: 20 } }))).toBeNull();
   });
 
