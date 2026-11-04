@@ -4,6 +4,7 @@ import {
   agentActDenial,
   agentPlanLimits,
   agentTriggersSchema,
+  canCallDenial,
   canSeeAgent,
   copyName,
   createAgentInput,
@@ -69,8 +70,17 @@ describe('what a new agent may hold', () => {
       connections: [],
       maxMonthShare: null,
       instructions: null,
+      canCall: [],
     });
     expect(input.maxRunShare).toBeUndefined();
+  });
+
+  it('lets an agent call up to 5 other agents, none twice', () => {
+    const ids = [1, 2, 3, 4, 5, 6].map((n) => `bbbbbbbb-0000-4000-8000-00000000000${n}`);
+    expect(createAgentInput.parse({ ...base, canCall: ids.slice(0, 5) }).canCall).toHaveLength(5);
+    expect(createAgentInput.safeParse({ ...base, canCall: ids }).success).toBe(false);
+    expect(createAgentInput.safeParse({ ...base, canCall: [ids[0], ids[0]] }).success).toBe(false);
+    expect(createAgentInput.safeParse({ ...base, canCall: ['not-an-id'] }).success).toBe(false);
   });
 
   it('folds a name’s spaces and keeps it to 1–60 characters', () => {
@@ -230,6 +240,16 @@ describe('versions', () => {
     expect(next).toEqual({ ...current, mode: 'ask_first' });
     // What it didn't name stays as it was.
     expect(next?.scope).toEqual(current.scope);
+  });
+
+  it('makes a new version when whom it can call changes', () => {
+    expect(current.can_call).toEqual([]);
+    const callee = 'bbbbbbbb-0000-4000-8000-000000000001';
+    expect(nextVersion(current, updateAgentInput.parse({ canCall: [] }))).toBeNull();
+    expect(nextVersion(current, updateAgentInput.parse({ canCall: [callee] }))).toEqual({
+      ...current,
+      can_call: [callee],
+    });
   });
 
   it('refuses an empty change', () => {
@@ -447,10 +467,22 @@ describe('what the plan allows', () => {
     ).toBe(250);
   });
 
+  it('keeps calling other agents to Growth and up, paid', () => {
+    const callee = ['bbbbbbbb-0000-4000-8000-000000000001'];
+    expect(canCallDenial([], plan('starter'))).toBeNull();
+    expect(canCallDenial(callee, plan('starter'))).toEqual({
+      denial: { code: 'plan_locked', needs: 'growth' },
+      asked: 'canCall',
+    });
+    expect(canCallDenial(callee, plan('growth', 'trialing'))).not.toBeNull();
+    expect(canCallDenial(callee, plan('growth'))).toBeNull();
+  });
+
   it('gives self-hosted no plan gates and no cap on agents', () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     const selfHosted = plan('starter');
     expect(modeDenial('full_auto', selfHosted, DEFAULT_AGENT_SETTINGS, 'manager')).toBeNull();
+    expect(canCallDenial(['bbbbbbbb-0000-4000-8000-000000000001'], selfHosted)).toBeNull();
     expect(enginesDenial(selfHosted, ['claude-sonnet-5'])).toBeNull();
     expect(agentPlanLimits(selfHosted).activeAgents).toBeNull();
   });

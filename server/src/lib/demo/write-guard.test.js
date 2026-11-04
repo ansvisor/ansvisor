@@ -26,7 +26,6 @@ const NOT_A_BRAND_ROW = {
   chat_user_prefs: "A person's own Chat preferences (00400): no brand's.",
   content_authors: "The organization's authors, shared by its brands.",
   content_rule_sets: "The organization's content rules per page type, shared by its brands.",
-  integration_connections: "The organization's Google connections.",
   invitations: "The organization's invitations.",
   organizations: 'The organization itself.',
   profiles: "A person's own profile.",

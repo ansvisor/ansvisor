@@ -25,6 +25,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { NewContentDialog } from '@/components/content/new-content-dialog';
 import { PublishDialog } from '@/components/content/publish-dialog';
+import { TakeDownDialog, type TakeDownPage } from '@/components/content/take-down-dialog';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -49,15 +50,18 @@ import {
   AGENT_POLL_MS,
   CREATED_RANGES,
   LIBRARY_TABS,
+  MADE_IN_FILTERS,
   SEND_FILTERS,
   contentEditorPath,
   draftsCreatedIn,
   draftsInTab,
   draftsLastSent,
+  draftsMadeIn,
   type ContentDraftListItem,
   type CreatedRange,
   type DraftStatus,
   type LibraryTab,
+  type MadeInFilter,
   type SendFilter,
 } from '@/lib/content/drafts';
 import { siteTypeOf } from '@/lib/content/page-types';
@@ -96,12 +100,14 @@ interface LibraryRead {
  */
 export default function ContentLibraryPage() {
   const t = useTranslations('contentEditor.library');
+  const tMadeIn = useTranslations('contentEditor.library.madeIn');
   const router = useRouter();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const [tab, setTab] = useState<LibraryTab>('all');
   // When the drafts listed (and exported) were created: ?created=30d.
   const [created, setCreated] = useState<CreatedRange>('all');
+  const [madeIn, setMadeIn] = useState<MadeInFilter>('all');
   // How the listed drafts' last send to the CMS stands (#1331): ?sent=failed.
   const [sent, setSent] = useState<SendFilter>('all');
   // Which shopping paths are listed, on an online shop: ?shopping=attention.
@@ -124,6 +130,8 @@ export default function ContentLibraryPage() {
   const [sending, setSending] = useState<{ brandId: string; source: CmsSource } | null>(null);
   // Mark published open, on a draft (CE-013).
   const [publishing, setPublishing] = useState<string | null>(null);
+  // Take down open, on a page published through Ansvisor (AUTONOMOUS-GO-LIVE PR 10).
+  const [takingDown, setTakingDown] = useState<TakeDownPage | null>(null);
   // Each draft's last send, beside its status; read with the list.
   const [cms, setCms] = useState<ReadonlyMap<string, CmsStatus>>(new Map());
   // The drafts the sends above were read for, in any order.
@@ -145,6 +153,7 @@ export default function ContentLibraryPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
     setTab(readUrlChoice('tab', LIBRARY_TABS, 'all'));
     setCreated(readUrlChoice('created', CREATED_RANGES, 'all'));
+    setMadeIn(readUrlChoice('madeIn', MADE_IN_FILTERS, 'all'));
     setSent(readUrlChoice('sent', SEND_FILTERS, 'all'));
     setShoppingFilter(readUrlChoice('shopping', SHOPPING_FILTERS, 'all'));
     // Once: closed, it doesn't open again on a reload. Read-only, it doesn't open.
@@ -347,6 +356,14 @@ export default function ContentLibraryPage() {
     onSend: guard((draft: ContentDraftListItem) => void openSend(draft), {
       action: tActions('sendToCms'),
     }),
+    // Open while read-only, as the API keeps it: it only lowers what is live.
+    onTakeDown: (draft, sent) =>
+      setTakingDown({
+        draftId: draft.id,
+        title: titleOf(draft),
+        url: sent.publishedUrl,
+        target: sent.target,
+      }),
   };
 
   const confirmDelete = async () => {
@@ -374,6 +391,11 @@ export default function ContentLibraryPage() {
     clearPicked();
     writeUrlParams({ created: next }, { created: 'all' });
   };
+  const changeMadeIn = (next: MadeInFilter) => {
+    setMadeIn(next);
+    clearPicked();
+    writeUrlParams({ madeIn: next }, { madeIn: 'all' });
+  };
   const changeSent = (next: SendFilter) => {
     setSent(next);
     clearPicked();
@@ -398,7 +420,9 @@ export default function ContentLibraryPage() {
   const drafts = current?.drafts ?? null;
   const counts = current?.counts ?? null;
   const inTab = drafts ? draftsInTab(drafts, tab) : [];
-  const createdIn = draftsCreatedIn(inTab, created);
+  const createdIn = draftsMadeIn(draftsCreatedIn(inTab, created), madeIn);
+  // Made in shows once the brand's drafts come from more than one place, or while the URL names one.
+  const anyMadeElsewhere = !!drafts?.some((draft) => draft.origin !== 'editor');
   // Shopping paths are an online shop's (shopping path, 00351).
   const isShop = siteTypeOf(activeBrand ?? {}) === 'ecommerce';
   const shopped = isShop ? draftsByShopping(createdIn, shoppingFilter) : createdIn;
@@ -490,6 +514,27 @@ export default function ContentLibraryPage() {
                 {SEND_FILTERS.map((filter) => (
                   <SelectItem key={filter} value={filter}>
                     {t(`lastSend.${filter}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {(anyMadeElsewhere || madeIn !== 'all') && (
+            <Select
+              value={madeIn}
+              onValueChange={(value) => changeMadeIn(value as MadeInFilter)}
+              items={MADE_IN_FILTERS.map((filter) => ({
+                value: filter,
+                label: `${tMadeIn('label')}: ${tMadeIn(filter)}`,
+              }))}
+            >
+              <SelectTrigger size="sm" aria-label={tMadeIn('label')} data-action="library.madeIn">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {MADE_IN_FILTERS.map((filter) => (
+                  <SelectItem key={filter} value={filter}>
+                    {tMadeIn(filter)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -640,6 +685,17 @@ export default function ContentLibraryPage() {
         />
       )}
 
+      {takingDown && (
+        <TakeDownDialog
+          page={takingDown}
+          onClose={() => setTakingDown(null)}
+          // A draft in its CMS again: the row's status and send are read again.
+          onDone={() => {
+            reload();
+            setCmsAttempt((n) => n + 1);
+          }}
+        />
+      )}
       {sending && (
         <SendDialog
           draftId={sending.source.draftId}

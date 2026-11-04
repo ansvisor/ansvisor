@@ -173,14 +173,14 @@ describe('the run models', () => {
     expect(modelId(sonnet!.pick('read'))).toBe('claude-sonnet-5-5');
     expect(sonnet?.pick('write').providerOptions).toMatchObject({ anthropic: { effort: 'max' } });
 
-    // Not tested yet (Opus 5.5): no picked key is looked for, the run takes Auto.
+    // Not offered (not tested, or never listed): no picked key is looked for, the run takes Auto.
     key.picked.mockClear();
     key.resolve.mockResolvedValueOnce({
       source: 'ansvisor',
       config: { provider: 'anthropic', apiKey: 'k', settings: {} },
     });
     const opus = await resolveChatModels('org', {
-      model: 'anthropic/claude-opus-5.5',
+      model: 'mistralai/mistral-large-3',
       effort: 'max',
     });
     expect(key.picked).not.toHaveBeenCalled();
