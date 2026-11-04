@@ -265,3 +265,43 @@ export async function brandReaders(
   }
   return readers;
 }
+
+/** A member's brand access as Settings › Team shows it to an admin. */
+export interface MemberBrandAccess {
+  scope: 'all' | 'selected';
+  /** The brands shared with a Selected-brands person; empty for All brands. */
+  brandIds: string[];
+}
+
+/**
+ * Every member's brand access in the organization (BRAND-ACCESS §3.2): All
+ * brands for an Admin and for 'all', else the brands shared with them
+ * (member_brands, page by page). For the admin screens: read with the
+ * service role, so the caller checks the admin first.
+ */
+export async function readMemberBrandAccess(
+  organizationId: string,
+): Promise<Map<string, MemberBrandAccess>> {
+  const members = await readMemberScopes(organizationId);
+  const access = new Map<string, MemberBrandAccess>(
+    members.map((member) => [
+      member.id,
+      { scope: hasAllBrands(member) ? 'all' : 'selected', brandIds: [] },
+    ]),
+  );
+  if (![...access.values()].some((a) => a.scope === 'selected')) return access;
+  const grants = await readAllRpcRows<{ user_id: string; brand_id: string }>((from, to) =>
+    supabaseAdmin
+      .from('member_brands')
+      .select('user_id, brand_id')
+      .eq('organization_id', organizationId)
+      .order('user_id')
+      .order('brand_id')
+      .range(from, to),
+  );
+  for (const grant of grants) {
+    const member = access.get(grant.user_id);
+    if (member?.scope === 'selected') member.brandIds.push(grant.brand_id);
+  }
+  return access;
+}

@@ -2,6 +2,9 @@ import { randomBytes } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
+// The brand's Merchant Center sign-in (BRAND-ACCESS PR 16, 00470); none: the workspace's entity.
+const brandConnection = vi.hoisted(() => vi.fn(async () => null));
+vi.mock('../brand-integrations.js', () => ({ brandConnection }));
 
 import example from '../../connectors/__example__/index.js';
 import { ConnectError } from '../../connectors/errors.js';
@@ -223,10 +226,25 @@ describe('a platform read with the workspace sign-in (#1270)', () => {
     await expect(
       listSignInAccounts({ brandId: BRAND, kind: 'merchant_center' }, signInOpts()),
     ).resolves.toEqual([{ id: '123', name: 'Acme' }]);
-    expect(signInRequest).toHaveBeenCalledWith('google-merchant-center', 'org_org-1', {
-      hosts: ['merchantapi.googleapis.com'],
-    });
+    expect(signInRequest).toHaveBeenCalledWith(
+      'google-merchant-center',
+      { entityId: 'org_org-1', accountId: null },
+      {
+        hosts: ['merchantapi.googleapis.com'],
+      },
+    );
     expect(gmc.listAccounts).toHaveBeenCalledWith({ request: expect.any(Function) });
+  });
+
+  it('lists them with the Merchant Center sign-in the brand uses, by its account', async () => {
+    brandConnection.mockResolvedValueOnce({ entityId: 'org_org-1', composioAccountId: 'ca_gmc' });
+    await listSignInAccounts({ brandId: BRAND, kind: 'merchant_center' }, signInOpts());
+    expect(brandConnection).toHaveBeenCalledWith(BRAND, 'google-merchant-center');
+    expect(signInRequest).toHaveBeenLastCalledWith(
+      'google-merchant-center',
+      { entityId: 'org_org-1', accountId: 'ca_gmc' },
+      { hosts: ['merchantapi.googleapis.com'] },
+    );
   });
 
   it('stops every call of a listing at one deadline, 30 seconds by default', async () => {

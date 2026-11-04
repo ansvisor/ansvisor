@@ -93,7 +93,9 @@ export type ToolArea =
   /** The workspace's own skills (CHAT-13). */
   | 'skills'
   /** What Chat remembers between chats (CHAT-14). */
-  | 'memory';
+  | 'memory'
+  /** An agent running another agent (CHAT-27 phase 2). */
+  | 'agents';
 
 /**
  * What the plan decides about a call (CHAT-20 §7), null when nothing. The
@@ -163,10 +165,14 @@ export type ChatToolContext = McpAuthContext & {
   timezone?: string;
 };
 
-/** What an editable card's fields are made and read with: the run's zone and workspace, now. */
+/**
+ * What an editable card's fields are made and read with: the run's zone,
+ * workspace and person (whose role a memory's scopes follow, W3-12a), now.
+ */
 export interface CardFormContext {
   timezone: string;
   organizationId: string;
+  userId: string;
   now: Date;
 }
 
@@ -187,7 +193,7 @@ export interface ToolCardRun {
 }
 
 /** What a card's targets are, by kind: the browser names each kind from en.json. */
-export type ToolCardTargetKind = 'prompts' | 'pages' | 'competitors' | 'platforms';
+export type ToolCardTargetKind = 'prompts' | 'pages' | 'competitors' | 'platforms' | 'aiUse';
 
 /**
  * What a card shows of a change beyond its target (CHAT-09 item 18: what is
@@ -339,6 +345,18 @@ interface ToolFields<S extends z.ZodObject> {
   };
   /** Its step once the change is made ("Scheduled: Weekly report"), when its words say more than the row's. */
   doneStep?(input: z.output<S>, output: unknown): { label: string; detail?: string } | null;
+  /**
+   * Whether the row is offered in this run at all (run_agent: only in an
+   * agent's run whose Can call names an agent, CHAT-27 item 14). Without it,
+   * every run that the precedence allows gets it. Not offered, it isn't
+   * explained as refused either.
+   */
+  offerIn?(run: { agentRunId: string | null }): Promise<boolean>;
+  /**
+   * What the change answers is untrusted data (another agent's words): the
+   * run is tainted after it, so every later change shows a card (CHAT-20 §16a).
+   */
+  taintsRun?: true;
   /** A valid input, for the registry's tests and the permission fixtures (CHAT-20 §19). */
   fixture: { input: z.input<S> };
 }

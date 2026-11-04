@@ -129,12 +129,6 @@ import { objectOptions } from './structured-output.js';
 const CALL_TIMEOUT_MS = 180_000;
 /** How far a Length's band reaches either side of it (the editor's LENGTH_TOLERANCE). */
 const LENGTH_TOLERANCE = 0.2;
-/**
- * How far past the top of its Length's band a rewrite may come before one
- * more pass cuts it: 15% of the Length (editor test 2026-10-25, where
- * rewrites for 4,000 came to 5,468, 6,843 and 7,335 characters).
- */
-const CUT_PASS_OVER = 0.15;
 
 // A 'writing' older than WRITING_STALE_MS (content-agent.js, which Fix open
 // rules checks too) was left by a server that stopped: it can start again.
@@ -932,17 +926,21 @@ async function rewritePage({
 }
 
 /**
- * One more pass when a rewrite came well past its Length (CUT_PASS_OVER past
- * its band's top): the model cuts its own page to the Length, keeping every
- * heading with its answer, each kept line, the links and the facts. On its
- * own hold on the budget, so a budget the first pass used up skips it. The
- * cut is taken only when it is shorter and keeps every kept line; else, or
- * when it fails, the first rewrite stands (logged). A stop goes through.
+ * One more pass when a rewrite came past the top of its Length's band
+ * (editor test 2026-10-25, where rewrites for 4,000 came to 5,468, 6,843
+ * and 7,335 characters): the model cuts its own page to the Length, keeping
+ * every heading with its answer, each kept line, the links and the facts.
+ * Any way past it, not only well past (editor test 2026-11-03: a rewrite
+ * left a little long was taken as the most a rewrite reaches, so the
+ * Length set was never met). On its own hold on the budget, so a budget
+ * the first pass used up skips it. The cut is taken only when it is
+ * shorter and keeps every kept line; else, or when it fails, the first
+ * rewrite stands (logged). A stop goes through.
  */
 async function cutToLength({ answer, page, length, brand, draft, model, modelId, run }) {
   const total = ownText({ ...page, html: answer.html }) + page.keptChars;
   const max = Math.round(length * (1 + LENGTH_TOLERANCE));
-  if (total <= max + length * CUT_PASS_OVER) return answer;
+  if (total <= max) return answer;
   const budget = await reserveAiBudget(brand.organization_id, {
     feature: 'content',
     modelId,
