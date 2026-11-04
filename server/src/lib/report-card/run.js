@@ -2,7 +2,7 @@ import logger from '../logger.js';
 import { fetchPage } from '../safe-fetch.js';
 import { detectSiteType, pageExcerpt } from '../site-type-detect.js';
 import { competitorsIn, summarize } from './analyze.js';
-import { reportCardLimits } from './config.js';
+import { CHECK_BELOW, reportCardLimits } from './config.js';
 import { countryName, languageName } from './countries.js';
 import { keywordFigures, keywordKey, medianCpc } from './cpc.js';
 import { askEngines } from './engines.js';
@@ -13,7 +13,7 @@ import { siteOutline } from './site.js';
  * One report card, start to end (REPORT-CARD §7): the site's home page
  * read once, its main products found and candidate questions written from
  * it, their keywords' search volume and cost per click looked up in one
- * call, the 15 to 20 that match the site best kept, each asked in the
+ * call, the 25 that match the site best kept, each asked in the
  * engines from the target country, and the answers read. Answers the PDF's figures (web lib/report-card/payload.ts)
  * and the questions with what each engine said, in short.
  *
@@ -105,6 +105,14 @@ export async function buildReportCard(
   const questions = pickQuestions(written.candidates, keywords.figures);
   if (!questions.length) throw new Error('No question matched the site');
   const products = written.products ?? [];
+  // Few questions matched the site: the card still goes out, flagged for
+  // staff to check by hand on the admin page.
+  const checkByHand =
+    questions.length < CHECK_BELOW
+      ? {
+          reason: `Only ${questions.length} of ${written.candidates.length} candidate questions matched the site well enough to ask.`,
+        }
+      : null;
 
   const asked = await ask(questions, country, { deadline });
   meter.answers += asked.tasks * limits.answerUsd;
@@ -193,6 +201,7 @@ export async function buildReportCard(
       keywords.figures,
     ),
     dealValue,
+    ...(checkByHand ? { checkByHand } : {}),
   };
 
   // The questions as asked, with each engine's answer in short: named or

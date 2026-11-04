@@ -24,6 +24,8 @@ export interface CardRow {
   started_at: string | null;
   finished_at: string | null;
   error: string | null;
+  /** The card's "check by hand" flag, from its figures: few questions matched the site. */
+  check?: unknown;
 }
 
 export interface RequestRow {
@@ -58,6 +60,8 @@ export interface ReportCardStats {
   marketingOptIns: number;
   days: DayRow[];
   failures: { site: string; at: string; error: string }[];
+  /** Cards sent with few questions, for staff to check by hand, newest first. */
+  checks: { site: string; at: string; reason: string }[];
 }
 
 const dayOf = (iso: string) => iso.slice(0, 10);
@@ -152,6 +156,21 @@ export function summarizeReportCards({
     .slice(0, FAILURES_SHOWN)
     .map((c) => ({ site: c.site, at: c.finished_at ?? c.created_at, error: c.error ?? '' }));
 
+  /** The flag's reason, from the figures' JSON. */
+  const reasonOf = (check: unknown): string | null => {
+    const reason = (check as { reason?: unknown } | null)?.reason;
+    return typeof reason === 'string' && reason ? reason : null;
+  };
+  const checks = cards
+    .filter((c) => c.status === 'ready' && reasonOf(c.check))
+    .sort((a, b) => (b.finished_at ?? b.created_at).localeCompare(a.finished_at ?? a.created_at))
+    .slice(0, FAILURES_SHOWN)
+    .map((c) => ({
+      site: c.site,
+      at: c.finished_at ?? c.created_at,
+      reason: reasonOf(c.check) ?? '',
+    }));
+
   const list = [...days.values()];
   return {
     today: list[0],
@@ -164,6 +183,7 @@ export function summarizeReportCards({
     ).length,
     days: list,
     failures,
+    checks,
   };
 }
 
@@ -177,7 +197,8 @@ export async function loadReportCardStats(
   const since = new Date(Math.min(now.getTime() - 30 * DAY_MS, monthStart.getTime()));
   // PostgREST gives at most 1,000 rows a request: every row is read, a page
   // at a time in id order, so the figures never come from a subset.
-  const CARD_COLUMNS = 'id, site, status, cost_usd, created_at, started_at, finished_at, error';
+  const CARD_COLUMNS =
+    'id, site, status, cost_usd, created_at, started_at, finished_at, error, check:payload->checkByHand';
   const [cards, requests, waiting] = await Promise.all([
     readAllRpcRows<CardRow>((from, to) =>
       db

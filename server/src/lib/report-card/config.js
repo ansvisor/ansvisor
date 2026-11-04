@@ -10,14 +10,15 @@
  */
 
 /**
- * Questions on a card (owner decision 2026-11-04: fewer but right): the
- * question writer drafts CANDIDATE_QUESTIONS, those that match the site
- * weakly are dropped and at most QUESTION_MAX are kept, QUESTION_MIN or
- * more when that many match well.
+ * Questions on a card (owner decisions 2026-11-04): the question writer
+ * drafts CANDIDATE_QUESTIONS; those that match the site weakly are never
+ * asked; QUESTION_MAX are kept, the core ones first and related ones to
+ * fill. A card left with fewer than CHECK_BELOW questions is still made and
+ * sent, flagged for staff to check by hand.
  */
-export const QUESTION_MAX = 20;
-export const QUESTION_MIN = 15;
-export const CANDIDATE_QUESTIONS = 32;
+export const QUESTION_MAX = 25;
+export const CANDIDATE_QUESTIONS = 40;
+export const CHECK_BELOW = 10;
 /** Engines a card asks each question in (lib/report-card/engines.js). */
 export const ENGINE_COUNT = 4;
 /** What the caps fall back to with nothing set. */

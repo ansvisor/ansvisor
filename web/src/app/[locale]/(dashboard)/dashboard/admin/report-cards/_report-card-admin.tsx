@@ -124,6 +124,28 @@ export function ReportCardAdmin({ stats }: { stats: ReportCardStats }) {
           )}
         </CardContent>
       </Card>
+
+      <Card className="py-4">
+        <CardHeader className="px-4">
+          <CardTitle className="text-base">{t('checks')}</CardTitle>
+        </CardHeader>
+        <CardContent className="px-4">
+          {stats.checks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('noChecks')}</p>
+          ) : (
+            <ul className="flex flex-col gap-2 text-sm">
+              {stats.checks.map((check) => (
+                <li key={`${check.site}-${check.at}`} className="flex flex-col">
+                  <span className="font-medium">
+                    {check.site} · {formatDateTime(check.at)}
+                  </span>
+                  <span className="text-muted-foreground">{check.reason}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
