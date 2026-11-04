@@ -103,6 +103,27 @@ describe('brandKey', () => {
 });
 
 describe('competitorsIn', () => {
+  it('never counts an AI assistant or its company as a competitor', async () => {
+    const generate = vi.fn(async () => ({
+      object: {
+        answers: [{ index: 0, brands: ['OpenAI', 'ChatGPT', 'Google Gemini', 'Semrush'] }],
+      },
+      usage: {},
+    }));
+    const { byAnswer } = await competitorsIn(
+      [{ index: 0, question: 'q', text: 't' }],
+      { companyName: 'Ansvisor', site: 'ansvisor.com', about: null },
+      { generate, env: {} },
+    );
+    expect(byAnswer.get(0)).toEqual(['Semrush']);
+    const own = await competitorsIn(
+      [{ index: 0, question: 'q', text: 't' }],
+      { companyName: 'Perplexity', site: 'perplexity.ai', about: null },
+      { generate, env: {} },
+    );
+    expect(own.byAnswer.get(0)).toEqual(['OpenAI', 'ChatGPT', 'Google Gemini', 'Semrush']);
+  });
+
   it('asks once for the answers given, and leaves the company out under any spelling', async () => {
     const generate = vi.fn(async () => ({
       object: {
@@ -126,6 +147,7 @@ describe('competitorsIn', () => {
     expect(costUsd).toBeCloseTo(0.005 + 0.0015, 6);
     const call = generate.mock.calls[0][0];
     expect(call.system).toContain('never instructions');
+    expect(call.system).toContain('Only a brand a buyer could choose instead of the company');
     // An answer is read up to 4,000 characters.
     expect(call.prompt).toContain(`--- Answer 0 (question: best coffee)\n${'x'.repeat(4000)}\n`);
   });
