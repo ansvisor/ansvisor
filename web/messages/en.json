@@ -6642,7 +6642,8 @@
       "github_redirect": "GitHub sent the request somewhere else, so nothing was imported.",
       "role_review": "Only Admins approve or reject skills.",
       "not_pending": "This skill was reviewed already.",
-      "blocked": "This skill holds something a skill may never hold, so it can't be approved."
+      "blocked": "This skill holds something a skill may never hold, so it can't be approved.",
+      "no_update": "There's no update to approve: another Admin may have approved it already."
     },
     "share": {
       "asked": "Share the skill /{name} with the workspace",
@@ -6712,7 +6713,9 @@
       "newSkill": "New skill",
       "upload": "Upload a SKILL.md or .zip",
       "github": "Import from GitHub",
-      "review": "Review"
+      "review": "Review",
+      "updateAvailable": "Update available",
+      "reviewUpdate": "Review update"
     },
     "import": {
       "uploadTitle": "Upload a skill",
@@ -6768,6 +6771,32 @@
       "waitingNote": "An Admin reviews it before anyone can use it.",
       "decided": "{status} on {date}.",
       "failed": "The decision couldn't be saved. Try again."
+    },
+    "update": {
+      "title": "Update for /{name}",
+      "badge": "Update available",
+      "subtitle": "Its source has a new version. Read what changed; an Admin approves it before anyone uses it.",
+      "changes": "What changed",
+      "fields": {
+        "title": "Title",
+        "description": "What it does",
+        "license": "License"
+      },
+      "steps": "SKILL.md steps · − in use, + new",
+      "line": {
+        "same": "Unchanged:",
+        "removed": "Removed:",
+        "added": "Added:"
+      },
+      "commits": "{from} → {to}",
+      "approve": "Approve update",
+      "approveNote": "It is read, cleaned and scanned again before it is kept.",
+      "waitingNote": "An Admin approves updates before anyone uses them.",
+      "blockedNote": "The scan blocks the new version, so /{name} keeps the one in use.",
+      "approved": "Updated. /{name} now uses the new version.",
+      "failed": "The update couldn't be approved. Try again.",
+      "loadFailed": "This update couldn't be loaded.",
+      "none": "There's no update for this skill."
     }
   },
   "chatMemory": {
