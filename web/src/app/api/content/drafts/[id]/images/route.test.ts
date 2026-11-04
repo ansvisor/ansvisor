@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 const ACTOR = { userId: 'user-1', email: null, organizationId: 'org-1' };
 const DRAFT = '44444444-4444-4444-8444-444444444444';
 const LITE = 'google/gemini-3.1-flash-lite-image';
+const OPTION = { id: 'a.jpg', url: 'https://cdn.example/content-images/org-1/ai-options/a.jpg' };
 
 const state = vi.hoisted(() => ({
   refused: false,
@@ -67,7 +68,7 @@ beforeEach(() => {
   state.draft = { id: DRAFT, brand_id: 'brand-1' };
   state.brand = { name: 'Acme Coffee', is_demo: false };
   images.options.mockReset().mockResolvedValue({ models: [{ id: LITE }], ownKey: false });
-  images.make.mockReset().mockResolvedValue({ ok: true, images: [{ dataUrl: 'data:,' }] });
+  images.make.mockReset().mockResolvedValue({ ok: true, images: [OPTION], failed: 0 });
 });
 
 describe('GET /api/content/drafts/{id}/images', () => {
@@ -85,10 +86,10 @@ describe('GET /api/content/drafts/{id}/images', () => {
 describe('POST /api/content/drafts/{id}/images', () => {
   const body = { prompt: 'A cover image', model: LITE, count: 3, style: 'photo' };
 
-  it('makes images for the draft, in the brand’s name', async () => {
+  it('makes images for the draft, in the brand’s name, and answers with their addresses', async () => {
     const res = await post(body);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, images: [{ dataUrl: 'data:,' }] });
+    expect(await res.json()).toEqual({ ok: true, images: [OPTION], failed: 0 });
     expect(images.make).toHaveBeenCalledWith({
       organizationId: 'org-1',
       draftId: DRAFT,
@@ -108,6 +109,7 @@ describe('POST /api/content/drafts/{id}/images', () => {
       [{ ok: false, code: 'ai_limit', trial: false }, 429],
       [{ ok: false, code: 'refused', why: 'Blocked' }, 422],
       [{ ok: false, code: 'own_key' }, 409],
+      [{ ok: false, code: 'not_saved', made: 3 }, 502],
       [{ ok: false, code: 'unavailable' }, 503],
     ] as const) {
       images.make.mockResolvedValueOnce(made);

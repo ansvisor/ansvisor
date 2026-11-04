@@ -8948,6 +8948,7 @@
           "altHint": "What the image shows, for people who can't see it and for search",
           "use": "Use this image",
           "uploading": "Adding…",
+          "unsaved": "{count, plural, one {# more image was made but couldn't be saved; it still counts} other {# more images were made but couldn't be saved; they still count}} toward your AI limit.",
           "aiGenerated": "AI-generated",
           "failed": {
             "unavailable": "Image generation isn't available in this workspace right now.",
@@ -8955,6 +8956,7 @@
             "ai_limit": "What's left of your monthly AI limit doesn't cover {count} images, so none was made.",
             "refused": "The image model didn't make an image for this description: {why} Try describing it another way.",
             "demo": "The demo brand makes no images. Switch to your brand to generate one.",
+            "not_saved": "{count, plural, one {The image was} other {The # images were}} made, and count toward your AI limit, but couldn't be saved. Try again.",
             "failed": "Couldn't generate images. Try again.",
             "upload": "Couldn't add the image. Try again."
           }

@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * Images made in the Content Editor (CHAT-25 §9, W4-09): the prompt keeps
  * the editor's rules, and a request is held on the draft, made at 1K,
- * charged at what the provider said, and handed back to pick from.
+ * charged at what the provider said, stored as options and handed back by
+ * address to pick from.
  */
 
 const fakes = vi.hoisted(() => ({
@@ -13,6 +14,8 @@ const fakes = vi.hoisted(() => ({
   charge: vi.fn(),
   release: vi.fn(),
   generate: vi.fn(),
+  store: vi.fn(),
+  order: [] as string[],
 }));
 
 vi.mock('@/lib/chat/images/access', () => ({
@@ -24,6 +27,8 @@ vi.mock('@/lib/chat/images/access', () => ({
 vi.mock('@/lib/chat/budget', () => ({ reserveDraftImages: fakes.reserve }));
 vi.mock('@/lib/chat/images/provider', () => ({ generateImages: fakes.generate }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
+vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
+vi.mock('./ai-image-store', () => ({ storeAiImageOptions: fakes.store }));
 
 const { DRAFT_IMAGE_RULES, draftImagePrompt, draftImagesInput, makeDraftImages } =
   await import('./ai-images');
@@ -36,9 +41,19 @@ const input = draftImagesInput.parse({
 });
 const job = { organizationId: 'org-1', draftId: 'draft-1', brandName: 'Acme Coffee', input };
 
+const OPTION_A = { id: 'a.jpg', url: 'https://cdn.example/content-images/org-1/ai-options/a.jpg' };
+const OPTION_B = { id: 'b.jpg', url: 'https://cdn.example/content-images/org-1/ai-options/b.jpg' };
+
 beforeEach(() => {
   fakes.key = { key: 'or-ansvisor', source: 'ansvisor' };
-  fakes.charge.mockReset().mockResolvedValue(undefined);
+  fakes.order = [];
+  fakes.charge.mockReset().mockImplementation(async () => {
+    fakes.order.push('charge');
+  });
+  fakes.store.mockReset().mockImplementation(async () => {
+    fakes.order.push('store');
+    return { stored: [OPTION_A, OPTION_B], failed: 0 };
+  });
   fakes.release.mockReset().mockResolvedValue(undefined);
   fakes.reserve.mockReset().mockResolvedValue({
     ok: true,
@@ -84,7 +99,7 @@ describe('the prompt', () => {
 });
 
 describe('a request for a draft', () => {
-  it('holds the images on the draft, makes them at 1K, charges what the provider said, and hands them back', async () => {
+  it('holds the images on the draft, makes them at 1K, charges what the provider said, and hands them back by address', async () => {
     const made = await makeDraftImages(job);
     expect(fakes.reserve).toHaveBeenCalledWith({
       organizationId: 'org-1',
@@ -102,13 +117,43 @@ describe('a request for a draft', () => {
       aspectRatio: '16:9',
     });
     expect(fakes.charge).toHaveBeenCalledWith({ produced: 2, costUsd: 0.0672 });
-    expect(made).toEqual({
-      ok: true,
-      images: [
-        { dataUrl: 'data:image/jpeg;base64,AAA=' },
-        { dataUrl: 'data:image/jpeg;base64,BBB=' },
-      ],
+    // Charged once, before anything is stored.
+    expect(fakes.order).toEqual(['charge', 'store']);
+    expect(fakes.store).toHaveBeenCalledWith('org-1', [
+      { base64: 'AAA=', mimeType: 'image/jpeg' },
+      { base64: 'BBB=', mimeType: 'image/jpeg' },
+    ]);
+    expect(made).toEqual({ ok: true, images: [OPTION_A, OPTION_B], failed: 0 });
+  });
+
+  it('answers with addresses only: four 1K images make a small body, with no image bytes', async () => {
+    // About 1.5 MB each, as a 1K image is: four of them as base64 would pass the host's 4.5 MB.
+    const big = Buffer.alloc(1_500_000, 7).toString('base64');
+    fakes.generate.mockResolvedValue({
+      images: Array.from({ length: 4 }, () => ({ base64: big, mimeType: 'image/jpeg' })),
+      costUsd: 0.13,
+      refusals: [],
     });
+    fakes.store.mockResolvedValue({ stored: [OPTION_A, OPTION_B, OPTION_A, OPTION_B], failed: 0 });
+    const body = JSON.stringify(await makeDraftImages({ ...job, input: { ...input, count: 4 } }));
+    expect(body.length).toBeLessThan(2_000);
+    expect(body).not.toContain('base64');
+    expect(body).not.toContain('data:');
+    expect(body).not.toContain(big.slice(0, 64));
+  });
+
+  it('keeps the charge when some can’t be stored, and says how many', async () => {
+    fakes.store.mockResolvedValue({ stored: [OPTION_B], failed: 1 });
+    expect(await makeDraftImages(job)).toEqual({ ok: true, images: [OPTION_B], failed: 1 });
+    expect(fakes.charge).toHaveBeenCalledWith({ produced: 2, costUsd: 0.0672 });
+    expect(fakes.release).not.toHaveBeenCalled();
+  });
+
+  it('says the images were made and charged when none could be stored', async () => {
+    fakes.store.mockResolvedValue({ stored: [], failed: 2 });
+    expect(await makeDraftImages(job)).toEqual({ ok: false, code: 'not_saved', made: 2 });
+    expect(fakes.charge).toHaveBeenCalledWith({ produced: 2, costUsd: 0.0672 });
+    expect(fakes.release).not.toHaveBeenCalled();
   });
 
   it('says why the model made none, charging only what it said', async () => {
@@ -119,6 +164,7 @@ describe('a request for a draft', () => {
       why: 'Blocked by safety',
     });
     expect(fakes.charge).toHaveBeenCalledWith({ produced: 0, costUsd: 0 });
+    expect(fakes.store).not.toHaveBeenCalled();
   });
 
   it('makes nothing past the AI limit, without a key, or on an own key it can’t read', async () => {

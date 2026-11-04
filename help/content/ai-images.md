@@ -29,9 +29,9 @@ The first model is marked **Recommended**: it uses your AI limit most slowly. Ea
 
 ## Pick one and add it
 
-Click **Generate 2 images** (or 3 or 4). Click the option you like, check the **Alt text** (it says what the image shows, for people who can't see it and for search), and click **Use this image**. Only that one is added to the page. **Regenerate** makes new options and uses your AI limit again.
+Click **Generate 2 images** (or 3 or 4). Click the option you like, check the **Alt text** (it says what the image shows, for people who can't see it and for search), and click **Use this image**. Only that one is kept and added to the page; the other options are removed, also when you close the dialog. **Regenerate** makes new options and uses your AI limit again.
 
-If what's left of your monthly AI limit doesn't cover the options you chose, none is made: choose fewer. The demo brand makes no images.
+If what's left of your monthly AI limit doesn't cover the options you chose, none is made: choose fewer. If an image is made but can't be saved, the panel says so: it still counts toward your AI limit, and you pick from the others. The demo brand makes no images.
 
 ## Where AI images count
 

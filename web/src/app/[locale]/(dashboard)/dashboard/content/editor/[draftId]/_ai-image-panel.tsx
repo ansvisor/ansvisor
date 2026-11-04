@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Check, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,6 @@ import {
   type DraftImageRatio,
   type DraftImageStyle,
 } from '@/lib/content/ai-image-options';
-import { uploadContentImage } from '@/lib/content/image-upload';
 import { cn } from '@/lib/utils';
 
 const CHIP =
@@ -30,25 +29,46 @@ const COUNTS = Array.from(
 );
 
 /** What a failed request says, by its code. */
-type Failure = 'unavailable' | 'own_key' | 'ai_limit' | 'refused' | 'demo' | 'failed' | 'upload';
+type Failure =
+  | 'unavailable'
+  | 'own_key'
+  | 'ai_limit'
+  | 'refused'
+  | 'demo'
+  | 'not_saved'
+  | 'failed'
+  | 'upload';
 
-/** An image the model made, as a data address, as a file the upload takes. */
-async function fileOf(dataUrl: string): Promise<File> {
-  // Its type as the address says it: the upload checks it.
-  const type = /^data:(image\/[a-z0-9.+-]+);/i.exec(dataUrl)?.[1].toLowerCase() ?? 'image/jpeg';
-  const blob = await (await fetch(dataUrl)).blob();
-  const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg';
-  return new File([blob], `ai-image.${ext}`, { type });
+/** An option the server made and stored: its id and its address. */
+interface ImageOption {
+  id: string;
+  url: string;
+}
+
+/**
+ * Drops options nobody picked (ai-image-store.ts). Best effort, also on the
+ * way out of the page (keepalive); one that is missed stays in the
+ * workspace's ai-options folder, linked from no page.
+ */
+function dropOptions(draftId: string, ids: readonly string[]) {
+  if (ids.length === 0) return;
+  void fetch(`/api/content/drafts/${draftId}/images/options`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ drop: ids }),
+    keepalive: true,
+  }).catch(() => undefined);
 }
 
 /**
  * Generate with AI in the image dialog (CHAT-25 §9, W4-09): the
  * description (filled from the page's title), the style and shape, the
  * image model with how fast it uses the monthly AI limit and its share per
- * image, two to four options; then the options to pick from, the alt text
- * (filled from the description) and Use this image, which uploads the
- * picked one as an upload is and adds it marked as AI's. Regenerate makes
- * new ones. Never a dollar amount.
+ * image, two to four options; then the options to pick from (stored by the
+ * server, shown by their addresses), the alt text (filled from the
+ * description) and Use this image, which keeps the picked one and adds it
+ * marked as AI's. The others are dropped then, on Regenerate once the new
+ * set is in, and when the panel closes. Never a dollar amount.
  */
 export function AiImagePanel({
   draftId,
@@ -60,7 +80,6 @@ export function AiImagePanel({
   onUse: (image: { src: string; alt: string }) => void;
 }) {
   const t = useTranslations('contentEditor.editor.image.ai');
-  const tUpload = useTranslations('content.imageUpload');
   const [prompt, setPrompt] = useState(() => t('promptDefault', { title: title.trim() || '…' }));
   const [style, setStyle] = useState<DraftImageStyle>('brand');
   const [ratio, setRatio] = useState<DraftImageRatio>('16:9');
@@ -68,17 +87,32 @@ export function AiImagePanel({
   const [ownKey, setOwnKey] = useState(false);
   const [model, setModel] = useState<string | null>(null);
   const [count, setCount] = useState<number>(EDITOR_IMAGE_VARIANTS.min);
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<ImageOption[]>([]);
+  // Made and charged, but not stored: said beside the options.
+  const [unsaved, setUnsaved] = useState(0);
   const [selected, setSelected] = useState(0);
   const [alt, setAlt] = useState('');
   const [busy, setBusy] = useState<'generate' | 'use' | null>(null);
   const [failure, setFailure] = useState<{
     code: Failure;
     why?: string;
-    upload?: string;
-    /** How many images the request asked for: what the AI limit left didn't cover. */
+    /** How many images the request asked for, or were made: what the message counts. */
     count?: number;
   } | null>(null);
+  // The options not yet kept or dropped, for the drop when the panel closes.
+  const open = useRef<string[]>([]);
+
+  useEffect(() => {
+    const drop = () => {
+      dropOptions(draftId, open.current);
+      open.current = [];
+    };
+    window.addEventListener('pagehide', drop);
+    return () => {
+      window.removeEventListener('pagehide', drop);
+      drop();
+    };
+  }, [draftId]);
 
   useEffect(() => {
     let live = true;
@@ -122,20 +156,30 @@ export function AiImagePanel({
       });
       const body = (await res.json().catch(() => null)) as {
         ok?: boolean;
-        images?: { dataUrl: string }[];
+        images?: ImageOption[];
+        failed?: number;
         code?: string;
         why?: string;
+        made?: number;
       } | null;
       if (res.ok && body?.ok && body.images?.length) {
-        setImages(body.images.map((image) => image.dataUrl));
+        // The earlier set goes once the new one is in: until then it can still be used.
+        dropOptions(draftId, open.current);
+        open.current = body.images.map((image) => image.id);
+        setImages(body.images);
+        setUnsaved(body.failed ?? 0);
         setSelected(0);
         setAlt((current) => current || prompt.slice(0, 200));
         return;
       }
-      const code = (['unavailable', 'own_key', 'ai_limit', 'refused', 'demo'] as const).find(
-        (c) => c === body?.code,
-      );
-      setFailure({ code: code ?? 'failed', why: body?.why, count });
+      const code = (
+        ['unavailable', 'own_key', 'ai_limit', 'refused', 'demo', 'not_saved'] as const
+      ).find((c) => c === body?.code);
+      setFailure({
+        code: code ?? 'failed',
+        why: body?.why,
+        count: code === 'not_saved' ? (body?.made ?? count) : count,
+      });
     } catch {
       setFailure({ code: 'failed' });
     } finally {
@@ -144,17 +188,27 @@ export function AiImagePanel({
   }
 
   async function use() {
-    const dataUrl = images[selected];
-    if (!dataUrl || busy) return;
+    const image = images[selected];
+    if (!image || busy) return;
     setBusy('use');
     setFailure(null);
     try {
-      const uploaded = await uploadContentImage(await fileOf(dataUrl));
-      if ('error' in uploaded) {
-        setFailure({ code: 'upload', upload: tUpload(`errors.${uploaded.error}`) });
+      // Kept where an upload goes, the others dropped: nothing goes up again.
+      const res = await fetch(`/api/content/drafts/${draftId}/images/options`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          keep: image.id,
+          drop: open.current.filter((id) => id !== image.id),
+        }),
+      });
+      const body = (await res.json().catch(() => null)) as { ok?: boolean; url?: string } | null;
+      if (!res.ok || !body?.ok || !body.url) {
+        setFailure({ code: 'upload' });
         return;
       }
-      onUse({ src: uploaded.url, alt: alt.trim() });
+      open.current = [];
+      onUse({ src: body.url, alt: alt.trim() });
     } catch {
       setFailure({ code: 'upload' });
     } finally {
@@ -296,21 +350,16 @@ export function AiImagePanel({
           role="alert"
           className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
         >
-          {failure.code === 'upload' && failure.upload
-            ? failure.upload
-            : t(`failed.${failure.code}`, {
-                why: failure.why ?? '',
-                count: failure.count ?? count,
-              })}
+          {t(`failed.${failure.code}`, { why: failure.why ?? '', count: failure.count ?? count })}
         </p>
       )}
 
       {images.length > 0 && (
         <div className="space-y-2">
           <div role="radiogroup" className="grid grid-cols-2 gap-2">
-            {images.map((src, i) => (
+            {images.map((image, i) => (
               <button
-                key={src.slice(-32) + i}
+                key={image.id}
                 type="button"
                 role="radio"
                 aria-checked={selected === i}
@@ -324,8 +373,8 @@ export function AiImagePanel({
                     : 'hover:border-foreground/30',
                 )}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element -- made just now, a data address */}
-                <img src={src} alt="" className="aspect-video w-full object-cover" />
+                {/* eslint-disable-next-line @next/next/no-img-element -- an option just stored, by its address */}
+                <img src={image.url} alt="" className="aspect-video w-full object-cover" />
                 {selected === i && (
                   <span className="absolute top-1.5 right-1.5 flex items-center gap-1 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-medium text-primary-foreground">
                     <Check className="size-3" aria-hidden />
@@ -335,6 +384,11 @@ export function AiImagePanel({
               </button>
             ))}
           </div>
+          {unsaved > 0 && (
+            <p data-slot="ai-image-unsaved" className="text-xs text-muted-foreground">
+              {t('unsaved', { count: unsaved })}
+            </p>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="ai-image-alt">{t('alt')}</Label>
             <Input

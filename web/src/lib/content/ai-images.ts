@@ -4,15 +4,42 @@ import { imageKey } from '@/lib/chat/images/access';
 import { EDITOR_IMAGE_VARIANTS, IMAGE_MODELS } from '@/lib/chat/images/models';
 import { generateImages } from '@/lib/chat/images/provider';
 import { OwnKeyUnreadableError } from '@/lib/chat/key';
+import { createClient } from '@/lib/supabase/server';
 import { DRAFT_IMAGE_RATIOS, DRAFT_IMAGE_STYLES } from './ai-image-options';
+import { storeAiImageOptions, type StoredOption } from './ai-image-store';
 
 /**
  * Images made in the Content Editor (CHAT-25 §9, W4-09), on the server: the
  * prompt the image model gets, with the editor's rules, and a request held
  * on the AI budget for the draft, made at 1K and charged at what OpenRouter
- * said it cost (no markup). The person picks one; only that one is uploaded
- * (content-images, as an upload is) and goes into the page, marked as AI's.
+ * said it cost (no markup). Each image is stored as an option at once
+ * (ai-image-store.ts), and the browser gets their addresses to pick from;
+ * only the picked one is kept and goes into the page, marked as AI's.
  */
+
+/**
+ * The draft, read as the person (its brand's access, CHAT-20 §15b), with
+ * its brand's name; null for one they can't open. The demo brand's drafts
+ * make nothing (`demo`).
+ */
+export async function imageDraftOf(id: string) {
+  const supabase = await createClient();
+  const { data: draft, error } = await supabase
+    .from('content_drafts')
+    .select('id, brand_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!draft) return null;
+  const { data: brand, error: brandError } = await supabase
+    .from('brands')
+    .select('name, is_demo')
+    .eq('id', draft.brand_id)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  if (!brand) return null;
+  return { id: draft.id as string, brandName: (brand.name as string) ?? '', demo: !!brand.is_demo };
+}
 
 export const draftImagesInput = z.strictObject({
   prompt: z.string().trim().min(3).max(1000),
@@ -50,22 +77,29 @@ export function draftImagePrompt(
   return [input.prompt, style, DRAFT_IMAGE_RULES].join('\n\n');
 }
 
-/** Why a request made no image: the person can act on each. */
+/** Why a request gave no image to pick: the person can act on each. */
 export type DraftImagesFailure =
   | { code: 'unavailable' }
   | { code: 'own_key' }
   | { code: 'ai_limit'; trial: boolean }
-  | { code: 'refused'; why: string };
+  | { code: 'refused'; why: string }
+  // Made, and charged, but none could be stored: the panel says so.
+  | { code: 'not_saved'; made: number };
 
+/**
+ * The options to pick from, by address (never their bytes), and how many
+ * images were made and charged but couldn't be stored.
+ */
 export type DraftImagesResult =
-  | { ok: true; images: { dataUrl: string }[] }
+  | { ok: true; images: StoredOption[]; failed: number }
   | ({ ok: false } & DraftImagesFailure);
 
 /**
  * A request for a draft of the workspace's (CHAT-25 §9): held on the AI
  * budget (each image at the model's price, the row on the draft), made at
- * 1K, charged at the provider's own cost. The images come back as data
- * addresses: nothing is kept until the person picks one.
+ * 1K, charged at the provider's own cost, then stored as options. The
+ * options come back as addresses; the picked one is kept and the others
+ * dropped (ai-image-store.ts).
  */
 export async function makeDraftImages(job: {
   organizationId: string;
@@ -109,15 +143,16 @@ export async function makeDraftImages(job: {
     await held.budget.release();
     throw err;
   }
+  // Settled before anything is stored: what the provider billed is charged
+  // once, whatever the storage does next.
   await held.budget.charge({ produced: made.images.length, costUsd: made.costUsd });
   if (made.images.length === 0) {
     const why = (made.refusals[0] ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
     return { ok: false, code: 'refused', why };
   }
-  return {
-    ok: true,
-    images: made.images.map((image) => ({
-      dataUrl: `data:${image.mimeType};base64,${image.base64}`,
-    })),
-  };
+  // Those that couldn't be stored stay charged (they were made), and the
+  // panel says how many; the others are there to pick from.
+  const { stored, failed } = await storeAiImageOptions(job.organizationId, made.images);
+  if (stored.length === 0) return { ok: false, code: 'not_saved', made: made.images.length };
+  return { ok: true, images: stored, failed };
 }
