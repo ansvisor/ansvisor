@@ -230,6 +230,18 @@ describe('running a due job', () => {
     expect(db.tables.chat_messages).toHaveLength(4);
   });
 
+  it('keeps a job on the zone it was made with when its creator picks another one (00468)', async () => {
+    seedJob();
+    // Since the job was made, the creator set New York in Settings › Account.
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.time_zone = 'America/New_York';
+    await worker.fireDueJobs(NOW, driver);
+    // Monday 09:00 in Istanbul still, never New York's 09:00 (14:00 UTC).
+    expect(jobRow()).toMatchObject({ timezone: 'Europe/Istanbul', next_run_at: NEXT_SLOT });
+    const answer = db.tables.chat_messages.find((m) => m.role === 'assistant')!;
+    expect(answer.timezone).toBe('Europe/Istanbul');
+    expect(db.tables.chat_run_state[0].progress).toMatchObject({ timezone: 'Europe/Istanbul' });
+  });
+
   it('runs a slot once with two workers at once, and the slot’s row is the backstop', async () => {
     seedJob();
     const [a, b] = await Promise.all([

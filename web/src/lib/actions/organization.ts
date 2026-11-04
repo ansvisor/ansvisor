@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 import { insertOrganization } from '@/lib/organization-insert';
 import { assertWritable } from '@/lib/subscription-guard';
+import { isTimeZone } from '@/lib/time-zone';
 
 // ---------------------------------------------------------------------------
 // Shared helpers (mirrors the pattern in team.ts)
@@ -141,6 +142,45 @@ export async function updateAccountName(name: string): Promise<void> {
   //    immediately (avoids a stale value until the next session refresh).
   await supabase.auth.updateUser({ data: { full_name: trimmed } });
 
+  revalidatePath('/dashboard/settings');
+}
+
+/**
+ * The time zone the signed-in person picked in Settings › Account
+ * (profiles.time_zone, 00468): null for Automatic, their browser's.
+ */
+export async function getAccountTimeZone(): Promise<string | null> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('time_zone')
+    .eq('id', user.id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const zone = data?.time_zone ?? null;
+  return isTimeZone(zone) ? zone : null;
+}
+
+/**
+ * Saves the person's own time zone on their row, as RLS lets them: an IANA
+ * zone, or null for Automatic. New Chat runs, schedule cards and daily
+ * suggestions use it; a scheduled job keeps the zone it was made with.
+ */
+export async function updateAccountTimeZone(zone: string | null): Promise<void> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Unauthorized');
+  if (zone !== null && !isTimeZone(zone)) throw new Error('Unknown time zone');
+
+  const { error } = await supabase.from('profiles').update({ time_zone: zone }).eq('id', user.id);
+  if (error) throw new Error(error.message);
   revalidatePath('/dashboard/settings');
 }
 

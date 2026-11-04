@@ -1,7 +1,7 @@
 ---
 title: Schedule work in Chat
 route: /dashboard/chat/scheduled
-keywords: [schedule, scheduled job, scheduled page, every monday, recurring report, ready by, create schedule, repeat, run now, take over, no change, didn't run, paused]
+keywords: [schedule, scheduled job, scheduled page, every monday, recurring report, ready by, create schedule, repeat, run now, take over, no change, didn't run, paused, job time zone]
 synonyms: [run later, run on repeat, weekly report automatically, remind me, automate a chat]
 plan: all
 updated: 2026-11-02
@@ -19,7 +19,7 @@ The card shows the job as it will be made, and you can change it before you clic
 
 - **Job**: the job's name.
 - **What Chat does each run**: what Chat is asked each time, or the skill it runs.
-- **When**: a day and time, or a repeat. The line under it says how Chat read it, with your time zone and the next run. A day with no time runs at 09:00.
+- **When**: a day and time, or a repeat. The line under it says how Chat read it, with your time zone and the next run. A day with no time runs at 09:00. The time zone is the one in **Settings › Account › Time zone**, or your browser's while that is **Automatic**.
 - **Deliver to**: **Chat**, **Email** or **Chat + Email**.
 - **Notify only if the answer changed**: for jobs that repeat.
 
@@ -55,7 +55,7 @@ If a run fails, Chat tries again 10 minutes later. If that fails too, the top of
 
 ## A job's page
 
-Click a job to change its name, what Chat does each run, **When** (the next three runs show as you type), where results go and **Notify only if the answer changed**, then **Save**. The page also has **Run now**, **Delete** (past results stay in Files) and the last 20 runs, with the share of your monthly AI usage each one took.
+Click a job to change its name, what Chat does each run, **When** (the next three runs show as you type), its **Time zone**, where results go and **Notify only if the answer changed**, then **Save**. A job keeps its own time zone: changing yours in Settings doesn't move it. The page also has **Run now**, **Delete** (past results stay in Files) and the last 20 runs, with the share of your monthly AI usage each one took.
 
 ## Who sees what
 

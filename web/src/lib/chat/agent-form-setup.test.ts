@@ -120,6 +120,17 @@ describe('agentFormSetupFor', () => {
     });
   });
 
+  it('carries the time zone the person picked in Settings › Account, null for Automatic', async () => {
+    expect((await setupOf(PEOPLE.manager)).timeZone).toBeNull();
+
+    db.tables.profiles = db.tables.profiles.map((row) =>
+      row.id === PEOPLE.manager ? { ...row, time_zone: 'Asia/Tokyo' } : row,
+    );
+    expect((await setupOf(PEOPLE.manager)).timeZone).toBe('Asia/Tokyo');
+    // Another person's pick isn't theirs.
+    expect((await setupOf(PEOPLE.admin)).timeZone).toBeNull();
+  });
+
   it('names only the agents the person sees; an Admin sees them all', async () => {
     expect((await setupOf(PEOPLE.manager)).takenNames.sort()).toEqual(['My own', 'Shared one']);
     expect((await setupOf(PEOPLE.admin)).takenNames.sort()).toEqual([
