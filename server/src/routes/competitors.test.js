@@ -13,6 +13,11 @@ vi.mock('ai', () => ({ generateObject }));
 vi.mock('../lib/ai-provider.js', () => ({ resolveModel: vi.fn(() => 'model') }));
 vi.mock('../lib/web-research.js', () => ({ webResearch }));
 vi.mock('../lib/retry.js', () => ({ withRetry: (fn) => fn() }));
+// The caller may (the role rule's own tests: run-roles.test.js).
+vi.mock('../lib/access.js', () => ({
+  MANAGER_ROLES: ['admin', 'manager'],
+  allowRole: vi.fn(async () => true),
+}));
 
 const { default: router } = await import('./competitors.js');
 
@@ -31,6 +36,7 @@ beforeEach(async () => {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
+    req.user = { id: 'u1' };
     req.log = { error: vi.fn(), info: vi.fn() };
     next();
   });

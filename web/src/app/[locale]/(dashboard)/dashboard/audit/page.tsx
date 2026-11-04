@@ -1032,7 +1032,7 @@ export default function SiteAuditPage() {
                 primaryHost={primaryHost}
                 loadingMore={loadingMore}
                 onLoadMore={handleLoadMore}
-                onDeleteRun={handleDelete}
+                onDeleteRun={canManage ? handleDelete : undefined}
                 selected={selected}
                 onSelect={handleSelect}
                 templates={groupByTemplate ? templates : null}

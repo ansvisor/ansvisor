@@ -995,7 +995,8 @@ export async function processTrackingJob({ brandId, promptId, promptIds, source,
           .catch((err) => {
             logger.error({ err, brandId }, 'site page inventory refresh failed');
           })
-          .then(() => generateContentOpportunities(brandId))
+          // Only the nightly cron run may add another angle (at most one a night).
+          .then(() => generateContentOpportunities(brandId, { nightly: source === 'cron' }))
           .catch((err) => {
             logger.error({ err, brandId }, 'auto opportunity generation failed');
           });
