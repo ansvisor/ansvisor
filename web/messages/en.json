@@ -4052,6 +4052,7 @@
     }
   },
   "chatRun": {
+    "thoughtFor": "Thought for {seconds, plural, one {# s} other {# s}}",
     "openPage": {
       "question": "Where should we open this page?",
       "editor": "Open in Content Editor",
@@ -5201,7 +5202,7 @@
       },
       "thought": {
         "label": "Show “Thought for N s”",
-        "note": "A short summary of the agent’s reasoning under answers"
+        "note": "How long Chat worked before writing, above each answer"
       },
       "everyPage": {
         "label": "Open Chat on every page",

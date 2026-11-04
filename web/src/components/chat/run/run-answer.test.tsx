@@ -95,6 +95,38 @@ describe('RunAnswer', () => {
     expect(status()).toBe('Writing the answer…');
   });
 
+  it('says "Thought for N s" above the answer when the run kept it, and nothing when not', async () => {
+    const thought = () => container.querySelector('[data-slot="run-thought"]')?.textContent ?? null;
+    const done = {
+      status: 'done' as const,
+      steps,
+      text: 'Two pages lost most of it.',
+      generatedAt: '2026-11-03T10:00:00.000Z',
+    };
+    await render({
+      run: run({
+        ...done,
+        summary: { workingMs: 41_000, stepCount: 3, sources: [], thoughtMs: 12_400 },
+      }),
+    });
+    expect(thought()).toBe('Thought for 12 s');
+    const order = [...container.querySelectorAll('[data-slot]')].map((el) =>
+      el.getAttribute('data-slot'),
+    );
+    expect(order.indexOf('run-thought')).toBeLessThan(order.indexOf('run-text'));
+
+    // Turned off in Settings › Chat: the run keeps no thoughtMs, and no line shows.
+    await render({
+      run: run({ ...done, summary: { workingMs: 41_000, stepCount: 3, sources: [] } }),
+    });
+    expect(thought()).toBeNull();
+    // No words yet: no line either.
+    await render({
+      run: run({ summary: { workingMs: 400, stepCount: 0, sources: [], thoughtMs: 400 } }),
+    });
+    expect(thought()).toBeNull();
+  });
+
   it('chips the steps done, the fact check among them, with each detail a click away', async () => {
     await render({ run: run({ steps, text: 'Two pages lost most of it.' }) });
     expect(chips()).toEqual([
