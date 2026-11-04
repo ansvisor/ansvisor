@@ -30,7 +30,12 @@ function query(name) {
   };
   const chain = {
     select: () => ((returning = true), chain),
-    eq: (col, value) => (filters.push((row) => row[col] === value), chain),
+    // A JSON field's text too (`payload->>draftId`), as PostgREST reads it.
+    eq: (col, value) => {
+      const [column, field] = col.split('->>');
+      filters.push((row) => (field ? row[column]?.[field] : row[column]) === value);
+      return chain;
+    },
     neq: (col, value) => (filters.push((row) => row[col] !== value), chain),
     is: (col, value) => (filters.push((row) => (row[col] ?? null) === value), chain),
     in: (col, values) => (filters.push((row) => values.includes(row[col])), chain),
@@ -63,15 +68,25 @@ vi.mock('./logger.js', () => ({
   logger: { warn: (...args) => events.push(args), error: () => {} },
 }));
 const shipped = [];
+const closed = [];
 vi.mock('./impact-ledger/ship.js', () => ({
   shipCmsPublish: async (args) => {
     shipped.push(args);
     return { id: 'ship-1', created: true, failed: false };
   },
+  closeTakenDown: async (args) => {
+    closed.push(args);
+    return 1;
+  },
 }));
 
-const { liveAddress, markDeliveryPublished, publishDraft, publishDraftForKeyUser } =
-  await import('./content-published.js');
+const {
+  liveAddress,
+  markDeliveryPublished,
+  markDeliveryTakenDown,
+  publishDraft,
+  publishDraftForKeyUser,
+} = await import('./content-published.js');
 
 const LIVE = 'https://www.acme.example/blog/cold-brew';
 
@@ -107,6 +122,7 @@ beforeEach(() => {
   rpcs.length = 0;
   events.length = 0;
   shipped.length = 0;
+  closed.length = 0;
 });
 
 describe('liveAddress', () => {
@@ -401,5 +417,82 @@ describe('markDeliveryPublished', () => {
       LIVE,
     );
     expect(shipped).toHaveLength(1);
+  });
+});
+
+describe('markDeliveryTakenDown (AUTONOMOUS-GO-LIVE PR 10)', () => {
+  const AT = '2026-11-02T12:00:00.000Z';
+  const send = (over = {}) => ({
+    id: 'x1',
+    draft_id: 'dr1',
+    target: 'webflow',
+    status: 'published',
+    published_url: LIVE,
+    ...over,
+  });
+  beforeEach(() => {
+    Object.assign(tables.content_drafts[0], {
+      status: 'published',
+      published_url: LIVE,
+      published_at: '2026-11-01T10:00:00Z',
+    });
+    tables.content_draft_deliveries = [send()];
+    tables.chat_agent_go_live_events = [
+      { id: 'e1', content_draft_id: 'dr1', target: 'webflow', kind: 'publish', status: 'done' },
+      { id: 'e2', content_draft_id: 'dr1', target: 'webflow', kind: 'cms_draft', status: 'done' },
+    ];
+    tables.chat_notices = [
+      {
+        id: 'n1',
+        kind: 'agent_went_live',
+        payload: { draftId: 'dr1', kind: 'publish', url: LIVE },
+        resolved_at: null,
+      },
+      {
+        id: 'n2',
+        kind: 'agent_went_live',
+        payload: { draftId: 'dr1', kind: 'cms_draft' },
+        resolved_at: null,
+      },
+    ];
+  });
+
+  it('marks the send taken down, the page back to Ready without its address, and tells the rest', async () => {
+    expect(await markDeliveryTakenDown(send(), { userId: 'u1', at: AT })).toBe(true);
+    expect(tables.content_draft_deliveries[0]).toMatchObject({
+      status: 'taken_down',
+      taken_down_at: AT,
+      taken_down_by: 'u1',
+      published_url: LIVE,
+    });
+    expect(tables.content_drafts[0]).toMatchObject({
+      status: 'ready',
+      published_url: null,
+      published_at: null,
+    });
+    // The publish on its own is taken down; the draft it sent before stays done.
+    expect(tables.chat_agent_go_live_events.map((e) => e.status)).toEqual(['taken_down', 'done']);
+    expect(tables.chat_agent_go_live_events[0]).toMatchObject({
+      taken_down_at: AT,
+      taken_down_by: 'u1',
+    });
+    expect(tables.chat_notices[0].resolved_at).toBe(AT);
+    expect(tables.chat_notices[1].resolved_at).toBeNull();
+    expect(closed).toEqual([{ draftId: 'dr1', at: AT }]);
+  });
+
+  it('changes nothing for a send that isn’t published, and leaves a page live at another send’s address', async () => {
+    tables.content_draft_deliveries[0].status = 'sent';
+    expect(await markDeliveryTakenDown(send(), { userId: 'u1', at: AT })).toBe(false);
+    expect(tables.content_drafts[0].published_url).toBe(LIVE);
+    expect(closed).toEqual([]);
+
+    tables.content_draft_deliveries[0].status = 'published';
+    tables.content_drafts[0].published_url = 'https://www.acme.example/blog/cold-brew-2';
+    expect(await markDeliveryTakenDown(send(), { userId: 'u1', at: AT })).toBe(true);
+    expect(tables.content_drafts[0]).toMatchObject({
+      status: 'published',
+      published_url: 'https://www.acme.example/blog/cold-brew-2',
+    });
   });
 });

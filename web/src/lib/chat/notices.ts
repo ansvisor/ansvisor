@@ -8,8 +8,8 @@ import type { CmsTarget } from '@/lib/content/cms-send-client';
  * reached 80% or all of their monthly limit on it (§4.2 item 4, PR 10); an
  * agent sent a page out on its own, or an edit stopped it from doing so
  * (AUTONOMOUS-GO-LIVE §6.4, §7.2); a scheduled job's run failed after its
- * retry, or the job turned itself off (CHAT-12 items 16, 26–27; 00461). Pure, for the server action that reads
- * them (lib/actions/chat-notices.ts).
+ * retry, or the job turned itself off (CHAT-12 items 16, 26–27; 00461).
+ * Pure, for the server action that reads them (lib/actions/chat-notices.ts).
  */
 
 interface NoticeBase {
