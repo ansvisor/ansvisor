@@ -134,6 +134,28 @@ describe('the run in the browser', () => {
     ]);
   });
 
+  it('gives a page’s next version a card of its own, under the one before (W4-12a)', () => {
+    const page = (n: number) => ({
+      title: 'Pricing FAQ',
+      type: 'document' as const,
+      formats: ['html'],
+      status: 'draft' as const,
+      href: '/dashboard/content/editor/x' as const,
+      filed: 'in_files' as const,
+      version: {
+        n,
+        counts: { questions: 3, sections: 3, characters: 905 },
+        changes: { shortened: [], added: [], placeholders: [] },
+        sections: [],
+      },
+    });
+    const run = applyChatEvent(
+      applyChatEvent(emptyRun(), chatEvent('deliverable.created', 1, page(1))),
+      chatEvent('deliverable.updated', 2, page(2)),
+    );
+    expect(run.deliverables.map((d) => d.version?.n)).toEqual([1, 2]);
+  });
+
   it('keeps what it sent to the Action Center, and the tasks a card carries (CHAT-09 items 18–19)', () => {
     const sent = {
       kind: 'action_created' as const,

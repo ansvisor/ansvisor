@@ -224,7 +224,8 @@ describe('PUT', () => {
   });
 
   it('saves the key encrypted, and makes the first one the one Chat uses', async () => {
-    results = [{ error: null }];
+    // The saved key's uses are read first (W4-06): none here.
+    results = [{ data: null, error: null }, { error: null }];
     const res = await PUT(
       send('PUT', {
         provider: 'azure',
@@ -233,7 +234,7 @@ describe('PUT', () => {
       }),
     );
     expect(res.status).toBe(200);
-    const [upsert] = queries[0].calls;
+    const upsert = queries[1].calls.find(([op]) => op === 'upsert')!;
     expect(upsert[0]).toBe('upsert');
     expect(upsert[1]).toMatchObject({
       organization_id: 'org1',
@@ -253,7 +254,11 @@ describe('PUT', () => {
     });
     // Only an Anthropic key has an old copy to clear; the workspace is marked
     // to keep its key for Chat (below).
-    expect(queries.map((q) => q.table)).toEqual(['organization_ai_keys', 'organizations']);
+    expect(queries.map((q) => q.table)).toEqual([
+      'organization_ai_keys',
+      'organization_ai_keys',
+      'organizations',
+    ]);
   });
 
   it('marks a workspace below Enterprise to keep its key for Chat while Chat is off', async () => {
@@ -272,14 +277,14 @@ describe('PUT', () => {
     vi.stubEnv('CHAT_AGENTIC', 'true');
     vi.stubEnv('CHAT_AGENTIC_ORGS', '');
     expect((await PUT(send('PUT', { provider: 'openai', apiKey: KEY }))).status).toBe(200);
-    expect(queries.map((q) => q.table)).toEqual(['organization_ai_keys']);
+    expect(queries.map((q) => q.table)).toEqual(['organization_ai_keys', 'organization_ai_keys']);
   });
 
   it("clears the Anthropic key's old copy on organizations when it is replaced", async () => {
-    results = [{ error: null }, { error: null }];
+    results = [{ data: null, error: null }, { error: null }, { error: null }];
     expect((await PUT(send('PUT', { provider: 'anthropic', apiKey: KEY }))).status).toBe(200);
-    expect(queries[1].table).toBe('organizations');
-    expect(queries[1].calls).toEqual([
+    expect(queries[2].table).toBe('organizations');
+    expect(queries[2].calls).toEqual([
       [
         'update',
         {
@@ -291,6 +296,53 @@ describe('PUT', () => {
       ],
       ['eq', 'id', 'org1'],
     ]);
+  });
+});
+
+describe('what a key is for (W4-06)', () => {
+  const upsertOf = () =>
+    queries.flatMap((q) => q.calls).find(([op]) => op === 'upsert')?.[1] as {
+      settings: unknown;
+    };
+
+  it('saves the uses a save names, and keeps the saved ones when it names none', async () => {
+    results = [{ error: null }];
+    await PUT(send('PUT', { provider: 'openai', apiKey: KEY, settings: { useFor: ['images'] } }));
+    expect(upsertOf().settings).toEqual({ useFor: ['images'] });
+
+    queries.length = 0;
+    results = [
+      { data: { settings: { useFor: ['chat', 'images'] } }, error: null },
+      { error: null },
+    ];
+    await PUT(send('PUT', { provider: 'openai', apiKey: KEY, settings: { model: 'gpt-5.5' } }));
+    expect(upsertOf().settings).toEqual({ model: 'gpt-5.5', useFor: ['chat', 'images'] });
+  });
+
+  it('refuses images for an Anthropic key, or no use at all', async () => {
+    for (const useFor of [['images'], [], ['video']]) {
+      const res = await PUT(
+        send('PUT', { provider: 'anthropic', apiKey: KEY, settings: { useFor } }),
+      );
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ field: 'useFor' });
+    }
+    expect((await PATCH(send('PATCH', { provider: 'anthropic', useFor: ['images'] }))).status).toBe(
+      400,
+    );
+  });
+
+  it('sets a saved key’s uses on PATCH, its other settings kept, and Chat’s key unchanged', async () => {
+    results = [{ data: { settings: { model: 'gpt-5.5' } }, error: null }, { error: null }];
+    const res = await PATCH(send('PATCH', { provider: 'openai', useFor: ['chat', 'images'] }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true, useFor: ['chat', 'images'] });
+    const update = queries.flatMap((q) => q.calls).find(([op]) => op === 'update');
+    expect(update?.[1]).toEqual({ settings: { model: 'gpt-5.5', useFor: ['chat', 'images'] } });
+    expect(rpc).not.toHaveBeenCalled();
+
+    results = [{ data: null, error: null }];
+    expect((await PATCH(send('PATCH', { provider: 'google', useFor: ['chat'] }))).status).toBe(404);
   });
 });
 
