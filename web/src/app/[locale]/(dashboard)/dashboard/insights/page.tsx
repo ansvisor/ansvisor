@@ -9,6 +9,7 @@ import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-she
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFirstRun } from '@/hooks/use-first-run';
+import { useUserRole } from '@/hooks/use-user-role';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { largestMove, rangeChipLabel } from '@/lib/chat/page-context';
 import {
@@ -439,7 +440,8 @@ function EmptyState({
   isRunning,
   isCloud,
 }: {
-  onRunPrompts: () => void;
+  /** Run all: admins and managers only (a run spends the plan's tracking). */
+  onRunPrompts?: () => void;
   isRunning: boolean;
   isCloud: boolean;
 }) {
@@ -452,7 +454,7 @@ function EmptyState({
         Run your prompts through AI platforms to see how your brand appears in AI-generated
         responses.
       </p>
-      {!isCloud && (
+      {!isCloud && onRunPrompts && (
         <Button onClick={onRunPrompts} disabled={isRunning} className="mt-6 gap-2">
           {isRunning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
           {t('runPromptsNow')}
@@ -508,7 +510,8 @@ function TrackingProgressBanner({
   jobStatus: TrackingJobStatus | null;
   /** The run's progress readings while this page polls it, for the time left. */
   pace: ProgressSample[];
-  onStop: () => void;
+  /** Stop: admins and managers only, as the run's start. */
+  onStop?: () => void;
 }) {
   const t = useTranslations('insights.tracking');
   if (!jobStatus) return null;
@@ -530,15 +533,17 @@ function TrackingProgressBanner({
             {jobStatus.status === 'waiting' ? t('queued') : t('analyzing')}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-          onClick={onStop}
-        >
-          <StopCircle className="h-3.5 w-3.5" />
-          {t('stop')}
-        </Button>
+        {onStop && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={onStop}
+          >
+            <StopCircle className="h-3.5 w-3.5" />
+            {t('stop')}
+          </Button>
+        )}
       </div>
 
       {jobStatus.status === 'waiting' && (
@@ -662,6 +667,8 @@ export default function InsightsPage() {
   // A read-only workspace (plan not active): Run All and Test Single Prompt
   // open the upgrade dialog instead.
   const { guard } = useUpgradeGate();
+  // Running tracking now (or stopping it) spends the plan's checks: admins and managers (2026-11-03).
+  const { canManage } = useUserRole();
   const tActions = useTranslations('readOnly.actions');
   const locale = useLocale();
   const brand = useBrandStore((s) => s.getActiveBrand());
@@ -1210,10 +1217,20 @@ export default function InsightsPage() {
             <p className="text-muted-foreground text-sm">{brand.name}</p>
           </div>
         </HeaderWithAiUsage>
-        <TrackingProgressBanner jobStatus={jobStatus} pace={pace} onStop={handleStopTracking} />
+        <TrackingProgressBanner
+          jobStatus={jobStatus}
+          pace={pace}
+          onStop={canManage ? handleStopTracking : undefined}
+        />
         {!localJobActive && <ServerRunBanner run={cronRun} firstRun={!runTimes.lastRunAt} />}
-        {!firstRun && <EmptyState onRunPrompts={runAll} isRunning={isRunning} isCloud={isCloud} />}
-        {!isCloud && (
+        {!firstRun && (
+          <EmptyState
+            onRunPrompts={canManage ? runAll : undefined}
+            isRunning={isRunning}
+            isCloud={isCloud}
+          />
+        )}
+        {!isCloud && canManage && (
           <div className="flex justify-center">
             <Button variant="outline" onClick={openSinglePrompt} className="gap-2">
               <FlaskConical className="h-4 w-4" />
@@ -1287,8 +1304,8 @@ export default function InsightsPage() {
               Reports
             </Link>
 
-            {/* Self-host only */}
-            {!isCloud && (
+            {/* Self-host only, for admins and managers */}
+            {!isCloud && canManage && (
               <>
                 <Button variant="outline" onClick={openSinglePrompt} className="gap-2">
                   <FlaskConical className="h-4 w-4" />
@@ -1319,7 +1336,11 @@ export default function InsightsPage() {
       />
 
       {/* Tracking Progress */}
-      <TrackingProgressBanner jobStatus={jobStatus} pace={pace} onStop={handleStopTracking} />
+      <TrackingProgressBanner
+        jobStatus={jobStatus}
+        pace={pace}
+        onStop={canManage ? handleStopTracking : undefined}
+      />
       {!localJobActive && <ServerRunBanner run={cronRun} firstRun={!runTimes.lastRunAt} />}
 
       {/* Refetch overlay: on a filter/date change the previous window's data
