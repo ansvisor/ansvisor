@@ -1,3 +1,4 @@
+import { parseHtml } from './dom';
 import { cleanHref } from './html-allowlist';
 import { sentencesOf } from './readability';
 import { squeeze, type TrustBlock } from './quality-checks';
@@ -210,7 +211,8 @@ export function proofsOnPage(blocks: TrustBlock[], proofs: readonly ProofAsk[]):
  * one, as the page keeps it): what the person may confirm is their own.
  */
 export function pageImages(html: string): { src: string; alt: string }[] {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  // The content DOM's parser (dom.ts): the browser's, or jsdom's on the server (go-live gate).
+  const doc = parseHtml(html);
   const seen = new Set<string>();
   return [...doc.querySelectorAll('img[src]')].flatMap((img) => {
     const src = img.getAttribute('src')!.trim();

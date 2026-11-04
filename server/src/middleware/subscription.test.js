@@ -156,6 +156,8 @@ describe('requireActiveSubscription', () => {
     const open = [
       ['DELETE', '/tracking/job/9b2c1e40-0000-4000-8000-000000000001'],
       ['POST', '/content-drafts/9b2c1e40-0000-4000-8000-000000000002/stop'],
+      // A published page taken down to a draft: it only lowers what is live.
+      ['POST', '/content-drafts/9b2c1e40-0000-4000-8000-000000000002/take-down'],
       ['DELETE', '/integrations/google-search-console'],
       ['DELETE', '/integrations/google-analytics'],
       ['DELETE', '/cms/brands/b1/webflow'],
@@ -179,6 +181,9 @@ describe('requireActiveSubscription', () => {
       ['DELETE', '/content-drafts/d1/stop'],
       ['POST', '/content-drafts/d1/write'],
       ['POST', '/content-drafts/d1/stop/now'],
+      ['DELETE', '/content-drafts/d1/take-down'],
+      ['POST', '/content-drafts/d1/take-down/again'],
+      ['POST', '/content-drafts/d1/publish'],
       ['POST', '/content-drafts/stop'],
       ['POST', '/content/d1/stop'],
       ['POST', '/action-center/tasks/t1/cancel'],
@@ -206,7 +211,7 @@ describe('requireActiveSubscription', () => {
       expect(res.status).toHaveBeenCalledWith(402);
     }
     // Both Google disconnects are one route.
-    expect(COST_STOPPING).toHaveLength(9);
+    expect(COST_STOPPING).toHaveLength(10);
   });
 
   it('lets an organization off a plan delete a brand, and nothing near it', async () => {

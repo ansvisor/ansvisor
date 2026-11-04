@@ -175,7 +175,12 @@ export function RunAnswer({
                 <span className="truncate">
                   {step.label}
                   {step.rowCount !== undefined && (
-                    <> · {tSteps('rows', { count: step.rowCount })}</>
+                    <>
+                      {' · '}
+                      {tSteps(step.scope?.unit === 'items' ? 'items' : 'rows', {
+                        count: step.rowCount,
+                      })}
+                    </>
                   )}
                 </span>
               </button>
@@ -241,7 +246,9 @@ export function RunAnswer({
                 className="rounded-full border px-2 py-0.5 text-foreground/80"
               >
                 {chip.label}
-                {chip.rows !== undefined && <> · {tSteps('rows', { count: chip.rows })}</>}
+                {chip.rows !== undefined && (
+                  <> · {tSteps(chip.unit === 'items' ? 'items' : 'rows', { count: chip.rows })}</>
+                )}
               </span>
             ))}
           </div>

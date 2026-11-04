@@ -19,6 +19,16 @@ describe('buildAgentSystemPrompt', () => {
     expect(prompt).toContain('Do not call list_brands just to resolve the default brand.');
   });
 
+  it('keeps to the safety rules: no risk to life, no profanity, no promised results', () => {
+    const prompt = buildAgentSystemPrompt(now);
+
+    expect(prompt).toContain('**Nothing that puts a life at risk.**');
+    expect(prompt).toContain('local emergency services');
+    expect(prompt).toContain('**No profanity and no insults**');
+    expect(prompt).toContain('**Never promise results or earnings**');
+    expect(prompt).toContain('an estimate or a scenario, not a guarantee');
+  });
+
   it('falls back to brand selection when there is no conversation brand', () => {
     const prompt = buildAgentSystemPrompt(now);
 

@@ -10,6 +10,7 @@ import {
   type ChatActionSent,
   type ChatStep,
   type ChatTaskStrip,
+  type ChatWhatsNewEntry,
 } from './events';
 import { clientMove } from './next-moves';
 import { applyChatEvent, emptyRun } from './run-state';
@@ -57,6 +58,8 @@ export interface ThreadRun {
   tasks: ChatTaskStrip | null;
   /** The Why did it move analyses it kept (CHAT-22 §1), in order. */
   why: ChatWhy[];
+  /** What's new's cards (CHAT-11 item 10). */
+  whatsNew: ChatWhatsNewEntry[];
 }
 
 export interface ThreadMessage {
@@ -99,6 +102,8 @@ interface FileRow {
 const END_EVENTS = ['run.finished', 'run.stopped', 'run.error', 'run.paused_cap'];
 /** What a run sent to the Action Center (CHAT-09 item 19), read back with its end. */
 const SENT_EVENT = 'action.sent';
+/** What's new's cards (CHAT-11 item 10), read back the same way. */
+const WHATS_NEW_EVENT = 'whats_new.ready';
 /** A run's deliverables, read back for their page versions (W4-12a), which Files doesn't keep. */
 const DELIVERABLE_EVENTS = ['deliverable.created', 'deliverable.updated'];
 /** Where a page's card links: the editor. */
@@ -112,6 +117,7 @@ interface RunEnd {
   sent: ChatActionSent[];
   /** Its filed pages' versions, in order; null for a page without one (W4-12a). */
   versions: (ChatPageVersion | null)[];
+  whatsNew: ChatWhatsNewEntry[];
 }
 const ENDED: readonly string[] = ['done', 'stopped', 'error', 'paused_cap'];
 
@@ -129,7 +135,7 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
     .from('chat_run_events')
     .select('run_id, seq, type, data')
     .in('run_id', runIds)
-    .in('type', [...END_EVENTS, SENT_EVENT, ...DELIVERABLE_EVENTS])
+    .in('type', [...END_EVENTS, SENT_EVENT, WHATS_NEW_EVENT, ...DELIVERABLE_EVENTS])
     .order('seq', { ascending: true });
   if (error) {
     console.error("[chat/thread] could not read the runs' ends:", error.message);
@@ -148,6 +154,7 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
       keyFailed: false,
       sent: [],
       versions: [],
+      whatsNew: [],
     };
     if (DELIVERABLE_EVENTS.includes(row.type)) {
       // Only a page that reached Files has a file to take its version.
@@ -157,6 +164,14 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
         row.run_id,
         page ? { ...kept, versions: [...kept.versions, made.version ?? null] } : kept,
       );
+      continue;
+    }
+    if (row.type === WHATS_NEW_EVENT) {
+      const cards = (row.data as { entries?: unknown }).entries;
+      ends.set(row.run_id, {
+        ...kept,
+        whatsNew: Array.isArray(cards) ? (cards as ChatWhatsNewEntry[]) : [],
+      });
       continue;
     }
     if (row.type === SENT_EVENT) {
@@ -357,6 +372,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         sent: ends.get(run.id)?.sent ?? [],
         tasks: strips.get(run.id) ?? null,
         why: whyByRun.get(run.id) ?? [],
+        whatsNew: ends.get(run.id)?.whatsNew ?? [],
       },
     ]),
   );
