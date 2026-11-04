@@ -15,7 +15,7 @@ Every page in the Content Editor is written to a set of rules for its page type.
 
 ## The Rules tab
 
-In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet.
+In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet.
 
 ## Save or reset your rules
 
@@ -29,7 +29,7 @@ Admins and managers keep a brand's rules in **Settings › Content › Brand rul
 
 **Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.
 
-A decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Running the agent uses your workspace's monthly AI usage.
+A decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage.
 
 An open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide: change the page yourself, or the rule.
 
@@ -37,9 +37,9 @@ An open rule shows its status in amber; red is kept for what blocks. Once you've
 
 The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.
 
-A rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. A rewrite isn't offered once the page is ready or published. One past its Length is cut to it with one more pass; accept one still a little long, and the next rewrite starts from there.
+A rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published.
 
-When the passages it keeps stop the page reaching its Length, a note offers **Raise Length to …** and **Rewrite, cited passages too**, which may stop those passages being quoted. The **Length** rule says so too.
+Your Length has the last word: a rewrite merges or drops the least useful sections rather than go past it, and one still long is cut once more. When the passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**. The **Length** rule says so too.
 
 ## Before you run it again
 

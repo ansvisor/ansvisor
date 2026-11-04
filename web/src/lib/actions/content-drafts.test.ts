@@ -1170,6 +1170,32 @@ describe('fixDraftRules', () => {
     vi.unstubAllGlobals();
   });
 
+  it('sends the room the Length leaves, to Fix and to a hand-off (#2092 review)', async () => {
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () =>
+      Response.json({ count: 1 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const lengthCap = { count: 4_800, max: 6_000 };
+    await fixDraftRules(DRAFT, BRAND, { ...request, lengthCap });
+    await handOffDraft(DRAFT, BRAND, {
+      items: [{ key: 'readability:longSentences', detail: '' }],
+      textRules: [],
+      locked: [],
+      origin: 'person',
+      lengthCap,
+    });
+    const [fix, handOff] = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse(init?.body as string) as Record<string, unknown>,
+    );
+    expect(fix).toEqual({ brandId: BRAND, ...request, lengthCap });
+    expect(handOff.lengthCap).toEqual(lengthCap);
+    // With no Length on, none is sent.
+    fetchMock.mockClear();
+    await fixDraftRules(DRAFT, BRAND, request);
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).not.toHaveProperty('lengthCap');
+    vi.unstubAllGlobals();
+  });
+
   it('names the budget and the empty page, and anything else as failed', async () => {
     for (const [body, error] of [
       [{ code: 'ai_budget' }, 'ai_budget'],

@@ -71,6 +71,9 @@ async function startApp() {
   vi.doMock('../lib/access.js', () => ({
     assertBrandAccess,
     assertPromptAccess: vi.fn(),
+    // The caller may (the role rule's own tests: run-roles.test.js).
+    MANAGER_ROLES: ['admin', 'manager'],
+    allowRole: vi.fn(async () => true),
   }));
   vi.doMock('../lib/volume-analysis.js', () => ({
     getVolumeProgress,

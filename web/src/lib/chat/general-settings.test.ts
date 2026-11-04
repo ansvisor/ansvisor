@@ -56,6 +56,7 @@ describe('readChatGeneral', () => {
         notify_via: 'inbox',
         show_thought: false,
         panel_on_pages: false,
+        page_open: 'editor',
       },
     ];
     expect((await general.readChatGeneral(ME))?.settings).toEqual({
@@ -64,6 +65,7 @@ describe('readChatGeneral', () => {
       notifyVia: 'inbox',
       showThought: false,
       panelOnPages: false,
+      pageOpen: 'editor',
     });
   });
 
@@ -109,6 +111,8 @@ describe('generalFromRow', () => {
         answer_language: 'xx',
         notify_via: 'pager',
         show_thought: null,
+        // Open here isn't offered yet (W4-15): it asks.
+        page_open: 'here',
       }),
     ).toEqual(general.DEFAULT_CHAT_GENERAL);
   });
@@ -135,6 +139,10 @@ describe('generalPatchRefusal and generalPatchRow', () => {
       answer_language: null,
       panel_on_pages: true,
     });
+    // Where pages open (W4-11): any role picks it; Open here isn't a choice yet.
+    expect(general.generalPatchRow({ pageOpen: 'editor' })).toEqual({ page_open: 'editor' });
+    expect(general.generalPatchRefusal({ pageOpen: 'chat' }, { ...open, modes: false })).toBeNull();
+    expect(general.generalPatch.safeParse({ pageOpen: 'here' }).success).toBe(false);
   });
 });
 
