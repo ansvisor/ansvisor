@@ -50,12 +50,44 @@ import supabaseAdmin from '../config/supabase.js';
 import { chatAgenticEnabled } from './chat-flag.js';
 import { drawCredits } from './ai-credits.js';
 import { cacheSplit, generationCostUsd } from './improve-cost.js';
+import { syncedRow } from './model-price-cache.js';
 import { CHAT_AI_FEATURES, aiBudgetOf, aiBudgetUsedUp, quotaPeriodStart } from './plan-guard.js';
 import { logger } from './logger.js';
 import { shiftMonthClamped } from './quota-period.js';
 
 /** What a Chat step can be metered as: a run's model step, then agents, scheduled runs, images. */
 export const CHAT_BUDGET_FEATURES = CHAT_AI_FEATURES;
+
+/**
+ * A 1K image's output tokens by provider: an image model's price per
+ * output-image token times this is what one image costs it. Google's is
+ * CHAT-16 item 10's 1,290 (its 1K images bill 1,120: room to spare); OpenAI's
+ * high-quality 1024² image is 4,160 tokens and its text side adds about a
+ * fifth (GPT-5 Image Mini cost $0.041 on 2026-11-03), so 5,500. A provider
+ * not listed is held at the larger.
+ */
+export const IMAGE_TOKENS_1K = Object.freeze({ google: 1290, openai: 5500 });
+/** The most images one request makes (00462 units: 1–10). */
+export const MAX_IMAGES = 10;
+/**
+ * One image on a model the catalog doesn't price (yet): held and charged
+ * high, never at nothing, as FALLBACK_PRICE does for text.
+ */
+export const IMAGE_FALLBACK_USD = 0.25;
+
+/**
+ * One 1K image's price on a model (CHAT-15 §E, W4-07): its synced
+ * image_output_per_m (the catalog's per-token image price) × its provider's
+ * IMAGE_TOKENS_1K, else IMAGE_FALLBACK_USD. What an image request's hold is
+ * made of, and its cost when the provider reports none. Dollars, server only.
+ */
+export function imageUnitUsd(modelId) {
+  const perMillion = Number(syncedRow(modelId)?.image_output_per_m);
+  if (!(perMillion > 0)) return IMAGE_FALLBACK_USD;
+  const tokens =
+    IMAGE_TOKENS_1K[String(modelId).split('/')[0]] ?? Math.max(...Object.values(IMAGE_TOKENS_1K));
+  return (perMillion * tokens) / 1_000_000;
+}
 
 /**
  * A request about a step the server can't take (Chat off, a run not the
@@ -188,11 +220,16 @@ export async function reserveChatStep(
     agentRunId = null,
     scheduleId = null,
     holdUsd = null,
+    images = null,
   },
 ) {
   assertChatOn(orgId);
   const { plan, budgetUsd, includedUsd, since } = await aiBudgetOf(orgId);
-  const cost = holdUsd ?? stepWorstCaseUsd(modelId, { inputTokens, maxOutputTokens });
+  // An image request holds each image it may make at the model's image price (W4-07).
+  const cost =
+    holdUsd ??
+    (images ? imageUnitUsd(modelId) * images : null) ??
+    stepWorstCaseUsd(modelId, { inputTokens, maxOutputTokens });
   const runCap = agentRunId ? await agentRunCapUsd(orgId, agentRunId, includedUsd) : null;
   const { data, error } = await supabaseAdmin.rpc('reserve_chat_ai_usage', {
     p_organization_id: orgId,
@@ -220,6 +257,87 @@ export async function reserveChatStep(
     }
     throw aiBudgetUsedUp(plan);
   }
+  if (images) {
+    // What the dollars buy: the images held (00462 units), until the charge says how many came.
+    const { error: unitsError } = await supabaseAdmin
+      .from('prompt_improve_usage')
+      .update({ units: images })
+      .eq('id', data)
+      .eq('organization_id', orgId);
+    if (unitsError) throw new Error(unitsError.message);
+  }
+  return data;
+}
+
+/** Whether a draft is one of the workspace's: its brand's. */
+async function draftOfOrg(orgId, draftId) {
+  const { data: draft, error } = await supabaseAdmin
+    .from('content_drafts')
+    .select('brand_id')
+    .eq('id', draftId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!draft?.brand_id) return false;
+  const { data: brand, error: brandError } = await supabaseAdmin
+    .from('brands')
+    .select('organization_id')
+    .eq('id', draft.brand_id)
+    .maybeSingle();
+  if (brandError) throw new Error(brandError.message);
+  return brand?.organization_id === orgId;
+}
+
+/**
+ * Holds an image request made in the Content Editor (W4-09) on the AI
+ * budget, for one of the workspace's drafts: there is no Chat run, so the
+ * hold goes through the budget's own reservation (reserve_ai_usage, as the
+ * editor's other AI), each image at the model's image price, the row tied
+ * to the draft and its images as its units. On the workspace's own key the
+ * row is written as its own (own_key, nothing held): the limit doesn't
+ * move. Charged and released as a Chat step is (chargeChatStep with
+ * `images`, releaseChatStep). Returns the row's id; PlanLimitError 429 when
+ * the budget is spent, 402 without an active plan; ChatBudgetError 404 for
+ * a draft that isn't the workspace's.
+ */
+export async function reserveDraftImages(orgId, { modelId, images, draftId, ownKey = false }) {
+  assertChatOn(orgId);
+  const count = Math.max(1, Math.min(MAX_IMAGES, Math.floor(images)));
+  if (!(await draftOfOrg(orgId, draftId))) {
+    throw new ChatBudgetError('not_found', 404, 'Draft not found.');
+  }
+
+  const row = { feature: 'image', model: modelId, content_draft_id: draftId, units: count };
+  const cost = imageUnitUsd(modelId) * count;
+  const { plan, budgetUsd, since } = ownKey
+    ? { plan: null, budgetUsd: null, since: null }
+    : await aiBudgetOf(orgId);
+  if (ownKey || budgetUsd === null) {
+    // Its own key bills the workspace; an unlimited budget holds nothing: the row only records.
+    const { data, error } = await supabaseAdmin
+      .from('prompt_improve_usage')
+      .insert({ organization_id: orgId, ...row, cost_usd: ownKey ? 0 : cost, own_key: ownKey })
+      .select('id')
+      .single();
+    if (error) throw new Error(error.message);
+    return data.id;
+  }
+  const { data, error } = await supabaseAdmin.rpc('reserve_ai_usage', {
+    p_organization_id: orgId,
+    p_since: since,
+    p_budget: budgetUsd,
+    p_cost: cost,
+    p_feature: 'image',
+    p_model: modelId,
+    p_content_draft_id: draftId,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw aiBudgetUsedUp(plan);
+  const { error: unitsError } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .update({ units: count })
+    .eq('id', data)
+    .eq('organization_id', orgId);
+  if (unitsError) throw new Error(unitsError.message);
   return data;
 }
 
@@ -257,11 +375,12 @@ async function periodSpentUsd(orgId, since) {
  */
 export async function fitChatUnits(
   orgId,
-  { modelId, perUnit, units, ownKey = false, agentRunId = null },
+  { modelId, perUnit, units, ownKey = false, agentRunId = null, image = false },
 ) {
   assertChatOn(orgId);
   const count = Math.max(0, Math.min(MAX_FIT_UNITS, Math.floor(units)));
-  const unitUsd = stepWorstCaseUsd(modelId, perUnit);
+  // An image request's parts are its images, each at the model's image price (W4-07).
+  const unitUsd = image ? imageUnitUsd(modelId) : stepWorstCaseUsd(modelId, perUnit);
   if (ownKey || !(unitUsd > 0)) return { fits: count, limit: 'month' };
   const { budgetUsd, includedUsd, since } = await aiBudgetOf(orgId);
   let room = Infinity;
@@ -277,6 +396,26 @@ export async function fitChatUnits(
     }
   }
   return { fits: room === Infinity ? count : fitsIn(room, unitUsd, count), limit };
+}
+
+/**
+ * Each image model's one image as a share of the plan's monthly AI limit
+ * (CHAT-15 §E, W4-07; owner decision 2026-11-02): the image's real price ÷
+ * the plan's included monthly budget, credits left out, ×2 nowhere. A
+ * percent to two decimals, for the model question's "{share}% of your
+ * monthly limit per image"; null without a limit (self-hosted). Dollars
+ * stay here.
+ */
+export async function imageShares(orgId, modelIds) {
+  assertChatOn(orgId);
+  const { includedUsd } = await aiBudgetOf(orgId, { credits: false });
+  return modelIds.map((model) => ({
+    model,
+    percent:
+      includedUsd !== null && includedUsd > 0
+        ? Math.round((imageUnitUsd(model) / includedUsd) * 10_000) / 100
+        : null,
+  }));
 }
 
 /** The parts of `unitUsd` each that `roomUsd` holds, at most `count`; float noise doesn't take one. */
@@ -396,11 +535,25 @@ export async function refreshScheduleRunShare(orgId, chatRunId) {
  * call took, is kept for staff. The cost past the included budget is then
  * drawn from the credits.
  */
-export async function chargeChatStep(orgId, usageId, { modelId, usage, latencyMs }) {
+export async function chargeChatStep(orgId, usageId, { modelId, usage, latencyMs, images }) {
   const reported = usage?.inputTokens != null && usage?.outputTokens != null;
   const latency = latencyMs != null ? { latency_ms: latencyMs } : {};
   let charged = { model: modelId, ...latency };
-  if (reported) {
+  if (images) {
+    // An image request (W4-07; owner decision 2026-11-02): the provider's own cost as it
+    // reported it (OpenRouter's usage.cost), no markup and no multiplier; without one, the
+    // model's image price for each image that came. The images that came are the row's units.
+    const produced = Math.max(0, Math.min(MAX_IMAGES, Math.floor(images.produced ?? 0)));
+    const reportedUsd = Number(images.costUsd);
+    charged = {
+      ...charged,
+      cost_usd:
+        images.costUsd != null && Number.isFinite(reportedUsd) && reportedUsd >= 0
+          ? reportedUsd
+          : imageUnitUsd(modelId) * produced,
+      ...(produced > 0 ? { units: produced } : {}),
+    };
+  } else if (reported) {
     const { read, written } = cacheSplit(usage);
     charged = {
       ...charged,

@@ -213,6 +213,74 @@ export async function listBrandMembers(brandId: string): Promise<TeamMember[]> {
     .map((member) => ({ ...member, brandAccess: ALL_BRANDS }));
 }
 
+/** A person who can see a brand, as Brand settings › People lists them. */
+export interface BrandPerson {
+  userId: string;
+  name: string;
+  /** Admins only, as in Roles & access. */
+  email: string | null;
+  role: TeamRole;
+  isCurrentUser: boolean;
+  /**
+   * Why they see it, for admins: All brands, or shared with them (Selected
+   * brands). Null for anyone else: which brands an admin shared with
+   * someone is the admins' to see.
+   */
+  access: 'all' | 'shared' | null;
+}
+
+export interface BrandPeople {
+  people: BrandPerson[];
+  /** The caller is an admin (Edit brands is in Settings › Team). */
+  isAdmin: boolean;
+  /** The demo brand: everyone sees it. */
+  isDemo: boolean;
+}
+
+/**
+ * Who can see the brand (BRAND-ACCESS §3.2, Brand settings › People, PR 13):
+ * the organization's members who may use it, in the team's order. The
+ * caller must see it too; a brand they can't reads as not found.
+ */
+export async function listBrandPeople(brandId: string): Promise<BrandPeople> {
+  const { user, profile } = await getCurrentUserAndOrg();
+  const isAdmin = profile.role === 'admin';
+  const [readers, members, access, brand] = await Promise.all([
+    brandReaders(profile.organization_id, [brandId]),
+    readMembers(user.id, profile.organization_id),
+    isAdmin ? readMemberBrandAccess(profile.organization_id) : null,
+    supabaseAdmin
+      .from('brands')
+      .select('is_demo')
+      .eq('id', brandId)
+      .eq('organization_id', profile.organization_id)
+      .maybeSingle(),
+  ]);
+  if (brand.error) throw new Error(brand.error.message);
+  if (!brand.data || !readers.has(user.id)) throw new Error('Brand not found');
+  const isDemo = brand.data.is_demo === true;
+  return {
+    isAdmin,
+    isDemo,
+    people: members
+      .filter((member) => readers.has(member.userId))
+      .map((member) => ({
+        userId: member.userId,
+        name: member.fullName?.trim() || member.email.split('@')[0] || '',
+        email: isAdmin ? member.email || null : null,
+        role: member.role,
+        isCurrentUser: member.isCurrentUser,
+        // Everyone sees the demo brand, whatever their brands.
+        access:
+          access && !isDemo
+            ? access.get(member.userId)?.scope === 'selected'
+              ? 'shared'
+              : 'all'
+            : null,
+      })),
+  };
+}
+
 /** The organization's members, the earliest first, with their e-mails. */
 async function readMembers(
   userId: string,

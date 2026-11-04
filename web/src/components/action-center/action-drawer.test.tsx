@@ -8,6 +8,7 @@ import { parseTaskDetails } from '@/lib/action-center/task-details';
 import { promptVolumeEstimate } from '@/lib/volume-estimate';
 import messages from '../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { RoleContext, type TeamRole } from '@/components/providers/role-provider';
 
 /**
  * Status, assignee and due date sit right under the drawer's header, ahead of
@@ -42,6 +43,12 @@ vi.mock('@/lib/actions/action-center', () => server);
 vi.mock('@/lib/actions/content-drafts', () => drafts);
 vi.mock('@/lib/actions/action-task-check', () => taskCheck);
 vi.mock('sonner', () => ({ toast }));
+// The brand has an active webhook (AC-004).
+const taskSend = vi.hoisted(() => ({
+  hasActiveWebhook: vi.fn(async () => true),
+  sendActionTask: vi.fn(),
+}));
+vi.mock('@/lib/actions/action-task-send', () => taskSend);
 
 const { ActionDrawer } = await import('./action-drawer');
 
@@ -92,22 +99,28 @@ afterEach(() => {
   container.remove();
 });
 
-async function renderDrawer(shown: ActionItem = action, isLocked = false) {
+async function renderDrawer(
+  shown: ActionItem = action,
+  isLocked = false,
+  role: TeamRole = 'analyst',
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <UpgradeDialogContext.Provider
-          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-        >
-          <ActionDrawer
-            brandId="b1"
-            action={shown}
-            members={[]}
-            onOpenChange={() => {}}
-            onChanged={onChanged}
-            onPatched={onPatched}
-          />
-        </UpgradeDialogContext.Provider>
+        <RoleContext.Provider value={{ role }}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <ActionDrawer
+              brandId="b1"
+              action={shown}
+              members={[]}
+              onOpenChange={() => {}}
+              onChanged={onChanged}
+              onPatched={onPatched}
+            />
+          </UpgradeDialogContext.Provider>
+        </RoleContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -592,5 +605,20 @@ describe('ActionDrawer Check now (AC-010)', () => {
     await act(async () => button('Check now')!.click());
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Checking a task needs a plan');
     expect(taskCheck.checkActionTask).not.toHaveBeenCalled();
+  });
+
+  // The webhook sets off an outside workflow: admins and managers (2026-11-03).
+  it('offers Send to webhook to an admin or a manager only, on a brand that has one', async () => {
+    server.getActionDetail.mockResolvedValue({ ...emptyDetail, tasks: [checked] });
+    await renderDrawer(action, false, 'manager');
+    await openTask();
+    expect(button('Send to webhook')).toBeDefined();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await renderDrawer(action, false, 'analyst');
+    await openTask();
+    expect(button('Check now')).toBeDefined();
+    expect(button('Send to webhook')).toBeUndefined();
   });
 });
