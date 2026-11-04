@@ -312,12 +312,14 @@ describe('Content Opportunities for an analyst or an agency partner', () => {
       el.textContent?.trim(),
     );
 
-  it('keeps Send All in the bulk bar, without Done, Dismiss All or Delete', async () => {
+  // 2026-11-03: sending to the webhook is for admins and managers too, so
+  // nothing is left to do in bulk.
+  it('gives no boxes to tick, so no bulk bar', async () => {
     viewer.canManage = false;
     await render(false);
-    await pickRow();
-    expect(labels()).toContain('Send All');
-    for (const label of ['Done', 'Dismiss All', 'Delete']) {
+    expect(container.querySelector('tbody [role="checkbox"]')).toBeNull();
+    expect(container.querySelector('thead [role="checkbox"]')).toBeNull();
+    for (const label of ['Send All', 'Done', 'Dismiss All', 'Delete']) {
       expect(labels(), label).not.toContain(label);
     }
   });
@@ -329,15 +331,17 @@ describe('Content Opportunities for an analyst or an agency partner', () => {
     expect(container.textContent).toContain('Ask an admin or a manager to generate opportunities.');
   });
 
-  it("leaves Dismiss out of the row's menu", async () => {
+  it("leaves Send to Workflow and Dismiss out of the row's menu", async () => {
     viewer.canManage = false;
     await render(false);
     const trigger = container.querySelector<HTMLElement>(
       '[aria-label="Actions for Office coffee subscriptions"]',
     )!;
     await act(async () => trigger.click());
-    expect(labels()).toContain('Send to Workflow');
-    expect(labels()).not.toContain('Dismiss');
+    expect(document.body.querySelector('[role="menu"]')).not.toBeNull();
+    for (const label of ['Send to Workflow', 'Dismiss']) {
+      expect(labels(), label).not.toContain(label);
+    }
   });
 });
 

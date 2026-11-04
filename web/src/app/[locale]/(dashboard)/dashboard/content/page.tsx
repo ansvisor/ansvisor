@@ -1462,21 +1462,21 @@ export default function ContentPage() {
                   {t('bulk.selected', { count: selectedIds.size })}
                 </span>
                 <div className="flex items-center gap-1 ml-auto">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1.5"
-                    onClick={guard(handleBulkSend, { action: tActions('sendToWorkflow') })}
-                    disabled={bulkSending}
-                  >
-                    {bulkSending ? <LoadingDots /> : <Send className="h-3 w-3" />}
-                    {t('bulk.sendAll')}
-                  </Button>
-
-                  {/* Bulk changes, dismissing and deleting are for admins and
-                      managers, as the server and the database allow them. */}
+                  {/* Sending to the webhook, bulk changes, dismissing and deleting are
+                      for admins and managers, as the server and the database allow them. */}
                   {canManage && (
                     <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1.5"
+                        onClick={guard(handleBulkSend, { action: tActions('sendToWorkflow') })}
+                        disabled={bulkSending}
+                      >
+                        {bulkSending ? <LoadingDots /> : <Send className="h-3 w-3" />}
+                        {t('bulk.sendAll')}
+                      </Button>
+
                       <Button
                         variant="outline"
                         size="sm"
@@ -1576,17 +1576,21 @@ export default function ContentPage() {
               <Table className="min-w-[720px] table-fixed">
                 <TableHeader>
                   <TableRow>
+                    {/* Every bulk action is for admins and managers, so the others
+                        get no boxes to tick; the column stays for the layout. */}
                     <TableHead className="w-10 pl-4">
-                      <Checkbox
-                        checked={filtered.length > 0 && selectedIds.size === filtered.length}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedIds(new Set(filtered.map((o) => o.id)));
-                          } else {
-                            setSelectedIds(new Set());
-                          }
-                        }}
-                      />
+                      {canManage && (
+                        <Checkbox
+                          checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedIds(new Set(filtered.map((o) => o.id)));
+                            } else {
+                              setSelectedIds(new Set());
+                            }
+                          }}
+                        />
+                      )}
                     </TableHead>
                     {/* The other columns are sized to fit their badges and buttons;
                         the action takes what is left, so nothing spills into its
@@ -1634,15 +1638,17 @@ export default function ContentPage() {
                   {filtered.map((opp) => (
                     <TableRow key={opp.id} className="hover:bg-muted/50">
                       <TableCell className="w-10 pl-4">
-                        <Checkbox
-                          checked={selectedIds.has(opp.id)}
-                          onCheckedChange={(checked) => {
-                            const next = new Set(selectedIds);
-                            if (checked) next.add(opp.id);
-                            else next.delete(opp.id);
-                            setSelectedIds(next);
-                          }}
-                        />
+                        {canManage && (
+                          <Checkbox
+                            checked={selectedIds.has(opp.id)}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(selectedIds);
+                              if (checked) next.add(opp.id);
+                              else next.delete(opp.id);
+                              setSelectedIds(next);
+                            }}
+                          />
+                        )}
                       </TableCell>
                       <TableCell className="pl-6 max-w-0">
                         <button
@@ -1780,7 +1786,7 @@ export default function ContentPage() {
                               : null
                           }
                           workflow={
-                            opp.status === 'new'
+                            canManage && opp.status === 'new'
                               ? {
                                   sending: sendingId === opp.id,
                                   onSend: guard(() => void handleSendWebhook(opp.id), {

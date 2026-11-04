@@ -41,14 +41,14 @@ Each row's **…** menu has the quick actions:
 - **Open in new tab**, which opens it as a page of its own;
 - **Dismiss**, for a new one. Undo it from the message that appears.
 
-Send to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions.
+Send to Plan, Send to Workflow and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions.
 
 ## Work on many at once
 
-Tick rows, or the box in the header for every row shown, then:
+Admins and managers tick rows, or the box in the header for every row shown, then:
 
 - **Send All** sends each one to your workflow tool, which suits kicking off a content sprint.
-- **Done**, **Dismiss All** and **Delete** change them all at once. They're for admins and managers.
+- **Done**, **Dismiss All** and **Delete** change them all at once.
 
 **Delete** removes the opportunities for good, with any brief they have, and doesn't give back the month's opportunities or briefs. Dismissing keeps them out of your way instead.
 
