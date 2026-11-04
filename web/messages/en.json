@@ -3776,6 +3776,7 @@
           "skillDraft": "Skill draft card (W3-08)",
           "question": "Question card",
           "openPage": "Where should we open this page? (W4-11)",
+          "pageVersions": "A page's versions in chat (W4-12a)",
           "execute": "Click card (EXECUTE)",
           "result": "Result card",
           "denial": "Out-of-permission answer",
@@ -3784,6 +3785,8 @@
         },
         "states": {
           "openPage": "After Chat writes a page · none Recommended; Open here comes with W4-15",
+          "pageVersion1": "Version 1: the page Chat wrote · no Undo",
+          "pageVersion2": "Version 2 after a change · Rules, Quality, Optimize, Mark ready and Send to CMS come with W4-12b",
           "planAuto": "Auto, ask before changes",
           "planFullAuto": "Full auto, a tool not connected",
           "planReadOnly": "Analyst: read-only",
@@ -3876,6 +3879,10 @@
     }
   },
   "chatEngine": {
+    "pageMoves": {
+      "fill": "Fill the {what}",
+      "untitled": "Untitled page"
+    },
     "actionCard": {
       "tasks": "{count, plural, one {# task} other {# tasks}}",
       "doneWhen": "Done when: {text}",
@@ -4336,6 +4343,24 @@
     "openEditorFailed": "Couldn't open that in the Content Editor. Try again."
   },
   "chatDeliverable": {
+    "version": {
+      "line": "Version {n} · {parts} · {characters, number} characters",
+      "questions": "{count, plural, one {# question} other {# questions}}",
+      "sections": "{count, plural, one {# section} other {# sections}}",
+      "whatChanged": "What changed",
+      "shortened": "“{heading}” shortened: {before} → {after} characters",
+      "newQuestion": "New question: “{heading}”",
+      "newSection": "New section: “{heading}”",
+      "placeholders": "{count, plural, one {# placeholder} other {# placeholders}} to fill: {list}",
+      "showAllQuestions": "Show all {count} questions",
+      "showAllSections": "Show all {count} sections",
+      "showLess": "Show less",
+      "undo": "Undo to version {n}",
+      "undoneShort": "Back to version {n}",
+      "undone": "Version {n} is back in the draft.",
+      "undoFailed": "The version before couldn’t be put back. Try again from the editor’s History.",
+      "saved": "Saved to the Library as a draft after each change, so the editor can open it anytime."
+    },
     "types": {
       "document": "Document",
       "table": "Table",
