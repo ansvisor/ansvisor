@@ -1,5 +1,6 @@
 import { pagePrices, priceRanges } from './brand-facts';
 import { languageCode, ownText, sentencesOf } from './readability';
+import { parseHtml } from './dom';
 
 /**
  * A category page's intro facts (Content Editor Quality spec §11, Phase 3,
@@ -86,7 +87,8 @@ function pricesIn(sentence: string): string[] {
  * each sentence once.
  */
 export function introFacts(html: string, language: string | null = 'en'): IntroFact[] {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  // The content DOM's parser (dom.ts): the browser's, or jsdom's on the server (go-live gate).
+  const doc = parseHtml(html);
   const blocks = [...doc.body.querySelectorAll('h1, h2, p, li')];
   const h1 = blocks.findIndex((el) => el.tagName === 'H1');
   const intro: string[] = [];

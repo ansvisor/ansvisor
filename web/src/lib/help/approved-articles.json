@@ -752,7 +752,12 @@
         "publish on its own",
         "go live on its own",
         "daily limit",
-        "went live notice"
+        "went live notice",
+        "can call",
+        "run another agent",
+        "called by",
+        "sub-agents",
+        "agent calls agent"
       ],
       "synonyms": [
         "my agents",
@@ -768,10 +773,13 @@
         "change an agent",
         "remove an agent",
         "publish without a click",
-        "agent sends to cms"
+        "agent sends to cms",
+        "agent runs an agent",
+        "chain agents",
+        "helper agent"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -826,6 +834,10 @@
           "text": "Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox.\n\nA run may use only its share of your monthly AI limit. A run a trigger started ends **Stopped at its limit** when it reaches it; a **Run now** run pauses there instead. After 3 failed runs in a row the agent pauses. When the monthly AI limit is used up, the agent pauses and starts again by itself once the limit resets."
         },
         {
+          "heading": "Let an agent run other agents",
+          "text": "On Growth and up, an agent can run up to 5 of your other agents. Pick them under **Can call** on the agent's last step. A paused agent isn't run until you resume it.\n\nA run may run other agents up to 3 times and asks you first each time: the card names the agent, what it asks and how much of your monthly AI limit it may use. The other agent works on the same brand, in a chat of its own, and asks before most changes. It gets only what is left of the first run's **Max per run**, and can't run agents itself. It stops when the first run stops, or after 4 minutes.\n\nIn **Run history**, its run shows **Called by** and the first agent. The first run says how many agents it ran: click it for each one's result and AI use."
+        },
+        {
           "heading": "When a run asks before a change",
           "text": "A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions and **Send to Action Center**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**."
         },
@@ -839,7 +851,7 @@
         },
         {
           "heading": "When an agent sends a page on its own",
-          "text": "Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. The notice leaves Needs you once you open it. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.\n\nWhen an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves."
+          "text": "Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. A published page's notice also has **Take down**, for Admins and Managers. The notice leaves Needs you once you open it. A page someone took down never goes live on its own again. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.\n\nWhen an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves."
         },
         {
           "heading": "On your own AI key",
@@ -988,6 +1000,10 @@
         "attach to task and mark done",
         "attach only",
         "mark task done",
+        "ai limit",
+        "part of a job",
+        "remaining ai usage",
+        "do the first now",
         "shortcuts",
         "slash menu",
         "/start",
@@ -1001,7 +1017,15 @@
         "create a report",
         "optimize a page",
         "find opportunities",
-        "improve with audit"
+        "improve with audit",
+        "brand facts",
+        "approved facts",
+        "/facts",
+        "/wrongclaim",
+        "fact check",
+        "api key in message",
+        "paste api key",
+        "remove key"
       ],
       "synonyms": [
         "assistant",
@@ -1010,7 +1034,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1022,7 +1046,7 @@
         },
         {
           "heading": "Ask Chat",
-          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nNext to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; their box says **Read-only**, with a link to their role.\n\nOn the demo brand or a read-only workspace, sending or starting from **Home** opens the plan dialog."
+          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nNext to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; their box says **Read-only**, with a link to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
         },
         {
           "heading": "Chat beside any page",
@@ -1066,7 +1090,11 @@
         },
         {
           "heading": "Send or publish a page from Chat",
-          "text": "A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. A live page, or a send to your webhook, goes from the Content Editor.\n\nSending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat."
+          "text": "A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. A live page, or a send to your webhook, goes from the Content Editor.\n\nSending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat.\n\nTo take a published page back down to a draft in its CMS, ask Chat, or click **Take down** on its row in **Activity** for 30 days. It always waits for your click, and Managers can do it even when publishing is off for them."
+        },
+        {
+          "heading": "Your brand facts",
+          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims a person approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact."
         },
         {
           "heading": "Open a web page",
@@ -1105,6 +1133,10 @@
           "text": "Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until they are up. If a file can't go, the box says why, and **Retry** sends a failed one again.\n\nAttached files are data for Chat to read, not files you made: they don't show in **Files**, and they are kept for 90 days.\n\nIn **＋**, **Connect a tool** opens **Settings › Integrations** for Admins; others send their Admin a request in one click."
         },
         {
+          "heading": "An API key in your message",
+          "text": "If your message holds something that looks like an API key, Chat doesn't send it: the key would end up in the chat. A line under the box says so, and **Send** waits. Click **Remove** to take the key out and keep the rest of your message. To run Chat on your own AI key, an Admin saves it in **Settings › AI Providers**; own keys come with Enterprise."
+        },
+        {
           "heading": "Watch the work",
           "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone."
         },
@@ -1119,6 +1151,10 @@
         {
           "heading": "AI usage",
           "text": "Chat draws on your workspace's monthly AI usage, shared by every seat. The meter under the box shows how much is used; click it for what used it and when it resets. From 80% it turns amber, and a line above the box says so once a month, on whichever device you are on; **×** closes it.\n\nOnce the usage is used up, Chat pauses: the box is off, and a red line above it says until when. **Get more AI credits** there opens a window with your plan and the credit packs, and it opens once by itself the first time Chat stops. Admins buy packs; everyone else sees them and can **Ask your Admin**. On Enterprise, admins can also use their own AI key. In the free trial, starting the plan gives its full monthly AI usage."
+        },
+        {
+          "heading": "When only part of a job fits",
+          "text": "Before work in several parts, such as five drafts, Chat checks that your remaining AI usage covers them all. When it covers only some, Chat asks first, for example \"Your remaining AI limit covers about 2 of the 5 drafts.\": **Do the first 2 now** (recommended), **Get more AI credits**, which stops there so you can add credits, or **Cancel**. When it covers none, Chat stops at the AI limit before starting. A skill's answer is checked the same way before Chat reads anything.\n\nAn agent's run, with no one there to ask, does the parts that fit, keeps what it made, and stops at the AI limit. A workspace on its own AI key isn't checked."
         },
         {
           "heading": "Inbox",
@@ -1170,6 +1206,8 @@
         "chat settings",
         "default mode",
         "your focus",
+        "answer language",
+        "chat language",
         "ask chat on every page",
         "full auto"
       ],
@@ -1179,7 +1217,7 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1192,6 +1230,10 @@
         {
           "heading": "Your focus",
           "text": "**Your focus** lists the eight areas Chat can focus on for you, such as **Competitors** or **Content**. Tick the ones you work on: Chat Home and its suggestions follow them. Your focus doesn't change what you can do; your role decides that."
+        },
+        {
+          "heading": "Answer language",
+          "text": "**Answer language** sets the language Chat answers in. **Same as my question**, the default, answers in the language you write in. Pick a language, such as English, and Chat answers in it whatever language you write in: useful for agencies and teams that write in several languages. Asking for a language in a message, such as \"answer in German\", always wins for that answer. The app itself stays in English."
         },
         {
           "heading": "Chat on every page",
@@ -1353,6 +1395,17 @@
         "slash menu",
         "ansvisor skills",
         "used skill",
+        "save a skill",
+        "my skills",
+        "skills page",
+        "turn off a skill",
+        "schedule a skill",
+        "import a skill",
+        "upload a skill",
+        "skill from github",
+        "review a skill",
+        "skill update",
+        "update available",
         "faq from fan-outs",
         "weekly report",
         "win back citations",
@@ -1368,7 +1421,7 @@
         "templates"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1379,8 +1432,24 @@
           "text": "Type **/** at the start of an empty box, or click **/**. Under the shortcuts, **Skills** lists each skill by its command and name. Type to filter, such as **/fa** for **/faq**, then press Enter or click. The command goes first in the box: finish your message after it and send.\n\nYou can also type a skill's command yourself, at the start of your message. One answer uses up to three skills, a shortcut's own steps counted. **/report** is the **Weekly report** skill; for any other report, use the **/new-report** shortcut (**Reports**)."
         },
         {
+          "heading": "The Skills page",
+          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Brand Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
+        },
+        {
           "heading": "When Chat picks a skill",
-          "text": "Chat also picks a skill by itself when one fits your question. Either way, the steps above the answer show **Used skill:** with the skill's name, and **Ansvisor library** under it. A shortcut shows **Used shortcut:** with its name.\n\nAnalysts and Agency partners have no **/** menu, but Chat still uses a skill for them when one fits."
+          "text": "Chat also picks a skill by itself when one fits your question. Either way, the steps above the answer show **Used skill:** with the skill's name, and where it comes from under it: **Ansvisor library**, or **You** for a skill you saved. A shortcut shows **Used shortcut:** with its name.\n\nAnalysts and Agency partners have no **/** menu, but Chat still uses a skill for them when one fits."
+        },
+        {
+          "heading": "Save your own skill",
+          "text": "Admins and Managers can ask Chat to keep steps they repeat as a skill of their own, for example: \"Save this as a skill called /pricing-brief: open with the answer, then three short sections.\" Chat shows the skill's name, what it does and its steps on a card, and saves it when you approve, or by itself in Full auto. The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill or a shortcut, such as **/analyze**, and your plan sets how many skills your workspace keeps."
+        },
+        {
+          "heading": "Import a skill",
+          "text": "Admins and Managers on a paid plan can bring in a skill from outside. On the **Skills** page, click **New skill**, then **Upload a SKILL.md or .zip** (up to 5 MB), or **Import from GitHub** and paste a public github.com link. Only the skill's instructions come in: scripts, commands and allowed tools are removed, and nothing runs. A GitHub skill is read at today's commit and never updates by itself. Only MIT, Apache-2.0, BSD and ISC licenses are accepted.\n\nAn imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it."
+        },
+        {
+          "heading": "Updates to an imported skill",
+          "text": "Once a week, Ansvisor checks the source of each approved GitHub skill. When its SKILL.md changed, its card in **My skills** shows **Update available**. **Review update** shows what changed, line by line, and the safety scan of the new version. Nothing changes until an Admin clicks **Approve update**, and the new version is cleaned and scanned again first. A skill whose saved file was changed some other way is turned off."
         },
         {
           "heading": "What a skill can't change",
@@ -1812,7 +1881,9 @@
         "mark published",
         "history",
         "export",
-        "site audit estimate"
+        "site audit estimate",
+        "health claims",
+        "supplements"
       ],
       "synonyms": [
         "write an article",
@@ -1821,7 +1892,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1829,11 +1900,11 @@
         },
         {
           "heading": "The header",
-          "text": "The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, and a **Rules** chip with how many rules the page meets now; click it to open the rules. An **Audit** chip estimates the page's Site Audit score; see below. On a page that optimizes a live one, a chip counts the cited passages kept.\n\nOn the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel."
+          "text": "The header shows the title, which you can click to rename the page, and whether your changes are saved. Under them come the page type, the method and status, a **Rules** chip with how many rules the page meets now (for example **13/15 rules**; click it to open the rules) and the **Quality** score. On a page that optimizes a live one, a chip counts the cited passages kept.\n\nOn the right are the month's AI usage and the buttons **History**, **Copy HTML**, **Export**, **Send to CMS** (the paper-plane icon, for admins and managers) and **Mark ready**, and a button to show or hide the side panel."
         },
         {
           "heading": "Site Audit estimate",
-          "text": "The **Audit** chip, for example **Audit ≈62**, is about where the page would score in Site Audit once published. Click it to see the score by category: Structure, Content, Authority, Trust and E-E-A-T. It's free, and it's read again each time you pause typing.\n\nIt runs Site Audit's checks on the page as it would go out. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.\n\nThe 13 checks AI reads aren't in it at first, so it runs a few points under the full audit. **Estimate AI checks** adds them, using a little of your monthly AI usage. They stay in the score as you keep writing; **Read AI checks again** reads them anew."
+          "text": "In the side panel's **Quality**, **Site Audit estimate** (for example **≈62**) is about where the page would score in Site Audit once published, with the score by category: Structure, Content, Authority, Trust and E-E-A-T. It's free, and it's read again each time you pause typing.\n\nIt runs Site Audit's checks on the page as it would go out. The checks of your whole site, such as robots.txt, llms.txt and HTTPS, come from your latest Site Audit; with none yet, they're left out.\n\nThe 13 checks AI reads aren't in it at first, so it runs a few points under the full audit. **Estimate AI checks** adds them, using a little of your monthly AI usage. They stay in the score as you keep writing; **Read AI checks again** reads them anew."
         },
         {
           "heading": "Status and runs",
@@ -1848,12 +1919,16 @@
           "text": "The Content Agent looks up the facts a page needs, such as a price, a plan's limits or a statistic, and links each to the page it came from, never a forum or a social post. A fact no trusted page has is left out of its sentence.\n\nA fact it couldn't look up stays in square brackets for you, as do up to three only your brand has, such as your customer count. Each is tinted amber; **Your input needed** in the toolbar counts them and jumps to the next one, selected so you can type over it.\n\nOnes in alt text, structured data or HTML count too. **Send to CMS** waits until none is left. With Quality on, **Export** offers **Fill now** or **Export without them**, which drops those sentences. One in the title or a heading has to be filled."
         },
         {
+          "heading": "Health and supplement brands",
+          "text": "The Content Agent never writes a health benefit, a treatment, a prevention or a dose your brand didn't give in its own words, such as that a product helps you sleep or eases stress, and never looks one up. One it wrote anyway is taken out of the page, or its suggestion is dropped. A claim your page, your brand's description or **Your input** already makes can stay, and safety lines such as \"talk to your doctor\" always do.\n\nA brand counts as a health brand when its industry is Healthcare, or its industry, name or description names supplements, vitamins, a pharmacy, a clinic or wellness."
+        },
+        {
           "heading": "The side panel",
           "text": "The side panel's tabs are **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**.\n\nWhile the panel is closed, its tabs run down the editor's right edge: click one to open the panel there.\n\nBuilding the brief and running the Content Agent use your workspace's monthly AI usage."
         },
         {
           "heading": "The brief",
-          "text": "**Brief** shows the page type, target URL, goal, audience, length, outline and keywords; **Edit brief** changes them. With no brief yet, **Run Agent** writes the goal, audience and outline from your sources; once there is one, the button reads **Rebuild brief**. Either writes the outline from the sources you keep, each H2 answering a search AI ran for your prompts. If you edited the brief, rebuilding asks first: **Rebuild anyway** or **Keep my brief**.\n\nA draft started from an opportunity with a brief starts with that brief's outline and keywords."
+          "text": "**Brief** shows the page type, target URL, goal, audience, length, outline and keywords; **Edit brief** changes them. With no brief yet, **Build brief** writes the goal, audience and outline from your sources; once there is one, the button reads **Rebuild brief**. Either writes the outline from the sources you keep, each H2 answering a search AI ran for your prompts. If you edited the brief, rebuilding asks first: **Rebuild anyway** or **Keep my brief**.\n\nA draft started from an opportunity with a brief starts with that brief's outline and keywords."
         },
         {
           "heading": "What the brief reads from cited pages",
@@ -1898,7 +1973,10 @@
         "drafts",
         "draft status",
         "archive",
-        "export drafts"
+        "export drafts",
+        "made in",
+        "open chat",
+        "from chat"
       ],
       "synonyms": [
         "content list",
@@ -1907,7 +1985,7 @@
         "draft list"
       ],
       "plan": "all",
-      "updated": "2026-10-30",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1919,7 +1997,7 @@
         },
         {
           "heading": "Columns and filters",
-          "text": "The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Status, Created and Updated. While the Content Agent writes a draft, its Status reads **Agent writing…**, and **Agent failed** if it couldn't finish; where your workspace has Chat, each comes with the same dot Chat shows for a run. The **Created** filter narrows the list to the last 7, 30 or 90 days. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published."
+          "text": "The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Made in (Content Editor, Chat, Action Center, Agent or MCP), Status, Created and Updated. A draft made in your own chat has **Open chat**, and the editor shows **From chat** with its title. While the Content Agent writes a draft, its Status reads **Agent writing…**, and **Agent failed** if it couldn't finish; where your workspace has Chat, each comes with the same dot Chat shows for a run. The **Created** filter narrows the list to the last 7, 30 or 90 days, and **Made in** to one place, once drafts come from more than one. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published."
         },
         {
           "heading": "The row menu",
@@ -1956,7 +2034,7 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1984,11 +2062,15 @@
         },
         {
           "heading": "What each focus picks",
-          "text": "- **Let Ansvisor choose** takes the highest-scoring groups that have no opportunity yet, one from each topic first.\n- **Topic** takes only that topic's groups.\n- **Prompt** takes only that prompt's group, so it writes at most one opportunity, and **How many** stays at 1. If that prompt already has an open opportunity, a message says so when the run ends, with **Open existing**."
+          "text": "- **Let Ansvisor choose** takes the highest-scoring groups that have no opportunity yet, one from each topic first.\n- **Topic** takes only that topic's groups. Each topic in the list shows how many new groups it has, or **All covered**.\n- **Prompt** takes only that prompt's group, so it writes at most one opportunity, and **How many** stays at 1. If the group already has an open opportunity, the dialog says so and offers **Open existing** instead; prompts like that show **Has one** in the list. A prompt whose opportunity was dismissed or done can be asked for again."
+        },
+        {
+          "heading": "How many are left",
+          "text": "The dialog shows how many groups in your focus have no opportunity yet, and **How many** goes no higher. When none are left, it says so and **Generate** stays off: add prompts for new groups, or use **Another angle** on an opportunity. Groups without tracked answers from the last 30 days have nothing to write from yet."
         },
         {
           "heading": "No duplicates",
-          "text": "Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is written, the message says so and counts any duplicates it skipped.\n\nFor a second take on the same need, use **Another angle** on the opportunity."
+          "text": "Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is written, the message says so and counts any duplicates it skipped.\n\nA question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.\n\nFor a second take on the same need, use **Another angle** on the opportunity."
         },
         {
           "heading": "How many you get",
@@ -2080,11 +2162,11 @@
         "let the agent fix the page"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
-          "text": "Every page in the Content Editor is written to a set of rules for its page type. The **Rules** chip in the header shows how many the page meets now; click it to open the rules. **Run Agent** asks the Content Agent to suggest changes for the rules the page doesn't meet yet, or to rewrite the whole page to them."
+          "text": "Every page in the Content Editor is written to a set of rules for its page type. The **Rules** chip in the header shows how many the page meets now; click it to open the rules. **Fix open rules** asks the Content Agent to suggest changes for the rules the page doesn't meet yet; **Rewrite page** rewrites the whole page to them."
         },
         {
           "heading": "The Rules tab",
@@ -2099,12 +2181,12 @@
           "text": "Admins and managers keep a brand's rules in **Settings › Content › Brand rules**, one per line, up to 30, such as topics to stay away from. The Content Agent follows them on every page of the brand, before your text rules, and a brand rule wins when they disagree. They change what's written, not the **Rules** count."
         },
         {
-          "heading": "Fix open rules with Run Agent",
-          "text": "**Run Agent** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet (**Fix open rules**). Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Running the agent uses your workspace's monthly AI usage."
+          "heading": "Fix open rules",
+          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Running the agent uses your workspace's monthly AI usage.\n\nAn open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide: change the page yourself, or the rule."
         },
         {
           "heading": "Rewrite the whole page",
-          "text": "The **▾** menu beside **Run Agent** also offers **Rewrite the whole page**: one new version written to every rule in the set, with the cited passages kept. It uses more AI usage than fixing open rules. The menu marks it **Recommended** when the page is far off its Length or many rules are open. Pick it, and the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. A rewrite isn't offered once the page is ready or published.\n\nWhen the quoted passages it keeps stop the page reaching its Length, a note offers **Raise Length to …** and **Rewrite, cited passages too**, which may stop those passages being quoted."
+          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. A rewrite isn't offered once the page is ready or published. One past its Length is cut to it with one more pass; accept one still a little long, and the next rewrite starts from there.\n\nWhen the passages it keeps stop the page reaching its Length, a note offers **Raise Length to …** and **Rewrite, cited passages too**, which may stop those passages being quoted. The **Length** rule says so too."
         },
         {
           "heading": "Before you run it again",
@@ -2210,7 +2292,7 @@
         "regulated page review"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -2218,11 +2300,11 @@
         },
         {
           "heading": "The scores",
-          "text": "Quality scores the page from 0 to 100 on **E-E-A-T**, **Trust** and **Readability**: 80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nUnder them, **Site Audit estimate** is about where the page would score in Site Audit, as the header's **Audit** chip shows it. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
+          "text": "Quality scores the page from 0 to 100 on three things, each card saying what it scores:\n\n- **E-E-A-T**: who stands behind the page, such as its author and their experience.\n- **Trust**: sources, links and dated facts.\n- **Readability**: how easily it reads.\n\n80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.\n\nUnder them, **Site Audit estimate** is about where the page would score in Site Audit. See the Content Editor article.\n\nAt the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing."
         },
         {
           "heading": "Your to-dos and what would raise it",
-          "text": "- **Your to-dos** are what only you can do, such as picking the page's author, adding your own experience, data or an expert's quote, linking the proof for a claim, and filling the placeholders.\n- **What would raise it** lists the checks still open, each with the points it would add to a score and, where it has one, a button such as **Show** or **Add source**."
+          "text": "- **Your to-dos** are what only you can do, such as picking the page's author, adding your own experience, data or an expert's quote, linking the proof for a claim, and filling the placeholders.\n- **What would raise it** lists the checks still open, each with about how many points it could add to a score (an estimate, not a promise) and, where it has one, a button such as **Show** or **Add source**."
         },
         {
           "heading": "Hand off",
@@ -2234,7 +2316,7 @@
         },
         {
           "heading": "Next step",
-          "text": "With Quality on, the header shows the page's **Next step**: plan the page, write the first draft or bring in your page, fix its length or open rules, add proof and author, or check and mark ready. It comes with a button to take the step, **Skip this step** and **All steps**.\n\nOnce the page is ready, **Next step** also offers **Mark published**."
+          "text": "With Quality on, the header's **Next step** opens a window: every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.\n\nOnce you've decided the agent's **Fix open rules** suggestions, the step is ticked. Rules its later suggestions leave open don't bring it back; your edits can.\n\n**Show to-dos** scrolls Quality to your to-dos, or **Show what raises Trust** to what would raise it. The nudge at the bottom shows only on your own steps.\n\nMarked ready with steps skipped, it says how many are still open. **Next step** then offers **Export** and **Mark published**."
         },
         {
           "heading": "The page's author",
@@ -2242,11 +2324,11 @@
         },
         {
           "heading": "Before you publish",
-          "text": "**Mark ready** opens **Before you publish** first. It checks:\n\n- placeholders, alt text and links;\n- the author;\n- the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the Article schema Ansvisor adds;\n- a warning when Trust is under 60.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about."
+          "text": "**Mark ready** opens **Before you publish** first. A line sums up what to fix and to check; the checks show in three groups: **Fix before you publish**, **Check yourself** and **In place**. They cover:\n\n- placeholders, alt text and links (**Ready for your CMS**);\n- the author, and the qualified reviewer on pages that advise on health, money or the law;\n- visible dates;\n- the search engine details (Article schema) Ansvisor adds;\n- Trust under 60: AI answers may lean on the page less;\n- the rules and to-dos still open. You can still mark it ready.\n\nCopy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data does too. On a shopping path page, it also names product cards whose catalog price changed since they went in. **Send to CMS** opens it only when it has something to ask about."
         },
         {
-          "heading": "The Article schema",
-          "text": "An article goes to your CMS and to exports with an Article schema that names its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin."
+          "heading": "Search engine details (Article schema)",
+          "text": "An article goes to your CMS and to exports with search engine details, an Article schema, that name its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin."
         },
         {
           "heading": "Export with Quality on",
@@ -2267,7 +2349,9 @@
         "last send",
         "qualified reviewer",
         "reviewer metadata",
-        "reviewed by"
+        "reviewed by",
+        "take down",
+        "unpublish"
       ],
       "synonyms": [
         "push to cms",
@@ -2278,11 +2362,11 @@
         "reviewer field"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-02",
       "sections": [
         {
           "heading": null,
-          "text": "**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Ansvisor never publishes on its own: you publish in your CMS. Only admins and managers can send pages."
+          "text": "**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Send to CMS never publishes: you publish in your CMS. Only admins and managers can send pages."
         },
         {
           "heading": "Send one page",
@@ -2302,11 +2386,15 @@
         },
         {
           "heading": "See how a send went",
-          "text": "Beside each row's status, the Library shows the last send: a clock while it's on its way, a paper plane once it's sent, a red warning when it failed (hover it to see why), and a blue link once it's published (click it to open the live page).\n\nThe **Last send** filter beside **Created** lists the pages that were **Never sent**, **Sending**, **Sent**, **Failed** or **Published**. A send to your workflow isn't retried on its own: send a failed page again from the Library."
+          "text": "Beside each row's status, the Library shows the last send: a clock while it's on its way, a paper plane once it's sent, a red warning when it failed (hover it to see why), a blue link once it's published (click it to open the live page), and a crossed-out cloud once it was taken down.\n\nThe **Last send** filter beside **Created** lists the pages that were **Never sent**, **Sending**, **Sent**, **Failed** or **Published**; a page taken down counts as **Sent**. A send to your workflow isn't retried on its own: send a failed page again from the Library."
         },
         {
           "heading": "When a page becomes Published",
           "text": "Once you publish the item in Webflow or Framer, or the post in WordPress or Wix, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one."
+        },
+        {
+          "heading": "Take a published page down",
+          "text": "A page published through Ansvisor in Webflow, WordPress or Wix can be taken down: pick **Take down** in its row's **…** menu. It leaves your site at once and goes back to a draft in your CMS, and the Library shows **Taken down** beside its status. Links to it, and AI answers that cited it, may still point to it for a while.\n\nAdmins and managers can take a page down, even when publishing is off for managers. A page someone took down never goes live on its own again: an agent's next publish of it waits for a click. Framer publishes the whole site, and a send to your workflow is your workflow's: take those down there."
         },
         {
           "heading": "Sending a page again",
@@ -2759,7 +2847,9 @@
         "estimate",
         "confidence",
         "volume range",
-        "estimate badge"
+        "estimate badge",
+        "head terms",
+        "opportunity volume"
       ],
       "synonyms": [
         "how many people ask",
@@ -2768,15 +2858,15 @@
         "est. ai volume"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
-          "text": "AI assistants don't publish how often people ask them something, so every AI search volume in Ansvisor is an estimate. It is shown as a range, such as 540–2k, never as a single number. Totals, averages and a prompt's own page add a dashed **Estimate** badge; in tables the range alone marks an estimate."
+          "text": "AI assistants don't publish how often people ask them something, so every AI search volume in Ansvisor is an estimate. It is shown as a range, such as 540–2k, never as a single number. Totals, averages, a prompt's own page, a content opportunity, the **Prompt Volumes** chart and the Action Center's volumes add a dashed **Estimate** badge; in other tables the range alone marks an estimate."
         },
         {
           "heading": "How it's estimated",
-          "text": "The estimate is the median monthly Google searches for the prompt's related keywords, times the share of Google searches that now get an AI answer (45% by default; a self-hosted server can change it).\n\nWhen a prompt's volume is analyzed, Ansvisor picks five short Google keywords for its category and reads their monthly Google searches. Keywords Google has no data for are left out, and the median of the rest is the prompt's **Google Vol.** The Insights tab shows the AI share as **AI Adoption Rate**."
+          "text": "The estimate is the median monthly Google searches for the prompt's related keywords, times the share of Google searches that now get an AI answer (45% by default; a self-hosted server can change it).\n\nWhen a prompt's volume is analyzed, Ansvisor picks five short Google keywords for its category and reads their monthly Google searches. Keywords Google has no data for are left out, and the median of the rest is the prompt's **Google Vol. (head terms)**. The Insights tab shows the AI share as **AI Adoption Rate**."
         },
         {
           "heading": "How the range is set",
@@ -2797,6 +2887,10 @@
         {
           "heading": "Totals, single keywords and AI guesses",
           "text": "Some estimates are built differently, and their note says so:\n\n- **Totals and averages** (**Total Est. AI Volume**, **Avg. AI Volume**, and Similar Topics' **Est. AI Volume**): the sum of the lows to the sum of the highs; an average divides both by the prompt count. A total is high-confidence when at least 80% of its volume is, low when more than half is low-confidence, and medium otherwise. The note gives the mix.\n- **One keyword** (each row of Similar Topics): only the AI share is assumed, so it is Medium with a ±25% range, or Low when it has no volume or is over six months old.\n- **An AI's guess** (suggestions from Ansvisor Agents, the Brand Visibility page's Opportunities, and the Action Center's topic opportunities): always Low, from half to twice the guess. Track the prompt to get an estimate from its keywords' Google searches."
+        },
+        {
+          "heading": "A content opportunity's volume",
+          "text": "A content opportunity shows the estimate of its question, the prompt it is shown with, and says it is one of the prompts it answers; it isn't their sum. Its score still weighs all of them.\n\nA long question's estimate comes from short head terms for its category, not its own words, so it says **From head terms** and names the closest measured phrase with that phrase's own estimate, often far lower."
         },
         {
           "heading": "Compare prompts by their ranges",
@@ -2919,7 +3013,7 @@
         "volume analysis"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-01",
       "sections": [
         {
           "heading": null,
@@ -2931,7 +3025,7 @@
         },
         {
           "heading": "What the tab shows",
-          "text": "For analyzed prompts you see:\n\n- **Prompts Analyzed**, with how many keywords they cover, and **Total Est. AI Volume** and **Avg. AI Volume** across your prompts.\n- Two **Prompt Volumes** cards: a chart of the total by answer engine, and a table with each prompt's **Google Vol.** and **Est. AI Vol.**\n- Each prompt's **Intent**: Comparison, How-to, What is, Best / Top, vs. / Review, Recommendation, Problem Solving or Other.\n- **High Opportunity Prompts**: the prompts with the most estimated AI searches. A low-confidence estimate isn't listed there on its own.\n- **Similar Topics**: the most-searched keyword clusters across your prompts. **See all** opens its own page.\n- **AI Adoption Rate**: the share of Google searches that get an AI answer, used in every estimate."
+          "text": "For analyzed prompts you see:\n\n- **Prompts Analyzed**, with how many keywords they cover, and **Total Est. AI Volume** and **Avg. AI Volume** across your prompts.\n- Two **Prompt Volumes** cards: a chart of the total by answer engine, and a table with each prompt's **Google Vol. (head terms)** and **Est. AI Vol.**\n- Each prompt's **Intent**: Comparison, How-to, What is, Best / Top, vs. / Review, Recommendation, Problem Solving or Other.\n- **High Opportunity Prompts**: the prompts with the most estimated AI searches. A low-confidence estimate isn't listed there on its own.\n- **Similar Topics**: the most-searched keyword clusters across your prompts. **See all** opens its own page.\n- **AI Adoption Rate**: the share of Google searches that get an AI answer, used in every estimate."
         },
         {
           "heading": "Where else estimated volumes show",

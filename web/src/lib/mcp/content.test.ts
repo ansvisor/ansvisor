@@ -185,6 +185,8 @@ describe('createContentDraftFor', () => {
       author: 'agent',
       created_by: null,
       status: 'in_review',
+      // Made by an MCP client (00463, W4-10).
+      origin: 'mcp',
       page_type_source: 'detected',
       prompt_ids: ['p1'],
       body_html: '<h1>How to clean CRM data</h1><p>Start here.</p>',

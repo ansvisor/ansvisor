@@ -8,6 +8,7 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
+import { looksLikeApiKey, withoutApiKeys } from '@/lib/chat/key-paste';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import { MAX_REFERENCES, type ChatReference } from '@/lib/chat/references';
@@ -150,6 +151,10 @@ const refKey = (ref: ChatReference) => `ref:${ref.type}:${ref.id}`;
  *
  * A `draft` from the page (W1-08) puts its question in the box, or attaches
  * its object as an @ chip, and the cursor goes to the end.
+ *
+ * Text that holds an API key is never sent (W4-05): a line under the box
+ * says so, Send waits, and Remove takes the key out. Save securely shows
+ * only where the page offers it (`onSaveKey`: an Admin on Enterprise).
  */
 export function ChatComposer({
   variant = 'dock',
@@ -179,6 +184,7 @@ export function ChatComposer({
   onOpenModel,
   modelChoice,
   onModelChoice,
+  onSaveKey,
   className,
 }: {
   variant?: ComposerVariant;
@@ -239,6 +245,11 @@ export function ChatComposer({
    */
   modelChoice?: ChatModelChoice;
   onModelChoice?: (choice: ChatModelChoice) => void;
+  /**
+   * Save securely on the pasted-key line: the text goes to the page's own
+   * key form, never to Chat. Without it, only Remove shows.
+   */
+  onSaveKey?: (text: string) => void;
   className?: string;
 }) {
   const t = useTranslations('chatComposer');
@@ -281,6 +292,8 @@ export function ChatComposer({
   }
   const box = useRef<HTMLTextAreaElement>(null);
   const hasText = text.trim().length > 0;
+  // A pasted API key: the text stays in the box until it is taken out.
+  const keyInText = hasText && looksLikeApiKey(text);
   const uploading = files.some((f) => f.status === 'uploading');
   const failedFiles = files.some((f) => f.status === 'failed');
   // The ghost shows in an empty box, not while a run answers or the box is off.
@@ -561,7 +574,7 @@ export function ChatComposer({
 
   async function submit(steer: boolean) {
     const message = text.trim();
-    if (!message || sending || disabled || uploading) return;
+    if (!message || sending || disabled || uploading || looksLikeApiKey(message)) return;
     const handler = steer ? onSteer : onSend;
     if (!handler) return;
     const sentRefs = refs;
@@ -919,7 +932,7 @@ export function ChatComposer({
               type="button"
               data-action="composer.send"
               onClick={() => void submit(false)}
-              disabled={!hasText || sending || disabled || uploading}
+              disabled={!hasText || sending || disabled || uploading || keyInText}
               aria-label={t('send')}
               title={t('send')}
               className={cn(
@@ -932,6 +945,33 @@ export function ChatComposer({
           )}
         </div>
       </div>
+      {keyInText && (
+        <p
+          role="alert"
+          data-slot="composer-key-paste"
+          className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          <span className="min-w-0 flex-1">{t('keyPaste.line')}</span>
+          <button
+            type="button"
+            data-action="composer.removeKey"
+            onClick={() => putText(withoutApiKeys(text))}
+            className="font-medium underline underline-offset-2"
+          >
+            {t('keyPaste.remove')}
+          </button>
+          {onSaveKey && (
+            <button
+              type="button"
+              data-action="composer.saveKey"
+              onClick={() => onSaveKey(text)}
+              className="font-medium underline underline-offset-2"
+            >
+              {t('keyPaste.save')}
+            </button>
+          )}
+        </p>
+      )}
       {(fileProblem || failedFiles) && (
         <p
           role="alert"

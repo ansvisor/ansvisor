@@ -298,6 +298,22 @@ describe('loadChatThread', () => {
     });
   });
 
+  it("keeps What's new's cards, after a reload (CHAT-11 item 10)", async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    const entries = [
+      {
+        slug: 'agent-center',
+        feature: 'Agent Center',
+        lines: ['Why.', 'What.', 'How it helps.'],
+        href: '/dashboard/agents' as const,
+      },
+    ];
+    fake.db.tables.chat_run_events = [event('run-1', chatEvent('whats_new.ready', 1, { entries }))];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.whatsNew).toEqual(entries);
+  });
+
   it("keeps a stopped run's time and steps, its stopped step skipped with why", async () => {
     seed([{ id: 'run-1', status: 'stopped' }]);
     fake.db.tables.chat_run_steps = [

@@ -253,6 +253,18 @@ export async function publishItem(account, collectionId, itemId) {
   return itemId;
 }
 
+/**
+ * Takes a live item down (AUTONOMOUS-GO-LIVE PR 10): Webflow unpublishes it
+ * from the live site and sets it back to a draft. Its id.
+ */
+export async function unpublishItem(account, collectionId, itemId) {
+  await run('WEBFLOW_UNPUBLISH_LIVE_COLLECTION_ITEM', account, {
+    collection_id: collectionId,
+    item_id: itemId,
+  });
+  return itemId;
+}
+
 /** The words a field's slug or name is read for, by part: the first field that has them is suggested. */
 const HINTS = {
   body: [/(^|-)(post-)?body($|-)/, /content/, /article/, /rich/],
