@@ -3,6 +3,7 @@ import messages from '../../../../messages/en.json';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { LoadedRun } from '../engine-store';
 import { readStrips, weekEndIn } from '../task-strip';
+import { emailJobProblem, emailRunResult } from './email';
 
 /**
  * What a scheduled job's run leaves once it moves (CHAT-12 items 13, 16,
@@ -55,14 +56,17 @@ async function readNoticeJob(jobId: string): Promise<NoticeJob | null> {
   return (data as NoticeJob | null) ?? null;
 }
 
-/** One notice for the job's creator; a second for the same event (`key`) is kept out. */
+/**
+ * One notice for the job's creator; a second for the same event (`key`) is
+ * kept out. True when this one was written: its e-mail goes with it.
+ */
 async function notify(
   job: NoticeJob,
   kind: ScheduleNoticeKind,
   reason: string,
   key: string,
-): Promise<void> {
-  if (!job.created_by) return;
+): Promise<boolean> {
+  if (!job.created_by) return false;
   const { error } = await supabaseAdmin.from('chat_notices').insert({
     organization_id: job.organization_id,
     user_id: job.created_by,
@@ -78,6 +82,7 @@ async function notify(
   if (error && error.code !== '23505') {
     throw new Error(`Could not write a scheduled job's notice: ${error.message}`);
   }
+  return !error;
 }
 
 /**
@@ -93,12 +98,14 @@ export async function noticeJobPaused(
     const job = await readNoticeJob(jobId);
     if (!job) return;
     const words = t(`paused.${reason}`, { skill: job.skill_name ?? '' });
-    await notify(
+    const told = await notify(
       job,
       'schedule_paused',
       words,
       `paused:${reason}:${now.toISOString().slice(0, 10)}`,
     );
+    // And by e-mail, for a job that delivers by e-mail (W3-04b).
+    if (told) emailJobProblem(job.id, 'paused', words);
   } catch (err) {
     console.error('[chat/schedules] could not tell that a job paused:', err);
   }
@@ -112,7 +119,11 @@ export async function noticeRunFailed(
 ): Promise<void> {
   try {
     const job = await readNoticeJob(jobId);
-    if (job) await notify(job, 'schedule_failed', reason, `failed:${runRowId}`);
+    if (!job) return;
+    // And by e-mail, for a job that delivers by e-mail (W3-04b).
+    if (await notify(job, 'schedule_failed', reason, `failed:${runRowId}`)) {
+      emailJobProblem(job.id, 'failed', reason, runRowId);
+    }
   } catch (err) {
     console.error('[chat/schedules] could not tell that a run failed:', err);
   }
@@ -189,12 +200,13 @@ export type SettledStatus =
  * Keeps what a run left (above) on its row and its job, after its row
  * moved to `status`: its parts and fingerprint; a delivered run's
  * fingerprint as the job's last; the job's notices closed once a run goes
- * on; a failed retry told. Never throws.
+ * on; a failed retry told; a done run e-mailed for a job that delivers by
+ * e-mail (email.ts, W3-04b). Never throws.
  */
 export async function keepRunResult(
   run: { id: string; schedule_id: string; attempt: number },
   status: SettledStatus,
-  chat: Pick<LoadedRun, 'id' | 'conversationId' | 'progress'> | null,
+  chat: Pick<LoadedRun, 'id' | 'conversationId' | 'progress' | 'messageId'> | null,
   {
     reason = null,
     jobOn = true,
@@ -229,6 +241,8 @@ export async function keepRunResult(
       }
       await closeJobNotices(run.schedule_id, now);
     }
+    // Done, not No change: its result by e-mail too, for a job that delivers by e-mail (W3-04b).
+    if (status === 'done' && chat) emailRunResult(run, chat);
     // The first failure is tried again in 10 minutes: only a failed retry is told (CHAT-12
     // item 26). A job that turned off on it is told so by its own notice.
     if (status === 'failed' && run.attempt >= 2 && jobOn) {

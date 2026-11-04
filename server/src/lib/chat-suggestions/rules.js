@@ -130,16 +130,35 @@ export function addDays(day, days) {
 }
 
 /**
- * The time zones a workspace's people read in, from their latest Chat
- * answers (chat_messages.timezone: the browser's zone each answer was shown
- * in), newest first. A person's own is their latest; the workspace's is the
- * one most of them read in (the newest on a tie); with neither, UTC. No
- * profile or workspace time zone is stored yet (CHAT-12 brings one).
+ * The zone a person's times are read in: the one they picked (Settings ›
+ * Account, profiles.time_zone, 00468), else the one their browser or answers
+ * read in, else UTC. A copy of effectiveTimeZone in web/src/lib/time-zone.ts:
+ * keep them in step. A zone this runtime doesn't know counts as none.
+ *
+ * @param {string | null | undefined} chosen
+ * @param {string | null | undefined} fallback
+ */
+export function effectiveTimeZone(chosen, fallback) {
+  if (isTimeZone(chosen)) return chosen;
+  if (isTimeZone(fallback)) return fallback;
+  return 'UTC';
+}
+
+/**
+ * The time zones a workspace's people read in. A person's own is the one
+ * they picked in Settings › Account (`people`' time_zone, 00468); else
+ * their latest Chat answer's (chat_messages.timezone: the zone each answer
+ * was shown in), newest first; else the one most of the workspace's answers
+ * were read in (the newest on a tie); with none of these, UTC
+ * (effectiveTimeZone). web/src/lib/chat/daily-suggestions.ts sendingZone
+ * is a copy, for the Inbox's "Today".
  *
  * @param {Array<{ userId: string, timezone: string | null }>} answers newest first
+ * @param {Array<{ id: string, time_zone?: string | null }>} [people] the workspace's people
  * @returns {{ ofPerson: (userId: string) => string, workspace: string }}
  */
-export function resolveZones(answers) {
+export function resolveZones(answers, people = []) {
+  const chosen = new Map(people.map((person) => [person.id, person.time_zone ?? null]));
   const own = new Map();
   const counts = new Map();
   for (const { userId, timezone } of answers) {
@@ -156,7 +175,10 @@ export function resolveZones(answers) {
       most = count;
     }
   }
-  return { ofPerson: (userId) => own.get(userId) ?? workspace, workspace };
+  return {
+    ofPerson: (userId) => effectiveTimeZone(chosen.get(userId), own.get(userId) ?? workspace),
+    workspace,
+  };
 }
 
 /** Whether `now` falls in the person's morning sending window. */

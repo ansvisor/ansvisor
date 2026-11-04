@@ -86,7 +86,7 @@ export const SCHEDULE_TOOLS = [
     brandOf: { input: 'brand_id' },
     costClass: 'C0',
     labelKey: 'scheduleJob',
-    route: null,
+    route: '/dashboard/chat/scheduled',
     mcpTool: null,
     specRow: '78',
     stepKind: 'schedule',

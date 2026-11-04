@@ -5,6 +5,13 @@ on:
   push:
     branches: [main]
 
+# A new push to a PR cancels that PR's run still going: only the newest
+# commit's result counts, and the runners go to the next PR. Runs on main
+# all finish.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   schema:
     name: schema — consolidated schema.sql is up to date
@@ -37,19 +44,72 @@ jobs:
       - run: yarn install --frozen-lockfile
       - name: Prettier format check
         run: yarn format:check
+      # ESLint keeps a cache of the files it already passed; a run restores the
+      # newest one and re-lints only what changed since.
+      - uses: actions/cache@v4
+        with:
+          path: web/.eslintcache
+          key: eslint-${{ hashFiles('web/yarn.lock', 'web/eslint.config.mjs') }}-${{ github.sha }}
+          restore-keys: eslint-${{ hashFiles('web/yarn.lock', 'web/eslint.config.mjs') }}-
       - name: ESLint
-        run: yarn lint
+        run: yarn lint --cache --cache-location .eslintcache --cache-strategy content
       - name: TypeScript typecheck
         run: yarn typecheck
         env:
           # tsc --noEmit over the whole app sits at Node's default heap limit
           # and has run out of memory here once; 6 GB fits the hosted runner.
           NODE_OPTIONS: --max-old-space-size=6144
+
+  # The tests are most of web's time (7–9 minutes in one job): four jobs run a
+  # quarter each, side by side.
+  web-test:
+    name: web — tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: web/yarn.lock
+      - run: yarn install --frozen-lockfile
       - name: Vitest tests
-        run: yarn test
+        run: yarn test --shard=${{ matrix.shard }}/4
+
+  web-build:
+    name: web — Next.js build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: web/yarn.lock
+      - run: yarn install --frozen-lockfile
+      # Next keeps its compiled output between builds in .next/cache; a run
+      # restores the newest one, so unchanged modules aren't compiled again.
+      - uses: actions/cache@v4
+        with:
+          path: web/.next/cache
+          key: nextjs-${{ hashFiles('web/yarn.lock') }}-${{ github.sha }}
+          restore-keys: nextjs-${{ hashFiles('web/yarn.lock') }}-
       - name: Next.js production build
         run: yarn build
         env:
+          # Its own job, with the runner's memory to itself: in one job with
+          # the tests it ran out of heap on some PRs.
+          NODE_OPTIONS: --max-old-space-size=6144
           # next build evaluates modules that initialize Supabase and Stripe
           # clients; fake values keep CI independent of deployment secrets.
           NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
