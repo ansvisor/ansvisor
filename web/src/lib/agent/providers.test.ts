@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { azureEndpoint, chatModelId, isAiProvider, parseProviderSettings } from './providers';
+import {
+  azureEndpoint,
+  chatModelId,
+  isAiProvider,
+  keyUsesOf,
+  parseKeyUses,
+  parseProviderSettings,
+} from './providers';
 
 /** What each AI provider keeps besides its key, and the model Chat calls with it. */
 
@@ -88,5 +95,36 @@ describe('chatModelId', () => {
       'd1',
     );
     expect(chatModelId('openrouter', { model: 'openai/gpt-5.5' })).toBe('openai/gpt-5.5');
+  });
+});
+
+describe('what a key is for (W4-06)', () => {
+  it('is Chat for a key saved before uses, and never images for Anthropic', () => {
+    expect(keyUsesOf('openai', {})).toEqual(['chat']);
+    expect(keyUsesOf('openai', { useFor: ['images'] })).toEqual(['images']);
+    expect(keyUsesOf('google', { useFor: ['images', 'chat'] })).toEqual(['chat', 'images']);
+    expect(keyUsesOf('anthropic', { useFor: ['chat', 'images'] })).toEqual(['chat']);
+    expect(keyUsesOf('openai', null)).toEqual(['chat']);
+  });
+
+  it('reads a request’s uses, refusing none, unknown ones and Anthropic’s images', () => {
+    expect(parseKeyUses('openai', ['images', 'chat'])).toEqual(['chat', 'images']);
+    expect(parseKeyUses('openai', [])).toBeNull();
+    expect(parseKeyUses('openai', ['video'])).toBeNull();
+    expect(parseKeyUses('anthropic', ['images'])).toBeNull();
+    expect(parseKeyUses('openai', 'chat')).toBeNull();
+  });
+
+  it('keeps the uses beside the provider’s other settings', () => {
+    expect(parseProviderSettings('openai', { model: 'gpt-5.5', useFor: ['chat'] })).toEqual({
+      settings: { model: 'gpt-5.5', useFor: ['chat'] },
+    });
+    expect(parseProviderSettings('google', { useFor: ['images'] })).toEqual({
+      settings: { useFor: ['images'] },
+    });
+    expect(parseProviderSettings('anthropic', { useFor: ['images'] })).toEqual({ error: 'useFor' });
+    expect(parseProviderSettings('openai', { model: 'gpt-5.5' })).toEqual({
+      settings: { model: 'gpt-5.5' },
+    });
   });
 });

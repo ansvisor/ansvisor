@@ -4064,6 +4064,7 @@
     },
     "keyFix": "Open AI Providers",
     "keyAskAdmin": "An Admin can fix it in Settings › AI Providers.",
+    "keyUseAnsvisor": "Use Ansvisor's limit",
     "tasks": {
       "title": "{due, plural, =0 {Action Center tasks} other {Action Center tasks · # due}}",
       "progress": "Tasks ready",
@@ -4281,6 +4282,46 @@
         "full_auto": "Full auto: the agent makes changes without asking. Nothing is published or sent without your click. Every change is in the Activity log."
       }
     }
+  },
+  "chatKeys": {
+    "title": "Add API key",
+    "close": "Close",
+    "loading": "Reading your keys…",
+    "loadFailed": "Couldn't read your keys. Try again.",
+    "failed": "Couldn't save that. Try again.",
+    "needsEnterprise": "Own API keys come with Enterprise. Chat runs on your plan's AI limit.",
+    "askAdmin": "Only Admins add API keys. Ask your Admin to add it in Settings › AI Providers.",
+    "note": "Your key goes straight to Settings › AI Providers, never into the chat. It is tested before it is kept.",
+    "provider": "Provider",
+    "key": "API key",
+    "keyPlaceholder": "Paste the key",
+    "model": "Model on OpenRouter",
+    "useFor": "Use for",
+    "useChat": "Chat",
+    "useImages": "Images",
+    "noImages": "Anthropic has no image models",
+    "save": "Test & save",
+    "saving": "Testing…",
+    "settings": "Open AI Providers",
+    "saved": {
+      "working": "{provider} key saved and working.",
+      "no_credit": "{provider} key saved, but its account is out of credit.",
+      "unchecked": "{provider} key saved. It couldn't be tested just now."
+    },
+    "yourKeys": "Your API keys",
+    "routing": "A model you pick runs on its provider's key, then your OpenRouter key, then your plan's AI limit. Auto runs on the key marked Auto.",
+    "none": "No keys saved yet.",
+    "autoRunsOnIt": "Auto",
+    "failing": "Not working",
+    "test": "Test",
+    "testing": "Testing…",
+    "tested": {
+      "working": "Working.",
+      "no_credit": "The account is out of credit.",
+      "unchecked": "Couldn't test it just now.",
+      "refused": "The provider turned this key down."
+    },
+    "add": "Add API key"
   },
   "chatPage": {
     "sendToActionCenterPrompt": "Send this finding to Action Center as an action.",
@@ -4604,6 +4645,8 @@
       "settings": "Settings",
       "usageTip": "AI usage this month",
       "files": "Files",
+      "scheduled": "Scheduled",
+      "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
       "agents": "Agent Center"
     },
     "actions": {
@@ -5032,6 +5075,7 @@
       "pages": {
         "allChats": "All chats",
         "agents": "Agent Center",
+        "scheduled": "Scheduled",
         "files": "Files",
         "settings": "Settings",
         "connections": "Connections"
@@ -5090,6 +5134,7 @@
         "activity": "Activity",
         "capabilities": "What Chat can do",
         "files": "Files",
+        "scheduled": "Scheduled",
         "settings": "Settings",
         "memory": "Memory",
         "connections": "Connections"
@@ -5142,7 +5187,7 @@
       },
       "notify": {
         "label": "Notify me when an agent needs me",
-        "note": "Inbox always; also email or Slack",
+        "note": "When an agent stops to ask you or wait for your OK: your Inbox always, and an email once per run",
         "inbox_email": "Inbox + email",
         "inbox": "Inbox only",
         "inbox_slack": "Inbox + Slack",
@@ -7198,6 +7243,116 @@
       "limit": "The workspace’s plan keeps up to {limit} scheduled jobs on at once, and {count} are on. Tell the person to turn one off in Scheduled, or to upgrade.",
       "skill": "There is no skill /{skill} on in this workspace. Schedule it with a prompt instead, or with a skill from the / menu.",
       "role": "Only Admins and Managers can schedule work."
+    },
+    "page": {
+      "title": "Scheduled",
+      "subtitle": "Work Chat does on a date or on repeat.",
+      "new": "New schedule",
+      "newPrompt": "Every Monday at 9:00, ",
+      "limit": "{active} of {limit} jobs on",
+      "columns": {
+        "job": "Job",
+        "when": "When",
+        "lastRun": "Last run",
+        "deliver": "Result goes to",
+        "mode": "Mode"
+      },
+      "skillLine": "/{skill}",
+      "brandAll": "All brands",
+      "by": "by {name}",
+      "followUp": "Follow-up check",
+      "setByRun": "Set by a Full auto run for you",
+      "setByYou": "Set by you",
+      "next": "Next: {date}",
+      "due": "Due {date}",
+      "paused": "Paused",
+      "pausedWhy": {
+        "manual": "Off",
+        "cap": "Paused · AI limit reached",
+        "failed": "Off after 3 failed runs",
+        "skill_off": "Paused · its skill is off",
+        "missing_source": "Paused · its brand is gone",
+        "owner_role": "Paused · its creator can't run it"
+      },
+      "notRun": "Not run yet",
+      "status": {
+        "running": "Working",
+        "needs_you": "Needs you",
+        "paused_cap": "Paused · AI limit reached",
+        "done": "Done",
+        "unchanged": "No change",
+        "failed": "Failed",
+        "skipped": "Skipped"
+      },
+      "parts": "{done} of {total} ready",
+      "emailed": "emailed",
+      "deliverTo": {
+        "chat": "Inbox · Chat",
+        "email": "Email",
+        "both": "Email · Inbox"
+      },
+      "mode": {
+        "ask_first": "Ask me first",
+        "auto": "Auto, ask before changes",
+        "full_auto": "Full auto"
+      },
+      "toggle": "{title} on",
+      "openLast": "Open last",
+      "runNow": "Run now",
+      "takeOver": "Take over",
+      "cancel": "Cancel",
+      "open": "Open",
+      "agent": "Agent: {name}",
+      "agentNote": "Edit its schedule in Agent Center",
+      "agentEdit": "Edit",
+      "empty": "No scheduled work yet. Ask Chat, such as “Every Monday at 9:00, summarise last week”, or click New schedule.",
+      "loadFailed": "Couldn’t load your scheduled work.",
+      "retry": "Retry",
+      "running": "Running now · the result shows up in your Inbox",
+      "busy": "Every run slot is busy. Try again in a minute.",
+      "deleted": "Schedule deleted. Past results stay in Files.",
+      "takenOver": "It’s yours now, and on again.",
+      "saved": "Saved",
+      "detail": {
+        "back": "Scheduled",
+        "edit": "Edit",
+        "title": "Job",
+        "prompt": "What Chat does each run",
+        "skill": "Runs the skill /{skill}",
+        "when": "When",
+        "nextRuns": "Next runs",
+        "deliver": "Deliver to",
+        "changeOnly": "Notify only if the answer changed",
+        "changeOnlyHint": "Recurring jobs only. The first run always delivers.",
+        "model": "Runs on Auto · Normal",
+        "save": "Save",
+        "delete": "Delete",
+        "deleteTitle": "Delete this schedule?",
+        "deleteBody": "Past results stay in Files.",
+        "deleteConfirm": "Delete",
+        "history": "Run history",
+        "historyNote": "The last 20 runs. Use is a share of your monthly AI limit.",
+        "historyEmpty": "No runs yet.",
+        "columns": {
+          "date": "Date",
+          "status": "Status",
+          "result": "Result",
+          "usage": "AI use"
+        },
+        "runNowTag": "Run now",
+        "openChat": "Open in Chat",
+        "readOnly": "Only its creator can change this job."
+      },
+      "errors": {
+        "not_found": "This job is gone.",
+        "forbidden": "Only its creator or an Admin can do that.",
+        "owner": "Its creator can’t run it any more. An Admin can take it over.",
+        "passed": "Its time has passed. Edit when it runs first.",
+        "limit": "Your plan’s scheduled jobs are all on. Turn one off first, or upgrade.",
+        "when": "That time doesn’t work.",
+        "prompt": "Say what Chat does each run.",
+        "failed": "That didn’t work. Try again."
+      }
     }
   },
   "audit": {
@@ -9040,7 +9195,9 @@
           "image": "Image",
           "imageHint": "Insert an image on this line",
           "products": "Products",
-          "productsHint": "Insert products from your catalog on this line"
+          "productsHint": "Insert products from your catalog on this line",
+          "aiImage": "Generate image",
+          "aiImageHint": "Generate an image with AI on this line"
         },
         "attach": "Attach a file: Excel, CSV, Word, Markdown, HTML or text",
         "products": "Insert products from your catalog",
@@ -9087,7 +9244,52 @@
         "altPlaceholder": "What the image shows",
         "invalid": "Enter the image's web address (https://…).",
         "cancel": "Cancel",
-        "insert": "Insert"
+        "insert": "Insert",
+        "tabs": {
+          "label": "How to add the image",
+          "address": "Upload or address",
+          "ai": "Generate with AI"
+        },
+        "ai": {
+          "prompt": "Describe the image",
+          "promptDefault": "A cover image about {title}",
+          "style": "Style",
+          "styles": {
+            "brand": "Brand style",
+            "illustration": "Illustration",
+            "photo": "Photo-like"
+          },
+          "ratio": "Shape",
+          "model": "Image model",
+          "loadingModels": "Reading the image models…",
+          "modelCost": "{multiplier} · about {percent}% of your monthly AI limit per image",
+          "modelOwnKey": "{multiplier} · Your key",
+          "recommended": "Recommended",
+          "count": "Options",
+          "rules": "No product screenshots, realistic people or charts with numbers. No text unless you ask for it.",
+          "generate": "Generate {count} images",
+          "regenerate": "Regenerate",
+          "share": "About {percent}% of your monthly AI limit",
+          "generating": "Generating…",
+          "pick": "Option {n} of {count}",
+          "selected": "Selected",
+          "alt": "Alt text",
+          "altHint": "What the image shows, for people who can't see it and for search",
+          "use": "Use this image",
+          "uploading": "Adding…",
+          "unsaved": "{count, plural, one {# more image was made but couldn't be saved; it still counts} other {# more images were made but couldn't be saved; they still count}} toward your AI limit.",
+          "aiGenerated": "AI-generated",
+          "failed": {
+            "unavailable": "Image generation isn't available in this workspace right now.",
+            "own_key": "Your workspace's own OpenRouter key can't be read. An Admin can replace it in Settings › AI Providers.",
+            "ai_limit": "What's left of your monthly AI limit doesn't cover {count} images, so none was made.",
+            "refused": "The image model didn't make an image for this description: {why} Try describing it another way.",
+            "demo": "The demo brand makes no images. Switch to your brand to generate one.",
+            "not_saved": "{count, plural, one {The image was} other {The # images were}} made, and count toward your AI limit, but couldn't be saved. Try again.",
+            "failed": "Couldn't generate images. Try again.",
+            "upload": "Couldn't add the image. Try again."
+          }
+        }
       },
       "chat": {
         "continued": "Continued from your chat “{title}”",
@@ -14710,6 +14912,17 @@
     "team_done": "Done",
     "team_sending": "Sending...",
     "team_sendInvitation": "Send invitation",
+    "googleOverview": {
+      "title": "Google per brand",
+      "description": "Which Google account each brand reads Search Console and Analytics from. Change it in the brand's own settings, under Integrations.",
+      "brand": "Brand",
+      "workspace": "Workspace account",
+      "own": "Its own account",
+      "ownShared": "Own account, shared with {count, plural, one {# more brand} other {# more brands}}",
+      "none": "Not connected",
+      "reconnect": "Needs connecting again",
+      "change": "Change"
+    },
     "teamBrands": {
       "label": "Brands",
       "all": {
@@ -14858,6 +15071,40 @@
           "founded": "Founded",
           "claim": "Claim"
         }
+      },
+      "integrations": {
+        "tab": "Integrations",
+        "title": "Google",
+        "description": "Which Google account this brand reads Search Console and Analytics from. A brand can use the workspace's account, the same account as another brand, or its own.",
+        "workspaceAccount": "the workspace's Google account",
+        "ownAccount": "its own Google account",
+        "sameAs": "the same account as {brands}",
+        "notSetUp": "Not set up",
+        "statusConnected": "Connected",
+        "statusNotConnected": "Not connected",
+        "none": "This brand uses no Google account for this yet.",
+        "uses": "Uses {account}.",
+        "needsReconnect": "The Google account needs connecting again.",
+        "connectedOn": "Connected on {date}",
+        "alsoUsedBy": "Also used by {brands}",
+        "useSame": "Use the same account as…",
+        "useSameLabel": "Use the same account as another brand",
+        "connect": "Connect a Google account",
+        "connectAnother": "Connect another Google account",
+        "disconnect": "Disconnect",
+        "switched": "{label} now uses that account",
+        "connected": "{label} connected for this brand",
+        "connectUnfinished": "The sign-in didn't finish. Try again.",
+        "disconnected": "{label} disconnected from this brand",
+        "failed": "That didn't work. Try again.",
+        "gscProperty": "Search Console property",
+        "gaProperty": "Analytics property",
+        "pickProperty": "Pick a property",
+        "propertySaved": "Property saved",
+        "propertiesFailed": "Couldn't list this account's properties.",
+        "otherIntegrations": "CMS sites, catalog sources and AI traffic are in Settings › Integrations, for the brand selected there.",
+        "loadError": "Couldn't load this brand's Google accounts.",
+        "retry": "Retry"
       },
       "people": {
         "tab": "People",
