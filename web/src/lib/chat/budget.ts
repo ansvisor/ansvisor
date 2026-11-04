@@ -69,6 +69,25 @@ export interface ChatBudgetStep {
    * server holds the step within that run's cap too (CHAT-27 item 21).
    */
   agentRunId?: string | null;
+  /**
+   * The scheduled job the step's chat is (chat_conversations.schedule_id):
+   * its usage row is named with the job (CHAT-12 item 14).
+   */
+  scheduleId?: string | null;
+}
+
+/**
+ * What a run's steps are metered as, by whose chat it is: an agent run's
+ * as the agent's, within its own cap (CHAT-27 item 21); a scheduled job's
+ * as the job's (CHAT-12 item 14); else a person's chat.
+ */
+export function meteredAs(chat: {
+  agentRunId: string | null;
+  scheduleId: string | null;
+}): Pick<ChatBudgetStep, 'feature' | 'agentRunId' | 'scheduleId'> {
+  if (chat.agentRunId) return { feature: 'agent', agentRunId: chat.agentRunId };
+  if (chat.scheduleId) return { feature: 'schedule', scheduleId: chat.scheduleId };
+  return {};
 }
 
 /**
@@ -136,7 +155,7 @@ const UNMETERED: ChatStepBudget = {
   keep() {},
 };
 
-type BudgetPath = 'reserve' | 'charge' | 'release';
+type BudgetPath = 'reserve' | 'charge' | 'release' | 'fit';
 
 /** The proxy's answers while the API is down or restarting. */
 const isTransient = (status: number) => status === 502 || status === 503 || status === 504;
@@ -217,6 +236,7 @@ export async function reserveChatStep(step: ChatBudgetStep): Promise<ChatStepRes
       maxOutputTokens: Math.max(1, Math.ceil(step.maxOutputTokens)),
       ownKey: step.source === 'own',
       ...(step.agentRunId ? { agentRunId: step.agentRunId } : {}),
+      ...(step.scheduleId ? { scheduleId: step.scheduleId } : {}),
     },
     RESERVE_TIMEOUT_MS,
   );
@@ -268,4 +288,71 @@ export async function reserveChatStep(step: ChatBudgetStep): Promise<ChatStepRes
     },
   };
   return { ok: true, budget };
+}
+
+/** The most like parts one check sizes, as the server takes them (MAX_FIT_UNITS). */
+export const MAX_FIT_UNITS = 100;
+
+/** A job in like parts, each one model step at worst: what fitChatUnits checks. */
+export interface ChatFitJob {
+  organizationId: string;
+  /** The model a part's step runs on, as the server prices it. */
+  model: string;
+  /** One part's step: its prompt in tokens (counted up) and the most it may write. */
+  perUnit: { inputTokens: number; maxOutputTokens: number };
+  /** How many parts the job has. */
+  units: number;
+  source: ChatKeySource;
+  /** The agent run the chat is: its own cap counts too (CHAT-27 item 21). */
+  agentRunId?: string | null;
+}
+
+/**
+ * How many of a job's parts the AI limit left covers, before the job starts
+ * (CHAT-04 item 17a): a count, never dollars (the server works it out,
+ * server/src/lib/chat-budget.js fitChatUnits). Every part fits on the
+ * workspace's own key, which isn't checked, and while the new Chat is off.
+ * `limit` says which limit binds: the agent run's own cap ('run') or the
+ * month's AI limit.
+ * Holds nothing: each step is still held on its own. Never throws: an API
+ * that doesn't answer, or refuses, comes back as `ok: false`, and the job
+ * goes on with each step held as before.
+ */
+export async function fitChatUnits(
+  job: ChatFitJob,
+): Promise<
+  { ok: true; fits: number; limit: 'run' | 'month' } | { ok: false; refusal: ChatBudgetRefusal }
+> {
+  const units = Math.max(1, Math.min(MAX_FIT_UNITS, Math.floor(job.units)));
+  if (job.source === 'own' || !chatAgenticEnabled(job.organizationId)) {
+    return { ok: true, fits: units, limit: 'month' };
+  }
+  const res = await post(
+    'fit',
+    {
+      orgId: job.organizationId,
+      model: job.model,
+      perUnit: {
+        inputTokens: Math.max(0, Math.ceil(job.perUnit.inputTokens)),
+        maxOutputTokens: Math.max(1, Math.ceil(job.perUnit.maxOutputTokens)),
+      },
+      units,
+      ...(job.agentRunId ? { agentRunId: job.agentRunId } : {}),
+    },
+    RESERVE_TIMEOUT_MS,
+  );
+  const fits = res?.body?.fits;
+  if (res?.status === 200 && typeof fits === 'number' && Number.isInteger(fits) && fits >= 0) {
+    // The agent run's own cap, when it is the limit that binds; else the month's.
+    const limit = res.body?.limit === 'run' ? 'run' : 'month';
+    return { ok: true, fits: Math.min(fits, units), limit };
+  }
+  const code = res?.body?.error;
+  return {
+    ok: false,
+    refusal:
+      typeof code === 'string' && (CHAT_BUDGET_REFUSALS as readonly string[]).includes(code)
+        ? (code as ChatBudgetRefusal)
+        : 'unavailable',
+  };
 }

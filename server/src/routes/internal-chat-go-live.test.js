@@ -34,6 +34,7 @@ function query(table) {
       );
       return chain;
     },
+    limit: () => chain,
     maybeSingle: async () => ({
       data: (db.tables[table] ?? []).find((row) => filters.every((f) => f(row))) ?? null,
       error: null,
@@ -300,6 +301,14 @@ describe('POST /api/internal/chat/go-live/send', () => {
     flags.cloud = false;
     db.tables.organizations[0].plan = 'starter';
     expect((await send()).status).toBe(200);
+  });
+
+  it('never sends a page someone took down: a click does it (PR 10)', async () => {
+    db.tables.content_draft_deliveries = [{ id: 'd0', draft_id: DRAFT, status: 'taken_down' }];
+    const res = await send();
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ success: false, code: 'taken_down' });
+    expect(sendContentPages).not.toHaveBeenCalled();
   });
 
   it('answers 404 for a run or a draft that isn’t the workspace’s', async () => {

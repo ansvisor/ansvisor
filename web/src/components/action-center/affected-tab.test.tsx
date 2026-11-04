@@ -93,7 +93,14 @@ describe('AffectedTab', () => {
         }
       />,
     );
-    expect(headers()).toEqual(['Prompt', 'Volume', 'Lost on', 'Your lost page', 'Cited instead']);
+    // The Volume column says its figures are estimates, with their note (2026-11-01).
+    expect(headers()).toEqual([
+      'Prompt',
+      'VolumeEstimate',
+      'Lost on',
+      'Your lost page',
+      'Cited instead',
+    ]);
     const cells = [...container.querySelectorAll('td')].map((td) => td.textContent);
     // An estimate: its range (PROMPT-013).
     expect(cells[1]).toBe('18–32k');

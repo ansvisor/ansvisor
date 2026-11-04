@@ -149,6 +149,14 @@ describe('toClientStep', () => {
     expect(step?.scope).toEqual({ platforms: ['ChatGPT', '…'], brand: 'Acme' });
   });
 
+  it('keeps a memory step’s unit, items, and no other unit (CHAT-14 item 17)', () => {
+    const memory = { ...FULL_ROW, row_count: 3 };
+    expect(
+      toClientStep({ ...memory, scope_json: { subject: 'Memory', unit: 'items' } })?.scope,
+    ).toEqual({ subject: 'Memory', unit: 'items' });
+    expect(toClientStep({ ...memory, scope_json: { unit: 'bytes' } })).not.toHaveProperty('scope');
+  });
+
   it('leaves out a data time it cannot read', () => {
     expect(toClientStep({ ...FULL_ROW, data_as_of: 'soon' })).not.toHaveProperty('dataAsOf');
   });

@@ -72,6 +72,12 @@ vi.mock('@/lib/mcp/pages', async (importOriginal) =>
 vi.mock('@/lib/mcp/why', async (importOriginal) =>
   tracked.all('mcp/why', await importOriginal<Record<string, unknown>>()),
 );
+vi.mock('@/lib/mcp/brand-facts-reads', async (importOriginal) =>
+  tracked.all('mcp/brand-facts-reads', await importOriginal<Record<string, unknown>>()),
+);
+vi.mock('@/lib/mcp/whats-new', async (importOriginal) =>
+  tracked.all('mcp/whats-new', await importOriginal<Record<string, unknown>>()),
+);
 vi.mock('@/lib/actions/content', () => ({
   updateOpportunityStatus: tracked.track('actions/content.updateOpportunityStatus'),
 }));
@@ -95,6 +101,9 @@ vi.mock('@/lib/actions/cms-send', () => ({
   sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
   publishDraftToCms: tracked.track('actions/cms-send.publishDraftToCms'),
 }));
+vi.mock('@/lib/actions/cms-take-down', () => ({
+  takeDownDraft: tracked.track('actions/cms-take-down.takeDownDraft'),
+}));
 vi.mock('@/lib/actions/reports', () => ({
   createReport: tracked.track('actions/reports.createReport'),
 }));
@@ -105,8 +114,21 @@ vi.mock('@/lib/actions/audits', () => ({
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
 }));
+vi.mock('@/lib/actions/chat-schedules', () => ({
+  createChatSchedule: tracked.track('actions/chat-schedules.createChatSchedule'),
+}));
+vi.mock('@/lib/actions/chat-agent-calls', () => ({
+  runAgentFromChat: tracked.track('actions/chat-agent-calls.runAgentFromChat'),
+}));
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
+}));
+vi.mock('@/lib/actions/chat-skills', () => ({
+  saveChatSkill: tracked.track('actions/chat-skills.saveChatSkill'),
+}));
+vi.mock('@/lib/actions/chat-memory', () => ({
+  saveChatMemory: tracked.track('actions/chat-memory.saveChatMemory'),
+  forgetChatMemory: tracked.track('actions/chat-memory.forgetChatMemory'),
 }));
 vi.mock('@/lib/actions/prompt', () => ({
   addTopicPrompts: tracked.track('actions/prompt.addTopicPrompts'),
@@ -348,6 +370,11 @@ describe('the Chat tool registry', () => {
       date_to: '2026-10-31',
     });
     await run('run_site_audit', { brand_id: brand, urls: [' https://acme.example/a '] });
+    await run('save_skill', {
+      name: 'pricing-faq',
+      description: ' Writes a pricing FAQ. ',
+      instructions: 'Read the pricing page.',
+    });
 
     expect(calls.map((call) => [call.from, call.args])).toEqual([
       ['actions/prompt-suggestions.dismissSuggestion', [item]],
@@ -365,6 +392,9 @@ describe('the Chat tool registry', () => {
             source: { kind: 'opportunity', id: item },
             bodyHtml: undefined,
             sourceUrl: undefined,
+            // Made in Chat (00463, W4-10); no chat in this context.
+            origin: 'chat',
+            conversationId: null,
           },
         ],
       ],
@@ -413,6 +443,16 @@ describe('the Chat tool registry', () => {
         [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
       ],
       ['actions/audits.startSiteAudits', [brand, ['https://acme.example/a']]],
+      [
+        'actions/chat-skills.saveChatSkill',
+        [
+          {
+            name: 'pricing-faq',
+            description: 'Writes a pricing FAQ.',
+            instructions: 'Read the pricing page.',
+          },
+        ],
+      ],
     ]);
   });
 
@@ -442,6 +482,23 @@ describe('the Chat tool registry', () => {
       'chat/actor/drafts.updateContentDraftFor',
       [person, item, { title: 'Plans', bodyHtml: undefined }],
     ]);
+    // Made in the run's chat; an agent's run's own write is the agent's (00463, W4-10).
+    calls.length = 0;
+    const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+    const inChat = {
+      ...ctx,
+      chat: {
+        conversationId: CHAT,
+        runId: 'run-1',
+        agentRunId: 'agent-run-1',
+        approvalKey: 'k',
+        executionMode: 'automated' as const,
+      },
+    };
+    await create.run(inChat, start);
+    await create.runFor!(inChat, start);
+    expect(calls[0].args[1]).toMatchObject({ origin: 'chat', conversationId: CHAT });
+    expect(calls[1].args[2]).toMatchObject({ origin: 'agent', conversationId: CHAT });
     // A context with no workspace has no one to act for.
     await expect(create.runFor!({ ...ctx, organizationId: null }, start)).rejects.toThrow(
       /workspace/,
@@ -552,10 +609,10 @@ describe('the Chat tool registry', () => {
         { title: 'Pitch G2 a review', type: 'outreach', where: 'g2.com', done_when: 'Sent' },
       ],
     });
-    expect(send.target!(input)).toBe(
+    expect(send.target!(input, { organizationId: 'org-1' })).toBe(
       '“Win back pricing citations on /pricing” · Recover · 2 tasks',
     );
-    await expect(send.cardDetails!(input)).resolves.toEqual({
+    await expect(send.cardDetails!(input, { organizationId: 'org-1' })).resolves.toEqual({
       items: [
         {
           title: 'Add a FAQ to /pricing',
@@ -658,8 +715,19 @@ describe('approval policies', () => {
       update_draft: ['admin', 'manager'],
       push_cms_draft: ['admin', 'manager'],
       publish_cms: ['admin', 'manager'],
+      // Take down (AUTONOMOUS-GO-LIVE PR 10): as the API's route, a Manager even while publishing is off.
+      unpublish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
+      // Scheduled work (CHAT-20 §4: Admins and Managers create schedules).
+      create_schedule: ['admin', 'manager'],
+      // A skill of one's own (W3-06, CHAT-13 v2): Admins and Managers save skills.
+      save_skill: ['admin', 'manager'],
+      // Memory (W3-11, CHAT-14 item 25): every role has its Me; the store checks the scope.
+      save_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
+      forget_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
+      // An agent running another agent (CHAT-27 phase 2): Admins and Managers, as agents are.
+      run_agent: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
@@ -682,20 +750,25 @@ describe('approval policies', () => {
   });
 
   it('says where every row that takes a brand or an object finds its brand', () => {
-    const problems = CHAT_TOOLS.flatMap((tool) => {
-      const fields = Object.keys(tool.inputSchema.shape);
-      const ids = fields.filter((field) => field === 'id' || field.endsWith('_id'));
-      const brandOf = tool.brandOf;
-      if (fields.includes('brand_id')) {
-        return brandOf && 'input' in brandOf ? [] : [`${tool.name}: takes brand_id`];
-      }
-      if (ids.length > 0) {
-        return brandOf && 'lookup' in brandOf && ids.includes(brandOf.idField)
-          ? []
-          : [`${tool.name}: takes ${ids.join(', ')}, so its brand is looked up`];
-      }
-      return brandOf === null ? [] : [`${tool.name}: names no brand or object`];
-    });
+    // Memory's lines (W3-11): a Me or Workspace line has no brand, so the store checks a
+    // Brand line's brand itself (memory/store.ts), never the precedence's brand rule.
+    const OWN_BRAND_CHECK = new Set(['save_memory', 'forget_memory']);
+    const problems = CHAT_TOOLS.filter((tool) => !OWN_BRAND_CHECK.has(tool.name)).flatMap(
+      (tool) => {
+        const fields = Object.keys(tool.inputSchema.shape);
+        const ids = fields.filter((field) => field === 'id' || field.endsWith('_id'));
+        const brandOf = tool.brandOf;
+        if (fields.includes('brand_id')) {
+          return brandOf && 'input' in brandOf ? [] : [`${tool.name}: takes brand_id`];
+        }
+        if (ids.length > 0) {
+          return brandOf && 'lookup' in brandOf && ids.includes(brandOf.idField)
+            ? []
+            : [`${tool.name}: takes ${ids.join(', ')}, so its brand is looked up`];
+        }
+        return brandOf === null ? [] : [`${tool.name}: names no brand or object`];
+      },
+    );
     expect(problems).toEqual([]);
     for (const tool of CHAT_TOOLS) {
       if (tool.brandOf && 'lookup' in tool.brandOf) {
@@ -847,6 +920,11 @@ describe('approval policies', () => {
     // The registry: Send to CMS may, every other row may not.
     const onItsOwn = CHAT_TOOLS.filter((tool) => tool.flags.goLiveOnOwn).map((tool) => tool.name);
     expect(onItsOwn).toEqual(['push_cms_draft', 'publish_cms']);
+    // Take down (PR 10): an EXECUTE outside the go-live groups, which never goes live itself.
+    expect(chatTool('unpublish_cms')).toMatchObject({ class: 'execute', executeGroup: null });
+    expect(() => defineTool({ ...execute, executeGroup: null, goLive } as never)).toThrow(
+      /outside the groups never goes live/,
+    );
     expect(chatTool('publish_cms')?.goLive?.({ draft_id: 'd', destination: 'wordpress' })).toEqual({
       kind: 'publish',
       draftId: 'd',
@@ -982,20 +1060,33 @@ describe("the model's tool list on the registry's rows", () => {
   const withoutShopping = reads.filter((name) => name !== 'get_shopping_visibility');
 
   it('gives every role the reads its plan opens, and Analysts and Agency partners daily work only', () => {
+    // Memory (W3-11): everyone keeps their own Me.
+    const memory = ['save_memory', 'forget_memory'];
     expect(list('analyst', starter)).toEqual([
       ...withoutShopping,
       'create_draft',
       'dismiss_prompt_suggestion',
       'request_access',
+      ...memory,
     ]);
-    expect(list('agency_partner', growth)).toEqual([...reads, 'create_draft', 'request_access']);
-    expect(list('manager', starter)).toEqual([...withoutShopping, ...writes]);
+    expect(list('agency_partner', growth)).toEqual([
+      ...reads,
+      'create_draft',
+      'request_access',
+      ...memory,
+    ]);
+    // Running another agent is Growth and up (CHAT-27 decision 4).
+    expect(list('manager', starter)).toEqual([
+      ...withoutShopping,
+      ...writes.filter((name) => name !== 'run_agent'),
+    ]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
     expect(list('analyst', facts(null, false))).toEqual([
       ...reads,
       'create_draft',
       'dismiss_prompt_suggestion',
       'request_access',
+      ...memory,
     ]);
   });
 
@@ -1011,6 +1102,8 @@ describe("the model's tool list on the registry's rows", () => {
       ...reads,
       'create_draft',
       'request_access',
+      'save_memory',
+      'forget_memory',
     ]);
   });
 });

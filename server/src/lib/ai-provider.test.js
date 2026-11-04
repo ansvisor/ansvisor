@@ -94,10 +94,89 @@ describe('ai-provider registry', () => {
     });
   });
 
+  it('asks OpenRouter for providers that keep no data on every call', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new globalThis.Response(
+          JSON.stringify({
+            id: 'gen-1',
+            object: 'chat.completion',
+            created: 0,
+            model: 'anthropic/claude-haiku-4.5',
+            choices: [
+              { index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' },
+            ],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const { resolveModel } = await loadWith({ OPENROUTER_API_KEY: 'sk-or-test' });
+      const { generateText } = await import('ai');
+
+      const { text } = await generateText({
+        model: resolveModel('openrouter/anthropic/claude-haiku-4.5'),
+        prompt: 'Hi',
+      });
+
+      expect(text).toBe('ok');
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(String(url)).toBe('https://openrouter.ai/api/v1/chat/completions');
+      const body = JSON.parse(init.body);
+      expect(body.provider.data_collection).toBe('deny');
+      expect(body.model).toBe('anthropic/claude-haiku-4.5');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('has no search tool for openrouter or an unconfigured provider', async () => {
     const { webSearchTools } = await loadWith({ OPENROUTER_API_KEY: 'sk-or-test' });
 
     expect(webSearchTools('openrouter/google/gemini-3-flash')).toBeNull();
     expect(webSearchTools('google/gemini-3-flash-preview')).toBeNull();
+  });
+});
+
+describe('openRouterFetch', () => {
+  const post = (body) => ({ method: 'POST', body });
+
+  it('adds data_collection deny to a JSON body without a provider', async () => {
+    const own = vi.fn(async () => 'sent');
+    const { openRouterFetch, OPENROUTER_ROUTING } = await import('./ai-provider.js');
+
+    await openRouterFetch(OPENROUTER_ROUTING, own)('https://x', post('{"model":"m"}'));
+
+    expect(JSON.parse(own.mock.calls[0][1].body)).toEqual({
+      model: 'm',
+      provider: { data_collection: 'deny' },
+    });
+  });
+
+  it("keeps the body's own provider settings and denies data collection over them", async () => {
+    const own = vi.fn(async () => 'sent');
+    const { openRouterFetch, OPENROUTER_ROUTING } = await import('./ai-provider.js');
+    const body = { model: 'm', provider: { order: ['azure'], data_collection: 'allow' } };
+
+    await openRouterFetch(OPENROUTER_ROUTING, own)('https://x', post(JSON.stringify(body)));
+
+    expect(JSON.parse(own.mock.calls[0][1].body).provider).toEqual({
+      order: ['azure'],
+      data_collection: 'deny',
+    });
+  });
+
+  it('sends a body that is not JSON, or no body, as it is', async () => {
+    const own = vi.fn(async () => 'sent');
+    const { openRouterFetch, OPENROUTER_ROUTING } = await import('./ai-provider.js');
+    const send = openRouterFetch(OPENROUTER_ROUTING, own);
+
+    await send('https://x', post('not json'));
+    await send('https://x', { method: 'GET' });
+
+    expect(own.mock.calls[0][1].body).toBe('not json');
+    expect(own.mock.calls[1][1]).toEqual({ method: 'GET' });
   });
 });

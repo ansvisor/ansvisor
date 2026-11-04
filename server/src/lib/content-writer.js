@@ -34,6 +34,13 @@ import {
   rebuildDraftBrief,
   rebuildSources,
 } from './content-brief.js';
+import {
+  HEALTH_RULE,
+  healthGuard,
+  healthHtml,
+  healthPage,
+  withoutHealthFinds,
+} from './content-health.js';
 import { inputSources, readDraftInputs } from './content-inputs.js';
 import {
   RESEARCH_RULE,
@@ -122,12 +129,6 @@ import { objectOptions } from './structured-output.js';
 const CALL_TIMEOUT_MS = 180_000;
 /** How far a Length's band reaches either side of it (the editor's LENGTH_TOLERANCE). */
 const LENGTH_TOLERANCE = 0.2;
-/**
- * How far past the top of its Length's band a rewrite may come before one
- * more pass cuts it: 15% of the Length (editor test 2026-10-25, where
- * rewrites for 4,000 came to 5,468, 6,843 and 7,335 characters).
- */
-const CUT_PASS_OVER = 0.15;
 
 // A 'writing' older than WRITING_STALE_MS (content-agent.js, which Fix open
 // rules checks too) was left by a server that stopped: it can start again.
@@ -202,6 +203,7 @@ How to write:
 - For each fan-out a rule names, use its words, not questions of your own: a section heading for fanoutH2, an FAQ question ending in "?" for fanoutFaq.
 - Use only facts from the brand, the brief and your data, and the ones you ask to have looked up. Never invent numbers, prices, dates, names, customers, sources or quotes.
 ${RESEARCH_RULE}
+${HEALTH_RULE}
 - Plain text in every field: no HTML, no Markdown.
 - Write in the language asked for.`;
 
@@ -237,6 +239,7 @@ ${FANOUT_RULE}
 - Put the keys of the rules a change meets in "rules" (none when it meets none).
 - Use only facts from the page, the brand and your data, and the ones you ask to have looked up. Never invent numbers, prices, dates, names, sources or quotes.
 ${RESEARCH_RULE}
+${HEALTH_RULE}
 ${SOURCES_RULE}
 ${ATTRIBUTION_RULE}
 - Keep the page's voice. The most useful changes first, at most ${MAX_AGENT_SUGGESTIONS}.
@@ -775,6 +778,7 @@ async function rewritePage({
   numbered,
   known,
   people,
+  health,
   brief,
   run,
 }) {
@@ -821,10 +825,15 @@ async function rewritePage({
 
   // No invented person or quote (CE-044): read in its words as written,
   // blockquotes too, before what it kept goes back, so the page's own
-  // passages are never touched.
+  // passages are never touched. No health claim the brand didn't make, nor
+  // a {{find: …}} for one, before anything is looked up (content-health.js).
+  const stats = { health: 0 };
   const cleaned = cleanPageHtml(
     // A claim given to a source it wasn't given: a placeholder, not the page dropped.
-    placeholderAttributionsInHtml(guardPeopleInHtml(answer.html, people).html, attributable),
+    placeholderAttributionsInHtml(
+      guardPeopleInHtml(healthHtml(answer.html, health, stats), people).html,
+      attributable,
+    ),
     rewriteLinks(draft.body_html, linkAllowList(targets)),
     { h1Kept: page.h1Token !== null, originalH1: page.h1 },
   );
@@ -850,8 +859,13 @@ async function rewritePage({
     editHtml(placeholderNumbersInHtml(looked.page, known), settler(looked.own, looked.stats)),
     sweeper(looked.own, looked.stats),
   );
-  logger.info({ draftId: draft.id, ...looked.stats }, '[content-writer] facts settled');
-  const linked = linkFacts(sweepHtml(settled, looked.own), looked.links);
+  // …and none the facts pass wrote in.
+  const checked = healthHtml(settled, health, stats);
+  logger.info(
+    { draftId: draft.id, ...looked.stats, health: stats.health },
+    '[content-writer] facts settled',
+  );
+  const linked = linkFacts(sweepHtml(checked, looked.own), looked.links);
   const { html, missing } = restoreKept(linked, page.kept, {
     word: page.word,
     h1Token: page.h1Token,
@@ -912,17 +926,21 @@ async function rewritePage({
 }
 
 /**
- * One more pass when a rewrite came well past its Length (CUT_PASS_OVER past
- * its band's top): the model cuts its own page to the Length, keeping every
- * heading with its answer, each kept line, the links and the facts. On its
- * own hold on the budget, so a budget the first pass used up skips it. The
- * cut is taken only when it is shorter and keeps every kept line; else, or
- * when it fails, the first rewrite stands (logged). A stop goes through.
+ * One more pass when a rewrite came past the top of its Length's band
+ * (editor test 2026-10-25, where rewrites for 4,000 came to 5,468, 6,843
+ * and 7,335 characters): the model cuts its own page to the Length, keeping
+ * every heading with its answer, each kept line, the links and the facts.
+ * Any way past it, not only well past (editor test 2026-11-03: a rewrite
+ * left a little long was taken as the most a rewrite reaches, so the
+ * Length set was never met). On its own hold on the budget, so a budget
+ * the first pass used up skips it. The cut is taken only when it is
+ * shorter and keeps every kept line; else, or when it fails, the first
+ * rewrite stands (logged). A stop goes through.
  */
 async function cutToLength({ answer, page, length, brand, draft, model, modelId, run }) {
   const total = ownText({ ...page, html: answer.html }) + page.keptChars;
   const max = Math.round(length * (1 + LENGTH_TOLERANCE));
-  if (total <= max + length * CUT_PASS_OVER) return answer;
+  if (total <= max) return answer;
   const budget = await reserveAiBudget(brand.organization_id, {
     feature: 'content',
     modelId,
@@ -1147,6 +1165,21 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     ...numbered.map(sourceWords),
     ...authors,
   );
+  // A health brand's guard: the claims it made in its own words (the page,
+  // its description, Your input, its products' names and the rules people
+  // wrote), never the brief's, a buyer's or a cited page's (content-health.js).
+  const health = healthGuard(brand, {
+    html: draft.body_html,
+    texts: [
+      draft.title,
+      brand.name,
+      brand.description,
+      ...shopping.names,
+      ...input.textRules,
+      ...(brand.rules ?? []),
+    ],
+    numbered,
+  });
   // The sources a claim may be given to: the ones the page gives claims to,
   // its Your input and authors (editor test 2026-10-25).
   const language = await draftLanguage(draft, brand);
@@ -1168,6 +1201,7 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
       numbered,
       known: knownInPage,
       people,
+      health,
       brief,
       run,
     });
@@ -1193,11 +1227,15 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     );
     await budget.charge(usage);
     await advanceRun(run, 3);
+    // No health claim the brand didn't make, nor a {{find: …}} for one,
+    // before anything is looked up (content-health.js).
+    const stats = { health: 0 };
+    const asked = healthPage(object, health, editPage, stats);
     // The facts it asked for, and the figures it wrote with no source,
     // looked up on the web and written in with their links, or left for the
     // person (content-research.js); never its shopping path's products' specs.
     const looked = await lookUpFacts({
-      map: (editsFor) => editPage(object, editsFor),
+      map: (editsFor) => editPage(asked, editsFor),
       known: knownInPage,
       own: pageOwn(draft.body_html),
       products: shopping.names,
@@ -1208,12 +1246,21 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
       context: { brand: brand.name, title: draft.title, language: getLanguageName(language) },
     });
     // No number without a source (CE-033): one nobody found is the person's
-    // to fill, as a fact only the brand has; a marker left broken goes.
-    const written = editPage(
-      editPage(sourcedPage(looked.page, knownInPage, people), settler(looked.own, looked.stats)),
-      sweeper(looked.own, looked.stats),
+    // to fill, as a fact only the brand has; a marker left broken goes; and
+    // no health claim the facts pass wrote in.
+    const written = healthPage(
+      editPage(
+        editPage(sourcedPage(looked.page, knownInPage, people), settler(looked.own, looked.stats)),
+        sweeper(looked.own, looked.stats),
+      ),
+      health,
+      editPage,
+      stats,
     );
-    logger.info({ draftId: draft.id, ...looked.stats }, '[content-writer] facts settled');
+    logger.info(
+      { draftId: draft.id, ...looked.stats, health: stats.health },
+      '[content-writer] facts settled',
+    );
     // The title column as the H1 reads it: a capital first (headingCase).
     const title = headingCase(clean(written.title).slice(0, 300), language) || draft.title;
     // Stopped meanwhile: the page stays as it was, and History with it.
@@ -1288,9 +1335,11 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
   await budget.charge(usage);
   await advanceRun(run, 3);
   // The facts it asked for, and the figures it wrote with no source, looked
-  // up (content-research.js); its data's own figures are its sources'.
+  // up (content-research.js); its data's own figures are its sources'. One
+  // that asks for a health claim to be looked up goes first: none is
+  // searched (content-health.js); keepSuggestions reads the claims.
   const looked = await lookUpSuggestionFacts({
-    suggestions: object.suggestions,
+    suggestions: withoutHealthFinds(object.suggestions, health),
     known: knownInPage,
     own: pageOwn(draft.body_html),
     products: shopping.names,
@@ -1307,7 +1356,7 @@ async function writeWithRun({ draft, brand, model, modelId, input, budget, rewri
     lockedKeys,
     ruleKeys,
     withFactLinks(linkAllowList(targets), looked.links),
-    { numbered, known, people, attributable, banned: bannedWordsOf(input.rules) },
+    { numbered, known, people, attributable, banned: bannedWordsOf(input.rules), health },
   );
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);
