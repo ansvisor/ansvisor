@@ -10,7 +10,8 @@
  *   2. reads the brands Chat is on for (not demo brands, 00380, nor paused
  *      ones), and skips read-only workspaces (no active plan): their lists
  *      keep what they have;
- *   3. per workspace, its people by role (ROLE_FEEDS) and their time zones,
+ *   3. per workspace, its people by role (ROLE_FEEDS) and their time zones
+ *      (the one each picked in Settings › Account, else their answers'),
  *      and only those whose morning it is go on; which brands each of them
  *      can see is read once (brand access, spec §5.4: brandReaders);
  *   4. per brand, for the people who can see it, in a few batched reads:
@@ -130,10 +131,10 @@ async function loadActiveWorkspaces(db, orgIds) {
   );
 }
 
-/** The workspace's people who get suggestions at all (not analysts). */
+/** The workspace's people who get suggestions at all (not analysts), with their picked time zone. */
 async function loadPeople(db, orgId) {
   const people = await readAll('profiles read', () =>
-    db.from('profiles').select('id, role').eq('organization_id', orgId).order('id'),
+    db.from('profiles').select('id, role, time_zone').eq('organization_id', orgId).order('id'),
   );
   return people.filter((person) => roleFeed(person.role) !== 'never');
 }
@@ -460,7 +461,7 @@ async function runBrand(db, { orgId, brandId, people, zones, now, tally }) {
 async function runWorkspace(db, { orgId, brands, now, tally }) {
   const people = await loadPeople(db, orgId);
   if (people.length === 0) return;
-  const zones = resolveZones(await loadAnswerZones(db, orgId, now));
+  const zones = resolveZones(await loadAnswerZones(db, orgId, now), people);
   const morning = people.filter((person) => inMorning(now, zones.ofPerson(person.id)));
   if (morning.length === 0) return;
   const readers = await brandReaders(
