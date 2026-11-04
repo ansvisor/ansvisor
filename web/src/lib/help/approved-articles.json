@@ -779,7 +779,7 @@
         "helper agent"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-04",
       "sections": [
         {
           "heading": null,
@@ -851,11 +851,7 @@
         },
         {
           "heading": "Let an agent publish on its own",
-          "text": "An Admin can let chosen agents send pages to your CMS as drafts without a click. Two switches must be on: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with the agent in **Full auto**. Managers see the box read-only, with **Ask your Admin**.\n\n**At most a day** sets how many pages it may send on its own in 24 hours, from 1 to 20. A page still waits for your click, and its card says why, when it fails Quality or your approved brand facts, the run read text that tried to instruct it, the page has hidden text or outside links, the page is live already, or the agent reached its limit.\n\nChanging what the agent does turns this off until an Admin turns it on again."
-        },
-        {
-          "heading": "Let an agent publish on its own",
-          "text": "An Admin can let chosen agents publish new pages on Webflow, WordPress and Wix, and send drafts to your CMS, without a click. Two switches must be on: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with the agent in **Full auto**. Managers see it read-only.\n\n**At most a day** sets how many pages it may send or publish on its own in 24 hours, from 1 to 20. A page still waits for your click, and its card says why, when it fails Quality or your approved brand facts, the run read text that tried to instruct it, the page has hidden text or outside links, the page is live already, or the agent reached its limit.\n\nChanging what the agent does turns this off until an Admin turns it on again."
+          "text": "Where your workspace has it, Admins on Growth and up can let chosen agents publish new pages on Webflow, WordPress and Wix, and send drafts to your CMS, without a click. It takes two switches: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with **Full auto** picked. Managers see the agent's switch read-only, with **Ask your Admin**.\n\n**At most a day** caps its pages in 24 hours: 1 to 20, 5 by default. A page still waits for your click, and its card says why, when the run read text that tried to instruct it, the agent reached its limit, or the page fails Quality or your approved brand facts, has hidden text or outside links, or is live already.\n\nChanging what the agent does turns this off until an Admin allows it again."
         },
         {
           "heading": "When an agent sends a page on its own",
@@ -863,7 +859,7 @@
         },
         {
           "heading": "On your own AI key",
-          "text": "When your workspace runs Chat on its own AI key, agents run on it too. The provider bills your account, and your monthly AI limit doesn't move. **Max per run** and **Monthly cap** still apply: what a run uses is measured at the providers' list prices."
+          "text": "When your workspace runs Chat on its own AI key, agents on **Auto** run on it too. An agent set to another model, such as **Fast** or **Best writing**, runs on your key for that model's provider first, then on your OpenRouter key, then on your monthly AI limit. On your own key, the provider bills your account, and your monthly AI limit doesn't move. **Max per run** and **Monthly cap** still apply: what a run uses is measured at the providers' list prices."
         },
         {
           "heading": "Run an agent from Action Center",
