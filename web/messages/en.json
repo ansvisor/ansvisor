@@ -3511,6 +3511,11 @@
       "note": "Its timeline events go with it. Undo brings the competitor back, not those events."
     },
     "reviseDraft": { "name": "Change drafts in Content", "step": "Changed draft in Content" },
+    "markDraftReady": { "name": "Mark drafts ready", "step": "Marked draft ready" },
+    "editorSuggestions": {
+      "name": "Suggest changes in the Content Editor",
+      "step": "Content Agent suggested changes in the editor"
+    },
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
     "publishToCms": { "name": "Publish pages on your site", "step": "Published page on your site" },
     "takeDownFromCms": {
@@ -3786,7 +3791,8 @@
         "states": {
           "openPage": "After Chat writes a page · none Recommended; Open here comes with W4-15",
           "pageVersion1": "Version 1: the page Chat wrote · no Undo",
-          "pageVersion2": "Version 2 after a change · Rules, Quality, Optimize, Mark ready and Send to CMS come with W4-12b",
+          "pageVersion2": "Version 2 after a change, for an Admin or a Manager · Rules, Quality and Optimize come with W4-12b-2",
+          "pageMarkReady": "Next moves once nothing is left to fill (W4-12b)",
           "planAuto": "Auto, ask before changes",
           "planFullAuto": "Full auto, a tool not connected",
           "planReadOnly": "Analyst: read-only",
@@ -3881,6 +3887,8 @@
   "chatEngine": {
     "pageMoves": {
       "fill": "Fill the {what}",
+      "markReady": "Mark ready",
+      "markReadyPrompt": "Mark this page ready",
       "untitled": "Untitled page"
     },
     "actionCard": {
@@ -4401,7 +4409,9 @@
       "undoneShort": "Back to version {n}",
       "undone": "Version {n} is back in the draft.",
       "undoFailed": "The version before couldn’t be put back. Try again from the editor’s History.",
-      "saved": "Saved to the Library as a draft after each change, so the editor can open it anytime."
+      "saved": "Saved to the Library as a draft after each change, so the editor can open it anytime.",
+      "sendToCms": "Send to CMS",
+      "sendFailed": "The page couldn’t be read to send. Try again, or send it from the Content Editor."
     },
     "types": {
       "document": "Document",
@@ -5730,6 +5740,9 @@
       "taskReadyForReviewUndo": "Took {task} back from Ready for review",
       "reviseDraft": "Changed the draft “{title}”",
       "reviseDraftUndo": "Put the draft “{title}” back as it was",
+      "markDraftReady": "Marked the draft “{title}” ready",
+      "editorSuggestions": "Asked the Content Agent for suggestions on “{title}”",
+      "markDraftReadyUndo": "Took the draft “{title}” back from Ready",
       "sendToCms": "Sent the draft “{title}” to {cms}",
       "publishToCms": "Published the page “{title}” through {cms}",
       "takeDownFromCms": "Took the page “{title}” down from {cms}",
@@ -7329,7 +7342,11 @@
         },
         "runNowTag": "Run now",
         "openChat": "Open in Chat",
-        "readOnly": "Only its creator can change this job."
+        "readOnly": "Only its creator can change this job.",
+        "timeZone": "Time zone",
+        "timeZoneHint": "This job’s own clock. Changing your time zone in Settings doesn’t move it.",
+        "timeZoneSearch": "Search time zones",
+        "timeZoneEmpty": "No time zone matches."
       },
       "errors": {
         "not_found": "This job is gone.",
@@ -7339,6 +7356,7 @@
         "limit": "Your plan’s scheduled jobs are all on. Turn one off first, or upgrade.",
         "when": "That time doesn’t work.",
         "prompt": "Say what Chat does each run.",
+        "zone": "Pick a time zone from the list.",
         "failed": "That didn’t work. Try again."
       }
     }
@@ -9021,6 +9039,7 @@
       "suggestions": {
         "bar": "Agent suggestions",
         "agent": "Content Agent",
+        "agentFromChat": "Content Agent · from your chat",
         "fromAction": "from Action AC-{no}",
         "runMax": "a run makes at most {max} changes: run it again for the rest",
         "acceptAll": "Accept all",
@@ -14035,6 +14054,15 @@
     "danger": "Danger Zone",
     "displayName": "Display Name",
     "email": "Email",
+    "timeZone": {
+      "label": "Time zone",
+      "automatic": "Automatic ({zone})",
+      "hint": "New scheduled jobs, Chat’s dates and times and your daily suggestions use it. Jobs you already have keep their own.",
+      "search": "Search time zones",
+      "empty": "No time zone matches.",
+      "saved": "Time zone saved",
+      "saveFailed": "Couldn’t save your time zone. Try again."
+    },
     "save": "Save changes",
     "saved": "Changes saved!",
     "signOut": "Sign out",

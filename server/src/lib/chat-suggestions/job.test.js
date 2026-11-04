@@ -403,6 +403,20 @@ describe('runDailySuggestions: who and what', () => {
     expect(hers.map((row) => row.sent_on)).toEqual(['2026-11-01']);
   });
 
+  it('waits for the morning of the zone a person picked in Settings › Account (00468)', async () => {
+    // The admin's answers read in UTC (09:30, their morning), but they picked Tokyo (18:30).
+    const people = world().profiles.map((p) =>
+      p.id === 'admin' ? { ...p, time_zone: 'Asia/Tokyo' } : p,
+    );
+    const db = fakeDb(world({ profiles: people }));
+    await run(db);
+    expect(db.tables.chat_suggestions.some((row) => row.user_id === 'admin')).toBe(false);
+    // Tokyo's 08:00 next morning (23:00 UTC) sends it, dated on Tokyo's day.
+    await run(db, new Date('2026-10-30T23:00:00Z'));
+    const theirs = db.tables.chat_suggestions.filter((row) => row.user_id === 'admin');
+    expect(theirs.map((row) => row.sent_on)).toEqual(['2026-10-31']);
+  });
+
   it('never suggests on a demo brand, a paused brand or in a read-only workspace', async () => {
     const db = fakeDb(world());
     await run(db);

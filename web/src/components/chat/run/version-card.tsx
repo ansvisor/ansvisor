@@ -1,11 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Undo2 } from 'lucide-react';
+import { Send, Undo2 } from 'lucide-react';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { ChatPageVersion } from '@/lib/chat/events';
+import { CONTENT_EDITOR_PATH } from '@/lib/content/drafts';
+
+// The Send dialog and its reads load on the click: the card itself never pulls them in.
+const VersionSendDialog = lazy(() =>
+  import('./version-send').then((module) => ({ default: module.VersionSendDialog })),
+);
 
 /** The sections a card shows before Show all. */
 const PREVIEWED = 2;
@@ -142,5 +148,52 @@ export function VersionDetails({
       </div>
       <p className="text-xs text-muted-foreground">{t('saved')}</p>
     </div>
+  );
+}
+
+/** The draft a page's card opens in the editor, from its link: the card carries no id. */
+export function draftIdOfHref(href: string | undefined): string | null {
+  const prefix = `${CONTENT_EDITOR_PATH}/`;
+  if (!href?.startsWith(prefix)) return null;
+  const id = href.slice(prefix.length);
+  return /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id) ? id : null;
+}
+
+/**
+ * Send to CMS on a page's version card (CHAT-25 §6, W4-12b): the Library's
+ * Send dialog for this one page (version-send.tsx). Shown to Admins and
+ * Managers in their own chat; a read-only workspace gets the plan dialog
+ * instead.
+ */
+export function SendPageButton({ href, className }: { href: string; className: string }) {
+  const t = useTranslations('chatDeliverable.version');
+  const tReadOnly = useTranslations('readOnly.actions');
+  const { guard } = useUpgradeGate();
+  const [open, setOpen] = useState(false);
+  const draftId = draftIdOfHref(href);
+  if (!draftId) return null;
+  return (
+    <>
+      <button
+        type="button"
+        data-action="version.sendToCms"
+        disabled={open}
+        onClick={guard(() => setOpen(true), { action: tReadOnly('sendToCms') })}
+        className={className}
+      >
+        <Send className="size-3.5" aria-hidden />
+        {t('sendToCms')}
+      </button>
+      {open && (
+        <Suspense fallback={null}>
+          <VersionSendDialog
+            draftId={draftId}
+            href={href}
+            onFailed={() => toast.error(t('sendFailed'))}
+            onClose={() => setOpen(false)}
+          />
+        </Suspense>
+      )}
+    </>
   );
 }

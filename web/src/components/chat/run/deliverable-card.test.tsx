@@ -42,6 +42,17 @@ vi.mock('@/components/providers/upgrade-gate', () => ({
   }),
 }));
 
+// The Send dialog loads on the click (version-send.tsx): here, what it was opened for.
+vi.mock('./version-send', () => ({
+  VersionSendDialog: ({ draftId, onClose }: { draftId: string; onClose: () => void }) => (
+    <div data-slot="version-send" data-draft={draftId}>
+      <button type="button" data-action="test.closeSend" onClick={onClose}>
+        Close
+      </button>
+    </div>
+  ),
+}));
+
 const { DeliverableCard, filedNumbers } = await import('./deliverable-card');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -391,6 +402,27 @@ describe('DeliverableCard for a page’s version (CHAT-25 §6, W4-12a)', () => {
     await click(action('version.undo')!);
     expect(plan.openUpgrade).toHaveBeenCalledWith(messages.readOnly.actions.restoreVersion);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('sends the page to the CMS from its card, for an Admin or a Manager in their chat (W4-12b)', async () => {
+    const DRAFT_ID = '55555555-5555-4555-8555-555555555555';
+    const card = { ...versionCard(), href: `/dashboard/content/editor/${DRAFT_ID}` as const };
+    await render(card);
+    expect(action('version.sendToCms')).toBeNull();
+    await render(card, { canChange: true });
+    await click(action('version.sendToCms')!);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(container.querySelector('[data-slot="version-send"]')?.getAttribute('data-draft')).toBe(
+      DRAFT_ID,
+    );
+    expect(action('version.sendToCms')!.hasAttribute('disabled')).toBe(true);
+    await click(action('test.closeSend')!);
+    expect(container.querySelector('[data-slot="version-send"]')).toBeNull();
+    // A read-only workspace: the plan dialog, no Send dialog.
+    plan.locked = true;
+    await click(action('version.sendToCms')!);
+    expect(plan.openUpgrade).toHaveBeenCalledWith(messages.readOnly.actions.sendToCms);
+    expect(container.querySelector('[data-slot="version-send"]')).toBeNull();
   });
 
   it('keeps saying it wasn’t saved to Files, with no Undo, when storage is full', async () => {
