@@ -6,7 +6,9 @@ import { actorOf } from '@/lib/chat/actor/access';
 import { updateContentDraftFor } from '@/lib/chat/actor/drafts';
 import { CHAT_CMS_TARGETS, CMS_NAMES } from '@/lib/content/cms-names';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
+import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { contentUuid } from '@/lib/mcp/content-schemas';
+import { readPageVersion } from '../page-versions';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 import { draftPage, draftTitle, pageChanges } from './targets';
 
@@ -29,6 +31,13 @@ import { draftPage, draftTitle, pageChanges } from './targets';
  */
 
 const ITEM = FIXTURE_IDS.item;
+
+/** A change update_draft made, with the History version that kept the page before it. */
+const changed = (output: unknown): output is { ok: true; beforeVersionId: string } =>
+  !!output &&
+  typeof output === 'object' &&
+  (output as { ok?: unknown }).ok === true &&
+  typeof (output as { beforeVersionId?: unknown }).beforeVersionId === 'string';
 
 export const CONTENT_TOOLS = [
   defineTool({
@@ -68,6 +77,29 @@ export const CONTENT_TOOLS = [
         title: input.title,
         bodyHtml: input.body_html,
       }),
+    // The page's next version in this chat (CHAT-25 §6, W4-12a): filed as the page Chat made is,
+    // its card saying what changed. A change of the title alone makes none.
+    deliverable: (input, output) =>
+      changed(output) && input.body_html !== undefined
+        ? {
+            title: input.title ?? '',
+            type: 'document',
+            formats: ['html', 'md', 'docx', 'pdf'],
+            body: sanitizeDraftHtml(input.body_html),
+            mimeType: 'text/html',
+            fileName: 'page.html',
+            href: `/dashboard/content/editor/${input.draft_id}`,
+            contentDraftId: input.draft_id,
+          }
+        : null,
+    versionOf: (input, output, place) =>
+      changed(output)
+        ? readPageVersion({
+            draftId: input.draft_id,
+            conversationId: place.conversationId,
+            beforeVersionId: output.beforeVersionId,
+          })
+        : Promise.resolve(null),
     target: async (input) => {
       const now = await draftPage(input.draft_id);
       if (!now) return input.title ? `“${input.title}”` : null;

@@ -781,3 +781,50 @@ describe('delivering a run (W3-04a)', () => {
     ]);
   });
 });
+
+describe('Run now (W3-03, CHAT-12 item 23)', () => {
+  it('runs the job at once as its creator, outside its slots, and keeps its next slot', async () => {
+    seedJob();
+    const at = minutes(30);
+    expect(await worker.runJobNow(JOB, at, driver)).toEqual({ kind: 'started' });
+    expect(runsOf()).toEqual([
+      expect.objectContaining({ slot_at: at.toISOString(), run_now: true, status: 'running' }),
+    ]);
+    expect(opened).toHaveLength(1);
+    expect(jobRow().next_run_at).toBe(SLOT);
+  });
+
+  it('says why it can’t, as a due run’s checks do, and waits for a free slot', async () => {
+    seedJob();
+    busy = { workspace: 99, user: 0 };
+    expect(await worker.runJobNow(JOB, NOW, driver)).toEqual({ kind: 'busy' });
+    busy = { workspace: 0, user: 0 };
+    db.tables.brands = [];
+    expect(await worker.runJobNow(JOB, NOW, driver)).toEqual({
+      kind: 'refused',
+      reason: 'Its brand was deleted.',
+    });
+    expect(jobRow()).toMatchObject({ enabled: false, paused_reason: 'missing_source' });
+    expect(await worker.runJobNow('00000000-0000-4000-8000-000000000000', NOW, driver)).toEqual({
+      kind: 'gone',
+    });
+  });
+});
+
+describe('settling a Run now', () => {
+  it('neither retries a failed Run now nor counts it toward the job’s failed runs', async () => {
+    seedJob({ fail_count: 2 });
+    expect(await worker.runJobNow(JOB, NOW, driver)).toEqual({ kind: 'started' });
+    chatEnds(runsOf()[0].id, 'error');
+    expect(await worker.settleScheduleRun(runsOf()[0].id as string, { now: minutes(1) })).toBe(
+      'failed',
+    );
+    expect(jobRow()).toMatchObject({
+      enabled: true,
+      paused_reason: null,
+      fail_count: 2,
+      retry_at: null,
+      next_run_at: SLOT,
+    });
+  });
+});
