@@ -1,29 +1,21 @@
-import { createTranslator } from 'next-intl';
-import messages from '../../../messages/en.json';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { PLANS } from '@/config/plans';
-import { formatNumber } from '@/lib/format';
-import { helpLine, type HelpLine } from './help-lines';
+import { cardCopy, type CardCopy, type FeatureTag, type TargetKind } from './copy';
 import type { CitedSiteKind, ReportCardEngine, ReportCardPayload } from './payload';
 
 /**
- * What a report card says, worked out from its figures by fixed rules: the
- * three things to do now, the action plan's steps, the value table and the
- * revenue scenario. No model writes any of it, so a card never promises what
- * the figures don't show; what each feature does is word for word from its
- * approved Help article (./help-lines.ts).
+ * What a report card says, worked out from its figures by fixed rules
+ * (REPORT-CARD §1; the v5 layout, owner decisions 2026-11-04): page 1's
+ * starting point and the questions missed, page 2's question grid, page 3's
+ * three findings with what to do in week one and the sites to get onto,
+ * page 4's value table and plan. No model writes any of it, so a card never
+ * promises what the figures don't show; every word is in the card's
+ * language, from ./copy.ts.
  */
 
 /** Where the card's trial links go. */
 export const REPORT_CARD_SIGN_UP_URL =
   'https://app.ansvisor.com/en/sign-up?utm_source=report-card&utm_medium=pdf';
-
-/** Countries whose English name takes "the": "in the United States". */
-const WITH_THE = new Set(['US', 'GB', 'NL', 'AE', 'PH', 'CZ', 'DO', 'BS', 'GM', 'CF', 'KM', 'MV']);
-
-/** The country as a sentence names it: "the United States", "Türkiye". */
-export const countryName = (country: ReportCardPayload['country']): string =>
-  WITH_THE.has(country.code.toUpperCase()) ? `the ${country.name}` : country.name;
 
 export const engineLabel = (engine: ReportCardEngine): string => PLATFORM_LABELS[engine] ?? engine;
 
@@ -106,6 +98,14 @@ export function siteBrandKey(domain: string): string {
 
 /** The kinds of site a card may suggest getting onto: never a competitor's or a marketplace's. */
 const TARGET_KINDS = new Set<CitedSiteKind>(['guide', 'publication', 'official', 'community']);
+/** The order page 3 lists them in, the reviews sites last. */
+export const TARGET_ORDER: readonly TargetKind[] = [
+  'guide',
+  'publication',
+  'official',
+  'community',
+  'reviews',
+];
 
 type CitedSite = ReportCardPayload['citedSites'][number];
 
@@ -132,7 +132,7 @@ const REVIEW_SITES = [
 ];
 
 /** A cited site's kind: as sorted, or a known reviews site on an older card. */
-function kindOf(site: CitedSite): CitedSiteKind | null {
+export function kindOf(site: CitedSite): CitedSiteKind | null {
   const domain = site.domain.toLowerCase().replace(/^www\./, '');
   if (!site.own && REVIEW_SITES.some((r) => domain === r || domain.endsWith(`.${r}`))) {
     return 'reviews';
@@ -170,44 +170,6 @@ export function targetSite(card: ReportCardPayload): CitedSite | null {
   );
 }
 
-/** What a target site's step says, by its kind. */
-function targetWin(site: CitedSite, company: string, answers: number): QuickWin {
-  const domain = clip(site.domain, NAME_MAX);
-  const cited = `AI engines cite it in ${site.answers} of ${answers} answers about your market.`;
-  switch (kindOf(site)) {
-    case 'reviews':
-      return {
-        title: `Check and answer what customers say about ${company} on ${domain}`,
-        detail: `A reviews site: ${cited} Replies to reviews and complaints, and a complete profile, are what they read about you.`,
-      };
-    case 'guide':
-      return {
-        title: `Get ${company} reviewed or listed on ${domain}`,
-        detail: `A review and guide site: ${cited} A listing or a review there gives them a source that names you.`,
-      };
-    case 'publication':
-      return {
-        title: `Pitch ${domain} a story or an expert comment`,
-        detail: `A publication: ${cited} An article or a quote there is a source they trust.`,
-      };
-    case 'official':
-      return {
-        title: `Make sure ${domain} lists ${company} correctly`,
-        detail: `An official source: ${cited} Your registrations, memberships and licences listed there are facts they repeat.`,
-      };
-    case 'community':
-      return {
-        title: `Answer questions about your market on ${domain}`,
-        detail: `A community: ${cited} Helpful, open answers from your team are what gets quoted.`,
-      };
-    default:
-      return {
-        title: `Get ${company} mentioned on ${domain}`,
-        detail: `${cited} A mention or a listing there puts you in front of them.`,
-      };
-  }
-}
-
 /** A name as compared: lower case, without accents or punctuation. */
 const nameKey = (name: string) =>
   name
@@ -243,9 +205,9 @@ export function growthEngineRows(card: ReportCardPayload): EngineRow[] {
   return card.engines.filter((e) => !main.includes(e.engine));
 }
 
-/** "ChatGPT and Microsoft Copilot". */
-export const engineList = (rows: readonly EngineRow[]): string =>
-  listOf(rows.map((e) => engineLabel(e.engine)));
+/** "ChatGPT and Microsoft Copilot", in the card's language. */
+export const engineList = (rows: readonly EngineRow[], t: CardCopy = cardCopy()): string =>
+  t.list(rows.map((e) => engineLabel(e.engine)));
 
 export interface Totals {
   answers: number;
@@ -269,10 +231,7 @@ export function mainTotals(card: ReportCardPayload): Totals {
   return totals({ ...card, engines: mainEngineRows(card) });
 }
 
-// ─── Page 1: three things to do now ──────────────────────────────────────────
-
-/** "two", "three", "four": how many engines a card asked. */
-const ENGINE_COUNT: Record<number, string> = { 2: 'two', 3: 'three', 4: 'four' };
+// ─── Names and sites ─────────────────────────────────────────────────────────
 
 /** A company's name as compared with a site's: nameKey without "Inc.", "Ltd" and the like. */
 const companyKey = (name: string): string =>
@@ -298,63 +257,104 @@ export function competitorSite(domain: string, competitors: readonly { name: str
     );
 }
 
+// ─── Page 1 and 3: the findings ──────────────────────────────────────────────
+
 export interface QuickWin {
+  /** What to do, with what it's about. */
   title: string;
+  /** What the card found that makes it worth doing. */
   detail: string;
+  /** What you'd do about it in your first week. */
+  week: string;
+  /** Where Ansvisor helps with it. */
+  feature: FeatureTag;
 }
 
-/** "A", "A and B", "A, B and C". */
-function listOf(names: readonly string[]): string {
-  if (names.length <= 1) return names[0] ?? '';
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+/** A question's product page, without the scheme, when the card knows it. */
+function productPage(card: ReportCardPayload, product: number | null | undefined): string | null {
+  const url = typeof product === 'number' ? card.products?.[product]?.url : null;
+  return url ? clip(url.replace(/^https?:\/\/(www\.)?/, ''), 50) : null;
+}
+
+/** The question competitors win most: one the top three name; else the one most engines answered. */
+export function leadQuestion(card: ReportCardPayload): Missed | null {
+  const topThree = new Set(card.competitors.slice(0, 3).map((c) => nameKey(c.name)));
+  const main = (q: Missed) => q.competitors.filter((name) => topThree.has(nameKey(name))).length;
+  const quotable = card.missedQuestions.filter((q) => quotedQuestion(q));
+  return (
+    quotable
+      .filter((q) => main(q) > 0)
+      .sort((a, b) => main(b) - main(a) || b.competitors.length - a.competitors.length)[0] ??
+    [...quotable].sort((a, b) => (b.answers ?? 0) - (a.answers ?? 0))[0] ??
+    null
+  );
+}
+
+/** The step for the site to get onto, by its kind. */
+function targetWin(site: CitedSite, card: ReportCardPayload, t: CardCopy): QuickWin {
+  const company = clip(card.companyName, NAME_MAX);
+  const domain = clip(site.domain, NAME_MAX);
+  const { answers } = totals(card);
+  const kind = kindOf(site);
+  const copy = t.wins.target[kind && kind in t.wins.target ? (kind as TargetKind) : 'other'];
+  return {
+    title: copy.title(company, domain),
+    detail: copy.detail(site.answers, answers),
+    week: copy.week(company, domain),
+    feature: 'citations',
+  };
 }
 
 /**
- * Three things to do now, the first that apply in this order: answer the
- * question competitors win, get onto the guide, publication, official source
- * or community AI cites most, make your own
- * pages citable, close the gap on the leading competitor, and work on the
- * engine that names you least.
+ * The card's three findings, the first that apply in this order: answer
+ * the question competitors win; get onto the guide, publication, official
+ * source or community AI cites most (a reviews site only when none is);
+ * put the brand's name where AI already cites its pages without naming it,
+ * or make its pages easy to cite; close the gap on the leading competitor;
+ * work on the Starter engine that names it least. Each with what to do in
+ * week one and where Ansvisor helps.
  */
-export function quickWins(card: ReportCardPayload): QuickWin[] {
+export function quickWins(card: ReportCardPayload, t: CardCopy = cardCopy(card)): QuickWin[] {
   const { answers, named } = totals(card);
   const company = clip(card.companyName, NAME_MAX);
   const wins: QuickWin[] = [];
 
-  // A question the main competitors (the top three) win; with none, the
-  // question the most engines answered.
-  const topThree = new Set(card.competitors.slice(0, 3).map((c) => nameKey(c.name)));
-  const main = (q: Missed) => q.competitors.filter((name) => topThree.has(nameKey(name))).length;
-  const quotable = card.missedQuestions.filter((q) => quotedQuestion(q));
-  const missed =
-    quotable
-      .filter((q) => main(q) > 0)
-      .sort((a, b) => main(b) - main(a) || b.competitors.length - a.competitors.length)[0] ??
-    [...quotable].sort((a, b) => (b.answers ?? 0) - (a.answers ?? 0))[0];
+  const missed = leadQuestion(card);
   const quoted = missed ? quotedQuestion(missed) : null;
   if (missed && quoted) {
+    const topThree = new Set(card.competitors.slice(0, 3).map((c) => nameKey(c.name)));
     const names = [...missed.competitors]
       .sort((a, b) => Number(topThree.has(nameKey(b))) - Number(topThree.has(nameKey(a))))
       .slice(0, 3)
       .map((name) => clip(name, NAME_MAX));
     wins.push({
-      title: `Answer “${clip(quoted, QUESTION_MAX)}” on your site`,
-      detail: `${
-        names.length
-          ? `AI names ${listOf(names)} for it, and not ${company}.`
-          : `None of the answers to it names ${company}.`
-      } A page that answers it directly gives AI engines something of yours to cite.`,
+      title: t.wins.question.title(clip(quoted, QUESTION_MAX)),
+      detail: names.length
+        ? t.wins.question.detailNames(t.list(names), company)
+        : t.wins.question.detailNone(company),
+      week: t.wins.question.week(productPage(card, missed.product)),
+      feature: 'contentEditor',
     });
   }
 
-  // A site AI cites that the brand can get onto: never a competitor's or a marketplace's.
   const target = targetSite(card);
-  if (target) wins.push(targetWin(target, company, answers));
+  if (target) wins.push(targetWin(target, card, t));
 
-  if (percent(card.ownCitations, answers) < 10) {
+  const headline = mainTotals(card);
+  if (headline.named === 0 && card.ownCitations > 0) {
+    // AI reads the site but doesn't say the name: the best place to start.
     wins.push({
-      title: 'Make your own pages easy to cite',
-      detail: `Your site is cited in ${card.ownCitations} of ${answers} answers. Clear answers, headings that match the question and facts with sources help AI engines quote you.`,
+      title: t.wins.ownName.title,
+      detail: t.wins.ownName.detail(card.ownCitations, company),
+      week: t.wins.ownName.week,
+      feature: 'siteAudit',
+    });
+  } else if (percent(card.ownCitations, answers) < 10) {
+    wins.push({
+      title: t.wins.ownPages.title,
+      detail: t.wins.ownPages.detail(card.ownCitations, answers),
+      week: t.wins.ownPages.week,
+      feature: 'siteAudit',
     });
   }
 
@@ -362,8 +362,10 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
   if (leader && leader.answers > named) {
     const rival = clip(leader.name, NAME_MAX);
     wins.push({
-      title: `Close the gap on ${rival}`,
-      detail: `${rival} is named in ${leader.answers} answers, ${company} in ${named}. Compare its pages with yours for the questions it wins.`,
+      title: t.wins.gap.title(rival),
+      detail: t.wins.gap.detail(rival, leader.answers, company, named),
+      week: t.wins.gap.week(rival),
+      feature: 'competitors',
     });
   }
 
@@ -375,149 +377,85 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
     (a, b) => percent(a.named, a.answers) - percent(b.named, b.answers),
   )[0];
   if (weakest && Math.min(...shares) < Math.max(...shares)) {
+    const engine = engineLabel(weakest.engine);
     wins.push({
-      title: `Look at what ${engineLabel(weakest.engine)} says about your market`,
-      detail: `It names you in ${weakest.named} of ${weakest.answers} answers, the fewest of ${
-        card.mainEngines?.length
-          ? engineList(mainRows)
-          : `the ${ENGINE_COUNT[mainRows.length] ?? mainRows.length} engines`
-      }.`,
+      title: t.wins.weakest.title(engine),
+      detail: t.wins.weakest.detail(
+        weakest.named,
+        weakest.answers,
+        card.mainEngines?.length ? engineList(mainRows, t) : t.engines.the(mainRows.length),
+      ),
+      week: t.wins.weakest.week(engine),
+      feature: 'brandVisibility',
     });
   }
 
   // A company that leads everywhere, named alike by every engine, still gets one step.
   if (!wins.length) {
     wins.push({
-      title: `Keep ${company} where it is`,
-      detail: `AI names you in ${named} of ${answers} answers, alike in every engine. Answers change as engines update, so check them again each month.`,
+      title: t.wins.keep.title(company),
+      detail: t.wins.keep.detail(named, answers),
+      week: t.wins.keep.week,
+      feature: 'brandVisibility',
     });
   }
 
   return wins.slice(0, 3);
 }
 
-// ─── Page 2: the action plan ─────────────────────────────────────────────────
-
-export interface PlanStep {
-  /** What the card found, with its figures. */
-  finding: string;
-  /** The Ansvisor features that work on it. */
-  feature: string;
-  /** What the features do, from their approved Help articles. */
-  lines: HelpLine[];
-  /** What working on it is meant to bring. */
-  aim: string;
-}
-
-/** The plan has 4 to 6 steps. */
-export const PLAN_STEPS_MIN = 4;
-export const PLAN_STEPS_MAX = 6;
+// ─── Page 1: the starting point and the questions missed ────────────────────
 
 /**
- * The action plan: one step per finding, in this order (visibility,
- * questions missed, a competitor ahead, few citations of your own site), then
- * the Action Center when there is that much to do, then AI Traffic and Chat,
- * which fit every card: four to six steps.
+ * The starting point (owner decision 2026-11-04: a zero is where a brand
+ * starts, not a failure): when no Starter engine named the company, and
+ * whether AI already cites its pages; null when it is named.
  */
-export function actionPlan(card: ReportCardPayload): PlanStep[] {
-  const { answers, named, visibility } = totals(card);
-  const leader = card.competitors[0];
-  const rival = leader ? clip(leader.name, NAME_MAX) : '';
-  const steps: PlanStep[] = [];
-  const lines = (...ids: Parameters<typeof helpLine>[0][]) =>
-    ids.map((id) => helpLine(id)).filter((line): line is HelpLine => line !== null);
-
-  steps.push({
-    finding:
-      leader && leader.answers > named
-        ? `You appear in ${named} of ${answers} answers; ${rival} in ${leader.answers}.`
-        : `You appear in ${named} of ${answers} answers (${visibility}%).`,
-    feature: 'Brand Visibility',
-    lines: lines('brandVisibility'),
-    aim: 'Know every day how often AI answers name you, engine by engine.',
-  });
-
-  if (card.missedCount > 0) {
-    steps.push({
-      finding: `${card.missedCount} of ${card.questionCount} questions got no answer that names you.`,
-      feature: 'Prompts and Content Editor',
-      lines: lines('trackPrompts', 'contentOpportunities'),
-      aim: 'A page of yours for each question you’re missing.',
-    });
-  }
-
-  if (leader && leader.answers > named) {
-    steps.push({
-      finding: `${rival} is named ${leader.answers} times, ${leader.answers - named} more than you.`,
-      feature: 'Competitors and Mentions',
-      lines: lines('compareCompetitors', 'mentions'),
-      aim: `See where ${rival} is named instead of you, and in what tone.`,
-    });
-  }
-
-  if (percent(card.ownCitations, answers) < 10) {
-    steps.push({
-      finding: `AI cites your site in ${card.ownCitations} of ${answers} answers.`,
-      feature: 'Citations and Site Audit',
-      lines: lines('competitorGaps', 'siteAudit'),
-      aim: 'Pages AI engines can cite, and the sites worth being mentioned on.',
-    });
-  }
-
-  // AI Traffic and Chat close every plan; a card with little to fix keeps
-  // four steps with the lead over the nearest competitor.
-  const closing = 2;
-  if (leader && leader.answers <= named && steps.length + closing < PLAN_STEPS_MIN) {
-    steps.push({
-      finding: `You’re named in ${named} answers, ${rival} in ${leader.answers}.`,
-      feature: 'Competitors and Mentions',
-      lines: lines('compareCompetitors', 'mentions'),
-      aim: `Keep your lead: see where ${rival} gains on you.`,
-    });
-  }
-
-  if (steps.length >= 3 || steps.length + closing < PLAN_STEPS_MIN) {
-    steps.push({
-      finding:
-        steps.length >= 3
-          ? `That’s ${steps.length} areas to work on at once.`
-          : 'AI answers change from day to day, and so does the work to stay in them.',
-      feature: 'Action Center and Agent Center',
-      lines: lines('actionCenter', 'agents'),
-      aim: 'One ranked list of work, and agents that take on the routine steps.',
-    });
-  }
-
-  steps.push({
-    finding: 'AI answers send visits that most analytics count as direct traffic.',
-    feature: 'AI Traffic',
-    lines: lines('aiTraffic'),
-    aim: 'Your real visits from AI answers, and what they’re worth.',
-  });
-
-  steps.push({
-    finding: 'You’ll have questions of your own about these answers.',
-    feature: 'Chat',
-    lines: lines('chat'),
-    aim: 'Answers about your brand from your own Ansvisor data.',
-  });
-
-  return steps.slice(0, PLAN_STEPS_MAX);
+export function startingPoint(card: ReportCardPayload): { cited: number } | null {
+  return mainTotals(card).named === 0 ? { cited: card.ownCitations } : null;
 }
 
-/** The trial box's three first-day steps. */
-export function firstDaySteps(card: ReportCardPayload): string[] {
+export interface MissedLine {
+  text: string;
+  instead: string[];
+}
+
+/** Page 1's questions missed: the five competitors win most, as the server ranked them. */
+export function topMissed(card: ReportCardPayload, count = 5): MissedLine[] {
+  return card.missedQuestions
+    .map((q) => ({ q, text: quotedQuestion(q) }))
+    .filter((row): row is { q: Missed; text: string } => row.text !== null)
+    .slice(0, count)
+    .map(({ q, text }) => ({
+      text: clip(text, QUESTION_ROW_MAX),
+      instead: q.competitors.slice(0, 3).map((name) => clip(name, 28)),
+    }));
+}
+
+/** The marketplaces and other businesses named, apart from the competitors: a line each. */
+export function alsoNamed(card: ReportCardPayload, t: CardCopy = cardCopy(card)): string[] {
+  const names = (list?: { name: string }[]) =>
+    (list ?? [])
+      .slice(0, 4)
+      .map((n) => clip(n.name, 28))
+      .join(', ');
   return [
-    `Add ${clip(card.domain, 60)} as your brand: the setup wizard usually takes a few minutes.`,
-    `Track this card’s ${card.questionCount} questions as prompts, in ${countryName(card.country)}.`,
-    'Open the Action Center after the first run: what to do next, ranked.',
-  ];
+    card.marketplaces?.length ? t.status.alsoMarketplaces(names(card.marketplaces)) : null,
+    card.otherNames?.length ? t.status.alsoOthers(names(card.otherNames)) : null,
+  ].filter((line): line is string => line !== null);
 }
 
-// ─── Page 4: the questions ───────────────────────────────────────────────────
+/** The products the card read the site as selling, as page 1 lists them. */
+export function productNames(card: ReportCardPayload): string[] {
+  return (card.products ?? []).map((p) => clip(productLabel(p), 40));
+}
 
-/** How long a question may run on page 4: two lines at most, so 25 fit with their groups. */
+// ─── Page 2: the questions ───────────────────────────────────────────────────
+
+/** How long a question may run on page 2: two lines at most, so 25 fit with their groups. */
 export const QUESTION_ROW_MAX = 90;
+const RELATED_ROW_MAX = 60;
+
+export type Mark = 'named' | 'missed' | 'none';
 
 export interface QuestionLine {
   /** The question's number on the card, from 1. */
@@ -525,10 +463,8 @@ export interface QuestionLine {
   /** The question as the card quotes it: as asked, or its English. */
   text: string;
   /** Each engine's answer: named the company, didn't, or gave none. */
-  named: Partial<
-    Record<ReportCardPayload['engines'][number]['engine'], 'named' | 'missed' | 'none'>
-  >;
-  /** The brand named most in its answers, if any. */
+  named: Partial<Record<ReportCardEngine, Mark>>;
+  /** The competitor named most in its answers, if any. */
   instead: string | null;
   /** Its keyword's Google searches a month; null when unknown. */
   volume: number | null;
@@ -550,11 +486,15 @@ export function productLabel(product: { name: string; nameEn: string | null }): 
   return product.nameEn && interCanDraw(product.nameEn) ? product.nameEn : product.name;
 }
 
-/** Page 4's rows: every question asked, quoted as page 1 quotes one. */
+/** Page 2's rows: every question asked, quoted as page 1 quotes one. */
 export function questionLines(card: ReportCardPayload): QuestionLine[] {
   return (card.questionRows ?? []).map((row, i) => ({
     number: i + 1,
-    text: clip(quotedQuestion(row) ?? row.textEn ?? row.text, QUESTION_ROW_MAX),
+    // A related question carries a note after it: shorter, so it keeps to two lines.
+    text: clip(
+      quotedQuestion(row) ?? row.textEn ?? row.text,
+      row.fit === 'related' ? RELATED_ROW_MAX : QUESTION_ROW_MAX,
+    ),
     named: row.named,
     instead: row.instead ? clip(row.instead, 28) : null,
     volume: row.volume ?? null,
@@ -563,7 +503,7 @@ export function questionLines(card: ReportCardPayload): QuestionLine[] {
 }
 
 /**
- * Page 4's rows grouped by the product they ask about, in the products'
+ * Page 2's rows grouped by the product they ask about, in the products'
  * order (the main one first); one group without a product on a card made
  * before products were found.
  */
@@ -585,9 +525,7 @@ export function questionGroups(card: ReportCardPayload): QuestionGroup[] {
     .sort((a, b) => a[0] - b[0])
     .map(([index, groupLines]) => ({
       product: clip(productLabel(products[index]), 60),
-      page: products[index].url
-        ? clip(products[index].url.replace(/^https?:\/\/(www\.)?/, ''), 60)
-        : null,
+      page: productPage(card, index),
       lines: groupLines,
     }));
   if (loose.length) out.push({ product: null, page: null, lines: loose });
@@ -595,75 +533,82 @@ export function questionGroups(card: ReportCardPayload): QuestionGroup[] {
 }
 
 /**
- * Page 4's one-line summary, above the table: none named, or how many
- * answers named the company and in which questions.
+ * Page 2's one-line summary, above the grid: none named, or how many of the
+ * main engines' answers named the company and in how many questions.
  */
-export function questionSummary(card: ReportCardPayload): string | null {
+export function questionSummary(
+  card: ReportCardPayload,
+  t: CardCopy = cardCopy(card),
+): string | null {
   const rows = card.questionRows ?? [];
   if (!rows.length) return null;
+  const main = new Set(mainEngineRows(card).map((e) => e.engine));
   let answers = 0;
   let named = 0;
-  const questions: number[] = [];
-  rows.forEach((row, i) => {
-    const marks = Object.values(row.named);
+  let questions = 0;
+  for (const row of rows) {
+    const marks = Object.entries(row.named)
+      .filter(([engine]) => main.has(engine as ReportCardEngine))
+      .map(([, mark]) => mark);
     answers += marks.filter((mark) => mark !== 'none').length;
     const here = marks.filter((mark) => mark === 'named').length;
     named += here;
-    if (here > 0) questions.push(i + 1);
-  });
+    if (here > 0) questions += 1;
+  }
   const company = clip(card.companyName, NAME_MAX);
-  if (named === 0) return `${company} wasn’t named in any of the ${answers} answers.`;
-  const where =
-    questions.length <= 10
-      ? `${questions.length === 1 ? 'question' : 'questions'} ${listOf(questions.map(String))}`
-      : `${questions.length} of the ${rows.length} questions`;
-  return `Named in ${named} of ${answers} answers: ${where}.`;
+  return named === 0
+    ? t.questions.summaryNone(company, answers)
+    : t.questions.summary(named, answers, questions, rows.length);
 }
 
-// ─── Page 3: outcomes ────────────────────────────────────────────────────────
+// ─── Page 3: the sites to get onto ───────────────────────────────────────────
 
-export interface Goal {
-  title: string;
-  features: string[];
+export interface TargetGroup {
+  kind: TargetKind | 'other';
+  sites: { domain: string; answers: number }[];
 }
 
-/** The three goals, each with the features that work toward it. */
-export const OUTCOME_GOALS: readonly Goal[] = [
-  {
-    title: 'Maximize your visibility in AI answers',
-    features: ['Brand Visibility', 'Prompts', 'Content Editor', 'Site Audit'],
-  },
-  {
-    title: 'Grow the traffic AI answers send you',
-    features: ['Citations', 'Competitors', 'AI Traffic'],
-  },
-  {
-    title: 'Grow the revenue that comes from AI answers',
-    features: ['AI Traffic conversions', 'Action Center', 'Agent Center'],
-  },
-];
-
-/** The value table's rows: AI visits a month. */
-export const VISIT_ROWS = [100, 1_000, 10_000] as const;
-
-/** The plans the value table compares with. */
-export const COMPARED_PLANS = ['starter', 'growth'] as const;
-export type ComparedPlan = (typeof COMPARED_PLANS)[number];
-
-export interface ValueRow {
-  visits: number;
-  /** What the same visits would cost a month in Google Ads, in USD. */
-  monthly: number;
-  yearly: number;
+/**
+ * The sites AI cites that a brand can get onto, by kind, and the ones left
+ * out: competitors' sites and marketplaces. A card made before sites were
+ * sorted lists the sites it may suggest under "other".
+ */
+export function targetGroups(card: ReportCardPayload): {
+  groups: TargetGroup[];
+  leftOut: string[];
+} {
+  const sorted = card.citedSites.some((s) => s.kind);
+  const groups: TargetGroup[] = [];
+  const kinds: (TargetKind | 'other')[] = sorted ? [...TARGET_ORDER] : ['reviews', 'other'];
+  for (const kind of kinds) {
+    const sites = card.citedSites
+      .filter((s) => !s.own && !s.competitor)
+      .filter((s) => (kind === 'other' ? isTargetSite(s, card) && !kindOf(s) : kindOf(s) === kind))
+      .slice(0, 3)
+      .map((s) => ({ domain: clip(s.domain, 30), answers: s.answers }));
+    if (sites.length || sorted) groups.push({ kind, sites });
+  }
+  const leftOut = card.citedSites
+    .filter(
+      (s) =>
+        !s.own &&
+        (s.competitor ||
+          kindOf(s) === 'competitor' ||
+          kindOf(s) === 'marketplace' ||
+          (!sorted && !isTargetSite(s, card) && kindOf(s) !== 'reviews')),
+    )
+    .map((s) => clip(s.domain, 30));
+  return { groups, leftOut };
 }
 
-export function planMonthly(plan: ComparedPlan): number {
-  return PLANS[plan].pricing?.monthly ?? 0;
+/** A prompt the card's buyers ask, to show what Ansvisor tracks: the question competitors win. */
+export function examplePrompt(card: ReportCardPayload): string | null {
+  const missed = leadQuestion(card);
+  const quoted = missed ? quotedQuestion(missed) : null;
+  return quoted ? clip(quoted, QUESTION_MAX) : null;
 }
 
-export function planYearly(plan: ComparedPlan): number {
-  return PLANS[plan].pricing?.annual ?? planMonthly(plan) * 12;
-}
+// ─── Page 4: value and plan ──────────────────────────────────────────────────
 
 /**
  * Keywords with a cost per click a value table needs: a median of fewer
@@ -671,39 +616,115 @@ export function planYearly(plan: ComparedPlan): number {
  * median came from two).
  */
 export const MIN_CPC_KEYWORDS = 5;
+/**
+ * The highest median cost per click a card prices visits with: above it, a
+ * few expensive keywords decide the table (a real card's $47.10 from 8
+ * keywords priced 1,000 visits at $47,100 a month).
+ */
+export const MAX_CPC_USD = 30;
 
-/** The value table, or null when fewer than MIN_CPC_KEYWORDS keywords had a cost per click. */
-export function valueRows(card: ReportCardPayload): ValueRow[] | null {
-  if (!card.cpc || card.cpc.keywords < MIN_CPC_KEYWORDS) return null;
-  const { usd } = card.cpc;
-  return VISIT_ROWS.map((visits) => {
-    const monthly = Math.round(visits * usd);
-    return { visits, monthly, yearly: monthly * 12 };
-  });
+/** Whether the card's ad data can price visits: none, too uneven, or usable. */
+export function adsVerdict(
+  card: ReportCardPayload,
+): { kind: 'none' } | { kind: 'odd' | 'ok'; usd: number; keywords: number } {
+  if (!card.cpc || card.cpc.keywords < MIN_CPC_KEYWORDS) return { kind: 'none' };
+  return {
+    kind: card.cpc.usd > MAX_CPC_USD ? 'odd' : 'ok',
+    usd: card.cpc.usd,
+    keywords: card.cpc.keywords,
+  };
+}
+
+/** The questions' keywords' Google searches a month, added up; null without volumes. */
+export function questionDemand(
+  card: ReportCardPayload,
+): { searches: number; keywords: number } | null {
+  const volumes = (card.questionRows ?? [])
+    .map((row) => row.volume)
+    .filter((v): v is number => typeof v === 'number' && v > 0);
+  if (!volumes.length) return null;
+  return { searches: volumes.reduce((sum, v) => sum + v, 0), keywords: volumes.length };
+}
+
+/** Shares of the questions' searches the value table prices as AI visits. */
+export const DEMAND_SHARES = [0.02, 0.05, 0.1] as const;
+/** The fixed rows a card without search volumes prices. */
+export const VISIT_ROWS = [100, 1_000, 10_000] as const;
+
+export interface ValueRow {
+  /** The share of the questions' searches; null on a fixed row. */
+  share: number | null;
+  visits: number;
+  /** What the same visits would cost a month in Google Ads, in USD. */
+  monthly: number;
+  yearly: number;
+}
+
+/** The visits a card prices: shares of its questions' searches, or the fixed rows. */
+function visitRows(card: ReportCardPayload): { share: number | null; visits: number }[] {
+  const demand = questionDemand(card);
+  if (demand && demand.searches >= 100) {
+    return DEMAND_SHARES.map((share) => ({
+      share,
+      visits: Math.max(1, Math.round(demand.searches * share)),
+    }));
+  }
+  return VISIT_ROWS.map((visits) => ({ share: null, visits }));
 }
 
 /**
- * Buying the visits vs earning them (owner, 2026-11-03): the 1,000-visit
- * row's ad cost, a month and over 12 months, bought again every month,
- * against Growth's price a month, over 12 months and paid yearly.
+ * The value table (owner decision 2026-11-04: scaled to the brand's own
+ * question volume): 2%, 5% and 10% of the questions' searches priced at the
+ * median cost per click; null when the ad data can't price them.
+ */
+export function valueRows(card: ReportCardPayload): ValueRow[] | null {
+  const ads = adsVerdict(card);
+  if (ads.kind !== 'ok') return null;
+  return visitRows(card).map(({ share, visits }) => {
+    const monthly = Math.round(visits * ads.usd);
+    return { share, visits, monthly, yearly: monthly * 12 };
+  });
+}
+
+export type ComparedPlan = 'starter' | 'growth';
+
+export function planMonthly(plan: ComparedPlan): number {
+  return PLANS[plan].pricing?.monthly ?? 0;
+}
+
+/** The yearly price, paid yearly: 20% off twelve months. */
+export function planYearly(plan: ComparedPlan): number {
+  return PLANS[plan].pricing?.annual ?? planMonthly(plan) * 12;
+}
+
+/** The prompts a plan tracks every day. */
+export const planPrompts = (plan: ComparedPlan): number => PLANS[plan].limits.maxPrompts;
+
+/** The brands a plan tracks. */
+export const planBrands = (plan: ComparedPlan): number => PLANS[plan].limits.maxBrands;
+
+/**
+ * Buying the visits vs earning them: the middle row's ad cost against
+ * Starter, the plan this card measured. `cheap` when the ads would cost
+ * less than Starter: the card says so instead of claiming a saving.
  */
 export function buyVsEarn(card: ReportCardPayload) {
-  const row = valueRows(card)?.find((r) => r.visits === 1_000);
+  const row = valueRows(card)?.[1];
   if (!row) return null;
+  const starter = planMonthly('starter');
   return {
     visits: row.visits,
     adsMonthly: row.monthly,
     adsYearly: row.yearly,
-    growthMonthly: planMonthly('growth'),
-    growthTwelveMonths: planMonthly('growth') * 12,
-    growthYearly: planYearly('growth'),
+    starterMonthly: starter,
+    cheap: row.monthly < starter,
   };
 }
 
 /**
  * The conversion rates the revenue scenario assumes, by the site's kind: an
- * online shop's visit to an order, a B2B or app visit to a closed deal. The
- * headline is the low end. AI visits aren't assumed to convert better.
+ * online shop's visit to an order, a B2B or app visit to a closed deal. AI
+ * visits aren't assumed to convert better.
  */
 export function conversionRange(siteType: ReportCardPayload['siteType']): {
   low: number;
@@ -722,66 +743,35 @@ export interface RevenueRow {
   high: number;
 }
 
-/** The revenue scenario, or null without a deal value. */
+/** The revenue scenario over the value table's visits, or null without a deal value. */
 export function revenueRows(card: ReportCardPayload): RevenueRow[] | null {
   if (!card.dealValue) return null;
   const { amount } = card.dealValue;
   const { low, high } = conversionRange(card.siteType);
-  return VISIT_ROWS.map((visits) => ({
+  return visitRows(card).map(({ visits }) => ({
     visits,
     low: Math.round(visits * low * amount),
     high: Math.round(visits * high * amount),
   }));
 }
 
-const settings = createTranslator({ locale: 'en', messages, namespace: 'settings' });
-
-export interface PlanOffer {
-  plan: ComparedPlan;
-  name: string;
-  monthly: number;
-  yearly: number;
-  /** What sets it apart, as the plan cards say it. */
-  points: string[];
-}
-
-/**
- * Starter and Growth as the billing cards describe them: the brands and
- * prompts, the engines tracked and, for Growth, regions and Full auto.
- */
-export function planOffers(): PlanOffer[] {
-  const starterChat = settings.raw('planCards.starter.extrasChat') as string[];
-  return COMPARED_PLANS.map((plan) => {
-    const { limits, name } = PLANS[plan];
-    const points = [
-      `${settings('planCards.brands', { count: limits.maxBrands })} · ${settings('planCards.prompts', { count: limits.maxPrompts })}`,
-      settings(`planCards.${plan}.engines`),
-    ];
-    if (plan === 'growth') {
-      points.push(
-        (settings.raw('planCards.growth.extras') as string[])[0],
-        ...(settings.raw('planCards.growth.extrasChat') as string[]).filter(
-          (p) => !starterChat.includes(p),
-        ),
-      );
-    }
-    return { plan, name, monthly: planMonthly(plan), yearly: planYearly(plan), points };
-  });
-}
-
-/** "$1,850" or "€1,850": whole units. */
-export function money(amount: number, currency = 'USD'): string {
+/** "$1,850" or "€1,850": whole units, in the card's locale. */
+export function money(amount: number, currency = 'USD', locale = 'en-US'): string {
   try {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
       maximumFractionDigits: 0,
     }).format(amount);
   } catch {
-    return `${formatNumber(Math.round(amount))} ${currency}`;
+    return `${Math.round(amount).toLocaleString(locale)} ${currency}`;
   }
 }
 
 /** "$1.85": a cost per click, to the cent. */
-export const cents = (usd: number): string =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(usd);
+export const cents = (amount: number, currency = 'USD', locale = 'en-US'): string =>
+  new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+
+/** A whole number in the card's locale: "12,400". */
+export const count = (value: number, locale = 'en-US'): string =>
+  new Intl.NumberFormat(locale).format(Math.round(value));

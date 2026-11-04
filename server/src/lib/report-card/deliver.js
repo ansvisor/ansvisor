@@ -125,11 +125,11 @@ export function renderReportCardEmail({
     ${stat(String(payload.ownCitations), `Answers that cite your site, of ${answers}`)}
     </tr>
   </table>
-  <p style="font-size:14px;margin:8px 0 16px 0;">Your report card is attached as a PDF, 4 pages: your results and three things to do now, what’s in Ansvisor and how you can use it, what AI visits could be worth to you, and all ${payload.questionRows?.length || payload.questionCount} questions we asked.</p>
+  <p style="font-size:14px;margin:8px 0 16px 0;">Your report card is attached as a PDF, 4 pages: where you start and who AI names instead, all ${payload.questionRows?.length || payload.questionCount} questions we asked and what each engine said, what you’d do in your first week, and what AI visits are worth with the plan that matches.</p>
   <div style="margin:24px 0;">
     <a href="${escapeHtml(signUpUrl(origin))}" style="background:${INK};color:#ffffff;text-decoration:none;padding:8px 28px;border-radius:100px;font-size:15px;font-weight:500;display:inline-block;">Start a free trial</a>
   </div>
-  <p style="font-size:14px;color:${GREY};margin:0;">Want this every day, for every question you care about? Ansvisor tracks your brand in AI answers and ranks what to do next.</p>`);
+  <p style="font-size:14px;color:${GREY};margin:0;">Want to measure your own questions too? In the free trial, Ansvisor asks this card’s questions and yours every day, and ranks what to do next.</p>`);
 
   return { subject: `Your AI visibility report card: ${payload.domain}`, html };
 }
