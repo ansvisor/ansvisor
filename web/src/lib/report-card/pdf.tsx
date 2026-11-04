@@ -66,14 +66,21 @@ const DOMAIN_MAX = 25;
 
 const look = reportLook(null);
 
-let fontsFrom: string | null = null;
+/** Cards drawn by this server: each one registers Inter under a family of its own. */
+let drawn = 0;
 
-/** Inter from `dir` (public/fonts by default), registered once per server. */
-function registerFonts(dir: string) {
-  if (fontsFrom) return;
-  fontsFrom = dir;
+/**
+ * Inter from `dir` (public/fonts by default), as a family for one card: the
+ * renderer keeps a registered family's font subset from the first card it
+ * draws, so a later card lost every letter the first one didn't use (a
+ * Turkish card after an English one printed "Kış sporları" as "ış sporlar").
+ * The family it registered, removed again once the card is drawn.
+ */
+function registerFonts(dir: string): string {
+  drawn += 1;
+  const family = `${FAMILY}-${drawn}`;
   Font.register({
-    family: FAMILY,
+    family,
     fonts: [
       { src: path.join(dir, 'Inter-Regular.ttf'), fontWeight: 400 },
       { src: path.join(dir, 'Inter-Bold.ttf'), fontWeight: 700 },
@@ -81,11 +88,12 @@ function registerFonts(dir: string) {
   });
   // Word-splitting hyphenation looks broken in tables; wrap whole words only.
   Font.registerHyphenationCallback((word) => [word]);
+  return family;
 }
 
 const styles = StyleSheet.create({
-  page: {
-    fontFamily: FAMILY,
+  // Its font is the card's own family: pageStyle.
+  pageBox: {
     fontSize: 9,
     color: TEXT,
     paddingTop: 36,
@@ -189,6 +197,12 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 7, color: MUTED },
 });
 
+/** A page of the card, in the card's own Inter (registerFonts). */
+const pageStyle = (family: string) => [styles.pageBox, { fontFamily: family }];
+
+/** A page's card, and the family its Inter is registered as for it. */
+type PageProps = { card: ReportCardPayload; family: string };
+
 function Bar({
   label,
   pct,
@@ -274,7 +288,7 @@ function alsoNamed(card: ReportCardPayload): string[] {
 }
 
 /** Page 1: the results. */
-function ResultsPage({ card }: { card: ReportCardPayload }) {
+function ResultsPage({ card, family }: PageProps) {
   const { answers, named, visibility } = totals(card);
   const leader = card.competitors[0];
   const rivals = card.competitors.slice(0, 3);
@@ -284,7 +298,7 @@ function ResultsPage({ card }: { card: ReportCardPayload }) {
   const date = formatDate(card.generatedAt);
 
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={pageStyle(family)}>
       <Header
         eyebrow="Free AI visibility report card"
         title={`How visible is ${clip(card.companyName, 60)} in AI answers?`}
@@ -410,13 +424,13 @@ function ResultsPage({ card }: { card: ReportCardPayload }) {
 }
 
 /** Page 2: the action plan. */
-function PlanPage({ card }: { card: ReportCardPayload }) {
+function PlanPage({ card, family }: PageProps) {
   const plan = actionPlan(card);
   const sources = [...new Set(plan.flatMap((step) => step.lines.map((line) => line.title)))].join(
     ', ',
   );
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={pageStyle(family)}>
       <Header
         eyebrow="Your action plan"
         title="What’s in Ansvisor and how you can use it"
@@ -468,7 +482,7 @@ function PlanPage({ card }: { card: ReportCardPayload }) {
 }
 
 /** Page 3: the outcomes. Compact, so the revenue scenario fits on it too. */
-function OutcomesPage({ card }: { card: ReportCardPayload }) {
+function OutcomesPage({ card, family }: PageProps) {
   const values = valueRows(card);
   const revenue = revenueRows(card);
   const offers = planOffers();
@@ -480,7 +494,7 @@ function OutcomesPage({ card }: { card: ReportCardPayload }) {
   const muted = [styles.compact, styles.muted];
 
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={pageStyle(family)}>
       <Header
         eyebrow="Outcomes"
         title="What you can achieve, and what it’s worth"
@@ -673,7 +687,7 @@ function Faint({ children }: { children: string }) {
 }
 
 /** Page 4: every question asked, by product, and what each engine did with it. */
-function QuestionsPage({ card }: { card: ReportCardPayload }) {
+function QuestionsPage({ card, family }: PageProps) {
   const groups = questionGroups(card);
   const count = groups.reduce((sum, g) => sum + g.lines.length, 0);
   const summary = questionSummary(card);
@@ -681,7 +695,7 @@ function QuestionsPage({ card }: { card: ReportCardPayload }) {
   const withProducts = groups.some((g) => g.product);
   const withVolume = groups.some((g) => g.lines.some((l) => l.volume !== null));
   return (
-    <Page size="A4" style={styles.page}>
+    <Page size="A4" style={pageStyle(family)}>
       <Header
         eyebrow="What we measured"
         title={`The ${count} questions we asked`}
@@ -773,17 +787,18 @@ function QuestionsPage({ card }: { card: ReportCardPayload }) {
   );
 }
 
-export function ReportCardPdfDocument({ card }: { card: ReportCardPayload }) {
+/** `family`: the Inter registerFonts registered for this card. */
+export function ReportCardPdfDocument({ card, family }: PageProps) {
   return (
     <Document
       title={`AI visibility report card: ${clip(card.companyName, 60)}`}
       author={look.author}
       creator={look.author}
     >
-      <ResultsPage card={card} />
-      <PlanPage card={card} />
-      <OutcomesPage card={card} />
-      {(card.questionRows?.length ?? 0) > 0 && <QuestionsPage card={card} />}
+      <ResultsPage card={card} family={family} />
+      <PlanPage card={card} family={family} />
+      <OutcomesPage card={card} family={family} />
+      {(card.questionRows?.length ?? 0) > 0 && <QuestionsPage card={card} family={family} />}
     </Document>
   );
 }
@@ -793,6 +808,13 @@ export async function reportCardPdf(
   card: ReportCardPayload,
   fontDir: string = path.join(process.cwd(), 'public', 'fonts'),
 ): Promise<Uint8Array> {
-  registerFonts(fontDir);
-  return new Uint8Array(await renderToBuffer(<ReportCardPdfDocument card={card} />));
+  const family = registerFonts(fontDir);
+  try {
+    return new Uint8Array(
+      await renderToBuffer(<ReportCardPdfDocument card={card} family={family} />),
+    );
+  } finally {
+    // Drawn: its family goes, so a server drawing many cards doesn't keep them all.
+    delete Font.getRegisteredFonts()[family];
+  }
 }

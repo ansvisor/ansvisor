@@ -75,13 +75,14 @@ export const SKIPPED = {
     "Search Console's shopping results by page (00377): the sync that reads them never runs for a demo brand, and with the brand's gsc_shopping_synced_at left empty, Readiness shows that item as not read yet and leaves it out of the score.",
   member_brands:
     "The brands shared with a Selected-brands person (00388): the organization's own people, set by its admins; everyone sees the demo brand without a row.",
+  agent_conversations:
+    "The old Agent chat's conversations (00009): with the new Chat on, the demo brand shows Chat's own sample chats (chat.js) and the old Agent chat page isn't shown.",
   brand_integrations:
     "The sign-in a brand uses per integration (00470): the demo builds none. Like every brand of the Account, the demo brand uses the Account's own Google connection when there is one (nothing is synced for it), and its Webflow shows as connected from the web's own list (web lib/demo/integrations.ts).",
 };
 
 const FOLLOW_UP =
   'demo follow-up (PR 7): a draft with product links, checked against the demo catalog';
-const CHAT = 'demo Chat, once Chat ships (the demo shows Chat as Soon until then)';
 
 /** Tables a later demo PR builds; listed so the gap stays visible until then. */
 export const PENDING = {
@@ -94,8 +95,6 @@ export const PENDING = {
   competitor_timeline_scans:
     "demo follow-up (PR 7): when a demo competitor's pages were last read (learning C3, 00376); the nightly read never runs for a demo brand",
 
-  agent_conversations: CHAT,
-  chat_conversations: CHAT,
   prompt_demand:
     "demo follow-up (PR 7): each demo prompt's demand level (PROMPT-014, 00370); the nightly read never runs for a demo brand",
 };

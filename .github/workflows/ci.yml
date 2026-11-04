@@ -56,6 +56,79 @@ jobs:
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
           SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
           STRIPE_SECRET_KEY: sk_test_ci_placeholder
+
+  # GitHub filters paths per workflow, not per job, and the rest of CI runs on
+  # every change. This job asks the API which files changed (nothing is
+  # checked out), and `skills` below runs only when one is under skills/.
+  skills-changes:
+    name: skills — did this change skills/?
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      changed: ${{ steps.paths.outputs.changed }}
+    steps:
+      - id: paths
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const PREFIX = 'skills/';
+            const repo = { owner: context.repo.owner, repo: context.repo.repo };
+            let files;
+            if (context.eventName === 'pull_request') {
+              files = await github.paginate(github.rest.pulls.listFiles, {
+                ...repo,
+                pull_number: context.payload.pull_request.number,
+                per_page: 100,
+              });
+            } else {
+              const { before, after } = context.payload;
+              // A push with nothing to compare with is checked.
+              if (!before || /^0+$/.test(before)) {
+                core.setOutput('changed', 'true');
+                return;
+              }
+              const { data } = await github.rest.repos.compareCommitsWithBasehead({
+                ...repo,
+                basehead: `${before}...${after}`,
+              });
+              files = data.files ?? [];
+              // The compare lists at most 300 files: a bigger push is checked.
+              if (files.length >= 300) {
+                core.setOutput('changed', 'true');
+                return;
+              }
+            }
+            // A file renamed out of skills/ changes it too.
+            const changed = files.some(
+              (f) => f.filename.startsWith(PREFIX) || (f.previous_filename ?? '').startsWith(PREFIX),
+            );
+            core.info(changed ? 'skills/ changed: checking it.' : 'Nothing under skills/ changed.');
+            core.setOutput('changed', String(changed));
+
+  skills:
+    name: skills — format & public scan
+    needs: skills-changes
+    if: needs.skills-changes.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: web/yarn.lock
+      - run: yarn install --frozen-lockfile
+      # Chat's skills against the whole format and scan, and every file in
+      # skills/ (the AEO coach skills too) against the public profile, with
+      # the README's table matching the folders.
+      - name: Skills format and scan
+        run: yarn test src/lib/chat/skills/library.test.ts src/lib/chat/skills/public-skills.test.ts
+
   server:
     name: server — lint, format & test
     runs-on: ubuntu-latest
