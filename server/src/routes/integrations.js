@@ -27,7 +27,12 @@ import {
 import { runGscSync } from '../lib/gsc-sync.js';
 import { runGaSync } from '../lib/ga-sync.js';
 import { detectPageOpportunitiesInWindow } from '../lib/page-opportunities.js';
-import { assertBrandAccess, assertAllBrands, assertEveryBrand, brandAccessOf } from '../lib/access.js';
+import {
+  assertBrandAccess,
+  assertAllBrands,
+  assertEveryBrand,
+  brandAccessOf,
+} from '../lib/access.js';
 
 const router = Router();
 
