@@ -1,17 +1,22 @@
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { ChatTool, PlanGate, ToolFlags } from './define-tool';
 import { ACTION_CENTER_TOOLS } from './action-center-tools';
+import { AGENT_CALL_TOOLS } from './agent-call-tools';
 import { AUDIT_TOOLS } from './audit-tools';
 import { COMPETITOR_TOOLS } from './competitor-tools';
 import { CONTENT_TOOLS } from './content-tools';
 import { PROMPT_TOOLS } from './prompt-tools';
 import { READ_TOOLS } from './read-tools';
+import { MEMORY_TOOLS } from './memory-tools';
 import { REPORT_TOOLS } from './report-tools';
+import { SCHEDULE_TOOLS } from './schedule-tools';
+import { SKILL_TOOLS } from './skill-tools';
 import { TOPIC_TOOLS } from './topic-tools';
 import { WHY_TOOLS } from './why-tools';
 import { WRITE_TOOLS } from './write-tools';
 import { AREA_READS } from './areas';
 import { NAVIGATION_READS } from './navigation';
+import { WHATS_NEW_READS } from './whats-new';
 
 /**
  * Every tool Chat may call (CHAT-20 §9). One without a row here isn't
@@ -23,6 +28,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...READ_TOOLS,
   ...AREA_READS,
   ...NAVIGATION_READS,
+  ...WHATS_NEW_READS,
   ...WHY_TOOLS,
   ...WRITE_TOOLS,
   ...PROMPT_TOOLS,
@@ -32,6 +38,10 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...CONTENT_TOOLS,
   ...REPORT_TOOLS,
   ...AUDIT_TOOLS,
+  ...SCHEDULE_TOOLS,
+  ...SKILL_TOOLS,
+  ...MEMORY_TOOLS,
+  ...AGENT_CALL_TOOLS,
 ];
 
 /** The row of a tool, by its internal name; undefined for a name with no row. */

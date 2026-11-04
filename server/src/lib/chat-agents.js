@@ -6,9 +6,12 @@
  *   - Every minute (startChatAgentTicks, node-cron) it calls the web's
  *     POST /api/internal/chat/agents/tick, which fires the Schedule
  *     triggers that are due and sweeps (lost and stale runs, failures, the
- *     AI limit's pauses). Like the server's other crons, not in development
- *     (server.js): there, `node src/scripts/chat-agents-tick.js` calls it
- *     once.
+ *     AI limit's pauses); then, in the same tick, Chat's scheduled jobs'
+ *     POST /api/internal/chat/schedules/tick (CHAT-12, W3-01), which
+ *     settles their open runs, lets jobs paused at the AI limit go on and
+ *     runs the ones that are due. Like the server's other crons, not in
+ *     development (server.js): there, `node src/scripts/chat-agents-tick.js`
+ *     calls both once.
  *   - After Action Center's signal pass records new signals on a brand
  *     (signals/record.js), notifyChatAgentsOfSignals tells the web's
  *     POST /api/internal/chat/agents/signals which signals, with the
@@ -46,19 +49,19 @@ export function webAppOrigin() {
 }
 
 /**
- * POSTs to one of the web's internal agents endpoints. Answers
- * { status, body }, or null when nothing was sent (Chat off, no secret) or
- * the web didn't answer in time; never throws.
+ * POSTs to one of the web's internal Chat endpoints (/api/internal/chat/…).
+ * Answers { status, body }, or null when nothing was sent (Chat off, no
+ * secret) or the web didn't answer in time; never throws.
  *
- * @param {'tick' | 'signals'} path
+ * @param {'agents/tick' | 'agents/signals' | 'schedules/tick'} path
  * @param {object} body
  */
-export async function postToChatAgents(path, body) {
+async function postToChatInternal(path, body) {
   if (!chatAgenticDeployed()) return null;
   const secret = process.env.CHAT_INTERNAL_SECRET;
   if (!secret) return null;
   try {
-    const res = await fetch(`${webAppOrigin()}/api/internal/chat/agents/${path}`, {
+    const res = await fetch(`${webAppOrigin()}/api/internal/chat/${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
       body: JSON.stringify(body),
@@ -71,6 +74,16 @@ export async function postToChatAgents(path, body) {
   }
 }
 
+/**
+ * POSTs to one of the web's internal agents endpoints (postToChatInternal).
+ *
+ * @param {'tick' | 'signals'} path
+ * @param {object} body
+ */
+export function postToChatAgents(path, body) {
+  return postToChatInternal(`agents/${path}`, body);
+}
+
 /** One tick: the web fires the due schedules and sweeps. Answers what it did, or null. */
 export async function tickChatAgents() {
   const res = await postToChatAgents('tick', {});
@@ -81,9 +94,23 @@ export async function tickChatAgents() {
 }
 
 /**
+ * Chat's scheduled jobs' tick (CHAT-12, W3-01): the web settles their open
+ * runs, resumes the ones the AI limit paused and runs the due ones. Answers
+ * what it did, or null.
+ */
+export async function tickChatSchedules() {
+  const res = await postToChatInternal('schedules/tick', {});
+  if (res && res.status !== 200) {
+    logger.error({ status: res.status, body: res.body }, '[chat-agents] the schedules tick failed');
+  }
+  return res;
+}
+
+/**
  * Starts the minute tick, with the new Chat on and CHAT_INTERNAL_SECRET
- * set; one tick at a time (a slow one is skipped over, not stacked).
- * Answers the cron task, or null when it didn't start.
+ * set: the agents' tick, then the scheduled jobs' (each apart: one that
+ * fails doesn't stop the other); one tick at a time (a slow one is skipped
+ * over, not stacked). Answers the cron task, or null when it didn't start.
  *
  * @param {typeof cron.schedule} [schedule]
  */
@@ -98,7 +125,9 @@ export function startChatAgentTicks(schedule = cron.schedule) {
     if (running) return;
     running = true;
     try {
+      // Neither throws: the agents' tick first, then the jobs' in the same minute.
       await tickChatAgents();
+      await tickChatSchedules();
     } catch (err) {
       logger.error({ err }, '[chat-agents] the tick crashed');
     } finally {

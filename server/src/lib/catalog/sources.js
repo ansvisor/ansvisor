@@ -10,7 +10,7 @@ import { PlanLimitError, getCatalogProductCap } from '../plan-guard.js';
 import { queueShoppingCheck } from '../shopping-check.js';
 import { CredentialsKeyError, readCredentials } from './credentials.js';
 import { saveItemIssues } from './issues.js';
-import { signInRequest as workspaceSignIn, workspaceEntity } from './sign-in.js';
+import { brandSignIn, signInRequest as workspaceSignIn } from './sign-in.js';
 import { syncCatalog } from './sync.js';
 import { syncCatalogOrders } from './orders.js';
 
@@ -408,7 +408,7 @@ async function syncOnce(
       } else if (isSignIn(connector)) {
         const signedIn = signInRequest(
           connector.signIn,
-          await workspaceEntity(source.brand_id, { db }),
+          await brandSignIn(source.brand_id, connector.signIn, { db }),
           { hosts: connector.hosts },
         );
         // Every call the read makes stops at its deadline.

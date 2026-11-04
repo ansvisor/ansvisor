@@ -31,6 +31,7 @@ import {
   getChatAccess,
   listRoleMembers,
   type ChatAccess,
+  type MemberBrands,
   type RoleMember,
 } from '@/lib/actions/chat-access';
 import { ROLE_MATRIX, ROLE_ORDER, type RoleCell } from '@/lib/chat/access';
@@ -196,7 +197,9 @@ function MembersTable({
                     t(`roleNames.${member.role}`)
                   )}
                 </TableCell>
-                <TableCell className="text-muted-foreground">{t('roles.allBrands')}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  <MemberBrandsCell brands={member.brands} />
+                </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {t(`roles.throughChat.${member.role}`)}
                 </TableCell>
@@ -211,6 +214,22 @@ function MembersTable({
         </Table>
       </div>
     </section>
+  );
+}
+
+/**
+ * A member's brands (BRAND-ACCESS §3.2): All brands, or how many, with
+ * their names when the viewer may see them (an admin, or the person).
+ */
+export function MemberBrandsCell({ brands }: { brands: MemberBrands }) {
+  const t = useTranslations('chatAccess');
+  if (brands.scope === 'all') return <>{t('roles.allBrands')}</>;
+  if (!brands.names) return <>{t('roles.selectedBrands')}</>;
+  return (
+    <span title={brands.names.join(', ')}>
+      {t('roles.brandCount', { count: brands.names.length })}
+      <span className="block max-w-48 truncate text-xs">{brands.names.join(', ')}</span>
+    </span>
   );
 }
 

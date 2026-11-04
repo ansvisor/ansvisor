@@ -55,21 +55,23 @@ const answer = (body: unknown, status = 200) =>
   fetchMock.mockResolvedValue(new Response(JSON.stringify(body), { status }));
 
 describe('the offered models', () => {
-  it('are the tested ones only: Haiku and Sonnet 5.5, and GPT-6.1 Sol, Terra and Luna since their test runs; Opus 5.5 hidden until tested', () => {
+  it('are the tested ones only: Haiku and Sonnet 5.5 at launch, Opus 5.5 since its test run, and GPT-6.1 Sol, Terra and Luna since their test runs', () => {
     expect(OFFERED_MODELS.map((m) => [m.id, m.api])).toEqual([
       ['anthropic/claude-haiku-5.5', 'claude-haiku-5-5'],
       ['anthropic/claude-sonnet-5.5', 'claude-sonnet-5-5'],
+      ['anthropic/claude-opus-5.5', 'claude-opus-5-5'],
       ['openai/gpt-6.1-sol', 'openai/gpt-6.1-sol'],
       ['openai/gpt-6.1-terra', 'openai/gpt-6.1-terra'],
       ['openai/gpt-6-luna', 'openai/gpt-6-luna'],
     ]);
-    expect(CHAT_MODELS.find((m) => m.id === 'anthropic/claude-opus-5.5')?.tested).toBe(false);
+    expect(OFFERED_MODELS).toEqual(CHAT_MODELS.filter((m) => m.tested));
     expect(OFFERED_MODELS.every((m) => m.tested)).toBe(true);
     expect(isChatModelChoice(AUTO_MODEL)).toBe(true);
     expect(isChatModelChoice('anthropic/claude-sonnet-5.5')).toBe(true);
-    expect(isChatModelChoice('anthropic/claude-opus-5.5')).toBe(false);
-    expect(offeredModel('anthropic/claude-opus-5.5')).toBeNull();
+    expect(isChatModelChoice('anthropic/claude-opus-5.5')).toBe(true);
+    expect(offeredModel('anthropic/claude-opus-5.5')?.api).toBe('claude-opus-5-5');
     expect(isChatModelChoice('google/gemini-3.5-flash-lite')).toBe(false);
+    expect(offeredModel('google/gemini-3.5-flash-lite')).toBeNull();
     expect(isChatModelChoice(undefined)).toBe(false);
     expect(offeredModel('auto')).toBeNull();
     expect(isCatalogId('openai/gpt-6.1-sol')).toBe(true);
@@ -88,8 +90,8 @@ describe('a run’s model and effort (W4-02)', () => {
     const sonnet = { model: 'anthropic/claude-sonnet-5.5', effort: 'max' };
     expect(runChoiceOf(sonnet, true)).toEqual(sonnet);
     expect(runChoiceOf(sonnet, false)).toEqual(AUTO_CHOICE);
-    // Picked before it was hidden, not tested yet: Auto, the effort kept.
-    expect(runChoiceOf({ model: 'anthropic/claude-opus-5.5', effort: 'high' }, true)).toEqual({
+    // A model listed but not tested yet: Auto, the effort kept.
+    expect(runChoiceOf({ model: 'google/gemini-3.8-flash', effort: 'high' }, true)).toEqual({
       model: 'auto',
       effort: 'high',
     });
@@ -106,11 +108,11 @@ describe('a run’s model and effort (W4-02)', () => {
         { model: 'anthropic/claude-sonnet-5.5', effort: 'max', created_at: '2026-11-02T11:00:00Z' },
       ]),
     ).toEqual({ model: 'anthropic/claude-sonnet-5.5', effort: 'max' });
-    // A chat whose latest run was on Opus 5.5 opens on Auto while it isn't tested.
+    // A chat whose latest run was on a model not tested opens on Auto.
     expect(
       latestChoice([
         {
-          model: 'anthropic/claude-opus-5.5',
+          model: 'google/gemini-3.8-flash',
           effort: 'normal',
           created_at: '2026-11-02T12:00:00Z',
         },
@@ -128,6 +130,7 @@ describe('readModelMenu', () => {
         serverModel('anthropic/claude-haiku-5.5', '0.1x', 'low'),
         serverModel('anthropic/claude-sonnet-5.5', '2.3x', 'normal'),
         serverModel('anthropic/claude-opus-5.5', '4.7x', 'high'),
+        serverModel('google/gemini-3.8-flash', '2.3x', 'normal'),
       ],
       selected: null,
       catalogCount: 312,
@@ -136,15 +139,16 @@ describe('readModelMenu', () => {
     const menu = await readModelMenu({ ownKeyProviders: ['anthropic'] });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain(
-      '/api/internal/chat/models?ids=anthropic%2Fclaude-haiku-5.5%2Canthropic%2Fclaude-sonnet-5.5',
+      '/api/internal/chat/models?ids=anthropic%2Fclaude-haiku-5.5%2Canthropic%2Fclaude-sonnet-5.5%2Canthropic%2Fclaude-opus-5.5',
     );
-    expect(String(url)).not.toContain('opus');
+    expect(String(url)).not.toContain('gemini');
     expect(init.headers).toEqual({ Authorization: 'Bearer shh' });
     expect(menu.auto).toEqual({ id: 'auto', multiplier: '1x', tone: 'normal' });
     // A model not tested stays out, even when the server answers for it.
     expect(menu.models.map((m) => [m.id, m.multiplier, m.tone, m.yourKey])).toEqual([
       ['anthropic/claude-haiku-5.5', '0.1x', 'low', true],
       ['anthropic/claude-sonnet-5.5', '2.3x', 'normal', true],
+      ['anthropic/claude-opus-5.5', '4.7x', 'high', true],
     ]);
     expect(menu.catalogCount).toBe(312);
     expect(menu.updatedAt).toBe('2026-11-02T05:17:00.000Z');
@@ -183,17 +187,13 @@ describe('readModelMenu', () => {
 
   it('counts a model no longer offered, or not tested yet, as removed, and Auto as no selection', async () => {
     answer({ models: [], catalogCount: 0, updatedAt: null });
-    // A chat that picked Opus 5.5 before it was hidden: it runs Auto now.
-    expect((await readModelMenu({ selected: 'anthropic/claude-opus-5.5' })).selected).toEqual({
-      id: 'anthropic/claude-opus-5.5',
-      removed: true,
-    });
+    // A chat that picked a model not tested yet: it runs Auto.
     expect((await readModelMenu({ selected: 'google/gemini-3.5-flash-lite' })).selected).toEqual({
       id: 'google/gemini-3.5-flash-lite',
       removed: true,
     });
     expect((await readModelMenu({ selected: 'auto' })).selected).toBeNull();
-    expect(String(fetchMock.mock.calls[2][0])).not.toContain('selected=');
+    expect(String(fetchMock.mock.calls[1][0])).not.toContain('selected=');
   });
 
   it('still lists the offered models, unlabelled, when the API server doesn’t answer', async () => {
@@ -209,10 +209,10 @@ describe('readModelMenu', () => {
     );
     vi.stubEnv('OPENROUTER_API_KEY', '');
     answer({}, 502);
-    expect((await readModelMenu()).models).toHaveLength(2);
+    expect((await readModelMenu()).models).toHaveLength(3);
     vi.stubEnv('CRON_SECRET', '');
     fetchMock.mockReset();
-    expect((await readModelMenu()).models).toHaveLength(2);
+    expect((await readModelMenu()).models).toHaveLength(3);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

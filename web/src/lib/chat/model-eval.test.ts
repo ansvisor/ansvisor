@@ -126,7 +126,8 @@ vi.mock('./model-menu', () => ({
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 vi.mock('@/lib/mcp/why', () => ({ explainChangeFor: fakes.explain }));
 // Every step is held and charged here: what it used is counted, never billed.
-vi.mock('./budget', () => ({
+vi.mock('./budget', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./budget')>()),
   reserveChatStep: vi.fn(async () => ({
     ok: true,
     budget: {
