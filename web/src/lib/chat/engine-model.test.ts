@@ -10,7 +10,17 @@ const key = vi.hoisted(() => ({
 vi.mock('./key', () => ({ resolveChatModelKey: key.resolve }));
 vi.mock('./key-health', () => ({ ownKeyFailure: key.failure }));
 
-const { autoModels, estimateInputTokens, resolveChatModels } = await import('./engine-model');
+const {
+  autoModels,
+  claudeEffort,
+  estimateInputTokens,
+  openRouterModels,
+  pickedClaudeModels,
+  resolveChatModels,
+} = await import('./engine-model');
+const { OFFERED_MODELS } = await import('./models');
+
+const modelId = (choice: { model: unknown }) => (choice.model as { modelId: string }).modelId;
 
 describe('the run models', () => {
   it('read with Haiku 5.5 and write with Sonnet 5.5, priced by their catalog ids', () => {
@@ -70,6 +80,110 @@ describe('the run models', () => {
     });
     expect(await resolveChatModels('org')).toMatchObject({ source: 'ansvisor', keyFailing: false });
     expect(key.failure).not.toHaveBeenCalled();
+  });
+
+  it('run a Claude model picked in the menu for both phases, priced by its catalog id (W4-03)', () => {
+    const sonnet = OFFERED_MODELS.find((m) => m.id === 'anthropic/claude-sonnet-5.5')!;
+    const models = pickedClaudeModels('k', 'ansvisor', sonnet);
+    expect(models.phases).toBe('auto');
+    expect(models.model).toBe('anthropic/claude-sonnet-5.5');
+    for (const phase of ['read', 'write'] as const) {
+      expect(modelId(models.pick(phase))).toBe('claude-sonnet-5-5');
+      expect(models.pick(phase).budgetModel).toBe('anthropic/claude-sonnet-5.5');
+      expect(models.pick(phase).claude).toBe(true);
+    }
+    expect(models.pick('read').maxOutputTokens).toBe(8_000);
+  });
+
+  it('turn effort into Claude’s own setting, with more room to write (W4-03)', () => {
+    expect(claudeEffort('claude-haiku-5-5', 'normal')).toBeUndefined();
+    expect(claudeEffort('claude-haiku-5-5', 'high')).toBe('high');
+    expect(claudeEffort('claude-opus-5-5', 'high')).toBe('high');
+    // Sonnet 5.5 is at high already: one level up.
+    expect(claudeEffort('claude-sonnet-5-5', 'high')).toBe('xhigh');
+    expect(claudeEffort('claude-sonnet-5-5', 'max')).toBe('max');
+
+    const high = autoModels('k', 'ansvisor', 'high');
+    expect(high.pick('read').providerOptions).toEqual({
+      anthropic: { structuredOutputMode: 'outputFormat', effort: 'high' },
+    });
+    expect(high.pick('write').providerOptions).toEqual({
+      anthropic: { structuredOutputMode: 'outputFormat', effort: 'xhigh' },
+    });
+    expect(high.pick('write').maxOutputTokens).toBe(24_000);
+    const max = autoModels('k', 'ansvisor', 'max');
+    expect(max.pick('read').maxOutputTokens).toBe(16_000);
+    expect(max.pick('write').maxOutputTokens).toBe(32_000);
+  });
+
+  it('take the pick on an Anthropic key, Auto otherwise, and the own key’s model on another provider (W4-03)', async () => {
+    const anthropic = {
+      source: 'ansvisor',
+      config: { provider: 'anthropic', apiKey: 'k', settings: {} },
+    };
+    key.resolve.mockResolvedValueOnce(anthropic);
+    const sonnet = await resolveChatModels('org', {
+      model: 'anthropic/claude-sonnet-5.5',
+      effort: 'max',
+    });
+    expect(sonnet?.model).toBe('anthropic/claude-sonnet-5.5');
+    expect(modelId(sonnet!.pick('read'))).toBe('claude-sonnet-5-5');
+    expect(sonnet?.pick('write').providerOptions).toMatchObject({ anthropic: { effort: 'max' } });
+
+    // Not offered (not tested, or never listed): Auto, the effort kept.
+    key.resolve.mockResolvedValueOnce(anthropic);
+    const opus = await resolveChatModels('org', {
+      model: 'mistralai/mistral-large-3',
+      effort: 'max',
+    });
+    expect(opus?.model).toBe('auto');
+    expect(modelId(opus!.pick('write'))).toBe('claude-sonnet-5-5');
+    expect(opus?.pick('write').providerOptions).toMatchObject({ anthropic: { effort: 'max' } });
+
+    key.resolve.mockResolvedValueOnce(anthropic);
+    const unknown = await resolveChatModels('org', {
+      model: 'openai/gpt-6.1-sol',
+      effort: 'normal',
+    });
+    expect(unknown?.model).toBe('auto');
+    expect(modelId(unknown!.pick('read'))).toBe('claude-haiku-5-5');
+
+    key.resolve.mockResolvedValueOnce({
+      source: 'own',
+      config: { provider: 'openai', apiKey: 'k', settings: {} },
+    });
+    const own = await resolveChatModels('org', {
+      model: 'anthropic/claude-sonnet-5.5',
+      effort: 'high',
+    });
+    expect(own?.phases).toBe('single');
+    expect(own?.model).toBe('openai/gpt-5.5');
+  });
+
+  it('run a model through OpenRouter in one phase, with its reasoning effort (W4-03)', () => {
+    const picked = {
+      id: 'x-ai/grok-4.7',
+      api: 'x-ai/grok-4.7',
+      provider: 'openrouter' as const,
+      label: 'Grok 4.7',
+      tested: true,
+    };
+    const models = openRouterModels('or-key', picked, 'high');
+    expect(models).toMatchObject({
+      source: 'ansvisor',
+      provider: 'openrouter',
+      phases: 'single',
+      model: 'x-ai/grok-4.7',
+    });
+    const step = models.pick('write');
+    expect(step.budgetModel).toBe('x-ai/grok-4.7');
+    expect(step.claude).toBe(false);
+    expect(step.providerOptions).toMatchObject({
+      openai: { store: false, reasoningEffort: 'high' },
+    });
+    expect(openRouterModels('or-key', picked).pick('read').providerOptions).not.toHaveProperty(
+      'openai.reasoningEffort',
+    );
   });
 
   it('count a prompt’s tokens up, not down', () => {

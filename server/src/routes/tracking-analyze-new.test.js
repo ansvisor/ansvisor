@@ -53,7 +53,13 @@ vi.mock('../lib/tracking-quota.js', () => ({
   TrackingQuotaError: class TrackingQuotaError extends Error {},
 }));
 // The caller reaches the brand; the route reads whether it is paused from it.
-vi.mock('../lib/access.js', () => ({ assertBrandAccess }));
+vi.mock('../lib/access.js', () => ({
+  assertBrandAccess,
+  // The caller may (the role rule's own tests: run-roles.test.js).
+  MANAGER_ROLES: ['admin', 'manager'],
+  allowRole: vi.fn(async () => true),
+  assertRole: vi.fn(async () => 'manager'),
+}));
 
 const { default: router } = await import('./tracking.js');
 

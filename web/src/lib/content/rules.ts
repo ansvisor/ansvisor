@@ -627,9 +627,20 @@ export const RULE_LENGTH_MAX = 50_000;
  */
 export function ruleLength(rules: ActiveRule[], pageType: PageType | null): number {
   const rule = rules.find((r) => r.key === 'length');
-  const value = rule?.on ? Number(rule.current) : NaN;
+  const value = rule?.on ? (lengthSpan(rule.current)?.target ?? NaN) : NaN;
   if (!Number.isFinite(value) || value <= 0) return lengthTarget(pageType);
   return Math.min(RULE_LENGTH_MAX, Math.max(RULE_LENGTH_MIN, value));
+}
+
+/**
+ * The range the person set on the Length rule while it is on, as the agent
+ * is told to keep within it; undefined for one number (the agent aims at
+ * it, its band as before), with the rule off or unset.
+ */
+export function ruleLengthBand(rules: ActiveRule[]): { min: number; max: number } | undefined {
+  const rule = rules.find((r) => r.key === 'length');
+  const span = rule?.on && /[-–—]/.test(rule.current) ? lengthSpan(rule.current) : null;
+  return span ? { min: span.min, max: span.max } : undefined;
 }
 
 /**
@@ -926,6 +937,36 @@ export function lengthBand(target: number): { min: number; max: number } {
   };
 }
 
+/** One bound of a Length range, as typed: "4500", "4,500" or "4.500". */
+const lengthBound = (text: string): number | null => {
+  const digits = text.replace(/[\s.,]/g, '');
+  return /^\d{1,6}$/.test(digits) && Number(digits) > 0 ? Number(digits) : null;
+};
+
+/**
+ * A Length as set: one number, met within LENGTH_TOLERANCE of it either
+ * way, or a range the person sets ("4500-5500", editor test 2026-11-03:
+ * a Length no rewrite hits exactly), met within it and aimed at its
+ * middle. Null for neither (no value, 0, or something else).
+ */
+export function lengthSpan(value: string): { target: number; min: number; max: number } | null {
+  const range = value.split(/[-–—]/);
+  if (range.length === 2) {
+    const a = lengthBound(range[0]);
+    const b = lengthBound(range[1]);
+    if (a === null || b === null) return null;
+    const [min, max] = a <= b ? [a, b] : [b, a];
+    return { target: Math.round((min + max) / 2), min, max };
+  }
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? { target: n, ...lengthBand(n) } : null;
+}
+
+/** A Length range as the rule keeps it: "4500-5500", the smaller first. */
+export function lengthRangeValue(min: number, max: number): string {
+  return `${Math.min(min, max)}-${Math.max(min, max)}`;
+}
+
 const atLeast = (have: number, want: number): RuleStatus =>
   have >= want ? { state: 'ok' } : { state: 'bad', code: 'partOf', count: have, of: want };
 
@@ -1015,6 +1056,20 @@ export function overLengthFor<T extends { rule: ActiveRule; status: RuleStatus }
 }
 
 /**
+ * The page's characters now and the most its Length allows, while the
+ * Length rule is on and set (editor UX review 2026-11-03, decision b): a
+ * Fix or a hand-off never adds past it (content-agent.js capToLength).
+ */
+export function lengthCapFor<T extends { rule: ActiveRule }>(
+  rules: T[],
+  characters: number,
+): { count: number; max: number } | undefined {
+  const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
+  const span = length ? lengthSpan(length.rule.current) : null;
+  return span ? { count: Math.max(0, Math.round(characters)), max: span.max } : undefined;
+}
+
+/**
  * What to say when only held rules are left for the agent: the quoted
  * passages' (a sentence in one), else the Length's, out of a rewrite's reach.
  */
@@ -1070,6 +1125,8 @@ export const NO_REACH: RewriteReach = { kept: 0, floor: 0, last: null };
 export interface LengthOutOfReach {
   count: number;
   target: number;
+  /** The most the Length allows (lengthSpan). */
+  max: number;
   /** The characters a rewrite keeps as they are. */
   kept: number;
   /** Why: the least a rewrite comes to is past the Length, or the last rewrite came to `least`. */
@@ -1140,17 +1197,10 @@ export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatu
   reach: RewriteReach,
 ): LengthOutOfReach | null {
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
-  const target = Number(length?.rule.current);
+  const span = length ? lengthSpan(length.rule.current) : null;
   const status = length?.status;
-  if (
-    status?.state !== 'bad' ||
-    status.code !== 'long' ||
-    !Number.isFinite(target) ||
-    target <= 0
-  ) {
-    return null;
-  }
-  const { max } = lengthBand(target);
+  if (status?.state !== 'bad' || status.code !== 'long' || !span) return null;
+  const { target, max } = span;
   const says = lastRewriteSays(reach.last, target, reach.kept);
   if (says?.inReach && says.chars <= max) return null;
   const reached =
@@ -1167,6 +1217,7 @@ export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatu
   return {
     count: status.count,
     target,
+    max,
     kept: reach.kept,
     why,
     least,
@@ -1195,7 +1246,7 @@ export function rewriteAdvice<T extends { rule: ActiveRule; status: RuleStatus }
   held: ReadonlySet<string> = NO_HELD,
 ): RewriteAdvice | null {
   const length = rules.find(({ rule }) => rule.key === 'length' && rule.on);
-  const target = Number(length?.rule.current);
+  const target = length ? (lengthSpan(length.rule.current)?.target ?? NaN) : NaN;
   const status = length?.status;
   // An empty page has nothing to rewrite, and one too long can't be sent whole.
   if (status && 'count' in status && (status.count === 0 || status.count > REWRITE_MAX_CHARS)) {
@@ -1316,7 +1367,8 @@ export function checkRule(rule: ActiveRule, page: PageRead, ctx: RuleContext): R
       return over ? { state: 'bad', code: 'over', count: over } : { state: 'ok' };
     }
     case 'length': {
-      const { min, max } = lengthBand(n);
+      // A range as set, else the band around one number (a Length of 0 reads every page long).
+      const { min, max } = lengthSpan(rule.current) ?? lengthBand(n);
       if (page.characters < min) {
         return { state: 'bad', code: 'short', count: page.characters, min, max };
       }
@@ -1548,8 +1600,8 @@ export function lengthConflict(
     return n;
   };
   const length = statuses.find((s) => s.rule.key === 'length')?.rule;
-  const target = length?.on ? Number(length.current) : NaN;
-  if (!Number.isFinite(target) || target <= 0) return null;
+  const span = length?.on ? lengthSpan(length.current) : null;
+  if (!span) return null;
   const need =
     Math.min(asked('fanoutH2'), fanouts) * LEAST_SECTION +
     Math.max(
@@ -1561,7 +1613,7 @@ export function lengthConflict(
     (asked('summary') ? LEAST_SUMMARY : 0);
   // The page holds them all already: it shows they fit.
   if (counted.every((status) => status.state === 'ok')) return null;
-  const { max } = lengthBand(target);
+  const { max } = span;
   return need > max ? { need, max } : null;
 }
 
