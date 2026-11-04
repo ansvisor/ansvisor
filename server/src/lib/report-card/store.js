@@ -75,6 +75,109 @@ export function reportCardStore(db = supabaseAdmin) {
       return data;
     },
 
+    /** Cards running now. */
+    async runningCards() {
+      const { data, error } = await db
+        .from('report_cards')
+        .select('id, started_at, attempts')
+        .eq('status', 'running')
+        .limit(100);
+      if (error) fail('running', error);
+      return data ?? [];
+    },
+
+    /** Cards started since `since`. */
+    async startedSince(since) {
+      const { count, error } = await db
+        .from('report_cards')
+        .select('id', { count: 'exact', head: true })
+        .gte('started_at', since.toISOString());
+      if (error) fail('count', error);
+      return count ?? 0;
+    },
+
+    /**
+     * Takes the oldest card due by `now` for this server: queued → running,
+     * only if no other run took it first. The card, or null for none.
+     */
+    async claimNext(now) {
+      const { data: next, error } = await db
+        .from('report_cards')
+        .select('id, attempts')
+        .eq('status', 'queued')
+        .lte('run_after', now.toISOString())
+        .order('run_after', { ascending: true })
+        .limit(1);
+      if (error) fail('queue', error);
+      const card = next?.[0];
+      if (!card) return null;
+      const { data, error: claimError } = await db
+        .from('report_cards')
+        .update({ status: 'running', started_at: now.toISOString(), attempts: card.attempts + 1 })
+        .eq('id', card.id)
+        .eq('status', 'queued')
+        .select('id, domain, site, company_name, country, language, attempts')
+        .maybeSingle();
+      if (claimError) fail('claim', claimError);
+      return data ?? null;
+    },
+
+    /** What the person gave that the card reads: the first request's industry and deal value. */
+    async cardInputs(cardId) {
+      const { data, error } = await db
+        .from('report_card_requests')
+        .select('industry, deal_value, deal_currency')
+        .eq('report_card_id', cardId)
+        .order('created_at', { ascending: true })
+        .limit(5);
+      if (error) fail('inputs', error);
+      const rows = data ?? [];
+      const deal = rows.find((r) => r.deal_value !== null && r.deal_currency);
+      return {
+        industry: rows.find((r) => r.industry)?.industry ?? null,
+        dealValue: deal ? { amount: Number(deal.deal_value), currency: deal.deal_currency } : null,
+      };
+    },
+
+    /**
+     * Ends a run: ready with its figures, or failed with why; with what it
+     * cost either way. Only the run of `attempt` writes: one the tick took as
+     * lost and started again (or failed) matches nothing.
+     */
+    async finishCard(cardId, attempt, fields) {
+      const { error } = await db
+        .from('report_cards')
+        .update(fields)
+        .eq('id', cardId)
+        .eq('status', 'running')
+        .eq('attempts', attempt);
+      if (error) fail('finish', error);
+    },
+
+    /**
+     * Puts a card a lost run left behind back in the queue, or fails it after
+     * its tries; only while it is still that run's (`attempt`), running.
+     */
+    async releaseCard(cardId, attempt, fields) {
+      const { error } = await db
+        .from('report_cards')
+        .update(fields)
+        .eq('id', cardId)
+        .eq('status', 'running')
+        .eq('attempts', attempt);
+      if (error) fail('release', error);
+    },
+
+    /** Deletes the requests older than `before` (12 months: the privacy notice). */
+    async pruneRequests(before) {
+      const { error, count } = await db
+        .from('report_card_requests')
+        .delete({ count: 'exact' })
+        .lt('created_at', before.toISOString());
+      if (error) fail('prune', error);
+      return count ?? 0;
+    },
+
     async insertRequest(row) {
       const { data, error } = await db
         .from('report_card_requests')

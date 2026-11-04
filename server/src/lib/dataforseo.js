@@ -26,8 +26,9 @@ function getAuthHeader() {
  * Fetch Google Ads search volume for a list of keywords via DataForSEO.
  * @param {string[]} keywords - Up to 1000 keywords
  * @param {{ locationCode?: number, languageCode?: string }} options
- * @returns {Promise<Record<string, { volume: number, competitionIndex: number | null, competition: string | null }>>}
- *   Map of keyword → { monthly search volume, Google Ads competition index (0–100), competition label }
+ * @returns {Promise<Record<string, { volume: number, competitionIndex: number | null, competition: string | null, cpc: number | null }>>}
+ *   Map of keyword → { monthly search volume, Google Ads competition index (0–100), competition
+ *   label, Google Ads cost per click in USD (null when it has none) }
  */
 export async function getSearchVolumes(keywords, options = {}) {
   const body = [
@@ -68,6 +69,8 @@ export async function getSearchVolumes(keywords, options = {}) {
       volume: item.search_volume ?? 0,
       competitionIndex: item.competition_index ?? null,
       competition: item.competition ?? null, // "LOW" | "MEDIUM" | "HIGH" | null
+      // The same call's cost per click (the free report card's value table).
+      cpc: typeof item.cpc === 'number' && item.cpc > 0 ? item.cpc : null,
     };
   }
 

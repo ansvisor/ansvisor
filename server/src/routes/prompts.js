@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { NoObjectGeneratedError, generateObject } from 'ai';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
-import { MANAGER_ROLES, assertBrandAccess, assertRole } from '../lib/access.js';
+import { MANAGER_ROLES, allowRole, assertBrandAccess, assertRole } from '../lib/access.js';
 import { resolveModel } from '../lib/ai-provider.js';
 import { decide, isDeciderConfigured } from '../lib/decider.js';
 import { classifyQueryIntents, normalizeIntentQuery } from '../lib/intent-extraction.js';
@@ -950,6 +950,8 @@ router.post('/from-topics', async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
     }
+    // A model writing prompts: admins and managers, who set brands up (2026-11-03).
+    if (!(await allowRole(res, req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL))) return;
     const { brandName, industry, description, topics, language } = parsed.data;
     const langName = getLanguageName(language);
 

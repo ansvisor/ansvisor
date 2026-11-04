@@ -16,6 +16,7 @@ import type { PageSites } from './page-sites';
 import type { ChatMode } from './precedence';
 import { publishRunEvent, type TailSource } from './run-hub';
 import type { ChatEffort } from './run-limits';
+import type { StepToSave } from './skills/save-steps';
 import { toClientStep, type ChatRunStepMemberRow } from './steps';
 
 /**
@@ -173,6 +174,11 @@ export interface RunProgress {
   whys?: number;
   /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */
   nextMoves?: NextMoveInput[];
+  /**
+   * The message is "Save these steps as a skill" (W4-32): the steps of the
+   * run that offered it, which this run drafts save_skill's card from.
+   */
+  saveSteps?: StepToSave[];
   /** The limit a run at paused_cap reached: the month's AI limit, or its agent run's cap. */
   capHit?: 'run' | 'month';
   /** Why a stopped run stopped (its run.stopped reason), for its agent run (CHAT-21 §H). */
