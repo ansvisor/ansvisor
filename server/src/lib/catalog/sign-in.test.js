@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
+const brandConnection = vi.hoisted(() => vi.fn(async () => null));
+vi.mock('../brand-integrations.js', () => ({ brandConnection }));
 
 import { ConnectorHttpError } from '../../connectors/http.js';
 import { logger } from '../logger.js';
 import { fakeDb } from './__fixtures__/fake-db.js';
-import { signInRequest, workspaceEntity } from './sign-in.js';
+import { brandSignIn, signInRequest, workspaceEntity } from './sign-in.js';
 
 const HOST = 'merchantapi.googleapis.com';
 const URL_ = `https://${HOST}/products/v1/accounts/1/products`;
@@ -53,7 +55,8 @@ describe('signInRequest', () => {
     await request(URL_, { query: { pageSize: 1000 } });
     await request(URL_);
     expect(active).toHaveBeenCalledTimes(1);
-    expect(active).toHaveBeenCalledWith('google-merchant-center', 'org_1');
+    // No account named: the entity's active one, as before.
+    expect(active).toHaveBeenCalledWith('google-merchant-center', 'org_1', null);
     expect(proxy).toHaveBeenCalledWith('ca_1', {
       endpoint: URL_,
       query: { pageSize: 1000 },
@@ -274,5 +277,39 @@ describe('workspaceEntity', () => {
     fake.rows('brands').push({ id: 'brand-1', organization_id: 'org-9' });
     await expect(workspaceEntity('brand-1', { db: fake.db })).resolves.toBe('org_org-9');
     await expect(workspaceEntity('brand-2', { db: fake.db })).rejects.toThrow();
+  });
+});
+
+describe('brandSignIn (BRAND-ACCESS PR 16)', () => {
+  it('names the Merchant Center account the brand uses', async () => {
+    brandConnection.mockResolvedValueOnce({ entityId: 'org_org-9', composioAccountId: 'ca_gmc' });
+    await expect(brandSignIn('brand-1', 'google-merchant-center')).resolves.toEqual({
+      entityId: 'org_org-9',
+      accountId: 'ca_gmc',
+    });
+    expect(brandConnection).toHaveBeenCalledWith('brand-1', 'google-merchant-center');
+  });
+
+  it('falls back to the workspace’s entity with no sign-in, as before', async () => {
+    const fake = fakeDb();
+    fake.rows('brands').push({ id: 'brand-1', organization_id: 'org-9' });
+    await expect(
+      brandSignIn('brand-1', 'google-merchant-center', { db: fake.db }),
+    ).resolves.toEqual({ entityId: 'org_org-9', accountId: null });
+  });
+});
+
+describe('signInRequest with a named account', () => {
+  it('uses the account the brand’s sign-in names, not the entity’s first', async () => {
+    const active = vi.fn(async () => ({ id: 'ca_gmc' }));
+    const proxy = vi.fn(async () => ({ status: 200, headers: {}, data: {} }));
+    const request = signInRequest(
+      'google-merchant-center',
+      { entityId: 'org_org-9', accountId: 'ca_gmc' },
+      { hosts: ['merchantapi.googleapis.com'], active, proxy },
+    );
+    await request('https://merchantapi.googleapis.com/accounts');
+    expect(active).toHaveBeenCalledWith('google-merchant-center', 'org_org-9', 'ca_gmc');
+    expect(proxy.mock.calls[0][0]).toBe('ca_gmc');
   });
 });

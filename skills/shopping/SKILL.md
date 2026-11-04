@@ -4,7 +4,7 @@ description: "Checks product pages and feed for ChatGPT Shopping (US) and Google
 license: MIT
 metadata:
   title: "AI shopping readiness"
-  filters: "product"
+  filters: "product technical"
 ---
 
 # AI shopping readiness

@@ -200,7 +200,7 @@ export function checkSkillFile(folder: string, text: string): SkillCheck {
 // ─── The scan (item 16, and what a published skill never holds, item 20) ────
 
 /** Zero-width, bidi controls and tag characters: text a reader can't see. */
-const HIDDEN = /[\u200B-\u200D\u2060\uFEFF\u202A-\u202E\u2066-\u2069]|\uDB40[\uDC00-\uDC7F]/;
+export const HIDDEN = /[\u200B-\u200D\u2060\uFEFF\u202A-\u202E\u2066-\u2069]|\uDB40[\uDC00-\uDC7F]/;
 const BASE64 = /[A-Za-z0-9+/]{100,}={0,2}/;
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9-]+(\.[A-Z0-9-]+)*\.[A-Z]{2,}/i;
 /** A figure with a currency: a price ("$49", "49 €", "₺1.200"). */
@@ -240,6 +240,15 @@ const COMMAND_LINE = /^\s*!\s*`?[A-Za-z./]/m;
 const BLOCK_TAGS = /<\/?(skill|available_skills)\b/i;
 const URL = /\bhttps?:\/\/\S+/i;
 const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
+
+/** Text a reader can't see: zero-width, bidi controls, tag characters (memory reuses it, CHAT-14 item 12). */
+export const hasHiddenCharacters = (text: string) => HIDDEN.test(text);
+/** A key, token or password (memory reuses it, CHAT-14 item 12). */
+export const hasSecret = (text: string) => SECRETS.some((re) => re.test(text));
+/** An email address (memory reuses it, CHAT-14 item 12). */
+export const hasEmail = (text: string) => EMAIL.test(text);
+/** Text that tries to take over the assistant (memory reuses it, CHAT-14 item 12). */
+export const overridesRules = (text: string) => ROLE_OVERRIDE.some((re) => re.test(text));
 
 /**
  * What the scan finds in a skill's text: `blocks` refuse it, `warns` go to

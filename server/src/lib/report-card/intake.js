@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { fetchPage } from '../safe-fetch.js';
+import { fetchPage, PageFetchError } from '../safe-fetch.js';
 import { estimatedCardUsd, reportCardLimits } from './config.js';
 import { countryLanguage, isCountry } from './countries.js';
 import {
@@ -158,15 +158,24 @@ function fieldErrors(issues) {
 }
 
 /**
+ * A fetch that got an answer from the site: an error status (a bot wall's
+ * 403 or 503 challenge, a home page that 404s), a page that isn't HTML or
+ * too many redirects. The site is up; the card's run reads what it can.
+ */
+const ANSWERED = new Set(['http_error', 'not_html', 'too_large', 'too_many_redirects']);
+
+/**
  * Whether the site opens: its home page, as given and then with "www.",
- * read once and only as far as the first bytes.
+ * read once and only as far as the first bytes. Only a site that can't be
+ * reached (DNS, connection, TLS, timeout) or isn't allowed doesn't.
  */
 export async function siteOpens(site, { fetcher = fetchPage } = {}) {
   for (const host of [site, `www.${site}`]) {
     try {
       await fetcher(`https://${host}/`, { truncate: true, maxBytes: 64 * 1024, timeoutMs: 8000 });
       return true;
-    } catch {
+    } catch (err) {
+      if (err instanceof PageFetchError && ANSWERED.has(err.code)) return true;
       // The next host, or not reachable.
     }
   }

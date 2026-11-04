@@ -23,12 +23,14 @@ function from(table: string) {
         : { data: null, error: null },
     then: (resolve: (value: unknown) => unknown) =>
       Promise.resolve(
-        listing
-          ? {
-              data: profilesError ? null : [{ id: ME, full_name: 'Alex', role: 'admin' }],
-              error: profilesError,
-            }
-          : { data: null, error: null },
+        listing && table === 'brands'
+          ? { data: [{ id: 'b1', name: 'Acme' }], error: null }
+          : listing
+            ? {
+                data: profilesError ? null : [{ id: ME, full_name: 'Alex', role: 'admin' }],
+                error: profilesError,
+              }
+            : { data: null, error: null },
       ).then(resolve),
   };
   return chain;
@@ -38,6 +40,10 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ auth: { getUser: async () => ({ data: { user: { id: ME } } }) } }),
 }));
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from: (t: string) => from(t) } }));
+// The person has Selected brands: Acme (BRAND-ACCESS §3.2).
+vi.mock('@/lib/brand-access', () => ({
+  readMemberBrandAccess: async () => new Map([[ME, { scope: 'selected', brandIds: ['b1'] }]]),
+}));
 vi.mock('@/lib/member-emails', () => ({
   readMemberAuth: async () => new Map([[ME, { email: 'alex@x.example', lastSignInAt: null }]]),
 }));
@@ -81,6 +87,7 @@ describe('listRoleMembers', () => {
           role: 'admin',
           lastActiveAt: null,
           isYou: true,
+          brands: { scope: 'selected', names: ['Acme'] },
         },
       ],
     });

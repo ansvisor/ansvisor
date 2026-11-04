@@ -127,12 +127,14 @@ export function detail(extra: Partial<AgentDetail> = {}): AgentDetail {
       scope: { brand_ids: ['bbbbbbbb-0000-4000-8000-000000000001'], engines: ['perplexity-web'] },
       notifyUserIds: [],
       followupDays: 14,
+      canCall: [],
     },
     brands: [{ id: 'bbbbbbbb-0000-4000-8000-000000000001', name: 'Ansvisor' }],
     recentRuns: [run()],
     usagePeriod: { share: 0.021, ownKeyShare: 0, runs: 3 },
     can: { ...NONE },
     limits: { activeAgents: 25, runsAtOnce: 5, eventRunsPerDay: 6 },
+    canCall: { options: [], locked: false },
     ...extra,
   };
 }

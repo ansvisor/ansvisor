@@ -192,6 +192,10 @@ export function ChatHeaderMenu({ chat }: { chat: ChatListItem }) {
         >
           {t('activity')}
         </Item>
+        {/* What Chat remembers between chats (CHAT-14 v2: header ⋯ › Memory). */}
+        <Item glyph="✱" action="memory.open" onClick={() => router.push('/dashboard/chat/memory')}>
+          {t('memory')}
+        </Item>
         <DebugItem />
         {(editable || actions.canDelete(chat)) && <DropdownMenuSeparator />}
         {editable && (
