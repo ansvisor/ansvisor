@@ -16,6 +16,7 @@ import type { PageSites } from './page-sites';
 import type { ChatMode } from './precedence';
 import { publishRunEvent, type TailSource } from './run-hub';
 import type { ChatEffort } from './run-limits';
+import type { StepToSave } from './skills/save-steps';
 import { toClientStep, type ChatRunStepMemberRow } from './steps';
 
 /**
@@ -177,6 +178,11 @@ export interface RunProgress {
   pagePlaceholder?: string | null;
   /** By the file a page version was filed as: the draft and the History version its Undo puts back (W4-12a). */
   pageUndos?: Record<string, { draftId: string; versionId: string }>;
+  /**
+   * The message is "Save these steps as a skill" (W4-32): the steps of the
+   * run that offered it, which this run drafts save_skill's card from.
+   */
+  saveSteps?: StepToSave[];
   /** The limit a run at paused_cap reached: the month's AI limit, or its agent run's cap. */
   capHit?: 'run' | 'month';
   /** Why a stopped run stopped (its run.stopped reason), for its agent run (CHAT-21 §H). */
@@ -239,6 +245,8 @@ export interface LoadedRun {
   status: ChatRunStatus;
   conversationId: string;
   messageId: string;
+  /** 'auto' or the model picked in the menu (chat_runs.model; W4-03). */
+  model: string;
   effort: ChatEffort;
   organizationId: string;
   userId: string;
@@ -262,7 +270,7 @@ export async function loadRun(runId: string): Promise<LoadedRun | null> {
   const [run, state] = await Promise.all([
     supabaseAdmin
       .from('chat_runs')
-      .select('id, status, conversation_id, message_id, effort')
+      .select('id, status, conversation_id, message_id, model, effort')
       .eq('id', runId)
       .maybeSingle(),
     supabaseAdmin
@@ -283,6 +291,7 @@ export async function loadRun(runId: string): Promise<LoadedRun | null> {
     status: r.status as ChatRunStatus,
     conversationId: r.conversation_id as string,
     messageId: r.message_id as string,
+    model: (r.model as string) ?? 'auto',
     effort: (r.effort as ChatEffort) ?? 'normal',
     organizationId: s.organization_id as string,
     userId: s.user_id as string,

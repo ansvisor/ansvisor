@@ -160,6 +160,19 @@ export const fixRulesInput = z.object({
     })
     .optional()
     .catch(undefined),
+  /**
+   * The page's characters now and the most its Length allows, whenever the
+   * Length is on (editor UX review 2026-11-03, decision b): what the run
+   * adds together never takes the page past it (capToLength). Dropped when
+   * it doesn't read, as overLength is.
+   */
+  lengthCap: z
+    .object({
+      count: z.number().int().min(0).max(10_000_000),
+      max: z.number().int().min(1).max(10_000_000),
+    })
+    .optional()
+    .catch(undefined),
 });
 
 export const suggestionsSchema = z.object({
@@ -1134,6 +1147,45 @@ export function overLengthLine(over) {
   return `The page is already ${over.count.toLocaleString('en-US')} characters, past the most its Length allows (${over.max.toLocaleString('en-US')}). The Length isn't among the rules here, so don't cut the page for it. Fix each rule with as few words as it needs: an answer in one or two sentences, no section, list, table or example a rule doesn't ask for, and a replace no longer than the words it replaces unless the rule needs words added (a keyword, a figure, a name).`;
 }
 
+/**
+ * What the model is told of the room its Length leaves (lengthCap), when
+ * overLengthLine says nothing: how much its changes may add together.
+ */
+export function lengthCapLine(cap) {
+  if (!cap) return '';
+  const room = cap.max - cap.count;
+  const fmt = (n) => n.toLocaleString('en-US');
+  return room > 0
+    ? `The page is ${fmt(cap.count)} characters and its Length allows up to ${fmt(cap.max)}: all your changes together may add at most ${fmt(room)} characters. Where a rule needs more, cut as much elsewhere.`
+    : `The page is ${fmt(cap.count)} characters, at or past the most its Length allows (${fmt(cap.max)}): add no words without cutting as many elsewhere.`;
+}
+
+/** The characters a suggestion row adds to the page (a cut is negative). */
+function rowAdds(row) {
+  if (row.kind === 'insert') return htmlLines(row.after_text ?? '').join('').length;
+  return (row.after_text ?? '').length - (row.before_text ?? '').length;
+}
+
+/**
+ * The rows a run keeps within the room its Length leaves (lengthCap,
+ * editor UX review 2026-11-03: a Fix took an 800-character page to 2,706):
+ * in their order, each that adds while what is kept so far, cuts counted,
+ * stays within the room; every cut. All of them without a cap.
+ */
+export function capToLength(rows, cap) {
+  if (!cap) return { rows, dropped: 0 };
+  const room = cap.max - cap.count;
+  let added = 0;
+  const kept = [];
+  for (const row of rows) {
+    const adds = rowAdds(row);
+    if (adds > 0 && added + adds > Math.max(0, room)) continue;
+    added += adds;
+    kept.push(row);
+  }
+  return { rows: kept, dropped: rows.length - kept.length };
+}
+
 /** What the model is told: the brand, the page's passages, and the rules to fix. */
 export function buildFixPrompt({
   brand,
@@ -1161,7 +1213,10 @@ export function buildFixPrompt({
     "The brand's rules, to follow in every change, before the writer's own:",
   );
   // Said only when the Length isn't among the rules: the line says it isn't.
-  const over = input.rules.some((r) => r.key === 'length') ? '' : overLengthLine(input.overLength);
+  // Else the room it leaves (lengthCap).
+  const over =
+    (input.rules.some((r) => r.key === 'length') ? '' : overLengthLine(input.overLength)) ||
+    lengthCapLine(input.lengthCap);
   return `Brand: ${brand?.name || 'Unknown'}
 Industry: ${brand?.industry || 'Not specified'}
 ${siteTypeLine(brand)}Description: ${brand?.description || 'N/A'}
@@ -1600,7 +1655,7 @@ async function fixWithRun({
     context: { brand: brand.name, title: draft.title },
   });
   for (const value of looked.learned) known.add(value);
-  const rows = keepSuggestions(
+  const suggested = keepSuggestions(
     looked.suggestions,
     passages,
     lockedKeys,
@@ -1616,6 +1671,14 @@ async function fixWithRun({
       health,
     },
   );
+  // Never past the Length the person set (decision b): what doesn't fit goes.
+  const { rows, dropped } = capToLength(suggested, input.lengthCap);
+  if (dropped) {
+    logger.info(
+      { draftId, dropped, cap: input.lengthCap },
+      '[content-agent] past the Length, dropped',
+    );
+  }
   // Stopped meanwhile: nothing it wrote is kept.
   await stopIfStopped(run);
   if (!rows.length) {

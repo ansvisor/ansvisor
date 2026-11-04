@@ -7,6 +7,8 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { PlanCard } from '@/components/agentic/plan-card';
 import { RunSteps } from '@/components/agentic/run-steps';
 import { ApprovalCard } from '@/components/agentic/approval-card';
+import { FormCard } from '@/components/agentic/form-card';
+import { useFormAssist } from '@/components/chat/run/form-assist';
 import { QuestionAnswered, QuestionCard } from '@/components/agentic/question-card';
 import { AgentHead } from '@/components/agentic/agent-card';
 import { ResultCard } from '@/components/agentic/result-card';
@@ -31,6 +33,7 @@ import {
   RESULT,
   RUN_STEPS,
   SHOPPING_PLAN,
+  SKILL_DRAFT,
   TASKS_PLAN,
   TRAY,
 } from './_card-samples';
@@ -67,6 +70,12 @@ export function CardsPreview() {
   const s = (key: string) => t(`states.${key}` as never);
   const brandId = useBrandStore((state) => state.activeBrandId);
   const stepOf = (n: number) => ({ n, total: 6 });
+  const skillAssist = useFormAssist(SKILL_DRAFT);
+  // The same draft with a /name it can't keep: the card says why, and Save skill waits.
+  const reservedDraft = {
+    ...SKILL_DRAFT,
+    fields: SKILL_DRAFT.fields.map((f) => (f.name === 'name' ? { ...f, value: 'winback' } : f)),
+  };
 
   return (
     <div data-slot="cards-preview" className="space-y-6">
@@ -140,6 +149,40 @@ export function CardsPreview() {
         </State>
         <State caption={s('skipped')}>
           <ApprovalCard {...APPROVAL} step={stepOf(4)} status="skipped" />
+        </State>
+      </Group>
+
+      <Group title={t('sections.skillDraft')}>
+        <State caption={s('skillDraft')}>
+          <FormCard
+            step={stepOf(2)}
+            title="Save skill · /pricing-brief"
+            form={SKILL_DRAFT}
+            assist={skillAssist}
+            onSubmit={noop}
+            onCancel={noop}
+          />
+        </State>
+        <State caption={s('skillDraftReserved')}>
+          <FormCard
+            step={stepOf(2)}
+            title="Save skill · /winback"
+            form={reservedDraft}
+            assist={skillAssist}
+            onSubmit={noop}
+            onCancel={noop}
+          />
+        </State>
+        <State caption={s('skillSaved')}>
+          <FormCard
+            step={stepOf(2)}
+            title="Save skill · /pricing-brief"
+            form={SKILL_DRAFT}
+            status="approved"
+            doneLabel="Saved skill: /pricing-brief"
+            onSubmit={noop}
+            onCancel={noop}
+          />
         </State>
       </Group>
 

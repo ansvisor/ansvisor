@@ -264,6 +264,28 @@ export async function assertRole(userId, roles, message) {
 }
 
 /**
+ * assertRole for a route whose own catch answers every error 500: the
+ * refusal is answered here, 403 `forbidden` with its words as both `error`
+ * and `message` (the routes' bodies read one or the other). Run it after the
+ * resource's own access check. Answers whether the caller may go on.
+ * @param {import('express').Response} res
+ * @param {string} userId
+ * @param {readonly string[]} roles
+ * @param {string} message
+ * @returns {Promise<boolean>}
+ */
+export async function allowRole(res, userId, roles, message) {
+  try {
+    await assertRole(userId, roles, message);
+    return true;
+  } catch (err) {
+    if (err.status !== 403) throw err;
+    res.status(403).json({ success: false, error: message, message, code: 'forbidden' });
+    return false;
+  }
+}
+
+/**
  * Assert that the caller may reach `brandId`: their organization's, and with
  * Selected brands granted to them. 404 for a brand that is gone, 403
  * `not_in_workspace` for another organization's, 403 `no_brand_access` for

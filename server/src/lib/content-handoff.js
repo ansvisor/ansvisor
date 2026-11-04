@@ -83,6 +83,8 @@ export async function handOffDraft({ draftId, brandId, input }) {
       ...(input.sources ? { sources: input.sources } : {}),
       // Its checks add text too (an FAQ, a specs table, headings).
       ...(input.overLength ? { overLength: input.overLength } : {}),
+      // Never past the Length the person set (decision b, capToLength).
+      ...(input.lengthCap ? { lengthCap: input.lengthCap } : {}),
     },
     handoff: { origin: input.origin },
   });
