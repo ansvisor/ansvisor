@@ -16,6 +16,7 @@ import { DenialCard } from '@/components/agentic/denial-card';
 import { ErrorCard } from '@/components/agentic/error-card';
 import { RunsTray, RunsTrayView } from '@/components/agentic/runs-tray';
 import { NextMoves } from '@/components/chat/run/next-moves';
+import { OpenPageCard } from '@/components/chat/run/open-page-card';
 import {
   APPROVAL,
   APPROVAL_HEAD,
@@ -201,6 +202,12 @@ export function CardsPreview() {
             question={QUESTIONS.topics.question}
             answer="Skipped · used Plans and prices"
           />
+        </State>
+      </Group>
+
+      <Group title={t('sections.openPage')}>
+        <State caption={s('openPage')}>
+          <OpenPageCard onChoose={noop} />
         </State>
       </Group>
 

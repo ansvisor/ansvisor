@@ -3775,6 +3775,7 @@
           "approval": "Approval card",
           "skillDraft": "Skill draft card (W3-08)",
           "question": "Question card",
+          "openPage": "Where should we open this page? (W4-11)",
           "execute": "Click card (EXECUTE)",
           "result": "Result card",
           "denial": "Out-of-permission answer",
@@ -3782,6 +3783,7 @@
           "tray": "Runs tray"
         },
         "states": {
+          "openPage": "After Chat writes a page · none Recommended; Open here comes with W4-15",
           "planAuto": "Auto, ask before changes",
           "planFullAuto": "Full auto, a tool not connected",
           "planReadOnly": "Analyst: read-only",
@@ -4035,6 +4037,16 @@
     }
   },
   "chatRun": {
+    "openPage": {
+      "question": "Where should we open this page?",
+      "editor": "Open in Content Editor",
+      "editorDetail": "The full editor with Brief, Rules and Quality.",
+      "chat": "Keep working in chat",
+      "chatDetail": "No editor needed: ask for changes here.",
+      "dontAskAgain": "Don't ask again",
+      "saved": "Your choice is saved. Change it anytime in Settings › Chat.",
+      "saveFailed": "Your choice couldn't be saved. Try again in Settings › Chat."
+    },
     "keyFix": "Open AI Providers",
     "keyAskAdmin": "An Admin can fix it in Settings › AI Providers.",
     "tasks": {
@@ -5049,6 +5061,13 @@
       }
     },
     "settings": {
+      "pageOpen": {
+        "label": "Where pages open",
+        "note": "When Chat writes or starts editing a page.",
+        "ask": "Ask each time",
+        "chat": "Keep in chat",
+        "editor": "Content Editor"
+      },
       "title": "Settings",
       "intro": "How Chat works for you and your team.",
       "tabs": {
