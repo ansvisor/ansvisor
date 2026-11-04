@@ -155,7 +155,7 @@ const UNMETERED: ChatStepBudget = {
   keep() {},
 };
 
-type BudgetPath = 'reserve' | 'charge' | 'release' | 'fit';
+type BudgetPath = 'reserve' | 'reserve-draft-images' | 'charge' | 'release' | 'fit';
 
 /** The proxy's answers while the API is down or restarting. */
 const isTransient = (status: number) => status === 502 || status === 503 || status === 504;
@@ -425,6 +425,20 @@ export async function reserveImages(job: ChatImageJob): Promise<ChatImageReserva
     },
     RESERVE_TIMEOUT_MS,
   );
+  return heldImages(reserved, job.organizationId, job.model, images);
+}
+
+/**
+ * An image request's hold as the server answered it: its charge (the
+ * provider's own cost, else each image's price), release or keep, each
+ * settled once; or why it wasn't held.
+ */
+function heldImages(
+  reserved: Awaited<ReturnType<typeof post>>,
+  organizationId: string,
+  model: string,
+  images: number,
+): ChatImageReservation {
   if (!reserved) return refused('unavailable', { retryable: true });
   const usageId = reserved.body?.usageId;
   if (reserved.status !== 201 || typeof usageId !== 'string') {
@@ -443,9 +457,9 @@ export async function reserveImages(job: ChatImageJob): Promise<ChatImageReserva
         settled = true;
         const produced = Math.max(0, Math.min(images, Math.floor(outcome.produced)));
         await settle('charge', {
-          orgId: job.organizationId,
+          orgId: organizationId,
           usageId,
-          model: job.model,
+          model,
           usage: {},
           images: {
             produced,
@@ -458,13 +472,47 @@ export async function reserveImages(job: ChatImageJob): Promise<ChatImageReserva
       async release() {
         if (settled) return;
         settled = true;
-        await settle('release', { orgId: job.organizationId, usageId });
+        await settle('release', { orgId: organizationId, usageId });
       },
       keep() {
         settled = true;
       },
     },
   };
+}
+
+/** An image request made in the Content Editor (W4-09): on a draft, with no Chat run. */
+export interface DraftImageJob {
+  organizationId: string;
+  draftId: string;
+  /** The image model's catalog id, as the server prices it. */
+  model: string;
+  /** How many images it may make (1–10). */
+  images: number;
+  source: ChatKeySource;
+}
+
+/**
+ * Holds a Content Editor image request on the AI budget (W4-09): each image
+ * at the model's image price, the row tied to the draft; on the workspace's
+ * own key written as its own and held at nothing. Charged at the provider's
+ * own cost and released as reserveImages' are.
+ */
+export async function reserveDraftImages(job: DraftImageJob): Promise<ChatImageReservation> {
+  if (!chatAgenticEnabled(job.organizationId)) return { ok: true, budget: UNMETERED_IMAGES };
+  const images = Math.max(1, Math.min(10, Math.floor(job.images)));
+  const reserved = await post(
+    'reserve-draft-images',
+    {
+      orgId: job.organizationId,
+      draftId: job.draftId,
+      model: job.model,
+      images,
+      ownKey: job.source === 'own',
+    },
+    RESERVE_TIMEOUT_MS,
+  );
+  return heldImages(reserved, job.organizationId, job.model, images);
 }
 
 /**

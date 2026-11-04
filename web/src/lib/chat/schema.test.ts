@@ -1171,3 +1171,22 @@ describe('outside e-mails (00467)', () => {
     );
   });
 });
+
+describe('a notice when an agent needs its person (00474)', () => {
+  const sql = migration('00474');
+
+  it('adds agent_needs_you and keeps every kind written before, open pull requests’ too', () => {
+    expect(allowed(sql, 'kind')).toEqual([
+      'own_key_failed',
+      'own_key_limit_80',
+      'own_key_limit_100',
+      'agent_went_live',
+      'agent_go_live_off',
+      'schedule_failed',
+      'schedule_paused',
+      'followup_result',
+      'agent_needs_you',
+    ]);
+    expect(sql).toMatch(/drop constraint if exists chat_notices_kind_check/);
+  });
+});

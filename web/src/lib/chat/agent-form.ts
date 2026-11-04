@@ -70,6 +70,11 @@ export interface AgentFormSetup {
    */
   goLive?: 'hidden' | 'off' | 'on';
   /**
+   * The time zone the person picked in Settings › Account (00468), or null
+   * for Automatic: a new Schedule trigger starts on it, before the browser's.
+   */
+  timeZone: string | null;
+  /**
    * Can call's choices (CHAT-27 item 14): the workspace's agents the person
    * sees, on or paused, by name; the form leaves out the one it edits.
    */

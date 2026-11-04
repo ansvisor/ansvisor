@@ -64,6 +64,7 @@ import { BrandFactsTab } from './_brand-facts-tab';
 import { ConversionsCard } from './_conversions-card';
 import { ClientLogoCard } from './_client-logo-card';
 import { PeopleTab } from './_people-tab';
+import { IntegrationsTab } from './_integrations-tab';
 import { trackingSnippetTag } from '@/lib/conversion-tracking';
 
 interface PageProps {
@@ -72,7 +73,16 @@ interface PageProps {
   searchParams?: Promise<{ tab?: string }>;
 }
 
-const TABS = ['general', 'domains', 'tracking', 'competitors', 'facts', 'people', 'danger'];
+const TABS = [
+  'general',
+  'domains',
+  'tracking',
+  'competitors',
+  'facts',
+  'integrations',
+  'people',
+  'danger',
+];
 /** No search params: one promise for every render, as use() needs. */
 const NO_SEARCH: Promise<{ tab?: string }> = Promise.resolve({});
 
@@ -111,6 +121,7 @@ export default function BrandSettingsPage({ params, searchParams }: PageProps) {
           <TabsTrigger value="tracking">Tracking</TabsTrigger>
           <TabsTrigger value="competitors">Competitors</TabsTrigger>
           {factsOn && <TabsTrigger value="facts">{t('settings.facts.tab')}</TabsTrigger>}
+          <TabsTrigger value="integrations">{t('settings.integrations.tab')}</TabsTrigger>
           <TabsTrigger value="people">{t('settings.people.tab')}</TabsTrigger>
           <TabsTrigger
             value="danger"
@@ -154,6 +165,10 @@ export default function BrandSettingsPage({ params, searchParams }: PageProps) {
             <BrandFactsTab brandId={brand.id} />
           </TabsContent>
         )}
+
+        <TabsContent value="integrations">
+          <IntegrationsTab brand={brand} />
+        </TabsContent>
 
         <TabsContent value="people">
           <PeopleTab brandId={brand.id} />

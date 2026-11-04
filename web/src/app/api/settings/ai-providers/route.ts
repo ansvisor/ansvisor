@@ -3,7 +3,13 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { writeRefusal } from '@/lib/subscription-guard';
 import { encryptApiKey, last4 } from '@/lib/agent/key-encryption';
 import { isKeyFailureClass } from '@/lib/agent/key-errors';
-import { isAiProvider, parseProviderSettings, type AiProvider } from '@/lib/agent/providers';
+import {
+  isAiProvider,
+  parseKeyUses,
+  parseProviderSettings,
+  type AiProvider,
+  type AiProviderSettings,
+} from '@/lib/agent/providers';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { ownKeyAccess, type OwnKeyAccess } from '@/lib/chat/key';
 import { readProviderKey } from '@/lib/agent/key';
@@ -32,6 +38,9 @@ import { getAdmin, getCallerAndOrg } from './_admin';
  * - PUT { provider, apiKey, settings }: saves (or replaces) a provider's key;
  *   the first one saved becomes the one Chat uses.
  * - PATCH { provider }: makes a saved provider the one Chat uses.
+ * - PATCH { provider, useFor }: sets what a saved key is for, Chat and/or
+ *   images (W4-06; settings.useFor, Anthropic's for Chat only). A PUT that
+ *   names no useFor keeps the saved one.
  * - DELETE ?provider=: removes a key; when it was Chat's, the most recently
  *   saved other one takes over.
  *
@@ -305,6 +314,18 @@ export async function PUT(req: Request) {
   }
 
   const organizationId = ctx.profile.organization_id;
+  // A save that names no uses keeps the key's (W4-06): Settings' form doesn't send them.
+  let settings: AiProviderSettings = parsed.settings;
+  if (!settings.useFor) {
+    const { data: saved } = await supabaseAdmin
+      .from('organization_ai_keys')
+      .select('settings')
+      .eq('organization_id', organizationId)
+      .eq('provider', provider)
+      .maybeSingle();
+    const useFor = parseKeyUses(provider, (saved?.settings as AiProviderSettings | null)?.useFor);
+    if (useFor) settings = { ...settings, useFor };
+  }
   // `active` is left out: a replaced key keeps whether Chat uses it.
   const { error } = await supabaseAdmin.from('organization_ai_keys').upsert(
     {
@@ -312,7 +333,7 @@ export async function PUT(req: Request) {
       provider,
       key_encrypted: encrypted,
       key_last4: last4(apiKey),
-      settings: parsed.settings,
+      settings,
       set_at: new Date().toISOString(),
       set_by: ctx.profile.id,
     },
@@ -357,13 +378,14 @@ export async function PATCH(req: Request) {
   const refused = await writeRefusal();
   if (refused) return refused;
 
-  const body = (await req.json().catch(() => ({}))) as { provider?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { provider?: unknown; useFor?: unknown };
   if (!isAiProvider(body.provider)) {
     return NextResponse.json({ error: 'Unknown provider' }, { status: 400 });
   }
   const notAllowed = await keyChangeRefusal(ctx.profile.organization_id, body.provider);
   if (notAllowed) return notAllowed;
   const organizationId = ctx.profile.organization_id;
+  if (body.useFor !== undefined) return setKeyUses(organizationId, body.provider, body.useFor);
 
   // With Chat on, the key is tested before Chat uses it (AGENT-OWN-KEY §8 item 3).
   let tested: KeyTestResult | null = null;
@@ -400,6 +422,41 @@ export async function PATCH(req: Request) {
     ok: true,
     ...(await keptCheck(organizationId, body.provider, tested, true)),
   });
+}
+
+/** What a saved key is for (W4-06): its settings' useFor, the rest of them kept. */
+async function setKeyUses(
+  organizationId: string,
+  provider: AiProvider,
+  raw: unknown,
+): Promise<NextResponse> {
+  const useFor = parseKeyUses(provider, raw);
+  if (!useFor) {
+    return NextResponse.json(
+      { error: 'useFor is missing or malformed', field: 'useFor' },
+      {
+        status: 400,
+      },
+    );
+  }
+  const { data: saved, error: readError } = await supabaseAdmin
+    .from('organization_ai_keys')
+    .select('settings')
+    .eq('organization_id', organizationId)
+    .eq('provider', provider)
+    .maybeSingle();
+  if (readError) return NextResponse.json({ error: readError.message }, { status: 500 });
+  if (!saved) {
+    return NextResponse.json({ error: 'No key is saved for this provider' }, { status: 404 });
+  }
+  const settings = { ...((saved.settings as AiProviderSettings | null) ?? {}), useFor };
+  const { error } = await supabaseAdmin
+    .from('organization_ai_keys')
+    .update({ settings })
+    .eq('organization_id', organizationId)
+    .eq('provider', provider);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, useFor });
 }
 
 /**
