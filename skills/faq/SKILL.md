@@ -4,7 +4,7 @@ description: "An FAQ block from the top fan-outs and your brand facts, with FAQP
 license: MIT
 metadata:
   title: "FAQ from fan-outs"
-  filters: "content visibility"
+  filters: "content visibility technical"
 ---
 
 # FAQ from fan-outs
@@ -27,7 +27,7 @@ An FAQ block that answers the questions AI engines search for, and the FAQPage s
 
 1. Pick the top fan-outs for the page: 5 to 8 questions. Merge near-duplicates, and phrase each the way a buyer would ask it.
 2. Write the answers from the brand's facts: 40 to 80 words each, the first sentence answering on its own. Use only facts from the person's messages, the brand's approved facts they give, its own pages read in this chat, or the draft. Any other fact is a [placeholder], such as [plan limits] or [support hours].
-3. Save the FAQ and its FAQPage schema as a draft when the person wants it kept, with `create_draft`; the app asks them first when it should.
+3. Save the FAQ and its FAQPage schema as a draft when the person wants it kept, with `create_draft`; the app asks them first when it should. In an agent's run nobody is there to ask: always save it with its tool, and the app holds it for approval where the agent's mode needs it.
 
 ## Output
 

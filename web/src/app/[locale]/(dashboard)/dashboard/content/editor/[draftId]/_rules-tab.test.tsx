@@ -138,7 +138,7 @@ describe('the Rules tab', () => {
     expect(container.querySelector('[data-slot="brand-rules"]')).toBeNull();
   });
 
-  describe('Run Agent', () => {
+  describe('Fix open rules', () => {
     const fix = () => ({ run: vi.fn(), running: false, blocked: null as string | null });
     const show = async (props: Partial<Parameters<typeof RulesTab>[0]>, s = state()) =>
       act(async () => {
@@ -152,7 +152,9 @@ describe('the Rules tab', () => {
       });
     const buttons = () => [...container.querySelectorAll('button')];
     const main = () =>
-      buttons().find((b) => ['Run Agent', 'Rewrite page', 'Working…'].includes(b.textContent!))!;
+      buttons().find((b) =>
+        ['Fix open rules', 'Rewrite page', 'Working…'].includes(b.textContent!),
+      )!;
     const trigger = () =>
       container.querySelector<HTMLButtonElement>('[aria-label="More ways to run the agent"]')!;
     const items = () => [...document.body.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
@@ -169,7 +171,7 @@ describe('the Rules tab', () => {
         buttons()
           .map((b) => b.getAttribute('aria-label') ?? b.textContent)
           .slice(0, 3),
-      ).toEqual(['Run Agent', 'More ways to run the agent', 'What Run Agent does']);
+      ).toEqual(['Fix open rules', 'More ways to run the agent', 'What it does']);
       const open = openRules();
       expect(container.textContent).toContain(`${open.length} rules are not met`);
       // The first three by name, then "…".
@@ -202,7 +204,7 @@ describe('the Rules tab', () => {
       expect(main().textContent).toBe('Rewrite page');
       await act(async () => main().click());
       expect(pageRewrite.run).toHaveBeenCalledTimes(1);
-      expect(main().textContent).toBe('Run Agent');
+      expect(main().textContent).toBe('Fix open rules');
     });
 
     it('says when the Length is out of a rewrite’s reach, recommending none for it, with a Length it can reach', async () => {
@@ -226,6 +228,10 @@ describe('the Rules tab', () => {
           .click(),
       );
       expect(change).toHaveBeenCalledWith('length', { value: '4000' });
+      // Said under the Length too, where it was set (editor test 2026-11-03).
+      expect(row('Length').textContent).toContain(
+        "A rewrite can't get this page much under 3,900 characters, so the agent leaves the Length to you. Run Agent above says why.",
+      );
       // No quoted passage kept: no rewrite of them to offer.
       expect(buttons().some((b) => b.textContent === 'Rewrite, cited passages too')).toBe(false);
     });
@@ -302,6 +308,34 @@ describe('the Rules tab', () => {
       );
     });
 
+    it('shows a rule the agent tried and couldn’t fix as an amber chip with its note, never red (editor test 2026-11-03)', async () => {
+      await show({ agentFix: { ...fix(), tried: new Set(['bannedWords']) } });
+      const tried = row('Banned words');
+      const badge = [...tried.querySelectorAll('span')].find((s) => s.textContent === '1 found')!;
+      expect(badge.className).toContain('bg-amber-50');
+      expect(badge.className).toContain('dark:bg-amber-950');
+      expect(badge.className).not.toContain('text-red');
+      expect(tried.textContent).toContain(
+        "Content Agent tried this and couldn't fix it. It's yours to decide",
+      );
+      // Open and not tried: still the agent's, amber text with no chip or note (red is for
+      // what blocks only: editor UX review 2026-11-03).
+      const length = [...row('Length').querySelectorAll('span')].find(
+        (s) => s.textContent === '15,921 · over',
+      )!;
+      expect(length.className).toContain('text-amber-600');
+      expect(length.className).toContain('dark:text-amber-400');
+      expect(length.className).not.toContain('bg-amber-50');
+      expect(length.className).not.toContain('text-red');
+      expect(row('Length').textContent).not.toContain('tried this');
+      // A held rule is the person's too: amber.
+      await show({ agentFix: { ...fix(), held: new Set(['length']) } });
+      expect(
+        [...row('Length').querySelectorAll('span')].find((s) => s.textContent === '15,921 · over')!
+          .className,
+      ).toContain('bg-amber-50');
+    });
+
     it('says why its choice waits under the card, for the choice picked', async () => {
       const agentFix = {
         ...fix(),
@@ -320,9 +354,9 @@ describe('the Rules tab', () => {
       expect(reason().textContent).toBe('');
     });
 
-    it('shows the agent working, with ▾ closed until it is done', async () => {
+    it('holds its button while the agent works, with ▾ closed until it is done; the card alone says it works', async () => {
       await show({ agentFix: { ...fix(), running: true }, pageRewrite: fix() });
-      expect(main().textContent).toBe('Working…');
+      expect(main().textContent).toBe('Fix open rules');
       expect(main().disabled).toBe(true);
       expect(trigger().disabled).toBe(true);
     });
@@ -394,7 +428,7 @@ describe('the Rules tab', () => {
       'Links and sources',
       'Style',
     ]);
-    expect(container.textContent).toContain(`${s.met} of ${s.total} rules met`);
+    expect(container.textContent).toContain(`${s.met}/${s.total} rules met`);
     expect(row('Comparison table vs alternatives').textContent).toContain('✓');
     expect(row("Who it's for").textContent).toContain('Not set');
     // Over the band, said short on the badge and in full on hover.

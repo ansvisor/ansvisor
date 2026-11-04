@@ -15,6 +15,12 @@ import {
   type ActionApiAnswer,
   type Where,
 } from '@/lib/action-center/chat-send';
+import {
+  brandTask,
+  markReadyForReview,
+  readyForReviewFailed,
+  type ReadyForReviewResult,
+} from '@/lib/action-center/ready-for-review';
 import { isManager } from '@/lib/session-role';
 import { assertWritable } from '@/lib/subscription-guard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -358,30 +364,6 @@ export async function attachToAction(
   }
 }
 
-/** A task of the brand's open actions, with what History names it by. */
-async function brandTask(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  brandId: string,
-  taskId: string,
-) {
-  const { data, error } = await supabase
-    .from('action_tasks')
-    .select('id, action_id, task_key, title, status, actions!inner(brand_id, status)')
-    .eq('id', taskId)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  const row = data as {
-    id: string;
-    action_id: string;
-    task_key: string | null;
-    title: string | null;
-    status: string;
-    actions: { brand_id: string; status: string } | null;
-  } | null;
-  if (!row || row.actions?.brand_id !== brandId) return null;
-  return row;
-}
-
 /**
  * Attach only (attach_file_to_task, CHAT-09 item 16): a file in Files, or a
  * draft filed there, linked to a task (`attached_by` the person), its status
@@ -468,8 +450,6 @@ export async function attachFileToTask(
 }
 
 /** A task Chat can still say it finished: one that isn't done, skipped or failed. */
-const OPEN_TASK = new Set(['todo', 'in_progress', 'waiting_approval']);
-
 /**
  * Ready for review (set_task_ready_for_review, CHAT-09 item 16a): Chat, or
  * an agent, finished its work for a task. It is Chat's status for the task
@@ -481,114 +461,24 @@ export async function setTaskReadyForReview(
   brandId: string,
   taskId: string,
   place?: Place,
-): Promise<
-  | {
-      ok: true;
-      task_id: string;
-      action_id: string;
-      conversation_id: string;
-      /** Chat's status for the task before, null when the strip didn't have it: what Undo puts back. */
-      previous: string | null;
-    }
-  | ChatActionFailure
-> {
+): Promise<ReadyForReviewResult> {
   try {
     await assertWritable({ brandId });
     const supabase = await createClient();
     if (!(await isManager(supabase))) return FORBIDDEN;
     if (!(await canUseBrand(supabase, brandId))) return NOT_FOUND('task');
-    const task = await brandTask(supabase, brandId, taskId);
-    if (!task) return NOT_FOUND('task');
-    if (!OPEN_TASK.has(task.status)) {
-      return {
-        ok: false,
-        reason: 'conflict',
-        message: 'That task is already done or skipped in Action Center.',
-      };
-    }
     const where = await placeOf(supabase, place, 'set_task_ready_for_review');
-    if (!where) {
-      return { ok: false, reason: 'invalid', message: 'Ready for review is set from a chat.' };
-    }
-    // Its chat's brand: a chat about one brand doesn't mark another's tasks.
-    if (where.brandId && where.brandId !== brandId) {
-      return {
-        ok: false,
-        reason: 'invalid',
-        message: 'This chat is about another brand: set Ready for review from its own chat.',
-      };
-    }
-    const { data: state, error: stateError } = await supabaseAdmin
-      .from('chat_task_state')
-      .select('chat_status')
-      .eq('conversation_id', where.conversationId)
-      .eq('action_task_id', task.id)
-      .maybeSingle();
-    if (stateError) throw new Error(stateError.message);
-    const previous = (state?.chat_status as string | undefined) ?? null;
-    if (previous === 'ready_for_review' || previous === 'done') {
-      return {
-        ok: true,
-        task_id: task.id,
-        action_id: task.action_id,
-        conversation_id: where.conversationId,
-        previous,
-      };
-    }
-    if (previous) {
-      const { error } = await supabaseAdmin
-        .from('chat_task_state')
-        .update({ chat_status: 'ready_for_review', run_id: where.runId })
-        .eq('conversation_id', where.conversationId)
-        .eq('action_task_id', task.id);
-      if (error) throw new Error(error.message);
-    } else {
-      // A task the strip didn't list yet: it goes last.
-      const { data: last, error: lastError } = await supabaseAdmin
-        .from('chat_task_state')
-        .select('position')
-        .eq('conversation_id', where.conversationId)
-        .order('position', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (lastError) throw new Error(lastError.message);
-      const { error } = await supabaseAdmin.from('chat_task_state').insert({
-        conversation_id: where.conversationId,
-        action_task_id: task.id,
-        position: Number(last?.position ?? 0) + 1,
-        chat_status: 'ready_for_review',
-        run_id: where.runId,
-      });
-      if (error) throw new Error(error.message);
-    }
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    const { error: eventError } = await supabase.from('action_events').insert({
-      action_id: task.action_id,
-      event: 'task_ready_for_review',
-      actor_id: user?.id ?? null,
-      data: {
-        source: 'chat',
-        taskId: task.id,
-        task: task.task_key,
-        title: task.title,
-        conversationId: where.conversationId,
-        runId: where.runId,
-        execution: executionOf(where),
-      } as Json,
+    // The task read, and its History written, as the signed-in person.
+    return await markReadyForReview(supabase, {
+      brandId,
+      taskId,
+      where,
+      actorId: user?.id ?? null,
     });
-    if (eventError)
-      console.error('[chat/action-center] Ready for review not in History:', eventError);
-    return {
-      ok: true,
-      task_id: task.id,
-      action_id: task.action_id,
-      conversation_id: where.conversationId,
-      previous,
-    };
   } catch (err) {
-    console.error('[chat/action-center] could not set Ready for review:', err);
-    return FAILED("The task couldn't be set to Ready for review.");
+    return readyForReviewFailed(err);
   }
 }

@@ -5,6 +5,7 @@ import { PAGE_TYPES, type DraftMethod, type PageType } from '@/lib/content/draft
 import { lengthTarget } from '@/lib/content/editor';
 import { feedCheck, type CatalogMatch } from '@/lib/content/feed-match';
 import { decodeHtmlBlock } from '@/lib/content/html-allowlist';
+import { parseHtml } from '@/lib/content/dom';
 import { pageOffer } from '@/lib/content/page-schema';
 import { countWords, languageCode } from '@/lib/content/readability';
 import { wordsOf } from '@/lib/content/sources';
@@ -675,7 +676,8 @@ const BLOCK_TAGS = 'h1, h2, h3, p, li, table, ol, ul, blockquote';
 
 /** Reads the page's blocks in order, each list item and table once. */
 export function readPage(html: string, characters: number): PageRead {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  // The content DOM's parser (dom.ts): the browser's, or jsdom's on the server (go-live gate).
+  const doc = parseHtml(html);
   const blocks: PageBlock[] = [];
   for (const el of doc.body.querySelectorAll(BLOCK_TAGS)) {
     const tag = el.tagName.toLowerCase();
@@ -703,7 +705,7 @@ export function readPage(html: string, characters: number): PageRead {
   for (const el of doc.body.querySelectorAll('[data-html-block]')) {
     const inner = decodeHtmlBlock(el.getAttribute('data-html-block') ?? '');
     if (!inner) continue;
-    const block = new DOMParser().parseFromString(inner, 'text/html');
+    const block = parseHtml(inner);
     htmlBlockH1s += [...block.body.querySelectorAll('h1')].filter((h) =>
       h.textContent?.trim(),
     ).length;
@@ -1117,11 +1119,21 @@ export function keptOutOfReach<T extends { rule: ActiveRule; status: RuleStatus 
 }
 
 /**
+ * How much longer than the last rewrite came to the page must be for that
+ * rewrite to say another won't get further: a page that took it (about as
+ * long, or shorter) is rewritten from there, and the cut pass goes on.
+ */
+const REWRITTEN_SLACK = 0.05;
+
+/**
  * Whether the page is over its Length by more than a rewrite could take
  * out: the least a rewrite comes to (`reach.floor`) is past the top of the
- * Length's band, or the last rewrite (lastRewriteSays) came to more than it.
- * A last rewrite that got within the band says it's in reach, whatever the
- * estimate. Null otherwise, and for a page under its Length.
+ * Length's band, or the last rewrite (lastRewriteSays) came to more than it
+ * from a page still longer than it came to (editor test 2026-11-03: a
+ * rewrite taken a little long held the Length out of reach for good, and
+ * the agent never shortened the page again). A last rewrite that got
+ * within the band says it's in reach, whatever the estimate. Null
+ * otherwise, and for a page under its Length.
  */
 export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatus }>(
   rules: T[],
@@ -1141,7 +1153,10 @@ export function lengthOutOfReach<T extends { rule: ActiveRule; status: RuleStatu
   const { max } = lengthBand(target);
   const says = lastRewriteSays(reach.last, target, reach.kept);
   if (says?.inReach && says.chars <= max) return null;
-  const reached = says && says.chars > max ? says.chars : null;
+  const reached =
+    says && says.chars > max && status.count > says.chars * (1 + REWRITTEN_SLACK)
+      ? says.chars
+      : null;
   if (reached === null && reach.floor <= max) return null;
   // The more of the two, so the Length suggested is one a rewrite can reach.
   const least = Math.max(reach.floor, reached ?? 0);
