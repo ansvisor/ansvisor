@@ -977,27 +977,33 @@ export default function PromptsPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">All Prompts ({allPrompts.length})</h2>
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={guard(openBulkDialog, { action: tActions('changeLocations') })}
-              >
-                <Globe className="mr-2 h-3.5 w-3.5" />
-                Locations
-              </Button>
-              <Button
-                size="sm"
-                variant={unanalyzedPrompts.length > 0 ? 'default' : 'outline'}
-                onClick={guard(openAnalyzeDialog, { action: tActions('analyzePrompts') })}
-              >
-                <Search className="mr-2 h-3.5 w-3.5" />
-                Analyze Prompts
-                {unanalyzedPrompts.length > 0 && (
-                  <Badge variant="secondary" className="ml-2 text-[10px]">
-                    {unanalyzedPrompts.length} new
-                  </Badge>
-                )}
-              </Button>
+              {/* Changing locations and tracking the prompts now are for admins and
+                  managers, as the database and the server allow them. */}
+              {canManage && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={guard(openBulkDialog, { action: tActions('changeLocations') })}
+                  >
+                    <Globe className="mr-2 h-3.5 w-3.5" />
+                    Locations
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={unanalyzedPrompts.length > 0 ? 'default' : 'outline'}
+                    onClick={guard(openAnalyzeDialog, { action: tActions('analyzePrompts') })}
+                  >
+                    <Search className="mr-2 h-3.5 w-3.5" />
+                    Analyze Prompts
+                    {unanalyzedPrompts.length > 0 && (
+                      <Badge variant="secondary" className="ml-2 text-[10px]">
+                        {unanalyzedPrompts.length} new
+                      </Badge>
+                    )}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
           <div className="space-y-2">

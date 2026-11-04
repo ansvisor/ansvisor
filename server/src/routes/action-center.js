@@ -98,6 +98,8 @@ export async function regenerateTasks(actionId, userId) {
     .maybeSingle();
   if (!action) throw new TaskWriterError('not_found', 'Action not found', 404);
   await assertBrandAccess(action.brand_id, userId);
+  // A model writes them, on the AI budget Improve shares: admins and managers (2026-11-03).
+  await assertRole(userId, MANAGER_ROLES, 'Only admins and managers can write the tasks again.');
 
   let result;
   try {
@@ -208,11 +210,20 @@ router.delete('/actions/:id', async (req, res) => {
 /**
  * Sends a task onward (AC-004): to Content as an opportunity, or to the
  * brand's webhook. `title` is the task's text as the dashboard shows it, for
- * a library task whose text only the dashboard renders.
+ * a library task whose text only the dashboard renders. The webhook sets off
+ * an outside workflow, so it is for admins and managers, as opportunities
+ * sent to it are (2026-11-03).
  */
 export async function sendTask(taskId, { to, title }, userId) {
   const loaded = await loadTask(taskId);
   await assertBrandAccess(loaded.action.brand_id, userId);
+  if (to === 'webhook') {
+    await assertRole(
+      userId,
+      MANAGER_ROLES,
+      'Only admins and managers can send tasks to the webhook.',
+    );
+  }
   return to === 'content'
     ? sendTaskToContent({ taskId, title, userId, loaded })
     : sendTaskToWebhook({ taskId, title, userId, loaded });
