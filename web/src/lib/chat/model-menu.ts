@@ -83,16 +83,18 @@ async function readServerMenu(selected: string | null): Promise<ServerMenu | nul
 }
 
 /**
- * The menu for a workspace. `ownKeyProvider`: the provider of the own key
- * Chat runs on, if any; its models say "Your key". When the API server
- * doesn't answer, the offered models still show, with no multipliers.
+ * The menu for a workspace. `ownKeyProviders`: the providers of the own keys
+ * for Chat (ownChatKeyProviders); a model says "Your key" when one runs it,
+ * in resolvePickedModelKey's order: its provider's key, else an OpenRouter
+ * one. When the API server doesn't answer, the offered models still show,
+ * with no multipliers.
  */
 export async function readModelMenu({
   selected = null,
-  ownKeyProvider = null,
+  ownKeyProviders = [],
 }: {
   selected?: string | null;
-  ownKeyProvider?: string | null;
+  ownKeyProviders?: readonly string[];
 } = {}): Promise<ChatModelMenu> {
   const server = await readServerMenu(selected);
   const byId = new Map((server?.models ?? []).map((model) => [model.id, model]));
@@ -109,7 +111,7 @@ export async function readModelMenu({
       multiplier: listed?.multiplier ?? null,
       tone: listed?.tone ?? null,
       variesByHour: listed?.variesByHour ?? false,
-      yourKey: ownKeyProvider === offered.provider,
+      yourKey: ownKeyProviders.includes(offered.provider) || ownKeyProviders.includes('openrouter'),
     });
   }
   const chosen = selected && selected !== AUTO_MODEL ? selected : null;

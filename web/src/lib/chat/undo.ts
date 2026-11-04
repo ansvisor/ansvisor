@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
+import { reopenDraftTasks } from '@/lib/content/action-drafts';
 import { followRestoredPageType } from '@/lib/content/draft-page-type';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
@@ -255,6 +256,93 @@ const updateDraft: UndoRule = {
   href: (id) => `/dashboard/content/editor/${id}`,
 };
 
+// ─── set_draft_ready: back to its status before Ready (§9 row 57: 7 days) ───
+
+/** The statuses Mark ready moves a draft from (markContentDraftReady). */
+const BEFORE_READY = ['draft', 'in_review'];
+
+const setDraftReady: UndoRule = {
+  targetType: 'content_draft',
+  windowMs: 7 * DAY_MS,
+  async before(input) {
+    const id = textOf(asObject(input).draft_id);
+    if (!id) return null;
+    const { data, error } = await supabaseAdmin
+      .from('content_drafts')
+      .select('status')
+      .eq('id', id)
+      .maybeSingle();
+    check(error, 'the draft');
+    return data ? { status: textOf(data.status) } : null;
+  },
+  async record(input, output, before) {
+    const id = textOf(asObject(input).draft_id);
+    let title: unknown = null;
+    if (id) {
+      const { data, error } = await supabaseAdmin
+        .from('content_drafts')
+        .select('title')
+        .eq('id', id)
+        .maybeSingle();
+      check(error, 'the draft');
+      title = data?.title;
+    }
+    const was = textOf(before?.status);
+    // Only a draft Ready moved has a status to go back to: one ready or published already keeps its own.
+    const moved = asObject(output).ok === true && !!was && BEFORE_READY.includes(was);
+    return {
+      target: { type: 'content_draft', id },
+      summaryParams: { title: summaryValue(title) },
+      undo: moved ? { status: was } : null,
+    };
+  },
+  async inverse({ id, brandId, data, userId }) {
+    let read = supabaseAdmin
+      .from('content_drafts')
+      .select('status, brand_id, method, action_id, archived_at')
+      .eq('id', id);
+    if (brandId) read = read.eq('brand_id', brandId);
+    const { data: draft, error } = await read.maybeSingle();
+    check(error, 'the draft');
+    if (!draft) return 'gone';
+    const status = textOf(data.status);
+    // Published, archived or moved on since: the person's to change in the Library.
+    if (
+      draft.archived_at ||
+      draft.status !== 'ready' ||
+      !status ||
+      !BEFORE_READY.includes(status)
+    ) {
+      return 'changed';
+    }
+    const { data: back, error: backError } = await supabaseAdmin
+      .from('content_drafts')
+      .update({ status })
+      .eq('id', id)
+      .eq('status', 'ready')
+      .select('id')
+      .maybeSingle();
+    if (backError)
+      throw new Error(`Could not take the draft back from Ready: ${backError.message}`);
+    if (!back) return 'changed';
+    // The tasks Ready completed in its action open again, as the editor's Ready does when clicked.
+    if (draft.action_id) {
+      await reopenDraftTasks(
+        supabaseAdmin,
+        {
+          id,
+          brandId: draft.brand_id as string,
+          actionId: draft.action_id as string,
+          method: draft.method === 'create' ? 'create' : 'optimize',
+        },
+        userId ?? null,
+      ).catch((err: unknown) => console.error("Undo couldn't reopen the action's task:", err));
+    }
+    return 'ok';
+  },
+  href: (id) => `/dashboard/content/editor/${id}`,
+};
+
 // ─── update_opportunity: its status and dismiss reason before (§9: 7 days) ──
 
 const OPPORTUNITY_COLUMNS = 'id, brand_id, title, status, source_data, updated_at';
@@ -443,6 +531,7 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   dismiss_prompt_suggestion: dismissSuggestion,
   request_access: requestAccessRule,
   update_draft: updateDraft,
+  set_draft_ready: setDraftReady,
   ...SETUP_UNDO_RULES,
   ...ACTION_CENTER_UNDO_RULES,
   ...OUTPUT_UNDO_RULES,

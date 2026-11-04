@@ -5,6 +5,12 @@ import { isTimeZone } from '@/lib/time-zone';
 import type { PlanFacts } from '../plan-facts';
 import { readPrecedenceContext } from '../precedence-context';
 import { enabledSkills } from '../skills/library';
+import {
+  DELIVER_CHOICES,
+  deliverChoiceOf,
+  deliverToOf,
+  type DeliverChoice,
+} from './deliver-choices';
 import { nextJobRun } from './rule';
 import {
   dateWords,
@@ -89,19 +95,7 @@ async function withinLimit(organizationId: string, id: string, limit: number): P
   return ((data ?? []) as { id: string }[]).some((row) => row.id === id);
 }
 
-/** Where a job's results go (CHAT-12 item 7): the card's Deliver to. */
-export const DELIVER_CHOICES = ['chat', 'email', 'both'] as const;
-export type DeliverChoice = (typeof DELIVER_CHOICES)[number];
-
-export const deliverToOf = (choice: DeliverChoice): ('chat' | 'email')[] =>
-  choice === 'both' ? ['chat', 'email'] : [choice];
-
-export const deliverChoiceOf = (deliverTo: readonly string[]): DeliverChoice =>
-  deliverTo.includes('chat') && deliverTo.includes('email')
-    ? 'both'
-    : deliverTo.includes('email')
-      ? 'email'
-      : 'chat';
+export { DELIVER_CHOICES, deliverChoiceOf, deliverToOf, type DeliverChoice };
 
 /** A job as the card says it: its words for when and where. */
 export function deliverWords(choice: DeliverChoice): string {
@@ -125,7 +119,11 @@ export interface NewSchedule {
 export interface ScheduleMaker {
   userId: string;
   organizationId: string;
-  /** The person's time zone: the run's (their browser's). */
+  /**
+   * The person's time zone: the run's, as its card showed it (their pick in
+   * Settings › Account, else their browser's: effectiveTimeZone). The job
+   * keeps it; a later change of the setting moves no job.
+   */
   timezone: string;
   /** The Chat run whose card made it. */
   runId?: string | null;

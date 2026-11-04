@@ -65,7 +65,7 @@ export interface ScheduleNotice extends NoticeBase {
   kind: 'schedule_failed' | 'schedule_paused';
   title: string;
   reason: string;
-  /** Where Open goes: the job's chat, or Chat when it has none yet. */
+  /** Where Open goes: the job's page in Scheduled. */
   href: `/dashboard/${string}`;
 }
 
@@ -82,7 +82,11 @@ const CMS_TARGETS = ['webflow', 'wordpress', 'framer', 'wix', 'webhook'] as cons
 const isCmsTarget = (value: unknown): value is CmsTarget =>
   CMS_TARGETS.some((target) => target === value);
 
-/** The notice a row is, or null for one this Inbox can't show (another kind, a broken payload). */
+/**
+ * The notice a row is, or null for one this Inbox can't show (another kind,
+ * a broken payload) or doesn't: agent_needs_you (00474) records an e-mail,
+ * and the run's chat is in Needs you already.
+ */
 export function noticeOf(row: NoticeRow): ChatNotice | null {
   const base = { id: row.id, createdAt: row.created_at, read: row.read_at !== null };
   const payload = row.payload ?? {};
@@ -127,18 +131,17 @@ export function noticeOf(row: NoticeRow): ChatNotice | null {
     return { ...base, kind: 'agent_go_live_off', agent, agentId };
   }
   if (row.kind === 'schedule_failed' || row.kind === 'schedule_paused') {
-    const { title, reason, conversationId } = payload;
+    const { title, reason, scheduleId } = payload;
     if (typeof title !== 'string' || typeof reason !== 'string') return null;
-    const chat =
-      typeof conversationId === 'string' && /^[0-9a-f-]{36}$/i.test(conversationId)
-        ? conversationId
-        : null;
+    // Open goes to the job's page (Scheduled, W3-03): its runs, Run now, on and off.
+    const job =
+      typeof scheduleId === 'string' && /^[0-9a-f-]{36}$/i.test(scheduleId) ? scheduleId : null;
     return {
       ...base,
       kind: row.kind,
       title: title.slice(0, 120),
       reason: reason.slice(0, 200),
-      href: chat ? `/dashboard/chat/${chat}` : '/dashboard/chat',
+      href: job ? `/dashboard/chat/scheduled/${job}` : '/dashboard/chat/scheduled',
     };
   }
   return null;

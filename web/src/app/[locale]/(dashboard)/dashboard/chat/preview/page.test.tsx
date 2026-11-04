@@ -38,6 +38,12 @@ const notFound = vi.hoisted(() =>
 vi.mock('next/navigation', () => ({ notFound }));
 // The composer's "Ask your Admin to connect" (B2's requests).
 vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
+// A page's version cards (W4-12a) are output cards, whose task buttons are the server's.
+vi.mock('@/lib/actions/chat-task-card', () => ({
+  markTaskDoneFromCard: vi.fn(),
+  attachOnlyFromCard: vi.fn(),
+  undoTaskDoneFromCard: vi.fn(),
+}));
 vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push: () => {}, refresh: () => {} }),
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
@@ -182,7 +188,8 @@ describe('the Chat pieces preview', () => {
       'execute:pending',
     ]);
     expect(slots('question-card')).toHaveLength(3);
-    expect(slots('next-moves')).toHaveLength(1);
+    // The latest answer's, and a page's once nothing is left to fill (Mark ready, W4-12b).
+    expect(slots('next-moves')).toHaveLength(2);
     expect(slots('question-answered')).toHaveLength(2);
     // Approved, and the saved skill (W3-08).
     expect(slots('done-line')).toHaveLength(3);
@@ -193,6 +200,13 @@ describe('the Chat pieces preview', () => {
     ]);
     expect(slots('denial-card')).toHaveLength(3);
     expect(slots('error-card')).toHaveLength(2);
+    // A page's versions (W4-12a): version 1, then 2 with Undo.
+    expect([...slots('page-version')].map((el) => (el as HTMLElement).dataset.version)).toEqual([
+      '1',
+      '2',
+    ]);
+    // Version 2 is an Admin's or a Manager's card: Send to CMS on it.
+    expect(container.querySelectorAll('[data-action="version.sendToCms"]')).toHaveLength(1);
     expect(container.querySelectorAll('[data-action="runs.toggleTray"]')).toHaveLength(3);
   });
 
