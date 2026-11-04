@@ -163,10 +163,14 @@ export type ChatToolContext = McpAuthContext & {
   timezone?: string;
 };
 
-/** What an editable card's fields are made and read with: the run's zone and workspace, now. */
+/**
+ * What an editable card's fields are made and read with: the run's zone,
+ * workspace and person (whose role a memory's scopes follow, W3-12a), now.
+ */
 export interface CardFormContext {
   timezone: string;
   organizationId: string;
+  userId: string;
   now: Date;
 }
 

@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import { forgetChatMemory, saveChatMemory } from '@/lib/actions/chat-memory';
+import { applyMemoryCard, forgetDoneStep, memoryCardForm, memoryDoneStep } from '../memory/card';
 import {
   brandNameOf,
   checkMemorySave,
   memoryRefusal,
   readMemoryLine,
   readMemoryViewer,
-  replacesWords,
   saidRefusal as said,
   scopeWords,
   visibleMemoryLine,
@@ -69,7 +69,11 @@ export const MEMORY_TOOLS = [
         .min(1)
         .max(MAX_MEMORY_LINE)
         .describe('The line, as the person would write it ("Write blog posts in US English").'),
-      brand_id: memoryId.optional().describe('The brand of a brand line: the chat’s brand_id.'),
+      brand_id: memoryId
+        .optional()
+        .describe(
+          'The chat’s brand_id whenever the chat has a brand, so the person can pick Brand on the card.',
+        ),
       replaces: memoryId
         .optional()
         .describe('The id of the saved note this one replaces, from the saved notes.'),
@@ -93,11 +97,12 @@ export const MEMORY_TOOLS = [
           : null;
       return `“${input.text}” · ${scopeWords(input.scope, brandName)}`;
     },
-    cardDetails: async (input, { organizationId }) => {
-      if (!input.replaces) return {};
-      const old = await readMemoryLine(organizationId, input.replaces);
-      return old ? { items: [{ title: input.text, detail: replacesWords(old.text) }] } : {};
+    // The Remember card (W3-12a): the line and its scope, editable, and what it replaces.
+    form: {
+      fields: (input, ctx) => memoryCardForm(input, ctx),
+      apply: (input, values) => applyMemoryCard(input, values),
     },
+    doneStep: (_input, output) => memoryDoneStep(output),
     fixture: { input: { scope: 'user', text: 'Write blog posts in US English' } },
   }),
   defineTool({
@@ -139,6 +144,7 @@ export const MEMORY_TOOLS = [
       const line = await readMemoryLine(organizationId, input.memory_id);
       return line ? `“${line.text}” · ${scopeWords(line.scope, line.brandName)}` : null;
     },
+    doneStep: (_input, output) => forgetDoneStep(output),
     fixture: { input: { memory_id: FIXTURE_IDS.item } },
   }),
 ];

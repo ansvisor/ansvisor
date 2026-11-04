@@ -2725,7 +2725,7 @@ const cardText = (text: string, max: number) => {
 async function cardDetailsOf(
   tool: ChatTool,
   input: Record<string, unknown>,
-  place: { timezone: string; organizationId: string },
+  place: { timezone: string; organizationId: string; userId: string },
 ) {
   // An editable card's form (W3-02: a schedule's), as the change would be made.
   const form = await cardFormOf(tool, input, { ...place, now: new Date() });
@@ -2826,6 +2826,7 @@ function cardNotes(tool: ChatTool): { noUndo?: true; note?: string } {
 const placeOf = (rc: RunContext) => ({
   timezone: rc.progress.timezone,
   organizationId: rc.actor.organizationId,
+  userId: rc.actor.userId,
 });
 
 /** The hash of the arguments a card shows: what an approval is bound to (CHAT-20 §6). */
@@ -4357,6 +4358,7 @@ export async function prepareResume(
         ...(await cardDetailsOf(tool, input, {
           timezone: progress.timezone,
           organizationId: actor.organizationId,
+          userId: actor.userId,
         })),
       });
       await sink.flush();
@@ -4375,6 +4377,7 @@ export async function prepareResume(
       ? editedInput(tool, asked.data as Record<string, unknown>, body.form, {
           timezone: (run.progress as Progress).timezone,
           organizationId: actor.organizationId,
+          userId: actor.userId,
           now: new Date(),
         })
       : { ok: false as const, error: null };
