@@ -313,6 +313,39 @@ export async function refreshAgentRunShare(orgId, agentRunId) {
 }
 
 /**
+ * Keeps a scheduled job's run's use (chat_schedule_runs.usage_share,
+ * CHAT-12 item 24: "0.6%" in its run history) as its Chat run's spend on
+ * Ansvisor's key over the plan's included monthly budget: after each charge
+ * or release of one of its steps. Own-key steps don't draw on the limit,
+ * so they don't count. Never dollars. Without a budget (self-hosted) there
+ * is no share. A failure is logged: the step is settled all the same.
+ */
+export async function refreshScheduleRunShare(orgId, chatRunId) {
+  if (!chatRunId) return;
+  try {
+    const { includedUsd } = await aiBudgetOf(orgId, { credits: false });
+    if (includedUsd === null || !(includedUsd > 0)) return;
+    const { data, error } = await supabaseAdmin
+      .from('prompt_improve_usage')
+      .select('cost_usd')
+      .eq('organization_id', orgId)
+      .eq('chat_run_id', chatRunId)
+      .eq('own_key', false);
+    if (error) throw new Error(error.message);
+    const spent = (data ?? []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
+    // numeric(7, 4): a share to 0.01%, at most 999.9999.
+    const share = Math.min(999.9999, Math.round((spent / includedUsd) * 10_000) / 10_000);
+    const { error: keepError } = await supabaseAdmin
+      .from('chat_schedule_runs')
+      .update({ usage_share: share })
+      .eq('run_id', chatRunId);
+    if (keepError) throw new Error(keepError.message);
+  } catch (err) {
+    logger.error({ err, orgId, chatRunId }, '[chat-budget] could not keep a scheduled run’s use');
+  }
+}
+
+/**
  * The step's real cost in place of its hold: what its model used, priced 1x
  * (generationCostUsd), its prompt cache's reads at the cache-read rate and
  * writes at the write premium. Only the workspace's own Chat rows:
@@ -344,12 +377,13 @@ export async function chargeChatStep(orgId, usageId, { modelId, usage, latencyMs
     .eq('id', usageId)
     .eq('organization_id', orgId)
     .in('feature', CHAT_BUDGET_FEATURES)
-    .select('id, agent_run_id');
+    .select('id, agent_run_id, schedule_id, chat_run_id');
   if (error) throw new Error(error.message);
   if (!data?.length) throw new ChatBudgetError('not_found', 404, 'Chat step usage not found.');
   await drawOnCredits(orgId, usageId);
   // After the draw: the run's use counts the step's credit parts too.
   if (data[0].agent_run_id) await refreshAgentRunShare(orgId, data[0].agent_run_id);
+  if (data[0].schedule_id) await refreshScheduleRunShare(orgId, data[0].chat_run_id);
 }
 
 /**
@@ -382,10 +416,11 @@ export async function releaseChatStep(orgId, usageId) {
     .eq('id', usageId)
     .eq('organization_id', orgId)
     .in('feature', CHAT_BUDGET_FEATURES)
-    .select('agent_run_id');
+    .select('agent_run_id, schedule_id, chat_run_id');
   if (error) throw new Error(error.message);
-  const agentRunId = (data ?? [])[0]?.agent_run_id;
-  if (agentRunId) await refreshAgentRunShare(orgId, agentRunId);
+  const released = (data ?? [])[0];
+  if (released?.agent_run_id) await refreshAgentRunShare(orgId, released.agent_run_id);
+  if (released?.schedule_id) await refreshScheduleRunShare(orgId, released.chat_run_id);
 }
 
 /**

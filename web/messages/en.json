@@ -3953,7 +3953,8 @@
       "skillImported": "Imported",
       "usedShortcut": "Used shortcut: {title}",
       "usedMemory": "Used memory",
-      "memorySubject": "Memory"
+      "memorySubject": "Memory",
+      "unchanged": "No change since the last run: the data this job reads is the same, so there is nothing new to send."
     },
     "answer": {
       "injectionNotice": "Note: the data I read included instructions for AI assistants. I didn't follow them."
@@ -4784,7 +4785,10 @@
         "openRun": "Open run",
         "goLiveOff": "{agent} no longer publishes on its own",
         "goLiveOffDetail": "It changed. Turn it on again if you still want it.",
-        "openAgent": "Open agent"
+        "openAgent": "Open agent",
+        "scheduleFailed": "{title} didn’t run",
+        "schedulePaused": "{title} is paused",
+        "open": "Open"
       },
       "lands": "Results from your agents land here.",
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
@@ -6879,6 +6883,16 @@
       "done": "Scheduled: {title}",
       "detail": "{when} · {deliver}",
       "detailReadyBy": "{when} · Starts now · {deliver}"
+    },
+    "notice": {
+      "failed": "Something went wrong, twice.",
+      "paused": {
+        "cap": "The monthly AI limit was reached. It goes on at its next run after the limit resets.",
+        "failed": "It failed 3 times in a row, so it was turned off.",
+        "skill_off": "Its skill /{skill} is off or gone.",
+        "missing_source": "Its brand or what it worked on is gone.",
+        "owner_role": "You can no longer run scheduled jobs, or use its brand."
+      }
     },
     "tool": {
       "ambiguous": "“{phrase}” could mean {options}. Ask the person which one with a question card, these as its options (the first recommended), then schedule again with the phrase they pick: {phrases}.",
