@@ -42,8 +42,16 @@ const integrations = vi.hoisted(() => ({
   setBrandGscProperty: vi.fn(),
   getGaBrandMappings: vi.fn(),
   setBrandGaProperty: vi.fn(),
+  // Google per brand (PR 15): one brand, so the overview stays out of the way.
+  getGoogleAccountsOverview: vi.fn(async () => []),
 }));
 vi.mock('@/lib/actions/integrations', () => integrations);
+// The Google-per-brand overview links to each brand's settings.
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children }: { href: string; children: React.ReactNode }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
 const client = vi.hoisted(() => ({
   readIntegrationStatus: vi.fn(),
   readIntegrationsConfig: vi.fn(),
