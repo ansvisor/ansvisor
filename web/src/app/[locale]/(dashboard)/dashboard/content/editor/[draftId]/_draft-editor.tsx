@@ -9,7 +9,6 @@ import type { Node as PmNode } from '@tiptap/pm/model';
 import { TextSelection, type Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
-import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import {
   ArrowLeft,
@@ -46,6 +45,8 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
 import { PublishDialog } from '@/components/content/publish-dialog';
+import { AiImageBadges } from '@/lib/content/ai-image-badges';
+import { ContentImage } from '@/lib/content/content-image';
 import { readLiveUrl } from '@/lib/content/publish-client';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { CmsSentChip } from '@/components/content/cms-sent-chip';
@@ -643,7 +644,9 @@ export function DraftEditor({
     extensions: [
       StarterKit.configure(EDITOR_STARTER_KIT),
       TableKit.configure({ table: { resizable: false } }),
-      Image,
+      // An image says whether AI made it (W4-09), with "AI-generated" under it here.
+      ContentImage,
+      AiImageBadges.configure({ label: t('image.ai.aiGenerated') }),
       CharacterCount,
       Placeholder.configure({ placeholder: t('placeholder') }),
       JsonLd.configure({
@@ -1731,6 +1734,7 @@ export function DraftEditor({
   const suggestionLabels = useMemo<SuggestionLabels>(
     () => ({
       agent: t('suggestions.agent'),
+      agentFromChat: t('suggestions.agentFromChat'),
       breaks: (names: string) => t('suggestions.breaks', { names }),
       accept: t('suggestions.accept'),
       reject: t('suggestions.reject'),
@@ -4332,6 +4336,9 @@ export function DraftEditor({
               placeholders={{ hidden: hiddenPlaceholders, onShowHidden: showHiddenPlaceholder }}
               // + Insert › Products, from an online shop's catalog (shopping path, part 5).
               productsBrandId={siteType === 'ecommerce' ? draft.brandId : null}
+              // Image › Generate with AI, and on an empty line (W4-09): only
+              // with Chat on, whose AI budget and image models it runs on.
+              aiImages={chatOn ? { draftId: draft.id, title } : null}
             />
           )}
 
