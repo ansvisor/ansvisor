@@ -612,6 +612,33 @@ describe('the card’s language', () => {
     );
   });
 
+  it('prints soru × motor only when every question was answered, in Turkish too', () => {
+    const engines = 'ChatGPT ve Microsoft Copilot';
+    expect(tr.status.kpiVisibilitySub(engines, 8, 50, 25, 2)).toBe(
+      '50 yanıtın 8 tanesinde adınız geçiyor: 25 soru × 2 motor (ChatGPT ve Microsoft Copilot)',
+    );
+    expect(tr.status.kpiVisibilitySub(engines, 8, 49, 25, 2)).toBe(
+      'ChatGPT ve Microsoft Copilot motorlarının 49 yanıtından 8 tanesinde adınız geçiyor (1 soruya bir motordan yanıt gelmedi)',
+    );
+    expect(tr.status.kpiVisibilitySub(engines, 8, 47, 25, 2)).toBe(
+      'ChatGPT ve Microsoft Copilot motorlarının 47 yanıtından 8 tanesinde adınız geçiyor (3 kez yanıt gelmedi)',
+    );
+    expect(tr.questions.summaryNone('Brewline Coffee', 49, 25, engines, 2)).toBe(
+      'Brewline Coffee markası 25 sorunun hiçbirinde anılmadı: ChatGPT ve Microsoft Copilot motorlarından 49 yanıt (1 soruya bir motordan yanıt gelmedi).',
+    );
+    expect(tr.questions.summaryNone('Brewline Coffee', 50, 25, engines, 2)).toBe(
+      'Brewline Coffee markası 25 sorunun hiçbirinde anılmadı: ChatGPT ve Microsoft Copilot motorlarından 50 yanıt (25 soru × 2 motor).',
+    );
+  });
+
+  it('counts the competitor and the citations over the headline’s answers, in Turkish too', () => {
+    expect(tr.status.kpiLeaderSub(21, 50)).toBe('aynı 50 yanıtın 21 tanesinde geçiyor');
+    expect(tr.status.kpiCitedSub(50)).toBe('aynı 50 yanıttan sayfanızı kaynak gösterenler');
+    expect(tr.status.measured(25, false, 'ChatGPT', 'Türkiye', '4 Kas 2026')).toContain(
+      'rakipler ve siteler aynı yanıtlar üzerinden sayıldı',
+    );
+  });
+
   it('writes dollar amounts the card’s language’s way', () => {
     expect(money(2390, 'USD', 'tr-TR')).toBe('$2.390');
     expect(money(2390)).toBe('$2,390');

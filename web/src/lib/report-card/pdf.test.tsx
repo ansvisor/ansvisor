@@ -230,6 +230,10 @@ describe('ReportCardPdfDocument', () => {
     expect(pages[0]).toContain('Brewline Coffee, yapay zekâ yanıtlarında ne kadar görünür?');
     expect(pages[0]).toContain('Tek seferlik bir ölçüm');
     expect(pages[0]).toContain('Ansvisor ile hazırlandı · www.ansvisor.com');
+    // One base for the headline, the competitor and the citations.
+    expect(pages[0]).toContain('50 yanıtın 8 tanesinde adınız geçiyor: 25 soru × 2 motor');
+    expect(pages[0]).toContain('aynı 50 yanıtın 21 tanesinde geçiyor');
+    expect(pages[0]).not.toContain('tüm motorlardaki');
     expect(pages[1]).toContain('25 soru ve her motorun yanıtı');
     expect(pages[2]).toContain('Üç bulgu ve ilk haftada yapacaklarınız');
     expect(pages[3]).toContain('Starter ayda $49.');

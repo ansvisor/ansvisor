@@ -13,6 +13,13 @@ export function listTr(items: readonly string[]): string {
   return `${items.slice(0, -1).join(', ')} ve ${items[items.length - 1]}`;
 }
 
+/**
+ * The answers a base falls short of its questions × engines by: the
+ * product is printed only when every question was answered.
+ */
+const noAnswer = (missing: number) =>
+  missing === 1 ? '1 soruya bir motordan yanıt gelmedi' : `${missing} kez yanıt gelmedi`;
+
 interface TargetStep {
   title: (company: string, domain: string) => string;
   detail: (cited: number, answers: number) => string;
@@ -46,18 +53,22 @@ export const tr: CardCopy = {
         : `${domain} sitesini şöyle anladık: sattıklarınız`,
     understoodNote: '2. sayfadaki sorular bunlarla ilgili.',
     kpiVisibility: 'Yapay zekâ görünürlüğü',
-    kpiVisibilitySub: (engines, named, answers, questions, engineCount) =>
-      `${answers} yanıtın ${named} tanesinde adınız geçiyor: ${questions} soru × ${engineCount} motor (${engines})`,
+    kpiVisibilitySub: (engines, named, answers, questions, engineCount) => {
+      const missing = questions * engineCount - answers;
+      if (missing === 0) {
+        return `${answers} yanıtın ${named} tanesinde adınız geçiyor: ${questions} soru × ${engineCount} motor (${engines})`;
+      }
+      return `${engines} motorlarının ${answers} yanıtından ${named} tanesinde adınız geçiyor${missing > 0 ? ` (${noAnswer(missing)})` : ''}`;
+    },
     kpiQuestions: 'Sorulan soru',
     kpiQuestionsSub: (engines, answers, unanswered) =>
       `${engines} yapay zekâ motorunda: ${answers} yanıt${unanswered > 0 ? ` (${unanswered} kez yanıt gelmedi)` : ''}`,
     kpiLeader: 'Öne çıkan rakip',
     kpiLeaderNone: 'Rakip yok',
-    kpiLeaderSub: (answers, total) =>
-      `tüm motorlardaki ${total} yanıtın ${answers} tanesinde geçiyor`,
+    kpiLeaderSub: (answers, total) => `aynı ${total} yanıtın ${answers} tanesinde geçiyor`,
     kpiLeaderNoneSub: 'bu yanıtlarda',
     kpiCited: 'Sitenize kaynak gösterilen',
-    kpiCitedSub: (total) => `tüm motorlardaki ${total} yanıttan sayfanızı kaynak gösterenler`,
+    kpiCitedSub: (total) => `aynı ${total} yanıttan sayfanızı kaynak gösterenler`,
     startTitle: 'Başlangıç noktanız',
     startCited: (engines, cited) =>
       `${engines} adınızı henüz anmıyor; ama yapay zekâ sitenizi zaten okuyor: ${cited} yanıtta sayfalarınızı kaynak gösterdi, adınızı söylemedi. Başlanacak yer burası.`,
@@ -83,7 +94,7 @@ export const tr: CardCopy = {
     missedInstead: (names) => `Önerilen: ${names}`,
     missedNone: 'Hiçbir yanıt başka bir markayı anmadı.',
     measured: (questions, readers, engines, country, date) =>
-      `Nasıl ölçtük: bir ${readers ? 'okurun' : 'alıcının'} sorabileceği ${questions} soruyu ${date} tarihinde ${country} konumundan ${engines} motorlarında birer kez sorduk. Görünürlük, adınızı ya da sitenizi anan yanıtların payıdır; rakipler ve siteler tüm motorların yanıtları üzerinden sayıldı. Soruların tamamı 2. sayfada.`,
+      `Nasıl ölçtük: bir ${readers ? 'okurun' : 'alıcının'} sorabileceği ${questions} soruyu ${date} tarihinde ${country} konumundan ${engines} motorlarında birer kez sorduk. Görünürlük, adınızı ya da sitenizi anan yanıtların payıdır; rakipler ve siteler aynı yanıtlar üzerinden sayıldı. Soruların tamamı 2. sayfada.`,
   },
 
   // ─── Bulgular (sayfa 1 ve 3) ───────────────────────────────────────────────
@@ -185,8 +196,16 @@ export const tr: CardCopy = {
       products
         ? `${domain} sitesindeki ana ürünlerden yazıldı; sattıklarınızla ne kadar örtüştüğüne ve ne sıklıkla arandığına göre seçildi; ${country} konumundan, ${language} soruldu.`
         : `${country} konumundan, ${language} soruldu.`,
-    summaryNone: (company, answers, total, engines, engineCount) =>
-      `${company} markası ${total} sorunun hiçbirinde anılmadı: ${engines} motorlarından ${answers} yanıt (${total} soru × ${engineCount} motor).`,
+    summaryNone: (company, answers, total, engines, engineCount) => {
+      const missing = total * engineCount - answers;
+      const base =
+        missing === 0
+          ? `${total} soru × ${engineCount} motor`
+          : missing > 0
+            ? noAnswer(missing)
+            : null;
+      return `${company} markası ${total} sorunun hiçbirinde anılmadı: ${engines} motorlarından ${answers} yanıt${base ? ` (${base})` : ''}.`;
+    },
     summary: (named, answers, questions, total, engines) =>
       `${total} sorunun ${questions} tanesinde adınız geçti: ${engines} motorlarının ${answers} yanıtından ${named} tanesinde.`,
     legendNamed: 'Adınızı andı',
