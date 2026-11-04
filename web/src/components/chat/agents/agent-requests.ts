@@ -1,6 +1,7 @@
 import { API_FAILURES, apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ChatDenialCard } from '@/lib/chat/events';
 import type { CompatibleAgents } from '@/lib/chat/agent-action';
+import type { AgentGoLiveDetail } from '@/lib/chat/agent-go-live';
 import type { AgentDetail, AgentListResult, AgentRunView } from '@/lib/chat/agents';
 import type { AgentListView } from '@/lib/chat/agent-rules';
 import type { RunNowItem } from '@/lib/chat/agent-runs';
@@ -101,6 +102,16 @@ export const updateAgent = (id: string, patch: Record<string, unknown>) =>
   send<{ agent: AgentDetail }>(`/api/chat/agents/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(patch),
+  });
+
+/**
+ * An Admin gives an agent its permission to publish and send on its own,
+ * at most `dailyLimit` a day, or takes it away (null): AUTONOMOUS-GO-LIVE §7.2.
+ */
+export const setAgentGoLive = (id: string, dailyLimit: number | null) =>
+  send<{ goLive: AgentGoLiveDetail | null }>(`/api/chat/agents/${id}/go-live`, {
+    method: dailyLimit === null ? 'DELETE' : 'PUT',
+    ...(dailyLimit === null ? {} : { body: JSON.stringify({ dailyLimit }) }),
   });
 
 /** Delete, once archived (§B item 7): its runs, chats and files stay. */

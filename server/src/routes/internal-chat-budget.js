@@ -5,8 +5,12 @@
  * checked the person against.
  *
  * POST /api/internal/chat/budget/reserve
- *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey?, agentRunId? }
- *   → 201 { usageId }: the step's row, its worst case held (on Ansvisor's key).
+ *   { orgId, runId, stepId?, feature?, model, inputTokens, maxOutputTokens, ownKey?, agentRunId?,
+ *     scheduleId? }
+ *   → 201 { usageId }: the step's row, its worst case held (on Ansvisor's key),
+ *     named with the chat's agent run and scheduled job (reserve_chat_ai_usage
+ *     finds both from the run's chat, and refuses a scheduleId or an
+ *     agentRunId that isn't the chat's).
  *   → 429 ai_limit { trial }: the budget can't cover the step; it doesn't start.
  *   → 429 run_cap: the chat's agent run (agentRunId) can't take the step
  *     within its own cap (CHAT-27 item 21); it doesn't start.
@@ -19,14 +23,34 @@
  *     writes priced at their own rates. 404 when it is gone.
  * POST /api/internal/chat/budget/release { orgId, usageId }
  *   → 200: the hold went (nothing was billed). Safe to repeat.
+ * POST /api/internal/chat/budget/fit
+ *   { orgId, model, perUnit: { inputTokens, maxOutputTokens }, units, ownKey?, agentRunId? }
+ *   → 200 { fits, limit }: how many of the job's `units` like parts (1–100)
+ *     the AI budget left covers, each one model step's worst case, before the
+ *     job starts (CHAT-04 item 17a); all of them on the workspace's own key.
+ *     `limit` is the one that binds: 'run' (the agent run's cap) or 'month'.
+ *     Holds nothing. 402 plan_limit, 403 chat_off, 404 not_found (an agent
+ *     run that isn't the workspace's).
  * A step a Stop aborted calls neither: its hold stays as its cost.
  * GET /api/internal/chat/budget/agent-shares?orgId=&days=
  *   → 200 { unlimited, since, shares: [{ agentId, share, ownKeyShare, runs }] }:
  *     each agent's share of the AI limit this period, or over the last
  *     `days` (1–90), for the Agents list and detail (CHAT-27 items 24–30).
  *   → 402 plan_limit: no active plan. 403 chat_off.
+ * GET /api/internal/chat/budget/run-estimate?orgId=
+ *   → 200 { unlimited, share, runs }: about how much of the AI limit one Chat
+ *     run uses, from the last 30 days' runs (null with none), for the
+ *     schedule card (CHAT-12 item 7).
+ *   → 402 plan_limit: no active plan. 403 chat_off.
+ * GET /api/internal/chat/budget/own-key?orgId=
+ *   → 200 { reached, usedUsd, capUsd, since, renewsAt }: the key guard
+ *     (AGENT-OWN-KEY §4.2): what all agents spent on the workspace's own key
+ *     this AI period against the Admin's monthly limit. 403 chat_off.
+ *     Each read also warns the Admins at 80% and at the limit, once each
+ *     a period (lib/chat-notices/own-key-limit.js), off the answer's path.
  *
- * Dollars never leave the server: no answer carries one. Calls with the
+ * Dollars leave the server only in the own-key answer, for the Admins'
+ * settings card (AGENT-OWN-KEY §11 Q1): the agent checks read `reached`. Calls with the
  * secret aren't counted by the API's per-IP limiter (isInternalChatBudgetCall
  * in middleware/rate-limiter.js): each step makes two, from the web's few
  * shared addresses.
@@ -37,11 +61,16 @@ import { z } from 'zod';
 import {
   CHAT_BUDGET_FEATURES,
   ChatBudgetError,
+  MAX_FIT_UNITS,
   agentUsageShares,
   chargeChatStep,
+  chatRunEstimate,
+  fitChatUnits,
+  ownKeyAgentSpend,
   releaseChatStep,
   reserveChatStep,
 } from '../lib/chat-budget.js';
+import { warnOwnKeyLimit } from '../lib/chat-notices/own-key-limit.js';
 import { PlanLimitError } from '../lib/plan-guard.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 
@@ -72,6 +101,8 @@ const reserveSchema = z.strictObject({
   ownKey: z.boolean().default(false),
   // The chat's agent run: the step is held within its cap too (CHAT-27 item 21).
   agentRunId: z.guid().nullish(),
+  // The chat's scheduled job (CHAT-12 item 14): its row is named with the job.
+  scheduleId: z.guid().nullish(),
 });
 
 const chargeSchema = z.strictObject({
@@ -91,10 +122,23 @@ const chargeSchema = z.strictObject({
 
 const releaseSchema = z.strictObject({ orgId: z.guid(), usageId: z.guid() });
 
+const fitSchema = z.strictObject({
+  orgId: z.guid(),
+  model,
+  // One part's model step: its prompt and the most it may write.
+  perUnit: z.strictObject({ inputTokens: tokens, maxOutputTokens: tokens.min(1) }),
+  units: z.number().int().min(1).max(MAX_FIT_UNITS),
+  ownKey: z.boolean().default(false),
+  agentRunId: z.guid().nullish(),
+});
+
 const sharesSchema = z.strictObject({
   orgId: z.guid(),
   days: z.coerce.number().int().min(1).max(90).optional(),
 });
+
+const estimateSchema = z.strictObject({ orgId: z.guid() });
+const ownKeySchema = z.strictObject({ orgId: z.guid() });
 
 /** The body as `schema` reads it, or null once a 400 is sent. */
 function parse(schema, req, res) {
@@ -140,6 +184,7 @@ router.post('/reserve', async (req, res) => {
       stepId: body.stepId ?? null,
       ownKey: body.ownKey,
       agentRunId: body.agentRunId ?? null,
+      scheduleId: body.scheduleId ?? null,
     });
     return res.status(201).json({ success: true, usageId });
   } catch (err) {
@@ -173,6 +218,23 @@ router.post('/release', async (req, res) => {
   }
 });
 
+router.post('/fit', async (req, res) => {
+  const body = parse(fitSchema, req, res);
+  if (!body) return undefined;
+  try {
+    const { fits, limit } = await fitChatUnits(body.orgId, {
+      modelId: body.model,
+      perUnit: body.perUnit,
+      units: body.units,
+      ownKey: body.ownKey,
+      agentRunId: body.agentRunId ?? null,
+    });
+    return res.json({ success: true, fits, limit });
+  } catch (err) {
+    return fail(err, req, res, 'fit');
+  }
+});
+
 router.get('/agent-shares', async (req, res) => {
   const query = sharesSchema.safeParse(req.query ?? {});
   if (!query.success) {
@@ -185,6 +247,39 @@ router.get('/agent-shares', async (req, res) => {
     return res.json({ success: true, ...shares });
   } catch (err) {
     return fail(err, req, res, 'agent shares');
+  }
+});
+
+router.get('/run-estimate', async (req, res) => {
+  const query = estimateSchema.safeParse(req.query ?? {});
+  if (!query.success) {
+    return res
+      .status(400)
+      .json({ success: false, error: 'invalid_request', message: 'Invalid request' });
+  }
+  try {
+    const estimate = await chatRunEstimate(query.data.orgId);
+    return res.json({ success: true, ...estimate });
+  } catch (err) {
+    return fail(err, req, res, 'run estimate');
+  }
+});
+
+router.get('/own-key', async (req, res) => {
+  const query = ownKeySchema.safeParse(req.query ?? {});
+  if (!query.success) {
+    return res
+      .status(400)
+      .json({ success: false, error: 'invalid_request', message: 'Invalid request' });
+  }
+  try {
+    const spend = await ownKeyAgentSpend(query.data.orgId);
+    warnOwnKeyLimit(query.data.orgId, spend).catch((err) =>
+      req.log.error({ err }, 'own key limit warning failed'),
+    );
+    return res.json({ success: true, ...spend });
+  } catch (err) {
+    return fail(err, req, res, 'own key spend');
   }
 });
 

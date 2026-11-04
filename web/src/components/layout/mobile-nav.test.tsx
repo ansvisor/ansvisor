@@ -16,10 +16,20 @@ vi.mock('@/i18n/navigation', () => ({
     </a>
   ),
 }));
+const gate = vi.hoisted(() => ({ isCloud: false }));
 vi.mock('@/hooks/use-feature-gate', () => ({
-  useFeatureGate: () => ({ canUse: () => true, requiredPlanFor: () => null, isCloud: false }),
+  useFeatureGate: () => ({
+    canUse: () => true,
+    requiredPlanFor: () => null,
+    isCloud: gate.isCloud,
+  }),
 }));
-vi.mock('@/hooks/use-agent-key-status', () => ({ useAgentKeyStatus: () => 'configured' }));
+// The org's provider key for Chat: there, unless a test says otherwise.
+const agentKey = vi.hoisted(() => ({ status: 'configured' as 'configured' | 'missing' }));
+const useAgentKeyStatus = vi.hoisted(() =>
+  vi.fn((probe: boolean) => (probe ? agentKey.status : 'configured')),
+);
+vi.mock('@/hooks/use-agent-key-status', () => ({ useAgentKeyStatus }));
 vi.mock('@/components/layout/brand-switcher', () => ({ BrandSwitcher: () => null }));
 vi.mock('@/components/layout/user-profile-nav-item', () => ({ UserProfileNavItem: () => null }));
 vi.mock('@/components/layout/theme-toggle', () => ({ ThemeToggle: () => null }));
@@ -62,6 +72,7 @@ const { MobileNav } = await import('./mobile-nav');
 const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
+const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
 
 /**
  * The mobile menu leaves the viewer's hidden sections off, the active brand's
@@ -75,6 +86,9 @@ let container: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  gate.isCloud = false;
+  agentKey.status = 'configured';
+  useAgentKeyStatus.mockClear();
   useBrandStore.setState({ activeBrandId: 'brand-1', brands: [] });
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -86,15 +100,19 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-async function open(hidden: string[], chatOn = false) {
+async function open(hidden: string[], chatOn = false, isDemo = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <MenuAccessProvider hidden={hidden} canManageMenus={false}>
-          <ChatAgenticProvider enabled={chatOn}>
-            <MobileNav />
-          </ChatAgenticProvider>
-        </MenuAccessProvider>
+        <DemoBrandContext.Provider
+          value={{ isDemo, demoBrand: null, offer: 'trial', neverSubscribed: true }}
+        >
+          <MenuAccessProvider hidden={hidden} canManageMenus={false}>
+            <ChatAgenticProvider enabled={chatOn}>
+              <MobileNav />
+            </ChatAgenticProvider>
+          </MenuAccessProvider>
+        </DemoBrandContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -136,5 +154,31 @@ describe('MobileNav', () => {
     await open(['agents'], true);
     expect(link('/dashboard/chat')).not.toBeNull();
     expect(link('/dashboard/agents')).toBeNull();
+  });
+
+  it('says Chat needs setting up without a key, with the new Chat off', async () => {
+    gate.isCloud = true;
+    agentKey.status = 'missing';
+    await open([]);
+    expect(useAgentKeyStatus).toHaveBeenCalledWith(true);
+    expect(link('/dashboard/agent')?.textContent).toBe('ChatSet up');
+  });
+
+  it('gives Chat no Set up badge with the new Chat on, and never asks for the key', async () => {
+    gate.isCloud = true;
+    agentKey.status = 'missing';
+    await open([], true);
+    expect(link('/dashboard/chat')?.textContent).toBe('Chat');
+    expect(useAgentKeyStatus).not.toHaveBeenCalledWith(true);
+  });
+
+  // The demo brand's Chat is the real one, locked as the rest of the demo.
+  it.each([
+    [false, '/dashboard/agent'],
+    [true, '/dashboard/chat'],
+  ])('gives the demo brand the Chat item any brand has (new Chat %s)', async (chatOn, href) => {
+    await open([], chatOn, true);
+    expect(link(href)?.textContent).toBe('Chat');
+    expect(document.body.textContent).not.toContain('Soon');
   });
 });

@@ -46,6 +46,16 @@ export interface ActivityRow {
   status: 'done' | 'undone' | 'undo_conflict';
   canUndo: boolean;
   undoneAt: string | null;
+  /**
+   * A page this row published, still live, an Admin or a Manager may take
+   * down from here for 30 days (AUTONOMOUS-GO-LIVE §6.4, PR 10); else null.
+   */
+  takeDown: {
+    draftId: string;
+    title: string;
+    url: string | null;
+    target: 'webflow' | 'wordpress' | 'wix';
+  } | null;
 }
 
 /** How a row ran, as the Approval column says it. */
@@ -56,6 +66,7 @@ export type ApprovalLabel =
   | 'always'
   | 'full_auto'
   | 'dont_ask_again'
+  | 'go_live'
   | 'run';
 
 export function approvalLabel(
@@ -65,7 +76,10 @@ export function approvalLabel(
   if (row.approvalKind === 'ask') return 'card';
   if (row.approvalKind === 'click') return 'click';
   if (row.approvalKind === 'auto') {
-    return row.autoVia === 'always' || row.autoVia === 'dont_ask_again' ? row.autoVia : 'full_auto';
+    // An agent's step that went live on its own (AUTONOMOUS-GO-LIVE §6.4), never Full auto's.
+    return row.autoVia === 'always' || row.autoVia === 'dont_ask_again' || row.autoVia === 'go_live'
+      ? row.autoVia
+      : 'full_auto';
   }
   return 'run';
 }

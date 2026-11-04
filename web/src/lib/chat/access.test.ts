@@ -36,6 +36,23 @@ describe('ROLE_MATRIX', () => {
       }
     }
   });
+
+  // Role model A as the app runs it (2026-11-03).
+  it('lets everyone do the daily work, and keeps what spends the plan to Admins and Managers', () => {
+    const row = (key: string) => ROLE_MATRIX.flatMap((g) => g.rows).find((r) => r.key === key);
+    expect(ROLE_MATRIX.find((g) => g.key === 'everyone')?.rows.map((r) => r.key)).toContain(
+      'dailyWork',
+    );
+    expect(Object.values(row('dailyWork')!.cells)).toEqual(['yes', 'yes', 'yes', 'yes']);
+    for (const key of ['tracking', 'volumes', 'generate']) {
+      expect(row(key)?.cells, key).toEqual({
+        admin: 'yes',
+        manager: 'yes',
+        analyst: 'no',
+        agency_partner: 'no',
+      });
+    }
+  });
 });
 
 describe('yourAccessRows', () => {
@@ -174,10 +191,15 @@ describe('the registry as "What Chat can do" shows it', () => {
       approvalMark({
         class: 'read',
         defaultPolicy: 'on',
-        flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false },
+        flags: { alwaysCard: false, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false },
       }),
     ).toBe('none');
-    const flags = { alwaysCard: false, costCard: false, adminMayTurnOff: false };
+    const flags = {
+      alwaysCard: false,
+      costCard: false,
+      adminMayTurnOff: false,
+      goLiveOnOwn: false,
+    };
     expect(approvalMark({ class: 'write', defaultPolicy: 'ask', flags })).toBe('card');
     expect(approvalMark({ class: 'write', defaultPolicy: 'ask_full_auto', flags })).toBe('auto');
     expect(

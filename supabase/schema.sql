@@ -57153,6 +57153,161 @@ alter table public.chat_agent_runs
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00441_chat_notices.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00441: Chat notices, a person's own notes from the system
+-- ============================================================================
+-- AGENT-OWN-KEY §5.3, §6.2. When the workspace's own AI key fails, every
+-- Admin is told once per failure episode: a row at the top of their Inbox's
+-- Needs you, and an e-mail by their "Notify me when an agent needs me"
+-- (chat_user_prefs.notify_via, 00408). One reminder after 3 days still
+-- failing. Kinds own_key_limit_80 and own_key_limit_100 are the key guard's
+-- warnings (AGENT-OWN-KEY PR 10).
+--
+--   * payload: what the words need (provider, class, model), ≤ 4 KB. No
+--     brand data: a key belongs to the workspace.
+--   * dedupe_key: one notice per person and event, e.g.
+--     own_key:{provider}:{failing_since} and its :reminder; unique per person,
+--     so failures at once write one row.
+--   * read_at: the person opened it. resolved_at: what it was about is over
+--     (the key works again); it leaves Needs you.
+--
+-- A person reads their own rows in the workspace they belong to now, and
+-- sets read_at on them. The server writes.
+
+create table if not exists public.chat_notices (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  kind text not null
+    check (kind in ('own_key_failed', 'own_key_limit_80', 'own_key_limit_100')),
+  payload jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(payload) = 'object' and octet_length(payload::text) <= 4096
+  ),
+  dedupe_key text not null check (char_length(dedupe_key) between 1 and 200),
+  created_at timestamptz not null default now(),
+  read_at timestamptz,
+  resolved_at timestamptz,
+  unique (user_id, dedupe_key)
+);
+
+-- A person's open notices, newest first (the Inbox).
+create index if not exists chat_notices_open_idx
+  on public.chat_notices (user_id, created_at desc)
+  where resolved_at is null;
+
+-- What a key that works again resolves.
+create index if not exists chat_notices_organization_idx
+  on public.chat_notices (organization_id, kind)
+  where resolved_at is null;
+
+comment on table public.chat_notices is
+  'Chat (00441): a note from the system to a person (AGENT-OWN-KEY §5.3): their own AI key failed, or reached its agents'' monthly limit. Theirs to read and mark read; the server writes.';
+
+alter table public.chat_notices enable row level security;
+
+revoke all on table public.chat_notices from anon, authenticated;
+grant select on table public.chat_notices to authenticated;
+grant update (read_at) on table public.chat_notices to authenticated;
+grant all on table public.chat_notices to service_role;
+
+drop policy if exists "chat_notices: own select" on public.chat_notices;
+create policy "chat_notices: own select"
+  on public.chat_notices
+  for select
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+drop policy if exists "chat_notices: own read" on public.chat_notices;
+create policy "chat_notices: own read"
+  on public.chat_notices
+  for update
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00442_own_key_agent_cap.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00442: a monthly limit for all agents on the workspace's own AI key
+-- ============================================================================
+-- AGENT-OWN-KEY §4.2, §6.3. On the workspace's own key each agent run has
+-- its cap, but nothing bounded what all agents together spend on the key in
+-- a month. The key guard does:
+--
+--   * chat_settings.own_key_agent_month_usd: the most all agents' runs may
+--     spend on the workspace's own key in the AI period (the meter's, so it
+--     renews with it). $250 unless an Admin set it, $10–$10,000, always on
+--     (owner decision D5, 2026-11-01). No chat_settings row reads as $250.
+--   * chat_own_key_agent_spend: what the agents' own-key steps cost since a
+--     moment, at the price each step was charged (prompt_improve_usage rows
+--     with own_key and feature agent or schedule; holds in flight count at
+--     their worst case). The server's guard reads it (lib/chat-budget.js);
+--     the dollars stay on the server but for the Admins' settings card.
+--   * chat_agents.paused_reason gains own_key_cap: the guard was reached; the
+--     agent starts again by itself once the period renews or an Admin raises
+--     the guard.
+--
+-- Constraint swaps on small tables: no rewrite, existing rows already pass.
+
+alter table public.chat_settings
+  add column if not exists own_key_agent_month_usd numeric(10, 2) not null default 250
+    check (own_key_agent_month_usd between 10 and 10000);
+
+comment on column public.chat_settings.own_key_agent_month_usd is
+  'The most all agents may spend on the workspace''s own AI key in the AI period, in dollars at list prices ($10–$10,000; always on).';
+
+alter table public.chat_agents
+  drop constraint if exists chat_agents_paused_reason_check;
+
+alter table public.chat_agents
+  add constraint chat_agents_paused_reason_check check (
+    paused_reason in (
+      'cap',
+      'connection',
+      'skill_off',
+      'failures',
+      'owner_role',
+      'plan',
+      'brand_gone',
+      'manual',
+      'own_key',
+      'own_key_cap'
+    )
+  );
+
+-- What the workspace's agents spent on its own key since p_since, in dollars.
+create or replace function public.chat_own_key_agent_spend(
+  p_organization_id uuid,
+  p_since timestamptz
+)
+returns numeric
+language sql
+stable
+set search_path = public
+as $$
+  select coalesce(sum(cost_usd), 0)
+  from prompt_improve_usage
+  where organization_id = p_organization_id
+    and own_key
+    and feature in ('agent', 'schedule')
+    and used_at >= p_since;
+$$;
+
+revoke all on function public.chat_own_key_agent_spend(uuid, timestamptz)
+  from public, anon, authenticated;
+grant execute on function public.chat_own_key_agent_spend(uuid, timestamptz) to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00443_chat_agent_go_live.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -57410,6 +57565,370 @@ grant execute on function public.finish_agent_go_live(uuid, text, uuid, text, te
   to service_role;
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00444_content_draft_deliveries_agent_run.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00444: a CMS send an agent made on its own
+-- ============================================================================
+-- AUTONOMOUS-GO-LIVE §10.2 (PR 4). A send an agent run made without a
+-- person's click (its go-live step, chat_agent_go_live_events) names the
+-- agent run, so the Library and the ship event can say "Sent by {agent} · on
+-- its own". sent_by stays the person the run acted as. A person's own send
+-- has none.
+
+alter table public.content_draft_deliveries
+  add column if not exists agent_run_id uuid
+    references public.chat_agent_runs(id) on delete set null;
+
+create index if not exists content_draft_deliveries_agent_run_idx
+  on public.content_draft_deliveries (agent_run_id)
+  where agent_run_id is not null;
+
+comment on column public.content_draft_deliveries.agent_run_id is
+  'The agent run that sent the page on its own (00444); null for a person''s send.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00445_chat_activity_go_live.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00445: a step an agent took live on its own, in the Activity log
+-- ============================================================================
+-- AUTONOMOUS-GO-LIVE §10.3 (PR 5). An agent an Admin allowed may take an
+-- EXECUTE (a CMS draft today) live without a person's click, in Full auto,
+-- once its guards pass. Its Activity row says so: approval `auto` with
+-- auto_via `go_live`, the agent and its run. Only an EXECUTE in an agent run
+-- goes live on its own, so the log refuses go_live anywhere else. The Undo
+-- check stays: an EXECUTE has no Undo (Take down is a row of its own later).
+
+alter table public.chat_activity_log
+  drop constraint if exists chat_activity_log_auto_via_check;
+alter table public.chat_activity_log
+  add constraint chat_activity_log_auto_via_check
+  check (auto_via in ('always', 'full_auto', 'dont_ask_again', 'go_live'));
+
+alter table public.chat_activity_log
+  drop constraint if exists chat_activity_log_go_live_check;
+alter table public.chat_activity_log
+  add constraint chat_activity_log_go_live_check
+  check (auto_via is distinct from 'go_live' or (class = 'execute' and agent_run_id is not null));
+
+comment on column public.chat_activity_log.auto_via is
+  'Why a change ran without a card (00402): an Admin''s Always, Full auto, the person''s "Don''t ask again", or go_live (00445): an EXECUTE an allowed agent took live on its own.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00446_chat_notices_go_live.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00446: notices when an agent goes live on its own, or stops being allowed to
+-- ============================================================================
+-- AUTONOMOUS-GO-LIVE §6.4, §7.2 (PR 8). Two new kinds of chat_notices (00441):
+--
+--   * agent_went_live: an agent an Admin allowed sent a page out on its own
+--     (a CMS draft in v1). Its owner and the people its version notifies get
+--     it at the top of their Inbox's Needs you, and an e-mail by their
+--     "Notify me when an agent needs me". It names the agent, the page and
+--     the CMS, so it carries the page's brand: brand_id.
+--   * agent_go_live_off: an edit made a new version of an agent that was
+--     allowed, so it no longer publishes on its own. The Admin who allowed it
+--     and the owner are told, once per version.
+--
+-- A notice with a brand is read only by a person who reaches that brand
+-- (user_brand_ids, 00388); one about the workspace (a key) has none. A
+-- person closes their own notice once they open it (resolved_at), as they
+-- mark it read (read_at). The server writes.
+
+alter table public.chat_notices
+  drop constraint if exists chat_notices_kind_check;
+alter table public.chat_notices
+  add constraint chat_notices_kind_check check (
+    kind in (
+      'own_key_failed',
+      'own_key_limit_80',
+      'own_key_limit_100',
+      'agent_went_live',
+      'agent_go_live_off'
+    )
+  );
+
+alter table public.chat_notices
+  add column if not exists brand_id uuid references public.brands(id) on delete cascade;
+
+create index if not exists chat_notices_brand_idx
+  on public.chat_notices (brand_id)
+  where brand_id is not null;
+
+comment on column public.chat_notices.brand_id is
+  'The brand a notice is about (00446: a page an agent sent on its own); null for one about the workspace. Read only by people who reach the brand.';
+
+comment on table public.chat_notices is
+  'Chat (00441, 00446): a note from the system to a person: their own AI key failed or reached its agents'' monthly limit, an agent went live on its own, or an agent is no longer allowed to. Theirs to read, mark read and close; the server writes.';
+
+-- A person closes their own notice once they open it.
+grant update (resolved_at) on table public.chat_notices to authenticated;
+
+-- Their own notices, and only about brands they reach.
+drop policy if exists "chat_notices: own select" on public.chat_notices;
+create policy "chat_notices: own select"
+  on public.chat_notices
+  for select
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+-- They mark read or close only notices they can read.
+drop policy if exists "chat_notices: own read" on public.chat_notices;
+create policy "chat_notices: own read"
+  on public.chat_notices
+  for update
+  to authenticated
+  using (
+    user_id = auth.uid()
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  )
+  with check (
+    user_id = auth.uid()
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00447_go_live_publish.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00447: a page an agent publishes on its own, in the impact ledger and its slots
+-- ============================================================================
+-- AUTONOMOUS-GO-LIVE §6.4, §10.5 (PR 9). Pages now go live from Ansvisor:
+-- a person's Publish in Chat, or an agent an Admin allowed to publish on its
+-- own (Webflow, WordPress and Wix; new pages only).
+--
+--   * ship_cms_publish (00428) takes the run, the agent and the agent run a
+--     publish came from, so "What Ansvisor did for you" and the agent's page
+--     can say "Published by {agent} on its own". The 11-argument function
+--     is dropped and the 14-argument one made in its place, so PostgREST
+--     sees one; the server passes the three (null for a person's own send)
+--     and execution_mode `automated` for an agent's.
+--   * reserve_agent_go_live (00443): a step of another kind on a page and
+--     destination already counted in the last 24 hours (a publish after its
+--     CMS draft) gets its own row, so it has its own record and notice, but
+--     takes no new slot: the pair is counted once. The same kind again is
+--     still the row it had.
+
+drop function if exists public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer);
+
+create or replace function public.ship_cms_publish(
+  p_delivery_id uuid,
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_content_draft_id uuid,
+  p_title text,
+  p_url text,
+  p_action_id uuid,
+  p_shipped_at timestamptz,
+  p_shipped_by uuid,
+  p_execution_mode text,
+  p_republish_days integer,
+  p_run_id uuid,
+  p_agent_id uuid,
+  p_agent_run_id uuid
+)
+returns table (ship_event_id uuid, created boolean)
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+begin
+  if p_delivery_id is null or p_shipped_at is null then
+    raise exception 'a send and its publish time are needed' using errcode = '22023';
+  end if;
+  if p_republish_days is null or p_republish_days < 1 then
+    raise exception 'a republish window of a day or more is needed' using errcode = '22023';
+  end if;
+  -- Every send of one draft waits for the one before it.
+  if p_content_draft_id is not null then
+    perform pg_advisory_xact_lock(hashtext('ship_cms_publish:' || p_content_draft_id::text));
+  end if;
+
+  -- The send's own, written before (a confirmation read twice).
+  select s.id into v_id
+  from public.ship_events s
+  where s.content_draft_delivery_id = p_delivery_id;
+  if v_id is not null then
+    return query select v_id, false;
+    return;
+  end if;
+  -- The send noted on a cms_publish before: that one, also once its draft is
+  -- deleted (content_draft_id set null), when the lookup below finds nothing.
+  select s.id into v_id
+  from public.ship_events s
+  where s.republished_delivery_ids @> array[p_delivery_id]
+  order by s.id
+  limit 1;
+  if v_id is not null then
+    return query select v_id, false;
+    return;
+  end if;
+
+  -- The same draft live again within the window: its first cms_publish goes on.
+  -- The latest shipped before the send first, else the nearest after it.
+  if p_content_draft_id is not null then
+    select s.id into v_id
+    from public.ship_events s
+    where s.brand_id = p_brand_id
+      and s.content_draft_id = p_content_draft_id
+      and s.kind = 'cms_publish'
+      and s.shipped_at >= p_shipped_at - make_interval(days => p_republish_days)
+      and s.shipped_at <= p_shipped_at + make_interval(days => p_republish_days)
+    order by s.shipped_at > p_shipped_at,
+      greatest(s.shipped_at - p_shipped_at, p_shipped_at - s.shipped_at),
+      s.id desc
+    limit 1;
+    if v_id is not null then
+      update public.ship_events s
+      set republished_at = case
+            when p_shipped_at > coalesce(s.republished_at, s.shipped_at) then p_shipped_at
+            else s.republished_at
+          end,
+          republished_delivery_ids = case
+            when p_delivery_id = any (s.republished_delivery_ids)
+              or cardinality(s.republished_delivery_ids) >= 50
+              then s.republished_delivery_ids
+            else s.republished_delivery_ids || p_delivery_id
+          end
+      where s.id = v_id;
+      return query select v_id, false;
+      return;
+    end if;
+  end if;
+
+  insert into public.ship_events (
+    organization_id, brand_id, kind, title, content_draft_id, content_draft_delivery_id,
+    url, action_id, source, change_type, shipped_at, shipped_by, execution_mode,
+    run_id, agent_id, agent_run_id
+  ) values (
+    p_organization_id, p_brand_id, 'cms_publish', p_title, p_content_draft_id, p_delivery_id,
+    p_url, p_action_id, 'content_editor', 'content', p_shipped_at, p_shipped_by, p_execution_mode,
+    p_run_id, p_agent_id, p_agent_run_id
+  )
+  on conflict (content_draft_delivery_id) do nothing
+  returning id into v_id;
+  if v_id is not null then
+    return query select v_id, true;
+    return;
+  end if;
+  -- A send without a draft, confirmed twice at once: the other call wrote it.
+  select s.id into v_id
+  from public.ship_events s
+  where s.content_draft_delivery_id = p_delivery_id;
+  return query select v_id, false;
+end;
+$$;
+
+revoke all on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer, uuid, uuid, uuid)
+  from public, anon, authenticated;
+grant execute on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer, uuid, uuid, uuid)
+  to service_role;
+
+comment on function public.ship_cms_publish(uuid, uuid, uuid, uuid, text, text, uuid, timestamptz, uuid, text, integer, uuid, uuid, uuid) is
+  'Impact ledger (00428, 00447): a CMS-confirmed publish as a ship event, under a lock on its draft: the send''s own, else the one it is noted on, else the draft''s cms_publish within p_republish_days (the latest before it, else the nearest after) noted, else a new one, with the run, agent and agent run it came from. Says the id and whether this call wrote it. Service role only.';
+create or replace function public.reserve_agent_go_live(
+  p_organization_id uuid,
+  p_agent_id uuid,
+  p_run_id uuid,
+  p_agent_run_id uuid,
+  p_brand_id uuid,
+  p_content_draft_id uuid,
+  p_tool_key text,
+  p_kind text,
+  p_target text,
+  p_limit integer
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_id uuid;
+  v_used integer;
+  v_counted boolean;
+begin
+  if p_limit is null or p_limit < 1 or p_limit > 20 then
+    raise exception 'reserve_agent_go_live: the limit must be 1 to 20';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext('agent_go_live:' || p_agent_id::text));
+
+  -- The same step again (this page, destination and kind): its row, no second slot.
+  select e.id
+    into v_id
+    from public.chat_agent_go_live_events e
+   where e.agent_id = p_agent_id
+     and e.content_draft_id is not distinct from p_content_draft_id
+     and e.target = p_target
+     and e.kind = p_kind
+     and e.status in ('reserved', 'done', 'taken_down')
+     and e.created_at > now() - interval '24 hours'
+   order by e.created_at desc
+   limit 1;
+  if v_id is not null then
+    return v_id;
+  end if;
+
+  -- A step of another kind on a page and destination counted already: a row of its own, no new slot.
+  select exists (
+    select 1
+      from public.chat_agent_go_live_events e
+     where e.agent_id = p_agent_id
+       and e.content_draft_id is not distinct from p_content_draft_id
+       and e.target = p_target
+       and e.status in ('reserved', 'done', 'taken_down')
+       and e.created_at > now() - interval '24 hours'
+  ) into v_counted;
+
+  if not v_counted then
+    select count(*)
+      into v_used
+      from (
+        select distinct e.content_draft_id, e.target
+          from public.chat_agent_go_live_events e
+         where e.agent_id = p_agent_id
+           and e.status in ('reserved', 'done', 'taken_down')
+           and e.created_at > now() - interval '24 hours'
+      ) counted;
+    if v_used >= p_limit then
+      return null;
+    end if;
+  end if;
+
+  insert into public.chat_agent_go_live_events (
+    organization_id, agent_id, run_id, agent_run_id, brand_id,
+    content_draft_id, tool_key, kind, target
+  )
+  values (
+    p_organization_id, p_agent_id, p_run_id, p_agent_run_id, p_brand_id,
+    p_content_draft_id, p_tool_key, p_kind, p_target
+  )
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+revoke all on function public.reserve_agent_go_live(uuid, uuid, uuid, uuid, uuid, uuid, text, text, text, integer)
+  from public, anon, authenticated;
+grant execute on function public.reserve_agent_go_live(uuid, uuid, uuid, uuid, uuid, uuid, text, text, text, integer)
+  to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00448_content_drafts_schema_left_out.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -57535,4 +58054,2264 @@ alter table public.content_quality_pages
 alter table public.content_quality_pages
   add constraint content_quality_pages_site_type_check
     check (site_type in ('b2b', 'ecommerce', 'b2c', 'app'));
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00457_chat_schedules.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00457: Chat's scheduled work — schedules and their runs, the job's chat,
+-- and the spend a job draws
+-- ============================================================================
+-- Scheduling (CHAT-12, Wave 3), behind CHAT_AGENTIC: nothing reads or writes
+-- these while the flag is off. A job is a Chat run started by the clock, in
+-- a chat of its own, acting as the person who created it. The server writes
+-- every row (service role), after its role, plan and brand checks; a person
+-- creates a job only by clicking the confirm card (CHAT-12 item 7), and a
+-- Full auto run may set one follow-up check by itself (CHAT-20 §13).
+--
+--   * chat_schedules: one job (CHAT-12 Data notes):
+--       - when: kind once / recurring / followup_check; run_mode run_at
+--         (start at due_at) or ready_by (start now, ready by due_at; once
+--         jobs only); due_at, next_run_at (what the worker picks, each
+--         minute), rrule (the RRULE subset agent-schedule.ts reads; recurring
+--         jobs only) and the IANA time zone it is read in.
+--       - what: title, the prompt or a skill's /name, the brand fixed at
+--         creation (null: a chat about the whole workspace, where each tool
+--         call picks its brand with the creator's access), the creator (runs
+--         act as them) and the job's own chat.
+--       - delivery: chat and/or email; recipient_ids are people of the
+--         workspace, never addresses (a trigger checks), so no job emails
+--         outside it by itself; change_only ("Notify only if the answer
+--         changed", recurring only) with the last delivered fingerprint.
+--       - how: mode, model and effort (Wave 3 runs on Auto · Normal).
+--       - state: enabled, why it is off (cap, failed, skill_off,
+--         missing_source, owner_role, manual), failed runs in a row (3 turn
+--         it off) and the one retry 10 minutes after a failure.
+--       - follow-up checks: what to check (target_json, metric), how it was
+--         made (card: someone clicked; full_auto: a Full auto run set it),
+--         and the run, agent and agent run that set it.
+--     A job whose brand is deleted, or whose creator's account is, turns
+--     off (missing_source, owner_role) instead of running on without them.
+--   * chat_schedule_runs: one row per run of a job: the slot it ran for
+--     (attempt 2 is the retry; a slot never runs twice), Run now, its Chat
+--     run and answer, status (running, done, unchanged, failed, paused_cap,
+--     skipped, needs_you), parts done of parts (the "1 of 3 ready" bar), the
+--     fingerprint of what it read, its use as a share of the monthly AI
+--     limit (never dollars), and the email's outcome.
+--   * chat_conversations.schedule_id and origin 'schedule': a job's chat,
+--     one live chat per job. It stays its creator's (00400, 00424): Admins
+--     see the job, not the chat.
+--   * prompt_improve_usage.schedule_id: the job a spend row was for
+--     (CHAT-12 item 14), so a job's share is one grouped read.
+--   * reserve_chat_ai_usage (00419's), taking the job: the row is named with
+--     the chat's job, and a p_schedule_id that isn't the chat's is refused,
+--     as p_agent_run_id is. Old calls still match.
+--
+-- An agent's Schedule trigger keeps its own settings in
+-- chat_agent_triggers.config_json (Wave 3 decision 15): it doesn't point at
+-- chat_schedules, whatever 00419's comment on config_json says.
+
+-- ─── Jobs ───────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_schedules (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  kind text not null check (kind in ('once', 'recurring', 'followup_check')),
+  -- run_at: the run starts at due_at; ready_by: it starts now and must be
+  -- ready by due_at (CHAT-12 item 1).
+  run_mode text not null default 'run_at' check (run_mode in ('run_at', 'ready_by')),
+  due_at timestamptz,
+  -- What the worker picks (next_run_at <= now); null once nothing is due.
+  next_run_at timestamptz,
+  -- The RRULE subset web lib/chat/agent-schedule.ts reads (FREQ DAILY,
+  -- WEEKLY, MONTHLY; at most once a day).
+  rrule text check (char_length(rrule) between 1 and 200),
+  -- IANA: the creator's, else the workspace's (CHAT-12 item 2).
+  timezone text not null check (char_length(timezone) between 1 and 64),
+  title text not null check (char_length(title) between 1 and 120),
+  -- What it asks Chat, as a message would (engine.ts takes 20,000 at most),
+  -- or the skill it runs by its /name, or both.
+  prompt text check (char_length(prompt) between 1 and 20000),
+  skill_name text check (char_length(skill_name) <= 64 and skill_name ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
+  -- Fixed at creation (CHAT-12 item 11). Null: about the whole workspace.
+  brand_id uuid references public.brands(id) on delete set null,
+  -- Runs act as them. Null once their account is deleted: the job is off.
+  created_by uuid references auth.users(id) on delete set null,
+  -- The job's own chat, where every run posts.
+  conversation_id uuid references public.chat_conversations(id) on delete set null,
+  deliver_to text[] not null default '{chat}' check (
+    cardinality(deliver_to) between 1 and 2
+    and deliver_to <@ array['chat', 'email']::text[]
+    and public.chat_text_array_distinct(deliver_to)
+  ),
+  -- People of the workspace (the trigger below), never addresses.
+  recipient_ids uuid[] not null default '{}' check (cardinality(recipient_ids) <= 20),
+  -- "Notify only if the answer changed" (CHAT-12 item 20), recurring only.
+  change_only boolean not null default false,
+  -- sha256 of what the last delivered run read.
+  last_fingerprint text check (last_fingerprint ~ '^[0-9a-f]{64}$'),
+  -- The composer's modes (CHAT-02); model 'auto' or a catalog model, never a key.
+  mode text not null default 'auto' check (mode in ('ask_first', 'auto', 'full_auto')),
+  model text not null default 'auto' check (char_length(model) between 1 and 200),
+  effort text not null default 'normal' check (effort in ('normal', 'high', 'max')),
+  enabled boolean not null default true,
+  -- Why it is off. Only cap resumes on its own, at the next slot after the
+  -- monthly reset (CHAT-12 item 17); manual: a person turned it off.
+  paused_reason text check (
+    paused_reason in ('cap', 'failed', 'skill_off', 'missing_source', 'owner_role', 'manual')
+  ),
+  -- Failed runs in a row: 3 turn it off (failed).
+  fail_count smallint not null default 0 check (fail_count >= 0),
+  -- The one retry after a failure (CHAT-12 item 26).
+  retry_at timestamptz,
+  last_run_at timestamptz,
+  -- A follow-up check's target ({url, action_id, ship_event_id, …}) and
+  -- what it measures (CHAT-20 §13).
+  target_json jsonb check (
+    jsonb_typeof(target_json) = 'object' and octet_length(target_json::text) <= 8000
+  ),
+  metric text check (char_length(metric) between 1 and 64),
+  -- card: a person clicked Create schedule or Set check; full_auto: a Full
+  -- auto run set a follow-up check by itself (logged, with Undo).
+  created_via text not null default 'card' check (created_via in ('card', 'full_auto')),
+  set_by_run_id uuid references public.chat_runs(id) on delete set null,
+  agent_id uuid references public.chat_agents(id) on delete set null,
+  agent_run_id uuid references public.chat_agent_runs(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check ((kind = 'recurring') = (rrule is not null)),
+  check (kind = 'recurring' or due_at is not null),
+  check (run_mode = 'run_at' or kind = 'once'),
+  check (prompt is not null or skill_name is not null),
+  check (not change_only or kind = 'recurring'),
+  check (created_via = 'card' or kind = 'followup_check'),
+  check (enabled = (paused_reason is null))
+);
+
+-- What the worker reads each minute: the jobs that are on and due.
+create index if not exists chat_schedules_due_idx
+  on public.chat_schedules (next_run_at) where enabled and next_run_at is not null;
+create index if not exists chat_schedules_retry_idx
+  on public.chat_schedules (retry_at) where retry_at is not null;
+-- Scheduled: the person's jobs, and an Admin's view of the workspace's.
+create index if not exists chat_schedules_organization_idx
+  on public.chat_schedules (organization_id, created_at desc);
+create index if not exists chat_schedules_created_by_idx
+  on public.chat_schedules (created_by) where created_by is not null;
+create index if not exists chat_schedules_brand_idx
+  on public.chat_schedules (brand_id) where brand_id is not null;
+create index if not exists chat_schedules_conversation_idx
+  on public.chat_schedules (conversation_id) where conversation_id is not null;
+create index if not exists chat_schedules_set_by_run_idx
+  on public.chat_schedules (set_by_run_id) where set_by_run_id is not null;
+create index if not exists chat_schedules_agent_idx
+  on public.chat_schedules (agent_id) where agent_id is not null;
+create index if not exists chat_schedules_agent_run_idx
+  on public.chat_schedules (agent_run_id) where agent_run_id is not null;
+
+drop trigger if exists trg_chat_schedules_updated_at on public.chat_schedules;
+create trigger trg_chat_schedules_updated_at
+  before update on public.chat_schedules
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_schedules is
+  'Chat (00457): a scheduled job (CHAT-12): once, recurring or a follow-up check; when, what (prompt or skill), the brand fixed at creation, the creator it acts as, its chat, delivery (chat, email to workspace members), change-only, mode, model and effort, on/off with the reason, failures and retry. The creator and the workspace''s Admins read it; the server writes.';
+comment on column public.chat_schedules.recipient_ids is
+  'Who the job emails besides its creator: people of its workspace when set (a trigger checks), never addresses. Sending rechecks that each still belongs to it.';
+comment on column public.chat_schedules.created_via is
+  'card: a person clicked Create schedule or Set check; full_auto: a Full auto run set this follow-up check by itself (CHAT-20 §13), logged with Undo.';
+comment on column public.chat_schedules.paused_reason is
+  'Why the job is off: cap (resumes at the next slot after the reset), failed (3 in a row), skill_off, missing_source (its brand or task is gone), owner_role (its creator can''t run it), manual.';
+
+-- A job emails people of its workspace only (Wave 3 decision 2): the
+-- database's backstop to the server's check, when the list is set.
+create or replace function public.chat_schedules_check_recipients()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if exists (
+    select 1
+    from unnest(new.recipient_ids) as r(id)
+    where not exists (
+      select 1 from public.profiles p
+      where p.id = r.id and p.organization_id = new.organization_id
+    )
+  ) then
+    raise exception 'a schedule emails people of its workspace only' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_schedules_check_recipients on public.chat_schedules;
+create trigger trg_chat_schedules_check_recipients
+  before insert or update of recipient_ids, organization_id on public.chat_schedules
+  for each row execute function public.chat_schedules_check_recipients();
+
+-- A job whose brand or creator is gone turns off (CHAT-12 item 27): with no
+-- brand it would otherwise run about the whole workspace, and with no
+-- creator as nobody. Fires on the foreign keys' set null too.
+create or replace function public.chat_schedules_source_gone()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if old.brand_id is not null and new.brand_id is null then
+    new.enabled := false;
+    new.paused_reason := 'missing_source';
+  elsif old.created_by is not null and new.created_by is null then
+    new.enabled := false;
+    new.paused_reason := 'owner_role';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_schedules_source_gone on public.chat_schedules;
+create trigger trg_chat_schedules_source_gone
+  before update of brand_id, created_by on public.chat_schedules
+  for each row execute function public.chat_schedules_source_gone();
+
+-- ─── Runs ───────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_schedule_runs (
+  id uuid primary key default gen_random_uuid(),
+  schedule_id uuid not null references public.chat_schedules(id) on delete cascade,
+  -- The slot it ran for (Run now: the click's time) and the attempt: 2 is
+  -- the one retry. A slot never runs twice (the unique index).
+  slot_at timestamptz not null,
+  attempt smallint not null default 1 check (attempt between 1 and 2),
+  run_now boolean not null default false,
+  -- Its Chat run and the answer it posted (the result link).
+  run_id uuid references public.chat_runs(id) on delete set null,
+  message_id uuid references public.chat_messages(id) on delete set null,
+  status text not null default 'running' check (
+    status in ('running', 'done', 'unchanged', 'failed', 'paused_cap', 'skipped', 'needs_you')
+  ),
+  -- Why it failed or was skipped, in plain words: never a raw error.
+  reason text check (char_length(reason) between 1 and 200),
+  -- The "1 of 3 ready" bar (CHAT-12 item 13); 0 of 0: one part.
+  parts_done smallint not null default 0,
+  parts_total smallint not null default 0 check (parts_total between 0 and 50),
+  -- sha256 of the scoped results it read (CHAT-12 item 20).
+  fingerprint text check (fingerprint ~ '^[0-9a-f]{64}$'),
+  -- Its use as a share of the monthly AI limit ("0.6%"), never dollars.
+  usage_share numeric(7, 4) not null default 0 check (usage_share >= 0),
+  -- Null: no email this run.
+  email_status text check (email_status in ('sent', 'failed')),
+  resend_message_id text check (char_length(resend_message_id) between 1 and 200),
+  started_at timestamptz not null default now(),
+  ended_at timestamptz,
+  check (parts_done between 0 and parts_total),
+  check (ended_at is null or status <> 'running')
+);
+
+-- One run per slot and attempt: the backstop to the worker's lock.
+create unique index if not exists chat_schedule_runs_slot_uidx
+  on public.chat_schedule_runs (schedule_id, slot_at, attempt);
+-- Run history: a job's last 20 runs (CHAT-12 item 24).
+create index if not exists chat_schedule_runs_schedule_started_idx
+  on public.chat_schedule_runs (schedule_id, started_at desc);
+create index if not exists chat_schedule_runs_run_idx
+  on public.chat_schedule_runs (run_id) where run_id is not null;
+create index if not exists chat_schedule_runs_message_idx
+  on public.chat_schedule_runs (message_id) where message_id is not null;
+
+comment on table public.chat_schedule_runs is
+  'Chat (00457): one run of a scheduled job (CHAT-12): its slot and attempt, Run now, its Chat run and answer, status, parts done, the fingerprint of what it read, its use as a share of the monthly AI limit, and the email''s outcome. Readable with its job; the server writes.';
+comment on column public.chat_schedule_runs.usage_share is
+  'What the run used, as a share of the monthly AI limit (CHAT-12 item 24). Kept by the server; never dollars.';
+
+-- ─── A job's chat ───────────────────────────────────────────────────────────
+
+alter table public.chat_conversations
+  add column if not exists schedule_id uuid
+    references public.chat_schedules(id) on delete set null;
+
+-- A chat a scheduled job runs in (CHAT-12 item 11).
+alter table public.chat_conversations
+  drop constraint if exists chat_conversations_origin_check;
+alter table public.chat_conversations
+  add constraint chat_conversations_origin_check
+    check (origin in ('page', 'panel', 'agent', 'schedule'));
+
+-- One live chat per job: a deleted one makes room for the next.
+create unique index if not exists chat_conversations_schedule_uidx
+  on public.chat_conversations (schedule_id)
+  where schedule_id is not null and deleted_at is null;
+
+comment on column public.chat_conversations.schedule_id is
+  'The scheduled job this chat runs (CHAT-12; origin schedule). The chat stays its creator''s. Null for a person''s own chat, and once the job is deleted.';
+
+-- ─── Who spent it (CHAT-12 item 14) ─────────────────────────────────────────
+
+alter table public.prompt_improve_usage
+  add column if not exists schedule_id uuid
+    references public.chat_schedules(id) on delete set null;
+
+create index if not exists prompt_improve_usage_schedule_idx
+  on public.prompt_improve_usage (schedule_id) where schedule_id is not null;
+
+comment on column public.prompt_improve_usage.schedule_id is
+  'The scheduled job this row was for (00457): its chat''s job. Null for other features and plain chats, and once the job is deleted.';
+
+-- 00419's hold, taking the job. The new argument has a default, so a call
+-- with the old ones still matches; the old signature goes first, or the two
+-- would both match it.
+drop function if exists public.reserve_chat_ai_usage(
+  uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric, uuid, numeric
+);
+
+-- Writes the step's row and returns its id; the server turns it into the
+-- step's real cost once the model answers, or deletes it when nothing was
+-- billed. Null when the budget can't cover the step's worst case (p_cost),
+-- or, given p_run_cap (dollars), when the agent run's spend so far, own-key
+-- steps included, plus p_cost would pass it; the server tells the two apart
+-- from the run's spend. On the workspace's own key (p_own_key), or with no
+-- budget to hold against (p_budget null: self-hosted), the budget isn't
+-- checked. The run must be the organization's, and the step, when named,
+-- the run's. The agent run is the chat's (chat_conversations.agent_run_id),
+-- so a subtask's step counts toward its parent's: p_agent_run_id, when
+-- given, must be that one. p_run_cap is always the whole agent run's cap,
+-- subtasks included, never one subtask's slice (the server checks slices).
+-- The job is the chat's too (chat_conversations.schedule_id): p_schedule_id,
+-- when given, must be that one. The row is named by the run's parent, the
+-- agent run's agent and the chat's job.
+create or replace function public.reserve_chat_ai_usage(
+  p_organization_id  uuid,
+  p_chat_run_id      uuid,
+  p_chat_run_step_id uuid,
+  p_feature          text,
+  p_model            text,
+  p_cost             numeric,
+  p_own_key          boolean,
+  p_since            timestamptz,
+  p_budget           numeric,
+  p_agent_run_id     uuid default null,
+  p_run_cap          numeric default null,
+  p_schedule_id      uuid default null
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_parent_id uuid;
+  v_agent_run uuid;
+  v_schedule  uuid;
+  v_agent_id  uuid;
+  v_spent     numeric;
+  v_run_spent numeric;
+  v_id        uuid;
+begin
+  if p_feature is null or p_feature not in ('chat', 'agent', 'schedule', 'image') then
+    raise exception 'not a Chat feature: %', p_feature using errcode = '22023';
+  end if;
+  select r.parent_run_id, c.agent_run_id, c.schedule_id
+    into v_parent_id, v_agent_run, v_schedule
+  from public.chat_runs r
+  join public.chat_conversations c on c.id = r.conversation_id
+  where r.id = p_chat_run_id
+    and c.organization_id = p_organization_id;
+  if not found or (
+    p_chat_run_step_id is not null
+    and not exists (
+      select 1 from public.chat_run_steps s
+      where s.id = p_chat_run_step_id and s.run_id = p_chat_run_id
+    )
+  ) then
+    raise exception 'chat run not found' using errcode = 'P0002';
+  end if;
+  if p_agent_run_id is not null and p_agent_run_id is distinct from v_agent_run then
+    raise exception 'agent run is not the chat''s' using errcode = '22023';
+  end if;
+  if p_schedule_id is not null and p_schedule_id is distinct from v_schedule then
+    raise exception 'schedule is not the chat''s' using errcode = '22023';
+  end if;
+  if p_run_cap is not null and v_agent_run is null then
+    raise exception 'a run cap needs an agent run' using errcode = '22023';
+  end if;
+
+  if v_agent_run is not null then
+    select a.agent_id into v_agent_id
+    from public.chat_agent_runs a
+    where a.id = v_agent_run
+      and a.organization_id = p_organization_id;
+    if not found then
+      raise exception 'agent run not found' using errcode = 'P0002';
+    end if;
+  end if;
+
+  if (not coalesce(p_own_key, false) and p_budget is not null) or p_run_cap is not null then
+    -- The lock reserve_ai_usage takes: one hold at a time per organization.
+    perform pg_advisory_xact_lock(hashtext('ai_usage:' || p_organization_id::text));
+  end if;
+
+  if not coalesce(p_own_key, false) and p_budget is not null then
+    select coalesce(sum(cost_usd), 0) into v_spent
+    from public.prompt_improve_usage
+    where organization_id = p_organization_id
+      and used_at >= p_since
+      and not own_key;
+
+    if v_spent >= p_budget or v_spent + greatest(p_cost, 0) > p_budget then
+      return null;
+    end if;
+  end if;
+
+  if p_run_cap is not null then
+    -- Own-key steps count too: the cap stops a runaway run on any key.
+    select coalesce(sum(cost_usd), 0) into v_run_spent
+    from public.prompt_improve_usage
+    where agent_run_id = v_agent_run;
+
+    if v_run_spent + greatest(p_cost, 0) > p_run_cap then
+      return null;
+    end if;
+  end if;
+
+  insert into public.prompt_improve_usage (
+    organization_id, feature, model, cost_usd, own_key, chat_run_id, chat_run_step_id,
+    agent_id, agent_run_id, parent_run_id, schedule_id)
+  values (
+    p_organization_id, p_feature, p_model, greatest(p_cost, 0), coalesce(p_own_key, false),
+    p_chat_run_id, p_chat_run_step_id, v_agent_id, v_agent_run, v_parent_id, v_schedule)
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+
+comment on function public.reserve_chat_ai_usage(uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric, uuid, numeric, uuid) is
+  'Holds a Chat step''s worst-case cost (p_cost) under the per-organization lock, only while the period''s spend since p_since (own-key rows left out, holds in flight in) plus p_cost stays within p_budget and, given p_run_cap, the agent run''s spend (own-key rows in) plus p_cost stays within it; returns the row to settle, or null. Own-key steps and an unlimited budget (null) skip the budget check. The row is named by its run''s parent, its agent run''s agent (00419) and its chat''s scheduled job (00457).';
+
+revoke all on function public.reserve_chat_ai_usage(uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric, uuid, numeric, uuid)
+  from public, anon, authenticated;
+grant execute on function public.reserve_chat_ai_usage(uuid, uuid, uuid, text, text, numeric, boolean, timestamptz, numeric, uuid, numeric, uuid)
+  to service_role;
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_schedules enable row level security;
+alter table public.chat_schedule_runs enable row level security;
+
+revoke all on table public.chat_schedules from anon, authenticated;
+revoke all on table public.chat_schedule_runs from anon, authenticated;
+
+grant select on table public.chat_schedules to authenticated;
+grant select on table public.chat_schedule_runs to authenticated;
+
+grant all on table public.chat_schedules to service_role;
+grant all on table public.chat_schedule_runs to service_role;
+
+-- A job: its creator, and the workspace's Admins, who may pause or delete
+-- any (CHAT-12 item 25), while they belong to it. A job about a brand
+-- follows the brand's access (00424's rule); one about the whole workspace
+-- stays its creator's, as their own chat with no brand does.
+drop policy if exists "chat_schedules: own or admin select" on public.chat_schedules;
+create policy "chat_schedules: own or admin select"
+  on public.chat_schedules
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (p.role = 'admin' or chat_schedules.created_by = auth.uid())
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+-- A job's runs follow it.
+drop policy if exists "chat_schedule_runs: schedule select" on public.chat_schedule_runs;
+create policy "chat_schedule_runs: schedule select"
+  on public.chat_schedule_runs
+  for select
+  to authenticated
+  using (schedule_id in (select s.id from public.chat_schedules s));
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00458_chat_skills.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00458: Chat's workspace skills — the skills a workspace made or imported,
+-- and the Ansvisor library skills it turned off
+-- ============================================================================
+-- Skills (CHAT-13, Wave 3), behind CHAT_AGENTIC: nothing reads or writes
+-- these while the flag is off. The Ansvisor library stays in the repository
+-- (/skills, read by web lib/chat/skills/library.ts); these are a workspace's
+-- own. The server writes every row (service role), after checking the file
+-- with checkSkillFile and scanSkillText (web lib/chat/skills/format.ts), the
+-- role and the plan's limits.
+--
+--   * chat_skills: one skill (CHAT-13 Data notes):
+--       - what it is: name (the /command: 1–64 lowercase letters, digits and
+--         single hyphens; once in the workspace), title, description
+--         (1–1,024), the Markdown body (at most 50 KB, item 2),
+--         compatibility, license and its text.
+--       - where it came from: user (made in Chat: the workspace's own) or
+--         import (an upload or a GitHub URL: third party, instruction-only);
+--         the source URL and the commit it is pinned to, and the SHA-256 of
+--         the cleaned file (a skill whose checksum stops matching is turned
+--         off, item 19). An import carries one of the licenses the owner
+--         accepted (Wave 3 decision 6): MIT, Apache-2.0, BSD-2-Clause,
+--         BSD-3-Clause or ISC.
+--       - review: what the scan found and what the cleanup removed, the
+--         status (pending_review, approved, rejected, blocked: blocked can't
+--         be approved, item 18) and the Admin who approved it.
+--       - use: private (its creator and the Admins) or workspace (every
+--         member, once approved), on or off (only an approved skill is on),
+--         and the newer commit an update would bring.
+--   * chat_settings.disabled_skills: the Ansvisor library skills the
+--     workspace turned off, by name (Wave 3 decision 10: workspace-wide).
+
+-- ─── Skills ─────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_skills (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- The /command (CHAT-13 item 1; format.ts SKILL_NAME and MAX_NAME).
+  name text not null check (char_length(name) <= 64 and name ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
+  -- metadata.title, else the name with spaces: what the step and / menu show.
+  title text not null check (char_length(title) between 1 and 120),
+  description text not null check (char_length(description) between 1 and 1024),
+  -- The cleaned Markdown body: at most 50 KB (format.ts MAX_BYTES).
+  body text not null check (char_length(body) >= 1 and octet_length(body) <= 51200),
+  compatibility text check (char_length(compatibility) between 1 and 500),
+  license text check (
+    license in ('MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC')
+  ),
+  license_text text check (char_length(license_text) between 1 and 30000),
+  source text not null default 'user' check (source in ('user', 'import')),
+  source_url text check (char_length(source_url) <= 2048 and source_url ~ '^https://'),
+  -- The commit a URL import is pinned to: it never updates by itself.
+  commit_sha text check (commit_sha ~ '^[0-9a-f]{40}$'),
+  -- SHA-256 of the cleaned file.
+  checksum_sha256 text not null check (checksum_sha256 ~ '^[0-9a-f]{64}$'),
+  -- scanSkillText's {blocks, warns}, and the removed parts ("scripts/ (3
+  -- files)", "allowed-tools", …) the review lists (items 15–17).
+  scan_json jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(scan_json) = 'object' and octet_length(scan_json::text) <= 64000
+  ),
+  removed_json jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(removed_json) = 'array' and octet_length(removed_json::text) <= 16000
+  ),
+  status text not null default 'pending_review'
+    check (status in ('pending_review', 'approved', 'rejected', 'blocked')),
+  approved_by uuid references auth.users(id) on delete set null,
+  approved_at timestamptz,
+  visibility text not null default 'private' check (visibility in ('private', 'workspace')),
+  enabled boolean not null default false,
+  -- A newer commit of the skill's folder: "Update available" (item 19).
+  update_sha text check (update_sha ~ '^[0-9a-f]{40}$'),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- One name per workspace (item 1).
+  unique (organization_id, name),
+  check (not enabled or status = 'approved'),
+  -- A third-party skill carries a license the owner accepted.
+  check (source = 'user' or license is not null),
+  check (license_text is null or license is not null),
+  -- Only an import has a source; a pinned commit has its URL; an update its pin.
+  check (source = 'import' or (source_url is null and commit_sha is null)),
+  check (commit_sha is null or source_url is not null),
+  check (update_sha is null or commit_sha is not null)
+);
+
+-- My skills and the review queue: the workspace's skills by status.
+create index if not exists chat_skills_organization_status_idx
+  on public.chat_skills (organization_id, status);
+create index if not exists chat_skills_created_by_idx
+  on public.chat_skills (created_by) where created_by is not null;
+
+drop trigger if exists trg_chat_skills_updated_at on public.chat_skills;
+create trigger trg_chat_skills_updated_at
+  before update on public.chat_skills
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_skills is
+  'Chat (00458): a workspace''s own skill (CHAT-13): name (once in the workspace), title, description, body (≤ 50 KB), license; made in Chat (user) or imported (an upload or a pinned GitHub commit, with its checksum); scan, removed parts and review status; private or workspace, on or off. Private: its creator and the Admins; workspace: every member once approved. The server writes.';
+comment on column public.chat_skills.license is
+  'The license an import carries: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause or ISC (Wave 3 decision 6). Null for a skill made in Chat.';
+comment on column public.chat_skills.checksum_sha256 is
+  'SHA-256 of the cleaned file (CHAT-13 item 19): a skill whose file no longer matches it is turned off.';
+
+-- ─── Library skills a workspace turned off ──────────────────────────────────
+
+alter table public.chat_settings
+  add column if not exists disabled_skills text[] not null default '{}' check (
+    cardinality(disabled_skills) <= 100
+    and public.chat_text_array_distinct(disabled_skills)
+    and public.chat_text_array_words(disabled_skills)
+      ~ '^([a-z0-9]+(-[a-z0-9]+)*( [a-z0-9]+(-[a-z0-9]+)*)*)?$'
+  );
+
+comment on column public.chat_settings.disabled_skills is
+  'The Ansvisor library skills (/skills) the workspace turned off, by name (CHAT-13; workspace-wide, by an Admin). Its own skills turn off with chat_skills.enabled.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_skills enable row level security;
+revoke all on table public.chat_skills from anon, authenticated;
+grant select on table public.chat_skills to authenticated;
+grant all on table public.chat_skills to service_role;
+
+-- A private skill, or one not approved yet: its creator and the workspace's
+-- Admins (who review it). An approved workspace skill: every member, while
+-- they belong to the workspace.
+drop policy if exists "chat_skills: member select" on public.chat_skills;
+create policy "chat_skills: member select"
+  on public.chat_skills
+  for select
+  to authenticated
+  using (
+    organization_id in (
+      select p.organization_id
+      from public.profiles p
+      where p.id = auth.uid()
+        and (
+          p.role = 'admin'
+          or chat_skills.created_by = auth.uid()
+          or (chat_skills.visibility = 'workspace' and chat_skills.status = 'approved')
+        )
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00459_chat_memory.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00459: Chat's memory — what Chat remembers between chats, for a person, a
+-- brand and the workspace
+-- ============================================================================
+-- Memory (CHAT-14, Wave 3), behind CHAT_AGENTIC: nothing reads or writes
+-- these while the flag is off. Nothing is saved without a click (CHAT-14
+-- item 10). The server writes every row (service role), after checking the
+-- text (no secrets, personal data or rule changes, item 12), who may edit
+-- the scope (item 25) and the confirm card's token.
+--
+--   * chat_memory_items: one remembered line:
+--       - scope: user ("Me": one person's, in their workspace), brand (one
+--         brand's facts and rules) or workspace (rules for every brand and
+--         member).
+--       - text: 1–300 characters (item 19); at most 4,000 characters a
+--         scope, a person's Me or a brand's or the workspace's: the trigger
+--         below holds it, under a lock per scope, so two saves at once can't
+--         both fit.
+--       - source: profile ("Call me {first name}", Me only, once a person),
+--         chat (saved from a confirm card) or page (written on the Memory
+--         page); source_ref names where; edited stops the profile sync.
+--       - deleted_at: deleted, with Undo for 10 seconds (item 23); the
+--         server deletes it for good after that. A deleted line counts for
+--         nothing and nobody reads it.
+--     A brand's lines go with the brand, a person's Me lines with their
+--     account, and with their leaving the workspace (item 26, the trigger
+--     on profiles below).
+--   * chat_settings.memory_enabled: the workspace's switch (an Admin's);
+--     off hides Memory for everyone (item 24).
+--   * chat_user_prefs.memory_enabled: the person's "Use memory" (item 24).
+--     Both start on (Wave 3 decision 1).
+
+-- ─── Memory ─────────────────────────────────────────────────────────────────
+
+create table if not exists public.chat_memory_items (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  scope text not null check (scope in ('user', 'brand', 'workspace')),
+  -- Whose Me line it is (scope user only).
+  user_id uuid references auth.users(id) on delete cascade,
+  -- Whose brand line it is (scope brand only): it goes with the brand.
+  brand_id uuid references public.brands(id) on delete cascade,
+  text text not null check (char_length(text) between 1 and 300),
+  source text not null check (source in ('profile', 'chat', 'page')),
+  -- Where it came from: the chat, or the profile field.
+  source_ref text check (char_length(source_ref) between 1 and 200),
+  -- A person changed it: the profile no longer rewrites it (item 4).
+  edited boolean not null default false,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  -- Deleted, while Undo is open (item 23).
+  deleted_at timestamptz,
+  check ((scope = 'user') = (user_id is not null)),
+  check ((scope = 'brand') = (brand_id is not null)),
+  check (source <> 'profile' or scope = 'user')
+);
+
+-- A scope's lines and what they hold: a person's Me, a brand's, the workspace's.
+create index if not exists chat_memory_items_user_idx
+  on public.chat_memory_items (user_id, organization_id) where user_id is not null;
+create index if not exists chat_memory_items_brand_idx
+  on public.chat_memory_items (brand_id) where brand_id is not null;
+create index if not exists chat_memory_items_organization_scope_idx
+  on public.chat_memory_items (organization_id, scope);
+create index if not exists chat_memory_items_created_by_idx
+  on public.chat_memory_items (created_by) where created_by is not null;
+-- One "Call me {first name}" a person.
+create unique index if not exists chat_memory_items_profile_uidx
+  on public.chat_memory_items (user_id)
+  where source = 'profile' and deleted_at is null;
+
+drop trigger if exists trg_chat_memory_items_updated_at on public.chat_memory_items;
+create trigger trg_chat_memory_items_updated_at
+  before update on public.chat_memory_items
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_memory_items is
+  'Chat (00459): what Chat remembers (CHAT-14): a person''s Me lines, a brand''s and the workspace''s; 300 characters a line, 4,000 a scope; from the profile, a chat''s confirm card or the Memory page; deleted with Undo. Me: only its person; brand: who can access the brand; workspace: every member. The server writes.';
+comment on column public.chat_memory_items.deleted_at is
+  'Deleted, while Undo is open (CHAT-14 item 23); the server deletes the row for good after 10 seconds. A deleted line counts toward no limit and is read by nobody.';
+
+-- At most 4,000 characters a scope (CHAT-14 item 19): a person's Me lines
+-- in their workspace, a brand's, the workspace's. Deleted lines don't count.
+-- A line already counted may still be shortened when a scope is over (a
+-- lower limit later). The lock makes two saves to one scope take turns.
+create or replace function public.chat_memory_items_scope_limit()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_used integer;
+begin
+  if new.deleted_at is not null then
+    return new;
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext(
+    'chat_memory:' || new.organization_id::text || ':' || new.scope || ':'
+      || coalesce(new.user_id::text, '') || ':' || coalesce(new.brand_id::text, '')
+  ));
+
+  select coalesce(sum(char_length(m.text)), 0) into v_used
+  from public.chat_memory_items m
+  where m.id <> new.id
+    and m.deleted_at is null
+    and m.organization_id = new.organization_id
+    and m.scope = new.scope
+    and m.user_id is not distinct from new.user_id
+    and m.brand_id is not distinct from new.brand_id;
+
+  if v_used + char_length(new.text) > 4000 then
+    if tg_op = 'UPDATE'
+      and old.deleted_at is null
+      and old.organization_id = new.organization_id
+      and old.scope = new.scope
+      and old.user_id is not distinct from new.user_id
+      and old.brand_id is not distinct from new.brand_id
+      and char_length(new.text) <= char_length(old.text)
+    then
+      return new;
+    end if;
+    raise exception 'memory is full: a scope holds at most 4,000 characters'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_memory_items_scope_limit on public.chat_memory_items;
+create trigger trg_chat_memory_items_scope_limit
+  before insert or update of text, scope, organization_id, user_id, brand_id, deleted_at
+  on public.chat_memory_items
+  for each row execute function public.chat_memory_items_scope_limit();
+
+-- A person's Me lines go when they leave the workspace or move to another
+-- (CHAT-14 item 26); an account's go with it (user_id's cascade). Security
+-- definer, as 00388's forget_profile_member_brands: a person's own update
+-- (joining the organization they just created) fires it too, and people
+-- can't write chat_memory_items.
+create or replace function public.forget_profile_chat_memory()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.chat_memory_items m
+  where m.user_id = new.id
+    and m.scope = 'user'
+    and m.organization_id is distinct from new.organization_id;
+  return null;
+end;
+$$;
+
+revoke all on function public.forget_profile_chat_memory() from public, anon, authenticated;
+
+drop trigger if exists profiles_forget_chat_memory on public.profiles;
+create trigger profiles_forget_chat_memory
+  after update of organization_id on public.profiles
+  for each row
+  when (old.organization_id is distinct from new.organization_id)
+  execute function public.forget_profile_chat_memory();
+
+-- ─── The switches ───────────────────────────────────────────────────────────
+
+alter table public.chat_settings
+  add column if not exists memory_enabled boolean not null default true;
+
+comment on column public.chat_settings.memory_enabled is
+  'Memory for the workspace (CHAT-14 item 24), an Admin''s switch: off, no prompt has a memory block and Memory is hidden for everyone. On by default (Wave 3 decision 1).';
+
+alter table public.chat_user_prefs
+  add column if not exists memory_enabled boolean not null default true;
+
+comment on column public.chat_user_prefs.memory_enabled is
+  'The person''s "Use memory" (CHAT-14 item 24): off, their prompts have no memory block and Chat offers no saves. On by default (Wave 3 decision 1).';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_memory_items enable row level security;
+revoke all on table public.chat_memory_items from anon, authenticated;
+grant select on table public.chat_memory_items to authenticated;
+grant all on table public.chat_memory_items to service_role;
+
+-- Me: only its person, in the workspace they belong to now (CHAT-14 item 1:
+-- Admins included). A Me line has no brand.
+drop policy if exists "chat_memory_items: own select" on public.chat_memory_items;
+create policy "chat_memory_items: own select"
+  on public.chat_memory_items
+  for select
+  to authenticated
+  using (
+    scope = 'user'
+    and user_id = auth.uid()
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+-- A brand's lines: whoever can access the brand (Analysts and Agency
+-- partners read them, item 25).
+drop policy if exists "chat_memory_items: brand select" on public.chat_memory_items;
+create policy "chat_memory_items: brand select"
+  on public.chat_memory_items
+  for select
+  to authenticated
+  using (
+    scope = 'brand'
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and brand_id in (select public.user_brand_ids())
+  );
+
+-- The workspace's lines: every member, whatever brands they see. They are
+-- rules for every brand and member, no brand's data: a brand's facts go in
+-- its own lines.
+drop policy if exists "chat_memory_items: workspace select" on public.chat_memory_items;
+create policy "chat_memory_items: workspace select"
+  on public.chat_memory_items
+  for select
+  to authenticated
+  using (
+    scope = 'workspace'
+    and deleted_at is null
+    and organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+    and (brand_id is null or brand_id in (select public.user_brand_ids()))
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00460_content_take_down.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00460: Take down a published page (AUTONOMOUS-GO-LIVE PR 10)
+-- ============================================================================
+-- A person takes a page Ansvisor published in Webflow, WordPress or Wix back
+-- down to a draft there, from the Inbox notice, Chat's Activity, the Content
+-- Library or Chat's unpublish_cms (always a person's click). The send that
+-- published it keeps the record:
+--
+--   * content_draft_deliveries.status takes 'taken_down'. A taken-down send
+--     is neither 'sent' nor 'published', so the CMS status sweeps never read
+--     it again (Webflow's would mark it published again from its old
+--     lastPublished), and the impact ledger's nightly fill never ships it
+--     again.
+--   * taken_down_at and taken_down_by: when, and who. A page someone took
+--     down never goes live on its own again: an agent's next go-live of that
+--     draft waits for a click (held `taken_down`).
+--
+-- The rest is written by the server with the take down, not here: the page's
+-- address cleared (content_drafts back to 'ready'), the agent's go-live event
+-- 'taken_down' (00443's status and columns), and the ship event's measurement
+-- Not measurable with reason 'taken_down' (00421's reason is free text).
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_status_check,
+  add constraint content_draft_deliveries_status_check
+    check (status in ('queued', 'sent', 'failed', 'published', 'taken_down'));
+
+alter table public.content_draft_deliveries
+  add column if not exists taken_down_at timestamptz,
+  add column if not exists taken_down_by uuid references public.profiles(id) on delete set null;
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_taken_down,
+  add constraint content_draft_deliveries_taken_down
+    check ((status = 'taken_down') = (taken_down_at is not null));
+
+comment on column public.content_draft_deliveries.taken_down_at is
+  'When a person took the published page down to a draft in its CMS (00460); set exactly when status is taken_down.';
+comment on column public.content_draft_deliveries.taken_down_by is
+  'Who took the page down (00460).';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00461_chat_notices_schedules.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00461: notices about scheduled jobs and follow-up checks
+-- ============================================================================
+-- CHAT-12 items 16, 26–27 and CHAT-20 §13 (Wave 3, W3-04a): three new kinds
+-- of chat_notices (00441), behind CHAT_AGENTIC. A job's creator gets them at
+-- the top of their Inbox's Needs you:
+--
+--   * schedule_failed: a run of their job failed after its retry ("{Job}
+--     didn't run: {reason}"), in plain words, never a raw error.
+--   * schedule_paused: their job turned itself off: the monthly AI limit,
+--     their role or brand access, its brand, its skill, or 3 failed runs.
+--   * followup_result: a follow-up check they (or a Full auto run for them)
+--     set has its result.
+--
+-- The payload names the job (its id, title and why), as the Inbox row says
+-- it; nothing else. A job that runs again, or is turned back on, closes its
+-- notices (resolved_at). A successful run needs no notice: the job's chat is
+-- its creator's, and its result is in their Inbox as an unread answer.
+--
+-- The list includes 00446's kinds (agent_went_live, agent_go_live_off):
+-- 00446 is applied before this one, and dropping its kinds here would refuse
+-- its notices.
+
+alter table public.chat_notices
+  drop constraint if exists chat_notices_kind_check;
+alter table public.chat_notices
+  add constraint chat_notices_kind_check check (
+    kind in (
+      'own_key_failed',
+      'own_key_limit_80',
+      'own_key_limit_100',
+      'agent_went_live',
+      'agent_go_live_off',
+      'schedule_failed',
+      'schedule_paused',
+      'followup_result'
+    )
+  );
+
+-- A job's open notices, which a run that goes on closes.
+create index if not exists chat_notices_schedule_idx
+  on public.chat_notices ((payload ->> 'scheduleId'))
+  where resolved_at is null and kind in ('schedule_failed', 'schedule_paused');
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00462_chat_models_images.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00462: what the model menu needs from the price catalog, and how many
+-- images a spend row paid for
+-- ============================================================================
+-- Chat Wave 4 (CHAT-16 §A, CHAT-15 §E), behind CHAT_AGENTIC. Nothing reads
+-- these yet: the model menu (W4-01) and image metering (W4-07) come next.
+--
+--   * chat_model_prices (00404) gains two catalog fields the daily sync
+--     (server lib/model-prices.js) writes from OpenRouter's public catalog:
+--       - supported_parameters: what the model takes ("tools", "reasoning",
+--         "structured_outputs", …). Chat's engine can't run without tool
+--         calls, so the menu offers only a model that lists "tools". Null
+--         until the next sync lists the model again.
+--       - context_length: its context window in tokens, as the catalog gives
+--         it. Null where the catalog gives none.
+--     The table stays the server's: no member reads it (dollars never reach
+--     a browser).
+--   * prompt_improve_usage.units: how many images a row paid for (an image
+--     request's 1–4 variants, the editor's 2–4). Null on every token row. An
+--     image row is charged at the provider's real cost, with no markup (owner
+--     decision 2026-11-02), on the same budget and the same reservation as
+--     a model step; units only says what the dollars bought.
+
+-- ─── The model catalog ──────────────────────────────────────────────────────
+
+alter table public.chat_model_prices
+  add column if not exists supported_parameters text[] check (
+    supported_parameters is null or cardinality(supported_parameters) <= 64
+  ),
+  add column if not exists context_length integer check (
+    context_length is null or context_length > 0
+  );
+
+comment on column public.chat_model_prices.supported_parameters is
+  'OpenRouter''s supported_parameters as given ("tools", "reasoning", "structured_outputs"…): the model menu offers only a model that lists "tools" (00462). Null until a sync lists the model.';
+comment on column public.chat_model_prices.context_length is
+  'The model''s context window in tokens, from the catalog (00462). Null where it gives none.';
+
+-- ─── Images on a spend row ──────────────────────────────────────────────────
+
+alter table public.prompt_improve_usage
+  add column if not exists units smallint;
+
+alter table public.prompt_improve_usage
+  drop constraint if exists prompt_improve_usage_units_check;
+alter table public.prompt_improve_usage
+  add constraint prompt_improve_usage_units_check
+    check (units is null or (units between 1 and 10 and feature = 'image'));
+
+comment on column public.prompt_improve_usage.units is
+  'How many images an image row paid for (00462; CHAT-15 §E): 1–10. Null on token rows. The row''s cost_usd is the provider''s real cost for them, with no markup.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00463_content_drafts_chat_origin.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00463: where a draft was made, and the chat that made it
+-- ============================================================================
+-- Chat Wave 4 (CHAT-25 §2, CHAT-15 §C), behind CHAT_AGENTIC for the chat
+-- parts. Content › Library's "Made in" column and filter, the editor's
+-- "From chat: {title}" line and Chat's version cards read these; the
+-- writers set them as they make a draft (W4-10).
+--
+--   * content_drafts.origin: editor (made in the Content Editor, the
+--     default), chat (Chat's create_draft), action_center (an Action Center
+--     task), agent (an agent's run) or mcp (an MCP client). Set once, when
+--     the draft is made.
+--   * content_drafts.conversation_id: the chat a draft was made in, or
+--     continued from (chat_conversations, 00400). Null once the chat is
+--     deleted: the draft stays. A member reads it with the draft; whether
+--     they may open the chat is the chat's own policy (00400, 00424).
+--   * A member's own write (the editor, and Chat's create_draft in a run
+--     with the person's session) may say editor or chat, and name only a
+--     chat of their own; neither changes afterwards. The other origins, and
+--     any change, are the server's (service role).
+--   * Drafts made before this: one with an action_id is action_center, the
+--     rest stay editor. Their updated_at isn't touched, so the Library keeps
+--     its order.
+
+alter table public.content_drafts
+  add column if not exists origin text not null default 'editor',
+  add column if not exists conversation_id uuid
+    references public.chat_conversations(id) on delete set null;
+
+alter table public.content_drafts
+  drop constraint if exists content_drafts_origin_check;
+alter table public.content_drafts
+  add constraint content_drafts_origin_check
+    check (origin in ('editor', 'chat', 'action_center', 'agent', 'mcp'));
+
+-- A member's write: editor or chat, a chat of their own, set once. Its own
+-- trigger, beside guard_content_draft_server_columns (00289's), which stays
+-- as it is.
+create or replace function public.guard_content_draft_origin()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations).
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.origin not in ('editor', 'chat') then
+      raise exception 'content draft origin is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.conversation_id is not null and not exists (
+      select 1
+      from public.chat_conversations c
+      where c.id = new.conversation_id
+        and c.user_id = auth.uid()
+        and c.deleted_at is null
+    ) then
+      raise exception 'content draft chat is not the person''s'
+        using errcode = '42501';
+    end if;
+  elsif new.origin is distinct from old.origin
+     or (new.conversation_id is distinct from old.conversation_id
+         and new.conversation_id is not null)
+  then
+    raise exception 'content draft origin is managed server-side'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists content_drafts_guard_origin on public.content_drafts;
+create trigger content_drafts_guard_origin
+  before insert or update of origin, conversation_id on public.content_drafts
+  for each row execute function public.guard_content_draft_origin();
+
+-- The drafts an Action Center task made. The updated_at trigger is off for
+-- this one statement (the migration's own transaction), so no draft looks
+-- edited today.
+alter table public.content_drafts disable trigger content_drafts_updated_at;
+update public.content_drafts
+set origin = 'action_center'
+where action_id is not null
+  and origin = 'editor';
+alter table public.content_drafts enable trigger content_drafts_updated_at;
+
+-- A chat's drafts (its version cards, and "From chat" back to it).
+create index if not exists content_drafts_conversation_idx
+  on public.content_drafts (conversation_id)
+  where conversation_id is not null;
+
+comment on column public.content_drafts.origin is
+  'Where the draft was made (00463; CHAT-25): editor (default), chat, action_center, agent or mcp. Content › Library''s "Made in". Drafts from before 00463 with an action_id are action_center.';
+comment on column public.content_drafts.conversation_id is
+  'The chat the draft was made in or continued from (00463; CHAT-25). Null for other drafts, and once the chat is deleted.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00464_chat_whats_new_reads.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00464: which What's new entries a person has read
+-- ============================================================================
+-- What's new (CHAT-11 §E, Wave 4), behind CHAT_AGENTIC. The entries
+-- themselves live in the repository (whats-new/{slug}.md, approved ones in
+-- web lib/chat/whats-new/entries.json, Wave 4 decision 13); this table only
+-- keeps who read which, so Home's New line, the chip's dot and
+-- `?unread=true` leave read entries out.
+--
+--   * chat_whats_new_reads: one row per person and entry, by the entry's
+--     slug, with when it was read: shown in a What's new answer, its Show me
+--     sent, or its link opened (CHAT-11 item 18). Per person, the same in
+--     the side panel and on the full page. Rows go with the person's
+--     account. Home's line also drops an entry 14 days after it was
+--     published (decision 14), which the entry's own date tells: no row.
+--   * A person reads only their own rows; the server writes them.
+
+create table if not exists public.chat_whats_new_reads (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  -- The entry's file name without .md: lowercase words and single hyphens.
+  entry_slug text not null check (
+    char_length(entry_slug) <= 80 and entry_slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'
+  ),
+  read_at timestamptz not null default now(),
+  primary key (user_id, entry_slug)
+);
+
+comment on table public.chat_whats_new_reads is
+  'What''s new (00464; CHAT-11 §E): the entries a person has read, by slug. Their own rows only; the server writes.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_whats_new_reads enable row level security;
+revoke all on table public.chat_whats_new_reads from anon, authenticated;
+grant select on table public.chat_whats_new_reads to authenticated;
+grant all on table public.chat_whats_new_reads to service_role;
+
+drop policy if exists "chat_whats_new_reads: own select" on public.chat_whats_new_reads;
+create policy "chat_whats_new_reads: own select"
+  on public.chat_whats_new_reads
+  for select
+  to authenticated
+  using (user_id = auth.uid());
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00465_chat_skills_library.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00465: workspace skills added from the Library, and the weekly update check
+-- ============================================================================
+-- Chat Wave 4 (CHAT-17, W4-19 and W4-31), behind CHAT_AGENTIC. The Library
+-- ("701 · MIT") is a catalog in the repository (web lib/chat/skills/
+-- marketplace.json); adding one of its skills takes the import path of 00458
+-- (cleanup, scan, MIT, an Admin's approval), from the commit the catalog
+-- pins. The Ansvisor skills in /skills (lib/chat/skills/library.ts) are
+-- another thing and stay out of this table.
+--
+--   * chat_skills.source gains library: a skill added from the Library. Like
+--     an import it carries its license, source URL and pinned commit, and
+--     never updates by itself.
+--   * chat_skills.library_ref: the catalog row it came from, once in the
+--     workspace (the Library card's Added state). Only a Library skill has
+--     one.
+--   * chat_skills.update_checked_at: when the weekly check last looked at an
+--     imported or Library skill's source (W4-31); update_sha (00458) says
+--     what it found.
+
+-- ─── Library as a source ────────────────────────────────────────────────────
+
+alter table public.chat_skills
+  drop constraint if exists chat_skills_source_check;
+alter table public.chat_skills
+  add constraint chat_skills_source_check
+    check (source in ('user', 'import', 'library'));
+
+-- 00458's unnamed rule that only an import has a source URL and a commit:
+-- found by what it says, since PostgreSQL named it, and given a name.
+do $$
+declare
+  v_name text;
+begin
+  for v_name in
+    select c.conname
+    from pg_catalog.pg_constraint c
+    where c.conrelid = 'public.chat_skills'::regclass
+      and c.contype = 'c'
+      and pg_catalog.pg_get_constraintdef(c.oid) like '%''import''::text%'
+      and pg_catalog.pg_get_constraintdef(c.oid) like '%source_url IS NULL%'
+  loop
+    execute format('alter table public.chat_skills drop constraint %I', v_name);
+  end loop;
+end;
+$$;
+
+alter table public.chat_skills
+  drop constraint if exists chat_skills_source_pin_check;
+alter table public.chat_skills
+  add constraint chat_skills_source_pin_check
+    check (source in ('import', 'library') or (source_url is null and commit_sha is null));
+
+-- ─── The catalog row, and the update check ──────────────────────────────────
+
+alter table public.chat_skills
+  add column if not exists library_ref text check (
+    char_length(library_ref) between 1 and 300 and library_ref ~ '^[A-Za-z0-9._/-]+$'
+  ),
+  add column if not exists update_checked_at timestamptz;
+
+-- A Library skill names its catalog row and its pinned commit; nothing else
+-- names a row.
+alter table public.chat_skills
+  drop constraint if exists chat_skills_library_check;
+alter table public.chat_skills
+  add constraint chat_skills_library_check
+    check (
+      ((source = 'library') = (library_ref is not null))
+      and (source <> 'library' or commit_sha is not null)
+    );
+
+-- Added once per workspace.
+create unique index if not exists chat_skills_library_ref_uidx
+  on public.chat_skills (organization_id, library_ref)
+  where library_ref is not null;
+
+-- The weekly check's queue: the pinned skills it looked at longest ago.
+create index if not exists chat_skills_update_checked_idx
+  on public.chat_skills (update_checked_at nulls first)
+  where commit_sha is not null;
+
+comment on column public.chat_skills.source is
+  'user (made in Chat), import (an upload or a pinned GitHub commit, 00458) or library (added from the Library catalog at the commit it pins, 00465).';
+comment on column public.chat_skills.library_ref is
+  'The Library catalog row a library skill came from (00465; marketplace.json''s id), once per workspace. Null for other skills.';
+comment on column public.chat_skills.update_checked_at is
+  'When the weekly update check last read the skill''s source (00465; W4-31). Null until it has.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00466_chat_agent_calls.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00466: an agent that runs another agent (CHAT-27 phase 2)
+-- ============================================================================
+-- Chat Wave 4 (CHAT-27 items 14–18, W4-26 and W4-27), behind CHAT_AGENTIC.
+-- An agent's run may start one of the agents its Can call list names, with
+-- run_agent; the called agent runs as its own agent run, and its summary
+-- comes back to the caller as untrusted data. Nothing writes these yet.
+--
+--   * chat_agent_versions.can_call: the agents this version may run, at most
+--     5, never itself, all of its own workspace (a trigger checks). Empty by
+--     default; Admins and Managers set it, Growth and up (the server checks
+--     roles and plan). A called agent deleted later stays in old versions'
+--     lists: the server offers only agents that are still there.
+--   * chat_agent_runs.trigger_kind gains agent: a run another agent's run
+--     started. called_by_run_id names that run, and only such a run has
+--     one. A run that was itself called can't call further (no chains, so no
+--     cycle), an agent doesn't call itself, and a run calls at most 3 times
+--     (Technical T3): a trigger is the database's backstop to run_agent's
+--     own checks, as 00419's is for subtasks.
+
+-- ─── Can call ───────────────────────────────────────────────────────────────
+
+alter table public.chat_agent_versions
+  add column if not exists can_call uuid[] not null default '{}';
+
+alter table public.chat_agent_versions
+  drop constraint if exists chat_agent_versions_can_call_check;
+alter table public.chat_agent_versions
+  add constraint chat_agent_versions_can_call_check
+    check (
+      cardinality(can_call) <= 5
+      and array_position(can_call, null) is null
+      and public.chat_text_array_distinct(can_call::text[])
+      and not (agent_id = any (can_call))
+    );
+
+-- Every agent it names is of the same workspace.
+create or replace function public.chat_agent_versions_can_call_rules()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if cardinality(new.can_call) = 0 then
+    return new;
+  end if;
+
+  if exists (
+    select 1
+    from unnest(new.can_call) as wanted(id)
+    where not exists (
+      select 1
+      from public.chat_agents callee
+      join public.chat_agents caller on caller.organization_id = callee.organization_id
+      where callee.id = wanted.id
+        and caller.id = new.agent_id
+    )
+  ) then
+    raise exception 'an agent calls only agents of its own workspace'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_agent_versions_can_call_rules on public.chat_agent_versions;
+create trigger trg_chat_agent_versions_can_call_rules
+  before insert or update of can_call, agent_id on public.chat_agent_versions
+  for each row execute function public.chat_agent_versions_can_call_rules();
+
+comment on column public.chat_agent_versions.can_call is
+  'The agents this version may run with run_agent (00466; CHAT-27 item 14): at most 5, never itself, of its own workspace. Empty by default.';
+
+-- ─── A run another agent started ────────────────────────────────────────────
+
+alter table public.chat_agent_runs
+  drop constraint if exists chat_agent_runs_trigger_kind_check;
+alter table public.chat_agent_runs
+  add constraint chat_agent_runs_trigger_kind_check
+    check (
+      trigger_kind in ('schedule', 'signal', 'kpi', 'watch_rule', 'manual', 'action', 'agent')
+    );
+
+-- The caller's run. As 00419's subtasks, the called run goes with it.
+alter table public.chat_agent_runs
+  add column if not exists called_by_run_id uuid
+    references public.chat_agent_runs(id) on delete cascade;
+
+alter table public.chat_agent_runs
+  drop constraint if exists chat_agent_runs_called_by_check;
+alter table public.chat_agent_runs
+  add constraint chat_agent_runs_called_by_check
+    check ((trigger_kind = 'agent') = (called_by_run_id is not null));
+
+-- A run's calls ("Ran {agent}" lines) and the called run's "Called by".
+create index if not exists chat_agent_runs_called_by_idx
+  on public.chat_agent_runs (called_by_run_id)
+  where called_by_run_id is not null;
+
+-- The caller is a run of the same workspace that wasn't called itself, of
+-- another agent, with fewer than 3 calls so far. Checked when a run names
+-- its caller, not when an agent's deletion clears agent_id later.
+create or replace function public.chat_agent_runs_call_rules()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.called_by_run_id is null then
+    return new;
+  end if;
+
+  if not exists (
+    select 1
+    from public.chat_agent_runs c
+    where c.id = new.called_by_run_id
+      and c.organization_id = new.organization_id
+      and c.called_by_run_id is null
+      and c.agent_id is distinct from new.agent_id
+  ) then
+    raise exception 'an agent run is called by a run of another agent of the workspace, which wasn''t called itself'
+      using errcode = '23514';
+  end if;
+
+  -- Calls of one run at once queue here, so a fourth can't slip past the count.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtext('chat_agent_calls:' || new.called_by_run_id::text)
+  );
+  if (
+    select count(*)
+    from public.chat_agent_runs r
+    where r.called_by_run_id = new.called_by_run_id
+      and r.id <> new.id
+  ) >= 3 then
+    raise exception 'a run calls other agents at most 3 times' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_chat_agent_runs_call_rules on public.chat_agent_runs;
+create trigger trg_chat_agent_runs_call_rules
+  before insert or update of called_by_run_id on public.chat_agent_runs
+  for each row execute function public.chat_agent_runs_call_rules();
+
+comment on column public.chat_agent_runs.called_by_run_id is
+  'The agent run whose run_agent call started this one (00466; trigger_kind agent; CHAT-27 phase 2). One level only, at most 3 a run. Null for every other run.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00467_chat_outbound_emails.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00467: a scheduled job's e-mails to addresses outside the workspace, each
+-- sent only with a click
+-- ============================================================================
+-- Chat Wave 4 (W4-28, Wave 4 decision 16), behind CHAT_AGENTIC. A job still
+-- e-mails the people of its workspace by itself (00457's recipient_ids).
+-- For an outside address it only prepares the e-mail: someone clicks Send
+-- on the Inbox card, every time (an EXECUTE; the go-live permission never
+-- covers it). Nothing reads or writes these yet.
+--
+--   * chat_schedules.external_recipients: up to 5 outside addresses on a
+--     job, lowercase and once each. Only Admins and Managers add them, on
+--     Starter and up (the server checks role and plan).
+--   * chat_outbound_emails: one prepared e-mail per run and address:
+--       - what: the address, the subject, the 3–5 line summary (an outside
+--         reader gets no link that asks them to sign in) and the files to
+--         attach (the report's PDF);
+--       - state: pending, then sent (with when, who clicked, and Resend's
+--         id), cancelled, or expired 7 days after it was prepared. A failed
+--         send stays pending with why, so Send can be tried again.
+--     The workspace's sends a day (50 at most) are counted from its sent
+--     rows.
+--   * Read as the job is (00457): its creator and the Admins, within the
+--     brands they can access. The server writes.
+
+-- ─── Outside addresses on a job ─────────────────────────────────────────────
+
+alter table public.chat_schedules
+  add column if not exists external_recipients text[] not null default '{}' check (
+    cardinality(external_recipients) <= 5
+    and public.chat_text_array_distinct(external_recipients)
+    and octet_length(public.chat_text_array_words(external_recipients)) <= 1300
+    and public.chat_text_array_words(external_recipients)
+      ~ '^([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}( [a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})*)?$'
+  );
+
+comment on column public.chat_schedules.external_recipients is
+  'Up to 5 addresses outside the workspace (00467; W4-28): the job prepares their e-mails (chat_outbound_emails) and someone clicks Send each time. Lowercase, once each.';
+
+-- ─── Prepared e-mails ───────────────────────────────────────────────────────
+
+create table if not exists public.chat_outbound_emails (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  schedule_id uuid not null references public.chat_schedules(id) on delete cascade,
+  -- The run that prepared it. Null once the run's row is gone.
+  schedule_run_id uuid references public.chat_schedule_runs(id) on delete set null,
+  to_address text not null check (
+    char_length(to_address) <= 254
+    and to_address ~ '^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$'
+  ),
+  subject text not null check (char_length(subject) between 1 and 200),
+  -- The answer's first lines (the job e-mail's summary), no sign-in link.
+  summary text not null check (char_length(summary) between 1 and 2000),
+  -- [{path, name, bytes}]: what goes attached (the report's PDF).
+  files jsonb not null default '[]'::jsonb check (
+    jsonb_typeof(files) = 'array'
+    and jsonb_array_length(files) <= 5
+    and octet_length(files::text) <= 8000
+  ),
+  status text not null default 'pending'
+    check (status in ('pending', 'sent', 'cancelled', 'expired')),
+  expires_at timestamptz not null default (now() + interval '7 days'),
+  -- Who clicked Send; Reply-to is theirs.
+  approved_by uuid references auth.users(id) on delete set null,
+  sent_at timestamptz,
+  resend_id text check (char_length(resend_id) between 1 and 200),
+  -- Why the last Send failed, in plain words: never a raw error.
+  send_error text check (char_length(send_error) between 1 and 200),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  check ((status = 'sent') = (sent_at is not null)),
+  check (resend_id is null or status = 'sent'),
+  check (send_error is null or status = 'pending'),
+  check (expires_at > created_at)
+);
+
+-- One e-mail per run and address.
+create unique index if not exists chat_outbound_emails_run_address_uidx
+  on public.chat_outbound_emails (schedule_run_id, to_address)
+  where schedule_run_id is not null;
+-- A job's e-mails, newest first (the Inbox cards, the job's history).
+create index if not exists chat_outbound_emails_schedule_created_idx
+  on public.chat_outbound_emails (schedule_id, created_at desc);
+-- The workspace's sends in the last day (the daily limit).
+create index if not exists chat_outbound_emails_organization_sent_idx
+  on public.chat_outbound_emails (organization_id, sent_at)
+  where status = 'sent';
+-- What expires next.
+create index if not exists chat_outbound_emails_pending_expires_idx
+  on public.chat_outbound_emails (expires_at)
+  where status = 'pending';
+create index if not exists chat_outbound_emails_approved_by_idx
+  on public.chat_outbound_emails (approved_by) where approved_by is not null;
+
+drop trigger if exists trg_chat_outbound_emails_updated_at on public.chat_outbound_emails;
+create trigger trg_chat_outbound_emails_updated_at
+  before update on public.chat_outbound_emails
+  for each row execute function public.handle_updated_at();
+
+comment on table public.chat_outbound_emails is
+  'Chat (00467; W4-28): a scheduled job''s e-mail to an address outside the workspace, prepared by its run and sent only when someone clicks Send (pending → sent, cancelled, or expired after 7 days). Read as the job is; the server writes.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_outbound_emails enable row level security;
+revoke all on table public.chat_outbound_emails from anon, authenticated;
+grant select on table public.chat_outbound_emails to authenticated;
+grant all on table public.chat_outbound_emails to service_role;
+
+-- A job's e-mails follow it (its creator and the Admins, within brand access).
+drop policy if exists "chat_outbound_emails: schedule select" on public.chat_outbound_emails;
+create policy "chat_outbound_emails: schedule select"
+  on public.chat_outbound_emails
+  for select
+  to authenticated
+  using (schedule_id in (select s.id from public.chat_schedules s));
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00470_brand_integrations.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00470: brand access — integrations per brand: the Account's sign-ins, and
+-- which one each brand uses
+-- ============================================================================
+-- BRAND-ACCESS PR 14 (Integrations 1). Every integration becomes per brand
+-- (D5): Google (Search Console, Analytics, Merchant Center) and the CMS sites
+-- (Webflow, WordPress, Framer, Wix). One Google login may serve several brands
+-- without signing in again (D6), so a sign-in lives once in the Account's pool
+-- and each brand names the one it uses:
+--
+--   * integration_accounts: the Account's sign-ins, one row each: a Google
+--     login for one Google product (Composio keeps one connected account per
+--     product), or a brand's CMS site. Composio's entity and connected
+--     account ids, as integration_connections (00045) and
+--     brand_cms_connections (00283) keep them; no token ever. `label` is what
+--     the sign-in is called on a card: a CMS site's name for now (a Google
+--     login's e-mail comes with the Brand settings cards, PR 15).
+--   * brand_integrations: the sign-in a brand uses for each provider, one per
+--     brand and provider. `settings` is for the brand's own choices on it (a
+--     property, a site, a collection); nothing writes it yet: the Search
+--     Console and Analytics properties stay on brands.gsc_property and
+--     brands.ga_property_id, and the CMS site and collection on
+--     brand_cms_connections, which everything reads as before.
+--
+-- The switch-over (D7) copies what there is, and nothing disconnects:
+--
+--   * the Account's Google rows (integration_connections) become pool
+--     sign-ins used by every brand of the Account, the demo brand too, as
+--     every brand used them before. A brand added later uses them as well.
+--   * each brand's CMS connection becomes a sign-in that brand uses, so the
+--     CMS cards don't change.
+--   * Until the Brand settings cards (PR 15) connect per brand, the old
+--     tables stay the ones written: Settings › Integrations and the CMS cards
+--     write them, and the triggers below keep the pool in step (a removed
+--     connection takes its sign-in, and the brands' use of it, with it).
+--     The API server reads a brand's connection from the pool (its
+--     lib/brand-integrations.js, and the web's lib/brand-integrations.ts),
+--     which names the connected account it calls Composio with: several
+--     sign-ins may share one Composio entity.
+--
+-- Nothing anyone sees changes: every brand uses the Account's Google
+-- connection as before, and its CMS site.
+--
+-- Who reads what (BRAND-ACCESS §3.3): a brand's integrations are read by the
+-- people who can access the brand, and a sign-in by the people who can
+-- access a brand that uses it. Only the server writes them. The server
+-- writes integration_connections too: its admin and manager write policy
+-- (00045, never used by the app) goes, since the pool now follows that
+-- table and the API calls Composio with the account it names.
+
+-- ── integration_accounts ────────────────────────────────────────────────────
+
+create table if not exists public.integration_accounts (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null
+    constraint integration_accounts_organization_id_fkey
+    references public.organizations(id) on delete cascade,
+  provider text not null check (char_length(provider) between 1 and 100),
+  composio_entity_id text,
+  composio_account_id text,
+  label text check (label is null or char_length(label) <= 300),
+  status text not null default 'pending' check (char_length(status) between 1 and 40),
+  connected_by uuid
+    constraint integration_accounts_connected_by_fkey
+    references public.profiles(id) on delete set null,
+  -- Where the sign-in comes from while the old tables are the ones written.
+  integration_connection_id uuid unique
+    constraint integration_accounts_integration_connection_id_fkey
+    references public.integration_connections(id) on delete cascade,
+  cms_connection_id uuid unique
+    constraint integration_accounts_cms_connection_id_fkey
+    references public.brand_cms_connections(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint integration_accounts_one_source
+    check (num_nonnulls(integration_connection_id, cms_connection_id) <= 1)
+);
+
+create index if not exists integration_accounts_organization_provider_idx
+  on public.integration_accounts (organization_id, provider);
+
+comment on table public.integration_accounts is
+  'Integrations per brand (00470): the Account''s sign-ins, one per Google login and product or CMS site, with Composio''s entity and connected account ids (never a token). Brands use them through brand_integrations. Read by people who can access a brand that uses one; written by the server.';
+comment on column public.integration_accounts.status is
+  'pending, connected or disconnected (a Google sign-in, as integration_connections keeps it); connected or auth_failed (a CMS site, as brand_cms_connections keeps it).';
+comment on column public.integration_accounts.label is
+  'What the sign-in is called on a card: the CMS site''s name (or address, or id). A Google login''s e-mail comes with PR 15.';
+comment on column public.integration_accounts.integration_connection_id is
+  'The Account''s Google row (00045) this sign-in follows while Settings › Integrations writes that table. Removed with it.';
+comment on column public.integration_accounts.cms_connection_id is
+  'The brand''s CMS connection (00283) this sign-in follows while the CMS cards write that table. Removed with it.';
+
+-- ── brand_integrations ──────────────────────────────────────────────────────
+
+create table if not exists public.brand_integrations (
+  brand_id uuid not null
+    constraint brand_integrations_brand_id_fkey
+    references public.brands(id) on delete cascade,
+  provider text not null check (char_length(provider) between 1 and 100),
+  account_id uuid not null
+    constraint brand_integrations_account_id_fkey
+    references public.integration_accounts(id) on delete cascade,
+  settings jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(settings) = 'object' and octet_length(settings::text) <= 8192
+  ),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (brand_id, provider)
+);
+
+-- The brands that use a sign-in (the pool's policy, a removed sign-in's cascade).
+create index if not exists brand_integrations_account_id_idx
+  on public.brand_integrations (account_id);
+
+comment on table public.brand_integrations is
+  'Integrations per brand (00470): the sign-in (integration_accounts) a brand uses for each provider. settings: the brand''s own choices on it, written by nothing yet (the Google properties stay on brands, the CMS site on brand_cms_connections). Read by people who can access the brand; written by the server.';
+
+-- A brand uses a sign-in of its own organization, for the provider it names.
+create or replace function public.check_brand_integration_account()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if not exists (
+    select 1
+    from public.integration_accounts a
+    join public.brands b on b.organization_id = a.organization_id
+    where a.id = new.account_id
+      and a.provider = new.provider
+      and b.id = new.brand_id
+  ) then
+    raise exception 'brand_integrations: sign-in % is not a % sign-in of the organization of brand %',
+      new.account_id, new.provider, new.brand_id
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists brand_integrations_check_account on public.brand_integrations;
+create trigger brand_integrations_check_account
+  before insert or update on public.brand_integrations
+  for each row execute function public.check_brand_integration_account();
+
+-- ── Who reads them ──────────────────────────────────────────────────────────
+
+alter table public.integration_accounts enable row level security;
+revoke all on table public.integration_accounts from anon, authenticated;
+grant select on table public.integration_accounts to authenticated;
+grant all on table public.integration_accounts to service_role;
+
+alter table public.brand_integrations enable row level security;
+revoke all on table public.brand_integrations from anon, authenticated;
+grant select on table public.brand_integrations to authenticated;
+grant all on table public.brand_integrations to service_role;
+
+drop policy if exists "brand_integrations: member select" on public.brand_integrations;
+create policy "brand_integrations: member select" on public.brand_integrations
+  for select
+  to authenticated
+  using (brand_id in (select public.user_brand_ids()));
+
+-- A sign-in a brand the person can access uses: through brand_integrations'
+-- own policy.
+drop policy if exists "integration_accounts: member select" on public.integration_accounts;
+create policy "integration_accounts: member select" on public.integration_accounts
+  for select
+  to authenticated
+  using (id in (select bi.account_id from public.brand_integrations bi));
+
+-- integration_connections: the server writes it (00045 said so); the pool
+-- follows it now, so a person can't write it under RLS.
+drop policy if exists "integration_connections: admin write" on public.integration_connections;
+revoke insert, update, delete, truncate on table public.integration_connections from anon, authenticated;
+
+-- ── Keeping the pool in step with the old tables ────────────────────────────
+-- Security definer: the server writes the old tables, and a person adding a
+-- brand (createBrand, under RLS) fires the brand trigger; only the server
+-- writes the pool. Made before the copy below, so a connection written while
+-- this migration runs is copied by one or the other.
+
+-- The Account's Google row → its sign-in; a new row is used by every brand of
+-- the Account that uses none for that product yet.
+create or replace function public.sync_integration_connection_account()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_account_id uuid;
+begin
+  insert into public.integration_accounts as a (
+    organization_id, provider, composio_entity_id, composio_account_id, status,
+    connected_by, integration_connection_id, created_at, updated_at
+  )
+  values (
+    new.organization_id, new.provider, new.composio_entity_id, new.composio_account_id,
+    new.status, new.connected_by, new.id, new.created_at, new.updated_at
+  )
+  on conflict (integration_connection_id) do update set
+    composio_entity_id = excluded.composio_entity_id,
+    composio_account_id = excluded.composio_account_id,
+    status = excluded.status,
+    connected_by = excluded.connected_by,
+    updated_at = excluded.updated_at
+  returning a.id into v_account_id;
+
+  if tg_op = 'INSERT' then
+    insert into public.brand_integrations (brand_id, provider, account_id)
+    select b.id, new.provider, v_account_id
+    from public.brands b
+    where b.organization_id = new.organization_id
+    on conflict (brand_id, provider) do nothing;
+  end if;
+  return null;
+end;
+$$;
+
+revoke all on function public.sync_integration_connection_account() from public, anon, authenticated;
+
+drop trigger if exists integration_connections_sync_account on public.integration_connections;
+create trigger integration_connections_sync_account
+  after insert or update on public.integration_connections
+  for each row execute function public.sync_integration_connection_account();
+
+-- A brand's CMS connection → its sign-in, used by that brand.
+create or replace function public.sync_cms_connection_account()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_account_id uuid;
+begin
+  insert into public.integration_accounts as a (
+    organization_id, provider, composio_entity_id, composio_account_id, label, status,
+    connected_by, cms_connection_id, created_at, updated_at
+  )
+  select
+    b.organization_id, new.provider, new.composio_entity_id, new.composio_account_id,
+    left(coalesce(nullif(new.site_name, ''), new.site_url, new.site_id), 300), new.status,
+    new.connected_by, new.id, new.created_at, new.updated_at
+  from public.brands b
+  where b.id = new.brand_id
+  on conflict (cms_connection_id) do update set
+    composio_entity_id = excluded.composio_entity_id,
+    composio_account_id = excluded.composio_account_id,
+    label = excluded.label,
+    status = excluded.status,
+    connected_by = excluded.connected_by,
+    updated_at = excluded.updated_at
+  returning a.id into v_account_id;
+
+  if tg_op = 'INSERT' and v_account_id is not null then
+    insert into public.brand_integrations (brand_id, provider, account_id)
+    values (new.brand_id, new.provider, v_account_id)
+    on conflict (brand_id, provider) do update set
+      account_id = excluded.account_id,
+      updated_at = now();
+  end if;
+  return null;
+end;
+$$;
+
+revoke all on function public.sync_cms_connection_account() from public, anon, authenticated;
+
+drop trigger if exists brand_cms_connections_sync_account on public.brand_cms_connections;
+create trigger brand_cms_connections_sync_account
+  after insert or update on public.brand_cms_connections
+  for each row execute function public.sync_cms_connection_account();
+
+-- A new brand uses the Account's Google sign-ins, as every brand did before.
+create or replace function public.use_account_integrations_on_new_brand()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.brand_integrations (brand_id, provider, account_id)
+  select new.id, a.provider, a.id
+  from public.integration_accounts a
+  where a.organization_id = new.organization_id
+    and a.integration_connection_id is not null
+  on conflict (brand_id, provider) do nothing;
+  return null;
+end;
+$$;
+
+revoke all on function public.use_account_integrations_on_new_brand() from public, anon, authenticated;
+
+drop trigger if exists brands_use_account_integrations on public.brands;
+create trigger brands_use_account_integrations
+  after insert on public.brands
+  for each row execute function public.use_account_integrations_on_new_brand();
+
+-- ── The switch-over: copy what there is (D7) ────────────────────────────────
+
+-- The Account's Google rows (Search Console, Analytics, Merchant Center)…
+insert into public.integration_accounts (
+  organization_id, provider, composio_entity_id, composio_account_id, status,
+  connected_by, integration_connection_id, created_at, updated_at
+)
+select
+  ic.organization_id, ic.provider, ic.composio_entity_id, ic.composio_account_id, ic.status,
+  ic.connected_by, ic.id, ic.created_at, ic.updated_at
+from public.integration_connections ic
+on conflict (integration_connection_id) do nothing;
+
+-- …used by every brand of the Account.
+insert into public.brand_integrations (brand_id, provider, account_id)
+select b.id, a.provider, a.id
+from public.integration_accounts a
+join public.brands b on b.organization_id = a.organization_id
+where a.integration_connection_id is not null
+on conflict (brand_id, provider) do nothing;
+
+-- Each brand's CMS site…
+insert into public.integration_accounts (
+  organization_id, provider, composio_entity_id, composio_account_id, label, status,
+  connected_by, cms_connection_id, created_at, updated_at
+)
+select
+  b.organization_id, c.provider, c.composio_entity_id, c.composio_account_id,
+  left(coalesce(nullif(c.site_name, ''), c.site_url, c.site_id), 300), c.status,
+  c.connected_by, c.id, c.created_at, c.updated_at
+from public.brand_cms_connections c
+join public.brands b on b.id = c.brand_id
+on conflict (cms_connection_id) do nothing;
+
+-- …used by its brand.
+insert into public.brand_integrations (brand_id, provider, account_id)
+select c.brand_id, c.provider, a.id
+from public.brand_cms_connections c
+join public.integration_accounts a on a.cms_connection_id = c.id
+on conflict (brand_id, provider) do nothing;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00471_brand_access_team.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00471: brand access — invite people to some brands, change who sees which
+-- ============================================================================
+-- BRAND-ACCESS PR 12 (the Team screen). 00388 stored the choice (a person's
+-- brand_scope and the brands shared with them, member_brands, and an
+-- invitation's brand_scope and brand_ids); the rules that apply it came
+-- with 00389 to 00470. These two functions are how the server writes the
+-- choice, each in one transaction, so a person is never left between two
+-- states (joined but still All brands, or Selected brands with none of the
+-- brands meant for them):
+--
+--   * accept_invitation(invitation, person): joins the person to the
+--     invitation's organization with its role and brand access, shares the
+--     invitation's brands that still exist (a brand deleted since is
+--     skipped; the demo brand is everyone's already), and marks the
+--     invitation accepted. A Selected-brands invitation never turns into
+--     All brands: the scope is written, not left to the default.
+--   * set_member_brand_access(organization, person, scope, brands, by): an
+--     admin's Edit brands. All brands drops the person's shared brands;
+--     Selected brands keeps exactly the brands named, of the organization
+--     (the demo brand needs none). An admin always has All brands, and
+--     Selected brands needs at least one brand.
+--
+-- The server (service role) calls them after its own checks: the invitation
+-- is pending, unexpired and for the signed-in person's e-mail; the caller is
+-- an admin of the organization. Security invoker, for the service role
+-- only: the service role bypasses RLS, so the 00228/00374/00388 profile
+-- guard lets it change the role, organization and brand_scope, and the
+-- triggers that follow (00388: the reset on a new admin, dropping the old
+-- organization's brands) run as before.
+
+-- ── accept_invitation ───────────────────────────────────────────────────────
+
+create or replace function public.accept_invitation(
+  p_invitation_id uuid,
+  p_user_id uuid
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_invitation public.invitations%rowtype;
+  v_brand_ids uuid[];
+begin
+  select * into v_invitation
+  from public.invitations i
+  where i.id = p_invitation_id
+  for update;
+
+  if not found then
+    raise exception 'invitation not found' using errcode = 'P0002';
+  end if;
+  if v_invitation.status <> 'pending' or v_invitation.expires_at < now() then
+    raise exception 'invitation is no longer valid' using errcode = '22023';
+  end if;
+
+  update public.profiles
+  set organization_id = v_invitation.organization_id,
+      role = v_invitation.role,
+      brand_scope = v_invitation.brand_scope,
+      onboarding_completed = true
+  where id = p_user_id;
+
+  if not found then
+    raise exception 'profile not found' using errcode = 'P0002';
+  end if;
+
+  -- The brands named that are still the organization's (not the demo brand,
+  -- which everyone sees). Inserted after the profile moved, so the
+  -- member_brands check finds the person in the organization.
+  if v_invitation.brand_scope = 'selected' then
+    insert into public.member_brands (organization_id, user_id, brand_id, granted_by)
+    select v_invitation.organization_id, p_user_id, b.id, v_invitation.invited_by
+    from public.brands b
+    where b.id = any (v_invitation.brand_ids)
+      and b.organization_id = v_invitation.organization_id
+      and not b.is_demo
+    on conflict (user_id, brand_id) do nothing;
+  end if;
+
+  update public.invitations
+  set status = 'accepted',
+      accepted_at = now()
+  where id = p_invitation_id;
+
+  select coalesce(array_agg(mb.brand_id order by mb.brand_id), '{}')
+  into v_brand_ids
+  from public.member_brands mb
+  where mb.user_id = p_user_id;
+
+  return jsonb_build_object(
+    'organization_id', v_invitation.organization_id,
+    'role', v_invitation.role,
+    'brand_scope', v_invitation.brand_scope,
+    'brand_ids', to_jsonb(v_brand_ids)
+  );
+end;
+$$;
+
+revoke all on function public.accept_invitation(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.accept_invitation(uuid, uuid) to service_role;
+
+comment on function public.accept_invitation(uuid, uuid) is
+  'Brand access (00471): joins the person to a pending, unexpired invitation''s organization with its role and brand access, shares the invitation''s brands that still exist (not the demo brand), and marks it accepted, in one transaction. Server only (service role), after it checked the invitation''s e-mail.';
+
+-- ── set_member_brand_access ─────────────────────────────────────────────────
+
+create or replace function public.set_member_brand_access(
+  p_organization_id uuid,
+  p_user_id uuid,
+  p_brand_scope text,
+  p_brand_ids uuid[],
+  p_granted_by uuid
+)
+returns uuid[]
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_role public.user_role;
+  v_brand_ids uuid[];
+begin
+  if p_brand_scope is null or p_brand_scope not in ('all', 'selected') then
+    raise exception 'brand scope must be all or selected' using errcode = '22023';
+  end if;
+
+  -- The person, locked: a move to another organization at the same time
+  -- waits, then finds the grants gone with it (00388's trigger).
+  select p.role into v_role
+  from public.profiles p
+  where p.id = p_user_id
+    and p.organization_id = p_organization_id
+  for update;
+
+  if not found then
+    raise exception 'member not found in this organization' using errcode = 'P0002';
+  end if;
+  if v_role = 'admin' and p_brand_scope = 'selected' then
+    raise exception 'admins always have all brands' using errcode = '22023';
+  end if;
+
+  if p_brand_scope = 'selected' then
+    select coalesce(array_agg(b.id order by b.id), '{}')
+    into v_brand_ids
+    from public.brands b
+    where b.id = any (coalesce(p_brand_ids, '{}'))
+      and b.organization_id = p_organization_id
+      and not b.is_demo;
+    if cardinality(v_brand_ids) = 0 then
+      raise exception 'selected brands needs at least one brand of the organization'
+        using errcode = '22023';
+    end if;
+  end if;
+
+  update public.profiles
+  set brand_scope = p_brand_scope
+  where id = p_user_id;
+
+  if p_brand_scope = 'all' then
+    delete from public.member_brands mb where mb.user_id = p_user_id;
+    return '{}';
+  end if;
+
+  delete from public.member_brands mb
+  where mb.user_id = p_user_id
+    and not (mb.brand_id = any (v_brand_ids));
+
+  insert into public.member_brands (organization_id, user_id, brand_id, granted_by)
+  select p_organization_id, p_user_id, ids.brand_id, p_granted_by
+  from unnest(v_brand_ids) as ids(brand_id)
+  on conflict (user_id, brand_id) do nothing;
+
+  return v_brand_ids;
+end;
+$$;
+
+revoke all on function public.set_member_brand_access(uuid, uuid, text, uuid[], uuid)
+  from public, anon, authenticated;
+grant execute on function public.set_member_brand_access(uuid, uuid, text, uuid[], uuid)
+  to service_role;
+
+comment on function public.set_member_brand_access(uuid, uuid, text, uuid[], uuid) is
+  'Brand access (00471): an admin''s Edit brands. All brands drops the person''s shared brands; Selected brands keeps exactly the organization''s brands named (at least one; not the demo brand). Admins are always All brands. One transaction, the person''s profile locked. Server only (service role), after it checked the caller is an admin.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00472_report_cards.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00472: the free AI visibility report card's requests and cards
+-- ============================================================================
+-- People ask for a free report card on www.ansvisor.com's form (Customer
+-- priorities §5). The API's public endpoint (POST /public/report-card)
+-- keeps each request, and the card it gets: 25 questions asked in ChatGPT,
+-- Gemini, Google AI Overviews and Google AI Mode in the person's target
+-- country, what the answers said, and the PDF's figures. The PDF itself is
+-- drawn again from those figures whenever it is sent.
+--
+--   * report_cards: one per company (its work e-mail's domain) every 30
+--     days; a repeat request is answered with the card already made, at no
+--     cost. A card is queued, then running, then ready or failed. One
+--     queued past the day's cap waits (run_after) for the next morning.
+--     Its cost in dollars is kept, for the daily and monthly caps.
+--   * report_card_requests: every request the form sent, with what the
+--     person gave (name, title, work e-mail, LinkedIn, company, country,
+--     size, optional industry and deal value), their consents, how it was
+--     answered and what became of the e-mail. No IP address is kept: the
+--     hourly limit per address is held in the API's memory.
+--
+-- Written and read by the API's service-role client only: RLS on, no
+-- policies, and the default grants to anon and authenticated revoked (as
+-- 00222 does), since the requests hold people's names and e-mails. The
+-- requests are deleted after 12 months, by the API's daily sweep.
+
+create table if not exists public.report_cards (
+  id uuid primary key default gen_random_uuid(),
+  -- The company: its work e-mail's domain, lower case. One card per domain every 30 days.
+  domain text not null check (
+    char_length(domain) between 3 and 253 and domain = lower(domain) and domain ~ '^[a-z0-9.-]+\.[a-z]{2,}$'
+  ),
+  -- The site measured: the website given, without "www.", the domain or a subdomain of it.
+  site text not null check (
+    char_length(site) between 3 and 253 and site = lower(site) and site ~ '^[a-z0-9.-]+\.[a-z]{2,}$'
+  ),
+  company_name text not null check (char_length(company_name) between 1 and 100),
+  -- The target country (ISO 3166-1 alpha-2) and its main language (ISO 639-1).
+  country text not null check (country ~ '^[A-Z]{2}$'),
+  language text not null check (language ~ '^[a-z]{2}$'),
+  status text not null default 'queued'
+    check (status in ('queued', 'running', 'ready', 'failed')),
+  -- When it may start: now, or the next morning past the day's cap.
+  run_after timestamptz not null default now(),
+  started_at timestamptz,
+  finished_at timestamptz,
+  attempts integer not null default 0 check (attempts between 0 and 10),
+  -- What the PDF draws (web/src/lib/report-card/payload.ts), once ready.
+  payload jsonb check (payload is null or jsonb_typeof(payload) = 'object'),
+  -- The questions as asked: text, English, keyword, and each engine's answer in short.
+  questions jsonb check (questions is null or jsonb_typeof(questions) = 'array'),
+  cost_usd numeric(10, 4) not null default 0 check (cost_usd >= 0),
+  -- Why it failed, in plain words.
+  error text check (char_length(error) <= 500),
+  created_at timestamptz not null default now(),
+  check ((status = 'ready') = (payload is not null)),
+  check (status not in ('ready', 'failed') or finished_at is not null)
+);
+
+-- One card being made per company at a time: two requests at once share it.
+create unique index if not exists report_cards_one_pending_idx
+  on public.report_cards (domain)
+  where status in ('queued', 'running');
+
+-- The company's last card (the 30-day rule), the queue, and the day's and month's counts.
+create index if not exists report_cards_domain_created_idx
+  on public.report_cards (domain, created_at desc);
+create index if not exists report_cards_queue_idx
+  on public.report_cards (run_after)
+  where status in ('queued', 'running');
+create index if not exists report_cards_started_idx
+  on public.report_cards (started_at)
+  where started_at is not null;
+
+alter table public.report_cards enable row level security;
+revoke all on public.report_cards from anon, authenticated;
+
+comment on table public.report_cards is
+  'Free AI visibility report cards (00472; Customer priorities §5): one per site every 30 days, its figures and cost. Server-only.';
+
+create table if not exists public.report_card_requests (
+  id uuid primary key default gen_random_uuid(),
+  report_card_id uuid references public.report_cards (id) on delete set null,
+  first_name text not null check (char_length(first_name) between 1 and 60),
+  last_name text not null check (char_length(last_name) between 1 and 60),
+  title text not null check (char_length(title) between 1 and 100),
+  email text not null check (
+    char_length(email) <= 254 and email = lower(email) and email ~ '^[^@\s]+@[a-z0-9.-]+\.[a-z]{2,}$'
+  ),
+  linkedin_url text not null check (char_length(linkedin_url) <= 300),
+  company_name text not null check (char_length(company_name) between 1 and 100),
+  -- The website as typed, and the domain measured.
+  website text not null check (char_length(website) <= 300),
+  domain text not null check (char_length(domain) between 3 and 253),
+  country text not null check (country ~ '^[A-Z]{2}$'),
+  company_size text not null
+    check (company_size in ('1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5000+')),
+  industry text check (char_length(industry) <= 60),
+  deal_value numeric(14, 2) check (deal_value > 0),
+  deal_currency text check (deal_currency ~ '^[A-Z]{3}$'),
+  consent_privacy boolean not null check (consent_privacy),
+  consent_own_site boolean not null check (consent_own_site),
+  consent_marketing boolean not null default false,
+  -- The form's page and campaign, as sent.
+  page text check (char_length(page) <= 100),
+  utm jsonb check (utm is null or (jsonb_typeof(utm) = 'object' and octet_length(utm::text) <= 1000)),
+  -- How it was answered: a new card queued, the card already made sent
+  -- again, or queued for tomorrow past the day's cap.
+  outcome text not null check (outcome in ('queued', 'resent', 'daily_cap')),
+  -- What became of the e-mail: sent, refused, unknown or skipped (server/src/lib/email.js).
+  email_status text check (email_status in ('sent', 'refused', 'unknown', 'skipped')),
+  emailed_at timestamptz,
+  created_at timestamptz not null default now(),
+  check ((deal_value is null) = (deal_currency is null))
+);
+
+create index if not exists report_card_requests_card_idx
+  on public.report_card_requests (report_card_id);
+create index if not exists report_card_requests_created_idx
+  on public.report_card_requests (created_at);
+-- A person's requests, for a deletion request.
+create index if not exists report_card_requests_email_idx
+  on public.report_card_requests (email);
+
+alter table public.report_card_requests enable row level security;
+revoke all on public.report_card_requests from anon, authenticated;
+
+comment on table public.report_card_requests is
+  'Every free report card request from the www.ansvisor.com form (00472): what the person gave, their consents and how it was answered. Server-only; deleted after 12 months.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00473_brand_google_property_guard.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00473: a brand's Google properties are set by the server
+-- ============================================================================
+-- A brand's Search Console site (gsc_property) and Analytics property
+-- (ga_property_id) are picked from the list of the Google sign-in the brand
+-- uses, and the server checks the pick is on that list and that the person
+-- reaches every brand on the sign-in (PUT
+-- /api/integrations/{google-search-console,google-analytics}/brands/:id/property).
+-- The syncs then read the property through that sign-in. This trigger keeps
+-- the two columns to the server: a member's own insert or update of a brand
+-- leaves them as they are.
+
+create or replace function public.guard_brand_google_properties()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    if new.gsc_property is not null or new.ga_property_id is not null then
+      raise exception 'a brand''s Google properties are set server-side' using errcode = '42501';
+    end if;
+  elsif new.gsc_property is distinct from old.gsc_property
+     or new.ga_property_id is distinct from old.ga_property_id
+  then
+    raise exception 'a brand''s Google properties are set server-side' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists brands_guard_google_properties on public.brands;
+create trigger brands_guard_google_properties
+  before insert or update on public.brands
+  for each row execute function public.guard_brand_google_properties();
 

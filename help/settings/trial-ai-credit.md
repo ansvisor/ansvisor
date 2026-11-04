@@ -8,7 +8,7 @@ updated: 2026-10-31
 last_checked: 2026-10-31
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/faq.mdx]
 ---
 During the free trial, the AI features share a starter AI credit: Improve suggestions, the Content Editor's AI, the Action Center's task writing, and Chat where it's on. The credit is smaller than a plan's monthly AI usage, so the app shows how far along it is in words, not as a percentage.

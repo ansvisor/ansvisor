@@ -1,5 +1,6 @@
 import { classifyDomain, normalizeDomain } from '@/lib/citations/classify';
 import type { ContentAuthor } from './authors';
+import { parseHtml } from './dom';
 import { cleanHref } from './html-allowlist';
 import { languageCode, ownText, sentencesOf } from './readability';
 import type { FactMismatch } from './brand-facts';
@@ -164,7 +165,7 @@ export function shippingOnPage(
   html: string,
   language: string | null = 'en',
 ): { shipping: boolean; returns: boolean } | null {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const doc = parseHtml(html);
   const blocks = [...doc.body.querySelectorAll('p, li, td, th, blockquote, h1, h2, h3, h4, h5, h6')]
     .map((el) => ({ heading: /^H\d$/.test(el.tagName), text: (el.textContent ?? '').trim() }))
     .filter((block) => block.text);
@@ -467,7 +468,8 @@ export interface TrustBlock {
  * Readability reads it), a paragraph in an item or a cell with it.
  */
 export function trustBlocks(html: string): TrustBlock[] {
-  const doc = new DOMParser().parseFromString(html, 'text/html');
+  // The content DOM's parser (dom.ts): the browser's, or jsdom's on the server (go-live gate).
+  const doc = parseHtml(html);
   const out: TrustBlock[] = [];
   for (const el of doc.body.querySelectorAll('p, li, blockquote, td, th')) {
     const tag = el.tagName.toLowerCase();

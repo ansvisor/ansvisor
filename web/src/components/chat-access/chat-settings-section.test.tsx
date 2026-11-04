@@ -13,6 +13,7 @@ const actions = vi.hoisted(() => ({
   resetToolPolicies: vi.fn(),
   setChatSwitch: vi.fn(),
   setManagerExecute: vi.fn(),
+  setAutoGoLive: vi.fn(),
   removeAutoChoice: vi.fn(),
 }));
 vi.mock('@/lib/actions/chat-settings', () => actions);
@@ -49,7 +50,7 @@ afterEach(() => {
   container.remove();
 });
 
-const flags = { alwaysCard: false, costCard: false, adminMayTurnOff: false };
+const flags = { alwaysCard: false, costCard: false, adminMayTurnOff: false, goLiveOnOwn: false };
 const rows: PolicyRow[] = [
   {
     key: 'trackedPrompts',
@@ -86,6 +87,7 @@ const view = (over: Partial<ChatSettingsView> = {}): ChatSettingsView => ({
   managerExecuteOff: ['feeds'],
   rows,
   autoChoices: ['saveDraft'],
+  goLive: null,
   ...over,
 });
 
@@ -161,5 +163,96 @@ describe('ChatSettingsSection', () => {
     expect(text()).toContain("Couldn't load Chat's settings.");
     await act(async () => button('Retry')!.click());
     expect(actions.getChatSettingsView).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('agents that publish on their own (AUTONOMOUS-GO-LIVE §7.1)', () => {
+  const GO_LIVE = {
+    on: false,
+    since: null,
+    byName: null,
+    qualityOff: false,
+    workspace: 'Acme',
+  };
+  const goLiveSwitch = () =>
+    container.querySelector(
+      '[role="switch"][aria-label="Allow agents to publish and send on their own"]',
+    ) as HTMLButtonElement | null;
+  const dialog = () => document.querySelector('[role="dialog"]') as HTMLElement | null;
+
+  it('stays hidden with its flag off, and says nothing new there', async () => {
+    actions.getChatSettingsView.mockResolvedValue({ ok: true, view: view() });
+    await render();
+    expect(text()).not.toContain('Agents that publish on their own');
+    expect(text()).toContain("NEVER tools don't exist · EXECUTE needs a click");
+  });
+
+  it('asks an Admin to accept the responsibility first, then turns it on', async () => {
+    actions.getChatSettingsView.mockResolvedValue({ ok: true, view: view({ goLive: GO_LIVE }) });
+    actions.setAutoGoLive.mockResolvedValue({ ok: true });
+    await render();
+    expect(text()).toContain('Agents that publish on their own');
+    expect(text()).toContain('unless an Admin let an agent go live on its own');
+    await act(async () => goLiveSwitch()!.click());
+    expect(actions.setAutoGoLive).not.toHaveBeenCalled();
+    expect(dialog()!.textContent).toContain('Let agents publish on their own?');
+    expect(dialog()!.textContent).toContain(
+      'Your workspace is responsible for what they publish, as if a member had clicked Publish.',
+    );
+    expect(dialog()!.textContent).toContain(
+      "I understand, and I'm allowed to decide this for Acme.",
+    );
+    const turnOn = [...dialog()!.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Turn on',
+    )!;
+    expect(turnOn.disabled).toBe(true);
+    await act(async () => (dialog()!.querySelector('[role="checkbox"]') as HTMLElement).click());
+    expect(turnOn.disabled).toBe(false);
+    await act(async () => turnOn.click());
+    expect(actions.setAutoGoLive).toHaveBeenCalledWith(true, 1);
+    expect(toast.success).toHaveBeenCalledWith('Agents you allow can now publish on their own');
+  });
+
+  it('turns it off with no dialog, and says who turned it on when', async () => {
+    actions.getChatSettingsView.mockResolvedValue({
+      ok: true,
+      view: view({
+        goLive: { ...GO_LIVE, on: true, since: '2026-11-01T09:00:00Z', byName: 'Ada Admin' },
+      }),
+    });
+    actions.setAutoGoLive.mockResolvedValue({ ok: true });
+    await render();
+    expect(text()).toContain('On since Nov 1, 2026 · by Ada Admin');
+    await act(async () => goLiveSwitch()!.click());
+    expect(dialog()).toBeNull();
+    expect(actions.setAutoGoLive).toHaveBeenCalledWith(false, 1);
+  });
+
+  it('locks it below Growth and while Content Quality is off, and others only read it', async () => {
+    actions.getChatSettingsView.mockResolvedValue({
+      ok: true,
+      view: view({ fullAutoLocked: 'growth', goLive: GO_LIVE }),
+    });
+    await render();
+    expect(goLiveSwitch()).toBeNull();
+    expect(text()).toContain("Needs Growth · you're on");
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    actions.getChatSettingsView.mockResolvedValue({
+      ok: true,
+      view: view({ goLive: { ...GO_LIVE, qualityOff: true } }),
+    });
+    await render();
+    expect(text()).toContain('Needs Content Quality, which checks each page before it goes live');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    actions.getChatSettingsView.mockResolvedValue({
+      ok: true,
+      view: view({ role: 'manager', goLive: { ...GO_LIVE, on: true } }),
+    });
+    await render();
+    expect(goLiveSwitch()).toBeNull();
   });
 });

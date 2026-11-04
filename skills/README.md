@@ -53,10 +53,28 @@ start a message with its `/name`.
 | [`rivals`](./rivals) | Rival brief |
 | [`audit-fix`](./audit-fix) | Site audit fixes |
 
+### Shortcut playbooks
+
+Chat's `/` menu shortcuts each have a playbook here too: a `SKILL.md` marked
+`metadata.hidden: "true"`, named after its command. Chat never lists them as
+skills; it loads one only for a message sent with its shortcut, and that
+answer reads only the tools in the playbook's `metadata.reads`.
+
+| Playbook | Shortcut |
+| --- | --- |
+| [`start`](./start) | Get started |
+| [`analyze`](./analyze) | Analyze |
+| [`new-report`](./new-report) | Reports |
+| [`create`](./create) | Create content |
+| [`optimize`](./optimize) | Optimize content |
+| [`opportunities`](./opportunities) | Find opportunities |
+| [`audit`](./audit) | Improve with audit |
+
 CI checks every one of them (`web/src/lib/chat/skills/library.test.ts`):
 the front matter (`name` matches the folder, `description` up to 1,024
 characters, `metadata.title` and `metadata.filters`, `license: MIT`), a body
-of at most 500 lines, the tool names Chat has, and a scan that refuses email
+of at most 500 lines, the tool names Chat has (for a playbook, `metadata.reads`
+names read tools only, and its title is its shortcut's), and a scan that refuses email
 addresses, prices, tracking parameters, hidden characters, base64 blobs,
 secrets and text that tries to override Chat's rules. A skill shapes how
 Chat does a task; it never changes what Chat may do, skips an approval or
@@ -145,8 +163,8 @@ you ask for that specific change.
 ## Contributing
 
 Every folder under `skills/` other than the two AEO coach flavours is one of
-Chat's Ansvisor skills, and CI checks it as one. So there are two kinds of
-contribution:
+Chat's Ansvisor skills or shortcut playbooks, and CI checks it as one. So
+there are two kinds of contribution:
 
 **A skill for Chat.** Ansvisor's own skills are the twenty-one listed above.
 Adding one (or changing one) means, in the same PR:
@@ -161,7 +179,7 @@ skills/
   to the list in `web/src/lib/chat/skills/library.test.ts` and to
   `SKILL_ORDER` in `web/src/lib/chat/skills/library.ts`.
 - `description` says what it does in one line; `metadata.title` and
-  `metadata.filters` (content, visibility, reports, product); `license: MIT`.
+  `metadata.filters` (content, visibility, product, technical, reports); `license: MIT`.
 - The body names only tools Chat has (`web/src/lib/chat/registry`), and
   never asks Chat to skip an approval, publish, or send anything.
 - Refresh `library.json` with `yarn test -u src/lib/chat/skills` in `web/`
@@ -174,8 +192,11 @@ release.
 
 **An AEO coach skill** for Claude clients goes in its own folder with its
 `references/`, and joins the AEO coach list in
-`web/src/lib/chat/skills/library.test.ts`, which leaves those out. A few
-principles we follow for those:
+`web/src/lib/chat/skills/library.test.ts`, which leaves those out. It still
+gets a row in the table at the top, and CI still scans every file in it for
+hidden characters, secrets, email addresses and base64 blobs, as it does
+every file in this folder (`web/src/lib/chat/skills/public-skills.test.ts`).
+A few principles we follow for those:
 
 - **Skills layer knowledge, not data.** Data comes from the MCP server
   or the matching REST endpoint. A skill's job is to know _when_ and

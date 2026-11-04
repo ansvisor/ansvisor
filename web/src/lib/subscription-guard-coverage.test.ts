@@ -40,6 +40,10 @@ const SCHEMA = join(__dirname, '../../../supabase/schema.sql');
  */
 const OPEN_ACTIONS: Record<string, string> = {
   'organization.ts:updateAccountName': "the person's own profile",
+  'chat-notices.ts:markChatNoticesRead':
+    "the person's own record of seeing a notice (00441), nothing that runs or costs",
+  'chat-notices.ts:closeChatNotice':
+    "the person's own record of opening a notice about an agent (00446), nothing that runs or costs",
   'chat-prefs.ts:saveChatMenuOpen': "the person's own Chat layout, no cost",
   'chat-prefs.ts:saveChatRailOpen': "the person's own Chat layout, no cost",
   'chat-prefs.ts:saveChatGeneralSettings':
@@ -73,17 +77,18 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-prefs.ts:skipChatFocus': "the person's own Chat focus left empty, nothing that costs",
   'chat-prefs.ts:markFocusPrompted':
     "the person's own record of being asked their focus, nothing that costs",
-  'chat-access-requests.ts:requestAccess':
-    'asking an Admin costs nothing, and a read-only workspace is one of the things to ask about',
+  // requestAccess writes through lib/chat/access-request-store.ts: asking an Admin
+  // costs nothing, and a read-only workspace is one of the things to ask about.
   'chat-access-requests.ts:withdrawAccessRequest': 'takes back a request, never gives access',
   'chat-access-requests.ts:decideAccessRequest':
-    "marks a request decided; it changes no one's access",
+    "marks a request decided; it changes no one's access, and an approved memory line is checked against the plan by the memory store (read_only)",
   // Chat's settings (Admins): asAdmin() checks the plan itself (ctx.plan.writable,
   // as assertWritable) to answer read_only as a result instead of throwing.
   'chat-settings.ts:setToolPolicy': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:resetToolPolicies': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:setChatSwitch': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:setManagerExecute': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:setAutoGoLive': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:removeAutoChoice':
     "removes the person's own Don't ask again tick: takes an auto-approval back, never gives one",
   // An add-on pack (CHAT-18): only on an active, paid plan.
@@ -123,8 +128,17 @@ const OPEN_ROUTES: Record<string, string> = {
     'pinning, renaming, sharing or archiving your own chat starts no cost',
   'chat/conversations/[id]:DELETE':
     'deleting your own chat starts no cost, as the old Agent chats (#1613)',
+  // Memory (W3-11): a person's own Me lines are their personal data (KVKK/GDPR).
+  'chat/memory/[id]:DELETE':
+    "deleting your own Me memory line stays open; the store answers 402 for a brand's or the workspace's",
+  'chat/memory/[id]/restore:POST':
+    'bringing back your own Me line you just deleted; the store answers 402 for the rest',
+  'chat/memory/settings:PATCH':
+    "turning your own Use memory off or on stays open; the store answers 402 for the workspace's switch",
   'chat/conversations/[id]/read:POST': 'marking your own chat read starts no cost',
   'chat/home-seen:POST': "the person's own record of leaving Chat Home starts no cost",
+  'chat/whats-new/read:POST':
+    "marking What's new read is the person's own record and starts no cost",
   'chat/conversations/[id]/restore:POST': 'undoing a delete starts no cost',
   'chat/runs:POST': 'the engine refuses a read-only workspace with the 402 body (startChatRun)',
   'chat/runs/[id]/approve:POST': 'the engine answers 402 (prepareResume), but for Ask your Admin',
@@ -139,6 +153,10 @@ const OPEN_ROUTES: Record<string, string> = {
     "the server's cron; it starts no agent run in a read-only workspace",
   'internal/chat/agents/signals:POST':
     "the server's signal hook; it starts no agent run in a read-only workspace",
+  // The same cron after the agents': a read-only workspace's due job is kept as
+  // Skipped, and runs nothing (fireDueJobs).
+  'internal/chat/schedules/tick:POST':
+    "the server's cron; it runs no scheduled job in a read-only workspace",
 };
 
 /** What checks a route's plan before it writes. */

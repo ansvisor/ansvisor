@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { sendDraftToCms } from '@/lib/actions/cms-send';
+import { publishDraftToCms, sendDraftToCms } from '@/lib/actions/cms-send';
+import { takeDownDraft } from '@/lib/actions/cms-take-down';
 import { updateContentDraft } from '@/lib/actions/content-drafts';
 import { actorOf } from '@/lib/chat/actor/access';
 import { updateContentDraftFor } from '@/lib/chat/actor/drafts';
@@ -16,8 +17,15 @@ import { draftPage, draftTitle, pageChanges } from './targets';
  * server action over the editor's own path, as the signed-in member; a
  * change also has its write for a run without a session (runFor). Both
  * are Admins' and Managers' (DECISIONS T: an Analyst's Chat only creates
- * drafts; the API sends pages for Admins and Managers). Going live in a CMS
- * (publish_cms) has no row: no CMS the app sends to is published from it yet.
+ * drafts; the API sends pages for Admins and Managers). Publishing a new page
+ * live in Webflow, WordPress or Wix (publish_cms, row 59, AUTONOMOUS-GO-LIVE
+ * PR 9) is an EXECUTE too; Framer publishes whole sites, so it isn't offered.
+ * The send and the publish are the rows an agent an Admin allowed may take
+ * on its own (AUTONOMOUS-GO-LIVE §4 rows 1 and 2, their goLive): the engine
+ * sends them through the API's internal route as the run's person, after
+ * its checks. Taking a published page down (unpublish_cms, PR 10) is always
+ * the person's click: outside the go-live groups, a Manager may even while
+ * publishing is off for Managers, as it only lowers what is live.
  */
 
 const ITEM = FIXTURE_IDS.item;
@@ -79,8 +87,9 @@ export const CONTENT_TOOLS = [
     // It leaves Ansvisor and has no Undo (a CMS item can't be taken back from here; an
     // item updated in Framer or Webflow goes live with the site's next publish): an
     // EXECUTE, so only the person's click sends it, in every mode, Full auto included,
-    // and no Admin "Always" lifts it. In the publishing group: an Admin's "Managers can't
-    // go live" for publishing stops a Manager's send too.
+    // and no Admin "Always" lifts it; only an agent an Admin allowed sends it on its own
+    // (goLive). In the publishing group: an Admin's "Managers can't go live" for
+    // publishing stops a Manager's send too.
     class: 'execute',
     executeGroup: 'publishing',
     area: 'content',
@@ -100,6 +109,7 @@ export const CONTENT_TOOLS = [
       destination: z.enum(CHAT_CMS_TARGETS).describe('The CMS the brand connected.'),
     }),
     run: (_ctx, input) => sendDraftToCms(input.draft_id, input.destination),
+    goLive: (input) => ({ kind: 'cms_draft', draftId: input.draft_id, target: input.destination }),
     target: async (input) => {
       const title = await draftTitle(input.draft_id);
       return [title ? `“${title}”` : null, `→ ${CMS_NAMES[input.destination]}`]
@@ -107,5 +117,65 @@ export const CONTENT_TOOLS = [
         .join(' ');
     },
     fixture: { input: { draft_id: ITEM, destination: 'webflow' } },
+  }),
+  defineTool({
+    name: 'publish_cms',
+    // It goes live on the brand's site: an EXECUTE, only the person's click, or an agent an
+    // Admin let go live on its own (goLive). New pages only; a live page is the editor's.
+    class: 'execute',
+    executeGroup: 'publishing',
+    area: 'content',
+    description:
+      "Publish a new Library page live on the brand's site through its connected CMS (Webflow, WordPress or Wix): it goes live at once. The page is written into its CMS draft first, as Send to CMS writes it. Not for a page that is live already (the Content Editor changes it), nor Framer, which publishes the whole site. Only when the person asked for this page to go live.",
+    minRole: 'manager',
+    planGate: null,
+    brandOf: { lookup: 'content_drafts', idField: 'draft_id' },
+    costClass: 'C1',
+    labelKey: 'publishToCms',
+    route: '/dashboard/content/library',
+    mcpTool: null,
+    specRow: '59',
+    inputSchema: z.object({
+      draft_id: contentUuid.describe('The draft, from list_content_drafts.'),
+      destination: z
+        .enum(['webflow', 'wordpress', 'wix'])
+        .describe('The CMS the brand connected: Webflow, WordPress or Wix.'),
+    }),
+    run: (_ctx, input) => publishDraftToCms(input.draft_id, input.destination),
+    goLive: (input) => ({ kind: 'publish', draftId: input.draft_id, target: input.destination }),
+    target: async (input) => {
+      const title = await draftTitle(input.draft_id);
+      return [title ? `“${title}”` : null, `→ ${CMS_NAMES[input.destination]}`]
+        .filter(Boolean)
+        .join(' ');
+    },
+    fixture: { input: { draft_id: ITEM, destination: 'webflow' } },
+  }),
+  defineTool({
+    name: 'unpublish_cms',
+    // Takes a page that went live back down to a draft in its CMS (§6.4): an EXECUTE, only
+    // ever the person's click, never an agent on its own (no goLive, no group).
+    class: 'execute',
+    executeGroup: null,
+    area: 'content',
+    description:
+      'Take a page published through Ansvisor (Webflow, WordPress or Wix) down to a draft in that CMS: it leaves the site at once, and links and AI answers that cited it may still point to it for a while. Only when the person asked for this page to come down.',
+    minRole: 'manager',
+    planGate: null,
+    brandOf: { lookup: 'content_drafts', idField: 'draft_id' },
+    costClass: 'C1',
+    labelKey: 'takeDownFromCms',
+    route: '/dashboard/content/library',
+    mcpTool: null,
+    specRow: '59',
+    inputSchema: z.object({
+      draft_id: contentUuid.describe('The published draft, from list_content_drafts.'),
+    }),
+    run: (_ctx, input) => takeDownDraft(input.draft_id),
+    target: async (input) => {
+      const title = await draftTitle(input.draft_id);
+      return title ? `“${title}”` : null;
+    },
+    fixture: { input: { draft_id: ITEM } },
   }),
 ];

@@ -51,7 +51,11 @@ function builder(calls: Call[], answerOf: (call: Call) => unknown) {
 }
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
-vi.mock('@/lib/member-emails', () => ({ readMemberEmails: vi.fn() }));
+const readMemberEmails = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/member-emails', () => ({ readMemberEmails }));
+// Who may use a brand (BRAND-ACCESS): person id → the brands they may.
+const brandReaders = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/brand-access', () => ({ brandReaders }));
 vi.mock('@/lib/guards/plan-guard', () => ({ enforceLimit: vi.fn(), getOrgPlan: vi.fn() }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
@@ -72,7 +76,7 @@ vi.mock('@/lib/supabase/admin', () => ({
   },
 }));
 
-const { listInvitations, removeMember } = await import('./team');
+const { listBrandMembers, listInvitations, removeMember } = await import('./team');
 
 beforeEach(() => {
   sessionCalls.length = 0;
@@ -139,7 +143,7 @@ describe('listInvitations', () => {
   };
 
   it.each(['admin', 'analyst'])(
-    'lists the pending invitations to an %s from the server, without their token or brands (00390)',
+    'lists the pending invitations to an %s from the server, without their token (00390)',
     async (role) => {
       sessionRole = role;
       adminAnswers['invitations.select'] = { data: [PENDING], error: null };
@@ -150,7 +154,8 @@ describe('listInvitations', () => {
         {
           table: 'invitations',
           op: 'select',
-          columns: 'id, email, role, status, invited_by, expires_at, created_at, accepted_at',
+          columns:
+            'id, email, role, status, invited_by, expires_at, created_at, accepted_at, brand_scope, brand_ids',
           filters: [
             ['organization_id', ORG],
             ['status', 'pending'],
@@ -170,14 +175,77 @@ describe('listInvitations', () => {
           expiresAt: '2026-11-07T00:00:00Z',
           createdAt: '2026-10-31T00:00:00Z',
           acceptedAt: null,
+          brandAccess: { scope: 'all', brandIds: [] },
         },
       ]);
     },
   );
 
+  it('names the brands an invitation shares to admins only (BRAND-ACCESS §3.2)', async () => {
+    const BRAND = '55555555-5555-4555-8555-555555555555';
+    adminAnswers['invitations.select'] = {
+      data: [{ ...PENDING, brand_scope: 'selected', brand_ids: [BRAND] }],
+      error: null,
+    };
+    expect((await listInvitations())[0].brandAccess).toEqual({
+      scope: 'selected',
+      brandIds: [BRAND],
+    });
+    sessionRole = 'analyst';
+    expect((await listInvitations())[0].brandAccess).toEqual({ scope: 'all', brandIds: [] });
+  });
+
   it('says so when the invitations could not be read', async () => {
     adminAnswers['invitations.select'] = { data: null, error: { message: 'down' } };
 
     await expect(listInvitations()).rejects.toThrow('down');
+  });
+});
+
+describe('listBrandMembers', () => {
+  const NARROW = '44444444-4444-4444-8444-444444444444';
+  const BRAND = '55555555-5555-4555-8555-555555555555';
+  beforeEach(() => {
+    adminAnswers['profiles.select'] = {
+      data: [
+        { id: ADMIN, full_name: 'Ada', avatar_url: null, role: 'admin', created_at: '2026-01-01' },
+        {
+          id: MEMBER,
+          full_name: 'Bo',
+          avatar_url: null,
+          role: 'manager',
+          created_at: '2026-02-01',
+        },
+        {
+          id: NARROW,
+          full_name: 'Cy',
+          avatar_url: null,
+          role: 'analyst',
+          created_at: '2026-03-01',
+        },
+      ],
+      error: null,
+    };
+    readMemberEmails.mockResolvedValue(new Map([[MEMBER, 'bo@acme.example']]));
+  });
+
+  it('lists the members who can see the brand, in the team’s order', async () => {
+    brandReaders.mockResolvedValue(
+      new Map([
+        [ADMIN, new Set([BRAND])],
+        [MEMBER, new Set([BRAND])],
+      ]),
+    );
+    const members = await listBrandMembers(BRAND);
+    expect(brandReaders).toHaveBeenCalledWith(ORG, [BRAND]);
+    expect(members.map((m) => [m.userId, m.email, m.isCurrentUser])).toEqual([
+      [ADMIN, '', true],
+      [MEMBER, 'bo@acme.example', false],
+    ]);
+  });
+
+  it('answers a brand the caller can’t see as not found', async () => {
+    brandReaders.mockResolvedValue(new Map([[MEMBER, new Set([BRAND])]]));
+    await expect(listBrandMembers(BRAND)).rejects.toThrow('Brand not found');
   });
 });

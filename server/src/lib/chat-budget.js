@@ -50,8 +50,9 @@ import supabaseAdmin from '../config/supabase.js';
 import { chatAgenticEnabled } from './chat-flag.js';
 import { drawCredits } from './ai-credits.js';
 import { cacheSplit, generationCostUsd } from './improve-cost.js';
-import { CHAT_AI_FEATURES, aiBudgetOf, aiBudgetUsedUp } from './plan-guard.js';
+import { CHAT_AI_FEATURES, aiBudgetOf, aiBudgetUsedUp, quotaPeriodStart } from './plan-guard.js';
 import { logger } from './logger.js';
+import { shiftMonthClamped } from './quota-period.js';
 
 /** What a Chat step can be metered as: a run's model step, then agents, scheduled runs, images. */
 export const CHAT_BUDGET_FEATURES = CHAT_AI_FEATURES;
@@ -107,19 +108,59 @@ async function agentRunSpentUsd(agentRunId) {
  * plan's included monthly budget (`includedUsd`, credits left out), worked
  * out here so no dollar leaves the server. Null without a budget to share
  * (self-hosted: no cap). ChatBudgetError 404 when the run isn't the
- * workspace's.
+ * workspace's. A run another agent ran (called_by_run_id) is held within
+ * what is left of its caller's cap too, after the caller's own spend and
+ * that of the other agents it ran, so calls one after another can't pass it.
  */
 async function agentRunCapUsd(orgId, agentRunId, includedUsd) {
   const { data, error } = await supabaseAdmin
     .from('chat_agent_runs')
-    .select('max_share')
+    .select('max_share, called_by_run_id')
     .eq('id', agentRunId)
     .eq('organization_id', orgId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new ChatBudgetError('not_found', 404, 'Agent run not found.');
   if (includedUsd === null || !(includedUsd > 0)) return null;
-  return (Number(data.max_share) || 0) * includedUsd;
+  const cap = (Number(data.max_share) || 0) * includedUsd;
+  // The agents it ran share its cap (CHAT-27 item 21): what they spent comes out of it.
+  const own = Math.max(0, cap - (await calledRunsSpentUsd(agentRunId)));
+  if (!data.called_by_run_id) return own;
+  const { data: caller, error: callerError } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .select('max_share')
+    .eq('id', data.called_by_run_id)
+    .eq('organization_id', orgId)
+    .maybeSingle();
+  if (callerError) throw new Error(callerError.message);
+  if (!caller) return own;
+  const callerLeft =
+    (Number(caller.max_share) || 0) * includedUsd -
+    (await agentRunSpentUsd(data.called_by_run_id)) -
+    (await calledRunsSpentUsd(data.called_by_run_id, agentRunId));
+  return Math.max(0, Math.min(own, callerLeft));
+}
+
+/**
+ * What the agent runs a run started with run_agent spent (00466's
+ * called_by_run_id; CHAT-27 phase 2), own-key steps included as the cap's
+ * measure is: a called run's slice is held out of its caller's cap, and
+ * what it didn't spend comes back. `exceptRunId` leaves one of them out.
+ */
+async function calledRunsSpentUsd(agentRunId, exceptRunId = null) {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .select('id')
+    .eq('called_by_run_id', agentRunId);
+  if (error) throw new Error(error.message);
+  const ids = (data ?? []).map((row) => row.id).filter((id) => id !== exceptRunId);
+  if (ids.length === 0) return 0;
+  const { data: rows, error: spentError } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .select('cost_usd')
+    .in('agent_run_id', ids);
+  if (spentError) throw new Error(spentError.message);
+  return (rows ?? []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
 }
 
 /**
@@ -128,7 +169,11 @@ async function agentRunCapUsd(orgId, agentRunId, includedUsd) {
  * budget can't cover the step (the step doesn't start), 402 without an
  * active plan; ChatBudgetError 404 when the run isn't the workspace's, or the
  * step the run's. With `agentRunId` (the chat's agent run), the step is held
- * within that run's cap too: ChatBudgetError run_cap 429 past it.
+ * within that run's cap too: ChatBudgetError run_cap 429 past it. With
+ * `scheduleId` (the chat's scheduled job, CHAT-12 item 14) the database
+ * checks it is the chat's; the row is named with the chat's job either way.
+ * `holdUsd` holds a set amount instead of the model's worst case, for a call
+ * much smaller than a Chat step (Content Quality's reads).
  */
 export async function reserveChatStep(
   orgId,
@@ -141,11 +186,13 @@ export async function reserveChatStep(
     stepId = null,
     ownKey = false,
     agentRunId = null,
+    scheduleId = null,
+    holdUsd = null,
   },
 ) {
   assertChatOn(orgId);
   const { plan, budgetUsd, includedUsd, since } = await aiBudgetOf(orgId);
-  const cost = stepWorstCaseUsd(modelId, { inputTokens, maxOutputTokens });
+  const cost = holdUsd ?? stepWorstCaseUsd(modelId, { inputTokens, maxOutputTokens });
   const runCap = agentRunId ? await agentRunCapUsd(orgId, agentRunId, includedUsd) : null;
   const { data, error } = await supabaseAdmin.rpc('reserve_chat_ai_usage', {
     p_organization_id: orgId,
@@ -158,6 +205,7 @@ export async function reserveChatStep(
     p_since: since,
     p_budget: budgetUsd,
     ...(agentRunId ? { p_agent_run_id: agentRunId, p_run_cap: runCap } : {}),
+    ...(scheduleId ? { p_schedule_id: scheduleId } : {}),
   });
   if (error) {
     if (error.code === 'P0002') {
@@ -173,6 +221,110 @@ export async function reserveChatStep(
     throw aiBudgetUsedUp(plan);
   }
   return data;
+}
+
+/** The most like parts one check sizes (fitChatUnits): a batch past it is checked as this many. */
+export const MAX_FIT_UNITS = 100;
+
+/**
+ * What the period's Chat and other AI calls spent so far, holds in flight
+ * included and own-key steps left out (ai_usage_by_feature, 00405): the sum
+ * reserve_chat_ai_usage checks a hold against.
+ */
+async function periodSpentUsd(orgId, since) {
+  const { data, error } = await supabaseAdmin.rpc('ai_usage_by_feature', {
+    p_organization_id: orgId,
+    p_since: since,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
+}
+
+/**
+ * How many of `units` like parts of one job (drafts, tasks, pages) the AI
+ * budget left covers, each sized as one model step's worst case (`perUnit`:
+ * its prompt and its max output, stepWorstCaseUsd), before the job starts
+ * (CHAT-04 item 17a). What is left is the budget, purchased credits
+ * included, less the period's spend and holds; for an agent run's chat
+ * (`agentRunId`), also what its own cap leaves (CHAT-27 item 21). A count,
+ * never dollars: the web asks the person what to do when it is under
+ * `units`, and pauses at the cap when it is 0. `limit` says which limit
+ * binds: 'run' when the agent run's own cap leaves no more than the month
+ * does, so the web pauses the run at its cap, not the agent at the month's. Every part fits on the
+ * workspace's own key (ownKey: the provider bills it), without a budget to
+ * hold against (self-hosted), and for a model priced at nothing. Only a
+ * check: each step is still held on its own (reserveChatStep).
+ */
+export async function fitChatUnits(
+  orgId,
+  { modelId, perUnit, units, ownKey = false, agentRunId = null },
+) {
+  assertChatOn(orgId);
+  const count = Math.max(0, Math.min(MAX_FIT_UNITS, Math.floor(units)));
+  const unitUsd = stepWorstCaseUsd(modelId, perUnit);
+  if (ownKey || !(unitUsd > 0)) return { fits: count, limit: 'month' };
+  const { budgetUsd, includedUsd, since } = await aiBudgetOf(orgId);
+  let room = Infinity;
+  if (budgetUsd !== null) room = budgetUsd - (await periodSpentUsd(orgId, since));
+  let limit = 'month';
+  if (agentRunId) {
+    const cap = await agentRunCapUsd(orgId, agentRunId, includedUsd);
+    if (cap !== null) {
+      const runRoom = cap - (await agentRunSpentUsd(agentRunId));
+      // Its own cap binds when it leaves no more than the month, as reserveChatStep's run_cap.
+      if (runRoom <= room) limit = 'run';
+      room = Math.min(room, runRoom);
+    }
+  }
+  return { fits: room === Infinity ? count : fitsIn(room, unitUsd, count), limit };
+}
+
+/** The parts of `unitUsd` each that `roomUsd` holds, at most `count`; float noise doesn't take one. */
+const fitsIn = (roomUsd, unitUsd, count) =>
+  Math.max(0, Math.min(count, Math.floor(roomUsd / unitUsd + 1e-9)));
+
+/**
+ * A meter for Content Quality's reads made for an agent run (the go-live
+ * gate, AUTONOMOUS-GO-LIVE §6.2): the same { charge, release, keep } as
+ * plan-guard's reserveAiBudget, so the reads take it in its place, but
+ * drawn as the run's own steps (feature `agent`, within the run's cap and
+ * the month's budget). `reserve({ modelId, holdUsd })` holds the read;
+ * past the run's cap, ChatBudgetError run_cap; past the budget,
+ * PlanLimitError. A read that calls the model again is held and charged as
+ * a second step.
+ */
+export function agentRunReserve(orgId, { runId, agentRunId }) {
+  return async ({ modelId, holdUsd = null }) => {
+    const hold = () =>
+      reserveChatStep(orgId, { feature: 'agent', modelId, runId, agentRunId, holdUsd });
+    let usageId = await hold();
+    let settled = false;
+    return {
+      // As reserveAiBudget's: a write that fails is logged, never thrown.
+      async charge(usage) {
+        try {
+          if (settled) usageId = await hold();
+          settled = true;
+          await chargeChatStep(orgId, usageId, { modelId, usage });
+        } catch (err) {
+          logger.error({ err, orgId, agentRunId }, '[chat-budget] a read for the run not charged');
+        }
+      },
+      async release() {
+        if (settled) return;
+        settled = true;
+        try {
+          await releaseChatStep(orgId, usageId);
+        } catch (err) {
+          logger.error({ err, orgId, agentRunId }, '[chat-budget] a read’s hold not released');
+        }
+      },
+      // A call sent and then cut off is billed all the same: the hold stays as its cost.
+      async keep() {
+        settled = true;
+      },
+    };
+  };
 }
 
 /**
@@ -197,6 +349,39 @@ export async function refreshAgentRunShare(orgId, agentRunId) {
     if (error) throw new Error(error.message);
   } catch (err) {
     logger.error({ err, orgId, agentRunId }, '[chat-budget] could not keep an agent run’s use');
+  }
+}
+
+/**
+ * Keeps a scheduled job's run's use (chat_schedule_runs.usage_share,
+ * CHAT-12 item 24: "0.6%" in its run history) as its Chat run's spend on
+ * Ansvisor's key over the plan's included monthly budget: after each charge
+ * or release of one of its steps. Own-key steps don't draw on the limit,
+ * so they don't count. Never dollars. Without a budget (self-hosted) there
+ * is no share. A failure is logged: the step is settled all the same.
+ */
+export async function refreshScheduleRunShare(orgId, chatRunId) {
+  if (!chatRunId) return;
+  try {
+    const { includedUsd } = await aiBudgetOf(orgId, { credits: false });
+    if (includedUsd === null || !(includedUsd > 0)) return;
+    const { data, error } = await supabaseAdmin
+      .from('prompt_improve_usage')
+      .select('cost_usd')
+      .eq('organization_id', orgId)
+      .eq('chat_run_id', chatRunId)
+      .eq('own_key', false);
+    if (error) throw new Error(error.message);
+    const spent = (data ?? []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
+    // numeric(7, 4): a share to 0.01%, at most 999.9999.
+    const share = Math.min(999.9999, Math.round((spent / includedUsd) * 10_000) / 10_000);
+    const { error: keepError } = await supabaseAdmin
+      .from('chat_schedule_runs')
+      .update({ usage_share: share })
+      .eq('run_id', chatRunId);
+    if (keepError) throw new Error(keepError.message);
+  } catch (err) {
+    logger.error({ err, orgId, chatRunId }, '[chat-budget] could not keep a scheduled run’s use');
   }
 }
 
@@ -232,12 +417,13 @@ export async function chargeChatStep(orgId, usageId, { modelId, usage, latencyMs
     .eq('id', usageId)
     .eq('organization_id', orgId)
     .in('feature', CHAT_BUDGET_FEATURES)
-    .select('id, agent_run_id');
+    .select('id, agent_run_id, schedule_id, chat_run_id');
   if (error) throw new Error(error.message);
   if (!data?.length) throw new ChatBudgetError('not_found', 404, 'Chat step usage not found.');
   await drawOnCredits(orgId, usageId);
   // After the draw: the run's use counts the step's credit parts too.
   if (data[0].agent_run_id) await refreshAgentRunShare(orgId, data[0].agent_run_id);
+  if (data[0].schedule_id) await refreshScheduleRunShare(orgId, data[0].chat_run_id);
 }
 
 /**
@@ -270,10 +456,11 @@ export async function releaseChatStep(orgId, usageId) {
     .eq('id', usageId)
     .eq('organization_id', orgId)
     .in('feature', CHAT_BUDGET_FEATURES)
-    .select('agent_run_id');
+    .select('agent_run_id, schedule_id, chat_run_id');
   if (error) throw new Error(error.message);
-  const agentRunId = (data ?? [])[0]?.agent_run_id;
-  if (agentRunId) await refreshAgentRunShare(orgId, agentRunId);
+  const released = (data ?? [])[0];
+  if (released?.agent_run_id) await refreshAgentRunShare(orgId, released.agent_run_id);
+  if (released?.schedule_id) await refreshScheduleRunShare(orgId, released.chat_run_id);
 }
 
 /**
@@ -307,5 +494,90 @@ export async function agentUsageShares(orgId, { days = null } = {}) {
       ownKeyShare: Number(row.own_key_share) || 0,
       runs: Number(row.runs) || 0,
     })),
+  };
+}
+
+/** How many of the last days a run estimate reads, and how many of their rows. */
+const ESTIMATE_DAYS = 30;
+const ESTIMATE_ROWS = 5000;
+
+/**
+ * About how much of the AI limit one Chat run uses (the schedule card's
+ * "≈ 2% of monthly AI usage per run", CHAT-12 item 7): the workspace's
+ * Chat and scheduled runs over the last 30 days, each run's spend summed,
+ * averaged, over the plan's included budget (credits left out, as agent
+ * shares are). On Ansvisor's key only: own-key rows are the workspace's.
+ * Null with no run to go on. Shares only: no dollars leave the server.
+ * No budget (self-hosted): unlimited.
+ */
+export async function chatRunEstimate(orgId) {
+  assertChatOn(orgId);
+  const { includedUsd } = await aiBudgetOf(orgId, { credits: false });
+  if (includedUsd === null || !(includedUsd > 0)) return { unlimited: true, share: null, runs: 0 };
+  const since = new Date(Date.now() - ESTIMATE_DAYS * 86_400_000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .select('chat_run_id, cost_usd')
+    .eq('organization_id', orgId)
+    .in('feature', ['chat', 'schedule'])
+    .eq('own_key', false)
+    .gte('used_at', since)
+    .not('chat_run_id', 'is', null)
+    .order('used_at', { ascending: false })
+    .limit(ESTIMATE_ROWS);
+  if (error) throw new Error(error.message);
+  const byRun = new Map();
+  for (const row of data ?? []) {
+    byRun.set(row.chat_run_id, (byRun.get(row.chat_run_id) ?? 0) + (Number(row.cost_usd) || 0));
+  }
+  if (byRun.size === 0) return { unlimited: false, share: null, runs: 0 };
+  const average = [...byRun.values()].reduce((sum, usd) => sum + usd, 0) / byRun.size;
+  // numeric(7, 4) as the run rows keep it: to 0.01%.
+  const share = Math.min(999.9999, Math.round((average / includedUsd) * 10_000) / 10_000);
+  return { unlimited: false, share, runs: byRun.size };
+}
+
+/**
+ * The agents' monthly limit on the workspace's own key when no Admin set it
+ * (AGENT-OWN-KEY D5, 00442's default).
+ */
+export const OWN_KEY_AGENT_CAP_DEFAULT_USD = 250;
+
+/**
+ * The key guard (AGENT-OWN-KEY §4.2): what all agents' runs spent on the
+ * workspace's own key this AI period (the meter's, so it renews with it),
+ * at the price each step was charged, holds in flight at their worst case,
+ * against the Admin's monthly limit (chat_settings.own_key_agent_month_usd,
+ * $250 without a row). `reached` at or past it: the agents pause
+ * (own_key_cap) and Run now is refused until the period renews or an Admin
+ * raises it. Dollars only for the Admins' settings card; the agent checks
+ * read `reached` alone. Interactive Chat isn't counted (§4.4).
+ */
+export async function ownKeyAgentSpend(orgId, now = new Date()) {
+  assertChatOn(orgId);
+  const periodStart = await quotaPeriodStart(orgId, now);
+  const since = periodStart.toISOString();
+  const [{ data: settings, error: settingsError }, { data: spent, error }] = await Promise.all([
+    supabaseAdmin
+      .from('chat_settings')
+      .select('own_key_agent_month_usd')
+      .eq('organization_id', orgId)
+      .maybeSingle(),
+    supabaseAdmin.rpc('chat_own_key_agent_spend', {
+      p_organization_id: orgId,
+      p_since: since,
+    }),
+  ]);
+  if (settingsError) throw new Error(settingsError.message);
+  if (error) throw new Error(error.message);
+  const capUsd = Number(settings?.own_key_agent_month_usd ?? OWN_KEY_AGENT_CAP_DEFAULT_USD);
+  const usedUsd = Number(spent) || 0;
+  return {
+    reached: usedUsd >= capUsd,
+    // To the cent: an estimate at list prices.
+    usedUsd: Math.round(usedUsd * 100) / 100,
+    capUsd,
+    since,
+    renewsAt: shiftMonthClamped(periodStart, 1).toISOString(),
   };
 }

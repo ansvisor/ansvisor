@@ -117,6 +117,7 @@ async function render(
     reviewer = null as ContentAuthor | null,
     reviewerRequired = false,
     reviewerLd = null as string | null,
+    openWork = null as { rules: number; todos: number } | null,
   } = {},
 ) {
   // As the editor makes it (00448): the author it names, the site's pages Site trust found.
@@ -167,6 +168,7 @@ async function render(
             disclosureLine={disclosureLine}
             disclosureAdded={disclosureAdded}
             onAddDisclosure={onAddDisclosure}
+            openWork={openWork}
           />
         </NextIntlClientProvider>
       </Wrap>,
@@ -178,6 +180,9 @@ const alert = () => dialog().querySelector('[role="alert"]');
 const button = (name: string) =>
   [...dialog().querySelectorAll('button')].find((b) => b.textContent === name);
 const rows = () => [...dialog().querySelectorAll('li > div')].map((row) => row.textContent);
+/** The Ready for your CMS row, in whichever group it shows. */
+const pasteRow = () =>
+  rows().find((row) => /^(Ready for your CMS|Fix before you paste) · /.test(row ?? ''));
 const jsonLd = () =>
   JSON.parse(
     dialog()
@@ -341,8 +346,8 @@ describe('BeforePublish', () => {
     expect(lowTrust.score).toBe(37);
     await render(quality());
     expect(alert()!.textContent).toBe(
-      'Trust 37, below 60. 2 sentences with figures have no source. You can mark it ready, but fixing them first raises Trust to about 94.' +
-        'Mark ready anyway is logged, with this Trust.',
+      'Trust is 37, under 60: AI answers may lean on this page less. 2 sentences with figures have no source. Fixing them first could raise Trust to about 94 (an estimate). You can still mark it ready.' +
+        'If you mark it ready anyway, we note it with this Trust.',
     );
     // The action has the focus, not the code (it moves there after a frame).
     await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
@@ -381,7 +386,7 @@ describe('BeforePublish', () => {
       }),
     );
     expect(alert()!.textContent).toContain(
-      'Trust 40, below 60. You can mark it ready, but Quality shows what would raise it.',
+      'Trust is 40, under 60: AI answers may lean on this page less. Quality shows what could raise it. You can still mark it ready.',
     );
     expect(button('Fix first')).toBeDefined();
     await act(async () => button('Mark ready anyway')!.click());
@@ -414,14 +419,55 @@ describe('BeforePublish', () => {
     );
   });
 
+  it('counts what is still open as it is marked ready, never that all is done (editor UX review 2026-11-03)', async () => {
+    const said = () =>
+      [...dialog().querySelectorAll('[role="status"]')].map((p) => p.textContent).join(' ');
+    await render(quality({ trust: null }), { openWork: { rules: 2, todos: 1 } });
+    expect(said()).toContain(
+      'Still open: 2 rules and 1 to-do. You can mark it ready: they stay in Rules and Quality.',
+    );
+    // Mark ready stays open.
+    expect(
+      [...dialog().querySelectorAll('button')].find((b) => b.textContent === 'Mark ready')!
+        .disabled,
+    ).toBe(false);
+    await render(quality({ trust: null }), { openWork: { rules: 1, todos: 0 } });
+    expect(said()).toContain('Still open: 1 rule. You can mark it ready');
+    await render(quality({ trust: null }), { openWork: { rules: 0, todos: 3 } });
+    expect(said()).toContain('Still open: 3 to-dos. You can mark it ready');
+    // Nothing open, or on the way to Export: nothing said.
+    await render(quality({ trust: null }), { openWork: { rules: 0, todos: 0 } });
+    expect(said()).not.toContain('Still open');
+    await render(quality({ trust: null }), { mode: 'export', openWork: { rules: 2, todos: 1 } });
+    expect(said()).not.toContain('Still open');
+  });
+
   it('says what the CMS does: the author, the dates and the Article schema', async () => {
     await render(quality());
+    // To fix first, then to check, then what is in place (editor UX review 2026-11-03).
     expect(rows()).toEqual([
-      "Author: Ada Lovelace · doneAda Lovelace is named in the page's Article schema. Set them as the author in your CMS too, so its template shows the byline.",
       'Visible published and updated dates · check itMost CMSs (WordPress, Webflow, Shopify) add these for you. Check your page.',
-      "Article schema with the authorAdded · doneAnsvisor adds it to the page it sends to your CMS and to exports, with Ada Lovelace as the author. The page's text doesn't change. WordPress leaves it out: add it with your SEO plugin.",
-      'Ready to paste · doneNo placeholders, all images have alt text, all links work.',
+      "Author: Ada Lovelace · doneAda Lovelace is named in the page's Article schema. Set them as the author in your CMS too, so its template shows the byline.",
+      "Search engine details (Article schema), with the authorAdded · doneAnsvisor adds it to the page it sends to your CMS and to exports, with Ada Lovelace as the author. The page's text doesn't change. WordPress leaves it out: add it with your SEO plugin.",
+      'Ready for your CMS · doneNo placeholders, all images have alt text, all links work.',
     ]);
+    const groups = [...dialog().querySelectorAll('section h3')].map((h) => h.textContent);
+    expect(groups).toEqual(['Check yourself', 'In place']);
+    expect(dialog().textContent).toContain(
+      'Nothing to fix and 1 to check yourself before you publish.',
+    );
+  });
+
+  it('sums up what to fix and what to check, the things to fix first', async () => {
+    await render(quality({ author: null, trust: null }), {
+      paste: { placeholders: 1, imagesWithoutAlt: 0, linksBroken: 0, linksUnread: 0 },
+    });
+    expect(dialog().textContent).toContain(
+      '2 things to fix and 1 to check yourself before you publish.',
+    );
+    const groups = [...dialog().querySelectorAll('section h3')].map((h) => h.textContent);
+    expect(groups).toEqual(['Fix before you publish', 'Check yourself', 'In place']);
+    expect(rows()[0]).toMatch(/^No author yet · missing/);
   });
 
   it('checks that a regulated page both selects and names its qualified reviewer', async () => {
@@ -497,7 +543,7 @@ describe('BeforePublish', () => {
   it('says a left-out schema is left out, with the code to paste and Add it back', async () => {
     await render(quality(), { schemaLeftOut: true });
     expect(rows()[2]).toBe(
-      "Article schema left out · check itYou left Ansvisor's Article schema out of this page, for a CMS that adds its own. If yours doesn't, paste the code below into the page.",
+      "Search engine details left out · check itYou left Ansvisor's search engine details (Article schema) out of this page, for a CMS that adds its own. If yours doesn't, paste the code below into the page.",
     );
     // The author row no longer says the schema names them.
     expect(rows()[0]).toContain('Author for your CMS');
@@ -510,7 +556,7 @@ describe('BeforePublish', () => {
   it('says why Ansvisor adds none to a page with an Article schema of its own', async () => {
     await render(quality(), { ownArticleSchema: true });
     expect(rows()[2]).toBe(
-      'Article schema on the page · doneYour page already has an Article schema, so Ansvisor leaves its own out.',
+      'Search engine details on the page · doneYour page already has its search engine details (Article schema), so Ansvisor leaves its own out.',
     );
     expect(button('Leave it out')).toBeUndefined();
     expect(dialog().querySelector('pre')).toBeNull();
@@ -690,7 +736,7 @@ describe('BeforePublish', () => {
     await render(quality({ author: null }), { isNew: false, image: null });
     const [author, , schema] = rows();
     expect(author).toBe(
-      'No author yet · missingThe page goes out as Acme Team: its Article schema names Acme as the author. A real author raises E-E-A-T.',
+      'No author yet · missingThe page goes out as Acme Team: its search engine details name Acme as the author. A real author raises E-E-A-T.',
     );
     expect(schema).toContain('with Acme as the author');
     expect(jsonLd().author).toEqual({
@@ -706,8 +752,8 @@ describe('BeforePublish', () => {
     await render(quality({ trust: null }), {
       paste: { placeholders: 2, imagesWithoutAlt: 1, linksBroken: 1, linksUnread: 1 },
     });
-    expect(rows().at(-1)).toBe(
-      "Not ready to paste yet · missing2 placeholders still open · 1 image has no alt text · 1 link doesn't answer · 1 link wasn't read: check it",
+    expect(pasteRow()).toBe(
+      "Fix before you paste · missing2 placeholders still open · 1 image has no alt text · 1 link doesn't answer · 1 link wasn't read: check it",
     );
     await act(async () => button('Fill now')!.click());
     expect(onFillNow).toHaveBeenCalled();
@@ -720,12 +766,12 @@ describe('BeforePublish', () => {
       paste: { ...clean, linksUnread: 2 },
       linksPending: 2,
     });
-    expect(rows().at(-1)).toBe(
-      'Ready to paste · check itNo placeholders, all images have alt text; 2 links are still being read.',
+    expect(pasteRow()).toBe(
+      'Ready for your CMS · check itNo placeholders, all images have alt text; 2 links are still being read.',
     );
     await render(quality({ trust: null }), { paste: { ...clean, linksUnread: 2 } });
-    expect(rows().at(-1)).toBe(
-      "Ready to paste · check itNo placeholders, all images have alt text; 2 links weren't read: check them.",
+    expect(pasteRow()).toBe(
+      "Ready for your CMS · check itNo placeholders, all images have alt text; 2 links weren't read: check them.",
     );
   });
 
@@ -735,22 +781,24 @@ describe('BeforePublish', () => {
       paste: { ...clean, linksUnread: 2 },
       linksPending: 1,
     });
-    expect(rows().at(-1)).toBe(
-      "Ready to paste · check itNo placeholders, all images have alt text; 1 link is still being read, 1 wasn't read: check it.",
+    expect(pasteRow()).toBe(
+      "Ready for your CMS · check itNo placeholders, all images have alt text; 1 link is still being read, 1 wasn't read: check it.",
     );
     await render(quality({ trust: null }), {
       paste: { ...clean, placeholders: 1, linksUnread: 3 },
       linksPending: 1,
     });
-    expect(rows().at(-1)).toBe(
-      "Not ready to paste yet · missing1 placeholder still open · 1 link is still being read, 2 weren't read: check them",
+    expect(pasteRow()).toBe(
+      "Fix before you paste · missing1 placeholder still open · 1 link is still being read, 2 weren't read: check them",
     );
   });
 
   it('goes on to Export from Export, the warning saying so, with no log', async () => {
     await render(quality(), { mode: 'export' });
-    expect(alert()!.textContent).toContain('You can export it, but fixing them first');
-    expect(alert()!.textContent).not.toContain('logged');
+    expect(alert()!.textContent).toContain(
+      'Fixing them first could raise Trust to about 94 (an estimate). You can still export it.',
+    );
+    expect(alert()!.textContent).not.toContain('we note it');
     expect(button('Mark ready anyway')).toBeUndefined();
     // The dialog moves focus in after it opens.
     await vi.waitFor(() => expect(document.activeElement).toBe(button('Continue to export')));
@@ -761,8 +809,10 @@ describe('BeforePublish', () => {
 
   it('goes on to the Send dialog from Send to CMS, the warning saying so', async () => {
     await render(quality(), { mode: 'send' });
-    expect(alert()!.textContent).toContain('You can send it to your CMS, but fixing them first');
-    expect(alert()!.textContent).not.toContain('logged');
+    expect(alert()!.textContent).toContain(
+      'Fixing them first could raise Trust to about 94 (an estimate). You can still send it to your CMS.',
+    );
+    expect(alert()!.textContent).not.toContain('we note it');
     await act(async () => button('Continue to send')!.click());
     expect(onContinue).toHaveBeenCalled();
     expect(onMarkReady).not.toHaveBeenCalled();
@@ -777,7 +827,9 @@ describe('BeforePublish', () => {
     expect(jsonLd()['@type']).toBe('Article');
     // Left out: the code to paste, for a CMS that doesn't add it.
     await render(quality(), { mode: 'send', schemaLeftOut: true });
-    expect(button("Show the JSON-LD, for a CMS that doesn't add it")).toBeDefined();
+    expect(
+      button("Show the code for search engines (JSON-LD), for a CMS that doesn't add it"),
+    ).toBeDefined();
     // Export and Mark ready show it as before.
     await render(quality(), { mode: 'export' });
     expect(dialog().querySelector('pre')).not.toBeNull();
@@ -897,7 +949,7 @@ describe('BeforePublish', () => {
     expect(rows()).toEqual([
       expect.stringContaining('Author for your CMS'),
       'Schema for this page type · check itCheck what your CMS adds for it (Product, ItemList…). The code Ansvisor gives here is for articles.',
-      expect.stringContaining('Ready to paste'),
+      expect.stringContaining('Ready for your CMS'),
     ]);
     expect(dialog().querySelector('pre')).toBeNull();
     expect(button('Copy JSON-LD')).toBeUndefined();
