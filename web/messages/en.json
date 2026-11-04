@@ -14889,6 +14889,17 @@
     "team_done": "Done",
     "team_sending": "Sending...",
     "team_sendInvitation": "Send invitation",
+    "googleOverview": {
+      "title": "Google per brand",
+      "description": "Which Google account each brand reads Search Console and Analytics from. Change it in the brand's own settings, under Integrations.",
+      "brand": "Brand",
+      "workspace": "Workspace account",
+      "own": "Its own account",
+      "ownShared": "Own account, shared with {count, plural, one {# more brand} other {# more brands}}",
+      "none": "Not connected",
+      "reconnect": "Needs connecting again",
+      "change": "Change"
+    },
     "teamBrands": {
       "label": "Brands",
       "all": {
@@ -15037,6 +15048,40 @@
           "founded": "Founded",
           "claim": "Claim"
         }
+      },
+      "integrations": {
+        "tab": "Integrations",
+        "title": "Google",
+        "description": "Which Google account this brand reads Search Console and Analytics from. A brand can use the workspace's account, the same account as another brand, or its own.",
+        "workspaceAccount": "the workspace's Google account",
+        "ownAccount": "its own Google account",
+        "sameAs": "the same account as {brands}",
+        "notSetUp": "Not set up",
+        "statusConnected": "Connected",
+        "statusNotConnected": "Not connected",
+        "none": "This brand uses no Google account for this yet.",
+        "uses": "Uses {account}.",
+        "needsReconnect": "The Google account needs connecting again.",
+        "connectedOn": "Connected on {date}",
+        "alsoUsedBy": "Also used by {brands}",
+        "useSame": "Use the same account as…",
+        "useSameLabel": "Use the same account as another brand",
+        "connect": "Connect a Google account",
+        "connectAnother": "Connect another Google account",
+        "disconnect": "Disconnect",
+        "switched": "{label} now uses that account",
+        "connected": "{label} connected for this brand",
+        "connectUnfinished": "The sign-in didn't finish. Try again.",
+        "disconnected": "{label} disconnected from this brand",
+        "failed": "That didn't work. Try again.",
+        "gscProperty": "Search Console property",
+        "gaProperty": "Analytics property",
+        "pickProperty": "Pick a property",
+        "propertySaved": "Property saved",
+        "propertiesFailed": "Couldn't list this account's properties.",
+        "otherIntegrations": "CMS sites, catalog sources and AI traffic are in Settings › Integrations, for the brand selected there.",
+        "loadError": "Couldn't load this brand's Google accounts.",
+        "retry": "Retry"
       },
       "people": {
         "tab": "People",
