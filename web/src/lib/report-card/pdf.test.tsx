@@ -156,9 +156,11 @@ describe('ReportCardPdfDocument', () => {
     const [, , , none] = draw({ ...SAMPLE_REPORT_CARD, cpc: null, dealValue: null });
     expect(none).toContain('Not enough ad data for your questions in the United States');
     expect(none).not.toContain('A revenue scenario');
-    const [, , , odd] = draw({ ...SAMPLE_REPORT_CARD, cpc: { usd: 47.1, keywords: 8 } });
-    expect(odd).toContain('too uneven to price visits with (a median of $47.10 from 8 keywords)');
-    expect(odd).not.toContain('$47,100');
+    const [, , , odd] = draw({ ...SAMPLE_REPORT_CARD, cpc: { usd: 150, keywords: 8 } });
+    expect(odd).toContain('look wrong (a median of $150.00 from 8 keywords)');
+    const [, , , b2b] = draw({ ...SAMPLE_REPORT_CARD, cpc: { usd: 47.1, keywords: 8 } });
+    expect(b2b).toContain('$43,756');
+    expect(b2b).toContain('Scenarios, not a forecast: what these visits would cost');
   });
 
   it('page 4 says so when clicks cost less than Starter, instead of a saving', () => {

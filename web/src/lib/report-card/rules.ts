@@ -617,13 +617,14 @@ export function examplePrompt(card: ReportCardPayload): string | null {
  */
 export const MIN_CPC_KEYWORDS = 5;
 /**
- * The highest median cost per click a card prices visits with: above it, a
- * few expensive keywords decide the table (a real card's $47.10 from 8
- * keywords priced 1,000 visits at $47,100 a month).
+ * The highest median cost per click a card prices visits with (owner
+ * decision 2026-11-04): a guard against bad data only. Real B2B and SaaS
+ * medians of $30–50 are priced, as the table is scaled to the brand's own
+ * searches, and they are those brands' strongest case.
  */
-export const MAX_CPC_USD = 30;
+export const MAX_CPC_USD = 100;
 
-/** Whether the card's ad data can price visits: none, too uneven, or usable. */
+/** Whether the card's ad data can price visits: none, implausible, or usable. */
 export function adsVerdict(
   card: ReportCardPayload,
 ): { kind: 'none' } | { kind: 'odd' | 'ok'; usd: number; keywords: number } {

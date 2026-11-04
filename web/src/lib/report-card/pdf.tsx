@@ -827,6 +827,7 @@ function ValuePage({ card, t, font }: PageProps) {
                 </Text>
               </View>
             ))}
+            <Text style={[styles.small, { marginTop: 3 }]}>{v.tableNote}</Text>
           </>
         )}
       </View>
