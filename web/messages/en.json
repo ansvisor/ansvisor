@@ -5120,6 +5120,8 @@
       },
       "you": "You",
       "allBrands": "All brands",
+      "selectedBrands": "Selected brands",
+      "brandCount": "{count, plural, one {# brand} other {# brands}}",
       "neverSignedIn": "Not yet",
       "roleChanged": "Role changed",
       "roleChangeFailed": "Couldn't change the role. Try again.",
@@ -5466,6 +5468,8 @@
     "yourAccess": {
       "title": "Your access",
       "brands": "Brands",
+      "noBrands": "None yet",
+      "selectedNote": "An Admin chose these brands for you. The sample brand is everyone's.",
       "actsAsYou": "Chat acts as you",
       "yourRole": "Your role: {role}",
       "rows": {
@@ -14443,6 +14447,29 @@
     "team_done": "Done",
     "team_sending": "Sending...",
     "team_sendInvitation": "Send invitation",
+    "teamBrands": {
+      "label": "Brands",
+      "all": {
+        "title": "All brands",
+        "note": "Every brand, and new ones too"
+      },
+      "selected": {
+        "title": "Selected brands",
+        "note": "Only the brands you pick"
+      },
+      "adminAlways": "Admins always have All brands.",
+      "noBrands": "There are no brands to share yet.",
+      "pickOne": "Pick at least one brand.",
+      "chosen": "{count, plural, one {# brand} other {# brands}} picked. The sample brand stays visible to everyone.",
+      "count": "{count, plural, one {# brand} other {# brands}}",
+      "editFor": "Edit brands for {name}",
+      "editTitle": "Edit brands",
+      "editDescription": "Choose which brands {name} sees. They see the change on their next page.",
+      "save": "Save",
+      "saving": "Saving...",
+      "saved": "Brands updated for {name}",
+      "saveFailed": "Failed to update brands"
+    },
     "organization": "Organization",
     "org_title": "Organization",
     "org_description": "Manage your organization name and view plan details.",

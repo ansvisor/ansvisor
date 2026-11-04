@@ -1,4 +1,4 @@
-import { allowedBrands, brandAccessFor } from '@/lib/brand-access';
+import { allowedBrands, brandAccessFor, readMemberBrandAccess } from '@/lib/brand-access';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readMemberEmails } from '@/lib/member-emails';
@@ -36,16 +36,38 @@ export async function listMembersFor(auth: McpAuthContext) {
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);
   const rows = data ?? [];
-  const emails = auth.role === 'admin' ? await readMemberEmails(rows.map((r) => r.id)) : null;
+  const isAdmin = auth.role === 'admin';
+  const [emails, access, brands] = await Promise.all([
+    isAdmin ? readMemberEmails(rows.map((r) => r.id)) : null,
+    readMemberBrandAccess(auth.organizationId),
+    supabaseAdmin
+      .from('brands')
+      .select('id, name')
+      .eq('organization_id', auth.organizationId)
+      .eq('is_demo', false)
+      .order('created_at', { ascending: true }),
+  ]);
+  if (brands.error) throw new Error(brands.error.message);
+  const brandOrder = (brands.data ?? []) as { id: string; name: string }[];
   return {
-    members: rows.map((row) => ({
-      name: row.full_name?.trim() || null,
-      role: row.role,
-      // Every member uses every brand of the workspace for now (P0 decision 7).
-      brand_access: 'all' as const,
-      is_you: row.id === auth.userId,
-      ...(emails ? { email: emails.get(row.id) ?? null } : {}),
-    })),
+    members: rows.map((row) => {
+      const member = access.get(row.id);
+      const isYou = row.id === auth.userId;
+      const selected = member?.scope === 'selected';
+      // As Settings › Roles & access shows it: which brands an admin shared
+      // with someone is for admins and the person themselves to see.
+      const shared = selected && (isAdmin || isYou) ? new Set(member.brandIds) : null;
+      return {
+        name: row.full_name?.trim() || null,
+        role: row.role,
+        brand_access: selected ? ('selected' as const) : ('all' as const),
+        ...(shared
+          ? { brands: brandOrder.filter((b) => shared.has(b.id)).map((b) => b.name) }
+          : {}),
+        is_you: isYou,
+        ...(emails ? { email: emails.get(row.id) ?? null } : {}),
+      };
+    }),
     data_as_of: now(),
   };
 }
