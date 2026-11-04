@@ -6,6 +6,7 @@ import {
   PLAN_STEPS_MAX,
   PLAN_STEPS_MIN,
   actionPlan,
+  competitorSite,
   conversionRange,
   countryName,
   firstDaySteps,
@@ -44,6 +45,51 @@ describe('totals', () => {
   it('is 0% when no engine answered', () => {
     const none = card({ engines: [{ engine: 'chatgpt-web', answers: 0, named: 0 }] });
     expect(totals(none).visibility).toBe(0);
+  });
+});
+
+describe('quickWins, about competitors and engines', () => {
+  it('never sends a company to a competitor’s own site, marked or by its name', () => {
+    const wins = quickWins(
+      card({
+        competitors: [{ name: 'Ridgeline Roasters', answers: 30 }],
+        citedSites: [
+          { domain: 'ridgelineroasters.example', answers: 30, own: false },
+          { domain: 'harborline.example', answers: 25, own: false, competitor: true },
+          { domain: 'coffeereview.example', answers: 23, own: false },
+        ],
+      }),
+    );
+    expect(wins.map((w) => w.title)).toContain('Get Brewline Coffee onto coffeereview.example');
+    expect(wins.map((w) => w.title).join(' ')).not.toMatch(/ridgeline|harborline/i);
+  });
+
+  it('matches a competitor by a label of the host, its first word too', () => {
+    const rivals = [{ name: 'HubSpot CRM' }, { name: 'Acme Inc.' }];
+    expect(competitorSite('hubspot.com', rivals)).toBe(true);
+    expect(competitorSite('blog.acme.io', rivals)).toBe(true);
+    expect(competitorSite('g2.com', rivals)).toBe(false);
+    expect(competitorSite('com', rivals)).toBe(false);
+  });
+
+  it('names the weakest engine by how many were asked, and only when the engines differ', () => {
+    const three = card({
+      engines: [
+        { engine: 'chatgpt-web', answers: 25, named: 10 },
+        { engine: 'gemini-web', answers: 25, named: 2 },
+        { engine: 'google-aio', answers: 20, named: 8 },
+      ],
+    });
+    const line = quickWins({ ...three, missedQuestions: [], citedSites: [], ownCitations: 50 });
+    expect(line.find((w) => w.title.includes('Gemini'))?.detail).toContain(
+      'the fewest of the three engines',
+    );
+    const alike = card({
+      engines: SAMPLE_REPORT_CARD.engines.map((e) => ({ ...e, answers: 25, named: 5 })),
+      missedQuestions: [],
+      citedSites: [],
+    });
+    expect(quickWins(alike).some((w) => w.title.startsWith('Look at what'))).toBe(false);
   });
 });
 
@@ -120,8 +166,13 @@ describe('quickWins', () => {
     expect(wins[0].detail).toContain('AI names Copper Kettle Coffee and Tiny Mill for it');
   });
 
-  it('still gives the weakest engine when the company leads everywhere', () => {
-    expect(quickWins(strong).map((w) => w.title)).toEqual([
+  it('still gives one step when the company leads everywhere, alike in every engine', () => {
+    expect(quickWins(strong).map((w) => w.title)).toEqual(['Keep Brewline Coffee where it is']);
+    const uneven = {
+      ...strong,
+      engines: strong.engines.map((e, i) => (i === 0 ? { ...e, named: 15 } : e)),
+    };
+    expect(quickWins(uneven).map((w) => w.title)).toEqual([
       'Look at what ChatGPT says about your market',
     ]);
   });

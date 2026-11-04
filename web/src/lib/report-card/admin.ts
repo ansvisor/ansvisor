@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 
 /**
  * The free report card's admin view (REPORT-CARD §7): for Ansvisor staff,
@@ -15,6 +16,7 @@ const FAILURES_SHOWN = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface CardRow {
+  id?: string;
   site: string;
   status: 'queued' | 'running' | 'ready' | 'failed';
   cost_usd: number | string;
@@ -25,6 +27,7 @@ export interface CardRow {
 }
 
 export interface RequestRow {
+  id?: string;
   created_at: string;
   outcome: 'queued' | 'resent' | 'daily_cap';
   email_status: 'sent' | 'refused' | 'unknown' | 'skipped' | null;
@@ -172,31 +175,46 @@ export async function loadReportCardStats(
 ): Promise<ReportCardStats> {
   const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   const since = new Date(Math.min(now.getTime() - 30 * DAY_MS, monthStart.getTime()));
+  // PostgREST gives at most 1,000 rows a request: every row is read, a page
+  // at a time in id order, so the figures never come from a subset.
+  const CARD_COLUMNS = 'id, site, status, cost_usd, created_at, started_at, finished_at, error';
   const [cards, requests, waiting] = await Promise.all([
-    db
-      .from('report_cards')
-      .select('site, status, cost_usd, created_at, started_at, finished_at, error')
-      .gte('created_at', since.toISOString())
-      .limit(20_000),
-    db
-      .from('report_card_requests')
-      .select('created_at, outcome, email_status, consent_marketing')
-      .gte('created_at', new Date(now.getTime() - 30 * DAY_MS).toISOString())
-      .limit(50_000),
+    readAllRpcRows<CardRow>((from, to) =>
+      db
+        .from('report_cards')
+        .select(CARD_COLUMNS)
+        .gte('created_at', since.toISOString())
+        .order('id')
+        .range(from, to),
+    ),
+    readAllRpcRows<RequestRow>((from, to) =>
+      db
+        .from('report_card_requests')
+        .select('id, created_at, outcome, email_status, consent_marketing')
+        .gte('created_at', new Date(now.getTime() - 30 * DAY_MS).toISOString())
+        .order('id')
+        .range(from, to),
+    ),
     // Cards queued before the window still wait: counted with the rest.
-    db
-      .from('report_cards')
-      .select('site, status, cost_usd, created_at, started_at, finished_at, error')
-      .eq('status', 'queued')
-      .lt('created_at', since.toISOString())
-      .limit(1_000),
-  ]);
-  for (const res of [cards, requests, waiting]) {
-    if (res.error) throw new Error(`report card stats: ${res.error.message}`);
-  }
+    readAllRpcRows<CardRow>((from, to) =>
+      db
+        .from('report_cards')
+        .select(CARD_COLUMNS)
+        .eq('status', 'queued')
+        .lt('created_at', since.toISOString())
+        .order('id')
+        .range(from, to),
+    ),
+  ]).catch((err: Error) => {
+    throw new Error(`report card stats: ${err.message}`);
+  });
+  // A row a later page shifted onto twice (rows written between pages) counts once.
+  const once = <T extends { id?: string }>(rows: T[]) => [
+    ...new Map(rows.map((r, i) => [r.id ?? String(i), r])).values(),
+  ];
   return summarizeReportCards({
-    cards: [...((cards.data ?? []) as CardRow[]), ...((waiting.data ?? []) as CardRow[])],
-    requests: (requests.data ?? []) as RequestRow[],
+    cards: once([...cards, ...waiting]),
+    requests: once(requests),
     now,
     ...adminLimits(env),
   });

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../ai-provider.js', () => ({ resolveModel: (id) => ({ id }) }));
 
-const { brandKey, competitorsIn, summarize } = await import('./analyze.js');
+const { brandKey, competitorSite, competitorsIn, summarize } = await import('./analyze.js');
 
 const company = {
   companyName: 'Acme Coffee',
@@ -23,6 +23,17 @@ const answer = (question, engine, text, urls = []) => ({
   text,
   citations: urls.map((url) => ({ url })),
   missing: null,
+});
+
+describe('competitorSite', () => {
+  it('marks a cited site whose host names a competitor, never a review or media site', () => {
+    const keys = new Set(['hubspotcrm', 'ridgelineroasters', 'g2']);
+    expect(competitorSite('hubspot.com', keys)).toBe(true);
+    expect(competitorSite('shop.ridgelineroasters.example', keys)).toBe(true);
+    expect(competitorSite('g2.com', keys)).toBe(true);
+    expect(competitorSite('coffeereview.example', keys)).toBe(false);
+    expect(competitorSite('com', keys)).toBe(false);
+  });
 });
 
 describe('summarize', () => {
@@ -67,9 +78,9 @@ describe('summarize', () => {
   it('counts a site once an answer, and the company’s own subdomains as its own', () => {
     const figures = summarize(questions, answers, competitors, company);
     expect(figures.citedSites).toEqual([
-      { domain: 'coffeereview.example', answers: 2, own: false },
-      { domain: 'blog.acme.example', answers: 1, own: true },
-      { domain: 'shop.acme.example', answers: 1, own: true },
+      { domain: 'coffeereview.example', answers: 2, own: false, competitor: false },
+      { domain: 'blog.acme.example', answers: 1, own: true, competitor: false },
+      { domain: 'shop.acme.example', answers: 1, own: true, competitor: false },
     ]);
     expect(figures.ownCitations).toBe(2);
   });

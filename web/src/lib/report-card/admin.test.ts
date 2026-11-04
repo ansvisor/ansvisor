@@ -120,22 +120,39 @@ describe('adminLimits', () => {
 });
 
 describe('loadReportCardStats', () => {
-  it('reads counts and sites only, never a name or an e-mail', async () => {
+  /** A query that answers its rows a page at a time, as PostgREST does. */
+  const fakeDb = (rowsOf: (table: string, waiting: boolean) => unknown[]) => {
     const selects: string[] = [];
-    const chain = (data: unknown[]) => {
-      const query = {
-        select: (columns: string) => {
-          selects.push(columns);
-          return query;
-        },
-        gte: () => query,
-        lt: () => query,
-        eq: () => query,
-        limit: async () => ({ data, error: null }),
-      };
-      return query;
+    const ranges: [string, number, number][] = [];
+    const db = {
+      from: vi.fn((table: string) => {
+        let waiting = false;
+        const query = {
+          select: (columns: string) => {
+            selects.push(columns);
+            return query;
+          },
+          gte: () => query,
+          lt: () => query,
+          eq: () => {
+            waiting = true;
+            return query;
+          },
+          order: () => query,
+          range: async (from: number, to: number) => {
+            ranges.push([table, from, to]);
+            const rows = rowsOf(table, waiting);
+            return { data: rows.slice(from, Math.min(to + 1, from + 1000)), error: null };
+          },
+        };
+        return query;
+      }),
     };
-    const db = { from: vi.fn<(table: string) => ReturnType<typeof chain>>(() => chain([])) };
+    return { db, selects, ranges };
+  };
+
+  it('reads counts and sites only, never a name or an e-mail', async () => {
+    const { db, selects } = fakeDb(() => []);
     await loadReportCardStats(db as never, NOW, {});
     expect(db.from.mock.calls.map(([table]) => table)).toEqual([
       'report_cards',
@@ -144,5 +161,30 @@ describe('loadReportCardStats', () => {
     ]);
     for (const columns of selects)
       expect(columns).not.toMatch(/email,|first_name|last_name|linkedin/);
+  });
+
+  it('reads every row past PostgREST’s 1,000, a page at a time', async () => {
+    const cards = Array.from({ length: 2_500 }, (_, i) => ({
+      id: `c${String(i).padStart(5, '0')}`,
+      site: 'acme.example',
+      status: 'ready',
+      cost_usd: 0.1,
+      created_at: NOW.toISOString(),
+      started_at: NOW.toISOString(),
+      finished_at: NOW.toISOString(),
+      error: null,
+    }));
+    const { db, ranges } = fakeDb((table, waiting) =>
+      table === 'report_cards' && !waiting ? cards : [],
+    );
+    const stats = await loadReportCardStats(db as never, NOW, {});
+    expect(stats.month.cards).toBe(2_500);
+    expect(stats.month.costUsd).toBeCloseTo(250);
+    expect(ranges).toEqual(
+      expect.arrayContaining([
+        ['report_cards', 1000, 1999],
+        ['report_cards', 2000, 2999],
+      ]),
+    );
   });
 });

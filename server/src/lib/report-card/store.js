@@ -129,19 +129,32 @@ export function reportCardStore(db = supabaseAdmin) {
       };
     },
 
-    /** Ends a run: ready with its figures, or failed with why; with what it cost either way. */
-    async finishCard(cardId, fields) {
+    /**
+     * Ends a run: ready with its figures, or failed with why; with what it
+     * cost either way. Only the run of `attempt` writes: one the tick took as
+     * lost and started again (or failed) matches nothing.
+     */
+    async finishCard(cardId, attempt, fields) {
       const { error } = await db
         .from('report_cards')
         .update(fields)
         .eq('id', cardId)
-        .eq('status', 'running');
+        .eq('status', 'running')
+        .eq('attempts', attempt);
       if (error) fail('finish', error);
     },
 
-    /** Puts a card a lost run left behind back in the queue, or fails it after its tries. */
-    async releaseCard(cardId, fields) {
-      const { error } = await db.from('report_cards').update(fields).eq('id', cardId);
+    /**
+     * Puts a card a lost run left behind back in the queue, or fails it after
+     * its tries; only while it is still that run's (`attempt`), running.
+     */
+    async releaseCard(cardId, attempt, fields) {
+      const { error } = await db
+        .from('report_cards')
+        .update(fields)
+        .eq('id', cardId)
+        .eq('status', 'running')
+        .eq('attempts', attempt);
       if (error) fail('release', error);
     },
 
@@ -150,14 +163,40 @@ export function reportCardStore(db = supabaseAdmin) {
       const { data, error } = await db
         .from('report_card_requests')
         .select(
-          'id, first_name, email, outcome, report_cards!report_card_requests_report_card_id_fkey!inner(id, status, payload, site, created_at)',
+          'id, first_name, email, outcome, email_attempts, report_cards!report_card_requests_report_card_id_fkey!inner(id, status, payload, site, created_at)',
         )
         .is('emailed_at', null)
         .in('report_cards.status', ['ready', 'failed'])
+        // The ones not yet tried first: a PDF that keeps failing can't fill every sweep.
+        .order('email_attempts', { ascending: true })
         .order('created_at', { ascending: true })
         .limit(limit);
       if (error) fail('undelivered', error);
       return data ?? [];
+    },
+
+    /** A try at a request's e-mail that will be made again: how many there have been. */
+    async markEmailAttempt(requestId, attempts) {
+      const { error } = await db
+        .from('report_card_requests')
+        .update({ email_attempts: attempts })
+        .eq('id', requestId)
+        .is('emailed_at', null);
+      if (error) fail('attempt', error);
+    },
+
+    /**
+     * Whether `email` already asked for this card: it is e-mailed once a
+     * card, however often the form is sent (a resend costs nothing to run).
+     */
+    async askedBy(email, cardId) {
+      const { count, error } = await db
+        .from('report_card_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('email', email)
+        .eq('report_card_id', cardId);
+      if (error) fail('asked', error);
+      return (count ?? 0) > 0;
     },
 
     /** What became of a request's e-mail; a request is e-mailed once. */

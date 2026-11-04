@@ -60074,3 +60074,15 @@ create trigger brands_guard_google_properties
   before insert or update on public.brands
   for each row execute function public.guard_brand_google_properties();
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00474_report_card_email_attempts.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- A report card's e-mail the web couldn't draw a PDF for is tried again on
+-- the next sweep (server/src/lib/report-card/deliver.js): how many times it
+-- was tried, so it gives up after a cap and waits behind the e-mails not yet
+-- tried instead of filling every sweep.
+
+alter table public.report_card_requests
+  add column if not exists email_attempts integer not null default 0
+    check (email_attempts >= 0);
+
