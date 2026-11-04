@@ -126,6 +126,15 @@ vi.mock('@/lib/actions/chat-schedules', () => ({
     },
   ),
 }));
+// Save skill through the person's session (W3-08): here, as the run's person (an Admin).
+vi.mock('@/lib/actions/chat-skills', () => ({
+  saveChatSkill: vi.fn(async (input: never) => {
+    const { readSkillViewer, saveSkill } = await import('./skills/store');
+    const { ORG, PEOPLE } = await import('./testing/chat-fixtures');
+    const viewer = await readSkillViewer({ userId: PEOPLE.admin, organizationId: ORG });
+    return saveSkill(viewer!, input);
+  }),
+}));
 // Remember and Forget through the person's session (W3-12a): here, as the run's person.
 vi.mock('@/lib/actions/chat-memory', () => ({
   saveChatMemory: vi.fn(async (input: Record<string, string>) => {
@@ -6916,6 +6925,82 @@ describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
     const results = JSON.stringify(sonnet.seen[1].prompt);
     expect(results).toContain("Memory doesn't keep secrets or personal details.");
     expect(db.tables.chat_memory_items).toEqual([]);
+  });
+});
+
+describe('the skill draft card (W3-08, CHAT-13 item 12)', () => {
+  const draft = (over: Record<string, unknown> = {}) =>
+    toolCall('k1', 'save_skill', {
+      name: 'pricing-brief',
+      description: 'Writes a pricing brief that opens with the answer.',
+      instructions: 'Open with the answer in two sentences, then three short sections.',
+      ...over,
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    db.tables.chat_skills = [];
+  });
+
+  it('waits on the draft card even in Full auto, then saves the skill as the card was edited', async () => {
+    useModels([READY], [calls(draft()), text('Saved it.')]);
+    const runId = await turn(ADMIN, 'Create a skill that writes our pricing briefs', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const confirm = ofType(events, 'confirm.required')[0].data;
+    expect(confirm.form).toMatchObject({ kind: 'skill', submit: 'Save skill' });
+    expect(confirm.form!.fields.map((f) => f.name)).toEqual([
+      'name',
+      'title',
+      'description',
+      'instructions',
+    ]);
+    // Nothing is kept before Save.
+    expect(db.tables.chat_skills).toEqual([]);
+
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { name: '/Team-Pricing', title: 'Team pricing brief' },
+    });
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    await engine.driveRun(ADMIN, runId, prepared.resume);
+    expect(db.tables.chat_skills).toHaveLength(1);
+    expect(db.tables.chat_skills[0]).toMatchObject({
+      name: 'team-pricing',
+      title: 'Team pricing brief',
+      source: 'user',
+      status: 'approved',
+      visibility: 'private',
+      created_by: PEOPLE.admin,
+    });
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      status: 'done',
+      label: 'Saved skill: /team-pricing',
+      detail: 'Private to you · Skills › My skills',
+    });
+  });
+
+  it('keeps the card when the name can’t be kept, and saves nothing', async () => {
+    useModels([READY], [calls(draft()), text('Saved it.')]);
+    const runId = await turn(ADMIN, 'Create a skill that writes our pricing briefs', 'auto');
+    const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    const refused = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { name: 'winback' },
+    });
+    expect(refused).toMatchObject({
+      ok: false,
+      status: 400,
+      code: 'invalid',
+      message: '/winback is an Ansvisor skill or shortcut. Pick another name.',
+    });
+    expect(runRow(runId).status).toBe('waiting');
+    expect(db.tables.chat_skills).toEqual([]);
   });
 });
 

@@ -1401,6 +1401,8 @@
       "keywords": [
         "skills",
         "skill",
+        "create a skill",
+        "skill draft",
         "slash menu",
         "ansvisor skills",
         "used skill",
@@ -1450,7 +1452,7 @@
         },
         {
           "heading": "Save your own skill",
-          "text": "Admins and Managers can ask Chat to keep steps they repeat as a skill of their own, for example: \"Save this as a skill called /pricing-brief: open with the answer, then three short sections.\" Chat shows the skill's name, what it does and its steps on a card, and saves it when you approve, or by itself in Full auto. The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill or a shortcut, such as **/analyze**, and your plan sets how many skills your workspace keeps."
+          "text": "Admins and Managers can ask Chat to keep steps they repeat as a skill of their own. Start with \"Create a skill that…\", or pick **New skill** › **Create in Chat** on the **Skills** page. Chat asks at most two questions, then shows a draft: the skill's name, title, what it does and its steps, each one editable. Nothing is kept until you click **Save skill**, in every mode, Full auto too.\n\nThe skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill or a shortcut, such as **/analyze**, and the card says so before you save. Your plan sets how many skills your workspace keeps."
         },
         {
           "heading": "Import a skill",

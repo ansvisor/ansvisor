@@ -3773,6 +3773,7 @@
           "plan": "Plan card",
           "runSteps": "Run steps",
           "approval": "Approval card",
+          "skillDraft": "Skill draft card (W3-08)",
           "question": "Question card",
           "execute": "Click card (EXECUTE)",
           "result": "Result card",
@@ -3814,7 +3815,10 @@
           "failedRun": "The run failed",
           "trayRuns": "With runs (click to open)",
           "trayEmpty": "No runs",
-          "trayLive": "Live: your runs and this brand’s"
+          "trayLive": "Live: your runs and this brand’s",
+          "skillDraft": "Skill draft · each field editable, Save skill in every mode",
+          "skillDraftReserved": "Skill draft · a /name it can’t keep: the card says why",
+          "skillSaved": "Skill saved: the card's done line"
         }
       }
     }
@@ -6766,6 +6770,21 @@
       "blocked": "This skill holds something a skill may never hold, so it can't be approved.",
       "no_update": "There's no update to approve: another Admin may have approved it already."
     },
+    "card": {
+      "submit": "Save skill",
+      "name": "Name",
+      "nameHint": "Its /command: lowercase letters, digits and single hyphens.",
+      "title": "Title",
+      "description": "What it does and when to use it",
+      "instructions": "Steps",
+      "private": "Private to you until an Admin shares it.",
+      "noTool": "It shapes how Chat works: it adds no tool and skips no card.",
+      "nameRequired": "Give it a name.",
+      "nameFormat": "Use lowercase letters, digits and single hyphens, such as pricing-faq.",
+      "nameReserved": "/{name} is an Ansvisor skill or shortcut. Pick another name.",
+      "saved": "Saved skill: /{name}",
+      "savedDetail": "Private to you · Skills › My skills"
+    },
     "share": {
       "asked": "Share the skill /{name} with the workspace",
       "rule": "Sharing a skill with the workspace is for Admins."
@@ -6832,6 +6851,8 @@
         "deleted": "Deleted /{name}."
       },
       "newSkill": "New skill",
+      "create": "Create in Chat",
+      "createText": "Create a skill that ",
       "upload": "Upload a SKILL.md or .zip",
       "github": "Import from GitHub",
       "review": "Review",
