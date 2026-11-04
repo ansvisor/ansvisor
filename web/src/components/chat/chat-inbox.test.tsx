@@ -40,8 +40,12 @@ vi.mock('@/components/providers/upgrade-gate', () => ({
     openUpgrade: plan.openUpgrade,
   }),
 }));
-const sonner = vi.hoisted(() => ({ error: vi.fn() }));
-vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: sonner.error }) }));
+const sonner = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), { error: sonner.error, success: sonner.success }),
+}));
+const takeDown = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/cms-take-down', () => ({ takeDownDraft: takeDown }));
 /** The demo brand on screen, and one brand of the workspace's own. */
 const BRANDS = [
   { id: 'brand-a', name: 'Demo', isDemo: true },
@@ -87,6 +91,7 @@ vi.mock('./chat-list-provider', () => ({
 }));
 
 const { ChatInboxView } = await import('./chat-inbox');
+const { RoleContext } = await import('@/components/providers/role-provider');
 const { ChatInbox } = await import('./chat-inbox-page');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -187,6 +192,8 @@ beforeEach(() => {
   plan.locked = false;
   plan.openUpgrade.mockClear();
   sonner.error.mockClear();
+  sonner.success.mockClear();
+  takeDown.mockReset();
   store.setActiveBrand.mockClear();
   store.brands = BRANDS;
   for (const fn of Object.values(server)) fn.mockClear();
@@ -426,6 +433,87 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
     expect(row.querySelector('[data-action="inbox.openGoLiveRun"]')).toBeNull();
   });
 
+  it('offers Take down on a page published on its own to an Admin or a Manager, then says it’s down (PR 10)', async () => {
+    const published = {
+      id: '9f0a4e3c-3d4e-4f60-8b12-3456789abcde',
+      kind: 'agent_went_live' as const,
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'wordpress' as const,
+      draftId: 'draft-1',
+      chatId: null,
+      url: 'https://www.acme.example/pricing-faq/',
+      createdAt: new Date().toISOString(),
+      read: true,
+    };
+    takeDown.mockResolvedValue({ ok: true, target: 'wordpress' });
+    // An Analyst sees the notice, not Take down.
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [published] }} />);
+    expect(host.querySelector('[data-action="inbox.takeDown"]')).toBeNull();
+
+    await render(
+      <RoleContext.Provider value={{ role: 'manager' }}>
+        <ChatInbox suggestions={ok()} notices={{ ok: true, notices: [published] }} />
+      </RoleContext.Provider>,
+    );
+    await click('[data-action="inbox.takeDown"]');
+    const dialog = document.querySelector('[data-slot="take-down-dialog"]')!;
+    expect(dialog.textContent).toContain('Take down “Pricing FAQ”?');
+    expect(dialog.textContent).toContain(
+      'It leaves acme.example now and goes back to a draft in WordPress.',
+    );
+    await act(async () =>
+      (dialog.querySelector('[data-action="takeDown.confirm"]') as HTMLElement).click(),
+    );
+    expect(takeDown).toHaveBeenCalledWith('draft-1');
+    expect(sonner.success).toHaveBeenCalledWith('Taken down. It’s a draft in WordPress again.');
+    const [row] = noticeRows();
+    expect(row.textContent).toContain('Taken down · a draft in WordPress again');
+    expect(row.querySelector('[data-action="inbox.takeDown"]')).toBeNull();
+    // The live address is gone: Open page opens the page in the Content Editor.
+    expect(
+      row.querySelector('[data-action="inbox.openGoLivePage"]')!.getAttribute('href'),
+    ).toContain('/dashboard/content/editor/draft-1');
+  });
+
+  it('keeps the dialog open with the CMS’s words when it refuses, and Keep it live closes it', async () => {
+    const published = {
+      id: '9f0a4e3c-3d4e-4f60-8b12-3456789abcdf',
+      kind: 'agent_went_live' as const,
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'webflow' as const,
+      draftId: 'draft-1',
+      chatId: null,
+      url: 'https://acme.example/blog/pricing-faq',
+      createdAt: new Date().toISOString(),
+      read: true,
+    };
+    takeDown.mockResolvedValue({
+      ok: false,
+      reason: 'refused',
+      message: 'Webflow didn’t take it down: Forbidden.',
+    });
+    await render(
+      <RoleContext.Provider value={{ role: 'admin' }}>
+        <ChatInbox suggestions={ok()} notices={{ ok: true, notices: [published] }} />
+      </RoleContext.Provider>,
+    );
+    await click('[data-action="inbox.takeDown"]');
+    const dialog = () => document.querySelector('[data-slot="take-down-dialog"]');
+    await act(async () =>
+      (dialog()!.querySelector('[data-action="takeDown.confirm"]') as HTMLElement).click(),
+    );
+    expect(dialog()!.querySelector('[role="alert"]')!.textContent).toBe(
+      'Webflow didn’t take it down: Forbidden.',
+    );
+    await act(async () =>
+      (dialog()!.querySelector('[data-action="takeDown.keep"]') as HTMLElement).click(),
+    );
+    expect(dialog()).toBeNull();
+    expect(noticeRows()[0].querySelector('[data-action="inbox.takeDown"]')).not.toBeNull();
+  });
+
   it('shows the notice in the Inbox without tabs too, and none that couldn’t be read', async () => {
     list.chats = [];
     await render(
@@ -443,6 +531,48 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
 
     await render(<ChatInbox suggestions={ok()} notices={{ ok: false }} />);
     expect(noticeRows()).toHaveLength(0);
+  });
+
+  it('says a scheduled job didn’t run, or paused, and why, with Open to its chat (W3-04a)', async () => {
+    const job = {
+      id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c10',
+      kind: 'schedule_failed' as const,
+      title: 'Weekly report',
+      reason: 'Something went wrong.',
+      href: '/dashboard/chat/0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c11' as const,
+      createdAt: '2026-11-02T06:10:00Z',
+      read: false,
+    };
+    await render(
+      <ChatInbox
+        suggestions={ok()}
+        notices={{
+          ok: true,
+          notices: [
+            job,
+            {
+              ...job,
+              id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c12',
+              kind: 'schedule_paused',
+              reason: 'The monthly AI limit was reached.',
+              href: '/dashboard/chat',
+            },
+          ],
+        }}
+      />,
+    );
+    const [failed, paused] = noticeRows();
+    expect(failed.textContent).toContain('Weekly report didn’t run');
+    expect(failed.textContent).toContain('Something went wrong.');
+    expect(failed.querySelector('[data-action="inbox.openSchedule"]')!.getAttribute('href')).toBe(
+      job.href,
+    );
+    expect(paused.textContent).toContain('Weekly report is paused');
+    expect(paused.textContent).toContain('The monthly AI limit was reached.');
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([
+      job.id,
+      '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c12',
+    ]);
   });
 });
 

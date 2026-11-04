@@ -40,9 +40,26 @@ export function isKnownProvider(provider) {
   return Object.hasOwn(PROVIDERS, provider);
 }
 
-/** Entity id: one connection per organization per provider (#577). */
+/**
+ * The Account's own entity (#577): Settings › Integrations connects Google
+ * under it. Several sign-ins may share an entity (BRAND-ACCESS PR 14), so a
+ * call names the connected account it uses (see `toolTarget`).
+ */
 export function entityIdFor(organizationId) {
   return `org_${organizationId}`;
+}
+
+/**
+ * Who a tool runs as: the entity, and the connected account when it is known.
+ * An entity may hold several connected accounts of one auth config (link and
+ * initiate take `allowMultiple`, as connectWebflowToken does); with only the
+ * entity, Composio would pick one of them itself. A brand's connection
+ * (lib/brand-integrations.js) always names its account.
+ *
+ * @param {{ entityId: string, accountId?: string|null }} connection
+ */
+function toolTarget({ entityId, accountId = null }) {
+  return accountId ? { userId: entityId, connectedAccountId: accountId } : { userId: entityId };
 }
 
 function authConfigId(provider) {
@@ -83,14 +100,20 @@ export async function initiateConnection(provider, entityId, callbackUrl) {
   };
 }
 
-/** The entity's ACTIVE connection for this provider on Composio, or null. */
-export async function getActiveConnection(provider, entityId) {
+/**
+ * The entity's ACTIVE connection for this provider on Composio, or null: the
+ * account `accountId` when one is named (an entity may hold several), else
+ * the first.
+ */
+export async function getActiveConnection(provider, entityId, accountId = null) {
   const connections = await getClient().connectedAccounts.list({
     authConfigIds: [authConfigId(provider)],
     userIds: [entityId],
     statuses: ['ACTIVE'],
   });
-  return connections.items?.[0] ?? null;
+  const items = connections.items ?? [];
+  if (accountId) return items.find((item) => item.id === accountId) ?? null;
+  return items[0] ?? null;
 }
 
 export async function deleteConnection(connectedAccountId) {
@@ -126,13 +149,14 @@ export async function proxyRequest(connectedAccountId, { endpoint, query = {}, s
 const GSC_TOOLKIT_VERSION = process.env.COMPOSIO_GSC_TOOLKIT_VERSION || '20260721_00';
 
 /**
- * Properties visible to the entity's connected account (#642).
+ * Properties visible to the connected account (#642): `connection` is
+ * `{ entityId, accountId }` (toolTarget).
  * Returns [{ siteUrl, permissionLevel }]. Requires the API key to have
  * tool-execution permission (the connect flow only needs connected_accounts).
  */
-export async function listGscSites(entityId) {
+export async function listGscSites(connection) {
   const result = await getClient().tools.execute('GOOGLE_SEARCH_CONSOLE_LIST_SITES', {
-    userId: entityId,
+    ...toolTarget(connection),
     arguments: {},
     version: GSC_TOOLKIT_VERSION,
   });
@@ -147,13 +171,14 @@ export async function listGscSites(entityId) {
 }
 
 /**
- * Search analytics rows for a property (#644). Parameters are deterministic —
- * built by the caller, never by an LLM. Returns the raw GSC rows:
+ * Search analytics rows for a property (#644), on the connected account
+ * `connection` names (toolTarget). Parameters are deterministic — built by
+ * the caller, never by an LLM. Returns the raw GSC rows:
  * [{ keys: [query, date], clicks, impressions, ctr, position }].
  */
-export async function queryGscSearchAnalytics(entityId, args) {
+export async function queryGscSearchAnalytics(connection, args) {
   const result = await getClient().tools.execute('GOOGLE_SEARCH_CONSOLE_SEARCH_ANALYTICS_QUERY', {
-    userId: entityId,
+    ...toolTarget(connection),
     arguments: args,
     version: GSC_TOOLKIT_VERSION,
   });
@@ -184,9 +209,9 @@ const GA_STREAM_LOOKUP_LIMIT = Number(process.env.COMPOSIO_GA_STREAM_LOOKUPS) ||
 /** Stream lookups in flight at once. */
 const GA_STREAM_CONCURRENCY = 8;
 
-async function executeGaTool(slug, entityId, args) {
+async function executeGaTool(slug, connection, args) {
   const result = await getClient().tools.execute(slug, {
-    userId: entityId,
+    ...toolTarget(connection),
     arguments: args,
     version: GA_TOOLKIT_VERSION,
   });
@@ -197,8 +222,8 @@ async function executeGaTool(slug, entityId, args) {
 }
 
 /** Site URLs served by a property's web data streams (app streams have none). */
-async function gaPropertySiteUrls(entityId, propertyId) {
-  const data = await executeGaTool('GOOGLE_ANALYTICS_LIST_DATA_STREAMS', entityId, {
+async function gaPropertySiteUrls(connection, propertyId) {
+  const data = await executeGaTool('GOOGLE_ANALYTICS_LIST_DATA_STREAMS', connection, {
     parent: `properties/${propertyId}`,
     pageSize: 200,
   });
@@ -208,7 +233,8 @@ async function gaPropertySiteUrls(entityId, propertyId) {
 }
 
 /**
- * GA4 properties visible to the entity's connected account (#694).
+ * GA4 properties visible to the connected account (#694): `connection` is
+ * `{ entityId, accountId }` (toolTarget).
  *
  * `LIST_ACCOUNT_SUMMARIES` returns every account with its properties, but a
  * GA4 property is a numeric id plus a free-text display name — nothing a brand
@@ -218,16 +244,19 @@ async function gaPropertySiteUrls(entityId, propertyId) {
  * lookup limit, simply arrives with no site URLs and stays manually
  * selectable.
  *
+ * With `streams: false` the site URLs are left empty and not looked up: for
+ * a caller that only needs the ids (checking a picked property).
+ *
  * Returns [{ propertyId, displayName, accountName, siteUrls }].
  */
-export async function listGaProperties(entityId) {
+export async function listGaProperties(connection, { streams = true } = {}) {
   const properties = [];
   let pageToken = null;
 
   do {
     const args = { pageSize: 200 };
     if (pageToken) args.pageToken = pageToken;
-    const data = await executeGaTool('GOOGLE_ANALYTICS_LIST_ACCOUNT_SUMMARIES', entityId, args);
+    const data = await executeGaTool('GOOGLE_ANALYTICS_LIST_ACCOUNT_SUMMARIES', connection, args);
 
     for (const account of data.accountSummaries ?? []) {
       for (const summary of account.propertySummaries ?? []) {
@@ -248,14 +277,14 @@ export async function listGaProperties(entityId) {
   } while (pageToken && properties.length < GA_MAX_PROPERTIES);
 
   const capped = properties.slice(0, GA_MAX_PROPERTIES);
-  const withStreams = capped.slice(0, GA_STREAM_LOOKUP_LIMIT);
+  const withStreams = streams ? capped.slice(0, GA_STREAM_LOOKUP_LIMIT) : [];
 
   for (let i = 0; i < withStreams.length; i += GA_STREAM_CONCURRENCY) {
     const batch = withStreams.slice(i, i + GA_STREAM_CONCURRENCY);
     await Promise.all(
       batch.map(async (property) => {
         try {
-          property.siteUrls = await gaPropertySiteUrls(entityId, property.propertyId);
+          property.siteUrls = await gaPropertySiteUrls(connection, property.propertyId);
         } catch {
           // Best effort — the property stays listed, just without auto-match.
         }
@@ -267,15 +296,16 @@ export async function listGaProperties(entityId) {
 }
 
 /**
- * Run a GA4 Data API report for a property (#704).
+ * Run a GA4 Data API report for a property (#704), on the connected account
+ * `connection` names (toolTarget).
  *
  * `body` is a runReport request minus `property`, built by the caller — the
  * dimensions, metrics and filters are deterministic, never model-generated.
  * Returns the report as GA4 shapes it (`dimensionHeaders`, `metricHeaders`,
  * `rows`, `rowCount`); parsing rows into storage is the sync's job.
  */
-export async function runGaReport(entityId, propertyId, body) {
-  return executeGaTool('GOOGLE_ANALYTICS_RUN_REPORT', entityId, {
+export async function runGaReport(connection, propertyId, body) {
+  return executeGaTool('GOOGLE_ANALYTICS_RUN_REPORT', connection, {
     property: `properties/${propertyId}`,
     ...body,
   });

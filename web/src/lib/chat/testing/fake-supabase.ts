@@ -52,6 +52,8 @@ interface Builder extends PromiseLike<Result> {
   gt(column: string, value: unknown): Builder;
   /** At or after: an ISO time, or a number. */
   gte(column: string, value: unknown): Builder;
+  /** At or before: an ISO time, or a number; a null cell never passes. */
+  lte(column: string, value: unknown): Builder;
   /**
    * PostgREST's `or`: a row passes any of the comma-separated `column.op.value`
    * terms (eq, neq, is null, lt a date — as saveContentDraft's agent check) or
@@ -300,6 +302,14 @@ export function createFakeSupabase(): FakeSupabase {
           filters.push((row) => row[column] !== null && at(row[column]) >= at(value));
           return builder;
         },
+        lte(column, value) {
+          const at = (v: unknown) => (typeof v === 'string' ? Date.parse(v) : (v as number));
+          filters.push(
+            (row) =>
+              row[column] !== null && row[column] !== undefined && at(row[column]) <= at(value),
+          );
+          return builder;
+        },
         or(filter) {
           // Split at the commas outside parentheses and quotes.
           const top = (text: string) => {
@@ -320,8 +330,13 @@ export function createFakeSupabase(): FakeSupabase {
             parts.push(text.slice(start));
             return parts;
           };
-          // One `column.op.value` term: eq, neq, is null, lt a date.
-          const term = (condition: string) => {
+          // One `column.op.value` term: eq, neq, is null, lt a date; `column.not.op.value` negated.
+          const term = (condition: string): ((row: Row) => boolean) => {
+            const negated = /^([^.]+)\.not\.(.*)$/.exec(condition);
+            if (negated) {
+              const inner = term(`${negated[1]}.${negated[2]}`);
+              return (row) => !inner(row);
+            }
             const [column, op, ...rest] = condition.split('.');
             const raw = rest.join('.').replace(/^"|"$/g, '');
             const value = raw === 'null' ? null : raw;
