@@ -23,8 +23,9 @@ import {
  *
  * A missed drop leaves options in {organization_id}/ai-options/: public by
  * an address only the person who made them was given, linked from no page,
- * a few MB each. Nothing reads that folder, so a later sweep of anything
- * older than a day there can remove them; none runs yet.
+ * a few MB each. Nothing reads that folder, so the server's daily run
+ * removes anything there older than a day, and nothing outside it
+ * (server/src/lib/ai-image-options-sweep.js).
  *
  * The options don't count toward the day's uploads (content_image_uploads):
  * each costs its share of the AI limit, which bounds them.
