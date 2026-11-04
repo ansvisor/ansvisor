@@ -172,6 +172,8 @@ const SESSION_FREE = [
   'update_opportunity',
   'dismiss_prompt_suggestion',
   'create_action',
+  // An agent's Ready for review in Full auto (owner decision 2026-11-03).
+  'set_task_ready_for_review',
   'update_draft',
 ];
 /** A run's place, as runLoggedWrite gives a write. */

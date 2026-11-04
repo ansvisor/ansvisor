@@ -4113,6 +4113,39 @@
     "model": "Model",
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
+    "modelMenu": {
+      "label": "Model and effort",
+      "title": "Model",
+      "models": "Models",
+      "loading": "Reading the models…",
+      "failed": "Couldn't read the models. Chat runs on Auto.",
+      "auto": "Auto",
+      "default": "Default",
+      "autoHow": "Haiku 5.5 reads, Sonnet 5.5 writes",
+      "yourKey": "Your key",
+      "variesByHour": "Price varies by hour",
+      "removed": "The model this chat used is no longer available, so Chat runs on Auto.",
+      "trialLocked": "In the free trial, Chat runs on Auto. Start your plan to pick a model.",
+      "pricesToday": "Prices from OpenRouter, updated today. 1x = Auto.",
+      "pricesOn": "Prices from OpenRouter, updated {date}. 1x = Auto.",
+      "pricesNone": "1x = Auto.",
+      "effortTitle": "Effort",
+      "effortHint": "High and Max use your limit faster",
+      "effort": {
+        "normal": "Normal",
+        "high": "High",
+        "max": "Max"
+      },
+      "ownKey": "Use your own API key",
+      "ownKeyIncluded": "Included in your plan",
+      "ownKeyUntil": "Works until {date}",
+      "ownKeyLocked": "Own API keys come with Enterprise · you're on {plan}",
+      "usage": "Monthly AI usage",
+      "usageLine": "{percent} · Resets {date}",
+      "plan": "Your plan",
+      "planTrial": "{plan} · free trial",
+      "seePlans": "See plans"
+    },
     "removeChip": "Remove {label}",
     "keyPaste": {
       "line": "This looks like an API key. Save it securely instead of sending it?",
@@ -4552,6 +4585,7 @@
       "exported": "Downloaded {name}",
       "exportFailed": "Couldn't export the chat. Try again.",
       "activity": "Activity log",
+      "memory": "Memory",
       "debug": "Debug",
       "debugNote": "Staff only",
       "pinned": "Pinned",
@@ -5012,6 +5046,7 @@
         "capabilities": "What Chat can do",
         "files": "Files",
         "settings": "Settings",
+        "memory": "Memory",
         "connections": "Connections"
       }
     },
@@ -6480,7 +6515,7 @@
       },
       "task-finisher": {
         "name": "Task Finisher",
-        "description": "Works through this week’s Action Center tasks by priority and prepares each one. You close the tasks."
+        "description": "Works through this week’s Action Center tasks by priority and finishes two a run; the rest wait for its next run. You close the tasks."
       },
       "weekly-report": {
         "name": "Weekly Report",
@@ -6944,6 +6979,60 @@
       "managerHint": "A Workspace note goes to your Admins to approve first.",
       "counter": "{count} of {max} characters",
       "sent": "Sent to your Admins"
+    },
+    "page": {
+      "title": "Memory",
+      "subtitle": "What Chat remembers between chats.",
+      "useMemory": "Use memory",
+      "useMemoryNote": "When off, Chat doesn't use your notes or save new ones.",
+      "tabs": {
+        "user": "Me",
+        "brand": "Brand: {brand}",
+        "brandNone": "Brand",
+        "workspace": "Workspace"
+      },
+      "columns": {
+        "memory": "Memory",
+        "source": "Source",
+        "updated": "Updated"
+      },
+      "sources": {
+        "profile": "Profile",
+        "chat": "Saved from chat",
+        "page": "Memory page",
+        "brandRules": "Brand rules"
+      },
+      "used": "{used} of {max} characters",
+      "empty": {
+        "user": "Nothing about you yet.",
+        "brand": "Nothing about {brand} yet.",
+        "brandNone": "Pick a brand in the brand switcher to see its notes.",
+        "workspace": "No rules for the whole workspace yet."
+      },
+      "readOnly": {
+        "brand": "Admins and Managers change Brand memory.",
+        "workspace": "Admins change Workspace memory.",
+        "workspaceRequest": "Admins change Workspace memory. Saved from chat, yours goes to them to approve."
+      },
+      "brandRulesNote": "Brand rules are set in Settings › Content and don't count toward this tab's limit.",
+      "editRules": "Edit brand rules",
+      "edit": "Edit {text}",
+      "delete": "Delete {text}",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saved": "Memory saved",
+      "deleted": "Removed from memory",
+      "undo": "Undo",
+      "restored": "Brought back",
+      "failed": "Couldn't change the memory. Try again.",
+      "loadFailed": "Couldn't load the memory.",
+      "retry": "Retry",
+      "off": "Memory is off for this workspace. An Admin can turn it on in Settings › Chat.",
+      "offAdmin": "Memory is off for the workspace, so Chat uses none of these notes. Turn it on in Settings › Chat.",
+      "personalOff": "Use memory is off, so Chat doesn't use your notes or save new ones.",
+      "addNote": "Say “remember that…” in any chat to add one.",
+      "switchLabel": "Memory",
+      "switchNote": "Chat remembers short notes between chats for each person, brand and the workspace. When off, no one's notes are used, and Memory is hidden."
     }
   },
   "chatSchedules": {

@@ -74,7 +74,7 @@ const saveMemory: UndoRule = {
     if (error) throw new Error(`Could not undo the memory: ${error.message}`);
     return (done ?? []).length > 0 ? 'ok' : stillThere(id);
   },
-  href: () => '/dashboard/chat',
+  href: () => '/dashboard/chat/memory',
 };
 
 const forgetMemory: UndoRule = {
@@ -108,7 +108,7 @@ const forgetMemory: UndoRule = {
     if (error) throw new Error(`Could not undo the memory: ${error.message}`);
     return (done ?? []).length > 0 ? 'ok' : stillThere(id);
   },
-  href: () => '/dashboard/chat',
+  href: () => '/dashboard/chat/memory',
 };
 
 /** The memory rows' record and Undo, by tool name (undo.ts UNDO_RULES). */
