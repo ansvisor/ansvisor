@@ -32,6 +32,8 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   deleteContentDraft: (...args: unknown[]) => deleteContentDraft(...args),
 }));
 const role = vi.hoisted(() => ({ canManage: true }));
+const takeDownDraft = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/cms-take-down', () => ({ takeDownDraft }));
 const chat = vi.hoisted(() => ({ on: false }));
 vi.mock('@/components/providers/chat-agentic-provider', () => ({ useChatAgentic: () => chat.on }));
 vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => role }));
@@ -972,6 +974,86 @@ describe('Send to CMS from a Library row (#1331)', () => {
     await act(async () => trigger.click());
     const items = [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
     expect(items.map((el) => el.textContent)).not.toContain('Send to CMS');
+  });
+});
+
+describe('Take down from a Library row (AUTONOMOUS-GO-LIVE PR 10)', () => {
+  const live = (target: string, over = {}) =>
+    new Map([
+      [
+        'd1',
+        {
+          status: 'published',
+          target,
+          at: '2026-11-01T10:00:00Z',
+          httpStatus: null,
+          error: null,
+          publishedUrl: 'https://acme.example/blog/pipeline-forecasting',
+          ...over,
+        },
+      ],
+    ]);
+  const menu = async () => {
+    const trigger = container.querySelector<HTMLElement>(
+      '[aria-label="Actions for Pipeline forecasting"]',
+    )!;
+    await act(async () => trigger.click());
+    return [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+  };
+
+  it('takes a page live in Webflow down, says so, and reads the row again', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(live('webflow'));
+    takeDownDraft.mockResolvedValue({ ok: true, target: 'webflow' });
+    await renderPage();
+    const item = (await menu()).find((el) => el.textContent === 'Take down')!;
+    await act(async () => item.click());
+    const dialog = document.querySelector('[data-slot="take-down-dialog"]')!;
+    expect(dialog.textContent).toContain('Take down “Pipeline forecasting”?');
+    expect(dialog.textContent).toContain(
+      'It leaves acme.example now and goes back to a draft in Webflow.',
+    );
+    const reads = readCmsStatuses.mock.calls.length;
+    await act(async () =>
+      (dialog.querySelector('[data-action="takeDown.confirm"]') as HTMLElement).click(),
+    );
+    expect(takeDownDraft).toHaveBeenCalledWith('d1');
+    expect(toast.success).toHaveBeenCalledWith('Taken down. It’s a draft in Webflow again.');
+    expect(readCmsStatuses.mock.calls.length).toBeGreaterThan(reads);
+  });
+
+  it.each([
+    ['live in Wix', 'wix', {}, true],
+    ['live in Framer, which publishes the whole site', 'framer', {}, false],
+    ['sent to the webhook', 'webhook', {}, false],
+    ['only sent to Webflow', 'webflow', { status: 'sent', publishedUrl: null }, false],
+  ] as const)('on a page %s: offered %s', async (_case, target, over, offered) => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(live(target, over));
+    await renderPage();
+    expect((await menu()).some((el) => el.textContent === 'Take down')).toBe(offered);
+  });
+
+  it('isn’t offered to an Analyst', async () => {
+    role.canManage = false;
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(live('wordpress'));
+    await renderPage();
+    expect((await menu()).some((el) => el.textContent === 'Take down')).toBe(false);
+  });
+
+  it('shows a page taken down beside its status', async () => {
+    getContentDrafts.mockResolvedValue([row({})]);
+    readCmsStatuses.mockResolvedValue(
+      live('wordpress', { status: 'taken_down', at: '2026-11-02T09:30:00Z' }),
+    );
+    await renderPage();
+    expect(
+      container.querySelector(
+        '[aria-label^="Taken down Nov 2, 2026"][aria-label$=": a draft post in WordPress again"]',
+      ),
+    ).not.toBeNull();
+    expect((await menu()).some((el) => el.textContent === 'Take down')).toBe(false);
   });
 });
 

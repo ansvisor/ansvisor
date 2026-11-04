@@ -22,10 +22,11 @@ import type { Json } from '@/types/supabase';
  */
 
 /**
- * The reads whose results are the workspace's own numbers and settings only.
- * Any other read (AI answers, cited pages, drafts, suggestions, generated
- * tasks, a tool added later) may carry text written outside the workspace:
- * its result is untrusted, and after it the run is tainted (§16a).
+ * The reads whose results are the workspace's own numbers and settings only,
+ * or text a person in the workspace approved. Any other read (AI answers,
+ * cited pages, drafts, suggestions, generated tasks, a tool added later) may
+ * carry text written outside the workspace: its result is untrusted, and
+ * after it the run is tainted (§16a).
  */
 export const TRUSTED_READS: ReadonlySet<string> = new Set([
   'get_visibility_summary',
@@ -38,13 +39,51 @@ export const TRUSTED_READS: ReadonlySet<string> = new Set([
   'list_topics',
   'get_ai_traffic_summary',
   'get_site_audit_summary',
+  // The brand's approved facts: words from its own site, each approved by a
+  // person in the workspace (Brand settings › Brand facts) before it is read.
+  'get_brand_facts',
 ]);
 
 /** Whether a read's result may carry text written outside the workspace. */
 export const isUntrustedRead = (toolName: string) => !TRUSTED_READS.has(toolName);
 
-/** The block names the model reads data in; never left whole inside the data. */
-export const DATA_TAGS = ['untrusted_data', 'app_data', 'read_results', 'page_context'] as const;
+/**
+ * The reads of what the workspace itself writes: its drafts and its saved
+ * reports (owner decision 2026-11-03, so an agent in Full auto can work from
+ * them). Their text may hold words copied from outside (a draft written from
+ * AI answers), so it is still read as untrusted data in its labelled block
+ * and scanned for instructions aimed at the model: one found asks first for
+ * the rest of the run, as any read's does (§16a rule 3). What they don't do
+ * is taint the run by themselves. AI answers, citations, fan-outs, mentions,
+ * suggestions, audit findings and web pages still do.
+ *
+ * Action Center reads (list_action_center_tasks, get_action,
+ * get_action_history) are not here: an action's payload, its tasks and its
+ * signals carry outside text verbatim (a mention action's evidence excerpts
+ * are AI-answer text), so reading one taints the run, as a Run agent on an
+ * action already starts tainted (agent-driver.ts).
+ */
+export const WORKSPACE_READS: ReadonlySet<string> = new Set([
+  'list_drafts',
+  'get_draft',
+  'get_reports',
+]);
+
+/** Whether reading a tool's result taints the run (§16a): outside text, not the workspace's own. */
+export const taintsRun = (toolName: string) =>
+  isUntrustedRead(toolName) && !WORKSPACE_READS.has(toolName);
+
+/**
+ * The block names the model reads data in; never left whole inside the data.
+ * saved_notes: the person's, brand's and workspace's memory (memory/rules.ts).
+ */
+export const DATA_TAGS = [
+  'untrusted_data',
+  'app_data',
+  'read_results',
+  'page_context',
+  'saved_notes',
+] as const;
 
 // Zero-width, soft hyphen, direction marks and isolates, word joiners, BOM.
 const INVISIBLE = /[­​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;

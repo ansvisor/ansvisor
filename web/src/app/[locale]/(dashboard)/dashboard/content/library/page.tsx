@@ -25,6 +25,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingDots } from '@/components/ui/loading-dots';
 import { NewContentDialog } from '@/components/content/new-content-dialog';
 import { PublishDialog } from '@/components/content/publish-dialog';
+import { TakeDownDialog, type TakeDownPage } from '@/components/content/take-down-dialog';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -129,6 +130,8 @@ export default function ContentLibraryPage() {
   const [sending, setSending] = useState<{ brandId: string; source: CmsSource } | null>(null);
   // Mark published open, on a draft (CE-013).
   const [publishing, setPublishing] = useState<string | null>(null);
+  // Take down open, on a page published through Ansvisor (AUTONOMOUS-GO-LIVE PR 10).
+  const [takingDown, setTakingDown] = useState<TakeDownPage | null>(null);
   // Each draft's last send, beside its status; read with the list.
   const [cms, setCms] = useState<ReadonlyMap<string, CmsStatus>>(new Map());
   // The drafts the sends above were read for, in any order.
@@ -353,6 +356,14 @@ export default function ContentLibraryPage() {
     onSend: guard((draft: ContentDraftListItem) => void openSend(draft), {
       action: tActions('sendToCms'),
     }),
+    // Open while read-only, as the API keeps it: it only lowers what is live.
+    onTakeDown: (draft, sent) =>
+      setTakingDown({
+        draftId: draft.id,
+        title: titleOf(draft),
+        url: sent.publishedUrl,
+        target: sent.target,
+      }),
   };
 
   const confirmDelete = async () => {
@@ -674,6 +685,17 @@ export default function ContentLibraryPage() {
         />
       )}
 
+      {takingDown && (
+        <TakeDownDialog
+          page={takingDown}
+          onClose={() => setTakingDown(null)}
+          // A draft in its CMS again: the row's status and send are read again.
+          onDone={() => {
+            reload();
+            setCmsAttempt((n) => n + 1);
+          }}
+        />
+      )}
       {sending && (
         <SendDialog
           draftId={sending.source.draftId}

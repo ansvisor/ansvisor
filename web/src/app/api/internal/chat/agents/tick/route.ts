@@ -4,15 +4,16 @@ import { agentRunDriver } from '@/lib/chat/agent-driver';
 import { sweepAgents } from '@/lib/chat/agent-sweep';
 import { fireDueSchedules } from '@/lib/chat/agent-triggers';
 import { internalCallRefusal } from '@/lib/chat/internal-call';
+import { purgeDeletedMemory } from '@/lib/chat/memory/store';
 
 // The runs it starts are driven past the answer (after()), within this.
 export const maxDuration = 300;
 
 const tickInput = z.strictObject({
   jobs: z
-    .array(z.enum(['schedules', 'sweep']))
+    .array(z.enum(['schedules', 'sweep', 'memory']))
     .min(1)
-    .default(['schedules', 'sweep']),
+    .default(['schedules', 'sweep', 'memory']),
 });
 
 /**
@@ -22,8 +23,9 @@ const tickInput = z.strictObject({
  * server's cron with `Authorization: Bearer ${CHAT_INTERNAL_SECRET}`:
  * fires the Schedule triggers that are due, then sweeps (lost and stale
  * runs, failures, the AI limit's pauses) and starts what each workspace has
- * room for. `jobs` picks one; both by default. Also called by hand in
- * development, where the server's crons don't run.
+ * room for; and deletes for good the memory lines deleted past their Undo
+ * (CHAT-14 item 23). `jobs` picks some; all by default. Also called by hand
+ * in development, where the server's crons don't run.
  *
  * 404 with the new Chat off, 401 without the secret, 400 a bad body. Each
  * job runs on its own: one that fails doesn't stop the other, and the
@@ -40,7 +42,10 @@ export async function POST(req: Request) {
   const now = new Date();
   const jobs = new Set(input.data.jobs);
   const failed: string[] = [];
-  const run = async <T>(name: 'schedules' | 'sweep', job: () => Promise<T>): Promise<T | null> => {
+  const run = async <T>(
+    name: 'schedules' | 'sweep' | 'memory',
+    job: () => Promise<T>,
+  ): Promise<T | null> => {
     if (!jobs.has(name)) return null;
     try {
       return await job();
@@ -53,10 +58,11 @@ export async function POST(req: Request) {
   // In turn, so the sweep sees what the schedules queued; each apart from the other.
   const schedules = await run('schedules', () => fireDueSchedules(now, agentRunDriver));
   const sweep = await run('sweep', () => sweepAgents(now, agentRunDriver));
+  const memory = await run('memory', async () => ({ purged: await purgeDeletedMemory(now) }));
   return NextResponse.json(
     failed.length > 0
-      ? { ok: false, error: 'failed', failed, schedules, sweep }
-      : { ok: true, schedules, sweep },
+      ? { ok: false, error: 'failed', failed, schedules, sweep, memory }
+      : { ok: true, schedules, sweep, memory },
     { status: failed.length > 0 ? 500 : 200 },
   );
 }
