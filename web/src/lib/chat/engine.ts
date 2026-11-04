@@ -222,6 +222,7 @@ import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
 import { memoryChoseTarget } from './memory/rules';
 import { memoryStep, runMemory, type RunMemory } from './memory/store';
 import { readUnchanged } from './schedule/fingerprint';
+import { CHAT_EFFORTS, isCatalogId, modelChoiceOpen, runChoiceOf } from './models';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -481,6 +482,19 @@ export const startRunInput = z.object({
    * item 18): a run of the same chat, read on the server, never trusted.
    */
   fromRunId: z.guid().optional(),
+  /**
+   * The model and effort picked in the composer's model menu (CHAT-16,
+   * W4-02): Auto or a model id. Checked again as the run starts
+   * (runChoiceOf): one not offered (not tested, or dropped) and the free
+   * trial run Auto, so a pick kept from before still sends.
+   */
+  model: z
+    .string()
+    .trim()
+    .max(200)
+    .refine((value) => value === 'auto' || isCatalogId(value))
+    .optional(),
+  effort: z.enum(CHAT_EFFORTS).optional(),
   /**
    * The shortcut the message was sent with (CHAT-08 item 4, W2-09): kept
    * only while the message is still that shortcut's (messageShortcut). One
@@ -795,9 +809,17 @@ export async function startChatRun(
     { conversation_id: conversationId, role: 'assistant', content_md: '', timezone },
     'make the answer',
   );
+  // The model menu's pick, when the plan lets the person choose (W4-02).
+  const choice = runChoiceOf(input, modelChoiceOpen(ctx.plan));
   const runId = await insertRow(
     'chat_runs',
-    { message_id: answerId, conversation_id: conversationId, status: 'queued' },
+    {
+      message_id: answerId,
+      conversation_id: conversationId,
+      status: 'queued',
+      model: choice.model,
+      effort: choice.effort,
+    },
     'make the run',
   );
   const progress: Progress = {

@@ -1,12 +1,16 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AUTO_CHOICE,
   AUTO_MODEL,
   CHAT_MODELS,
   OFFERED_MODELS,
   isCatalogId,
   isChatModelChoice,
+  latestChoice,
+  modelChoiceOpen,
   offeredModel,
+  runChoiceOf,
 } from './models';
 import { readModelMenu } from './model-menu';
 
@@ -57,6 +61,49 @@ describe('the offered models', () => {
     expect(offeredModel('auto')).toBeNull();
     expect(isCatalogId('openai/gpt-6.1-sol')).toBe(true);
     expect(isCatalogId('../../etc/passwd')).toBe(false);
+  });
+});
+
+describe('a run’s model and effort (W4-02)', () => {
+  it('lets Starter and up pick, the free trial run Auto, self-hosted pick', () => {
+    expect(modelChoiceOpen({ selfHosted: false, isTrial: false })).toBe(true);
+    expect(modelChoiceOpen({ selfHosted: false, isTrial: true })).toBe(false);
+    expect(modelChoiceOpen({ selfHosted: true, isTrial: false })).toBe(true);
+  });
+
+  it('keeps what was asked when open and offered, else Auto at Normal', () => {
+    const sonnet = { model: 'anthropic/claude-sonnet-5.5', effort: 'max' };
+    expect(runChoiceOf(sonnet, true)).toEqual(sonnet);
+    expect(runChoiceOf(sonnet, false)).toEqual(AUTO_CHOICE);
+    // A model listed but not tested yet: Auto, the effort kept.
+    expect(runChoiceOf({ model: 'openai/gpt-6.1-sol', effort: 'high' }, true)).toEqual({
+      model: 'auto',
+      effort: 'high',
+    });
+    expect(runChoiceOf({ model: 'openai/gpt-6.1-sol', effort: 'turbo' }, true)).toEqual(
+      AUTO_CHOICE,
+    );
+    expect(runChoiceOf({}, true)).toEqual(AUTO_CHOICE);
+  });
+
+  it('starts a chat’s menu on its latest run’s pick', () => {
+    expect(
+      latestChoice([
+        { model: 'anthropic/claude-haiku-5.5', effort: 'high', created_at: '2026-11-02T10:00:00Z' },
+        { model: 'anthropic/claude-sonnet-5.5', effort: 'max', created_at: '2026-11-02T11:00:00Z' },
+      ]),
+    ).toEqual({ model: 'anthropic/claude-sonnet-5.5', effort: 'max' });
+    // A chat whose latest run was on a model not tested opens on Auto.
+    expect(
+      latestChoice([
+        {
+          model: 'openai/gpt-6.1-sol',
+          effort: 'normal',
+          created_at: '2026-11-02T12:00:00Z',
+        },
+      ]),
+    ).toEqual(AUTO_CHOICE);
+    expect(latestChoice([])).toEqual(AUTO_CHOICE);
   });
 });
 
