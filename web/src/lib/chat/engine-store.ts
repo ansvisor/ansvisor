@@ -235,6 +235,8 @@ export interface LoadedRun {
   status: ChatRunStatus;
   conversationId: string;
   messageId: string;
+  /** 'auto' or the model picked in the menu (chat_runs.model; W4-03). */
+  model: string;
   effort: ChatEffort;
   organizationId: string;
   userId: string;
@@ -258,7 +260,7 @@ export async function loadRun(runId: string): Promise<LoadedRun | null> {
   const [run, state] = await Promise.all([
     supabaseAdmin
       .from('chat_runs')
-      .select('id, status, conversation_id, message_id, effort')
+      .select('id, status, conversation_id, message_id, model, effort')
       .eq('id', runId)
       .maybeSingle(),
     supabaseAdmin
@@ -279,6 +281,7 @@ export async function loadRun(runId: string): Promise<LoadedRun | null> {
     status: r.status as ChatRunStatus,
     conversationId: r.conversation_id as string,
     messageId: r.message_id as string,
+    model: (r.model as string) ?? 'auto',
     effort: (r.effort as ChatEffort) ?? 'normal',
     organizationId: s.organization_id as string,
     userId: s.user_id as string,

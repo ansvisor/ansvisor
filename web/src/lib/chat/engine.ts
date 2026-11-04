@@ -222,7 +222,17 @@ import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
 import { memoryChoseTarget } from './memory/rules';
 import { memoryStep, runMemory, type RunMemory } from './memory/store';
 import { readUnchanged } from './schedule/fingerprint';
-import { CHAT_EFFORTS, isCatalogId, modelChoiceOpen, runChoiceOf } from './models';
+import {
+  AUTO_CHOICE,
+  AUTO_MODEL,
+  CHAT_EFFORTS,
+  isCatalogId,
+  modelChoiceOpen,
+  runChoiceOf,
+  type ChatModelChoice as RunModelChoice,
+} from './models';
+import { readModelMenu } from './model-menu';
+import type { PlanFacts } from './plan-facts';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -871,6 +881,11 @@ const STEP_RETRY_MS = 1_000;
 type Progress = RunProgress & {
   question?: string;
   scope?: MessageScope;
+  /** The picked model was checked against the catalog once (W4-03). */
+  modelChecked?: boolean;
+  /** The catalog dropped the picked model: the run takes Auto, and says so once. */
+  modelDropped?: boolean;
+  modelNoted?: boolean;
   /**
    * The run's one recovery from a reply with no answer, by its cause: 'retry' ran a step the
    * provider ended in an error, with nothing in it, again; 'answer' asked the model for the
@@ -1117,9 +1132,11 @@ async function openContext(
     mode: run.mode,
     surface: 'chat',
   });
+  // The menu's pick, checked again against the plan as it is now (W4-03).
+  const choice = ctx ? await runModelChoice(run, progress, ctx.plan) : AUTO_CHOICE;
   let models: ChatModels | null = null;
   try {
-    models = ctx ? await resolveChatModels(actor.organizationId) : null;
+    models = ctx ? await resolveChatModels(actor.organizationId, choice) : null;
   } catch (err) {
     if (!(err instanceof OwnKeyUnreadableError)) throw err;
     // Marked failing where it was found (key.ts); the run stops on it, never on Ansvisor's key.
@@ -1150,10 +1167,11 @@ async function openContext(
   const offered = playbook ? playbookTools(shown.offered, playbook) : shown.offered;
   const { refused } = shown;
   // An agent's run reads what its skills list (run-limits.ts AGENT_READS).
-  const budget = readBudget(run.effort, { agent: agentRunId !== null });
+  const budget = readBudget(choice.effort, { agent: agentRunId !== null });
   const history = await readHistory(run, budget.historyChars);
   // One model does both on a single-model key: the run writes from the start.
   if (models.phases === 'single') progress.phase = 'write';
+  if (progress.modelDropped && !progress.modelNoted) await modelDroppedStep(run, progress, sink);
   return {
     actor,
     run,
@@ -1185,6 +1203,46 @@ async function openContext(
     },
     memory: await runMemory(actor, brand),
   };
+}
+
+/**
+ * The model and effort a run takes (W4-03): what it was started with, as
+ * the plan allows it now (the free trial runs Auto at Normal, runChoiceOf);
+ * a model the catalog no longer lists takes Auto, checked once a run (the
+ * API server's price sync, lib/chat/model-menu.ts). A check that can't be
+ * read keeps the model: the call tells.
+ */
+async function runModelChoice(
+  run: LoadedRun,
+  progress: Progress,
+  plan: PlanFacts,
+): Promise<RunModelChoice> {
+  const choice = runChoiceOf({ model: run.model, effort: run.effort }, modelChoiceOpen(plan));
+  if (choice.model === AUTO_MODEL) return choice;
+  if (progress.modelDropped) return { ...choice, model: AUTO_MODEL };
+  if (progress.modelChecked) return choice;
+  progress.modelChecked = true;
+  const menu = await readModelMenu({ selected: choice.model });
+  if (!menu.selected?.removed) return choice;
+  progress.modelDropped = true;
+  return { ...choice, model: AUTO_MODEL };
+}
+
+/** The one line a run says when its model was dropped: "Ran on Auto" (W4-03). */
+async function modelDroppedStep(
+  run: LoadedRun,
+  progress: Progress,
+  sink: RunEventSink,
+): Promise<void> {
+  progress.modelNoted = true;
+  const row = await insertStep(run.id, {
+    position: ++progress.steps,
+    kind: 'check',
+    status: 'done',
+    label: t('step.modelDropped'),
+    detail: t('step.modelDroppedDetail'),
+  });
+  sink.emit('step.finished', { step: clientStep(row) });
 }
 
 /**
