@@ -35,11 +35,11 @@ An open rule shows its status in amber; red is kept for what blocks. Once you've
 
 ## Rewrite the whole page
 
-The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule in the set, with the cited passages kept. It uses more AI usage than fixing open rules. The menu marks it **Recommended** when the page is far off its Length or many rules are open. Pick it, and the button reads **Rewrite page**.
+The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.
 
-A rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. A rewrite isn't offered once the page is ready or published.
+A rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. A rewrite isn't offered once the page is ready or published. One past its Length is cut to it with one more pass; accept one still a little long, and the next rewrite starts from there.
 
-When the quoted passages it keeps stop the page reaching its Length, a note offers **Raise Length to …** and **Rewrite, cited passages too**, which may stop those passages being quoted.
+When the passages it keeps stop the page reaching its Length, a note offers **Raise Length to …** and **Rewrite, cited passages too**, which may stop those passages being quoted. The **Length** rule says so too.
 
 ## Before you run it again
 

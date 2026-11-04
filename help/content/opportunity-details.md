@@ -4,8 +4,8 @@ route: /dashboard/content
 keywords: [opportunity details, source data, why this score, another angle, mark as reviewed, dismiss opportunity, send to actions, new signal detected, write this]
 synonyms: [opportunity panel, opportunity page, act on an opportunity, follow an opportunity]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -70,7 +70,7 @@ It counts as one of the month's new opportunities.
 
 **Dismiss**, for admins and managers, asks why:
 
-- **The topic doesn't matter to us** keeps it from being suggested again in this form for 90 days.
+- **The topic doesn't matter to us** keeps it from being suggested again in this form for 90 days. After that, its need can get a new suggestion.
 - **Right topic, wrong angle** dismisses it and opens **Another angle**, so you can ask for a better take on the same need.
 
 ## Follow it to Done

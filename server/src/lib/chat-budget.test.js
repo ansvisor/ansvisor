@@ -26,6 +26,8 @@ let ledger;
 let grants;
 // chat_agent_runs: an agent run's cap and its use (00419).
 let agentRuns;
+// chat_schedule_runs: a scheduled job's runs and their use (00457).
+let scheduleRuns;
 // chat_settings: the key guard an Admin set (00442); none reads as $250.
 let chatSettings;
 let rpcCalls;
@@ -128,6 +130,7 @@ const tables = () => ({
   prompt_improve_usage: ledger,
   ai_credit_grants: grants,
   chat_agent_runs: agentRuns,
+  chat_schedule_runs: scheduleRuns,
   chat_settings: chatSettings,
 });
 
@@ -153,14 +156,26 @@ function query(table) {
       const hit = list.filter(matches);
       hit.forEach((r) => Object.assign(r, op.value));
       return {
-        data: hit.map((r) => ({ id: r.id, agent_run_id: r.agent_run_id ?? null })),
+        data: hit.map((r) => ({
+          id: r.id,
+          agent_run_id: r.agent_run_id ?? null,
+          schedule_id: r.schedule_id ?? null,
+          chat_run_id: r.chat_run_id ?? null,
+        })),
         error: null,
       };
     }
     if (op.kind === 'delete') {
       const gone = ledger.filter(matches);
       ledger = ledger.filter((r) => !matches(r));
-      return { data: gone.map((r) => ({ agent_run_id: r.agent_run_id ?? null })), error: null };
+      return {
+        data: gone.map((r) => ({
+          agent_run_id: r.agent_run_id ?? null,
+          schedule_id: r.schedule_id ?? null,
+          chat_run_id: r.chat_run_id ?? null,
+        })),
+        error: null,
+      };
     }
     if (op.kind === 'insert') {
       for (const row of [op.value].flat()) list.push({ id: `u${nextId++}`, ...row });
@@ -218,6 +233,7 @@ beforeEach(async () => {
   ledger = [];
   grants = [];
   agentRuns = [];
+  scheduleRuns = [];
   chatSettings = [];
   rpcCalls = [];
   runs = new Set([RUN]);
@@ -954,6 +970,65 @@ describe('an agent run’s step, within its own cap (CHAT-27 items 21–22)', ()
     ).rejects.toMatchObject({ name: 'PlanLimitError', statusCode: 429 });
   });
 
+  it('takes what the agents it ran spent out of its cap: their unused slice comes back', async () => {
+    const CALLED = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0c';
+    agentRuns.push({
+      id: CALLED,
+      organization_id: 'o1',
+      max_share: 0.05,
+      usage_share: 0,
+      called_by_run_id: AGENT_RUN,
+    });
+    // The called agent spent $0.20 of its $0.25 slice: $0.30 of the caller's $0.50 is left.
+    ledger.push({
+      id: 'called',
+      feature: 'agent',
+      cost_usd: 0.2,
+      own_key: false,
+      agent_run_id: CALLED,
+      used_at: '2026-10-29T10:00:00.000Z',
+    });
+    await budget.reserveChatStep('o1', step({ feature: 'agent', agentRunId: AGENT_RUN }));
+    expect(rpcCalls.at(-1).args.p_run_cap).toBeCloseTo(0.3, 10);
+  });
+
+  it('holds a called run within what its caller and the agents it ran before left', async () => {
+    const FIRST = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0c';
+    const SECOND = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0d';
+    const called = (id) => ({
+      id,
+      organization_id: 'o1',
+      max_share: 0.1,
+      usage_share: 0,
+      called_by_run_id: AGENT_RUN,
+    });
+    agentRuns.push(called(FIRST), called(SECOND));
+    const spend = (id, agentRunId, cost) =>
+      ledger.push({
+        id,
+        feature: 'agent',
+        cost_usd: cost,
+        own_key: false,
+        agent_run_id: agentRunId,
+        used_at: '2026-10-29T10:00:00.000Z',
+      });
+    // The caller's cap is $0.50: it spent $0.05, the first agent it ran $0.40.
+    spend('caller', AGENT_RUN, 0.05);
+    spend('first', FIRST, 0.4);
+    // The second's own cap is $0.50 too, but only $0.05 of the caller's is left.
+    await budget.reserveChatStep('o1', step({ feature: 'agent', agentRunId: SECOND }));
+    expect(rpcCalls.at(-1).args.p_run_cap).toBeCloseTo(0.05, 10);
+    // Its own spend counts once, against that cap.
+    spend('second', SECOND, 0.05);
+    await expect(
+      budget.reserveChatStep('o1', step({ feature: 'agent', agentRunId: SECOND })),
+    ).rejects.toMatchObject({ name: 'ChatBudgetError', code: 'run_cap', statusCode: 429 });
+    // The first agent it ran is held to the same: none of the caller's cap is left for it.
+    await expect(
+      budget.reserveChatStep('o1', step({ feature: 'agent', agentRunId: FIRST })),
+    ).rejects.toMatchObject({ code: 'run_cap' });
+  });
+
   it('refuses an agent run that isn’t the workspace’s', async () => {
     agentRuns[0].organization_id = 'o2';
     await expect(
@@ -1052,6 +1127,35 @@ describe('about how much of the limit a Chat run uses (CHAT-12 item 7)', () => {
     expect(await budget.chatRunEstimate('o1')).toEqual({ unlimited: true, share: null, runs: 0 });
     vi.stubEnv('CHAT_AGENTIC', 'false');
     await expect(budget.chatRunEstimate('o1')).rejects.toMatchObject({ code: 'chat_off' });
+  });
+});
+
+describe('a scheduled run’s use (CHAT-12 item 24)', () => {
+  it('keeps its Chat run’s spend on Ansvisor’s key as a share of the included budget, as steps settle', async () => {
+    const JOB = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b';
+    scheduleRuns.push({ id: 'sr1', run_id: RUN, usage_share: 0 });
+    // Starter's included budget is $5: an earlier step of $0.10 and an own-key one that doesn't count.
+    ledger.push(
+      { id: 'a', organization_id: 'o1', chat_run_id: RUN, cost_usd: 0.1, own_key: false },
+      { id: 'b', organization_id: 'o1', chat_run_id: RUN, cost_usd: 3, own_key: true },
+    );
+    const id = await budget.reserveChatStep('o1', step({ feature: 'schedule', scheduleId: JOB }));
+    const row = ledger.find((r) => r.id === id);
+    row.schedule_id = JOB;
+    await budget.chargeChatStep('o1', id, {
+      modelId: MODEL,
+      usage: { inputTokens: 100_000, outputTokens: 0 },
+    });
+    // $0.10 + $0.10 (100k tokens at $1 a million) = $0.20 of $5: 4%.
+    expect(scheduleRuns[0].usage_share).toBe(0.04);
+
+    const second = await budget.reserveChatStep(
+      'o1',
+      step({ feature: 'schedule', scheduleId: JOB }),
+    );
+    ledger.find((r) => r.id === second).schedule_id = JOB;
+    await budget.releaseChatStep('o1', second);
+    expect(scheduleRuns[0].usage_share).toBe(0.04);
   });
 });
 

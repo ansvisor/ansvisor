@@ -329,15 +329,20 @@ export function asksForLanguage(question: string): boolean {
 }
 
 /**
- * The turn's last line for the writer: the language the person asked for,
- * else the question's, named, so pages of English data don't set it. Null
- * when the language is unclear.
+ * The turn's last line for the writer: the language the person asked for in
+ * their message, else the one they set (Settings › Chat, `preferred`), else
+ * the question's, named, so pages of English data don't set it. Null when
+ * none is set and the question's is unclear.
  */
-export function languageLine(question: string): string | null {
+export function languageLine(question: string, preferred: Language | null = null): string | null {
   const asked = askedLanguage(question);
   if (asked) {
     const name = LANGUAGES[asked];
     return `The person asked for the answer in ${name}: answer in ${name}.`;
+  }
+  if (preferred) {
+    const name = LANGUAGES[preferred];
+    return `The person set Chat to answer in ${name}: answer in ${name}, whatever the language of their message or the data, unless they ask for another language.`;
   }
   const language = detectLanguage(question);
   if (!language) return null;
@@ -346,13 +351,26 @@ export function languageLine(question: string): string | null {
 }
 
 /**
- * The language an answer is rewritten in, once, when it came out in English
- * for a question in another language; null otherwise: the same language, one
+ * The language an answer is rewritten in, once: the person's set language
+ * (`preferred`) when the answer came out in another, one of the two being
+ * English; with none set, the question's when the answer came out in English
+ * for a question in another language. Null otherwise: the same language, one
  * of them unclear, or a question that asks for a language (an English blog
  * post asked for in Turkish is English on purpose).
  */
-export function rewriteLanguage(question: string, answer: string): Language | null {
+export function rewriteLanguage(
+  question: string,
+  answer: string,
+  preferred: Language | null = null,
+): Language | null {
   if (asksForLanguage(question)) return null;
+  if (preferred) {
+    // The person's set language: rewritten into it across English, where reading is sure.
+    const written = detectLanguage(answer);
+    return written && written !== preferred && (written === 'en' || preferred === 'en')
+      ? preferred
+      : null;
+  }
   const asked = detectLanguage(question);
   if (!asked || asked === 'en') return null;
   return detectLanguage(answer) === 'en' ? asked : null;

@@ -228,6 +228,10 @@ describe('the Rules tab', () => {
           .click(),
       );
       expect(change).toHaveBeenCalledWith('length', { value: '4000' });
+      // Said under the Length too, where it was set (editor test 2026-11-03).
+      expect(row('Length').textContent).toContain(
+        "A rewrite can't get this page much under 3,900 characters, so the agent leaves the Length to you. Run Agent above says why.",
+      );
       // No quoted passage kept: no rewrite of them to offer.
       expect(buttons().some((b) => b.textContent === 'Rewrite, cited passages too')).toBe(false);
     });
