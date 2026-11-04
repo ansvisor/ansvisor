@@ -133,7 +133,9 @@ export const DEMO_GUARDED = [
   // Content Editor (content-drafts.js): the draft's brand is in the body;
   // the draft itself is checked too.
   guard('POST /content-drafts/send', brandIn('body')),
+  guard('POST /content-drafts/publish-cms', brandIn('body')),
   guard('POST /content-drafts/:draftId/publish', rowIn('content_drafts', 'path', 'draftId')),
+  guard('POST /content-drafts/:draftId/take-down', rowIn('content_drafts', 'path', 'draftId')),
   guard('POST /content-drafts/webflow-status', brandIn('body')),
   guard('POST /content-drafts/wordpress-status', brandIn('body')),
   guard('POST /content-drafts/framer-status', brandIn('body')),
@@ -194,6 +196,9 @@ export const DEMO_GUARDED = [
   // a brand, the organization's sync, which skips demo brands itself.
   guard('POST /integrations/google-search-console/sync', brandIn('body')),
   guard('POST /integrations/google-analytics/sync', brandIn('body')),
+  // A brand's property pick (the route refuses the demo brand itself too).
+  guard('PUT /integrations/google-search-console/brands/:brandId/property', brandIn('path')),
+  guard('PUT /integrations/google-analytics/brands/:brandId/property', brandIn('path')),
 
   // Mentions (mentions.js).
   guard('POST /mentions/action', brandIn('body')),

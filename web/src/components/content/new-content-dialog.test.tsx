@@ -21,9 +21,9 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   getContentOverlap: (...args: unknown[]) => getContentOverlap(...args),
 }));
 // What the agent is given is agent-write.test.ts's; here, that Start hands it over.
-const listMembers = vi.fn();
+const listBrandMembers = vi.fn();
 vi.mock('@/lib/actions/team', () => ({
-  listMembers: (...args: unknown[]) => listMembers(...args),
+  listBrandMembers: (...args: unknown[]) => listBrandMembers(...args),
 }));
 const assignAction = vi.fn();
 vi.mock('@/lib/actions/action-center', () => ({
@@ -177,7 +177,7 @@ beforeEach(() => {
   getContentOverlap.mockReset().mockResolvedValue({ totalPrompts: 2, pages: [] });
   importContentPage.mockReset().mockResolvedValue({ error: 'failed' });
   sendContentDraftToActionCenter.mockReset();
-  listMembers.mockReset().mockResolvedValue(MEMBERS);
+  listBrandMembers.mockReset().mockResolvedValue(MEMBERS);
   assignAction.mockReset().mockResolvedValue(undefined);
   startAgentWriting.mockReset();
   agentWriteRequest.mockReset().mockResolvedValue({ sources: 'kept', rules: [] });
@@ -530,6 +530,28 @@ describe('New content', () => {
       expect(document.body.textContent).toContain('Optimize: Pricing');
     });
 
+    it('wraps a long page address with no break in it, from either preset', async () => {
+      // A Turkish slug in %-escapes: one word, wider than the dialog.
+      const slug =
+        '%C3%BCr%C3%BCnler%C4%B1m%C4%B1z%C4%B1n%C3%B6zellikleri%C3%A7%C4%B1kt%C4%B1lar%C4%B1';
+      const url = `https://northwind.example/${slug}`;
+      importContentPage.mockResolvedValue({ page: { url, title: 'Products', html: '<h1>P</h1>' } });
+      await render('b2b', { kind: 'page', url });
+      await act(async () => {});
+      const summary = [...document.querySelectorAll('p')].find((p) =>
+        p.textContent?.startsWith(`/${slug} · `),
+      );
+      expect(summary?.className).toContain('[overflow-wrap:anywhere]');
+
+      act(() => root.unmount());
+      root = createRoot(container);
+      getContentOverlap.mockResolvedValue({ totalPrompts: 2, pages: [] });
+      await render('b2b', { kind: 'opportunity', id: 'o2', page: { url, title: 'Products' } });
+      await act(async () => {});
+      const title = radio(`Optimize /${slug}`).querySelector('.font-medium');
+      expect(title?.className).toContain('[overflow-wrap:anywhere]');
+    });
+
     it('starts an opportunity for an existing page on that page, whatever else is cited', async () => {
       getContentOverlap.mockResolvedValue({ totalPrompts: 2, pages: [] });
       await render('b2b', {
@@ -696,7 +718,8 @@ describe('New content', () => {
         ...document.querySelectorAll<HTMLElement>('[aria-labelledby="start-who"] [role="radio"]'),
       ].find((r) => r.textContent?.startsWith('Team'))!;
       expect(team.getAttribute('aria-checked')).toBe('true');
-      expect(listMembers).toHaveBeenCalled();
+      // The people who can see the dialog's brand (BRAND-ACCESS).
+      expect(listBrandMembers).toHaveBeenCalledWith('b1');
     });
 
     it('leaves an opportunity no longer open to pick', async () => {

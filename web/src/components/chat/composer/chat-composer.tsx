@@ -8,8 +8,15 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
+import { looksLikeApiKey, withoutApiKeys } from '@/lib/chat/key-paste';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { MAX_REFERENCES, type ChatReference } from '@/lib/chat/references';
+import {
+  keepsTrigger,
+  shortcutCommand,
+  type Shortcut,
+  type ShortcutId,
+} from '@/lib/chat/shortcuts';
 import {
   CHAT_UPLOAD_TYPES,
   UPLOAD_ACCEPT,
@@ -26,7 +33,6 @@ import {
   matchShortcuts,
   matchSkills,
   type PlusItem,
-  type Shortcut,
 } from './composer-menus';
 import { ModeSwitch } from './mode-switch';
 
@@ -74,6 +80,11 @@ export interface ComposerSend {
   references: ChatReference[];
   /** The attachments' ids (chat_uploads), each up and ready. */
   attachments: string[];
+  /**
+   * The shortcut picked from the / menu (CHAT-08 item 4), while the text
+   * still starts with its trigger words: the run uses its data plan.
+   */
+  shortcutId?: ShortcutId;
 }
 
 /**
@@ -128,7 +139,9 @@ const refKey = (ref: ChatReference) => `ref:${ref.type}:${ref.id}`;
  *
  * Menus (W1-12): "/" first in an empty box, or the / button, lists the
  * shortcuts that start a message, then the enabled skills, whose /command
- * starts it (W2-04: the server loads the skill it names); "@" at the start
+ * starts it (W2-04: the server loads the skill it names). A shortcut's
+ * message carries it while its trigger words stay (W2-09: the server runs
+ * its playbook); rewritten, it is a message like any other. "@" at the start
  * of a word, or the @ button, references data (the page's own first, then
  * the brand's prompts, pages and open tasks), the pick a chip; ＋ attaches
  * files and connects a tool. ↑ ↓ move, Enter picks, Esc closes and keeps
@@ -136,6 +149,10 @@ const refKey = (ref: ChatReference) => `ref:${ref.type}:${ref.id}`;
  *
  * A `draft` from the page (W1-08) puts its question in the box, or attaches
  * its object as an @ chip, and the cursor goes to the end.
+ *
+ * Text that holds an API key is never sent (W4-05): a line under the box
+ * says so, Send waits, and Remove takes the key out. Save securely shows
+ * only where the page offers it (`onSaveKey`: an Admin on Enterprise).
  */
 export function ChatComposer({
   variant = 'dock',
@@ -163,6 +180,7 @@ export function ChatComposer({
   usage,
   modelLabel,
   onOpenModel,
+  onSaveKey,
   className,
 }: {
   variant?: ComposerVariant;
@@ -217,6 +235,11 @@ export function ChatComposer({
   /** The model button's words; "Auto · Haiku reads, Sonnet writes" by default. */
   modelLabel?: ReactNode;
   onOpenModel?: () => void;
+  /**
+   * Save securely on the pasted-key line: the text goes to the page's own
+   * key form, never to Chat. Without it, only Remove shows.
+   */
+  onSaveKey?: (text: string) => void;
   className?: string;
 }) {
   const t = useTranslations('chatComposer');
@@ -234,13 +257,18 @@ export function ChatComposer({
   const [found, setFound] = useState<{ query: string; refs: ChatReference[] } | null>(null);
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [fileProblem, setFileProblem] = useState<UploadProblem | null>(null);
+  // The shortcut picked from the / menu, and the trigger words it put in the box.
+  const [shortcut, setShortcut] = useState<{ id: ShortcutId; trigger: string } | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   const root = useRef<HTMLDivElement>(null);
   // The page's last hand-off taken in: each one once.
   const [taken, setTaken] = useState<number | null>(null);
   if (draft && draft.nonce !== taken) {
     setTaken(draft.nonce);
-    if (draft.text !== undefined) setText(draft.text);
+    if (draft.text !== undefined) {
+      setText(draft.text);
+      setShortcut(null);
+    }
     const reference = draft.reference;
     if (reference) {
       setRefs((all) =>
@@ -252,6 +280,8 @@ export function ChatComposer({
   }
   const box = useRef<HTMLTextAreaElement>(null);
   const hasText = text.trim().length > 0;
+  // A pasted API key: the text stays in the box until it is taken out.
+  const keyInText = hasText && looksLikeApiKey(text);
   const uploading = files.some((f) => f.status === 'uploading');
   const failedFiles = files.some((f) => f.status === 'failed');
   // The ghost shows in an empty box, not while a run answers or the box is off.
@@ -304,11 +334,12 @@ export function ChatComposer({
   }, [atSearch, searchReferences]);
 
   const shortcutName = (s: Shortcut) => t(`slash.shortcuts.${s.key}.name`);
-  // A skill with a shortcut's command (/report) takes its place: the message calls the skill.
+  // A skill under a shortcut's command takes its place: the message calls the skill. The
+  // library has none (its hidden playbooks hold those names); this keeps the menu one per command.
   const shortcuts =
     menu?.kind === 'slash'
       ? matchShortcuts(menu.query, shortcutName).filter(
-          (s) => !skills.some((skill) => `/${skill.name}` === s.command),
+          (s) => !skills.some((skill) => `/${skill.name}` === shortcutCommand(s)),
         )
       : [];
   const skillRows = menu?.kind === 'slash' ? matchSkills(menu.query, skills) : [];
@@ -435,6 +466,8 @@ export function ChatComposer({
   /** The box's text and where its cursor is, after a change: which menu that opens. */
   function textChanged(next: string, cursor: number) {
     setText(next);
+    // Its trigger words rewritten: the message is the person's own, without the shortcut.
+    if (shortcut && !keepsTrigger(next, shortcut.trigger)) setShortcut(null);
     if (!readOnly && /^\/\S*$/.test(next.slice(0, cursor))) {
       setMenu({ kind: 'slash', query: next.slice(1, cursor), typed: true });
       setActive(0);
@@ -465,11 +498,12 @@ export function ChatComposer({
     if (ghost) putText(ghost);
   };
 
-  function pickShortcut(shortcut: Shortcut) {
-    const starter = t(`slash.shortcuts.${shortcut.key}.starter`);
+  function pickShortcut(picked: Shortcut) {
+    const starter = t(`slash.shortcuts.${picked.key}.starter`);
     // Typed "/…" is the shortcut's; from the button, the text stays after the starter.
     const rest = menu?.kind === 'slash' && menu.typed ? '' : text.trim();
     setMenu(null);
+    setShortcut({ id: picked.id, trigger: starter });
     putText(`${starter} ${rest}`);
   }
 
@@ -478,6 +512,7 @@ export function ChatComposer({
     // Typed "/…" is the skill's; from the button, the text stays after the command.
     const rest = menu?.kind === 'slash' && menu.typed ? '' : text.trim();
     setMenu(null);
+    setShortcut(null);
     putText(`/${skill.name} ${rest}`);
   }
 
@@ -527,27 +562,31 @@ export function ChatComposer({
 
   async function submit(steer: boolean) {
     const message = text.trim();
-    if (!message || sending || disabled || uploading) return;
+    if (!message || sending || disabled || uploading || looksLikeApiKey(message)) return;
     const handler = steer ? onSteer : onSend;
     if (!handler) return;
     const sentRefs = refs;
     const sentFiles = files;
+    const sentShortcut = shortcut && keepsTrigger(message, shortcut.trigger) ? shortcut : null;
     setSending(true);
     setText('');
     setRefs([]);
     setFiles([]);
     setFileProblem(null);
     setMenu(null);
+    setShortcut(null);
     const restore = () => {
       setText(message);
       setRefs(sentRefs);
       setFiles(sentFiles);
+      setShortcut(sentShortcut);
     };
     try {
       const sent = await handler(message, {
         context: chips,
         references: sentRefs,
         attachments: sentFiles.flatMap((f) => (f.status === 'ready' && f.id ? [f.id] : [])),
+        ...(sentShortcut ? { shortcutId: sentShortcut.id } : {}),
       });
       if (sent === false) restore();
     } catch {
@@ -881,7 +920,7 @@ export function ChatComposer({
               type="button"
               data-action="composer.send"
               onClick={() => void submit(false)}
-              disabled={!hasText || sending || disabled || uploading}
+              disabled={!hasText || sending || disabled || uploading || keyInText}
               aria-label={t('send')}
               title={t('send')}
               className={cn(
@@ -894,6 +933,33 @@ export function ChatComposer({
           )}
         </div>
       </div>
+      {keyInText && (
+        <p
+          role="alert"
+          data-slot="composer-key-paste"
+          className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+        >
+          <span className="min-w-0 flex-1">{t('keyPaste.line')}</span>
+          <button
+            type="button"
+            data-action="composer.removeKey"
+            onClick={() => putText(withoutApiKeys(text))}
+            className="font-medium underline underline-offset-2"
+          >
+            {t('keyPaste.remove')}
+          </button>
+          {onSaveKey && (
+            <button
+              type="button"
+              data-action="composer.saveKey"
+              onClick={() => onSaveKey(text)}
+              className="font-medium underline underline-offset-2"
+            >
+              {t('keyPaste.save')}
+            </button>
+          )}
+        </p>
+      )}
       {(fileProblem || failedFiles) && (
         <p
           role="alert"

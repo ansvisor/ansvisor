@@ -56,6 +56,7 @@ async function connect() {
     email: null,
     organizationId: 'org-1',
     apiKeyId: 'key-1',
+    brandAccess: 'all' as const,
     role: 'admin',
   });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -114,6 +115,7 @@ describe('the MCP tools on a read-only workspace', () => {
       email: null,
       organizationId: 'org-1',
       apiKeyId: 'key-1',
+      brandAccess: 'all' as const,
       role: 'admin',
     });
     // The handlers the SDK calls once a call's arguments are checked.
@@ -264,6 +266,7 @@ describe('the costly internal calls on a read-only workspace', () => {
     email: null,
     organizationId: 'org-1',
     apiKeyId: 'agent-internal',
+    brandAccess: 'all' as const,
     role: 'admin' as const,
   };
   const fetchMock = vi.fn(async () =>

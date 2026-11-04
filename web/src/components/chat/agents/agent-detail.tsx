@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { ListDot } from '@/components/agentic/list-dot';
@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useRouter } from '@/i18n/navigation';
+import type { AgentGoLiveDetail } from '@/lib/chat/agent-go-live';
 import type { AgentDetail as Agent, AgentRunView } from '@/lib/chat/agents';
 import {
   RUN_FILTERS,
@@ -34,7 +35,7 @@ import {
   type RunFilter,
 } from '@/lib/chat/agent-view';
 import { cn } from '@/lib/utils';
-import { AgentDenial, CHIP, StatusLine, liveRunOf } from './agent-parts';
+import { AgentDenial, CHIP, GoLiveBadge, StatusLine, liveRunOf } from './agent-parts';
 import { readAgent, readAgentRuns } from './agent-requests';
 import { useAgentWords, type AgentWords } from './agent-words';
 import { useAgentActions, type AgentButton } from './use-agent-actions';
@@ -86,6 +87,65 @@ function SideCard({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/**
+ * Publishing on its own (AUTONOMOUS-GO-LIVE §7.2): the permission's state
+ * (on with its limit, off in Settings › Chat, off since the agent changed),
+ * who allowed it, and the pages it took live in the last 24 hours.
+ */
+function GoLiveCard({ goLive, when }: { goLive: AgentGoLiveDetail; when: (at: string) => string }) {
+  const t = useTranslations('chatAgents.detail.goLive');
+  const format = useFormatter();
+  const given = goLive.permission;
+  const status = !given
+    ? t('statusNone')
+    : given.changed
+      ? t('statusChanged')
+      : goLive.switch === 'off'
+        ? t('statusOff')
+        : t('statusOn', { limit: given.dailyLimit });
+  return (
+    <section
+      data-slot="agent-go-live-card"
+      className="mb-3 overflow-hidden rounded-[14px] border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)]"
+    >
+      <h2 className="border-b px-3.5 py-[11px] text-[13px] font-semibold">{t('title')}</h2>
+      <dl className="m-0 grid grid-cols-[104px_minmax(0,1fr)] gap-x-3 gap-y-2 px-3.5 py-3 text-[12.5px]">
+        <Row label={t('status')} slot="goLiveStatus">
+          {status}
+        </Row>
+        {given && (
+          <Row label={t('allowedBy')} slot="goLiveBy">
+            {t('allowedByValue', {
+              name: given.by ?? t('formerMember'),
+              date: format.dateTime(new Date(given.at), { dateStyle: 'medium' }),
+            })}
+          </Row>
+        )}
+      </dl>
+      <div className="border-t px-3.5 py-3 text-[12.5px]">
+        <h3 className="mb-1.5 text-muted-foreground">{t('recent')}</h3>
+        {goLive.recent.length === 0 ? (
+          <p className="text-muted-foreground">{t('recentNone')}</p>
+        ) : (
+          <ul data-slot="agent-go-live-recent" className="grid gap-1.5">
+            {goLive.recent.map((step) => (
+              <li key={`${step.at}-${step.title}`} className="min-w-0">
+                <b className="block truncate font-medium" title={step.title}>
+                  {t('recentItem', { title: step.title || t('untitled'), target: step.target })}
+                </b>
+                <em className={EM}>
+                  {when(step.at)}
+                  {step.takenDown && ` · ${t('takenDown')}`}
+                </em>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function Row({ label, children, slot }: { label: string; children: ReactNode; slot?: string }) {
   return (
     <>
@@ -109,12 +169,18 @@ function RunRow({
 }) {
   const t = useTranslations('chatAgents');
   const tRuns = useTranslations('chatAgents.detail.runs');
+  const tCalls = useTranslations('chatAgents.calls');
+  // The agents it ran open under its row, each with its own share (CHAT-27 item 25).
+  const [callsOpen, setCallsOpen] = useState(false);
   const trigger =
     run.triggerKind === 'manual' && run.by
       ? t('manualBy', { name: run.by })
-      : t.has(`runTrigger.${run.triggerKind}`)
-        ? t(`runTrigger.${run.triggerKind}`)
-        : run.triggerKind;
+      : run.triggerKind === 'agent' && run.calledBy
+        ? tCalls('calledBy', { agent: run.calledBy })
+        : t.has(`runTrigger.${run.triggerKind}`)
+          ? t(`runTrigger.${run.triggerKind}`)
+          : run.triggerKind;
+  const calls = run.calls ?? [];
   const status = t.has(`runStatus.${run.status}`) ? t(`runStatus.${run.status}`) : run.status;
   const reason =
     run.status === 'stopped' && run.stopReason && t.has(`stopReason.${run.stopReason}`)
@@ -148,6 +214,18 @@ function RunRow({
           {trigger}
         </b>
         <em className={EM}>{run.brand ?? tRuns('noBrand')}</em>
+        {calls.length > 0 && (
+          <button
+            type="button"
+            data-action="agent.toggleRunCalls"
+            aria-expanded={callsOpen}
+            onClick={() => setCallsOpen((open) => !open)}
+            // Above the row's link, which fills the row.
+            className="relative z-10 mt-0.5 text-[11.5px] text-foreground/80 underline-offset-2 hover:underline"
+          >
+            {tCalls('callsLine', { count: calls.length })} {callsOpen ? '▴' : '▾'}
+          </button>
+        )}
       </span>
       <span role="cell" className="flex min-w-0 items-start gap-1.5">
         <ListDot state={runDot(run.status)} decorative className="mt-px" />
@@ -189,18 +267,51 @@ function RunRow({
     </>
   );
   return (
-    <div
-      role="row"
-      data-slot="agent-run"
-      className={cn(
-        RUN_COLS,
-        'relative min-h-[52px] border-t py-2.5 text-[13px]',
-        run.chatId &&
-          'hover:bg-muted/40 has-[a:focus-visible]:ring-[3px] has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-inset',
-      )}
-    >
-      {cells}
-    </div>
+    <>
+      <div
+        role="row"
+        data-slot="agent-run"
+        className={cn(
+          RUN_COLS,
+          'relative min-h-[52px] border-t py-2.5 text-[13px]',
+          run.chatId &&
+            'hover:bg-muted/40 has-[a:focus-visible]:ring-[3px] has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-inset',
+        )}
+      >
+        {cells}
+      </div>
+      {callsOpen &&
+        calls.map((call, i) => (
+          <div
+            key={`${call.agent}-${i}`}
+            role="row"
+            data-slot="agent-run-call"
+            className={cn(RUN_COLS, 'border-t border-dashed bg-muted/30 py-2 text-[12.5px]')}
+          >
+            <span role="cell" className="text-muted-foreground">
+              ↳
+            </span>
+            <span role="cell" className="min-w-0 truncate font-medium">
+              {tCalls('step.ran', { agent: call.agent || '—' })}
+            </span>
+            <span role="cell" className="flex min-w-0 items-start gap-1.5">
+              <ListDot state={runDot(call.status)} decorative className="mt-px" />
+              <span className="truncate">
+                {t.has(`runStatus.${call.status}`) ? t(`runStatus.${call.status}`) : call.status}
+              </span>
+            </span>
+            <span role="cell" className={HIDE_NARROW} />
+            <span role="cell" className="text-xs text-muted-foreground tabular-nums">
+              {metered
+                ? tRuns('aiUse', {
+                    used: percentOf(call.usageShare),
+                    cap: percentOf(call.maxShare),
+                  })
+                : tRuns('noOutcome')}
+            </span>
+          </div>
+        ))}
+    </>
   );
 }
 
@@ -215,6 +326,7 @@ export function AgentDetail({
 }) {
   const t = useTranslations('chatAgents');
   const tDetail = useTranslations('chatAgents.detail');
+  const tCalls = useTranslations('chatAgents.calls');
   const router = useRouter();
   const [state, setState] = useState<DetailState>({ status: 'loading' });
   const [runs, setRuns] = useState<AgentRunView[] | null | 'loading'>('loading');
@@ -351,6 +463,9 @@ export function AgentDetail({
   const filtered = shownRuns.filter((run) => runMatches(run, filter));
   const period = a.usagePeriod;
   const scope = settings?.scope;
+  // It publishes and sends on its own now (AUTONOMOUS-GO-LIVE §7.2): the switch on, the permission valid.
+  const goLiveLimit =
+    a.goLive?.switch === 'on' && a.goLive.permission?.on ? a.goLive.permission.dailyLimit : null;
 
   return (
     <div className="max-w-[1100px]">
@@ -517,7 +632,13 @@ export function AgentDetail({
                 </span>
               )),
             ],
-            ['mode', a.mode ? <span className={CHIP}>{t(`modes.${a.mode}`)}</span> : null],
+            [
+              'mode',
+              <>
+                {a.mode && <span className={CHIP}>{t(`modes.${a.mode}`)}</span>}
+                {goLiveLimit !== null && <GoLiveBadge limit={goLiveLimit} />}
+              </>,
+            ],
             [
               'connections',
               settings && settings.connections.length > 0 ? (
@@ -750,7 +871,22 @@ export function AgentDetail({
             </Row>
             <Row label={tDetail('side.runsAs')}>{tDetail('side.runsAsValue')}</Row>
             <Row label={tDetail('side.approvals')}>{tDetail('side.approvalsValue')}</Row>
+            <Row label={tCalls('canCall.label')} slot="canCall">
+              {(a.settings?.canCall ?? []).length > 0
+                ? (a.settings?.canCall ?? [])
+                    .map(
+                      (id) =>
+                        a.canCall?.options.find((o) => o.id === id)?.name ??
+                        tCalls('canCall.hidden'),
+                    )
+                    .join(', ')
+                : tCalls('canCall.none')}
+            </Row>
           </SideCard>
+
+          {a.goLive && (a.goLive.permission || a.goLive.recent.length > 0) && (
+            <GoLiveCard goLive={a.goLive} when={(at) => words.when(at)} />
+          )}
 
           <SideCard title={tDetail('side.scope')}>
             <Row label={tDetail('side.brands')} slot="brands">

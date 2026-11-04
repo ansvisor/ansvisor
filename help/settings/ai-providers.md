@@ -8,7 +8,7 @@ updated: 2026-11-01
 last_checked: 2026-11-01
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/faq.mdx]
 ---
 Chat normally runs on your plan's monthly AI limit, and you don't need any key for it. On the Enterprise plan, an admin can connect the workspace's own account with an AI provider (Anthropic, OpenAI, Google Gemini, Microsoft Azure OpenAI or OpenRouter) in **Settings › AI Providers**. Chat then runs on that key: the provider bills your account, and your monthly AI limit doesn't move.

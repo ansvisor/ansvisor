@@ -73,6 +73,7 @@ const auth = {
   organizationId: 'org-1',
   role: 'admin' as const,
   apiKeyId: 'key-1',
+  brandAccess: 'all' as const,
 };
 
 beforeEach(() => {

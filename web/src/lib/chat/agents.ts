@@ -17,6 +17,7 @@ import type { Json } from '@/types/supabase';
 import { recordAccessDenied } from './access-log';
 import { logActivity, summaryValue } from './activity';
 import { connectionName, missingRequiredConnection } from './agent-connections';
+import { offAgentSkill } from './agent-skills';
 import {
   AGENT_PAUSED_REASONS,
   AGENT_STATUSES,
@@ -34,6 +35,7 @@ import {
   enginesNamed,
   firstVersion,
   lifecycleTarget,
+  canCallDenial,
   modeDenial,
   monthCapDenial,
   nameKey,
@@ -68,9 +70,16 @@ import type { ChatActor } from './engine';
 import type { ChatDenialCard } from './events';
 import { OwnKeyUnreadableError, failingOwnKey, resolveChatModelKey } from './key';
 import type { FailingKey, OwnKeyFailure } from './key-health';
+import {
+  readAgentGoLive,
+  readGoLiveLimits,
+  tellGoLiveOff,
+  type AgentGoLiveDetail,
+} from './agent-go-live';
 import { ownKeyCapReached } from './own-key-cap';
 import { planFactsFromOrgRow, type PlanFacts } from './plan-facts';
 import { parseTeamRole, type ChatMode, type ToolDenial } from './precedence';
+import { agentSkillStates } from './skills/store';
 
 /**
  * Chat's agents (CHAT-21; CHAT-27 §E): the definitions behind Chat ›
@@ -182,6 +191,12 @@ export type AgentRefusalCode =
   | 'queue_full'
   | 'connection_missing'
   | 'own_key_failed'
+  | 'skill_off'
+  /** Going live on its own: the workspace's switch is off, or the agent isn't in Full auto. */
+  | 'go_live_off'
+  | 'go_live_mode'
+  /** Can call names an agent that isn't one of the workspace's, is archived, or is itself. */
+  | 'agent_not_found'
   | 'failed';
 
 export type AgentRefusal =
@@ -207,7 +222,7 @@ export type AgentRefusal =
     };
 
 export type AgentResult<T> = { ok: true; value: T } | { ok: false; refusal: AgentRefusal };
-type Refused = { ok: false; refusal: AgentRefusal };
+export type Refused = { ok: false; refusal: AgentRefusal };
 
 const refusalT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.refusal' });
 const ownKeyT = createTranslator({ locale: 'en', messages, namespace: 'chatAgents.ownKey' });
@@ -238,6 +253,10 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   queue_full: 409,
   connection_missing: 409,
   own_key_failed: 409,
+  skill_off: 409,
+  go_live_off: 409,
+  go_live_mode: 409,
+  agent_not_found: 400,
   failed: 500,
 };
 
@@ -305,10 +324,10 @@ async function firstDenial(
 const AGENT_COLUMNS =
   'id, organization_id, name, status, paused_reason, owner_id, visibility, version, max_run_share, max_month_share, created_by, created_at, updated_at, activated_at, archived_at';
 const VERSION_COLUMNS =
-  'agent_id, version, skill_ids, instructions, mode, connections, model, effort, scope, notify_user_ids, followup_days, created_at';
+  'agent_id, version, skill_ids, instructions, mode, connections, model, effort, scope, notify_user_ids, followup_days, can_call, created_at';
 const TRIGGER_COLUMNS = 'id, agent_id, kind, config_json, enabled, last_fired_at, created_at';
 const RUN_COLUMNS =
-  'id, agent_id, agent_version, brand_id, trigger_kind, acting_user_id, status, skipped_reason, stop_reason, max_share, usage_share, outcome, outcome_confidence, queued_at, started_at, finished_at';
+  'id, agent_id, agent_version, brand_id, trigger_kind, acting_user_id, status, skipped_reason, stop_reason, max_share, usage_share, outcome, outcome_confidence, queued_at, started_at, finished_at, called_by_run_id';
 
 /** Agents the list reads at most: past the plans' active caps, drafts and archives included. */
 const AGENT_LIST_MAX = 500;
@@ -347,6 +366,7 @@ interface VersionRow {
   scope: Json;
   notify_user_ids: string[];
   followup_days: number;
+  can_call: string[] | null;
   created_at: string;
 }
 
@@ -377,6 +397,8 @@ export interface RunRow {
   queued_at: string;
   started_at: string | null;
   finished_at: string | null;
+  /** The run whose run_agent call started this one (00466); null for every other run. */
+  called_by_run_id?: string | null;
 }
 
 function toAgentRow(row: Record<string, unknown>): AgentRow {
@@ -574,6 +596,11 @@ export interface AgentListItem {
   updatedAt: string;
   /** The row's buttons the person may use now (§B item 7), as the detail's `can` decides them. */
   can: Pick<AgentAbilities, 'run' | 'pause' | 'resume'>;
+  /**
+   * It publishes and sends on its own, at most this many a day
+   * (AUTONOMOUS-GO-LIVE §7.2): its card's badge. Absent when it doesn't.
+   */
+  goLiveLimit?: number;
 }
 
 export interface AgentListResult {
@@ -612,6 +639,18 @@ export interface AgentRunView {
   maxShare: number;
   /** Its chat's handle, once its run has one (§H item 36). */
   chatId: string | null;
+  /** A run another agent's run started (trigger agent): that agent's name ("Called by {agent}"). */
+  calledBy?: string | null;
+  /** The agents this run ran (CHAT-27 items 18, 25), each with its own share, for its row to open. */
+  calls?: AgentCallView[];
+}
+
+/** One agent a run ran with run_agent, as its row shows it. */
+export interface AgentCallView {
+  agent: string;
+  status: string;
+  usageShare: number;
+  maxShare: number;
 }
 
 /** What an agent does, as its Settings tab edits it (§C item 14): the stored shapes. */
@@ -625,6 +664,8 @@ export interface AgentSettingsView {
   scope: AgentScope;
   notifyUserIds: string[];
   followupDays: number;
+  /** The agents it may run (CHAT-27 item 14). */
+  canCall: string[];
 }
 
 /** What the person may do with it now, so the page shows only those buttons. */
@@ -644,6 +685,17 @@ export interface AgentDetail extends AgentListItem {
   can: AgentAbilities;
   /** The plan's agent limits (§M). */
   limits: AgentPlanLimits;
+  /**
+   * Can call's choices (CHAT-27 item 14): the workspace's other agents the
+   * person may see, not archived; `locked` below Growth.
+   */
+  canCall: { options: { id: string; name: string }[]; locked: boolean };
+  /**
+   * Its permission to publish and send on its own, the workspace's switch
+   * and its last day's go-lives (agent-go-live.ts); absent while
+   * CHAT_AUTO_GO_LIVE is off.
+   */
+  goLive?: AgentGoLiveDetail;
 }
 
 function triggerView(row: TriggerRow, now: Date): AgentTriggerView {
@@ -748,6 +800,7 @@ function runView(
   brands: ReadonlyMap<string, string>,
   people: ReadonlyMap<string, string>,
   chats: ReadonlyMap<string, string>,
+  calls: CallsOf = EMPTY_CALLS,
 ): AgentRunView {
   return {
     status: run.status,
@@ -765,7 +818,81 @@ function runView(
     usageShare: Number(run.usage_share),
     maxShare: Number(run.max_share),
     chatId: chats.get(run.id) ?? null,
+    ...(run.called_by_run_id ? { calledBy: calls.callers.get(run.called_by_run_id) ?? null } : {}),
+    ...(calls.made.has(run.id) ? { calls: calls.made.get(run.id) } : {}),
   };
+}
+
+/** Who called runs, and whom runs called (CHAT-27 items 18, 25). */
+interface CallsOf {
+  /** A caller run's agent name, by the caller run's id. */
+  callers: ReadonlyMap<string, string>;
+  /** The runs each run called, by the caller run's id. */
+  made: ReadonlyMap<string, AgentCallView[]>;
+}
+const EMPTY_CALLS: CallsOf = { callers: new Map(), made: new Map() };
+
+/** The agents' names, by id: deleted ones left out. */
+async function agentNamesById(ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('chat_agents')
+    .select('id, name')
+    .in('id', [...new Set(ids)]);
+  if (error) throw new Error(`Could not read the agents' names: ${error.message}`);
+  return new Map(((data ?? []) as { id: string; name: string }[]).map((a) => [a.id, a.name]));
+}
+
+/**
+ * The calls around these runs: the agent that called each called run
+ * ("Called by {agent}"), and the runs each run called, with their shares.
+ */
+async function readCalls(runs: RunRow[]): Promise<CallsOf> {
+  const callerIds = runs.flatMap((r) => (r.called_by_run_id ? [r.called_by_run_id] : []));
+  const [callerRuns, called] = await Promise.all([
+    callerIds.length
+      ? supabaseAdmin.from('chat_agent_runs').select('id, agent_id').in('id', callerIds)
+      : Promise.resolve({ data: [], error: null }),
+    supabaseAdmin
+      .from('chat_agent_runs')
+      .select('agent_id, called_by_run_id, status, usage_share, max_share, queued_at')
+      .in(
+        'called_by_run_id',
+        runs.map((r) => r.id),
+      )
+      .order('queued_at', { ascending: true }),
+  ]);
+  for (const read of [callerRuns, called]) {
+    if (read.error) throw new Error(`Could not read the runs' calls: ${read.error.message}`);
+  }
+  const callerRows = (callerRuns.data ?? []) as { id: string; agent_id: string | null }[];
+  const calledRows = (called.data ?? []) as {
+    agent_id: string | null;
+    called_by_run_id: string;
+    status: string;
+    usage_share: number;
+    max_share: number;
+  }[];
+  const names = await agentNamesById(
+    [...callerRows, ...calledRows].flatMap((r) => (r.agent_id ? [r.agent_id] : [])),
+  );
+  const callers = new Map(
+    callerRows.flatMap((r) =>
+      r.agent_id && names.has(r.agent_id) ? [[r.id, names.get(r.agent_id)!] as const] : [],
+    ),
+  );
+  const made = new Map<string, AgentCallView[]>();
+  for (const row of calledRows) {
+    const list = made.get(row.called_by_run_id) ?? [];
+    list.push({
+      agent: (row.agent_id && names.get(row.agent_id)) || '',
+      status: row.status,
+      usageShare: Number(row.usage_share),
+      maxShare: Number(row.max_share),
+    });
+    made.set(row.called_by_run_id, list);
+  }
+  return { callers, made };
 }
 
 /**
@@ -784,7 +911,7 @@ export async function runViews(
   const viewerId = viewer.userId;
   const runs = allRuns.filter((run) => runVisible(run, viewer.brandAccess));
   if (runs.length === 0) return [];
-  const [brands, people, chats] = await Promise.all([
+  const [brands, people, chats, calls] = await Promise.all([
     brandsOf(organizationId),
     namesOf(
       organizationId,
@@ -800,6 +927,7 @@ export async function runViews(
       )
       // A deleted chat (Delete with Undo, 00407) isn't opened from a run.
       .is('deleted_at', null),
+    readCalls(runs),
   ]);
   if (chats.error) throw new Error(`Could not read the runs' chats: ${chats.error.message}`);
   const brandNames = new Map(brands.map((b) => [b.id, b.name]));
@@ -817,7 +945,7 @@ export async function runViews(
         : [],
     ),
   );
-  return runs.map((run) => runView(run, brandNames, people, chatOf));
+  return runs.map((run) => runView(run, brandNames, people, chatOf, calls));
 }
 
 /** An agent's runs, newest first. */
@@ -930,18 +1058,25 @@ export async function listAgents(
   ]);
   if (runs.error) throw new Error(`Could not read the agents' runs: ${runs.error.message}`);
   const runRows = (runs.data ?? []) as RunRow[];
+  // The cards' "Publishes on its own" badge (AUTONOMOUS-GO-LIVE §7.2).
+  const goLive = await readGoLiveLimits(
+    org,
+    shown.map((agent) => ({ id: agent.row.id, version: agent.row.version })),
+  );
 
   return {
-    agents: shown.map((agent) =>
-      listItem(ctx, agent, {
+    agents: shown.map((agent) => {
+      const item = listItem(ctx, agent, {
         triggers: triggers.filter((t) => t.agent_id === agent.row.id),
         runs: runRows.filter((r) => r.agent_id === agent.row.id),
         brands,
         owners,
         usage: usageOf(shares, agent.row.id),
         now,
-      }),
-    ),
+      });
+      const limit = goLive.get(agent.row.id);
+      return limit === undefined ? item : { ...item, goLiveLimit: limit };
+    }),
     counts,
     keyFailure: key ? { class: key.class, provider: key.provider } : null,
     active: visible.filter((a) => a.row.status === 'active').length,
@@ -1004,13 +1139,14 @@ export async function readAgent(
 async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promise<AgentDetail> {
   const org = ctx.actor.organizationId;
   const { row, version } = agent;
-  const [triggers, runs, brands, owners, period, days30] = await Promise.all([
+  const [triggers, runs, brands, owners, period, days30, goLive] = await Promise.all([
     triggersOf([row.id]),
     runsOf(row.id, RECENT_RUNS),
     brandsOf(org),
     namesOf(org, row.owner_id ? [row.owner_id] : []),
     readAgentShares(org, 'period'),
     readAgentShares(org, 'days30'),
+    readAgentGoLive(org, row.id, row.version, now),
   ]);
   const item = listItem(ctx, agent, {
     triggers,
@@ -1036,6 +1172,7 @@ async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promi
           scope: version.scope,
           notifyUserIds: version.notify_user_ids,
           followupDays: version.followup_days,
+          canCall: version.can_call,
         }
       : null,
     brands: version
@@ -1048,6 +1185,13 @@ async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promi
     usagePeriod: usageOf(period, row.id),
     can: abilitiesOf(ctx, agent),
     limits: agentPlanLimits(ctx.plan),
+    canCall: {
+      options: (await runnableAgents(ctx))
+        .filter((other) => other.row.id !== row.id)
+        .map((other) => ({ id: other.row.id, name: other.row.name })),
+      locked: !ctx.plan.fullAuto,
+    },
+    ...(goLive ? { goLive } : {}),
   };
 }
 
@@ -1069,10 +1213,15 @@ export async function listAgentRuns(
  * workspace's, ones the person saving it may use (BRAND-ACCESS: another is
  * as not found), and none is the demo brand (00380: nothing runs on it),
  * its topics belong to its brands, and the people it tells are members.
+ * Can call names agents the person saving it sees (another is as not
+ * found), bar those already on the agent (`keptCallees`), which an Admin
+ * may have picked.
  */
 async function referencesRefusal(
   ctx: AgentContext,
-  version: Pick<AgentVersionData, 'scope' | 'notify_user_ids'>,
+  version: Pick<AgentVersionData, 'scope' | 'notify_user_ids' | 'can_call'>,
+  agentId: string | null = null,
+  keptCallees: readonly string[] = [],
 ): Promise<Refused | null> {
   const organizationId = ctx.actor.organizationId;
   const brands = allowedBrands(ctx.viewer.brandAccess, await brandsOf(organizationId));
@@ -1106,7 +1255,33 @@ async function referencesRefusal(
     if (error) throw new Error(`Could not read the people to notify: ${error.message}`);
     if ((data ?? []).length !== people.length) return refused('member_not_found');
   }
+  // Can call (CHAT-27 item 14): agents of the workspace, not archived, never itself.
+  const callees = version.can_call ?? [];
+  if (callees.length > 0) {
+    if (agentId && callees.includes(agentId)) return refused('agent_not_found');
+    const { data, error } = await supabaseAdmin
+      .from('chat_agents')
+      .select('id, status')
+      .eq('organization_id', organizationId)
+      .in('id', callees);
+    if (error) throw new Error(`Could not read the agents it calls: ${error.message}`);
+    const live = ((data ?? []) as { id: string; status: string }[]).filter(
+      (a) => a.status !== 'archived',
+    );
+    if (live.length !== callees.length) return refused('agent_not_found');
+    for (const id of callees) {
+      if (keptCallees.includes(id)) continue;
+      const callee = await loadAgent(organizationId, id);
+      if (!callee || !canSeeAgent(factsOf(callee), ctx.viewer)) return refused('agent_not_found');
+    }
+  }
   return null;
+}
+
+/** The agents of a Can call the person sees: a copy keeps only those (Duplicate). */
+async function visibleCallees(ctx: AgentContext, ids: readonly string[]): Promise<string[]> {
+  const seen = await Promise.all(ids.map((id) => visibleAgent(ctx, id)));
+  return ids.filter((_, i) => seen[i] !== null);
 }
 
 interface NamedAgent {
@@ -1218,10 +1393,12 @@ export async function runnableBrands(
  * Activate, on Resume and before a run): the plan and Settings › Chat allow
  * its mode and engines for the person it acts as, a brand of its scope is
  * there that they may use (`access`, theirs: the person in `ctx` by
- * default, the owner on Resume), and the AI limit isn't used up. Its Required
+ * default, the owner on Resume), its skills are on for the person it acts
+ * as (CHAT-13: else skill_off), and the AI limit isn't used up. Its Required
  * connections are checked for the run's brand before the run (agent-driver.ts,
- * agent-connections.ts), and for each brand of its scope on Resume; its
- * skills (CHAT-13) once their registry exists.
+ * agent-connections.ts), and for each brand of its scope on Resume.
+ * `actingUserId`: whose skills it runs, the person checking unless said
+ * (Resume: its owner, whom its triggered runs act as).
  */
 export async function runChecks(
   ctx: AgentContext,
@@ -1229,6 +1406,7 @@ export async function runChecks(
   actingRole: AgentViewer['role'],
   triggers: readonly AgentTriggerInput[],
   access: BrandAccess = ctx.viewer.brandAccess,
+  actingUserId: string = ctx.actor.userId,
 ): Promise<Refused | null> {
   const version = agent.version;
   if (!version) return refused('failed');
@@ -1240,6 +1418,12 @@ export async function runChecks(
   if ((await runnableBrands(ctx.actor.organizationId, version.scope, access)).length === 0) {
     return refused('no_brand');
   }
+  // A skill turned off, not approved, gone or changed since (CHAT-13 items 10, 19).
+  const offSkill = offAgentSkill(
+    version.skill_ids,
+    await agentSkillStates(ctx.actor.organizationId, actingUserId, version.skill_ids),
+  );
+  if (offSkill) return refused('skill_off', { skill: offSkill });
   // The workspace's own key is marked failing (AGENT-OWN-KEY §5.2 item 4): nothing is queued.
   const key = await failingOwnKey(ctx.actor.organizationId);
   if (key) return refused('own_key_failed', { why: ownKeyWhy(key) });
@@ -1299,7 +1483,9 @@ type AgentSummaryKey =
   | 'agentDuplicated'
   | 'agentTakenOver'
   | 'agentRunQueued'
-  | 'agentRunOnAction';
+  | 'agentRunOnAction'
+  | 'agentGoLiveOn'
+  | 'agentGoLiveOff';
 
 /**
  * Logs a person's change to an agent (CHAT-21: created, changed, state,
@@ -1348,6 +1534,7 @@ const versionInsert = (agentId: string, version: number, data: AgentVersionData,
   scope: data.scope as unknown as Json,
   notify_user_ids: data.notify_user_ids,
   followup_days: data.followup_days,
+  can_call: data.can_call,
   created_by: by,
 });
 
@@ -1383,6 +1570,7 @@ export async function createAgent(
     visibilityDenial(input.visibility, ctx.viewer, ctx.settings),
     input.maxMonthShare !== null ? monthCapDenial(ctx.viewer) : null,
     modeDenial(version.mode, ctx.plan, ctx.settings, ctx.viewer.role),
+    canCallDenial(version.can_call, ctx.plan),
     enginesDenial(ctx.plan, enginesNamed(version.scope, input.triggers)),
   ]);
   if (denial) return denial;
@@ -1501,11 +1689,14 @@ export async function updateAgent(
     next ? modeDenial(result.mode, ctx.plan, ctx.settings, ctx.viewer.role) : null,
     ownerRole ? modeDenial(result.mode, ctx.plan, ctx.settings, ownerRole) : null,
     next || patch.triggers ? enginesDenial(ctx.plan, enginesNamed(result.scope, triggers)) : null,
+    patch.canCall ? canCallDenial(patch.canCall, ctx.plan) : null,
   ]);
   if (denial) return denial;
   const problem =
     triggersRefusal(changedTriggers, now) ??
-    (next && (patch.scope || patch.notifyUserIds) ? await referencesRefusal(ctx, next) : null);
+    (next && (patch.scope || patch.notifyUserIds || patch.canCall)
+      ? await referencesRefusal(ctx, next, row.id, agent.version.can_call)
+      : null);
   if (problem) return problem;
   const renamed = patch.name !== undefined && patch.name !== row.name;
   if (renamed) {
@@ -1569,6 +1760,8 @@ export async function updateAgent(
   if (updated !== row || triggersChanged) {
     await logAgentChange(ctx, updated, 'agentUpdated');
   }
+  // A new version of an agent allowed to go live on its own: it no longer is, and they're told.
+  if (next) await tellGoLiveOff(ctx.actor.organizationId, row.id, row.version, ctx.actor.userId);
   return { ok: true, value: await detailOf(ctx, { row: updated, version: result }, now) };
 }
 
@@ -1703,6 +1896,7 @@ export async function changeAgentState(
       ownerRole,
       triggerInputs(await triggersOf([row.id])),
       ownerAccess,
+      action === 'activate' ? ctx.actor.userId : (row.owner_id ?? ctx.actor.userId),
     );
     if (failing) return failing;
     // A brand without a Required connection would pause it again on its next run
@@ -1872,14 +2066,22 @@ export async function duplicateAgent(
 ): Promise<AgentResult<AgentDetail>> {
   const found = await agentForAct(ctx, id, 'duplicate');
   if (!found.ok) return found;
-  const { agent } = found;
-  if (!agent.version) return refused('failed');
+  if (!found.agent.version) return refused('failed');
+  // The copy is the person's: it calls only the agents they see.
+  const agent = {
+    row: found.agent.row,
+    version: {
+      ...found.agent.version,
+      can_call: await visibleCallees(ctx, found.agent.version.can_call),
+    },
+  };
   const org = ctx.actor.organizationId;
   const { row } = agent;
   // A copy is a new agent: it is held to what creating one is.
   const sourceTriggers = await triggersOf([row.id]);
   const denial = await firstDenial(ctx, [
     modeDenial(agent.version.mode, ctx.plan, ctx.settings, ctx.viewer.role),
+    canCallDenial(agent.version.can_call, ctx.plan),
     enginesDenial(ctx.plan, enginesNamed(agent.version.scope, triggerInputs(sourceTriggers))),
   ]);
   if (denial) return denial;
