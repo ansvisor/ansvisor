@@ -37,6 +37,8 @@ const base64Bytes = (text) => {
  *   - 'skipped': not configured or no recipients. Missing config is a silent
  *     no-op, so self-host and misconfigured environments never fail a caller.
  * `replyTo`, when given, is where a reply goes instead of the sender;
+ * `from` sends from another address than RESEND_FROM_EMAIL (it must be on
+ * a domain Resend has verified: the report card's own sender);
  * `fromName` the sender's display name (senderOf); `attachments`
  * ({ filename, content: base64 }) go with it, refused as a whole past
  * ATTACHMENTS_MAX_BYTES.
@@ -47,11 +49,12 @@ export async function deliverEmailWithId({
   html,
   headers,
   replyTo,
+  from: sender,
   fromName,
   attachments,
 }) {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL;
+  const from = sender || process.env.RESEND_FROM_EMAIL;
   if (!apiKey || !from || !to.length) return { status: 'skipped', id: null };
   const files = (attachments ?? []).filter((file) => file?.filename && file?.content);
   if (files.reduce((sum, file) => sum + base64Bytes(file.content), 0) > ATTACHMENTS_MAX_BYTES) {

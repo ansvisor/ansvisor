@@ -168,6 +168,57 @@ export function reportCardStore(db = supabaseAdmin) {
       if (error) fail('release', error);
     },
 
+    /** Requests whose card is ready or failed and whose e-mail hasn't gone, oldest first. */
+    async undeliveredRequests(limit) {
+      const { data, error } = await db
+        .from('report_card_requests')
+        .select(
+          'id, first_name, email, outcome, email_attempts, report_cards!report_card_requests_report_card_id_fkey!inner(id, status, payload, site, created_at)',
+        )
+        .is('emailed_at', null)
+        .in('report_cards.status', ['ready', 'failed'])
+        // The ones not yet tried first: a PDF that keeps failing can't fill every sweep.
+        .order('email_attempts', { ascending: true })
+        .order('created_at', { ascending: true })
+        .limit(limit);
+      if (error) fail('undelivered', error);
+      return data ?? [];
+    },
+
+    /** A try at a request's e-mail that will be made again: how many there have been. */
+    async markEmailAttempt(requestId, attempts) {
+      const { error } = await db
+        .from('report_card_requests')
+        .update({ email_attempts: attempts })
+        .eq('id', requestId)
+        .is('emailed_at', null);
+      if (error) fail('attempt', error);
+    },
+
+    /**
+     * Whether `email` already asked for this card: it is e-mailed once a
+     * card, however often the form is sent (a resend costs nothing to run).
+     */
+    async askedBy(email, cardId) {
+      const { count, error } = await db
+        .from('report_card_requests')
+        .select('id', { count: 'exact', head: true })
+        .eq('email', email)
+        .eq('report_card_id', cardId);
+      if (error) fail('asked', error);
+      return (count ?? 0) > 0;
+    },
+
+    /** What became of a request's e-mail; a request is e-mailed once. */
+    async markEmailed(requestId, status, at) {
+      const { error } = await db
+        .from('report_card_requests')
+        .update({ email_status: status, emailed_at: at.toISOString() })
+        .eq('id', requestId)
+        .is('emailed_at', null);
+      if (error) fail('mark', error);
+    },
+
     /** Deletes the requests older than `before` (12 months: the privacy notice). */
     async pruneRequests(before) {
       const { error, count } = await db

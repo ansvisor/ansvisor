@@ -354,6 +354,8 @@ export interface ChatRunSummary {
   stepCount: number;
   /** The "Data used" chips: "Citations · 42". */
   sources: { label: string; count: number }[];
+  /** "Thought for N s" above the answer: the work before its first words; only when shown. */
+  thoughtMs?: number;
 }
 
 /**

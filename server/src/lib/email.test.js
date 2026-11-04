@@ -34,6 +34,23 @@ describe('deliverEmail', () => {
     expect(await deliverEmail(message)).toBe('refused');
   });
 
+  it('sends from another address and with files when asked', async () => {
+    fetchMock.mockResolvedValueOnce(answer(200));
+    await deliverEmail({
+      ...message,
+      from: 'Ansvisor <reports@acme.example>',
+      attachments: [{ filename: 'card.pdf', content: 'JVBERi0=' }],
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.from).toBe('Ansvisor <reports@acme.example>');
+    expect(body.attachments).toEqual([{ filename: 'card.pdf', content: 'JVBERi0=' }]);
+    fetchMock.mockResolvedValueOnce(answer(200));
+    await deliverEmail(message);
+    const plain = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(plain.from).toBe('Ansvisor <hello@acme.example>');
+    expect(plain).not.toHaveProperty('attachments');
+  });
+
   it('says unknown when no answer came: a timeout or a dropped connection', async () => {
     fetchMock.mockRejectedValueOnce(Object.assign(new Error('aborted'), { name: 'TimeoutError' }));
     expect(await deliverEmail(message)).toBe('unknown');

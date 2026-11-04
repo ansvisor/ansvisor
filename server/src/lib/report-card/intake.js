@@ -50,7 +50,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** What a field's error says under it, on the form. */
 export const FIELD_MESSAGES = {
-  firstName: 'Please enter your first name.',
+  firstName: 'Please enter your first name, in letters.',
   lastName: 'Please enter your last name.',
   title: 'Please enter your job title.',
   email: 'Please enter your work e-mail.',
@@ -79,8 +79,15 @@ const optionalText = (max) =>
 const sizeOf = (value) =>
   typeof value === 'string' ? value.replace(/[–—]/g, '-').replace(/[,\s]/g, '') : value;
 
+/**
+ * A first name as the e-mails greet it: letters, spaces, hyphens and
+ * apostrophes only. The address isn't confirmed, so the greeting must not
+ * carry a link or a message to whoever it reaches.
+ */
+const personName = line(60).refine((value) => /^\p{L}[\p{L}\p{M} '’-]*$/u.test(value));
+
 export const requestSchema = z.object({
-  firstName: line(60),
+  firstName: personName,
   lastName: line(60),
   title: line(100),
   email: z
@@ -256,6 +263,10 @@ export async function submitReportCardRequest(
   const recent = await store.recentCard(domain, since);
   if (recent) {
     const resent = recent.status === 'ready';
+    // One e-mail a card per address: sent again, the form adds no request.
+    if (await store.askedBy(input.email, recent.id)) {
+      return answer(200, resent ? 'resent' : 'queued', { domain: site });
+    }
     await store.insertRequest({
       ...request,
       report_card_id: recent.id,

@@ -28,6 +28,8 @@ export const reportCardPayloadSchema = z.object({
   country: z.object({ code: z.string().length(2), name: text(80) }),
   /** The language the questions were asked in, in English: "Turkish". */
   language: text(40),
+  /** Whose questions they are: a seller's buyers, or a publisher's readers. */
+  audience: z.enum(['buyers', 'readers']).optional(),
   /** The site's kind, as the site analysis found it; null when it couldn't tell. */
   siteType: z.enum(SITE_TYPES).nullable(),
   generatedAt: z.iso.datetime({ offset: true }),
@@ -61,6 +63,8 @@ export const reportCardPayloadSchema = z.object({
         /** The same question in English; null when it was asked in English. */
         textEn: text(500).nullable(),
         competitors: z.array(text(100)).max(10),
+        /** The engines that answered it. */
+        answers: count.optional(),
       }),
     )
     .max(10),

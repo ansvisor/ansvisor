@@ -60472,6 +60472,18 @@ create trigger chat_agents_check_demo_brand
   for each row execute function public.check_chat_agent_demo_brand();
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00478_report_card_email_attempts.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- A report card's e-mail the web couldn't draw a PDF for is tried again on
+-- the next sweep (server/src/lib/report-card/deliver.js): how many times it
+-- was tried, so it gives up after a cap and waits behind the e-mails not yet
+-- tried instead of filling every sweep.
+
+alter table public.report_card_requests
+  add column if not exists email_attempts integer not null default 0
+    check (email_attempts >= 0);
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00479_costly_writes_managers.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Deleting a Site Audit and approving or rejecting a brand fact are admins'
