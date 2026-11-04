@@ -602,6 +602,7 @@ export async function generateContentOpportunities(
           covered: coveredBefore,
           inFocus,
           nightly,
+          openRows: rows,
         }).slice(0, angleRoom)
       : [];
   const wanted = [...fresh, ...angles];
