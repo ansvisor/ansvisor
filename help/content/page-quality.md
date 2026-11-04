@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [quality score, e-e-a-t, trust, readability, hand off, next step, before you publish, page author, qualified reviewer, reviewer, reviewed by, trusted sources]
 synonyms: [content quality, quality check, page score, eeat score, ready to publish checklist, content reviewer, regulated page review]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,16 +15,22 @@ Quality scores a Content Editor page and lists what would raise it. It's turned 
 
 ## The scores
 
-Quality scores the page from 0 to 100 on **E-E-A-T**, **Trust** and **Readability**: 80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.
+Quality scores the page from 0 to 100 on three things, each card saying what it scores:
 
-Under them, **Site Audit estimate** is about where the page would score in Site Audit, as the header's **Audit** chip shows it. See the Content Editor article.
+- **E-E-A-T**: who stands behind the page, such as its author and their experience.
+- **Trust**: sources, links and dated facts.
+- **Readability**: how easily it reads.
+
+80 and up is **Strong**, 60 to 79 **Can improve**, and under 60 **Needs work**. The header's **Quality** chip is the average of the three. The scores are Ansvisor's estimates from Google's published quality signals, not a Google score.
+
+Under them, **Site Audit estimate** is about where the page would score in Site Audit. See the Content Editor article.
 
 At the bottom, **Site trust**, out of 5, comes from Site Audit's checks of your site, with **Fix in Site Audit** when some are missing.
 
 ## Your to-dos and what would raise it
 
 - **Your to-dos** are what only you can do, such as picking the page's author, adding your own experience, data or an expert's quote, linking the proof for a claim, and filling the placeholders.
-- **What would raise it** lists the checks still open, each with the points it would add to a score and, where it has one, a button such as **Show** or **Add source**.
+- **What would raise it** lists the checks still open, each with about how many points it could add to a score (an estimate, not a promise) and, where it has one, a button such as **Show** or **Add source**.
 
 ## Hand off
 
@@ -38,9 +44,13 @@ In **Settings › Content**, admins and managers can have each brand's new pages
 
 ## Next step
 
-With Quality on, the header shows the page's **Next step**: plan the page, write the first draft or bring in your page, fix its length or open rules, add proof and author, or check and mark ready. It comes with a button to take the step, **Skip this step** and **All steps**.
+With Quality on, the header's **Next step** opens a window: every step on the left; on the right, the one to take, who takes it, what raises the score and one button, with **Skip this step**. A step the Content Agent takes says about how long it runs and its share of your AI usage. While its suggestions wait, the step is **Review**; with nothing to build the brief from, **Add sources**.
 
-Once the page is ready, **Next step** also offers **Mark published**.
+Once you've decided the agent's **Fix open rules** suggestions, the step is ticked. Rules its later suggestions leave open don't bring it back; your edits can.
+
+**Show to-dos** scrolls Quality to your to-dos, or **Show what raises Trust** to what would raise it. The nudge at the bottom shows only on your own steps.
+
+Marked ready with steps skipped, it says how many are still open. **Next step** then offers **Export** and **Mark published**.
 
 ## The page's author
 
@@ -48,20 +58,20 @@ The header shows the page's author, picked from **Settings › Authors**, or you
 
 ## Before you publish
 
-**Mark ready** opens **Before you publish** first. It checks:
+**Mark ready** opens **Before you publish** first. A line sums up what to fix and to check; the checks show in three groups: **Fix before you publish**, **Check yourself** and **In place**. They cover:
 
-- placeholders, alt text and links;
-- the author;
-- the qualified reviewer on pages that advise on health, money or the law;
+- placeholders, alt text and links (**Ready for your CMS**);
+- the author, and the qualified reviewer on pages that advise on health, money or the law;
 - visible dates;
-- the Article schema Ansvisor adds;
-- a warning when Trust is under 60.
+- the search engine details (Article schema) Ansvisor adds;
+- Trust under 60: AI answers may lean on the page less;
+- the rules and to-dos still open. You can still mark it ready.
 
-Copy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data names them too, apart from the article author. On a page with a shopping path, **Before you publish** also names product cards whose price has changed in your catalog since they went in. **Send to CMS** opens it only when it has something to ask about.
+Copy and Export carry **Reviewed by** beside **Author** in the page metadata. Once the page's text names the reviewer, its structured data does too. On a shopping path page, it also names product cards whose catalog price changed since they went in. **Send to CMS** opens it only when it has something to ask about.
 
-## The Article schema
+## Search engine details (Article schema)
 
-An article goes to your CMS and to exports with an Article schema that names its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin.
+An article goes to your CMS and to exports with search engine details, an Article schema, that name its author, or your brand when it has none. The page's text doesn't change. If your CMS adds its own, click **Leave it out**; **Add it back** undoes it. A page with an Article schema of its own gets none. WordPress leaves the schema out: add it with your SEO plugin.
 
 ## Export with Quality on
 

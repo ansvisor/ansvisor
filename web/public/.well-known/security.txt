@@ -1,0 +1,7 @@
+# Ansvisor: how to report a security vulnerability (RFC 9116).
+# Please report privately through GitHub, not in a public issue.
+Contact: https://github.com/ansvisor/ansvisor/security/advisories/new
+Expires: 2027-11-01T23:59:59.000Z
+Policy: https://github.com/ansvisor/ansvisor/blob/main/SECURITY.md
+Preferred-Languages: en, tr
+Canonical: https://app.ansvisor.com/.well-known/security.txt

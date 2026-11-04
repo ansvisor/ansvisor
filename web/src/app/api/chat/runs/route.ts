@@ -4,6 +4,7 @@ import { bodyHasApiKey } from '@/lib/chat/key-paste';
 import {
   apiKeyRefusal,
   chatActor,
+  demoBrandRefusal,
   engineFailureResponse,
   runFailure,
   streamRun,
@@ -28,7 +29,8 @@ export const maxDuration = 300;
  * Refusals as values (`{ ok: false, failure, code, error }`): 400 a bad
  * body, or `api_key` for a message that holds an API key (W4-05: never
  * kept, sent to a model or logged), 401 no session, 402 a read-only
- * workspace (the server's subscription_inactive body), 404 Chat off for the
+ * workspace (the server's subscription_inactive body) or a chat on the demo
+ * brand (its demo_brand body: the demo's chats are sample data), 404 Chat off for the
  * workspace (CHAT_AGENTIC) or a chat that isn't the person's, 429 past the
  * message limits.
  */
@@ -38,6 +40,8 @@ export async function POST(req: Request) {
     if (actor instanceof NextResponse) return actor;
     const body = await req.json().catch(() => null);
     if (bodyHasApiKey(body, 'message')) return apiKeyRefusal();
+    const demo = await demoBrandRefusal(actor, body);
+    if (demo) return demo;
     const started = await startChatRun(actor, body);
     if (!started.ok) return engineFailureResponse(started);
     return streamRun(req, actor, started.runId, {
