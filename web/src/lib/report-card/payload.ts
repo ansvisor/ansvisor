@@ -39,7 +39,17 @@ export const reportCardPayloadSchema = z.object({
   /** Competitors by the answers that name them, most first. */
   competitors: z.array(z.object({ name: text(100), answers: count })).max(10),
   /** The sites the answers cite most, by the answers citing them, most first. */
-  citedSites: z.array(z.object({ domain: text(253), answers: count, own: z.boolean() })).max(10),
+  /** `competitor`: a competitor's own site (cards made before it was marked have none). */
+  citedSites: z
+    .array(
+      z.object({
+        domain: text(253),
+        answers: count,
+        own: z.boolean(),
+        competitor: z.boolean().optional(),
+      }),
+    )
+    .max(10),
   /** Answers that cite a page of the company's own site. */
   ownCitations: count,
   /** Questions no engine named the company in, the most competitors named first. */
