@@ -60316,7 +60316,7 @@ create trigger brands_guard_google_properties
   for each row execute function public.guard_brand_google_properties();
 
 -- ─────────────────────────────────────────────────────────────────────────
--- migrations/00474_report_card_email_attempts.sql
+-- migrations/00478_report_card_email_attempts.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- A report card's e-mail the web couldn't draw a PDF for is tried again on
 -- the next sweep (server/src/lib/report-card/deliver.js): how many times it
