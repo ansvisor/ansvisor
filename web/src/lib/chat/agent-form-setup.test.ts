@@ -129,6 +129,24 @@ describe('agentFormSetupFor', () => {
     ]);
   });
 
+  it('offers Can call the agents the person sees that are on or paused, by name; locked below Growth', async () => {
+    db.tables.chat_agents[0].status = 'active';
+    db.tables.chat_agents[1].status = 'draft';
+    db.tables.chat_agents[2].status = 'paused';
+    expect(await setupOf(PEOPLE.manager)).toMatchObject({
+      callable: [{ id: 'a1', name: 'Shared one' }],
+      canCallLocked: false,
+    });
+    expect((await setupOf(PEOPLE.admin)).callable).toEqual([
+      { id: 'a1', name: 'Shared one' },
+      { id: 'a3', name: 'Their private' },
+    ]);
+    db.tables.organizations = db.tables.organizations.map((org) =>
+      org.id === ORG ? { ...org, plan: 'starter' } : org,
+    );
+    expect((await setupOf(PEOPLE.manager)).canCallLocked).toBe(true);
+  });
+
   it('locks Full auto below Growth, hides it where Settings › Chat turned it off, and follows Settings › Chat’s defaults', async () => {
     db.tables.organizations = db.tables.organizations.map((org) =>
       org.id === ORG ? { ...org, plan: 'starter' } : org,

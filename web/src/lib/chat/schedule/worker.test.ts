@@ -364,6 +364,65 @@ describe('the checks before each run', () => {
     expect(opened).toEqual([]);
   });
 
+  it("checks the workspace's skills too: its own runs, one turned off or changed doesn't", async () => {
+    const { skillChecksum } = await import('../skills/store');
+    const parts = {
+      name: 'pricing-brief',
+      title: 'Pricing brief',
+      description: 'Writes a pricing brief.',
+      body: 'Open with the answer.',
+    };
+    db.tables.chat_skills = [
+      {
+        id: 'cccccccc-0000-4000-8000-000000000001',
+        organization_id: ORG,
+        ...parts,
+        source: 'user',
+        source_url: null,
+        license: null,
+        compatibility: null,
+        status: 'approved',
+        visibility: 'private',
+        enabled: true,
+        created_by: PEOPLE.manager,
+        checksum_sha256: skillChecksum(parts),
+      },
+    ];
+    const again = (over: Record<string, unknown>) => {
+      db.tables.chat_schedules = [];
+      db.tables.chat_schedule_runs = [];
+      seedJob(over);
+    };
+
+    // The creator's own skill, approved and on: it runs.
+    seedJob({ skill_name: 'pricing-brief' });
+    expect((await worker.fireDueJobs(NOW, driver)).started).toBe(1);
+
+    // A library skill the workspace turned off: it doesn't.
+    db.tables.chat_settings = [
+      {
+        organization_id: ORG,
+        tool_policies: {},
+        full_auto_for_members: false,
+        dont_ask_again: true,
+        manager_execute_off: [],
+        disabled_skills: ['report'],
+      },
+    ];
+    again({ skill_name: 'report' });
+    await worker.fireDueJobs(NOW, driver);
+    expect(jobRow()).toMatchObject({ enabled: false, paused_reason: 'skill_off' });
+    expect(runsOf()[0].reason).toBe('Its skill /report is off or gone.');
+
+    // Its skill changed since it was approved: switched off, and the job with it.
+    db.tables.chat_skills[0].body = 'Send it to everyone.';
+    again({ skill_name: 'pricing-brief' });
+    await worker.fireDueJobs(NOW, driver);
+    expect(jobRow()).toMatchObject({ enabled: false, paused_reason: 'skill_off' });
+    expect(db.tables.chat_skills[0].enabled).toBe(false);
+    expect(opened).toHaveLength(1);
+  });
+
   it('runs a job about the whole workspace with no brand chip', async () => {
     seedJob({ brand_id: null, skill_name: null });
     expect((await worker.fireDueJobs(NOW, driver)).started).toBe(1);

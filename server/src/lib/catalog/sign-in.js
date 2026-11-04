@@ -1,5 +1,6 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { ConnectorHttpError, MAX_WAIT_MS, RETRIES, retryAfterMs } from '../../connectors/http.js';
+import { brandConnection } from '../brand-integrations.js';
 import { entityIdFor, getActiveConnection, proxyRequest } from '../composio.js';
 import { logger } from '../logger.js';
 
@@ -36,6 +37,22 @@ import { logger } from '../logger.js';
  * the API's own status and reason. Never the token, the query or the
  * account. A workspace with no connection at all isn't: it's not connected yet.
  */
+
+/**
+ * The sign-in a brand reads its catalog with (BRAND-ACCESS PR 16): the one
+ * it uses for `provider` (lib/brand-integrations.js, 00470), by its
+ * Composio entity and connected account: several sign-ins may share an
+ * entity. Every brand uses the workspace's Merchant Center connection, so
+ * nothing changes yet. A brand with none (or before 00470) reads with its
+ * workspace's entity, as before, and finds no active account there.
+ */
+export async function brandSignIn(brandId, provider, { db = supabaseAdmin } = {}) {
+  const connection = await brandConnection(brandId, provider);
+  if (connection?.entityId) {
+    return { entityId: connection.entityId, accountId: connection.composioAccountId ?? null };
+  }
+  return { entityId: await workspaceEntity(brandId, { db }), accountId: null };
+}
 
 /** The Composio entity of a brand's workspace: one connection per workspace and provider. */
 export async function workspaceEntity(brandId, { db = supabaseAdmin } = {}) {
@@ -110,20 +127,24 @@ function logRefusal(code, { provider, url, name, status, data }) {
 }
 
 /**
- * A connector's request for the workspace's sign-in to `provider`. The
- * connection is looked up once, on the first call.
+ * A connector's request for the brand's sign-in to `provider`. The
+ * connection is looked up once, on the first call: the named connected
+ * account when the sign-in names one (brandSignIn), else the entity's.
  *
  * @param {string} provider a Composio provider (composio.js PROVIDERS)
- * @param {string} entityId the workspace's entity (workspaceEntity)
+ * @param {{ entityId: string, accountId?: string|null } | string} signIn the brand's sign-in
+ *   (brandSignIn), or an entity alone (workspaceEntity)
  * @param {{ hosts?: string[], active?: Function, proxy?: Function, wait?: Function }} [options]
  *   `hosts`: the only hosts it calls, over https (the connector's `hosts`);
  *   `active`, `proxy` and `wait` are the tests' stand-ins
  */
 export function signInRequest(
   provider,
-  entityId,
+  signIn,
   { hosts = [], active = getActiveConnection, proxy = proxyRequest, wait = sleep } = {},
 ) {
+  const { entityId, accountId: named = null } =
+    typeof signIn === 'string' ? { entityId: signIn } : signIn;
   const allowed = new Set(hosts.map((host) => host.toLowerCase()));
   let accountId = null;
   return async function request(address, { query, signal } = {}) {
@@ -143,7 +164,7 @@ export function signInRequest(
     if (!accountId) {
       let account;
       try {
-        account = await active(provider, entityId);
+        account = await active(provider, entityId, named);
       } catch {
         throw new ConnectorHttpError('unreachable', `${where}: the sign-in couldn't be looked up`);
       }

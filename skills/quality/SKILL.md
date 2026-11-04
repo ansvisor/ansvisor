@@ -29,7 +29,7 @@ Make the fixes a draft's Quality checks ask for (E-E-A-T, Trust and Readability)
    - **E-E-A-T:** no author, no first-hand experience, no examples.
    - **Structure:** headings that don't say what the section answers, a missing FAQ or schema.
 2. Fix what you can fix from the draft itself: split sentences, reorder, add headings, define terms, mark claims that need a source.
-3. Give the fixes as **Before** and **After** for each passage. When the person wants them kept as a new draft, save it with `create_draft`; the app asks them first when it should.
+3. Give the fixes as **Before** and **After** for each passage. When the person wants them kept as a new draft, save it with `create_draft`; the app asks them first when it should. In an agent's run nobody is there to ask: always save it with its tool, and the app holds it for approval where the agent's mode needs it.
 4. List what only the person can give: quotes, first-hand data, customer examples, the author and their credentials, sources for marked claims.
 
 ## Output
