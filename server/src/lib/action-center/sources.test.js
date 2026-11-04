@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const from = vi.fn();
 vi.mock('../../config/supabase.js', () => ({ default: { from: (...a) => from(...a) } }));
+const brandConnection = vi.hoisted(() => vi.fn());
+vi.mock('../brand-integrations.js', () => ({ brandConnection }));
 
 import { SOURCES, resolveBrandSources } from './sources.js';
 
@@ -26,7 +28,10 @@ function mockDb(tables) {
   });
 }
 
-beforeEach(() => from.mockReset());
+beforeEach(() => {
+  from.mockReset();
+  brandConnection.mockReset().mockResolvedValue(null);
+});
 
 describe('resolveBrandSources', () => {
   it('always includes tracking — a brand without it is not a brand yet', async () => {
@@ -65,15 +70,20 @@ describe('resolveBrandSources', () => {
     expect((await resolveBrandSources(BRAND)).has('volumes')).toBe(true);
   });
 
-  /** Integrations are connected per organization, so the brand has to be
-   *  resolved to one before the connection can be found. */
-  it('finds an analytics connection through the brand’s organization', async () => {
-    mockDb({ brands: [{ organization_id: 'org-1' }], integration_connections: [{ id: 'i' }] });
+  /** Integrations are per brand (00470): the Google sign-in the brand uses,
+   *  which every brand of a workspace shares until one picks its own. */
+  it('finds the analytics connection the brand uses', async () => {
+    mockDb({});
+    brandConnection.mockResolvedValue({ connected: true });
     expect((await resolveBrandSources(BRAND)).has('analytics')).toBe(true);
+    expect(brandConnection).toHaveBeenCalledWith(BRAND, 'google-analytics');
   });
 
-  it('claims no analytics for a brand with no organization', async () => {
-    mockDb({ integration_connections: [{ id: 'i' }] });
+  it('claims no analytics for a brand whose connection is gone or that uses none', async () => {
+    mockDb({});
+    brandConnection.mockResolvedValue({ connected: false, status: 'disconnected' });
+    expect((await resolveBrandSources(BRAND)).has('analytics')).toBe(false);
+    brandConnection.mockResolvedValue(null);
     expect((await resolveBrandSources(BRAND)).has('analytics')).toBe(false);
   });
 
@@ -87,9 +97,8 @@ describe('resolveBrandSources', () => {
       prompt_sets: [{ id: 's' }],
       prompts: [{ id: 'p' }],
       prompt_volumes: [{}],
-      brands: [{ organization_id: 'o' }],
-      integration_connections: [{}],
     });
+    brandConnection.mockResolvedValue({ connected: true });
     for (const source of await resolveBrandSources(BRAND)) expect(SOURCES).toContain(source);
   });
 });

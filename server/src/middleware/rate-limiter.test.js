@@ -253,6 +253,9 @@ describe('rate-limiter – the Chat engine’s budget calls', () => {
       true,
     );
     expect(isInternalChatBudgetCall(req('/internal/chat/pages/open'))).toBe(false);
+    // And the model menu's reads (W4-01).
+    expect(isInternalChatBudgetCall(req('/internal/chat/models', 'Bearer chat-secret'))).toBe(true);
+    expect(isInternalChatBudgetCall(req('/internal/chat/models'))).toBe(false);
     // Without it, with another, or with the secret on any other path: counted.
     expect(isInternalChatBudgetCall(req('/internal/chat/budget/reserve'))).toBe(false);
     expect(isInternalChatBudgetCall(req('/internal/chat/budget/reserve', 'Bearer nope'))).toBe(

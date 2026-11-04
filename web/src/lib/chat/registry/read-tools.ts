@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 import { getAiUsageFor, getMeFor } from '@/lib/mcp/account';
+import { getBrandFactsFor } from '@/lib/mcp/brand-facts-reads';
 import { getContentDraftFor, listContentDraftsFor } from '@/lib/mcp/content';
 import { contentUuid, listDraftsShape } from '@/lib/mcp/content-schemas';
 import {
@@ -132,6 +133,25 @@ export const READ_TOOLS = [
     inputSchema: z.object({}),
     run: (ctx) => listBrandsFor(ctx),
     fixture: { input: {} },
+  }),
+  // CHAT-20 §8a's Brands read "brand facts": no MCP tool does this yet.
+  defineTool({
+    name: 'get_brand_facts',
+    class: 'read',
+    area: 'brands',
+    description:
+      "The brand's approved facts: its prices and plans, trial, founding year and the claims it makes of itself, each as its own page's words, with when a person approved it and the page it came from. Only facts a person approved and still on the brand's site. Read it before checking a draft or an AI answer against the brand's facts.",
+    minRole: 'analyst',
+    planGate: null,
+    brandOf: { input: 'brand_id' },
+    costClass: 'C1',
+    labelKey: 'brandFacts',
+    route: '/dashboard/brands/[id]/settings',
+    mcpTool: null,
+    specRow: '7',
+    inputSchema: z.object({ brand_id: brandId }),
+    run: (ctx, input) => getBrandFactsFor(ctx, { brandId: input.brand_id }),
+    fixture: { input: { brand_id: BRAND } },
   }),
   defineTool({
     name: 'get_visibility_summary',

@@ -92,6 +92,7 @@ export const CHAT_SEARCH_PAGES: ChatSearchPage[] = [
   { key: 'agents', href: '/dashboard/agents', glyph: '✦' },
   { key: 'scheduled', href: '/dashboard/chat/scheduled', glyph: '⏲' },
   { key: 'files', href: '/dashboard/chat/files', glyph: '▤' },
+  { key: 'connections', href: '/dashboard/chat/connections', glyph: '⇄' },
   { key: 'settings', href: '/dashboard/chat/settings', glyph: '⚙' },
 ];
 

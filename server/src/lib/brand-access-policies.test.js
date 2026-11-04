@@ -21,7 +21,9 @@ import { brandScopedTables } from './demo/coverage.js';
  *     own rows listed below;
  *   * a table without a brand_id passes when each branch reaches, by the row
  *     it names, a table that passes (a draft, a chat, a change that went
- *     live…), or calls content_draft_member() or can_see_chat_agent() (an
+ *     live…), or by the rows of a passing table that name it (an Account's
+ *     sign-in, by the brands that use it, 00470), or calls
+ *     content_draft_member() or can_see_chat_agent() (an
  *     agent's brands are in its version's scope, 00436); otherwise it is on the list
  *     below of Account-level tables, with why, or on the list of tables a
  *     later PR takes, which must be empty before anyone can be narrowed.
@@ -82,6 +84,8 @@ const NOT_BRAND_DATA = {
   cloro_countries: 'The list of countries a prompt can track, the same for everyone.',
   content_authors: "The Account's authors for content (Settings › Authors).",
   content_rule_sets: "The Account's content rules.",
+  integration_connections:
+    "The Account's own Google connection (00045): connected or not, and Composio's ids, written by the server; which brands use it, and each brand's property, are brand_integrations' and the brand's (00470).",
   invitations: "The Account's invitations, for its admins (00390).",
   organization_menu_roles: "The Account's menu access by role (00374).",
   organizations: 'The Account itself: its plan, billing and members (D1).',
@@ -94,14 +98,12 @@ const NOT_BRAND_DATA = {
 
 /**
  * Tables without a brand_id that hold a brand's data but don't reach it yet,
- * and the BRAND-ACCESS PR that takes them:
- *   * integration_connections: the Account's Google connection, which lists
- *     every brand's properties; per brand in PR 14.
- * Nobody can be narrowed while this list has a table (the last test below).
+ * and the BRAND-ACCESS PR that takes them. Nobody can be narrowed while this
+ * list has a table (the last test below). PR 14 took the last one: Google is
+ * per brand (00470, brand_integrations), and integration_connections is the
+ * Account's own connection.
  */
-const DEFERRED = {
-  integration_connections: 'PR 14',
-};
+const DEFERRED = {};
 
 /**
  * A person's own rows, read by them (and admins, who have All brands), where a
@@ -193,6 +195,13 @@ const AGENT_MEMBER = /^(?:public\.)?can_see_chat_agent\( ?(?:chat_agents\.)?id ?
 /** `<column> in (select <a>.id from <table> <a> …)`: the row of `table` the column names. */
 const PARENT_ROW =
   /^\w+ in \( ?select (?:(\w+)\.)?id from \(* ?(?:public\.)?(\w+)(?: (?:as )?(\w+))?/i;
+
+/**
+ * `id in (select <a>.<column> from <table> <a> …)`: a row that rows of `table`
+ * name, read through that table's policies (00470: an Account's sign-in, by
+ * the brands that use it).
+ */
+const NAMED_BY_ROW = /^id in \( ?select (\w+)\.\w+ from \(* ?(?:public\.)?(\w+) (?:as )?\1\b/i;
 
 const name = (raw) =>
   raw
@@ -481,6 +490,8 @@ const reached = new Set(reaching);
 const childRule = () => ({
   binds: (part) => {
     if (DRAFT_MEMBER.test(part) || AGENT_MEMBER.test(part)) return true;
+    const named = part.match(NAMED_BY_ROW);
+    if (named && reached.has(named[2].toLowerCase())) return true;
     const m = part.match(PARENT_ROW);
     return !!m && (!m[1] || m[1] === m[3]) && reached.has(m[2].toLowerCase());
   },
@@ -589,6 +600,7 @@ describe('every brand table answers to the brand’s access', () => {
       'ship_events',
       'chat_schedules',
       'chat_memory_items',
+      'brand_integrations',
     ]) {
       expect(reaching, table).toContain(table);
     }
@@ -648,6 +660,7 @@ describe('every table without a brand_id', () => {
       'chat_agent_go_live',
       'chat_schedule_runs',
       'chat_outbound_emails',
+      'integration_accounts',
     ]) {
       expect(childrenReaching, table).toContain(table);
     }

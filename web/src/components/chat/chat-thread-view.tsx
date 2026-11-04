@@ -19,6 +19,7 @@ import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import { ghostOf } from '@/lib/chat/next-moves';
 import type { ChatEvent, ChatTaskStrip } from '@/lib/chat/events';
+import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
 import {
@@ -45,6 +46,8 @@ import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { WhyCard } from './run/why-card';
+import { WhatsNewCards } from './run/whats-new-cards';
+import { useHomeDraft } from './home-draft';
 import { useFormAssist } from './run/form-assist';
 import { NextMoves } from './run/next-moves';
 import { RunAnswer } from './run/run-answer';
@@ -114,6 +117,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         tasks: message.run.tasks ?? null,
         nextMoves: message.run.nextMoves ?? [],
         why: message.run.why ?? [],
+        whatsNew: message.run.whatsNew ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
@@ -223,6 +227,10 @@ export function ChatThreadView({
     thread?.conversationId ?? null,
   );
   const [mode, setMode] = useState<ChatMode>(defaultMode);
+  // The model menu's pick for this chat: its latest run's, Auto at first (W4-02).
+  const [modelChoice, setModelChoice] = useState<ChatModelChoice>(
+    () => thread?.choice ?? AUTO_CHOICE,
+  );
   const [reconnecting, setReconnecting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   // While the view is on screen: what it streams stops once it goes (another
@@ -241,6 +249,8 @@ export function ChatThreadView({
       : null;
   });
   const brandId = thread?.brandId ?? activeBrandId ?? null;
+  // On Chat Home, what its page put in the box (What's new's Show me).
+  const homeDraft = useHomeDraft();
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
@@ -414,6 +424,8 @@ export function ChatThreadView({
       body: JSON.stringify({
         message,
         mode,
+        model: modelChoice.model,
+        effort: modelChoice.effort,
         conversationId: conversationId ?? undefined,
         brandId: conversationId ? undefined : (brandId ?? undefined),
         // A chat the side panel starts names the page it started on.
@@ -434,7 +446,8 @@ export function ChatThreadView({
         code?: string;
       } | null;
       setTurns((all) => all.filter((turn) => turn.key !== answerKey && turn.key !== questionKey));
-      if (body?.code === 'subscription_inactive') openUpgrade();
+      // A read-only workspace, or a chat on the demo brand: the plans.
+      if (body?.code === 'subscription_inactive' || body?.code === 'demo_brand') openUpgrade();
       else toast.error(body?.error ?? t('sendFailed'));
       return false;
     }
@@ -675,12 +688,14 @@ export function ChatThreadView({
           disabled={atCap}
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
           usage={<ComposerUsageMeter />}
+          modelChoice={modelChoice}
+          onModelChoice={setModelChoice}
           // An answer is its text only: no page chips, @ data or files go with it.
           chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}
           references={asking ? undefined : pageReferences}
           skills={skills}
-          draft={draft}
+          draft={homeDraft ?? draft}
           onSend={(message, sent) =>
             asking && last
               ? answerQuestion(last, composerAnswer(asking, message), 'composer')
@@ -828,6 +843,7 @@ function Answer({
         </ApprovalCard>
       )}
       {turn.runId && run.why.map((why) => <WhyCard key={why.n} runId={turn.runId!} why={why} />)}
+      <WhatsNewCards entries={run.whatsNew} />
       {turn.runId &&
         run.deliverables.map((deliverable, i) => (
           <DeliverableCard

@@ -1,7 +1,12 @@
 import messages from '../../../messages/en.json';
-import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { AgentConnection } from './agent-rules';
-import { CATALOG_CONNECTION, CMS_CONNECTION, skillConnections } from './agent-skills';
+import {
+  CATALOG_CONNECTION,
+  CMS_CONNECTION,
+  connectionKindOf,
+  skillConnections,
+} from './agent-skills';
+import { NO_CONNECTION_ROWS, readConnectionRows } from './connection-rows';
 
 /**
  * Whether a brand has the connections an agent asks for (CHAT-21 §D item
@@ -16,35 +21,19 @@ import { CATALOG_CONNECTION, CMS_CONNECTION, skillConnections } from './agent-sk
  * that takes sent pages (webhook_configs, content_draft.sent); any catalog
  * source is a feed, upload, store or Merchant Center source whose sign-in
  * still works (catalog_sources); Search Console and Analytics are the
- * brand's picked property. Agents saved before connections were kinds name
+ * brand's picked property, and where the workspace's Google sign-ins are
+ * given, only while its sign-in is connected. Agents saved before connections were kinds name
  * a product (`webflow`, `shopify`): it counts as its kind. A connection
  * this can't read (one no integration offers yet) isn't held against a run.
  */
-
-/** The kinds this reads, and the products saved agents may name for them. */
-const KIND_OF: Record<string, string> = {
-  [CMS_CONNECTION]: CMS_CONNECTION,
-  webflow: CMS_CONNECTION,
-  wordpress: CMS_CONNECTION,
-  framer: CMS_CONNECTION,
-  wix: CMS_CONNECTION,
-  webhook: CMS_CONNECTION,
-  [CATALOG_CONNECTION]: CATALOG_CONNECTION,
-  shopify: CATALOG_CONNECTION,
-  merchant_center: CATALOG_CONNECTION,
-  google_search_console: 'google_search_console',
-  gsc: 'google_search_console',
-  google_analytics: 'google_analytics',
-  ga4: 'google_analytics',
-};
 
 const CONNECTION_NAMES: Record<string, string> = messages.chatAgents.connections.names;
 
 /** A connection's name as the app shows it: "Any CMS", "Google Search Console". */
 export const connectionName = (key: string) => CONNECTION_NAMES[key] ?? key;
 
-/** A connection key as the kind it is read as, or null for one this doesn't read. */
-export const connectionKindOf = (key: string): string | null => KIND_OF[key] ?? null;
+// The kinds, pure for the Skills page's chips too (agent-skills.ts).
+export { connectionKindOf };
 
 /** The webhook event a CMS workflow takes pages by (server content-delivery's DELIVERY_EVENT). */
 const PAGE_SENT_EVENT = 'content_draft.sent';
@@ -57,8 +46,21 @@ export interface BrandConnectionRows {
   catalog: { kind: string; last_status: string | null }[];
 }
 
-/** The kinds a brand has connected. */
-export function connectedKinds(rows: BrandConnectionRows): Set<string> {
+/** The Google sign-in each property kind needs (integration_connections.provider). */
+const PROPERTY_SIGN_IN: Record<string, string> = {
+  google_search_console: 'google-search-console',
+  google_analytics: 'google-analytics',
+};
+
+/**
+ * The kinds a brand has connected. Given the workspace's sign-ins, a picked
+ * property counts only while its Google sign-in is connected: Disconnect in
+ * Settings drops the sign-in but leaves the brand's property set.
+ */
+export function connectedKinds(
+  rows: BrandConnectionRows,
+  signIns?: readonly { provider: string; status: string }[],
+): Set<string> {
   const kinds = new Set<string>();
   if (
     rows.cms.some((c) => c.status === 'connected') ||
@@ -69,8 +71,13 @@ export function connectedKinds(rows: BrandConnectionRows): Set<string> {
   if (rows.catalog.some((source) => source.last_status !== 'auth_failed')) {
     kinds.add(CATALOG_CONNECTION);
   }
-  if (rows.brand?.gsc_property) kinds.add('google_search_console');
-  if (rows.brand?.ga_property_id) kinds.add('google_analytics');
+  const signedIn = (kind: string) =>
+    !signIns ||
+    signIns.some((s) => s.provider === PROPERTY_SIGN_IN[kind] && s.status === 'connected');
+  if (rows.brand?.gsc_property && signedIn('google_search_console')) {
+    kinds.add('google_search_console');
+  }
+  if (rows.brand?.ga_property_id && signedIn('google_analytics')) kinds.add('google_analytics');
   return kinds;
 }
 
@@ -108,32 +115,10 @@ export function connectionGaps(
   return gaps;
 }
 
-/** The kinds a brand has connected now. Server only. */
+/** The kinds a brand has connected now, from the one read of connections (connection-rows.ts). Server only. */
 export async function readBrandConnections(brandId: string): Promise<Set<string>> {
-  const [brand, cms, webhooks, catalog] = await Promise.all([
-    supabaseAdmin
-      .from('brands')
-      .select('gsc_property, ga_property_id')
-      .eq('id', brandId)
-      .maybeSingle(),
-    supabaseAdmin.from('brand_cms_connections').select('provider, status').eq('brand_id', brandId),
-    supabaseAdmin
-      .from('webhook_configs')
-      .select('events')
-      .eq('brand_id', brandId)
-      .eq('is_active', true),
-    supabaseAdmin.from('catalog_sources').select('kind, last_status').eq('brand_id', brandId),
-  ]);
-  for (const read of [brand, cms, webhooks, catalog]) {
-    if (read.error)
-      throw new Error(`Could not read the brand's connections: ${read.error.message}`);
-  }
-  return connectedKinds({
-    brand: (brand.data as BrandConnectionRows['brand']) ?? null,
-    cms: (cms.data ?? []) as BrandConnectionRows['cms'],
-    webhooks: (webhooks.data ?? []) as BrandConnectionRows['webhooks'],
-    catalog: (catalog.data ?? []) as BrandConnectionRows['catalog'],
-  });
+  const rows = await readConnectionRows([brandId]);
+  return connectedKinds(rows.get(brandId) ?? NO_CONNECTION_ROWS);
 }
 
 /**

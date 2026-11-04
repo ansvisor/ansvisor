@@ -34,6 +34,10 @@ vi.mock('@/lib/actions/chat-schedules', () => ({ countChatSchedules: vi.fn(async
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatMenuOpen: vi.fn(async () => ({ ok: true })),
 }));
+// The Connections row's Ask your Admin (W4-25) sends through this server action.
+vi.mock('@/lib/actions/chat-access-requests', () => ({
+  requestAccess: vi.fn(async () => ({ ok: true })),
+}));
 const usage = vi.hoisted(() => ({ percentUsed: null as number | null, trial: false }));
 vi.mock('@/components/providers/ai-usage-provider', () => ({
   useAiUsage: () => ({
@@ -141,6 +145,18 @@ function menu(chats: ChatListItem[], extra: Partial<Parameters<typeof ChatMenuVi
 }
 
 describe('ChatMenuView', () => {
+  it('puts the Connections row under Skills, its list closed until opened (W4-25)', async () => {
+    await render(menu([]));
+    const skills = action('chatMenu.openSkills')[0];
+    const row = skills.nextElementSibling as HTMLElement;
+    expect(row.textContent).toBe('ConnectionsManage▾');
+    expect(
+      row.querySelector('[data-action="chatMenu.manageConnections"]')?.getAttribute('href'),
+    ).toBe('/dashboard/chat/connections');
+    expect(action('chatMenu.toggleConnections')[0].getAttribute('aria-expanded')).toBe('false');
+    expect(host.querySelector('#chat-menu-connections')).toBeNull();
+  });
+
   it('shows the toggle, New chat with its keys, Home and the governance pages, and no unbuilt page', async () => {
     await render(menu([]));
     const toggle = action('chatMenu.toggle')[0];
@@ -163,9 +179,8 @@ describe('ChatMenuView', () => {
     // Agent Center, out of Chat, with "New" until it is first opened (governance mockup #cnav).
     expect(action('chatMenu.openAgents')[0].getAttribute('href')).toBe('/dashboard/agents');
     expect(action('chatMenu.openAgents')[0].textContent).toBe('Agent CenterNew');
-    for (const unbuilt of ['chatMenu.openSkills']) {
-      expect(action(unbuilt)).toHaveLength(0);
-    }
+    // Skills (W3-07).
+    expect(action('chatMenu.openSkills')[0].getAttribute('href')).toBe('/dashboard/chat/skills');
     // Scheduled (W3-03), with no count while no job is on.
     expect(action('chatMenu.openScheduled')[0].getAttribute('href')).toBe(
       '/dashboard/chat/scheduled',
@@ -382,7 +397,14 @@ describe('ChatShell', () => {
     );
     expect(
       [...popup.querySelectorAll('[data-action="search.openPage"]')].map((b) => b.textContent),
-    ).toEqual(['☰All chats', '✦Agent Center', '⏲Scheduled', '▤Files', '⚙Settings']);
+    ).toEqual([
+      '☰All chats',
+      '✦Agent Center',
+      '⏲Scheduled',
+      '▤Files',
+      '⇄Connections',
+      '⚙Settings',
+    ]);
     await act(async () =>
       (popup.querySelector('[data-action="search.openPage"]') as HTMLElement).click(),
     );

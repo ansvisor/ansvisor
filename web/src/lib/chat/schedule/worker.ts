@@ -15,7 +15,7 @@ import { planFactsFromOrgRow, type OrgPlanRow, type PlanFacts } from '../plan-fa
 import type { ChatMode } from '../precedence';
 import { readPrecedenceContext } from '../precedence-context';
 import { RUNS_PER_USER, claimRunSlot, readRunCounts, workspaceRunLimit } from '../run-limits';
-import { enabledSkills } from '../skills/library';
+import { enabledSkillsFor, loadSkillBodies } from '../skills/store';
 import { closeJobNotices, keepRunResult, noticeJobPaused, type PausedReason } from './deliver';
 import { nextJobRun } from './rule';
 
@@ -40,8 +40,8 @@ import { nextJobRun } from './rule';
  * Before each run, read again for the job's creator, whom it acts as:
  * still an Admin or a Manager of the workspace, and still able to use the
  * job's brand (else it turns off, owner_role); its brand still there
- * (missing_source) and its skill still on (skill_off); the AI limit not
- * used up (the run is Paused · AI limit reached and the job pauses, cap).
+ * (missing_source) and its skill still one they may use, the library's or
+ * the workspace's (skill_off); the AI limit not used up (the run is Paused · AI limit reached and the job pauses, cap).
  * A read-only workspace runs nothing (Skipped); with Chat off nothing is
  * read or written. A run whose job's last run is still open is Skipped.
  *
@@ -461,10 +461,7 @@ async function checkJob(
     }
     brand = data as { id: string; name: string };
   }
-  if (
-    job.skill_name &&
-    !enabledSkills(job.organization_id).some((skill) => skill.name === job.skill_name)
-  ) {
+  if (job.skill_name && !(await skillOn(actor, job.skill_name))) {
     return refuse({ status: 'skipped', reason: 'skillOff', pause: 'skill_off' });
   }
   // One run of a job at a time: its last one still works or waits on a card.
@@ -481,6 +478,21 @@ async function checkJob(
     return refuse({ status: 'paused_cap', reason: 'aiLimit', pause: 'cap' });
   }
   return { ok: true, facts: { actor, plan: ctx.plan, brand } };
+}
+
+/**
+ * Whether the job's /skill is one its creator may use now (skills/store.ts):
+ * a library skill the workspace didn't turn off, or a workspace skill that
+ * is approved, on, theirs or shared, and still matches its checksum (one
+ * that doesn't is switched off, as a run's load does).
+ */
+async function skillOn(actor: ChatActor, name: string): Promise<boolean> {
+  const skill = (await enabledSkillsFor(actor.organizationId, actor.userId)).find(
+    (s) => s.name === name,
+  );
+  if (!skill) return false;
+  await loadSkillBodies(actor, [skill], [name]);
+  return skill.body !== null;
 }
 
 /** The job's live chat, its creator's; null when it has none yet. */

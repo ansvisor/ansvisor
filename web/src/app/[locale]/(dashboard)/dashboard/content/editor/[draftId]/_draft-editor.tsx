@@ -11,7 +11,18 @@ import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
 import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
-import { ArrowLeft, Bot, Check, Copy, Download, PanelRight, Send, Target, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bot,
+  Check,
+  Copy,
+  Download,
+  MessageSquare,
+  PanelRight,
+  Send,
+  Target,
+  X,
+} from 'lucide-react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -96,8 +107,8 @@ import {
   type SuggestionSource,
   type SuggestionStatus,
 } from '@/lib/content/suggestions';
-import { REBUILD_LIMITS, rebuildSources } from '@/lib/content/brief';
-import { buildSourceGroups, includedCounts, type DraftSourceKind } from '@/lib/content/sources';
+import { rebuildSources } from '@/lib/content/brief';
+import { buildSourceGroups, type DraftSourceKind } from '@/lib/content/sources';
 import {
   cleanHtml,
   formatHtmlSource,
@@ -165,6 +176,7 @@ import {
   rulesForNext,
   stepState,
   thirdPassOf,
+  thirdPassesToRead,
   thirdStepPasses,
   thirdStepTried,
   type NextAction,
@@ -204,7 +216,6 @@ import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentCard } from './_agent-card';
-import { AgentDrafting, draftingKey } from './_agent-drafting';
 import { AuthorMenu, MANAGE_AUTHORS_PATH } from './_author-menu';
 import { ReviewerMenu } from './_reviewer-menu';
 import { BeforePublish, TRUST_GATE, type ReadyAnyway, type ReadyToPaste } from './_before-publish';
@@ -258,8 +269,24 @@ import {
   writeSkips,
   writeThirdStep,
 } from './_next-step';
-import { qualitySuggestions, useTodoCopy, type HandOff, type QualityRead } from './_quality-tab';
-import { AuditEstimateCard, AuditEstimateChip, useAuditEstimate } from './_audit-estimate';
+import {
+  NO_TRIED,
+  readTried,
+  runDecided,
+  triedAfter,
+  triedOpen,
+  triedStill,
+  writeTried,
+  type TriedRules,
+} from '@/lib/content/tried-rules';
+import {
+  qualitySuggestions,
+  useTodoCopy,
+  type HandOff,
+  type QualityFocus,
+  type QualityRead,
+} from './_quality-tab';
+import { AuditEstimateCard, useAuditEstimate } from './_audit-estimate';
 import { PageTypeMenu } from './_page-type-menu';
 import type { AgentRewrite } from './_brief-tab';
 import { ruleStatusDetail, type AgentFix, type PageRewrite } from './_rules-tab';
@@ -492,6 +519,15 @@ export function DraftEditor({
   };
   const saveThirdTry = (attempt: ThirdTry | null) =>
     saveThirdStep({ ...thirdStepNow.current, attempt });
+  // The rules Fix open rules tried and couldn't close (editor test
+  // 2026-11-03): Rules shows them amber, the person's to decide.
+  const [triedRules, setTriedRules] = useState<TriedRules>(() => readTried(draft.id));
+  const triedNow = useRef(triedRules);
+  const saveTried = (store: TriedRules) => {
+    triedNow.current = store;
+    setTriedRules(store);
+    writeTried(draft.id, store);
+  };
   /**
    * Notes a run the third step takes, from the batch on the page now, while
    * Next's step (`at`, as it was when the run was asked for) is the third: a
@@ -589,6 +625,8 @@ export function DraftEditor({
     build?: boolean;
     /** Brief › Your input to show: Quality's Add (CE-048). */
     input?: boolean;
+    /** Quality's part to show, from the Next step basket: its to-dos, or what raises Trust. */
+    focus?: QualityFocus;
   } | null>(null);
   const openPanelTab = (tab: PanelTarget, source?: { kind: DraftSourceKind; ref: string }) => {
     if (!panelOpen) togglePanel();
@@ -623,7 +661,6 @@ export function DraftEditor({
         onSource: (source) => onSource.current(source),
       }),
       OneH1,
-      AgentDrafting,
       FlashBlock,
       PlaceholderMarks,
       PageInfoStrip,
@@ -1822,42 +1859,6 @@ export function DraftEditor({
     );
   }, [editor, suggestions, suggestionLabels, ruleEffects]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // While Fix open rules runs, a dashed card in the page where its change
-  // will most likely land, from which of the kept data (CE-027/035).
-  const keptCounts = useMemo(
-    () =>
-      reads.sources?.data
-        ? includedCounts(
-            buildSourceGroups(reads.sources.data, reads.sources.choices, {
-              title: draft.title,
-              sourceUrl: draft.sourceUrl,
-            }),
-          )
-        : null,
-    [reads.sources, draft.title, draft.sourceUrl],
-  );
-  // As many as the agent gets (rebuildSources).
-  const pages = Math.min(keptCounts?.cited_page ?? 0, REBUILD_LIMITS.pages);
-  const fanouts = Math.min(keptCounts?.fanout ?? 0, REBUILD_LIMITS.fanouts);
-  const draftingText = !fixing
-    ? null
-    : pages && fanouts
-      ? t('agentCard.draftingFrom', { pages, fanouts })
-      : pages
-        ? t('agentCard.draftingFromPages', { pages })
-        : fanouts
-          ? t('agentCard.draftingFromFanouts', { fanouts })
-          : t('agentCard.draftingRules');
-  useEffect(() => {
-    if (!editor || editor.isDestroyed) return;
-    editor.view.dispatch(
-      editor.state.tr.setMeta(draftingKey, {
-        title: t('agentCard.drafting'),
-        text: draftingText,
-      }),
-    );
-  }, [editor, draftingText, t]);
-
   /**
    * Accept, reject, undo (an accepted one) or restore (a rejected one): the
    * page changes first, then the decision is kept. Accepting keeps the page
@@ -2046,6 +2047,11 @@ export function DraftEditor({
         ...(heldKey.includes('l') ? ['length'] : []),
       ]),
     [heldKey],
+  );
+  // The rules Fix open rules tried and couldn't close, open now: amber in Rules.
+  const triedShown = useMemo(
+    () => triedOpen(triedRules.tried, rules.rules),
+    [triedRules.tried, rules.rules],
   );
   // The rules as the agent card counts its gain: met now, and the ones still open.
   // The rules as the side panel shows them: their count once it stands.
@@ -2291,6 +2297,8 @@ export function DraftEditor({
         // before are passed no longer (#1556 review). The rewrite's own
         // attempt stays, to pass its step.
         saveThirdStep({ ...thirdStepNow.current, passes: {} });
+        // What Fix tried was on the page before: the new page's rules are the agent's again.
+        saveTried(NO_TRIED);
         toast.success(t('rewrite.acceptedToast'));
         // The rewrite is the whole batch: as Accept all.
         nudgeAfterRead();
@@ -2365,6 +2373,7 @@ export function DraftEditor({
       undefined,
       false,
       beginThirdTry('fix', { only }),
+      open.map(({ rule }) => rule.key),
     );
   };
 
@@ -2405,13 +2414,17 @@ export function DraftEditor({
     // Fix open rules as Next's third step (beginThirdTry): found nothing, it
     // is taken; failed, stopped or never run, the attempt before it is back.
     third: { prev: ThirdTry | null } | null = null,
+    // The rules a Fix was sent: tried once its run is decided (triedAfter).
+    tried: string[] | null = null,
   ) => {
     const untried = () => {
+      if (tried) saveTried({ ...triedNow.current, pending: null });
       if (!third) return;
       const read = attemptRead.current;
       saveThirdTry(read && read.of === third.prev ? read.now : third.prev);
     };
     const nothing = () => {
+      if (tried) saveTried(triedAfter(triedNow.current, tried));
       const now = thirdStepNow.current.attempt;
       if (third && now) saveThirdTry({ ...now, ended: true });
     };
@@ -2429,6 +2442,12 @@ export function DraftEditor({
     setStoppingRun(null);
     stopSent.current = null;
     setFixing(true);
+    if (tried) {
+      saveTried({
+        ...triedNow.current,
+        pending: { keys: tried, batch: suggestionsNow.current[0]?.batchId ?? null },
+      });
+    }
     const asked = Date.now();
     try {
       // The agent reads the page as saved.
@@ -2531,6 +2550,7 @@ export function DraftEditor({
   // suggestions, each with what it names on the page; the disclosure only
   // with its line in the page's language.
   const tQuality = useTranslations('contentEditor.editor.quality');
+  const tBrief = useTranslations('contentEditor.editor.brief');
   const handOffSuggestions = sourcesOn && quality ? qualitySuggestions(tQuality, quality) : [];
   const handOffList = handOffItems(handOffSuggestions, {
     // Added, and not read again yet: never a second one.
@@ -2596,6 +2616,14 @@ export function DraftEditor({
   useEffect(() => {
     if (agentWorking) setLastRunFailed(false);
   }, [agentWorking]);
+  // Another run started here (Fix, a hand-off, the brief): the band of the
+  // one that couldn't finish goes (editor UX review 2026-11-03: it stayed over
+  // a brief built since). Its own Try again keeps it until the page is left
+  // for the agent's: a start refused says so under it.
+  const otherRun = fixing || briefRebuilding;
+  useEffect(() => {
+    if (otherRun) setAgentFailed(false);
+  }, [otherRun]);
   const agentRun = useAgentRun(draft.id, agentWorking, fixing ? FIX_RUNS : BRIEF_RUNS);
   const stopAgent = async () => {
     if (!agentRun) return;
@@ -2704,6 +2732,7 @@ export function DraftEditor({
     running: fixRunning,
     blocked: agentFixBlocked(fixRunning),
     held: heldRules,
+    tried: triedShown,
   };
   const handOffCard: HandOff | null =
     sourcesOn && quality
@@ -2955,8 +2984,9 @@ export function DraftEditor({
         toast.error(t(`agentFailed.errors.${result.error}`));
         return;
       }
-      // A page written again: the third step is the new page's.
+      // A page written again: the third step is the new page's, and so are its rules.
       saveThirdStep({ attempt: null, passes: {} });
+      saveTried(NO_TRIED);
       onAgentStarted?.('write');
     } catch (err) {
       console.error('Failed to start the Content Agent again:', err);
@@ -3247,34 +3277,116 @@ export function DraftEditor({
     [qualityOn, pageHtml],
   );
   const trustNow = quality?.trust?.score ?? null;
-  // The run's changes decided (or it found nothing): its step is passed once
-  // the steps' reads are in (below), with what the page reads then.
-  const thirdTaken = thirdStepTried(thirdStep.attempt, {
+  // Something kept the brief can be built from (the server's no_sources
+  // check): a prompt, a fan-out or a Search Console query; null until read.
+  const briefSources = useMemo(() => {
+    const read = reads.sources;
+    if (!read || read.failed || !read.data) return null;
+    const kept = rebuildSources(read.data, read.choices, {
+      title,
+      sourceUrl: draft.sourceUrl,
+      html: '',
+      length: 0,
+    });
+    return kept.promptIds.length + kept.fanouts.length + kept.queries.length > 0;
+  }, [reads.sources, title, draft.sourceUrl]);
+  // Trust low is a step only while Quality names what raises it, or is still
+  // reading what may (editor test 2026-11-03: Trust 55 with nothing named
+  // left only Skip).
+  const trustRaisable =
+    !!quality &&
+    (qualitySuggestions(tQuality, quality).some((s) => s.score === 'trust') ||
+      !!quality.claimsReading ||
+      !!quality.pageReading);
+  // The agent's latest batch on the page, and whether one works or waits for a decision.
+  const batchNow = {
     batch: suggestions[0]?.batchId ?? null,
     open: openSuggestions,
     busy: agentWorking || rewriting,
-  });
+  };
+  // The run's changes decided (or it found nothing): its step is passed once
+  // the steps' reads are in (below), with what the page reads then.
+  const thirdTaken = thirdStepTried(thirdStep.attempt, batchNow);
   const nextState: NextStepState = {
     method: draft.method,
     open: canMarkReady,
     published: status === 'published',
     hasBrief: reads.brief.status === 'ready' ? reads.brief.brief !== null : null,
+    briefSources,
+    // The agent's suggestions waiting: Review them, the one step (a rewrite counts one).
+    waiting: agentWorking ? 0 : openSuggestions,
     empty: !pageHasWords,
     rewrite: rewriteAdvice(rules.rules, reach, heldRules),
     openRules: rulesForNext(rules.rules, heldRules),
+    fixable: openRulesForAgent(rules.rules, undefined, heldRules).forAgent.length,
     openTotal: rules.rules.filter(({ rule, status }) => rule.on && status.state === 'bad').length,
     quality: quality
-      ? { trust: trustNow, trustLow: trustNow !== null && trustNow < TRUST_GATE, todos }
+      ? {
+          trust: trustNow,
+          trustLow: trustNow !== null && trustNow < TRUST_GATE && trustRaisable,
+          todos,
+        }
       : null,
     skipped,
     thirdPasses: thirdStep.passes,
+    batch: batchNow.batch,
   };
   const next = nextStep(nextState);
   useEffect(() => {
     nextStepNow.current = next.step.id;
   });
   const firstTodo = todos.find((todo) => !todo.done);
+  // The bottom nudge names a to-do: only while Next's step is the person's too.
+  const nudgeFits = stepActor(next.step) === 'you' && next.step.id !== 'review';
   const todoLine = firstTodo && quality ? todoCopy(firstTodo, quality).next : null;
+  // The agent's step, typically (the user, 2026-11-03): its minutes, and its
+  // share of the month's AI usage as the server prices it (ai-estimates.js).
+  const NEXT_COSTS: Partial<
+    Record<
+      NextAction,
+      { minutes: number; estimate: 'editorBrief' | 'editorFix' | 'editorRewrite' | 'editorWrite' }
+    >
+  > = {
+    buildBrief: { minutes: 1, estimate: 'editorBrief' },
+    fixRules: { minutes: 1, estimate: 'editorFix' },
+    rewritePage: { minutes: 2, estimate: 'editorRewrite' },
+    writeWithAgent: { minutes: 3, estimate: 'editorWrite' },
+  };
+  const nextCostOf = NEXT_COSTS[next.step.primary];
+  const nextCost = nextCostOf
+    ? {
+        minutes: nextCostOf.minutes,
+        percent:
+          aiUsage && !aiUsage.unlimited ? (aiUsage.estimates?.[nextCostOf.estimate] ?? null) : null,
+      }
+    : null;
+  // What raises the score on Next's step, for its window (the user, 2026-11-03):
+  // the person's to-dos and Quality's suggestions with their points, or the
+  // rules the agent's step closes.
+  const nextRaises = (() => {
+    const id = next.step.id;
+    if ((id === 'proof' || id === 'check') && quality) {
+      return [
+        ...todos
+          .filter((todo) => !todo.done)
+          .map((todo) => ({
+            line: todoCopy(todo, quality).title,
+            gain:
+              todo.gain > 0
+                ? tQuality('gain', { gain: todo.gain, score: tQuality(`names.${todo.score}`) })
+                : null,
+          })),
+        ...qualitySuggestions(tQuality, quality).map((s) => ({
+          line: s.line,
+          gain: tQuality('gain', { gain: s.gain, score: tQuality(`names.${s.score}`) }),
+        })),
+      ];
+    }
+    if (id === 'fixRules' || id === 'length' || id === 'review') {
+      return nextState.openRules.map((key) => ({ line: tRules(`names.${key}`), gain: null }));
+    }
+    return [];
+  })();
   const skipStep = (id: NextStepId) => {
     const skips = { ...liveSkips(nextState), [id]: stepState(id, nextState) };
     setSkipped(skips);
@@ -3340,6 +3452,46 @@ export function DraftEditor({
     // pageHtml: each read of the page starts the wait again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [thirdTaken, thirdRead, attemptChecked, pageHtml]);
+  // A batch of the agent's since a pass (a hand-off, a Fix from the Rules
+  // tab, a rewrite), decided: the pass reads the page again as it reads
+  // then, the same wait over, so what its own changes opened never brings
+  // the step back (thirdPassesToRead). The run Next's step began is the
+  // attempt's (above).
+  const passesToRead = thirdTaken ? '' : thirdPassesToRead(thirdStep.passes, batchNow).join(',');
+  useEffect(() => {
+    if (!passesToRead || !thirdRead || !attemptChecked) return;
+    const timer = setTimeout(() => {
+      const { attempt, passes } = thirdStepNow.current;
+      const now = nextStateNow.current;
+      const ids = passesToRead.split(',') as ThirdStepId[];
+      saveThirdStep({
+        attempt,
+        passes: {
+          ...passes,
+          ...Object.fromEntries(ids.filter((id) => passes[id]).map((id) => [id, thirdPassOf(now)])),
+        },
+      });
+    }, PAGE_READ_DELAY_MS + PASS_SETTLE_MS);
+    return () => clearTimeout(timer);
+    // pageHtml: each read of the page starts the wait again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passesToRead, thirdRead, attemptChecked, pageHtml]);
+  // A Fix's suggestions decided, or it found nothing: the rules it was sent
+  // are tried (triedAfter). Once the rules read the page again, one met
+  // since leaves the list (triedStill): if the person's edits open it
+  // again, it's the agent's.
+  const triedDecided = runDecided(triedRules.pending, batchNow);
+  useEffect(() => {
+    const { pending } = triedNow.current;
+    if (triedDecided && pending) saveTried(triedAfter(triedNow.current, pending.keys));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triedDecided]);
+  const triedLeft =
+    thirdRead && !triedRules.pending ? triedStill(triedRules.tried, rules.rules) : triedRules.tried;
+  useEffect(() => {
+    if (triedLeft !== triedNow.current.tried) saveTried({ ...triedNow.current, tried: triedLeft });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triedLeft]);
   // A pass that no longer holds is dropped, as a stale skip is, so a page
   // that reads as it did again later doesn't bring it back to life.
   const stalePasses =
@@ -3406,7 +3558,8 @@ export function DraftEditor({
   const planned = nextState.hasBrief === true;
   useEffect(() => {
     if (!qualityOn) return;
-    if (nextShownOnce.current === 'no' && startsNew) {
+    // Never by itself while an agent works (the user, 2026-11-03).
+    if (nextShownOnce.current === 'no' && startsNew && !agentBusy) {
       nextShownOnce.current = 'open';
       setNextFocus(false);
       setNextOpen(true);
@@ -3414,7 +3567,8 @@ export function DraftEditor({
       nextShownOnce.current = 'done';
       setNextOpen(false);
     }
-  }, [qualityOn, startsNew, planned]);
+    // agentBusy: a run that ends lets it open then, once.
+  }, [qualityOn, startsNew, planned, agentBusy]);
   /** Why a step's button can't run now, as the buttons it stands for say. */
   const nextBlocked = (action: NextAction): string | null => {
     switch (action) {
@@ -3449,6 +3603,17 @@ export function DraftEditor({
   const runNext = (action: NextAction) => {
     setNextOpen(false);
     switch (action) {
+      case 'addSources':
+        openPanelTab('sources');
+        return;
+      case 'review':
+        // A rewrite waits in the card above the page, a fix in the page.
+        if (pageSuggestion?.status === 'open') {
+          document
+            .querySelector<HTMLElement>(`[role="region"][aria-label="${t('rewrite.bar')}"] button`)
+            ?.focus({ preventScroll: false });
+        } else reviewFirst();
+        return;
       case 'buildBrief':
         if (!panelOpen) togglePanel();
         setTabRequest((prev) => ({ tab: 'brief', n: (prev?.n ?? 0) + 1, build: true }));
@@ -3473,7 +3638,14 @@ export function DraftEditor({
         router.push(MANAGE_AUTHORS_PATH);
         return;
       case 'showTodos':
-        openPanelTab('quality');
+      case 'showTrust':
+        // Shown even with Quality open already: the part it names scrolls in and is marked.
+        if (!panelOpen) togglePanel();
+        setTabRequest((prev) => ({
+          tab: 'quality',
+          n: (prev?.n ?? 0) + 1,
+          focus: action === 'showTodos' ? 'todos' : 'trust',
+        }));
         return;
       case 'beforePublish':
         openBeforePublish('markReady');
@@ -3610,6 +3782,7 @@ export function DraftEditor({
       if (!samePage) {
         setBarClosed(true);
         saveThirdStep({ attempt: null, passes: {} });
+        saveTried(NO_TRIED);
       }
     } catch (err) {
       console.error('Failed to restore the version:', err);
@@ -3737,6 +3910,8 @@ export function DraftEditor({
                 onAction={runNext}
                 onSkip={skipStep}
                 blocked={nextBlocked}
+                raises={nextRaises}
+                cost={nextCost}
                 working={
                   agentWorking
                     ? {
@@ -3756,28 +3931,6 @@ export function DraftEditor({
                 // Read again as the page's agent starts, its run is on the server, and it ends.
                 readAgain={`${agentWorking}:${agentRun?.id ?? ''}`}
               />
-            )}
-            {/* The agent at work on this page: a click opens the basket, with its steps and Stop. */}
-            {/* Fix open rules or the brief at work: the basket shows their steps and Stop. */}
-            {!chatOn && qualityOn && agentWorking && (
-              <HeaderTip label={t('header.running', { count: 1 })} hint={t('header.runningHint')}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNextFocus(true);
-                    setNextOpen(true);
-                  }}
-                  aria-label={t('header.running', { count: 1 })}
-                  className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-2 text-xs font-medium text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
-                >
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none dark:bg-emerald-400"
-                  />
-                  {/* Narrower than 1024px, the dot alone: the count is on hover. */}
-                  <span className="hidden lg:inline">{t('header.running', { count: 1 })}</span>
-                </button>
-              </HeaderTip>
             )}
             {/* The month's AI usage, with this page's share (AI usage spec §3.1). */}
             <AiUsageMeter compact draftId={draft.id} />
@@ -3943,7 +4096,7 @@ export function DraftEditor({
             title={t('rulesChipHint')}
             aria-label={
               rulesSettled
-                ? t('rulesChip', { met: rules.met, total: rules.total })
+                ? t('rulesChipLabel', { met: rules.met, total: rules.total })
                 : t('rulesChipReading')
             }
             className={cn(
@@ -4002,7 +4155,6 @@ export function DraftEditor({
               </span>
             </button>
           )}
-          <AuditEstimateChip state={auditEstimate} />
           {citedCount > 0 && (
             <span
               title={t('cited.chipHint')}
@@ -4076,6 +4228,29 @@ export function DraftEditor({
               </span>
             </p>
           )}
+          {/* The chat it was made in (W4-10): "From chat: {title}", with the new Chat on. */}
+          {chatOn && draft.conversation && (
+            <p
+              data-slot="draft-chat-bar"
+              className="flex items-center gap-2 border-b bg-muted/40 px-4 py-1.5 text-[13px] text-muted-foreground"
+            >
+              <MessageSquare aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 truncate">
+                {t.rich('chatBar', {
+                  title: draft.conversation.title || t('chatBarUntitled'),
+                  link: (chunks) => (
+                    <Link
+                      href={`/dashboard/chat/${draft.conversation!.id}`}
+                      data-action="editor.openChat"
+                      className="font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                    >
+                      {chunks}
+                    </Link>
+                  ),
+                })}
+              </span>
+            </p>
+          )}
           {(agentWorking || (suggestions.length > 0 && !(barClosed && openSuggestions === 0))) && (
             <AgentCard
               suggestions={suggestions}
@@ -4124,7 +4299,7 @@ export function DraftEditor({
                       blocked: nextBlocked(next.step.primary),
                       // The card heads with the step and who takes it (Next step spec §3).
                       title: stepName(tNext, next.step.id, nextState),
-                      reason: stepReason(tNext, next.step, nextState, todoLine),
+                      reason: stepReason(tNext, next.step, nextState, todoLine, next.path),
                       actor: stepActor(next.step),
                     }
                   : null
@@ -4195,7 +4370,9 @@ export function DraftEditor({
             {dragging && <DropOverlay />}
             {quality && (
               <NextNudge
-                shown={nudge.shown}
+                // Only while Next's step is the person's: never a second step
+                // beside the agent's (editor UX review 2026-11-03).
+                shown={nudgeFits ? nudge.shown : null}
                 quality={quality}
                 onShowPlaceholder={showFirstPlaceholder}
                 onPickAuthor={() => setAuthorMenuOpen(true)}
@@ -4240,7 +4417,15 @@ export function DraftEditor({
             }
             onBriefRebuilding={onBriefRebuilding}
             briefBlocked={
-              briefRebuilding ? null : (aiUsedUp ?? (agentBusy ? t('suggestions.agentBusy') : null))
+              briefRebuilding
+                ? null
+                : (aiUsedUp ??
+                  (agentBusy
+                    ? t('suggestions.agentBusy')
+                    : // Said where Run Agent is, before it fails (editor UX review 2026-11-03).
+                      briefSources === false
+                      ? tBrief('rebuildErrors.no_sources')
+                      : null))
             }
             quality={quality}
             qualityScore={shownScore}
@@ -4402,6 +4587,12 @@ export function DraftEditor({
           onMarkReady={(anyway) => {
             setPublishOpen(null);
             void markReady(anyway ?? undefined);
+          }}
+          // Decision (a), editor UX review 2026-11-03: Mark ready stays open with work
+          // left, and the window counts it rather than saying all is done.
+          openWork={{
+            rules: rulesSettled ? Math.max(0, rules.total - rules.met) : 0,
+            todos: todos.filter((todo) => !todo.done).length,
           }}
           onFixFirst={(show) => {
             setPublishOpen(null);
