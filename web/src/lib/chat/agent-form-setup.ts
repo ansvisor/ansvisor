@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { PLANS } from '@/config/plans';
+import { readChosenTimeZone } from '@/lib/account-time-zone';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { AgentFormSetup } from './agent-form';
 import { readGoLiveSwitch } from './agent-go-live';
@@ -13,9 +14,9 @@ import { chatActor } from './run-api';
  * form opens, read on the server for the signed-in person: their live role,
  * the brands and topics a scope may name, the plan's engines, whether Full
  * auto is open, locked by the plan or turned off in Settings › Chat, the
- * workspace's Max per run and sharing rule, the names already taken and
- * whose key Chat runs on. Never a price or a dollar: shares and names only.
- * Server only.
+ * workspace's Max per run and sharing rule, the names already taken, whose
+ * key Chat runs on and the time zone they picked in Settings › Account.
+ * Never a price or a dollar: shares and names only. Server only.
  */
 
 /** Topics a scope lists at most. */
@@ -23,7 +24,7 @@ const TOPICS_MAX = 500;
 
 export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSetup> {
   const org = ctx.actor.organizationId;
-  const [brands, agents, ownKeyProvider, goLive] = await Promise.all([
+  const [brands, agents, ownKeyProvider, goLive, timeZone] = await Promise.all([
     supabaseAdmin.from('brands').select('id, name, is_demo').eq('organization_id', org),
     supabaseAdmin
       .from('chat_agents')
@@ -38,6 +39,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
         return null;
       }),
     readGoLiveSwitch(org),
+    readChosenTimeZone(ctx.actor.userId),
   ]);
   if (brands.error) throw new Error(`Could not read the brands: ${brands.error.message}`);
   if (agents.error) throw new Error(`Could not read the agents' names: ${agents.error.message}`);
@@ -106,6 +108,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     takenNames: seen,
     ownKeyProvider,
     goLive,
+    timeZone,
     callable,
     canCallLocked: !ctx.plan.fullAuto,
   };
