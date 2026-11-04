@@ -46,6 +46,7 @@ vi.mock('../chat-thread-view', () => ({
     pageReferences,
     pageRoute,
     draft,
+    pageOpen,
   }: {
     thread: ChatThread | null;
     variant: string;
@@ -56,8 +57,14 @@ vi.mock('../chat-thread-view', () => ({
     pageReferences?: ChatReference[];
     pageRoute?: string;
     draft?: PanelDraft | null;
+    pageOpen?: string;
   }) => (
-    <div data-testid="thread" data-variant={variant} data-route={pageRoute}>
+    <div
+      data-testid="thread"
+      data-variant={variant}
+      data-route={pageRoute}
+      data-page-open={pageOpen ?? 'ask'}
+    >
       {(thread?.messages.length ?? 0) === 0 && empty}
       <ul data-testid="chips">
         {chips?.map((chip) => (
@@ -345,6 +352,19 @@ describe('the panel’s chat', () => {
     expect(panel()!.textContent).toContain('Hi Sam, ask anything about this page.');
     await render({ firstName: null });
     expect(panel()!.textContent).toContain('Ask anything about this page.');
+  });
+
+  it('hands the chat the saved choice of where a page it writes opens (W4-11)', async () => {
+    const pageOpen = () =>
+      container.querySelector('[data-testid="thread"]')!.getAttribute('data-page-open');
+    await render({ pageOpen: 'chat' });
+    await click(ask());
+    expect(pageOpen()).toBe('chat');
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ pageOpen: 'editor' });
+    await click(ask());
+    expect(pageOpen()).toBe('editor');
   });
 
   it('reopens the last chat used in the last 30 minutes', async () => {
