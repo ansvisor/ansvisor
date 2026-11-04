@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from '../lib/ai-provider.js';
+import { MANAGER_ROLES, allowRole } from '../lib/access.js';
 import { brandSetupSchema } from '../lib/brand-setup-input.js';
 import { getLanguageName } from '../lib/languages.js';
 import { withRetry } from '../lib/retry.js';
@@ -58,6 +59,9 @@ router.post('/suggest', async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ error: 'Invalid request', details: parsed.error.message });
     }
+    // A web search and a model: admins and managers, who set brands up (2026-11-03).
+    const refusal = 'Only admins and managers can suggest competitors.';
+    if (!(await allowRole(res, req.user.id, MANAGER_ROLES, refusal))) return;
     const { brandName, industry, description, website, region, language } = parsed.data;
     const langName = getLanguageName(language);
     const country = countryName(region);
