@@ -39,7 +39,7 @@ The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page*
 
 A rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published.
 
-Your Length has the last word: a rewrite merges or drops the least useful sections rather than go past it, and one still long is cut once more. When the quoted passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**.
+Your Length has the last word: a rewrite merges or drops the least useful sections rather than go past it, and one still long is cut once more. When the passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**. The **Length** rule says so too.
 
 ## Before you run it again
 
