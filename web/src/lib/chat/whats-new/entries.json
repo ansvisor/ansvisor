@@ -30,7 +30,7 @@
         "enterprise"
       ],
       "planMode": "show_upgrade",
-      "published": "2099-12-31",
+      "published": "2026-11-04",
       "lines": [
         "Weekly reports and checks meant asking Chat the same thing every week.",
         "Say \"every Monday at 9:00\" and Chat shows a card you can edit; nothing is scheduled until you click.",
@@ -49,7 +49,7 @@
         "enterprise"
       ],
       "planMode": "show_upgrade",
-      "published": "2099-12-31",
+      "published": "2026-11-04",
       "lines": [
         "Times followed your browser, which was off when you travel or work in another time zone.",
         "Each person can now pick a time zone, or keep Automatic to follow the browser.",

@@ -972,6 +972,8 @@ interface RunContext {
   agentRunId: string | null;
   /** The language the person set Chat to answer in (Settings › Chat); null: their question's. */
   answerLanguage: Language | null;
+  /** The person shows "Thought for N s" above answers (Settings › Chat; on unless turned off). */
+  showThought: boolean;
   /** The brands this request noted on the chat already (touched-brands.ts); '*': the workspace. */
   touchedNoted?: Set<string>;
   /**
@@ -1142,6 +1144,21 @@ async function readAnswerLanguage(userId: string): Promise<Language | null> {
   return value && Object.hasOwn(LANGUAGES, value) ? (value as Language) : null;
 }
 
+/**
+ * Whether the person shows "Thought for N s" above answers (Settings › Chat ›
+ * General, chat_user_prefs.show_thought, 00408): on unless they turned it
+ * off, and on when the read fails.
+ */
+async function readShowThought(userId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_user_prefs')
+    .select('show_thought')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) return true;
+  return (data as { show_thought?: boolean | null } | null)?.show_thought !== false;
+}
+
 async function openContext(
   actor: ChatActor,
   run: LoadedRun,
@@ -1186,6 +1203,7 @@ async function openContext(
   const brand = progress.brandId ? await readBrand(progress.brandId, actor.organizationId) : null;
   const { agentRunId, scheduleId } = await readChatOwner(run.conversationId);
   const answerLanguage = await readAnswerLanguage(actor.userId);
+  const showThought = await readShowThought(actor.userId);
   const scope: RunScope = {
     brandId: brand?.id ?? null,
     brandIsDemo: brand ? await readBrandIsDemo(brand.id) : false,
@@ -1228,6 +1246,7 @@ async function openContext(
     openDraft,
     agentRunId,
     answerLanguage,
+    showThought,
     // The job's own run only: a person's message in its chat is theirs.
     scheduleId: progress.scheduled ? scheduleId : null,
     sessionUserId,
@@ -2270,6 +2289,10 @@ class TextOut {
     }
     const out = checked.text;
     if (!out) return;
+    // The answer's first words: how long the run thought before them, for those who show it.
+    if (this.rc.showThought && this.rc.progress.thoughtMs === undefined) {
+      this.rc.progress.thoughtMs = Math.max(0, Math.round(workedMs(this.rc)));
+    }
     this.rc.progress.text += out;
     this.rc.sink.emit('text.delta', { text: out });
   }
@@ -4652,6 +4675,7 @@ function summaryOf(progress: RunProgress, workingMs: number): ChatRunSummary {
     workingMs: Math.max(0, Math.round(workingMs)),
     stepCount: progress.steps,
     sources: Object.entries(progress.sources).map(([label, count]) => ({ label, count })),
+    ...(progress.thoughtMs !== undefined ? { thoughtMs: progress.thoughtMs } : {}),
   };
 }
 
