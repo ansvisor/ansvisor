@@ -27,7 +27,7 @@ Work through the brand's Action Center actions, highest priority first, and prep
 
 ## Steps
 
-1. Read the open actions and rank them by impact and due date. Say which ones you will work on, at most four in one run.
+1. Read the open actions and rank them by impact and due date. Finish at most two tasks in one run, the highest first, and say which ones; the rest wait for the next run. Take no third task, even when there is time left.
 2. Check the pages the tasks name, from their latest Site Audit.
 3. Prepare each task's work: an FAQ block, a rewritten passage, schema code or a new page, as its How says. Show a change to a passage AI cites before it is made.
 4. Save page work as a draft with `create_draft`; the app asks the person first when it should.
@@ -37,7 +37,7 @@ Work through the brand's Action Center actions, highest priority first, and prep
 
 ## Output
 
-A list of the actions worked on, each with what was made (and where it is), what is left for the person, and its "Done when" check. Then the actions not reached, by priority.
+Start with how many open tasks this run finished, for example "2 of 6 tasks done; the rest go in the next run." Then a list of the actions worked on, each with what was made (and where it is), what is left for the person, and its "Done when" check. Then the actions not reached, by priority.
 
 ## Don't
 
