@@ -1,11 +1,19 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { TakeDownDialog } from '@/components/content/take-down-dialog';
+import { RoleContext } from '@/components/providers/role-provider';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Link } from '@/i18n/navigation';
 import { Send } from 'lucide-react';
-import { closeChatNotice, markChatNoticesRead, type ChatNotice } from '@/lib/actions/chat-notices';
+import {
+  closeChatNotice,
+  markChatNoticesRead,
+  type ChatNotice,
+  type ScheduleNotice,
+} from '@/lib/actions/chat-notices';
+import { hostOf } from '@/lib/action-center/affected';
 import { CMS_NAMES } from '@/lib/content/cms-names';
 import { cn } from '@/lib/utils';
 import { INBOX_ROW } from './inbox-suggestions';
@@ -16,9 +24,11 @@ import { INBOX_ROW } from './inbox-suggestions';
  * or all of their monthly limit on it (§4.2 item 4), with the way to the
  * limit. Admins get them; a row goes once the key works again, the month
  * renews or the limit is raised. An agent sent a page out on its own, with
- * Open page and Open run; or an edit stopped it, with Open agent
- * (AUTONOMOUS-GO-LIVE §6.4, §7.2, 00446): its owner and the people it
- * notifies get them, and opening one closes it. Shown, they are marked read.
+ * Open page and Open run, and Take down for a page it published (PR 10); or
+ * an edit stopped it, with Open agent (AUTONOMOUS-GO-LIVE §6.4, §7.2,
+ * 00446): its owner and the people it notifies get them, and opening one
+ * closes it. A scheduled job's run failed, or the job paused (00461), with
+ * Open. Shown, they are marked read.
  */
 export function NoticeRows({ notices }: { notices: ChatNotice[] }) {
   const unread = notices
@@ -40,6 +50,9 @@ function NoticeRow({ notice }: { notice: ChatNotice }) {
       return <WentLiveRow notice={notice} />;
     case 'agent_go_live_off':
       return <GoLiveOffRow notice={notice} />;
+    case 'schedule_failed':
+    case 'schedule_paused':
+      return <ScheduleNoticeRow notice={notice} />;
     default:
       return <KeyFailedRow notice={notice} />;
   }
@@ -60,6 +73,36 @@ const dollars = (usd: number) =>
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(usd);
+
+/** A scheduled job's notice (00461): "{Job} didn't run", or "{Job} is paused", why, and Open. */
+function ScheduleNoticeRow({ notice }: { notice: ScheduleNotice }) {
+  const t = useTranslations('chatShell.inbox.notice');
+  return (
+    <div data-slot="inbox-notice" data-kind={notice.kind} className={NOTICE_ROW}>
+      <span aria-hidden className="size-2 rounded-full bg-amber-600 dark:bg-amber-400" />
+      <span className="min-w-0 text-[13.5px]">
+        <span className={cn('block truncate', !notice.read && 'font-semibold')}>
+          {t(notice.kind === 'schedule_failed' ? 'scheduleFailed' : 'schedulePaused', {
+            title: notice.title,
+          })}
+        </span>
+        <span className="block truncate text-xs text-amber-700 dark:text-amber-400">
+          {notice.reason}
+        </span>
+      </span>
+      <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+        {dayOf(notice.createdAt)}
+      </span>
+      <Link
+        href={notice.href}
+        data-action="inbox.openSchedule"
+        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full')}
+      >
+        {t('open')}
+      </Link>
+    </div>
+  );
+}
 
 function KeyLimitRow({ notice }: { notice: Extract<ChatNotice, { kind: 'own_key_limit' }> }) {
   const t = useTranslations('chatShell.inbox.notice');
@@ -147,15 +190,27 @@ const INFO_ROW = cn(
 /** Opening it closes it (00446): it leaves Needs you on the next read. */
 const closeOnOpen = (id: string) => () => void closeChatNotice(id);
 
+/** How long a published page's notice offers Take down (§6.4); the Library does after. */
+const TAKE_DOWN_MS = 30 * 24 * 60 * 60 * 1000;
+
 /**
  * An agent sent a page out on its own (AUTONOMOUS-GO-LIVE §6.4): what, to
  * which CMS, as a draft there; Open page, and Open run beside why it could.
  */
 function WentLiveRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_went_live' }> }) {
   const t = useTranslations('chatShell.inbox.notice');
+  const tTakeDown = useTranslations('contentEditor.takeDown');
+  const { role } = useContext(RoleContext);
+  const [takingDown, setTakingDown] = useState(false);
+  const [takenDown, setTakenDown] = useState(false);
+  // Read once: an older notice leaves Take down to the Library.
+  const [recent] = useState(() => Date.now() - Date.parse(notice.createdAt) < TAKE_DOWN_MS);
   const cms = CMS_NAMES[notice.target];
   // Published live (PR 9): on its site, Open page opens the live page.
-  const site = notice.url ? siteOf(notice.url) : null;
+  const site = notice.url ? hostOf(notice.url) : null;
+  const live = notice.url !== null && !takenDown;
+  // Take down (PR 10): an Admin's or a Manager's click, never the agent's.
+  const canTakeDown = live && recent && (role === 'admin' || role === 'manager');
   const words = site
     ? t('published', { agent: notice.agent, title: notice.title, site })
     : t('wentLive', { agent: notice.agent, title: notice.title, cms });
@@ -172,7 +227,11 @@ function WentLiveRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_we
         </span>
         <span className="block truncate text-xs text-muted-foreground">
           {/* The headline may be cut on a long title: the site it went live on stays readable. */}
-          {site ? t('publishedDetail', { site }) : t('wentLiveDetail')}
+          {takenDown
+            ? t('takenDown', { cms })
+            : site
+              ? t('publishedDetail', { site })
+              : t('wentLiveDetail')}
           {notice.chatId && (
             <>
               {' · '}
@@ -186,12 +245,25 @@ function WentLiveRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_we
               </Link>
             </>
           )}
+          {canTakeDown && (
+            <>
+              {' · '}
+              <button
+                type="button"
+                data-action="inbox.takeDown"
+                onClick={() => setTakingDown(true)}
+                className="text-red-700 underline underline-offset-2 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
+              >
+                {tTakeDown('action')}
+              </button>
+            </>
+          )}
         </span>
       </span>
       <span className="text-[11px] whitespace-nowrap text-muted-foreground">
         {dayOf(notice.createdAt)}
       </span>
-      {notice.url ? (
+      {live && notice.url ? (
         <a
           href={notice.url}
           target="_blank"
@@ -211,6 +283,18 @@ function WentLiveRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_we
         >
           {t('openPage')}
         </Link>
+      )}
+      {takingDown && (
+        <TakeDownDialog
+          page={{
+            draftId: notice.draftId,
+            title: notice.title,
+            url: notice.url,
+            target: notice.target,
+          }}
+          onClose={() => setTakingDown(false)}
+          onDone={() => setTakenDown(true)}
+        />
       )}
     </div>
   );
@@ -243,13 +327,4 @@ function GoLiveOffRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_g
       </Link>
     </div>
   );
-}
-
-/** The site a live page is on, as its notice names it: its host, without www. */
-function siteOf(url: string): string | null {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return null;
-  }
 }

@@ -35,6 +35,11 @@ import { LoadingDots } from '@/components/ui/loading-dots';
 import { cn } from '@/lib/utils';
 import { getTopics } from '@/lib/actions/topic';
 import { getBrandPrompts } from '@/lib/actions/tracking';
+import {
+  getOpportunityAvailability,
+  type NeedCounts,
+  type OpportunityAvailability,
+} from '@/lib/actions/content';
 
 export type NewOpportunitiesFocus = 'auto' | 'topic' | 'prompt';
 
@@ -62,6 +67,11 @@ interface Option {
  * the dialog says what the request will use before it is sent. A prompt
  * belongs to one prompt group, which gets one opportunity, so a request for
  * a prompt asks for one.
+ *
+ * Each need (prompt group) gets one opportunity, so the dialog reads what is
+ * still open (getOpportunityAvailability): it caps the count at the focus's
+ * needs without one, says when there are none, and offers a prompt's open
+ * opportunity instead of a request that would write nothing.
  */
 export function NewOpportunitiesDialog({
   open,
@@ -76,6 +86,8 @@ export function NewOpportunitiesDialog({
   /** What is left of the month; -1 when unlimited. */
   remaining: number;
   onSubmit: (input: NewOpportunitiesInput) => Promise<boolean>;
+  /** Opens an existing opportunity, for a prompt whose need already has one. */
+  onOpenExisting?: (id: string) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -92,12 +104,14 @@ function NewOpportunitiesForm({
   max,
   remaining,
   onSubmit,
+  onOpenExisting,
   onClose,
 }: {
   brandId: string;
   max: number;
   remaining: number;
   onSubmit: (input: NewOpportunitiesInput) => Promise<boolean>;
+  onOpenExisting?: (id: string) => void;
   onClose: () => void;
 }) {
   const t = useTranslations('content.newDialog');
@@ -110,6 +124,8 @@ function NewOpportunitiesForm({
   const [submitting, setSubmitting] = useState(false);
   const [topics, setTopics] = useState<Option[]>([]);
   const [prompts, setPrompts] = useState<Option[]>([]);
+  // Unknown until read, or when the read fails: the dialog then works as before.
+  const [availability, setAvailability] = useState<OpportunityAvailability | null>(null);
 
   // The brand's topics and prompts, not only the ones that already have
   // opportunities.
@@ -125,18 +141,35 @@ function NewOpportunitiesForm({
       },
       () => undefined,
     );
+    getOpportunityAvailability(brandId).then(
+      (result) => !cancelled && setAvailability(result),
+      () => undefined,
+    );
     return () => {
       cancelled = true;
     };
   }, [brandId]);
 
-  const cap = focus === 'prompt' ? Math.min(1, max) : max;
+  // The focus's needs by what New can still do for them.
+  const needs: NeedCounts | null = !availability
+    ? null
+    : focus === 'auto'
+      ? availability
+      : focus === 'topic' && topicId
+        ? (availability.topics[topicId] ?? { open: 0, covered: 0, noAnswers: 0 })
+        : null;
+  // The prompt's need already has an open opportunity: offer that one.
+  const existingId =
+    focus === 'prompt' && prompt ? availability?.promptOpportunity[prompt.value] : undefined;
+
+  const cap = focus === 'prompt' ? Math.min(1, max) : needs ? Math.min(max, needs.open) : max;
   // Kept as chosen, so leaving the prompt focus brings the count back.
   const count = Math.min(chosenCount, Math.max(1, cap));
 
   const focusReady =
     focus === 'auto' || (focus === 'topic' && !!topicId) || (focus === 'prompt' && !!prompt);
-  const canSubmit = max > 0 && count >= 1 && count <= cap && focusReady && !submitting;
+  const canSubmit =
+    max > 0 && count >= 1 && count <= cap && focusReady && !existingId && !submitting;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -184,11 +217,19 @@ function NewOpportunitiesForm({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {topics.map((tp) => (
-                  <SelectItem key={tp.value} value={tp.value}>
-                    {tp.label}
-                  </SelectItem>
-                ))}
+                {topics.map((tp) => {
+                  const open = availability ? (availability.topics[tp.value]?.open ?? 0) : null;
+                  return (
+                    <SelectItem key={tp.value} value={tp.value}>
+                      <span className="min-w-0 flex-1 truncate">{tp.label}</span>
+                      {open !== null && (
+                        <span className="ml-2 shrink-0 text-muted-foreground">
+                          {open ? t('topicOpen', { count: open }) : t('topicCovered')}
+                        </span>
+                      )}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           )}
@@ -209,12 +250,50 @@ function NewOpportunitiesForm({
                     {(item: Option) => (
                       <ComboboxItem key={item.value} value={item} title={item.label}>
                         <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                        {availability?.promptOpportunity[item.value] && (
+                          <span className="ml-2 shrink-0 text-xs text-muted-foreground">
+                            {t('promptHasOne')}
+                          </span>
+                        )}
                       </ComboboxItem>
                     )}
                   </ComboboxCollection>
                 </ComboboxList>
               </ComboboxContent>
             </Combobox>
+          )}
+          {needs &&
+            (needs.open > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {t('needsOpen', {
+                  open: needs.open,
+                  needs: needs.open + needs.covered + needs.noAnswers,
+                  focus,
+                })}
+              </p>
+            ) : (
+              <p className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                {t('needsNone', { focus, noAnswers: needs.noAnswers })}
+              </p>
+            ))}
+          {existingId && (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+              <span>{t('promptExisting')}</span>
+              {onOpenExisting && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 shrink-0 text-xs"
+                  onClick={() => {
+                    onOpenExisting(existingId);
+                    onClose();
+                  }}
+                >
+                  {t('openExisting')}
+                </Button>
+              )}
+            </div>
           )}
         </div>
 
@@ -262,23 +341,26 @@ function NewOpportunitiesForm({
               </Button>
             </div>
             <span className="text-xs text-muted-foreground">
-              {focus === 'prompt' ? t('promptOne') : t('max', { max })}
+              {focus === 'prompt' ? t('promptOne') : cap > 0 && t('max', { max: cap })}
             </span>
           </div>
         </div>
 
-        <p
-          className={cn(
-            'rounded-md border bg-muted/40 px-3 py-2 text-xs',
-            max === 0 && 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
-          )}
-        >
-          {max === 0
-            ? t('noneLeft')
-            : remaining === -1
-              ? t('usesUnlimited', { count })
-              : t('uses', { count, remaining, after: Math.max(0, remaining - count) })}
-        </p>
+        {/* Nothing to use when the focus has nothing left or the prompt has one. */}
+        {(max === 0 || (cap > 0 && !existingId)) && (
+          <p
+            className={cn(
+              'rounded-md border bg-muted/40 px-3 py-2 text-xs',
+              max === 0 && 'border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400',
+            )}
+          >
+            {max === 0
+              ? t('noneLeft')
+              : remaining === -1
+                ? t('usesUnlimited', { count })
+                : t('uses', { count, remaining, after: Math.max(0, remaining - count) })}
+          </p>
+        )}
       </div>
 
       <DialogFooter>

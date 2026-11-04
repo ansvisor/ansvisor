@@ -59,6 +59,21 @@ describe('connectedKinds', () => {
       }),
     ).toEqual(new Set(['google_search_console', 'google_analytics']));
   });
+
+  it('given the sign-ins, counts a property only while its Google sign-in is connected', () => {
+    const rows = { ...none, brand: { gsc_property: 'sc-domain:a.example', ga_property_id: '123' } };
+    // Disconnected in Settings: the property is kept, the sign-in gone.
+    expect(connectedKinds(rows, [])).toEqual(new Set());
+    expect(
+      connectedKinds(rows, [
+        { provider: 'google-search-console', status: 'connected' },
+        { provider: 'google-analytics', status: 'error' },
+      ]),
+    ).toEqual(new Set(['google_search_console']));
+    expect(connectedKinds(rows, [{ provider: 'google-analytics', status: 'connected' }])).toEqual(
+      new Set(['google_analytics']),
+    );
+  });
 });
 
 describe('connectionGaps', () => {

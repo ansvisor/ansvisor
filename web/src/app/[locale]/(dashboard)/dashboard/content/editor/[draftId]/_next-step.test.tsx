@@ -49,6 +49,8 @@ async function render(
     todoLine = null as string | null,
     blocked = (() => null) as (action: string) => string | null,
     working = null as { run: AgentRun | null; onStop: () => void; stopping: boolean } | null,
+    raises = [] as { line: string; gain: string | null }[],
+    cost = null as { minutes: number; percent: number | null } | null,
   } = {},
 ) {
   await act(async () => {
@@ -65,13 +67,15 @@ async function render(
           onSkip={onSkip}
           blocked={blocked}
           working={working}
+          raises={raises}
+          cost={cost}
         />
       </NextIntlClientProvider>,
     );
   });
 }
 const trigger = () => container.querySelector('button')!;
-const popup = () => document.querySelector('[data-slot="popover-content"]');
+const popup = () => document.querySelector('[data-slot="dialog-content"]');
 const button = (name: string) =>
   [...(popup()?.querySelectorAll('button') ?? [])].find((b) => b.textContent === name);
 const path = () => [...popup()!.querySelectorAll('ol li')].map((li) => li.textContent);
@@ -99,11 +103,21 @@ describe('NextStepButton', () => {
     expect(onOpenChange).toHaveBeenCalledWith(true, expect.anything());
   });
 
-  it('counts the rules the agent can fix, and says how many more the Rules tab counts', async () => {
+  it('counts the open rules once, as Rules does, and how many the agent can fix (editor UX review 2026-11-03)', async () => {
     // Length far off and a rule held by quoted passages: open in the Rules tab, not for Fix.
     await render(state({ method: 'optimize', openRules: ['faq'], openTotal: 3 }));
     expect(popup()!.textContent).toContain(
-      '1 rule is still open for the agent. Small, reviewable changes for them. 2 more are yours to decide in the Rules tab.',
+      '3 rules are open: Content Agent can fix 1 in small, reviewable changes, and 2 are yours to decide in the Rules tab.',
+    );
+    // As many as a Fix is sent, its Length among them: as Rules counts them.
+    await render(state({ method: 'optimize', openRules: ['faq'], openTotal: 3, fixable: 2 }));
+    expect(popup()!.textContent).toContain(
+      '3 rules are open: Content Agent can fix 2 in small, reviewable changes, and 1 is yours',
+    );
+    // All of them the agent's.
+    await render(state({ method: 'optimize', openRules: ['faq', 'summary'], openTotal: 2 }));
+    expect(popup()!.textContent).toContain(
+      '2 rules are open, all for the agent. Small, reviewable changes for them.',
     );
   });
 
@@ -151,7 +165,13 @@ describe('NextStepButton', () => {
     const step = [...popup()!.querySelectorAll('ol li')].find((li) =>
       li.textContent?.includes('Fix open rules'),
     )!;
-    expect(step.textContent).toContain('yours in the Rules tab');
+    expect(step.textContent).toContain('the rest is in Rules');
+    // Ticked and its bar filled, as a done step's (editor test 2026-11-03:
+    // shown like one ahead, it read as never done).
+    expect(step.querySelector('svg')).not.toBeNull();
+    const bars = [...popup()!.querySelectorAll('i')].map((bar) => bar.className);
+    expect(bars[2]).toContain('bg-foreground');
+    expect(bars[2]).not.toContain('bg-foreground/');
     const name = [...step.querySelectorAll('span')].find(
       (s) => s.textContent === 'Fix open rules',
     )!;
@@ -159,7 +179,7 @@ describe('NextStepButton', () => {
     // The note says what is still the person's: never crossed out, by
     // itself or by what holds it.
     const note = [...step.querySelectorAll('span')].find(
-      (s) => s.textContent === '· yours in the Rules tab',
+      (s) => s.textContent === 'done by Content Agent, the rest is in Rules',
     )!;
     expect(note.className).not.toContain('line-through');
     expect(name.parentElement!.className).not.toContain('line-through');
@@ -244,6 +264,96 @@ describe('NextStepButton', () => {
   });
 });
 
+describe('the step’s words (editor UX review 2026-11-03)', () => {
+  it('names the suggestions to review, and Review is the person’s', async () => {
+    await render(state({ openRules: ['faq'], waiting: 2 }));
+    expect(popup()!.textContent).toContain('Review 2 suggestions');
+    expect(popup()!.textContent).toContain('Content Agent left 2 suggestions on the page.');
+    const review = [...popup()!.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Review',
+    )!;
+    await act(async () => review.click());
+    expect(onAction).toHaveBeenCalledWith('review');
+    expect(
+      stepActor({ id: 'review', primary: 'review', alternative: null, skippable: false }),
+    ).toBe('you');
+  });
+
+  it('says a page marked ready has steps left, never that every step is done', async () => {
+    await render(
+      state({
+        open: false,
+        openRules: ['faq'],
+      }),
+    );
+    expect(popup()!.textContent).toContain('Marked ready with 1 step still open: see All steps.');
+    expect(popup()!.textContent).not.toContain('Every step is done');
+    expect(popup()!.textContent).toContain('1 step still open');
+    const fix = [...popup()!.querySelectorAll('ol li')].find((li) =>
+      li.textContent?.includes('Fix open rules'),
+    )!;
+    expect(fix.textContent).toContain('skipped');
+    expect(fix.querySelector('svg')).toBeNull();
+    // Nothing left: as before.
+    await render(state({ open: false }));
+    expect(popup()!.textContent).toContain('Every step is done.');
+  });
+
+  it('asks for sources when the brief has nothing to build from', async () => {
+    await render(state({ hasBrief: false, briefSources: false }));
+    expect(popup()!.textContent).toContain('Add one in Sources first.');
+    expect([...popup()!.querySelectorAll('button')].map((b) => b.textContent)).toContain(
+      'Add sources',
+    );
+  });
+});
+
+describe('the window (the user, 2026-11-03)', () => {
+  it('says who takes the step and what raises the score, the most first, with its points', async () => {
+    await render(state({ quality: { trust: 54, trustLow: true, todos: [] } }), {
+      raises: [
+        { line: 'Fill 5 placeholders', gain: '+15 E-E-A-T' },
+        { line: '4 links don’t work', gain: '+38 Trust' },
+        { line: 'Direct answer under each H2', gain: null },
+      ],
+    });
+    const right = popup()!.querySelector('section')!;
+    expect(right.textContent).toContain('Only you can take this step');
+    expect(right.textContent).toContain('Add proof and author');
+    const items = [...right.querySelectorAll('ul li')].map((li) => li.textContent);
+    expect(items).toEqual([
+      '+15 E-E-A-TFill 5 placeholders',
+      '+38 Trust4 links don’t work',
+      'Direct answer under each H2',
+    ]);
+    // Every step on the left.
+    expect(popup()!.querySelectorAll('aside ol li')).toHaveLength(5);
+    // The agent's step says so.
+    await render(state({ openRules: ['faq'] }));
+    expect(popup()!.querySelector('section')!.textContent).toContain(
+      'Content Agent takes this step',
+    );
+    // Nothing to list: no heading for it.
+    expect(popup()!.textContent).not.toContain('What raises it');
+  });
+
+  it('says how long the agent’s step takes and its share of the month’s AI usage', async () => {
+    await render(state({ openRules: ['faq'] }), { cost: { minutes: 1, percent: 3.4 } });
+    expect(popup()!.textContent).toContain("About 1 minute · 3% of this month's AI usage");
+    await render(state({ openRules: ['faq'] }), { cost: { minutes: 2, percent: 0.4 } });
+    expect(popup()!.textContent).toContain("About 2 minutes · <1% of this month's AI usage");
+    // Unlimited, or unread: the time alone.
+    await render(state({ openRules: ['faq'] }), { cost: { minutes: 2, percent: null } });
+    expect(popup()!.textContent).toContain('About 2 minutes');
+    expect(popup()!.textContent).not.toContain('AI usage');
+    // The person's step: none.
+    await render(state({ quality: { trust: 54, trustLow: true, todos: [] } }), {
+      cost: { minutes: 1, percent: 3 },
+    });
+    expect(popup()!.textContent).not.toContain('About 1 minute');
+  });
+});
+
 describe('stepActor', () => {
   it('gives the agent its runs and the person the rest', () => {
     const actor = (primary: Parameters<typeof stepActor>[0]['primary']) =>
@@ -258,12 +368,13 @@ describe('stepActor', () => {
           'pickAuthor',
           'addAuthor',
           'showTodos',
+          'showTrust',
           'beforePublish',
           'markReady',
           'export',
         ] as const
       ).map(actor),
-    ).toEqual(['you', 'you', 'you', 'you', 'you', 'you', 'you']);
+    ).toEqual(['you', 'you', 'you', 'you', 'you', 'you', 'you', 'you']);
   });
 });
 
