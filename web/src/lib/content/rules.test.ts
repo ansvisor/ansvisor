@@ -1128,7 +1128,9 @@ describe('rewriteAdvice', () => {
       suggested: 6_500,
     });
     // Never a Length past the page as it is.
-    expect(lengthOutOfReach(statuses(4_900, [], '4000'), run)?.suggested).toBe(5_000);
+    expect(lengthOutOfReach(statuses(4_900, [], '4000'), { ...run, floor: 5_100 })?.suggested).toBe(
+      5_000,
+    );
     // Rewritten with its cited passages too (it kept less): still missing says keeping them misses too…
     const citedToo = { ...run, last: { chars: 5_200, target: 4_000, kept: 0 } };
     expect(lengthOutOfReach(page, citedToo)).toMatchObject({ why: 'reached', least: 5_200 });
@@ -1140,6 +1142,23 @@ describe('rewriteAdvice', () => {
         last: { ...citedToo.last, chars: 4_500 },
       }),
     ).toMatchObject({ why: 'floor', least: 5_000 });
+  });
+
+  it('rewrites again from a page that took the last rewrite, missed or not (editor test 2026-11-03)', () => {
+    // A rewrite for 4,000 came to 5,468 and was accepted: the page is that long now.
+    const run = { kept: 3_125, floor: 4_300, last: { chars: 5_468, target: 4_000, kept: 3_125 } };
+    expect(lengthOutOfReach(statuses(5_468, [], '4000'), run)).toBeNull();
+    // A little edited since, or shorter: still rewritten from there.
+    expect(lengthOutOfReach(statuses(5_600, [], '4000'), run)).toBeNull();
+    expect(lengthOutOfReach(statuses(5_000, [], '4000'), run)).toBeNull();
+    // 30% off or more: a rewrite is recommended again.
+    expect(rewriteAdvice(statuses(5_468, [], '4000'), run)).toMatchObject({ reason: 'length' });
+    // From a page still well past what it came to (it was rejected): another won't get further.
+    expect(lengthOutOfReach(statuses(5_800, [], '4000'), run)).toMatchObject({ why: 'reached' });
+    // The estimate still holds a page whose kept blocks and headings are past the Length.
+    expect(lengthOutOfReach(statuses(5_468, [], '4000'), { ...run, floor: 5_100 })).toMatchObject({
+      why: 'floor',
+    });
   });
 
   it('names what a rewrite keeps as why it missed only when that alone puts the Length out of reach', () => {

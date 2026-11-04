@@ -590,7 +590,15 @@ export type SaveMemoryInput = z.input<typeof saveMemoryInput>;
 
 /** What a save did: a line kept (new, or its old one replaced), or a request sent to the Admins. */
 export type SavedMemory =
-  | { saved: true; id: string; scope: MemoryScope; text: string; replaced: boolean }
+  | {
+      saved: true;
+      id: string;
+      scope: MemoryScope;
+      text: string;
+      replaced: boolean;
+      /** A Brand line's brand, for its step ("Brand: Northwind"). */
+      brandName: string | null;
+    }
   | { requested: true };
 
 /** A save as the checks found it. */
@@ -664,7 +672,8 @@ export async function saveMemory(
 ): Promise<MemoryResult<SavedMemory>> {
   const checked = await checkMemorySave(viewer, raw, approval ? 'approval' : source);
   if (!checked.ok) return checked;
-  const { scope, text, key, replaced, right } = checked.value;
+  const { scope, text, key, brand, replaced, right } = checked.value;
+  const brandName = brand?.name ?? null;
 
   if (right === 'request') {
     // The server's own request: the browser's can't carry a drafted line (requestAccess).
@@ -693,7 +702,10 @@ export async function saveMemory(
     if (isFull(error)) return memoryRefusal('full');
     if (error) throw new Error(`Could not save the memory: ${error.message}`);
     if ((data ?? []).length === 0) return memoryRefusal('not_found');
-    return { ok: true, value: { saved: true, id: replaced.id, scope, text, replaced: true } };
+    return {
+      ok: true,
+      value: { saved: true, id: replaced.id, scope, text, replaced: true, brandName },
+    };
   }
 
   const { data, error } = await supabaseAdmin
@@ -713,7 +725,14 @@ export async function saveMemory(
   if (error || !data) throw new Error(`Could not save the memory: ${error?.message ?? 'no row'}`);
   return {
     ok: true,
-    value: { saved: true, id: (data as { id: string }).id, scope, text, replaced: false },
+    value: {
+      saved: true,
+      id: (data as { id: string }).id,
+      scope,
+      text,
+      replaced: false,
+      brandName,
+    },
   };
 }
 
@@ -941,9 +960,6 @@ export async function visibleMemoryLine(
   const row = await readVisible(viewer, id);
   return row ? { id: row.id, scope: scopeOf(row), text: row.text } : null;
 }
-
-/** "Replaces: {old}", under a save's card (item 7). */
-export const replacesWords = (text: string) => memoryT('card.replaces', { text });
 
 /** A brand of the workspace's name, for a card's words; null when there's none. */
 export async function brandNameOf(organizationId: string, brandId: string): Promise<string | null> {

@@ -175,6 +175,7 @@ describe('saveMemory (items 7, 10, 12, 19, 25)', () => {
         scope: 'user',
         text: 'Write blog posts in US English',
         replaced: false,
+        brandName: null,
       },
     });
     expect(live()).toEqual([

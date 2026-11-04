@@ -30,19 +30,29 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
   listMembers,
   listInvitations,
+  listShareableBrands,
   inviteMember,
   revokeInvitation,
   resendInvitation,
+  setMemberBrands,
   updateMemberRole,
   removeMember,
   getTeamInfo,
+  type BrandAccessChoice,
+  type ShareableBrand,
   type TeamMember,
   type TeamInvitation,
   type TeamInfo,
   type TeamRole,
 } from '@/lib/actions/team';
 import {
+  BrandAccessField,
+  brandAccessLabel,
+  isBrandChoiceComplete,
+} from '@/components/settings/brand-access-field';
+import {
   ArrowUpRight,
+  Building2,
   Copy,
   Loader2,
   Lock,
@@ -92,6 +102,8 @@ export function TeamSection() {
   const [info, setInfo] = useState<TeamInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [currentRole, setCurrentRole] = useState<TeamRole | null>(null);
+  // The brands an admin may share (BRAND-ACCESS §3.2); none for anyone else.
+  const [brands, setBrands] = useState<ShareableBrand[]>([]);
 
   const loadData = useCallback(async () => {
     try {
@@ -101,6 +113,7 @@ export function TeamSection() {
       setInfo(inf);
       const me = m.find((mem) => mem.isCurrentUser);
       setCurrentRole(me?.role ?? null);
+      if (me?.role === 'admin' && inf.multiBrand) setBrands(await listShareableBrands());
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('team_loadFailed'));
     } finally {
@@ -113,6 +126,8 @@ export function TeamSection() {
   }, [loadData]);
 
   const isAdmin = currentRole === 'admin';
+  // Brands to choose only on a plan with more than one (BRAND-ACCESS §9 Q1).
+  const multiBrand = Boolean(info?.multiBrand);
   const seatsLabel = info
     ? info.maxTeamMembers === -1
       ? t('team_seatsUsedUnlimited', { count: info.seatsUsed })
@@ -133,6 +148,7 @@ export function TeamSection() {
           {isAdmin && info && (
             <InviteDialog
               canInvite={info.canInvite}
+              brands={multiBrand ? brands : []}
               onInvited={() => {
                 loadData();
               }}
@@ -153,6 +169,8 @@ export function TeamSection() {
                     key={member.userId}
                     member={member}
                     isAdmin={isAdmin}
+                    showBrands={multiBrand && (isAdmin || member.isCurrentUser)}
+                    brands={brands}
                     onChanged={loadData}
                   />
                 ))}
@@ -199,6 +217,7 @@ export function TeamSection() {
                   key={inv.id}
                   invitation={inv}
                   isAdmin={isAdmin}
+                  showBrands={multiBrand && isAdmin}
                   onChanged={loadData}
                 />
               ))}
@@ -213,12 +232,18 @@ export function TeamSection() {
 function MemberRow({
   member,
   isAdmin,
+  showBrands,
+  brands,
   onChanged,
 }: {
   member: TeamMember;
   isAdmin: boolean;
+  /** The member's brands: an admin sees everyone's, anyone else their own. */
+  showBrands: boolean;
+  brands: ShareableBrand[];
   onChanged: () => void;
 }) {
+  const tBrands = useTranslations('settings.teamBrands');
   const t = useTranslations('settings');
   const [pendingRole, setPendingRole] = useState<TeamRole | null>(null);
   const [removing, setRemoving] = useState(false);
@@ -277,6 +302,15 @@ function MemberRow({
           <p className="truncate text-xs text-muted-foreground">{member.email}</p>
         )}
       </div>
+
+      {showBrands &&
+        (canEdit && member.role !== 'admin' ? (
+          <EditBrandsDialog member={member} brands={brands} onChanged={onChanged} />
+        ) : (
+          <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+            {brandAccessLabel(tBrands, member.brandAccess)}
+          </span>
+        ))}
 
       {canEdit ? (
         <Select
@@ -341,13 +375,17 @@ function MemberRow({
 function InvitationRow({
   invitation,
   isAdmin,
+  showBrands,
   onChanged,
 }: {
   invitation: TeamInvitation;
   isAdmin: boolean;
+  /** The brands it shares: admins only. */
+  showBrands: boolean;
   onChanged: () => void;
 }) {
   const t = useTranslations('settings');
+  const tBrands = useTranslations('settings.teamBrands');
   const [busy, setBusy] = useState<'revoke' | 'resend' | null>(null);
   // A read-only workspace (plan not active): Resend opens the upgrade dialog
   // instead. Revoke stays open: it ends an invitation's access.
@@ -396,6 +434,11 @@ function InvitationRow({
             : t('team_expires', { date: formatDate(invitation.expiresAt) })}
         </p>
       </div>
+      {showBrands && (
+        <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+          {brandAccessLabel(tBrands, invitation.brandAccess)}
+        </span>
+      )}
       <Badge variant="outline">{roleLabel(t, invitation.role)}</Badge>
       {isAdmin && (
         <DropdownMenu>
@@ -436,11 +479,24 @@ function InvitationRow({
   );
 }
 
-function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited: () => void }) {
+const ALL_BRANDS: BrandAccessChoice = { scope: 'all', brandIds: [] };
+
+function InviteDialog({
+  canInvite,
+  brands,
+  onInvited,
+}: {
+  canInvite: boolean;
+  /** The brands to choose from; none hides the choice (one brand, or not an admin). */
+  brands: ShareableBrand[];
+  onInvited: () => void;
+}) {
   const t = useTranslations('settings');
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<TeamRole>('analyst');
+  const [brandAccess, setBrandAccess] = useState<BrandAccessChoice>(ALL_BRANDS);
+  const brandsComplete = isBrandChoiceComplete(brandAccess, role === 'admin');
   const [submitting, setSubmitting] = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(true);
@@ -451,6 +507,7 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
   function reset() {
     setEmail('');
     setRole('analyst');
+    setBrandAccess(ALL_BRANDS);
     setInviteLink(null);
     setEmailSent(true);
   }
@@ -462,7 +519,11 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
     }
     setSubmitting(true);
     try {
-      const result = await inviteMember(email.trim(), role);
+      const result = await inviteMember(
+        email.trim(),
+        role,
+        role === 'admin' ? ALL_BRANDS : brandAccess,
+      );
       if ('error' in result) {
         toast.error(result.error);
         return;
@@ -556,6 +617,15 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
                 </SelectContent>
               </Select>
             </div>
+            {brands.length > 0 && (
+              <BrandAccessField
+                brands={brands}
+                value={brandAccess}
+                onChange={setBrandAccess}
+                adminRole={role === 'admin'}
+                disabled={submitting}
+              />
+            )}
           </div>
         )}
 
@@ -565,7 +635,7 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
           ) : (
             <>
               <DialogClose render={<Button variant="outline" />}>{t('team_cancel')}</DialogClose>
-              <Button onClick={handleSubmit} disabled={submitting}>
+              <Button onClick={handleSubmit} disabled={submitting || !brandsComplete}>
                 {submitting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -577,6 +647,99 @@ function InviteDialog({ canInvite, onInvited }: { canInvite: boolean; onInvited:
               </Button>
             </>
           )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * An admin's Edit brands for one person (BRAND-ACCESS §3.2): All brands, or
+ * the brands they work on. Saved in one go; they see the new brands from
+ * their next page.
+ */
+function EditBrandsDialog({
+  member,
+  brands,
+  onChanged,
+}: {
+  member: TeamMember;
+  brands: ShareableBrand[];
+  onChanged: () => void;
+}) {
+  const t = useTranslations('settings.teamBrands');
+  const tSettings = useTranslations('settings');
+  const tActions = useTranslations('readOnly.actions');
+  const { isLocked, openUpgrade } = useUpgradeGate();
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState<BrandAccessChoice>(member.brandAccess);
+  const [saving, setSaving] = useState(false);
+  const name = member.fullName || member.email;
+
+  async function save() {
+    setSaving(true);
+    try {
+      const result = await setMemberBrands(member.userId, value);
+      if ('error' in result) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(t('saved', { name }));
+      setOpen(false);
+      onChanged();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o, details) => {
+        if (o && isLocked) {
+          details.cancel();
+          openUpgrade(tActions('changeRoles'));
+          return;
+        }
+        if (o) setValue(member.brandAccess);
+        setOpen(o);
+      }}
+    >
+      <DialogTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 gap-1.5 px-2 text-xs font-normal text-muted-foreground"
+            aria-label={t('editFor', { name })}
+          >
+            <Building2 className="h-3.5 w-3.5" />
+            {brandAccessLabel(t, member.brandAccess)}
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('editTitle')}</DialogTitle>
+          <DialogDescription>{t('editDescription', { name })}</DialogDescription>
+        </DialogHeader>
+        <BrandAccessField brands={brands} value={value} onChange={setValue} disabled={saving} />
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            {tSettings('team_cancel')}
+          </DialogClose>
+          <Button onClick={save} disabled={saving || !isBrandChoiceComplete(value, false)}>
+            {saving ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {t('saving')}
+              </>
+            ) : (
+              t('save')
+            )}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
