@@ -369,13 +369,25 @@ function StatusPage({ card, t, font }: PageProps) {
           <Text style={styles.kpiLabel}>{s.kpiVisibility}</Text>
           <Text style={styles.kpiValue}>{headline.visibility}%</Text>
           <Text style={styles.kpiSub}>
-            {s.kpiVisibilitySub(growth.length ? mainNames : null, headline.named, headline.answers)}
+            {s.kpiVisibilitySub(
+              mainNames,
+              headline.named,
+              headline.answers,
+              card.questionCount,
+              main.length,
+            )}
           </Text>
         </View>
         <View style={styles.kpiBox}>
           <Text style={styles.kpiLabel}>{s.kpiQuestions}</Text>
           <Text style={styles.kpiValue}>{card.questionCount}</Text>
-          <Text style={styles.kpiSub}>{s.kpiQuestionsSub(card.engines.length, answers)}</Text>
+          <Text style={styles.kpiSub}>
+            {s.kpiQuestionsSub(
+              card.engines.length,
+              answers,
+              Math.max(card.questionCount * card.engines.length - answers, 0),
+            )}
+          </Text>
         </View>
         <View style={styles.kpiBox}>
           <Text style={styles.kpiLabel}>{s.kpiLeader}</Text>

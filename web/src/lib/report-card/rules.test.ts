@@ -145,7 +145,7 @@ describe('page 1', () => {
 describe('page 2', () => {
   it('sums up the main engines’ answers', () => {
     expect(questionSummary(SAMPLE_REPORT_CARD)).toBe(
-      'Named in 8 of 50 answers, in 6 of the 25 questions.',
+      'Named in 6 of the 25 questions: in 8 of the 50 answers from ChatGPT and Microsoft Copilot.',
     );
     const none = card({
       questionRows: SAMPLE_REPORT_CARD.questionRows?.map((row) => ({
@@ -153,7 +153,9 @@ describe('page 2', () => {
         named: Object.fromEntries(Object.keys(row.named).map((e) => [e, 'missed'])),
       })),
     });
-    expect(questionSummary(none)).toBe('Brewline Coffee wasn’t named in any of the 50 answers.');
+    expect(questionSummary(none)).toBe(
+      'Brewline Coffee wasn’t named in any of the 25 questions: 50 answers from ChatGPT and Microsoft Copilot (25 questions × 2 engines).',
+    );
   });
 });
 

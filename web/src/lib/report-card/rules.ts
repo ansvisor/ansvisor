@@ -542,7 +542,8 @@ export function questionSummary(
 ): string | null {
   const rows = card.questionRows ?? [];
   if (!rows.length) return null;
-  const main = new Set(mainEngineRows(card).map((e) => e.engine));
+  const mainRows = mainEngineRows(card);
+  const main = new Set(mainRows.map((e) => e.engine));
   let answers = 0;
   let named = 0;
   let questions = 0;
@@ -556,9 +557,10 @@ export function questionSummary(
     if (here > 0) questions += 1;
   }
   const company = clip(card.companyName, NAME_MAX);
+  const engines = engineList(mainRows, t);
   return named === 0
-    ? t.questions.summaryNone(company, answers)
-    : t.questions.summary(named, answers, questions, rows.length);
+    ? t.questions.summaryNone(company, answers, rows.length, engines, mainRows.length)
+    : t.questions.summary(named, answers, questions, rows.length, engines);
 }
 
 // ─── Page 3: the sites to get onto ───────────────────────────────────────────
