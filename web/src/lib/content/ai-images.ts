@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { reserveDraftImages } from '@/lib/chat/budget';
-import { imageKey } from '@/lib/chat/images/access';
+import { imageKey, imageModelOn } from '@/lib/chat/images/access';
 import { EDITOR_IMAGE_VARIANTS, IMAGE_MODELS } from '@/lib/chat/images/models';
 import { generateImages } from '@/lib/chat/images/provider';
 import { OwnKeyUnreadableError } from '@/lib/chat/key';
@@ -81,6 +81,8 @@ export function draftImagePrompt(
 export type DraftImagesFailure =
   | { code: 'unavailable' }
   | { code: 'own_key' }
+  // The model's maker is turned off in Settings › Chat (W4-34): `model` is its label.
+  | { code: 'provider_off'; model: string }
   | { code: 'ai_limit'; trial: boolean }
   | { code: 'refused'; why: string }
   // Made, and charged, but none could be stored: the panel says so.
@@ -99,7 +101,9 @@ export type DraftImagesResult =
  * budget (each image at the model's price, the row on the draft), made at
  * 1K, charged at the provider's own cost, then stored as options. The
  * options come back as addresses; the picked one is kept and the others
- * dropped (ai-image-store.ts).
+ * dropped (ai-image-store.ts). A model whose maker an Admin turned off
+ * (W4-34) is refused first, as Chat refuses it: nothing held, charged or
+ * sent to it.
  */
 export async function makeDraftImages(job: {
   organizationId: string;
@@ -107,6 +111,12 @@ export async function makeDraftImages(job: {
   brandName: string;
   input: DraftImagesInput;
 }): Promise<DraftImagesResult> {
+  // Hidden from the image models listed (imageModelOptions), and refused here when asked for.
+  if (!(await imageModelOn(job.organizationId, job.input.model).catch(() => false))) {
+    const label = IMAGE_MODELS.find((m) => m.id === job.input.model)?.label ?? job.input.model;
+    return { ok: false, code: 'provider_off', model: label };
+  }
+
   let key;
   try {
     key = await imageKey(job.organizationId);

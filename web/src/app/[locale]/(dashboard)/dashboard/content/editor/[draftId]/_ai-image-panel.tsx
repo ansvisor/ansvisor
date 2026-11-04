@@ -32,6 +32,7 @@ const COUNTS = Array.from(
 type Failure =
   | 'unavailable'
   | 'own_key'
+  | 'provider_off'
   | 'ai_limit'
   | 'refused'
   | 'demo'
@@ -96,6 +97,8 @@ export function AiImagePanel({
   const [failure, setFailure] = useState<{
     code: Failure;
     why?: string;
+    /** The image model's label, when its maker is turned off. */
+    model?: string;
     /** How many images the request asked for, or were made: what the message counts. */
     count?: number;
   } | null>(null);
@@ -160,6 +163,7 @@ export function AiImagePanel({
         failed?: number;
         code?: string;
         why?: string;
+        model?: string;
         made?: number;
       } | null;
       if (res.ok && body?.ok && body.images?.length) {
@@ -173,11 +177,20 @@ export function AiImagePanel({
         return;
       }
       const code = (
-        ['unavailable', 'own_key', 'ai_limit', 'refused', 'demo', 'not_saved'] as const
+        [
+          'unavailable',
+          'own_key',
+          'provider_off',
+          'ai_limit',
+          'refused',
+          'demo',
+          'not_saved',
+        ] as const
       ).find((c) => c === body?.code);
       setFailure({
         code: code ?? 'failed',
         why: body?.why,
+        model: body?.model,
         count: code === 'not_saved' ? (body?.made ?? count) : count,
       });
     } catch {
@@ -350,7 +363,11 @@ export function AiImagePanel({
           role="alert"
           className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200"
         >
-          {t(`failed.${failure.code}`, { why: failure.why ?? '', count: failure.count ?? count })}
+          {t(`failed.${failure.code}`, {
+            why: failure.why ?? '',
+            model: failure.model ?? '',
+            count: failure.count ?? count,
+          })}
         </p>
       )}
 

@@ -109,6 +109,7 @@ describe('POST /api/content/drafts/{id}/images', () => {
       [{ ok: false, code: 'ai_limit', trial: false }, 429],
       [{ ok: false, code: 'refused', why: 'Blocked' }, 422],
       [{ ok: false, code: 'own_key' }, 409],
+      [{ ok: false, code: 'provider_off', model: 'Nano Banana 2 Lite' }, 409],
       [{ ok: false, code: 'not_saved', made: 3 }, 502],
       [{ ok: false, code: 'unavailable' }, 503],
     ] as const) {
