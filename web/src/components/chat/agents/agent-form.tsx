@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { Link, useRouter } from '@/i18n/navigation';
 import type { AccessClass } from '@/lib/chat/access';
+import { MAX_CAN_CALL } from '@/lib/chat/agent-rules';
 import {
   AGENT_FORM_STEPS,
   FAST_MODEL,
@@ -153,6 +154,80 @@ function NeedsClick({ children }: { children: ReactNode }) {
     <span className="inline-flex h-[22px] items-center rounded-full bg-foreground px-2.5 text-[11.5px] font-medium whitespace-nowrap text-background">
       {children}
     </span>
+  );
+}
+
+/**
+ * Can call (CHAT-27 item 14; W4-27): the agents this one may run with
+ * run_agent, up to 5, never itself; each run asks the person first.
+ * Running other agents is Growth and up: below it the row is locked,
+ * though an agent that already names some may empty it.
+ */
+function CanCallRow({
+  options,
+  value,
+  locked,
+  onChange,
+}: {
+  options: { id: string; name: string }[];
+  value: string[];
+  locked: boolean;
+  onChange: (next: string[]) => void;
+}) {
+  const t = useTranslations('chatAgents.calls.canCall');
+  // A change keeps only the agents offered: one archived since can't hold the save up.
+  const offered = new Set(options.map((a) => a.id));
+  const kept = value.filter((id) => offered.has(id));
+  const full = kept.length >= MAX_CAN_CALL;
+  const toggle = (id: string) =>
+    onChange(kept.includes(id) ? kept.filter((v) => v !== id) : [...kept, id]);
+  return (
+    <SettingRow label={t('label')} note={t('hint')} noteId="agent-form-note-can-call">
+      {locked && kept.length === 0 ? (
+        <span
+          data-slot="agent-form-can-call-locked"
+          className="inline-flex w-fit items-center gap-1 rounded-full bg-muted px-2 py-px text-[11.5px] text-foreground/70"
+        >
+          <Lock className="size-3" aria-hidden />
+          {t('locked')}
+        </span>
+      ) : options.length === 0 ? (
+        <span className="text-muted-foreground">{t('empty')}</span>
+      ) : (
+        <div
+          role="group"
+          aria-label={t('label')}
+          aria-describedby="agent-form-note-can-call"
+          className="flex flex-wrap gap-1.5"
+        >
+          {options.map((agent) => {
+            const on = value.includes(agent.id);
+            // Below Growth only taking one out; at 5, only taking one out.
+            const off = !on && (locked || full);
+            return (
+              <button
+                key={agent.id}
+                type="button"
+                aria-pressed={on}
+                aria-disabled={off || undefined}
+                data-action="agentNew.canCall"
+                onClick={() => !off && toggle(agent.id)}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none',
+                  on
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'bg-card text-foreground hover:bg-muted',
+                  off && 'cursor-not-allowed opacity-50 hover:bg-card',
+                )}
+              >
+                {on && <Check className="size-3.5" aria-hidden />}
+                {agent.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </SettingRow>
   );
 }
 
@@ -1391,6 +1466,13 @@ function AgentFormBody({
                     </div>
                     {fieldError('maxRun')}
                   </SettingRow>
+
+                  <CanCallRow
+                    options={(setup.callable ?? []).filter((a) => a.id !== base?.id)}
+                    value={state.canCall}
+                    locked={setup.canCallLocked === true}
+                    onChange={(canCall) => update({ canCall })}
+                  />
 
                   {isAdmin ? (
                     <SettingRow

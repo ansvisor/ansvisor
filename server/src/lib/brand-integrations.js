@@ -188,6 +188,28 @@ export async function connectedBrands(provider, { organizationId, brandId } = {}
   return (uses ?? []).map((use) => connectionOf(use.brand_id, provider, byId.get(use.account_id)));
 }
 
+/**
+ * The brands that use the connection's sign-in, its own among them: whose
+ * properties a read through it lists, and so who may read through it
+ * (access.js assertEveryBrand). Null before 00470, when the connection is the
+ * Account's row, which every brand of the Account uses.
+ * @param {BrandConnection} connection
+ * @returns {Promise<string[]|null>}
+ */
+export async function signInBrandIds(connection) {
+  if (!connection.accountId) return null;
+  const { data, error } = await readAllRpcRows('brand_integrations', (from, to) =>
+    supabaseAdmin
+      .from('brand_integrations')
+      .select('brand_id')
+      .eq('account_id', connection.accountId)
+      .order('brand_id')
+      .range(from, to),
+  );
+  if (error) throw new Error(error.message);
+  return [...new Set((data ?? []).map((use) => use.brand_id))];
+}
+
 // ─── A brand's own Google sign-in (BRAND-ACCESS PR 15) ──────────────────────
 // Brand settings › Integrations: a brand keeps the Account's Google sign-in,
 // uses the one another brand uses ("Use the same account as…", D6), or a

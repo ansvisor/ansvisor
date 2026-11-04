@@ -58928,6 +58928,101 @@ create policy "chat_memory_items: workspace select"
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00460_content_take_down.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00460: Take down a published page (AUTONOMOUS-GO-LIVE PR 10)
+-- ============================================================================
+-- A person takes a page Ansvisor published in Webflow, WordPress or Wix back
+-- down to a draft there, from the Inbox notice, Chat's Activity, the Content
+-- Library or Chat's unpublish_cms (always a person's click). The send that
+-- published it keeps the record:
+--
+--   * content_draft_deliveries.status takes 'taken_down'. A taken-down send
+--     is neither 'sent' nor 'published', so the CMS status sweeps never read
+--     it again (Webflow's would mark it published again from its old
+--     lastPublished), and the impact ledger's nightly fill never ships it
+--     again.
+--   * taken_down_at and taken_down_by: when, and who. A page someone took
+--     down never goes live on its own again: an agent's next go-live of that
+--     draft waits for a click (held `taken_down`).
+--
+-- The rest is written by the server with the take down, not here: the page's
+-- address cleared (content_drafts back to 'ready'), the agent's go-live event
+-- 'taken_down' (00443's status and columns), and the ship event's measurement
+-- Not measurable with reason 'taken_down' (00421's reason is free text).
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_status_check,
+  add constraint content_draft_deliveries_status_check
+    check (status in ('queued', 'sent', 'failed', 'published', 'taken_down'));
+
+alter table public.content_draft_deliveries
+  add column if not exists taken_down_at timestamptz,
+  add column if not exists taken_down_by uuid references public.profiles(id) on delete set null;
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_taken_down,
+  add constraint content_draft_deliveries_taken_down
+    check ((status = 'taken_down') = (taken_down_at is not null));
+
+comment on column public.content_draft_deliveries.taken_down_at is
+  'When a person took the published page down to a draft in its CMS (00460); set exactly when status is taken_down.';
+comment on column public.content_draft_deliveries.taken_down_by is
+  'Who took the page down (00460).';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00461_chat_notices_schedules.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00461: notices about scheduled jobs and follow-up checks
+-- ============================================================================
+-- CHAT-12 items 16, 26–27 and CHAT-20 §13 (Wave 3, W3-04a): three new kinds
+-- of chat_notices (00441), behind CHAT_AGENTIC. A job's creator gets them at
+-- the top of their Inbox's Needs you:
+--
+--   * schedule_failed: a run of their job failed after its retry ("{Job}
+--     didn't run: {reason}"), in plain words, never a raw error.
+--   * schedule_paused: their job turned itself off: the monthly AI limit,
+--     their role or brand access, its brand, its skill, or 3 failed runs.
+--   * followup_result: a follow-up check they (or a Full auto run for them)
+--     set has its result.
+--
+-- The payload names the job (its id, title and why), as the Inbox row says
+-- it; nothing else. A job that runs again, or is turned back on, closes its
+-- notices (resolved_at). A successful run needs no notice: the job's chat is
+-- its creator's, and its result is in their Inbox as an unread answer.
+--
+-- The list includes 00446's kinds (agent_went_live, agent_go_live_off):
+-- 00446 is applied before this one, and dropping its kinds here would refuse
+-- its notices.
+
+alter table public.chat_notices
+  drop constraint if exists chat_notices_kind_check;
+alter table public.chat_notices
+  add constraint chat_notices_kind_check check (
+    kind in (
+      'own_key_failed',
+      'own_key_limit_80',
+      'own_key_limit_100',
+      'agent_went_live',
+      'agent_go_live_off',
+      'schedule_failed',
+      'schedule_paused',
+      'followup_result'
+    )
+  );
+
+-- A job's open notices, which a run that goes on closes.
+create index if not exists chat_notices_schedule_idx
+  on public.chat_notices ((payload ->> 'scheduleId'))
+  where resolved_at is null and kind in ('schedule_failed', 'schedule_paused');
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00462_chat_models_images.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -60044,4 +60139,179 @@ comment on function public.set_member_brand_access(uuid, uuid, text, uuid[], uui
   'Brand access (00471): an admin''s Edit brands. All brands drops the person''s shared brands; Selected brands keeps exactly the organization''s brands named (at least one; not the demo brand). Admins are always All brands. One transaction, the person''s profile locked. Server only (service role), after it checked the caller is an admin.';
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00472_report_cards.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00472: the free AI visibility report card's requests and cards
+-- ============================================================================
+-- People ask for a free report card on www.ansvisor.com's form (Customer
+-- priorities §5). The API's public endpoint (POST /public/report-card)
+-- keeps each request, and the card it gets: 25 questions asked in ChatGPT,
+-- Gemini, Google AI Overviews and Google AI Mode in the person's target
+-- country, what the answers said, and the PDF's figures. The PDF itself is
+-- drawn again from those figures whenever it is sent.
+--
+--   * report_cards: one per company (its work e-mail's domain) every 30
+--     days; a repeat request is answered with the card already made, at no
+--     cost. A card is queued, then running, then ready or failed. One
+--     queued past the day's cap waits (run_after) for the next morning.
+--     Its cost in dollars is kept, for the daily and monthly caps.
+--   * report_card_requests: every request the form sent, with what the
+--     person gave (name, title, work e-mail, LinkedIn, company, country,
+--     size, optional industry and deal value), their consents, how it was
+--     answered and what became of the e-mail. No IP address is kept: the
+--     hourly limit per address is held in the API's memory.
+--
+-- Written and read by the API's service-role client only: RLS on, no
+-- policies, and the default grants to anon and authenticated revoked (as
+-- 00222 does), since the requests hold people's names and e-mails. The
+-- requests are deleted after 12 months, by the API's daily sweep.
+
+create table if not exists public.report_cards (
+  id uuid primary key default gen_random_uuid(),
+  -- The company: its work e-mail's domain, lower case. One card per domain every 30 days.
+  domain text not null check (
+    char_length(domain) between 3 and 253 and domain = lower(domain) and domain ~ '^[a-z0-9.-]+\.[a-z]{2,}$'
+  ),
+  -- The site measured: the website given, without "www.", the domain or a subdomain of it.
+  site text not null check (
+    char_length(site) between 3 and 253 and site = lower(site) and site ~ '^[a-z0-9.-]+\.[a-z]{2,}$'
+  ),
+  company_name text not null check (char_length(company_name) between 1 and 100),
+  -- The target country (ISO 3166-1 alpha-2) and its main language (ISO 639-1).
+  country text not null check (country ~ '^[A-Z]{2}$'),
+  language text not null check (language ~ '^[a-z]{2}$'),
+  status text not null default 'queued'
+    check (status in ('queued', 'running', 'ready', 'failed')),
+  -- When it may start: now, or the next morning past the day's cap.
+  run_after timestamptz not null default now(),
+  started_at timestamptz,
+  finished_at timestamptz,
+  attempts integer not null default 0 check (attempts between 0 and 10),
+  -- What the PDF draws (web/src/lib/report-card/payload.ts), once ready.
+  payload jsonb check (payload is null or jsonb_typeof(payload) = 'object'),
+  -- The questions as asked: text, English, keyword, and each engine's answer in short.
+  questions jsonb check (questions is null or jsonb_typeof(questions) = 'array'),
+  cost_usd numeric(10, 4) not null default 0 check (cost_usd >= 0),
+  -- Why it failed, in plain words.
+  error text check (char_length(error) <= 500),
+  created_at timestamptz not null default now(),
+  check ((status = 'ready') = (payload is not null)),
+  check (status not in ('ready', 'failed') or finished_at is not null)
+);
+
+-- One card being made per company at a time: two requests at once share it.
+create unique index if not exists report_cards_one_pending_idx
+  on public.report_cards (domain)
+  where status in ('queued', 'running');
+
+-- The company's last card (the 30-day rule), the queue, and the day's and month's counts.
+create index if not exists report_cards_domain_created_idx
+  on public.report_cards (domain, created_at desc);
+create index if not exists report_cards_queue_idx
+  on public.report_cards (run_after)
+  where status in ('queued', 'running');
+create index if not exists report_cards_started_idx
+  on public.report_cards (started_at)
+  where started_at is not null;
+
+alter table public.report_cards enable row level security;
+revoke all on public.report_cards from anon, authenticated;
+
+comment on table public.report_cards is
+  'Free AI visibility report cards (00472; Customer priorities §5): one per site every 30 days, its figures and cost. Server-only.';
+
+create table if not exists public.report_card_requests (
+  id uuid primary key default gen_random_uuid(),
+  report_card_id uuid references public.report_cards (id) on delete set null,
+  first_name text not null check (char_length(first_name) between 1 and 60),
+  last_name text not null check (char_length(last_name) between 1 and 60),
+  title text not null check (char_length(title) between 1 and 100),
+  email text not null check (
+    char_length(email) <= 254 and email = lower(email) and email ~ '^[^@\s]+@[a-z0-9.-]+\.[a-z]{2,}$'
+  ),
+  linkedin_url text not null check (char_length(linkedin_url) <= 300),
+  company_name text not null check (char_length(company_name) between 1 and 100),
+  -- The website as typed, and the domain measured.
+  website text not null check (char_length(website) <= 300),
+  domain text not null check (char_length(domain) between 3 and 253),
+  country text not null check (country ~ '^[A-Z]{2}$'),
+  company_size text not null
+    check (company_size in ('1-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000', '5000+')),
+  industry text check (char_length(industry) <= 60),
+  deal_value numeric(14, 2) check (deal_value > 0),
+  deal_currency text check (deal_currency ~ '^[A-Z]{3}$'),
+  consent_privacy boolean not null check (consent_privacy),
+  consent_own_site boolean not null check (consent_own_site),
+  consent_marketing boolean not null default false,
+  -- The form's page and campaign, as sent.
+  page text check (char_length(page) <= 100),
+  utm jsonb check (utm is null or (jsonb_typeof(utm) = 'object' and octet_length(utm::text) <= 1000)),
+  -- How it was answered: a new card queued, the card already made sent
+  -- again, or queued for tomorrow past the day's cap.
+  outcome text not null check (outcome in ('queued', 'resent', 'daily_cap')),
+  -- What became of the e-mail: sent, refused, unknown or skipped (server/src/lib/email.js).
+  email_status text check (email_status in ('sent', 'refused', 'unknown', 'skipped')),
+  emailed_at timestamptz,
+  created_at timestamptz not null default now(),
+  check ((deal_value is null) = (deal_currency is null))
+);
+
+create index if not exists report_card_requests_card_idx
+  on public.report_card_requests (report_card_id);
+create index if not exists report_card_requests_created_idx
+  on public.report_card_requests (created_at);
+-- A person's requests, for a deletion request.
+create index if not exists report_card_requests_email_idx
+  on public.report_card_requests (email);
+
+alter table public.report_card_requests enable row level security;
+revoke all on public.report_card_requests from anon, authenticated;
+
+comment on table public.report_card_requests is
+  'Every free report card request from the www.ansvisor.com form (00472): what the person gave, their consents and how it was answered. Server-only; deleted after 12 months.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00473_brand_google_property_guard.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00473: a brand's Google properties are set by the server
+-- ============================================================================
+-- A brand's Search Console site (gsc_property) and Analytics property
+-- (ga_property_id) are picked from the list of the Google sign-in the brand
+-- uses, and the server checks the pick is on that list and that the person
+-- reaches every brand on the sign-in (PUT
+-- /api/integrations/{google-search-console,google-analytics}/brands/:id/property).
+-- The syncs then read the property through that sign-in. This trigger keeps
+-- the two columns to the server: a member's own insert or update of a brand
+-- leaves them as they are.
+
+create or replace function public.guard_brand_google_properties()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    if new.gsc_property is not null or new.ga_property_id is not null then
+      raise exception 'a brand''s Google properties are set server-side' using errcode = '42501';
+    end if;
+  elsif new.gsc_property is distinct from old.gsc_property
+     or new.ga_property_id is distinct from old.ga_property_id
+  then
+    raise exception 'a brand''s Google properties are set server-side' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists brands_guard_google_properties on public.brands;
+create trigger brands_guard_google_properties
+  before insert or update on public.brands
+  for each row execute function public.guard_brand_google_properties();
 

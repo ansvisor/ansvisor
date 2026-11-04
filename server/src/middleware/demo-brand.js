@@ -135,6 +135,7 @@ export const DEMO_GUARDED = [
   guard('POST /content-drafts/send', brandIn('body')),
   guard('POST /content-drafts/publish-cms', brandIn('body')),
   guard('POST /content-drafts/:draftId/publish', rowIn('content_drafts', 'path', 'draftId')),
+  guard('POST /content-drafts/:draftId/take-down', rowIn('content_drafts', 'path', 'draftId')),
   guard('POST /content-drafts/webflow-status', brandIn('body')),
   guard('POST /content-drafts/wordpress-status', brandIn('body')),
   guard('POST /content-drafts/framer-status', brandIn('body')),
@@ -195,6 +196,9 @@ export const DEMO_GUARDED = [
   // a brand, the organization's sync, which skips demo brands itself.
   guard('POST /integrations/google-search-console/sync', brandIn('body')),
   guard('POST /integrations/google-analytics/sync', brandIn('body')),
+  // A brand's property pick (the route refuses the demo brand itself too).
+  guard('PUT /integrations/google-search-console/brands/:brandId/property', brandIn('path')),
+  guard('PUT /integrations/google-analytics/brands/:brandId/property', brandIn('path')),
   // A brand's own Google sign-in (BRAND-ACCESS PR 15): the demo brand connects nothing.
   guard('POST /integrations/:provider/brands/:brandId/use', brandIn('path')),
   guard('POST /integrations/:provider/brands/:brandId/connect', brandIn('path')),

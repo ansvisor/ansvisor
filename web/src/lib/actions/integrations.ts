@@ -20,8 +20,8 @@ export type IntegrationStatus = 'not_configured' | 'not_connected' | 'connected'
  */
 const CONFIG_TIMEOUT_MS = 10_000;
 const DISCONNECT_TIMEOUT_MS = 20_000;
-/** The API answers a sync at once and runs it in the background. */
-const SYNC_START_TIMEOUT_MS = 5_000;
+/** Saving a property reads the brand's sign-in's list from Google first. */
+const PROPERTY_SAVE_TIMEOUT_MS = 20_000;
 
 async function authHeaders(): Promise<Record<string, string>> {
   const supabase = await createClient();
@@ -183,22 +183,29 @@ export async function disconnectIntegration(provider: IntegrationProvider): Prom
 // ─── Property mapping (#642) ─────────────────────────────────────────────────
 
 /**
- * Start a freshly mapped brand's first sync. Without it the data only lands
- * with the nightly run, and suggestions generated in the meantime cannot draw
- * on it. The server answers at once and syncs in the background. Best effort:
- * the property pick is already saved, and the nightly run is the fallback.
+ * Save a brand's property pick (null clears it) through the API, which checks
+ * it against the brand's own Google sign-in, so a pick can't name a site the
+ * brand's sign-in doesn't hold, and starts a freshly mapped brand's first
+ * sync in the background. Without that sync the data only lands with the
+ * nightly run, and suggestions generated in the meantime cannot draw on it.
  */
-async function startBrandSync(provider: IntegrationProvider, brandId: string): Promise<void> {
-  try {
-    await fetch(`${API_BASE_URL}/api/integrations/${provider}/sync`, {
-      method: 'POST',
+async function saveBrandProperty(
+  provider: 'google-search-console' | 'google-analytics',
+  brandId: string,
+  property: string | null,
+): Promise<void> {
+  await assertWritable({ brandId });
+  const res = await fetch(
+    `${API_BASE_URL}/api/integrations/${provider}/brands/${encodeURIComponent(brandId)}/property`,
+    {
+      method: 'PUT',
       headers: await authHeaders(),
-      body: JSON.stringify({ brandId }),
-      signal: AbortSignal.timeout(SYNC_START_TIMEOUT_MS),
-    });
-  } catch {
-    // The nightly sync picks the brand up.
-  }
+      body: JSON.stringify({ property }),
+      signal: AbortSignal.timeout(PROPERTY_SAVE_TIMEOUT_MS),
+    },
+  );
+  const body = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(body.error || `Server error: ${res.status}`);
 }
 
 export interface GscProperty {
@@ -229,16 +236,9 @@ export async function getGscBrandMappings(): Promise<GscBrandMapping[]> {
   }));
 }
 
-/** Persist a brand's property pick (null clears it). RLS: admin/manager. */
+/** Persist a brand's property pick (null clears it): admin/manager (saveBrandProperty). */
 export async function setBrandGscProperty(brandId: string, property: string | null): Promise<void> {
-  await assertWritable({ brandId });
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from('brands')
-    .update({ gsc_property: property })
-    .eq('id', brandId);
-  if (error) throw new Error(error.message);
-  if (property) await startBrandSync('google-search-console', brandId);
+  await saveBrandProperty('google-search-console', brandId, property);
 }
 
 // ─── Google Analytics property mapping (#694) ────────────────────────────────
@@ -275,19 +275,12 @@ export async function getGaBrandMappings(): Promise<GaBrandMapping[]> {
   }));
 }
 
-/** Persist a brand's GA property pick (null clears it). RLS: admin/manager. */
+/** Persist a brand's GA property pick (null clears it): admin/manager (saveBrandProperty). */
 export async function setBrandGaProperty(
   brandId: string,
   propertyId: string | null,
 ): Promise<void> {
-  await assertWritable({ brandId });
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from('brands')
-    .update({ ga_property_id: propertyId })
-    .eq('id', brandId);
-  if (error) throw new Error(error.message);
-  if (propertyId) await startBrandSync('google-analytics', brandId);
+  await saveBrandProperty('google-analytics', brandId, propertyId);
 }
 
 // ─── Which brand uses which Google account (BRAND-ACCESS PR 15) ──────────────

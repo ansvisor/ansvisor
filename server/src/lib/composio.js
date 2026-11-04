@@ -258,9 +258,12 @@ async function gaPropertySiteUrls(connection, propertyId) {
  * lookup limit, simply arrives with no site URLs and stays manually
  * selectable.
  *
+ * With `streams: false` the site URLs are left empty and not looked up: for
+ * a caller that only needs the ids (checking a picked property).
+ *
  * Returns [{ propertyId, displayName, accountName, siteUrls }].
  */
-export async function listGaProperties(connection) {
+export async function listGaProperties(connection, { streams = true } = {}) {
   const properties = [];
   let pageToken = null;
 
@@ -288,7 +291,7 @@ export async function listGaProperties(connection) {
   } while (pageToken && properties.length < GA_MAX_PROPERTIES);
 
   const capped = properties.slice(0, GA_MAX_PROPERTIES);
-  const withStreams = capped.slice(0, GA_STREAM_LOOKUP_LIMIT);
+  const withStreams = streams ? capped.slice(0, GA_STREAM_LOOKUP_LIMIT) : [];
 
   for (let i = 0; i < withStreams.length; i += GA_STREAM_CONCURRENCY) {
     const batch = withStreams.slice(i, i + GA_STREAM_CONCURRENCY);

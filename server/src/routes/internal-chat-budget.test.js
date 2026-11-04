@@ -30,6 +30,8 @@ const reserveChatStep = vi.fn();
 const chargeChatStep = vi.fn();
 const releaseChatStep = vi.fn();
 const agentUsageShares = vi.fn();
+const chatRunEstimate = vi.fn();
+const fitChatUnits = vi.fn();
 const ownKeyAgentSpend = vi.fn();
 vi.mock('../lib/plan-guard.js', () => ({ PlanLimitError }));
 vi.mock('../lib/chat-budget.js', () => ({
@@ -39,6 +41,9 @@ vi.mock('../lib/chat-budget.js', () => ({
   chargeChatStep: (...args) => chargeChatStep(...args),
   releaseChatStep: (...args) => releaseChatStep(...args),
   agentUsageShares: (...args) => agentUsageShares(...args),
+  chatRunEstimate: (...args) => chatRunEstimate(...args),
+  fitChatUnits: (...args) => fitChatUnits(...args),
+  MAX_FIT_UNITS: 100,
   ownKeyAgentSpend: (...args) => ownKeyAgentSpend(...args),
 }));
 const warnOwnKeyLimit = vi.fn();
@@ -57,6 +62,8 @@ beforeEach(async () => {
   chargeChatStep.mockReset().mockResolvedValue(undefined);
   releaseChatStep.mockReset().mockResolvedValue(undefined);
   agentUsageShares.mockReset().mockResolvedValue({ unlimited: false, since: null, shares: [] });
+  chatRunEstimate.mockReset().mockResolvedValue({ unlimited: false, share: 0.02, runs: 12 });
+  fitChatUnits.mockReset().mockResolvedValue({ fits: 3, limit: 'run' });
   ownKeyAgentSpend.mockReset();
   warnOwnKeyLimit.mockReset().mockResolvedValue({ notices: 0, emails: 0, resolved: 0 });
   const app = express();
@@ -133,6 +140,7 @@ describe('POST /api/internal/chat/budget/*', () => {
       stepId: STEP,
       ownKey: false,
       agentRunId: null,
+      scheduleId: null,
     });
 
     await post('reserve', reserveBody({ stepId: undefined, feature: 'image', ownKey: true }));
@@ -160,6 +168,18 @@ describe('POST /api/internal/chat/budget/*', () => {
       message: 'This run reached its limit.',
     });
     expect((await post('reserve', reserveBody({ agentRunId: 'nope' }))).status).toBe(400);
+  });
+
+  it('holds a scheduled job’s step named with its job (CHAT-12 item 14)', async () => {
+    const JOB = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b';
+    expect(
+      (await post('reserve', reserveBody({ feature: 'schedule', scheduleId: JOB }))).status,
+    ).toBe(201);
+    expect(reserveChatStep).toHaveBeenLastCalledWith(
+      ORG,
+      expect.objectContaining({ feature: 'schedule', scheduleId: JOB, agentRunId: null }),
+    );
+    expect((await post('reserve', reserveBody({ scheduleId: 'nope' }))).status).toBe(400);
   });
 
   it('refuses a body it can’t read before holding anything', async () => {
@@ -306,6 +326,92 @@ describe('GET /api/internal/chat/budget/agent-shares', () => {
     const res = await get(`orgId=${ORG}`);
     expect(res.status).toBe(402);
     expect(await res.json()).toMatchObject({ success: false, error: 'plan_limit' });
+  });
+});
+
+describe('GET /api/internal/chat/budget/run-estimate', () => {
+  const get = (query, secret = 'shh') =>
+    fetch(`${baseUrl}/run-estimate?${query}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+
+  it('answers about how much of the limit a run uses, never a dollar', async () => {
+    const res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, unlimited: false, share: 0.02, runs: 12 });
+    expect(chatRunEstimate).toHaveBeenLastCalledWith(ORG);
+  });
+
+  it('answers only the web, and refuses a query it can’t read', async () => {
+    expect((await get(`orgId=${ORG}`, 'nope')).status).toBe(401);
+    expect((await get('orgId=nope')).status).toBe(400);
+    expect(chatRunEstimate).not.toHaveBeenCalled();
+  });
+
+  it('says when Chat is off for the workspace', async () => {
+    chatRunEstimate.mockRejectedValueOnce(new ChatBudgetError('chat_off', 403, 'Chat is off.'));
+    const res = await get(`orgId=${ORG}`);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ success: false, error: 'chat_off' });
+  });
+});
+
+describe('POST /api/internal/chat/budget/fit (CHAT-04 item 17a)', () => {
+  const AGENT_RUN = '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0a';
+  const fitBody = (over = {}) => ({
+    orgId: ORG,
+    model: 'anthropic/claude-sonnet-5.5',
+    perUnit: { inputTokens: 12000, maxOutputTokens: 16000 },
+    units: 5,
+    ...over,
+  });
+
+  it('answers how many of the parts fit, a count and never a dollar', async () => {
+    const res = await post('fit', fitBody({ ownKey: true, agentRunId: AGENT_RUN }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ success: true, fits: 3, limit: 'run' });
+    expect(fitChatUnits).toHaveBeenCalledWith(ORG, {
+      modelId: 'anthropic/claude-sonnet-5.5',
+      perUnit: { inputTokens: 12000, maxOutputTokens: 16000 },
+      units: 5,
+      ownKey: true,
+      agentRunId: AGENT_RUN,
+    });
+    await post('fit', fitBody());
+    expect(fitChatUnits).toHaveBeenLastCalledWith(
+      ORG,
+      expect.objectContaining({ ownKey: false, agentRunId: null }),
+    );
+  });
+
+  it('answers only the web, and refuses a body it can’t read', async () => {
+    expect((await post('fit', fitBody(), 'nope')).status).toBe(401);
+    for (const body of [
+      fitBody({ units: 0 }),
+      fitBody({ units: 101 }),
+      fitBody({ units: 2.5 }),
+      fitBody({ perUnit: { inputTokens: 10 } }),
+      fitBody({ costUsd: 1 }),
+      fitBody({ orgId: 'nope' }),
+    ]) {
+      expect((await post('fit', body)).status).toBe(400);
+    }
+    expect(fitChatUnits).not.toHaveBeenCalled();
+  });
+
+  it('says why it can’t: no active plan, Chat off, an agent run not the workspace’s', async () => {
+    fitChatUnits.mockRejectedValueOnce(new PlanLimitError('No plan', 402));
+    let res = await post('fit', fitBody());
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ success: false, error: 'plan_limit' });
+    fitChatUnits.mockRejectedValueOnce(new ChatBudgetError('chat_off', 403, 'Chat is off.'));
+    res = await post('fit', fitBody());
+    expect(res.status).toBe(403);
+    fitChatUnits.mockRejectedValueOnce(
+      new ChatBudgetError('not_found', 404, 'Agent run not found.'),
+    );
+    res = await post('fit', fitBody({ agentRunId: AGENT_RUN }));
+    expect(res.status).toBe(404);
   });
 });
 

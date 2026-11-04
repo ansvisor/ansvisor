@@ -19,6 +19,7 @@ import {
   brandConnection,
   composioTarget,
   removeBrandAccount,
+  signInBrandIds,
   startBrandAccount,
   usableAccounts,
   useAccountForBrand,
@@ -26,7 +27,7 @@ import {
 import { runGscSync } from '../lib/gsc-sync.js';
 import { runGaSync } from '../lib/ga-sync.js';
 import { detectPageOpportunitiesInWindow } from '../lib/page-opportunities.js';
-import { assertBrandAccess, assertAllBrands, brandAccessOf } from '../lib/access.js';
+import { assertBrandAccess, assertAllBrands, assertEveryBrand, brandAccessOf } from '../lib/access.js';
 
 const router = Router();
 
@@ -265,13 +266,42 @@ router.delete('/:provider', async (req, res) => {
 const propertiesQuery = z.object({ brandId: z.guid().optional() });
 
 /**
+ * Assert that the caller may read through a brand's Google sign-in. A sign-in
+ * lists the properties of every brand that uses it, and every brand uses the
+ * Account's until the Brand settings cards (PR 15) let one use its own, so
+ * the caller needs each of those brands (BRAND-ACCESS §5.2); before 00470,
+ * when the sign-in is the Account's row, All brands.
+ */
+async function assertSignInReach(userId, connection) {
+  const brandIds = await signInBrandIds(connection);
+  if (brandIds === null) return assertAllBrands(userId);
+  return assertEveryBrand(brandIds, userId);
+}
+
+/**
+ * The live Composio target of the brand's sign-in for `provider`, or null
+ * when it isn't connected (409). The caller checks the brand's access first;
+ * this checks the sign-in's (assertSignInReach).
+ */
+async function brandSignIn(userId, brandId, provider) {
+  const connection = await brandConnection(brandId, provider);
+  if (!connection?.connected || !connection.entityId) return null;
+  await assertSignInReach(userId, connection);
+  const active = await getActiveConnection(
+    provider,
+    connection.entityId,
+    connection.composioAccountId,
+  );
+  return active ? composioTarget(connection) : null;
+}
+
+/**
  * The Google sign-in a property list is read from, or null when it isn't
  * connected (409). Member-readable: the mapping UI is shown to everyone who
  * may see it; writes stay role-gated elsewhere.
  *   * `?brandId=`: the sign-in that brand uses (BRAND-ACCESS PR 14, 00470),
- *     for anyone who can access the brand. Every brand uses the Account's
- *     Google connection until the Brand settings cards (PR 15) let one use
- *     another. The demo brand is everyone's sample data: it lists none.
+ *     for anyone who can access every brand that uses it (brandSignIn). The
+ *     demo brand is everyone's sample data: it lists none.
  *   * Without one: the Account's own connection, as Settings › Integrations
  *     reads it today. That list serves every brand, so it needs All brands
  *     (BRAND-ACCESS §5.2).
@@ -280,14 +310,7 @@ async function propertiesConnection(req, provider, brandId) {
   if (brandId) {
     const { brand } = await assertBrandAccess(brandId, req.user.id);
     if (brand.is_demo) return null;
-    const connection = await brandConnection(brand.id, provider);
-    if (!connection?.connected || !connection.entityId) return null;
-    const active = await getActiveConnection(
-      provider,
-      connection.entityId,
-      connection.composioAccountId,
-    );
-    return active ? composioTarget(connection) : null;
+    return brandSignIn(req.user.id, brand.id, provider);
   }
 
   await assertAllBrands(req.user.id);
@@ -327,27 +350,125 @@ router.get('/google-search-console/properties', async (req, res) => {
 const inFlightBrandSyncs = new Set();
 
 /**
- * Start one brand's sync without holding the request open: answer 202 at once
- * and leave the outcome to the log. A freshly mapped property otherwise has no
- * data until the nightly run, and suggestions built before then cannot use it.
+ * Start one brand's sync in the background, leaving the outcome to the log:
+ * false when it is already running. A freshly mapped property otherwise has
+ * no data until the nightly run, and suggestions built before then cannot
+ * use it.
  */
-function startBrandSync(req, res, provider, brandId, run) {
+function launchBrandSync(req, provider, brandId, run) {
   const key = `${provider}:${brandId}`;
-  if (inFlightBrandSyncs.has(key)) return res.status(202).json({ started: false });
+  if (inFlightBrandSyncs.has(key)) return false;
   inFlightBrandSyncs.add(key);
   run({ brandId })
     .then((result) => req.log.info({ provider, brandId, result }, 'integrations brand sync done'))
     .catch((err) => req.log.error({ err, provider, brandId }, 'integrations brand sync failed'))
     .finally(() => inFlightBrandSyncs.delete(key));
-  return res.status(202).json({ started: true });
+  return true;
 }
+
+/** Start one brand's sync without holding the request open: answer 202 at once. */
+function startBrandSync(req, res, provider, brandId, run) {
+  return res.status(202).json({ started: launchBrandSync(req, provider, brandId, run) });
+}
+
+/**
+ * Assert that the caller may sync the brand: they can access it, and every
+ * brand that uses its sign-in (assertSignInReach), whose property the sync
+ * reads through it.
+ */
+async function assertBrandSync(userId, brandId, provider) {
+  await assertBrandAccess(brandId, userId);
+  const connection = await brandConnection(brandId, provider);
+  if (connection) await assertSignInReach(userId, connection);
+}
+
+const propertyBody = z.object({ property: z.string().min(1).max(2048).nullable() });
+
+/**
+ * PUT /api/integrations/{google-search-console,google-analytics}/brands/:brandId/property
+ * Saves a brand's property pick (`{ property }`, null clears it) and starts
+ * that brand's sync. For the admins and managers who can access the brand. A
+ * property is checked against the list of the brand's own sign-in, read as
+ * the property lists are (brandSignIn): a pick can't name a site or property
+ * the brand's sign-in doesn't hold, and one the sign-in shares with brands
+ * the caller wasn't given can't be picked at all.
+ */
+function propertyRoute({ provider, label, column, listIds, run }) {
+  return async (req, res) => {
+    const brandId = z.guid().safeParse(req.params.brandId);
+    const body = propertyBody.safeParse(req.body ?? {});
+    if (!brandId.success || !body.success) {
+      return res.status(400).json({ error: 'Invalid request' });
+    }
+    try {
+      if (!isComposioConfigured(provider)) return notConfigured(res, provider);
+
+      const { brand, role } = await assertBrandAccess(brandId.data, req.user.id);
+      if (!WRITE_ROLES.includes(role)) {
+        return res.status(403).json({ error: 'Only admins and managers can map a property.' });
+      }
+      if (brand.is_demo) {
+        return res.status(403).json({ error: "The demo brand's properties can't be changed." });
+      }
+
+      const { property } = body.data;
+      if (property) {
+        const target = await brandSignIn(req.user.id, brand.id, provider);
+        if (!target) return res.status(409).json({ error: `${label} is not connected.` });
+        const ids = await listIds(target);
+        if (!ids.includes(property)) {
+          return res.status(400).json({
+            error: `That property isn't on the ${label} account this brand uses.`,
+            code: 'unknown_property',
+          });
+        }
+      }
+
+      const { error } = await supabaseAdmin
+        .from('brands')
+        .update({ [column]: property })
+        .eq('id', brand.id);
+      if (error) throw new Error(`Failed to save the property: ${error.message}`);
+
+      const syncStarted = property ? launchBrandSync(req, provider, brand.id, run) : false;
+      return res.json({ saved: true, syncStarted });
+    } catch (err) {
+      req.log.error({ err }, 'integrations property save error');
+      return res.status(err.status || 500).json({ error: err.message, code: err.code });
+    }
+  };
+}
+
+router.put(
+  '/google-search-console/brands/:brandId/property',
+  propertyRoute({
+    provider: GSC,
+    label: 'Google Search Console',
+    column: 'gsc_property',
+    listIds: async (target) => (await listGscSites(target)).map((site) => site.siteUrl),
+    run: (args) => runGscSync(args),
+  }),
+);
+
+router.put(
+  '/google-analytics/brands/:brandId/property',
+  propertyRoute({
+    provider: GA,
+    label: 'Google Analytics',
+    column: 'ga_property_id',
+    listIds: async (target) =>
+      (await listGaProperties(target, { streams: false })).map((p) => p.propertyId),
+    run: (args) => runGaSync(args),
+  }),
+);
 
 /**
  * POST /api/integrations/google-search-console/sync
  * Runs the query-stats sync for the caller's org immediately (#644) —
  * testing and first-time backfill; the daily cycle runs the same sync.
- * With `{ brandId }` in the body it syncs that brand only, in the background;
- * without one, every brand, so it needs All brands.
+ * With `{ brandId }` in the body it syncs that brand only, in the background,
+ * for someone who may (assertBrandSync); without one, every brand, so it
+ * needs All brands.
  */
 router.post('/google-search-console/sync', async (req, res) => {
   try {
@@ -360,7 +481,7 @@ router.post('/google-search-console/sync', async (req, res) => {
 
     const brandId = req.body?.brandId;
     if (brandId) {
-      await assertBrandAccess(brandId, req.user.id);
+      await assertBrandSync(req.user.id, brandId, GSC);
       return startBrandSync(req, res, GSC, brandId, runGscSync);
     }
 
@@ -401,8 +522,8 @@ router.get('/google-analytics/properties', async (req, res) => {
  * POST /api/integrations/google-analytics/sync
  * Runs the traffic sync for the caller's org immediately (#704) — testing and
  * first-time backfill; the daily cycle runs the same sync. With `{ brandId }`
- * in the body it syncs that brand only, in the background; without one,
- * every brand, so it needs All brands.
+ * in the body it syncs that brand only, in the background, for someone who
+ * may (assertBrandSync); without one, every brand, so it needs All brands.
  */
 router.post('/google-analytics/sync', async (req, res) => {
   try {
@@ -415,7 +536,7 @@ router.post('/google-analytics/sync', async (req, res) => {
 
     const brandId = req.body?.brandId;
     if (brandId) {
-      await assertBrandAccess(brandId, req.user.id);
+      await assertBrandSync(req.user.id, brandId, GA);
       return startBrandSync(req, res, GA, brandId, runGaSync);
     }
 
