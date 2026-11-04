@@ -83,6 +83,33 @@ describe('newResultMessage', () => {
     ]);
   });
 
+  it('names the needs written as another angle', () => {
+    expect(
+      newResultMessage({
+        generated: 3,
+        angles: [
+          { need: 'Coffee gifts', of: 'Gift guide' },
+          { need: 'Decaf', of: 'Decaf guide' },
+        ],
+        scope: scope({ needs: 11, covered: 10 }),
+      }),
+    ).toEqual({
+      tone: 'success',
+      title: { key: 'newDone', values: { generated: 3, duplicates: 0 } },
+      reasons: [{ key: 'newReason.angles', values: { count: 2, needs: 'Coffee gifts, Decaf' } }],
+    });
+  });
+
+  it('still says why when angles did not fill the rest', () => {
+    const { title, reasons } = newResultMessage({
+      generated: 2,
+      angles: [{ need: 'Decaf', of: 'Decaf guide' }],
+      scope: scope({ needs: 11, covered: 10 }),
+    });
+    expect(title).toEqual({ key: 'newPartial', values: { generated: 2, requested: 3 } });
+    expect(reasons.map((r) => r.key)).toEqual(['newReason.angles', 'newReason.covered']);
+  });
+
   it('keeps the old wording for a result without a scope', () => {
     expect(newResultMessage({ generated: 0, duplicates: 0 }).title).toEqual({ key: 'newNothing' });
     expect(newResultMessage({ generated: 0, duplicates: 2 }).title).toEqual({
