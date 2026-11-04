@@ -1,6 +1,63 @@
 {
   "entries": [
     {
+      "slug": "follow-up-checks",
+      "feature": "Follow-up checks",
+      "homeLine": "After a change, Chat can check back on a later day and tell you what happened.",
+      "route": "/dashboard/chat",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2099-12-31",
+      "lines": [
+        "It was easy to fix a page and never learn whether the fix worked.",
+        "After a change, Chat offers a check in 7, 14, 30 or 90 days that reads your tracking data.",
+        "You get Improved, No meaningful change or Declined in the chat and at the top of your Inbox.",
+        "Click Set check on the card Chat shows after a change you made or approved."
+      ]
+    },
+    {
+      "slug": "scheduled-jobs",
+      "feature": "Scheduled jobs",
+      "homeLine": "Chat can now do work on a schedule, such as a report every Monday at 9:00.",
+      "route": "/dashboard/chat",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2099-12-31",
+      "lines": [
+        "Weekly reports and checks meant asking Chat the same thing every week.",
+        "Say \"every Monday at 9:00\" and Chat shows a card you can edit; nothing is scheduled until you click.",
+        "Each run lands in your Inbox or your email, and a repeat can say No change when nothing moved.",
+        "Admins and Managers ask in any chat, then manage their jobs on the Scheduled page in the Chat menu."
+      ]
+    },
+    {
+      "slug": "time-zone",
+      "feature": "Your time zone",
+      "homeLine": "Pick your own time zone, so Chat's times and your schedules match your day.",
+      "route": "/dashboard/settings/account",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2099-12-31",
+      "lines": [
+        "Times followed your browser, which was off when you travel or work in another time zone.",
+        "Each person can now pick a time zone, or keep Automatic to follow the browser.",
+        "New scheduled jobs, Chat's times and your daily suggestions use it.",
+        "Open Settings › Account › Time zone and type a city or an offset."
+      ]
+    },
+    {
       "slug": "agents-publish-on-their-own",
       "feature": "Agents that publish on their own",
       "homeLine": "An Admin can now let chosen agents publish pages without waiting for a click.",
@@ -58,25 +115,6 @@
       ]
     },
     {
-      "slug": "follow-up-checks",
-      "feature": "Follow-up checks",
-      "homeLine": "After a change, Chat can check back on a later day and tell you what happened.",
-      "route": "/dashboard/chat",
-      "plans": [
-        "starter",
-        "growth",
-        "enterprise"
-      ],
-      "planMode": "show_upgrade",
-      "published": "2026-11-03",
-      "lines": [
-        "It was easy to fix a page and never learn whether the fix worked.",
-        "After a change, Chat offers a check in 7, 14, 30 or 90 days that reads your tracking data.",
-        "You get Improved, No meaningful change or Declined in the chat and at the top of your Inbox.",
-        "Click Set check on the card Chat shows after a change you made or approved."
-      ]
-    },
-    {
       "slug": "memory",
       "feature": "Memory",
       "homeLine": "Chat can remember short notes between chats, such as the tone your brand uses.",
@@ -93,25 +131,6 @@
         "Start a message with \"Remember that…\" and Chat saves one short line once you click Save.",
         "Notes for you, a brand or the workspace shape every chat, and the steps show when one was used.",
         "Change or delete notes on the Memory page, from the ⋯ menu at the top of a chat."
-      ]
-    },
-    {
-      "slug": "scheduled-jobs",
-      "feature": "Scheduled jobs",
-      "homeLine": "Chat can now do work on a schedule, such as a report every Monday at 9:00.",
-      "route": "/dashboard/chat",
-      "plans": [
-        "starter",
-        "growth",
-        "enterprise"
-      ],
-      "planMode": "show_upgrade",
-      "published": "2026-11-03",
-      "lines": [
-        "Weekly reports and checks meant asking Chat the same thing every week.",
-        "Say \"every Monday at 9:00\" and Chat shows a card you can edit; nothing is scheduled until you click.",
-        "Each run lands in your Inbox or your email, and a repeat can say No change when nothing moved.",
-        "Admins and Managers ask in any chat, then manage their jobs on the Scheduled page in the Chat menu."
       ]
     },
     {
@@ -150,25 +169,6 @@
         "Take down removes a page from your Webflow, WordPress or Wix site and keeps it there as a draft.",
         "A page you took down never goes live on its own again, even from an agent.",
         "Admins and Managers pick Take down in the page's … menu in the Library, or on an agent's notice."
-      ]
-    },
-    {
-      "slug": "time-zone",
-      "feature": "Your time zone",
-      "homeLine": "Pick your own time zone, so Chat's times and your schedules match your day.",
-      "route": "/dashboard/settings/account",
-      "plans": [
-        "starter",
-        "growth",
-        "enterprise"
-      ],
-      "planMode": "show_upgrade",
-      "published": "2026-11-03",
-      "lines": [
-        "Times followed your browser, which was off when you travel or work in another time zone.",
-        "Each person can now pick a time zone, or keep Automatic to follow the browser.",
-        "New scheduled jobs, Chat's times and your daily suggestions use it.",
-        "Open Settings › Account › Time zone and type a city or an offset."
       ]
     },
     {

@@ -113,21 +113,6 @@ describe('ChatSettings', () => {
     expect(host.textContent).not.toContain('Thought for');
   });
 
-  it('keeps where pages open: ask, in chat or the Content Editor, no Open here yet (W4-11)', async () => {
-    await render();
-    const choices = [...action('chatSettings.pageOpen')];
-    expect(choices.map((el) => el.textContent)).toEqual([
-      'Ask each time',
-      'Keep in chat',
-      'Content Editor',
-    ]);
-    expect(choices[0].getAttribute('aria-checked')).toBe('true');
-    await act(async () => choices[2].click());
-    expect(saved.patches).toEqual([{ pageOpen: 'editor' }]);
-    expect(action('chatSettings.pageOpen')[2].getAttribute('aria-checked')).toBe('true');
-    expect(host.textContent).toContain('Where pages open');
-  });
-
   it('offers the answer languages Chat reads, "Same as my question" first, and keeps a pick at once', async () => {
     await render();
     const select = action('chatSettings.answerLanguage')[0] as HTMLSelectElement;
@@ -152,6 +137,21 @@ describe('ChatSettings', () => {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
     expect(saved.patches).toEqual([{ answerLanguage: 'tr' }, { answerLanguage: null }]);
+  });
+
+  it('keeps where pages open: ask, in chat or the Content Editor, no Open here yet (W4-11)', async () => {
+    await render();
+    const choices = [...action('chatSettings.pageOpen')];
+    expect(choices.map((el) => el.textContent)).toEqual([
+      'Ask each time',
+      'Keep in chat',
+      'Content Editor',
+    ]);
+    expect(choices[0].getAttribute('aria-checked')).toBe('true');
+    await act(async () => choices[2].click());
+    expect(saved.patches).toEqual([{ pageOpen: 'editor' }]);
+    expect(action('chatSettings.pageOpen')[2].getAttribute('aria-checked')).toBe('true');
+    expect(host.textContent).toContain('Where pages open');
   });
 
   it('keeps each pick at once', async () => {
