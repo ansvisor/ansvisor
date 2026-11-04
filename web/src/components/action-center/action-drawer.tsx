@@ -96,6 +96,7 @@ import {
   useMissingText,
 } from './task-detail';
 import { hasActiveWebhook, sendActionTask } from '@/lib/actions/action-task-send';
+import { useUserRole } from '@/hooks/use-user-role';
 import { checkActionTask } from '@/lib/actions/action-task-check';
 import { getActionDrafts, startDraftFromAction } from '@/lib/actions/content-drafts';
 import { actionPages, draftMethodForTask, type ActionDraft } from '@/lib/content/action-drafts';
@@ -182,6 +183,7 @@ export function ActionDrawer({
   // Whether a task can go to the brand's webhook (AC-004). Best effort: no
   // answer is no button.
   const [webhookReady, setWebhookReady] = useState(false);
+  const { canManage } = useUserRole();
   useEffect(() => {
     let cancelled = false;
     hasActiveWebhook(brandId).then(
@@ -826,7 +828,8 @@ export function ActionDrawer({
                       send={{
                         // A content task, unless the action itself came from Content.
                         content: task.details?.type === 'content' && !opportunityId,
-                        webhook: webhookReady,
+                        // The webhook is for admins and managers, as the server allows it.
+                        webhook: canManage && webhookReady,
                         onSend: guard(
                           (to: 'content' | 'webhook') =>
                             void sendTask(task.id, taskText(task, tTasks), to),

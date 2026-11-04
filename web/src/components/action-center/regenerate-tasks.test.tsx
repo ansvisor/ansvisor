@@ -110,17 +110,14 @@ describe('RegenerateTasks', () => {
     );
   });
 
-  it('tells someone without the Needs review tab who reviews', async () => {
+  // A model writes them, so the server refuses anyone else (2026-11-03).
+  it('is not offered to an analyst or an agency partner', () => {
     canManage = false;
-    regenerate.mockResolvedValueOnce({ written: 0, kept: 0, reviews: 1 });
     render(
       <RegenerateTasks actionId="a1" disabled={false} onBusyChange={() => {}} onDone={() => {}} />,
     );
-    act(() => button('Regenerate tasks').click());
-    await act(async () => button('Regenerate').click());
-    expect(toast.success).toHaveBeenCalledWith(
-      '0 tasks written; 1 waits for an admin or a manager to review',
-    );
+    expect(container.textContent).toBe('');
+    expect(regenerate).not.toHaveBeenCalled();
   });
 
   it("words the server's reason, and a timeout", async () => {

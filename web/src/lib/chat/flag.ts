@@ -39,7 +39,10 @@ function chatAgenticOrgs(): string[] {
  * CHAT_AUTO_GO_LIVE_ORGS narrows it as CHAT_AGENTIC_ORGS does. Staff's
  * rollout list and kill switch on the cloud; a self-hosted operator's own
  * opt-in. Off, Settings › Chat hides the switch and no agent goes live on
- * its own. The API server reads the same variables (lib/chat-flag.js).
+ * its own. The API server reads the same two variables the same way
+ * (lib/chat-flag.js autoGoLiveEnabled) and, off, refuses every go-live step
+ * (routes/internal-chat-go-live.js, 403 auto_go_live_off) whatever the
+ * workspace's saved switch says: set both sides to the same values.
  */
 export function autoGoLiveEnabled(organizationId?: string | null): boolean {
   if (!chatAgenticEnabled(organizationId)) return false;

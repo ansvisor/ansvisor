@@ -4,8 +4,8 @@ route: /dashboard/prompts/insights
 keywords: [prompt insights, analyze volumes, refresh volumes, intent, similar topics, high opportunity prompts]
 synonyms: [prompt volume, search demand, keyword volume, volume analysis]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ The **Insights** tab of the **Prompts** page shows the estimated AI search volum
 
 ## Run a volume analysis
 
-Volumes come from an analysis you run:
+Volumes come from an analysis that admins and managers run:
 
 - **Analyze Volumes** the first time;
 - **Analyze New Prompts** for prompts added since, shown while some have no volume;
