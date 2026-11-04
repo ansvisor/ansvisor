@@ -13,6 +13,7 @@ import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { PAGE_TYPES, type DraftMethod, type DraftStart, type PageType } from '@/lib/content/drafts';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { contentUuid, isHttpUrl } from '@/lib/mcp/content-schemas';
+import { readPageVersion } from '../page-versions';
 import { FIXTURE_IDS, defineTool, type ChatToolContext } from './define-tool';
 
 /**
@@ -132,6 +133,11 @@ export const WRITE_TOOLS = [
             contentDraftId: output,
           }
         : null,
+    // Version 1 of the page in this chat (W4-12a).
+    versionOf: (_input, output, place) =>
+      typeof output === 'string' && output
+        ? readPageVersion({ draftId: output, conversationId: place.conversationId })
+        : Promise.resolve(null),
     fixture: {
       input: {
         brand_id: BRAND,

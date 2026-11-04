@@ -8,7 +8,14 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
-import { looksLikeApiKey, withoutApiKeys } from '@/lib/chat/key-paste';
+import {
+  asksToAddKey,
+  looksLikeApiKey,
+  pastedKeyOf,
+  withoutApiKeys,
+  type PastedKeyProvider,
+} from '@/lib/chat/key-paste';
+import { AddKeyCard } from '@/components/chat/run/add-key-card';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import { MAX_REFERENCES, type ChatReference } from '@/lib/chat/references';
@@ -37,6 +44,7 @@ import {
 } from './composer-menus';
 import { ModeSwitch } from './mode-switch';
 import { ModelMenu, useModelLabel } from './model-menu';
+import { YourKeysDialog } from './your-keys-dialog';
 
 /** Where the composer sits (CHAT-02 variants): Chat home, an open chat's dock, the side panel. */
 export type ComposerVariant = 'home' | 'dock' | 'panel';
@@ -185,6 +193,7 @@ export function ChatComposer({
   modelChoice,
   onModelChoice,
   onSaveKey,
+  keyForm = false,
   className,
 }: {
   variant?: ComposerVariant;
@@ -250,6 +259,12 @@ export function ChatComposer({
    * key form, never to Chat. Without it, only Remove shows.
    */
   onSaveKey?: (text: string) => void;
+  /**
+   * The own-key forms (W4-06): Save securely and a message such as "use my
+   * OpenAI key" open the Add API key card above the box, never the chat;
+   * the model menu opens Your API keys for Admins.
+   */
+  keyForm?: boolean;
   className?: string;
 }) {
   const t = useTranslations('chatComposer');
@@ -268,6 +283,13 @@ export function ChatComposer({
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [fileProblem, setFileProblem] = useState<UploadProblem | null>(null);
   const [modelOpen, setModelOpen] = useState(false);
+  const [keysOpen, setKeysOpen] = useState(false);
+  // The Add API key card above the box, with a pasted key and its provider (W4-06).
+  const [keyCard, setKeyCard] = useState<{ provider?: PastedKeyProvider; key?: string } | null>(
+    null,
+  );
+  // The message the card was last offered for: sent again, it goes to Chat as typed.
+  const [keyOfferedFor, setKeyOfferedFor] = useState<string | null>(null);
   const chosenLabel = useModelLabel(modelChoice ?? AUTO_CHOICE);
   // The shortcut picked from the / menu, and the trigger words it put in the box.
   const [shortcut, setShortcut] = useState<{ id: ShortcutId; trigger: string } | null>(null);
@@ -294,6 +316,16 @@ export function ChatComposer({
   const hasText = text.trim().length > 0;
   // A pasted API key: the text stays in the box until it is taken out.
   const keyInText = hasText && looksLikeApiKey(text);
+  // Save securely: the page's own form, else the Add API key card for an Admin (W4-06).
+  const saveKey =
+    onSaveKey ??
+    (keyForm && canAdmin
+      ? (value: string) => {
+          const found = pastedKeyOf(value);
+          setKeyCard({ provider: found?.provider, key: found?.key });
+          putText(withoutApiKeys(value));
+        }
+      : undefined);
   const uploading = files.some((f) => f.status === 'uploading');
   const failedFiles = files.some((f) => f.status === 'failed');
   // The ghost shows in an empty box, not while a run answers or the box is off.
@@ -575,6 +607,13 @@ export function ChatComposer({
   async function submit(steer: boolean) {
     const message = text.trim();
     if (!message || sending || disabled || uploading || looksLikeApiKey(message)) return;
+    // "Use my OpenAI key": the card answers it, and the key never goes to Chat (W4-06).
+    // The message stays in the box, and a second send sends it, so a misread loses nothing.
+    if (keyForm && asksToAddKey(message) && keyOfferedFor !== message) {
+      setKeyOfferedFor(message);
+      setKeyCard({});
+      return;
+    }
     const handler = steer ? onSteer : onSend;
     if (!handler) return;
     const sentRefs = refs;
@@ -655,6 +694,12 @@ export function ChatComposer({
 
   return (
     <div ref={root} className={cn('w-full', className)}>
+      {keyCard && (
+        <div className="mb-2">
+          <AddKeyCard initial={keyCard} onClose={() => setKeyCard(null)} />
+        </div>
+      )}
+      {keyForm && <YourKeysDialog open={keysOpen} onClose={() => setKeysOpen(false)} />}
       <div
         onDragOver={(e) => {
           if (uploader && e.dataTransfer.types.includes('Files')) e.preventDefault();
@@ -960,11 +1005,11 @@ export function ChatComposer({
           >
             {t('keyPaste.remove')}
           </button>
-          {onSaveKey && (
+          {saveKey && (
             <button
               type="button"
               data-action="composer.saveKey"
-              onClick={() => onSaveKey(text)}
+              onClick={() => saveKey(text)}
               className="font-medium underline underline-offset-2"
             >
               {t('keyPaste.save')}
@@ -1011,6 +1056,7 @@ export function ChatComposer({
                   choice={modelChoice ?? AUTO_CHOICE}
                   onChange={onModelChoice}
                   onClose={() => setModelOpen(false)}
+                  onOpenKeys={keyForm && canAdmin ? () => setKeysOpen(true) : undefined}
                 />
               )}
             </span>

@@ -164,3 +164,114 @@ export function withReadTimeout<T>(
     );
   });
 }
+
+// ─── A brand's own Google sign-in (BRAND-ACCESS PR 15) ──────────────────────
+
+/** The Google products a brand connects on its own. */
+export type BrandGoogleProvider = 'google-search-console' | 'google-analytics';
+
+/** A sign-in as Brand settings › Integrations shows it: no token, entity or Composio id. */
+export interface BrandSignIn {
+  accountId: string | null;
+  label: string | null;
+  /** The Account's own Google connection (Settings › Integrations). */
+  accountLevel: boolean;
+  /** Who connected it, and when: a brand's own login. */
+  connectedBy: string | null;
+  connectedAt: string | null;
+}
+
+export interface BrandGoogleProduct {
+  provider: BrandGoogleProvider;
+  configured: boolean;
+  /** The brand's property: a Search Console site, or a GA4 property id. */
+  property: string | null;
+  /** The sign-in the brand uses; null when it uses none. */
+  current: (BrandSignIn & { status: string; connected: boolean }) | null;
+  /** The connected sign-ins it could use: the Account's, and those of brands the person reaches. */
+  usable: (BrandSignIn & { brandIds: string[] })[];
+}
+
+/** The brand's Google sign-ins, and the ones it could use instead. */
+export function readBrandGoogle(brandId: string): Promise<IntegrationResult<BrandGoogleProduct[]>> {
+  return call(`/brands/${brandId}`, {}, INTEGRATION_READ_TIMEOUT_MS, (body) =>
+    Array.isArray(body.products) ? (body.products as BrandGoogleProduct[]) : undefined,
+  );
+}
+
+/** "Use the same account as…": the brand uses this connected sign-in from now on. */
+export function chooseBrandSignIn(
+  provider: BrandGoogleProvider,
+  brandId: string,
+  accountId: string,
+): Promise<IntegrationResult<true>> {
+  return call(
+    `/${provider}/brands/${brandId}/use`,
+    { method: 'POST', body: JSON.stringify({ accountId }) },
+    GOOGLE_CALL_TIMEOUT_MS,
+    (body) => (body.success === true ? true : undefined),
+  );
+}
+
+/** "Connect another Google account": the address to open, and the new sign-in's id. */
+export function startBrandConnect(
+  provider: BrandGoogleProvider,
+  brandId: string,
+  callbackUrl: string,
+): Promise<IntegrationResult<{ redirectUrl: string; accountId: string }>> {
+  return call(
+    `/${provider}/brands/${brandId}/connect`,
+    { method: 'POST', body: JSON.stringify({ callbackUrl }) },
+    GOOGLE_CALL_TIMEOUT_MS,
+    (body) =>
+      typeof body.redirectUrl === 'string' && typeof body.accountId === 'string'
+        ? { redirectUrl: body.redirectUrl, accountId: body.accountId }
+        : undefined,
+  );
+}
+
+/** Whether the brand's new login is done ('connected', the brand using it) or not yet. */
+export function activateBrandSignIn(
+  provider: BrandGoogleProvider,
+  brandId: string,
+  accountId: string,
+): Promise<IntegrationResult<'connected' | 'pending'>> {
+  return call(
+    `/${provider}/brands/${brandId}/activate`,
+    { method: 'POST', body: JSON.stringify({ accountId }) },
+    INTEGRATION_READ_TIMEOUT_MS,
+    (body) => (body.status === 'connected' || body.status === 'pending' ? body.status : undefined),
+  );
+}
+
+/** Disconnect on the brand's card: it uses no sign-in for the product. */
+export function disconnectBrandSignIn(
+  provider: BrandGoogleProvider,
+  brandId: string,
+): Promise<IntegrationResult<true>> {
+  return call(
+    `/${provider}/brands/${brandId}`,
+    { method: 'DELETE' },
+    GOOGLE_CALL_TIMEOUT_MS,
+    (body) => (body.success === true ? true : undefined),
+  );
+}
+
+/** The properties of the sign-in the brand uses (PR 14's `?brandId=`). */
+export function readBrandGscProperties(brandId: string): Promise<IntegrationResult<GscProperty[]>> {
+  return call(
+    `/google-search-console/properties?brandId=${brandId}`,
+    {},
+    GOOGLE_CALL_TIMEOUT_MS,
+    (body) => (Array.isArray(body.properties) ? (body.properties as GscProperty[]) : []),
+  );
+}
+
+export function readBrandGaProperties(brandId: string): Promise<IntegrationResult<GaProperty[]>> {
+  return call(
+    `/google-analytics/properties?brandId=${brandId}`,
+    {},
+    GOOGLE_CALL_TIMEOUT_MS,
+    (body) => (Array.isArray(body.properties) ? (body.properties as GaProperty[]) : []),
+  );
+}
