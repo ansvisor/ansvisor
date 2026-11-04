@@ -7,7 +7,12 @@ import { RoleContext } from '@/components/providers/role-provider';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Link } from '@/i18n/navigation';
 import { Send } from 'lucide-react';
-import { closeChatNotice, markChatNoticesRead, type ChatNotice } from '@/lib/actions/chat-notices';
+import {
+  closeChatNotice,
+  markChatNoticesRead,
+  type ChatNotice,
+  type ScheduleNotice,
+} from '@/lib/actions/chat-notices';
 import { hostOf } from '@/lib/action-center/affected';
 import { CMS_NAMES } from '@/lib/content/cms-names';
 import { cn } from '@/lib/utils';
@@ -22,7 +27,8 @@ import { INBOX_ROW } from './inbox-suggestions';
  * Open page and Open run, and Take down for a page it published (PR 10); or
  * an edit stopped it, with Open agent (AUTONOMOUS-GO-LIVE §6.4, §7.2,
  * 00446): its owner and the people it notifies get them, and opening one
- * closes it. Shown, they are marked read.
+ * closes it. A scheduled job's run failed, or the job paused (00461), with
+ * Open. Shown, they are marked read.
  */
 export function NoticeRows({ notices }: { notices: ChatNotice[] }) {
   const unread = notices
@@ -44,6 +50,9 @@ function NoticeRow({ notice }: { notice: ChatNotice }) {
       return <WentLiveRow notice={notice} />;
     case 'agent_go_live_off':
       return <GoLiveOffRow notice={notice} />;
+    case 'schedule_failed':
+    case 'schedule_paused':
+      return <ScheduleNoticeRow notice={notice} />;
     default:
       return <KeyFailedRow notice={notice} />;
   }
@@ -64,6 +73,36 @@ const dollars = (usd: number) =>
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(usd);
+
+/** A scheduled job's notice (00461): "{Job} didn't run", or "{Job} is paused", why, and Open. */
+function ScheduleNoticeRow({ notice }: { notice: ScheduleNotice }) {
+  const t = useTranslations('chatShell.inbox.notice');
+  return (
+    <div data-slot="inbox-notice" data-kind={notice.kind} className={NOTICE_ROW}>
+      <span aria-hidden className="size-2 rounded-full bg-amber-600 dark:bg-amber-400" />
+      <span className="min-w-0 text-[13.5px]">
+        <span className={cn('block truncate', !notice.read && 'font-semibold')}>
+          {t(notice.kind === 'schedule_failed' ? 'scheduleFailed' : 'schedulePaused', {
+            title: notice.title,
+          })}
+        </span>
+        <span className="block truncate text-xs text-amber-700 dark:text-amber-400">
+          {notice.reason}
+        </span>
+      </span>
+      <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+        {dayOf(notice.createdAt)}
+      </span>
+      <Link
+        href={notice.href}
+        data-action="inbox.openSchedule"
+        className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'w-full')}
+      >
+        {t('open')}
+      </Link>
+    </div>
+  );
+}
 
 function KeyLimitRow({ notice }: { notice: Extract<ChatNotice, { kind: 'own_key_limit' }> }) {
   const t = useTranslations('chatShell.inbox.notice');

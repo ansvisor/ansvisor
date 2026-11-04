@@ -9,6 +9,7 @@ import type {
   ChatRunSummary,
   ChatStep,
   ChatTaskStrip,
+  ChatWhatsNewEntry,
 } from './events';
 import { isChatEventType } from './events';
 import type { ChatWhy } from './why/view';
@@ -52,6 +53,8 @@ export interface ClientRun {
   tasks: ChatTaskStrip | null;
   /** Why did it move analyses it kept (CHAT-22 §1), in order. */
   why: ChatWhy[];
+  /** What's new's cards (CHAT-11 item 10). */
+  whatsNew: ChatWhatsNewEntry[];
   summary: ChatRunSummary | null;
   generatedAt: string | null;
   dataAsOf: string | null;
@@ -76,6 +79,7 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     sent: [],
     tasks: null,
     why: [],
+    whatsNew: [],
     summary: null,
     generatedAt: null,
     dataAsOf: null,
@@ -121,6 +125,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
     case 'text.delta':
       next.text = run.text + event.data.text;
       return next;
+    case 'text.replaced':
+      next.text = event.data.text;
+      return next;
     case 'confirm.required':
       next.confirm = event.data;
       next.status = 'waiting';
@@ -140,6 +147,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       return next;
     case 'why.ready':
       next.why = [...run.why.filter((why) => why.n !== event.data.n), event.data];
+      return next;
+    case 'whats_new.ready':
+      next.whatsNew = event.data.entries;
       return next;
     case 'next_moves':
       next.nextMoves = event.data.moves;

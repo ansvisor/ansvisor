@@ -1875,6 +1875,7 @@ export default function ContentPage() {
         max={requestMax}
         remaining={contentUsage?.opportunities.remaining ?? -1}
         onSubmit={handleNew}
+        onOpenExisting={selectOpportunity}
       />
     </div>
   );

@@ -136,8 +136,12 @@ describe('PlanCard', () => {
     expect(text).toContain('About 6 min');
     expect(text).toContain('AI usage ~2% of monthly limit');
     expect(text).toContain('Outputs FAQ draft');
-    expect(text).toContain('Shopify isn’t connected.');
+    // A missing optional tool's line (agentic plan §6): Connect or Skip, the run does the rest.
+    expect(text).toContain('Shopify isn’t connected. I can do everything else without it.');
     expect(action('integrations.connect')!.textContent).toBe('Connect Shopify');
+    await click(action('integrations.skip'));
+    expect(container.textContent).not.toContain('I can do everything else without it.');
+    expect(action('integrations.connect')).toBeNull();
   });
 
   it('starts with the plan as edited: moved and removed steps', async () => {
