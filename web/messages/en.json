@@ -14807,6 +14807,20 @@
           "claim": "Claim"
         }
       },
+      "people": {
+        "tab": "People",
+        "title": "People",
+        "description": "Who in your workspace can see this brand: everyone with All brands, and those it's shared with.",
+        "demoDescription": "The sample brand is visible to everyone in your workspace.",
+        "count": "{count, plural, one {# person} other {# people}} can see this brand",
+        "access": {
+          "all": "All brands",
+          "shared": "Shared with them"
+        },
+        "editInTeam": "Change who sees which brands in Team",
+        "loadError": "Couldn't load who can see this brand.",
+        "retry": "Retry"
+      },
       "title": "Brand Settings",
       "generalTab": "General",
       "domainsTab": "Domains",
