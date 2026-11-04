@@ -136,6 +136,9 @@ const instructionsSchema = z
   .nullable()
   .transform((text) => text?.trim() || null);
 
+/** The most agents an agent may run (CHAT-27 phase 2, Technical T3; 00466's check). */
+export const MAX_CAN_CALL = 5;
+
 /** What a version holds, as the API takes it (camelCase; the stored JSON as stored). */
 const versionFields = {
   /** The primary skill, then up to 2 follow-on skills, in order. */
@@ -148,6 +151,8 @@ const versionFields = {
   scope: agentScopeSchema,
   notifyUserIds: ids(20),
   followupDays: z.number().int().min(1).max(90),
+  /** The agents it may run with run_agent (CHAT-27 item 14; 00466): at most 5, never itself. */
+  canCall: ids(MAX_CAN_CALL),
 };
 
 // A Signal created in Action Center (§E): its category, optionally its definitions and entities.
@@ -229,6 +234,7 @@ export const createAgentInput = z.strictObject({
   scope: versionFields.scope,
   notifyUserIds: versionFields.notifyUserIds.default([]),
   followupDays: versionFields.followupDays.default(14),
+  canCall: versionFields.canCall.default([]),
   triggers: agentTriggersSchema.default([]),
 });
 export type CreateAgentInput = z.output<typeof createAgentInput>;
@@ -259,6 +265,7 @@ export const updateAgentInput = z
     scope: versionFields.scope.optional(),
     notifyUserIds: versionFields.notifyUserIds.optional(),
     followupDays: versionFields.followupDays.optional(),
+    canCall: versionFields.canCall.optional(),
     triggers: agentTriggersSchema.optional(),
   })
   .refine(
@@ -319,6 +326,8 @@ export interface AgentVersionData {
   scope: AgentScope;
   notify_user_ids: string[];
   followup_days: number;
+  /** The agents it may run (00466). */
+  can_call: string[];
 }
 
 const VERSION_KEYS = [
@@ -331,6 +340,7 @@ const VERSION_KEYS = [
   'scope',
   'notifyUserIds',
   'followupDays',
+  'canCall',
 ] as const;
 
 /** The version a new agent starts with. */
@@ -345,6 +355,7 @@ export function firstVersion(input: CreateAgentInput): AgentVersionData {
     scope: input.scope,
     notify_user_ids: input.notifyUserIds,
     followup_days: input.followupDays,
+    can_call: input.canCall,
   };
 }
 
@@ -368,6 +379,7 @@ export function nextVersion(
     scope: patch.scope ?? current.scope,
     notify_user_ids: patch.notifyUserIds ?? current.notify_user_ids,
     followup_days: patch.followupDays ?? current.followup_days,
+    can_call: patch.canCall ?? current.can_call,
   };
   return sameVersion(current, next) ? null : next;
 }
@@ -399,6 +411,7 @@ export function versionFromRow(row: {
   scope: unknown;
   notify_user_ids: string[];
   followup_days: number;
+  can_call?: string[] | null;
 }): AgentVersionData {
   const scope = agentScopeSchema.safeParse(row.scope);
   const connections = agentConnectionsSchema.safeParse(row.connections);
@@ -413,6 +426,7 @@ export function versionFromRow(row: {
     scope: scope.success ? scope.data : { brand_ids: [] as string[] },
     notify_user_ids: row.notify_user_ids,
     followup_days: row.followup_days,
+    can_call: row.can_call ?? [],
   };
 }
 
@@ -518,7 +532,9 @@ export type AgentAsk =
   | 'engines'
   | 'runWithChat'
   /** An agent's permission to publish and send on its own (AUTONOMOUS-GO-LIVE §7.2). */
-  | 'goLive';
+  | 'goLive'
+  /** Letting an agent run other agents (CHAT-27 phase 2): Growth and up. */
+  | 'canCall';
 
 /** A refusal: the precedence's denial, and what was asked in words. */
 export interface AgentDenial {
@@ -586,7 +602,7 @@ export function canSeeAgent(agent: AgentFacts, viewer: AgentViewer): boolean {
 /** The acts on an existing agent (create and duplicate make a new one). */
 export type AgentAct = Exclude<
   AgentAsk,
-  'workspace' | 'monthCap' | 'fullAuto' | 'engines' | 'runWithChat' | 'goLive'
+  'workspace' | 'monthCap' | 'fullAuto' | 'engines' | 'runWithChat' | 'goLive' | 'canCall'
 >;
 
 /** What only an Admin may do to a workspace agent while Settings › Chat keeps them to Admins. */
@@ -674,6 +690,16 @@ export function modeDenial(
     return { denial: { code: 'policy_never' }, asked: 'fullAuto' };
   }
   return null;
+}
+
+/**
+ * Can call (CHAT-27 phase 2, decision 4): an agent that runs other agents
+ * is Growth and up, with Full auto's plan gate (CHAT-20 §7). Emptying the
+ * list is always allowed.
+ */
+export function canCallDenial(canCall: readonly string[], plan: PlanFacts): AgentDenial | null {
+  if (canCall.length === 0 || plan.fullAuto) return null;
+  return { denial: { code: 'plan_locked', needs: 'growth' }, asked: 'canCall' };
 }
 
 /** The lowest plan above the workspace's that tracks an engine; Enterprise for API models. */

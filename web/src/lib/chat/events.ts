@@ -156,7 +156,10 @@ export interface ChatConfirm {
   /** What it aims at. */
   goal?: string;
   /** What it is about, by kind, in the person's words: frozen once it's made. */
-  targets?: { kind: 'prompts' | 'pages' | 'competitors' | 'platforms'; values: string[] }[];
+  targets?: {
+    kind: 'prompts' | 'pages' | 'competitors' | 'platforms' | 'aiUse';
+    values: string[];
+  }[];
   /**
    * An editable card (CHAT-12 item 7; W3-02): its fields, as the change
    * would be made. Its button sends the edited values with the Approve; the

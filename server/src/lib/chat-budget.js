@@ -108,19 +108,59 @@ async function agentRunSpentUsd(agentRunId) {
  * plan's included monthly budget (`includedUsd`, credits left out), worked
  * out here so no dollar leaves the server. Null without a budget to share
  * (self-hosted: no cap). ChatBudgetError 404 when the run isn't the
- * workspace's.
+ * workspace's. A run another agent ran (called_by_run_id) is held within
+ * what is left of its caller's cap too, after the caller's own spend and
+ * that of the other agents it ran, so calls one after another can't pass it.
  */
 async function agentRunCapUsd(orgId, agentRunId, includedUsd) {
   const { data, error } = await supabaseAdmin
     .from('chat_agent_runs')
-    .select('max_share')
+    .select('max_share, called_by_run_id')
     .eq('id', agentRunId)
     .eq('organization_id', orgId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new ChatBudgetError('not_found', 404, 'Agent run not found.');
   if (includedUsd === null || !(includedUsd > 0)) return null;
-  return (Number(data.max_share) || 0) * includedUsd;
+  const cap = (Number(data.max_share) || 0) * includedUsd;
+  // The agents it ran share its cap (CHAT-27 item 21): what they spent comes out of it.
+  const own = Math.max(0, cap - (await calledRunsSpentUsd(agentRunId)));
+  if (!data.called_by_run_id) return own;
+  const { data: caller, error: callerError } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .select('max_share')
+    .eq('id', data.called_by_run_id)
+    .eq('organization_id', orgId)
+    .maybeSingle();
+  if (callerError) throw new Error(callerError.message);
+  if (!caller) return own;
+  const callerLeft =
+    (Number(caller.max_share) || 0) * includedUsd -
+    (await agentRunSpentUsd(data.called_by_run_id)) -
+    (await calledRunsSpentUsd(data.called_by_run_id, agentRunId));
+  return Math.max(0, Math.min(own, callerLeft));
+}
+
+/**
+ * What the agent runs a run started with run_agent spent (00466's
+ * called_by_run_id; CHAT-27 phase 2), own-key steps included as the cap's
+ * measure is: a called run's slice is held out of its caller's cap, and
+ * what it didn't spend comes back. `exceptRunId` leaves one of them out.
+ */
+async function calledRunsSpentUsd(agentRunId, exceptRunId = null) {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .select('id')
+    .eq('called_by_run_id', agentRunId);
+  if (error) throw new Error(error.message);
+  const ids = (data ?? []).map((row) => row.id).filter((id) => id !== exceptRunId);
+  if (ids.length === 0) return 0;
+  const { data: rows, error: spentError } = await supabaseAdmin
+    .from('prompt_improve_usage')
+    .select('cost_usd')
+    .in('agent_run_id', ids);
+  if (spentError) throw new Error(spentError.message);
+  return (rows ?? []).reduce((sum, row) => sum + (Number(row.cost_usd) || 0), 0);
 }
 
 /**

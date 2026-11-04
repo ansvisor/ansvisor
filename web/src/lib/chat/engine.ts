@@ -358,6 +358,32 @@ interface RunScope {
   brandIsDemo: boolean;
 }
 
+/**
+ * The rows a run is offered at all (their offerIn, W4-26: run_agent only in
+ * an agent's run with an agent to call), and refused ones it may explain:
+ * a row not offered here isn't explained either. A check that fails leaves
+ * the row out.
+ */
+async function offeredInRun(
+  tools: ReturnType<typeof engineTools>,
+  run: { agentRunId: string | null },
+): Promise<ReturnType<typeof engineTools>> {
+  const hidden = new Set<string>();
+  for (const tool of CHAT_TOOLS) {
+    if (!tool.offerIn) continue;
+    const here = await tool.offerIn(run).catch((err) => {
+      console.error('[chat/engine] could not tell whether a tool is offered:', err);
+      return false;
+    });
+    if (!here) hidden.add(tool.name);
+  }
+  if (hidden.size === 0) return tools;
+  return {
+    offered: tools.offered.filter((tool) => !hidden.has(tool.name)),
+    refused: tools.refused.filter((r) => !hidden.has(r.tool.name)),
+  };
+}
+
 /** The rows an Admin is never offered: a request to the Admins (CHAT-20 row 80a). */
 const NOT_FOR_ADMINS: ReadonlySet<string> = new Set(['request_access']);
 
@@ -1096,8 +1122,9 @@ async function openContext(
   const tools = engineTools(ctx, scope);
   // A shortcut's run reads only its data plan (W2-09).
   const playbook = shortcutPlaybook(actor.organizationId, progress.shortcut);
-  const offered = playbook ? playbookTools(tools.offered, playbook) : tools.offered;
-  const { refused } = tools;
+  const shown = await offeredInRun(tools, { agentRunId });
+  const offered = playbook ? playbookTools(shown.offered, playbook) : shown.offered;
+  const { refused } = shown;
   // An agent's run reads what its skills list (run-limits.ts AGENT_READS).
   const budget = readBudget(run.effort, { agent: agentRunId !== null });
   const history = await readHistory(run, budget.historyChars);
@@ -3835,6 +3862,8 @@ async function writeCall(
   const auto = approval.kind === 'auto';
   // A row's own words for what it made ("Scheduled: Weekly report"), when it has them.
   const done = outcome.code === 'ok' ? doneStepOf(tool, input, outcome.output) : null;
+  // Another agent's answer is untrusted: every later change asks (CHAT-20 §16a).
+  if (tool.taintsRun && outcome.code === 'ok') rc.progress.tainted = true;
   row = await updateStep(stepId, {
     status: 'done',
     label: done?.label ?? toolWords(tool, 'step'),

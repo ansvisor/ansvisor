@@ -752,7 +752,12 @@
         "publish on its own",
         "go live on its own",
         "daily limit",
-        "went live notice"
+        "went live notice",
+        "can call",
+        "run another agent",
+        "called by",
+        "sub-agents",
+        "agent calls agent"
       ],
       "synonyms": [
         "my agents",
@@ -768,10 +773,13 @@
         "change an agent",
         "remove an agent",
         "publish without a click",
-        "agent sends to cms"
+        "agent sends to cms",
+        "agent runs an agent",
+        "chain agents",
+        "helper agent"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -824,6 +832,10 @@
         {
           "heading": "How a run works",
           "text": "Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox.\n\nA run may use only its share of your monthly AI limit. A run a trigger started ends **Stopped at its limit** when it reaches it; a **Run now** run pauses there instead. After 3 failed runs in a row the agent pauses. When the monthly AI limit is used up, the agent pauses and starts again by itself once the limit resets."
+        },
+        {
+          "heading": "Let an agent run other agents",
+          "text": "On Growth and up, an agent can run up to 5 of your other agents. Pick them under **Can call** on the agent's last step. A paused agent isn't run until you resume it.\n\nA run may run other agents up to 3 times and asks you first each time: the card names the agent, what it asks and how much of your monthly AI limit it may use. The other agent works on the same brand, in a chat of its own, and asks before most changes. It gets only what is left of the first run's **Max per run**, and can't run agents itself. It stops when the first run stops, or after 4 minutes.\n\nIn **Run history**, its run shows **Called by** and the first agent. The first run says how many agents it ran: click it for each one's result and AI use."
         },
         {
           "heading": "When a run asks before a change",
