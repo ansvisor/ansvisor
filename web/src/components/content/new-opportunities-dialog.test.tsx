@@ -134,6 +134,7 @@ describe('New content opportunities', () => {
     open,
     covered: 11 - open,
     noAnswers: 0,
+    angles: 0,
     topics: {},
     promptOpportunity: {},
     ...over,
@@ -157,6 +158,25 @@ describe('New content opportunities', () => {
     expect(button('Generate 1')!.disabled).toBe(true);
     expect(text()).not.toContain('max 0');
     expect(text()).not.toContain('Uses 1');
+  });
+
+  it('fills the rest with another angle on needs the brand is still barely seen for', async () => {
+    getOpportunityAvailability.mockResolvedValue(availability(1, { angles: 1 }));
+    await render();
+    expect(text()).toContain(
+      "1 of 11 needs has no opportunity yet. Past that, up to 1 more as another angle on needs you're still barely seen for.",
+    );
+    expect(button('Generate 2')).toBeDefined();
+    expect(text()).toContain('max 2');
+  });
+
+  it('writes only angles once every need has an opportunity', async () => {
+    getOpportunityAvailability.mockResolvedValue(availability(0, { angles: 4 }));
+    await render();
+    expect(text()).toContain(
+      "Every need already has an opportunity. New writes another angle on the ones you're still barely seen for: up to 4.",
+    );
+    expect(button('Generate 3')!.disabled).toBe(false);
   });
 
   it("offers the open opportunity a prompt's need already has", async () => {
