@@ -296,10 +296,12 @@ export function ChatThreadView({
   }, [last, pagePref, ownChat, router]);
 
   async function choosePage(runId: string, href: string, where: OpenPageChoice, remember: boolean) {
+    let kept = false;
     if (remember) {
       setPageSaving(true);
       const saved = await saveChatGeneralSettings({ pageOpen: where }).catch(() => ({ ok: false }));
       setPageSaving(false);
+      kept = saved.ok;
       if (saved.ok) {
         setPagePref(where);
         toast(tPage('saved'));
@@ -310,6 +312,8 @@ export function ChatThreadView({
     keepPageChoice(runId, where);
     setPageAnswered((was) => new Set(was).add(runId));
     if (where === 'editor') router.push(href);
+    // The side panel's setup is the layout's, read once: read again, so its next chat has the choice.
+    if (kept) router.refresh();
   }
   // A question the run waits on: the composer's message answers it (CHAT-07 §A item 8).
   const asking = last?.run?.question ?? null;

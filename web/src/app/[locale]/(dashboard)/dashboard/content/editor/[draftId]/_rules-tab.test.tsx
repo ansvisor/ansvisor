@@ -218,7 +218,7 @@ describe('the Rules tab', () => {
       expect(notes().some((n) => n.startsWith('Recommended: the page is'))).toBe(false);
       expect(notes()).toContainEqual(
         expect.stringContaining(
-          "The page is 15,921 characters for a Length of 3,000, but a rewrite can't go much under 3,900: 2,900 are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about 4,000, or unlock passages you're fine to have reworded.",
+          "The page is 15,921 characters for a Length of 3,000, but a rewrite can't go much under 3,900: 2,900 are passages AI answers quote, tables and other blocks it keeps as they are. Unlock passages you're fine to have reworded, or raise the Length to about 4,000.",
         ),
       );
       change.mockClear();
@@ -247,6 +247,17 @@ describe('the Rules tab', () => {
       expect(container.textContent).toContain(
         'That rewrites the passages AI answers quote as well, so they may stop being quoted.',
       );
+      // The Length is the person's: the rewrite first, raising it second and quieter
+      // (editor UX review 2026-11-03, decision b).
+      const names = buttons().map((b) => b.textContent);
+      expect(names.indexOf('Rewrite, cited passages too')).toBeLessThan(
+        names.indexOf('Raise Length to 4,000'),
+      );
+      // Ghost, not outlined as the rewrite is.
+      const raise = buttons().find((b) => b.textContent === 'Raise Length to 4,000')!;
+      const rewrite = buttons().find((b) => b.textContent === 'Rewrite, cited passages too')!;
+      expect(raise.className).not.toBe(rewrite.className);
+      expect(raise.className).toContain('border-transparent');
       await act(async () =>
         buttons()
           .find((b) => b.textContent === 'Rewrite, cited passages too')!
@@ -279,7 +290,7 @@ describe('the Rules tab', () => {
       expect(notes.some((n) => n?.startsWith('Recommended: the page is'))).toBe(false);
       expect(notes).toContainEqual(
         expect.stringContaining(
-          "The page is 15,921 characters for a Length of 3,000. The last rewrite came to 9,800, so another won't get there. Raise the Length to about 10,000",
+          "The page is 15,921 characters for a Length of 3,000. The last rewrite came to 9,800, so another won't get there. Unlock passages you're fine to have reworded, or raise the Length to about 10,000",
         ),
       );
     });
@@ -467,6 +478,44 @@ describe('the Rules tab', () => {
     });
     await act(async () => who.blur());
     expect(change).toHaveBeenCalledWith('whoFor', { value: 'Sales leaders at B2B teams' });
+  });
+
+  it('sets Length as a range, the least and the most, its band shown until then (editor test 2026-11-03)', async () => {
+    await render(state());
+    const [min, max] = row('Length').querySelectorAll('input');
+    expect(min.getAttribute('aria-label')).toBe('Length, at least');
+    expect(max.getAttribute('aria-label')).toBe('Length, at most');
+    // One number, 3,000: its band, 20% either side.
+    expect([min.value, max.value]).toEqual(['2400', '3600']);
+    const enter = (input: HTMLInputElement) =>
+      act(async () => {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      });
+    await act(async () => {
+      min.focus();
+      setValue(min, '4.500');
+      setValue(max, '5,500');
+    });
+    await enter(max);
+    expect(change).toHaveBeenCalledWith('length', { value: '4500-5500' });
+    // The larger first is put the right way round; one left empty, or as it was, changes nothing.
+    change.mockReset();
+    await act(async () => {
+      setValue(min, '6000');
+      setValue(max, '5000');
+    });
+    await enter(min);
+    expect(change).toHaveBeenCalledWith('length', { value: '5000-6000' });
+    change.mockReset();
+    await act(async () => setValue(max, ''));
+    await enter(max);
+    await act(async () => setValue(min, '2400'));
+    await enter(min);
+    expect(change).not.toHaveBeenCalled();
+    // A range set reads back as it is.
+    await render(state({ overrides: { length: { value: '4500-5500' } } }));
+    const shown = [...row('Length').querySelectorAll('input')].map((i) => i.value);
+    expect(shown).toEqual(['4500', '5500']);
   });
 
   it('turns a rule off, and shows it off', async () => {

@@ -333,6 +333,7 @@ describe('ChatThreadView', () => {
       container.querySelector<HTMLElement>(`[data-action="openPage.${name}"]`)!;
     beforeEach(() => {
       nav.push.mockReset();
+      nav.refresh.mockReset();
       prefs.saveGeneral.mockClear();
     });
 
@@ -343,6 +344,7 @@ describe('ChatThreadView', () => {
       expect(pageCard()).toBeNull();
       expect(prefs.saveGeneral).not.toHaveBeenCalled();
       expect(nav.push).not.toHaveBeenCalled();
+      expect(nav.refresh).not.toHaveBeenCalled();
     });
 
     it('opens the editor, and keeps the choice when asked not to ask again', async () => {
@@ -354,6 +356,8 @@ describe('ChatThreadView', () => {
         'Your choice is saved. Change it anytime in Settings › Chat.',
       );
       expect(nav.push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+      // The layout's setup (the side panel's) is read again with the choice.
+      expect(nav.refresh).toHaveBeenCalled();
       expect(pageCard()).toBeNull();
     });
 

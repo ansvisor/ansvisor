@@ -108,12 +108,12 @@ interface FileRow {
 const END_EVENTS = ['run.finished', 'run.stopped', 'run.error', 'run.paused_cap'];
 /** What a run sent to the Action Center (CHAT-09 item 19), read back with its end. */
 const SENT_EVENT = 'action.sent';
+/** What's new's cards (CHAT-11 item 10), read back the same way. */
+const WHATS_NEW_EVENT = 'whats_new.ready';
 /** A run's deliverables, read back for their page versions (W4-12a), which Files doesn't keep. */
 const DELIVERABLE_EVENTS = ['deliverable.created', 'deliverable.updated'];
 /** Where a page's card links: the editor. */
 const EDITOR_PATH = '/dashboard/content/editor/';
-/** What's new's cards (CHAT-11 item 10), read back the same way. */
-const WHATS_NEW_EVENT = 'whats_new.ready';
 
 /** What an ended run's events keep: its end, and what it sent to the Action Center. */
 interface RunEnd {

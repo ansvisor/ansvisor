@@ -7286,6 +7286,22 @@ describe('the side panel', () => {
         expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Fix open rules');
       });
 
+      it('asks the agent to shorten a long page of many sections, the Length being the person’s (editor UX review 2026-11-03, decision b)', async () => {
+        // Ten sections far past a Length of 400: a rewrite merges or drops
+        // sections to fit, so the Length is the agent's, not held.
+        const sections = Array.from(
+          { length: 10 },
+          (_, i) =>
+            `<h2>Section ${i + 1} on forecasting</h2><p>Teams trust the forecast because it reads the pipeline every day.</p>`,
+        ).join('');
+        getContentDraft.mockResolvedValue(
+          draft({ ...LONG, bodyHtml: `<h1>Pipeline forecasting</h1>${sections}` }),
+        );
+        getDraftSuggestions.mockResolvedValue([]);
+        await renderPage();
+        expect(nextButton()!.getAttribute('aria-label')).toBe('Next · Shorten to your Length');
+      });
+
       it('on the Length step, isn’t passed by a Fix, and is by a rewrite once decided', async () => {
         getContentDraft.mockResolvedValue(draft(LONG));
         getDraftSuggestions.mockResolvedValue([]);
@@ -7844,7 +7860,7 @@ describe('the side panel', () => {
       ).toContain('would break Max sentence length');
     });
 
-    it('tells a Fix run how far past its Length the page is when it doesn’t send the Length (#1552 review)', async () => {
+    it('sends the Length to Fix however far past it the page is, with the room it leaves (editor UX review 2026-11-03, decision b)', async () => {
       getContentDraft.mockResolvedValue({
         ...traced,
         rules: { set: null, source: null, overrides: { length: { value: '20' } }, textRules: [] },
@@ -7855,9 +7871,12 @@ describe('the side panel', () => {
       await act(async () => panelButton('Fix open rules').click());
       await act(async () => {});
       const sent = fixDraftRules.mock.calls[0][2];
-      // Far past its 20 characters, the Length is held from Fix: the hint says how far off the page is.
-      expect(sent.rules.map((r: { key: string }) => r.key)).not.toContain('length');
-      expect(sent.overLength).toEqual({ count: expect.any(Number), max: 24 });
+      // Far past its 20 characters, the Length is still the agent's (a rewrite
+      // may merge or drop sections), and the run is held to what it allows.
+      expect(sent.rules.map((r: { key: string }) => r.key)).toContain('length');
+      expect(sent.overLength).toBeUndefined();
+      expect(sent.lengthCap).toEqual({ count: expect.any(Number), max: 24 });
+      expect(sent.lengthCap.count).toBeGreaterThan(24);
     });
 
     it('says the month’s AI usage is used up before anything else, and runs nothing', async () => {

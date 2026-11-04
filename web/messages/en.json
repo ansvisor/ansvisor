@@ -460,7 +460,8 @@
     "generateBrief": "Ask an admin or a manager to generate a brief.",
     "improvePrompt": "Ask an admin or a manager to generate or send Improve suggestions.",
     "addPrompts": "Ask an admin or a manager to add prompts.",
-    "addTopic": "Prompts are grouped under topics. Ask an admin or a manager to add a topic first."
+    "addTopic": "Prompts are grouped under topics. Ask an admin or a manager to add a topic first.",
+    "reviewBrandFacts": "Ask an admin or a manager to approve or reject these facts, or to read your site again."
   },
   "topicFirst": {
     "title": "Add a topic first",
@@ -1828,7 +1829,6 @@
           "busy": "Writing tasks…",
           "done": "{count, plural, one {# task written} other {# tasks written}}",
           "doneWithReviews": "{count, plural, one {# task written} other {# tasks written}}; {reviews, plural, one {# waits} other {# wait}} in Needs review for the page, the change or the check",
-          "doneWithReviewsMember": "{count, plural, one {# task written} other {# tasks written}}; {reviews, plural, one {# waits} other {# wait}} for an admin or a manager to review",
           "timeout": "Writing the tasks took too long. Please try again.",
           "unreachable": "Couldn't reach the server. Please try again.",
           "unauthenticated": "Your session has ended. Please sign in again.",
@@ -3778,6 +3778,7 @@
           "plan": "Plan card",
           "runSteps": "Run steps",
           "approval": "Approval card",
+          "skillDraft": "Skill draft card (W3-08)",
           "question": "Question card",
           "openPage": "Where should we open this page? (W4-11)",
           "pageVersions": "A page's versions in chat (W4-12a)",
@@ -3825,7 +3826,10 @@
           "failedRun": "The run failed",
           "trayRuns": "With runs (click to open)",
           "trayEmpty": "No runs",
-          "trayLive": "Live: your runs and this brand’s"
+          "trayLive": "Live: your runs and this brand’s",
+          "skillDraft": "Skill draft · each field editable, Save skill in every mode",
+          "skillDraftReserved": "Skill draft · a /name it can’t keep: the card says why",
+          "skillSaved": "Skill saved: the card's done line"
         }
       }
     }
@@ -3965,6 +3969,8 @@
       "askStopped": "Question skipped",
       "opened": "Opened {page}",
       "notOpened": "Couldn't open {page}",
+      "modelDropped": "Ran on Auto",
+      "modelDroppedDetail": "The model this chat used is no longer available",
       "usedSkill": "Used skill: {title}",
       "skillFromLibrary": "Ansvisor library",
       "skillFromYou": "You",
@@ -3986,6 +3992,10 @@
       "credits": "Get more AI credits",
       "creditsDetail": "Chat stops here, where you can add AI credits",
       "cancel": "Cancel"
+    },
+    "saveSteps": {
+      "label": "Save these steps as a skill",
+      "prompt": "Save these steps as a skill"
     },
     "partial": {
       "question": "Your remaining AI limit covers about {fits} of the {parts} {unit}.",
@@ -6823,6 +6833,21 @@
       "blocked": "This skill holds something a skill may never hold, so it can't be approved.",
       "no_update": "There's no update to approve: another Admin may have approved it already."
     },
+    "card": {
+      "submit": "Save skill",
+      "name": "Name",
+      "nameHint": "Its /command: lowercase letters, digits and single hyphens.",
+      "title": "Title",
+      "description": "What it does and when to use it",
+      "instructions": "Steps",
+      "private": "Private to you until an Admin shares it.",
+      "noTool": "It shapes how Chat works: it adds no tool and skips no card.",
+      "nameRequired": "Give it a name.",
+      "nameFormat": "Use lowercase letters, digits and single hyphens, such as pricing-faq.",
+      "nameReserved": "/{name} is an Ansvisor skill or shortcut. Pick another name.",
+      "saved": "Saved skill: /{name}",
+      "savedDetail": "Private to you · Skills › My skills"
+    },
     "share": {
       "asked": "Share the skill /{name} with the workspace",
       "rule": "Sharing a skill with the workspace is for Admins."
@@ -6889,6 +6914,8 @@
         "deleted": "Deleted /{name}."
       },
       "newSkill": "New skill",
+      "create": "Create in Chat",
+      "createText": "Create a skill that ",
       "upload": "Upload a SKILL.md or .zip",
       "github": "Import from GitHub",
       "review": "Review",
@@ -10620,9 +10647,11 @@
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
           "open": "Recommended: Content Agent can fix {count, number} of them, and a rewrite meets them together."
         },
-        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are. Unlock passages you're fine to have reworded, or raise the Length to about {suggested, number}.",
+        "lengthMin": "{name}, at least",
+        "lengthMax": "{name}, at most",
         "lengthOutOfReachNote": "A rewrite can't get this page much under {least, number} characters, so the agent leaves the Length to you. Run Agent above says why.",
-        "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Unlock passages you're fine to have reworded, or raise the Length to about {suggested, number}.",
         "lengthOutOfReachHeadings": "The page is {count, number} characters for a Length of {target, number}, but its headings and an answer under each come to about {least, number}. Raise the Length to about {suggested, number}, or use fewer sections.",
         "raiseLength": "Raise Length to {suggested, number}",
         "rewriteCitedToo": "Rewrite, cited passages too",
@@ -10869,6 +10898,16 @@
     "new": "New",
     "newDone": "{generated, plural, =0 {No new opportunities} one {1 opportunity created} other {# opportunities created}}{duplicates, plural, =0 {} one { · 1 duplicate skipped (not counted)} other { · # duplicates skipped (not counted)}}",
     "newNothing": "No new opportunities: every matching need already has one.",
+    "newNone": "No new opportunities",
+    "newPartial": "{generated} of {requested} opportunities created",
+    "newReason": {
+      "joined": "{count, plural, one {# need was} other {# needs were}} added to existing opportunities that answer the same thing.",
+      "noAnswers": "{count, plural, one {# need has} other {# needs have}} no tracked answers from the last 30 days yet, so there's nothing to write from. {count, plural, one {It's} other {They're}} suggested once tracking has answers.",
+      "covered": "{count, plural, one {# need} other {# needs}}{focus, select, topic { in this topic} other {}} already {count, plural, one {has an opportunity} other {have one}}. Add prompts for new needs, or use Another angle on an opportunity.",
+      "fewNeeds": "{count, plural, =0 {There are no prompt groups{focus, select, topic { in this topic} other {}} yet.} one {There's only # need{focus, select, topic { in this topic} other {}}.} other {There are only # needs{focus, select, topic { in this topic} other {}}.}} Add prompts for new needs.",
+      "fewerWritten": "The AI wrote fewer than asked for. Try again for the rest.",
+      "angles": "{count, plural, one {1 is another angle on a need you're still barely seen for} other {# are another angle on needs you're still barely seen for}}: {needs}."
+    },
     "newExisting": "This prompt already has an opportunity",
     "openExisting": "Open existing",
     "newLimitReached": "Monthly opportunity limit reached.",
@@ -10880,7 +10919,7 @@
       "button": "Another angle",
       "running": "Writing another angle…",
       "hint": "Suggest one more opportunity for the same need, with a different angle",
-      "badge": "Alternative",
+      "badge": "Another angle",
       "of": "Another angle on",
       "title": "Another angle",
       "description": "Ansvisor writes one more opportunity for the same need, with a different content type, format, audience or approach. Both stay in the list so you can keep the one you prefer.",
@@ -10910,7 +10949,7 @@
     },
     "newDialog": {
       "title": "New content opportunities",
-      "description": "Get suggestions now. Ansvisor also writes up to 3 a night by itself, one per topic, for needs that have no opportunity yet.",
+      "description": "Get suggestions now. Ansvisor also writes up to 3 a night by itself, one per topic, for needs that have no opportunity yet, and once none are left, at most 1 a night as another angle.",
       "focus": "Focus (optional)",
       "focusOptions": {
         "auto": "Let Ansvisor choose",
@@ -10920,9 +10959,12 @@
       "pickTopic": "Choose a topic",
       "pickPrompt": "Choose a prompt",
       "topicOpen": "{count} new",
+      "topicAngles": "{count} for another angle",
       "topicCovered": "All covered",
       "promptHasOne": "Has one",
       "needsOpen": "{open} of {needs} {needs, plural, one {need} other {needs}}{focus, select, topic { in this topic} other {}} {open, plural, one {has} other {have}} no opportunity yet.",
+      "needsAngles": "{focus, select, topic {Every need in this topic} other {Every need}} already has an opportunity. New writes another angle on the ones you're still barely seen for: up to {angles}.",
+      "needsMoreAngles": "Past that, up to {angles} more as another angle on needs you're still barely seen for.",
       "needsNone": "Every need{focus, select, topic { in this topic} other {}} already has an opportunity{noAnswers, plural, =0 {} other {, or has no tracked answers from the last 30 days yet}}. Add prompts for new needs, or use Another angle on an opportunity.",
       "promptExisting": "This prompt's need already has an opportunity.",
       "openExisting": "Open existing",
@@ -14807,6 +14849,20 @@
           "founded": "Founded",
           "claim": "Claim"
         }
+      },
+      "people": {
+        "tab": "People",
+        "title": "People",
+        "description": "Who in your workspace can see this brand: everyone with All brands, and those it's shared with.",
+        "demoDescription": "The sample brand is visible to everyone in your workspace.",
+        "count": "{count, plural, one {# person} other {# people}} can see this brand",
+        "access": {
+          "all": "All brands",
+          "shared": "Shared with them"
+        },
+        "editInTeam": "Change who sees which brands in Team",
+        "loadError": "Couldn't load who can see this brand.",
+        "retry": "Retry"
       },
       "title": "Brand Settings",
       "generalTab": "General",

@@ -4,7 +4,7 @@ home_line: After a change, Chat can check back on a later day and tell you what 
 route: /dashboard/chat
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
-published: 2026-11-03
+published: 2099-12-31
 approved: true
 ---
 It was easy to fix a page and never learn whether the fix worked.

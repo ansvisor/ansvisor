@@ -1843,6 +1843,7 @@ export default function PromptsPage() {
     }
   };
 
+  // Volumes are bought per prompt: admins and managers analyze them (2026-11-03); the buttons below follow.
   const handleReanalyzeAll = guard(() => runVolumeAnalysis(true), {
     action: tActions('analyzePrompts'),
   });
@@ -2194,24 +2195,26 @@ export default function PromptsPage() {
                       </p>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    className="shrink-0"
-                    onClick={handleAnalyzeNew}
-                    disabled={analyzing || quotaExhausted}
-                  >
-                    {analyzing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {analyzingLabel}
-                      </>
-                    ) : (
-                      <>
-                        <BarChart3 className="mr-2 h-4 w-4" />
-                        Analyze {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'}
-                      </>
-                    )}
-                  </Button>
+                  {canManage && (
+                    <Button
+                      size="sm"
+                      className="shrink-0"
+                      onClick={handleAnalyzeNew}
+                      disabled={analyzing || quotaExhausted}
+                    >
+                      {analyzing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          {analyzingLabel}
+                        </>
+                      ) : (
+                        <>
+                          <BarChart3 className="mr-2 h-4 w-4" />
+                          Analyze {unanalyzedCount} prompt{unanalyzedCount === 1 ? '' : 's'}
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </div>
               )}
               {firstRun && allPrompts.length > 0 && <FirstRunEmptyState run={firstRun} />}
@@ -2288,7 +2291,7 @@ export default function PromptsPage() {
                 {noPlan ? tReadOnly('noPlan') : `${quota.remaining}/${quota.limit} analyses left`}
               </span>
             )}
-            {volumes.length > 0 && (
+            {volumes.length > 0 && canManage && (
               <>
                 <Button
                   onClick={guard(handleRefreshVolumes, { action: tActions('refreshVolumes') })}
@@ -2321,6 +2324,7 @@ export default function PromptsPage() {
               </>
             )}
             {volumes.length > 0 &&
+              canManage &&
               allPrompts.filter((p) => p.isActive && !volumes.find((v) => v.promptId === p.id))
                 .length > 0 && (
                 <Button
@@ -2355,7 +2359,7 @@ export default function PromptsPage() {
                       : 'Add prompts to your brand first, then analyze their volumes.'}
                   </p>
                 </div>
-                {allPrompts.length > 0 && (
+                {allPrompts.length > 0 && canManage && (
                   <>
                     <Button
                       onClick={handleAnalyzeNew}
