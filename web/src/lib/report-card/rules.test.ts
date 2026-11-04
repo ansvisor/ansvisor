@@ -196,6 +196,28 @@ describe('page 2', () => {
       'Brewline Coffee wasn’t named in any of the 25 questions: 50 answers from ChatGPT and Microsoft Copilot (25 questions × 2 engines).',
     );
   });
+
+  it('says how many got no answer instead of a questions × engines the answers fall short of', () => {
+    // ChatGPT gave no answer to the first question; then to the second too.
+    const unanswered = (count: number) =>
+      card({
+        questionRows: SAMPLE_REPORT_CARD.questionRows?.map((row, i) => ({
+          ...row,
+          named: Object.fromEntries(
+            Object.keys(row.named).map((e) => [
+              e,
+              e === 'chatgpt-web' && i < count ? 'none' : 'missed',
+            ]),
+          ),
+        })),
+      });
+    expect(questionSummary(unanswered(1))).toBe(
+      'Brewline Coffee wasn’t named in any of the 25 questions: 49 answers from ChatGPT and Microsoft Copilot (1 question got no answer from one engine).',
+    );
+    expect(questionSummary(unanswered(2))).toBe(
+      'Brewline Coffee wasn’t named in any of the 25 questions: 48 answers from ChatGPT and Microsoft Copilot (an engine gave no answer 2 times).',
+    );
+  });
 });
 
 describe('page 3', () => {
@@ -298,6 +320,20 @@ describe('copy', () => {
   it('puts "the" before the countries whose name takes it', () => {
     expect(en.country({ code: 'US', name: 'United States' })).toBe('the United States');
     expect(en.country({ code: 'TR', name: 'Türkiye' })).toBe('Türkiye');
+  });
+
+  it('spells the headline’s base as questions × engines only when every question was answered', () => {
+    const engines = 'ChatGPT and Microsoft Copilot';
+    expect(en.status.kpiVisibilitySub(engines, 8, 50, 25, 2)).toBe(
+      'named in 8 of 50 answers: 25 questions × 2 engines (ChatGPT and Microsoft Copilot)',
+    );
+    expect(en.status.kpiVisibilitySub(engines, 8, 49, 25, 2)).toBe(
+      'named in 8 of 49 answers from ChatGPT and Microsoft Copilot (1 question got no answer from one engine)',
+    );
+    expect(en.status.kpiVisibilitySub(engines, 8, 47, 25, 2)).toBe(
+      'named in 8 of 47 answers from ChatGPT and Microsoft Copilot (an engine gave no answer 3 times)',
+    );
+    expect(en.status.kpiVisibilitySub(engines, 8, 49, 25, 2)).not.toContain('×');
   });
 });
 

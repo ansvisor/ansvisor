@@ -109,6 +109,19 @@ describe('ReportCardPdfDocument', () => {
     for (const page of pages) expect(page).not.toMatch(/\d+ of (all |the )?122 answers/);
   });
 
+  it('page 1 says how many got no answer instead of 25 questions × 2 engines over 49 answers', () => {
+    const [status] = draw({
+      ...SAMPLE_REPORT_CARD,
+      engines: SAMPLE_REPORT_CARD.engines.map((e) =>
+        e.engine === 'chatgpt-web' ? { ...e, answers: 24 } : e,
+      ),
+    });
+    expect(status).toContain(
+      'named in 8 of 49 answers from ChatGPT and Microsoft Copilot (1 question got no answer from one engine)',
+    );
+    expect(status).not.toContain('25 questions × 2 engines');
+  });
+
   it('page 1 calls a zero the starting point, and points at the pages AI already reads', () => {
     const [status] = draw({
       ...SAMPLE_REPORT_CARD,

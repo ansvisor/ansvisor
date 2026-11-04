@@ -15,6 +15,15 @@ export function listEn(items: readonly string[]): string {
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
+/**
+ * The answers a base falls short of its questions × engines by, said
+ * plainly: the product is printed only when every question was answered.
+ */
+const noAnswer = (missing: number) =>
+  missing === 1
+    ? '1 question got no answer from one engine'
+    : `an engine gave no answer ${missing} times`;
+
 /** Ansvisor's areas, as a finding's tag names them. */
 export type FeatureTag =
   | 'contentEditor'
@@ -67,15 +76,23 @@ export const en = {
         : `How we understood ${domain}: you sell`,
     understoodNote: 'The questions on page 2 are about these.',
     kpiVisibility: 'AI visibility',
-    /** The headline's base spelled out: the questions times the engines it counts. */
+    /**
+     * The headline's base spelled out: the questions times the engines it
+     * counts when each answered them all, else how many got no answer.
+     */
     kpiVisibilitySub: (
       engines: string,
       named: number,
       answers: number,
       questions: number,
       engineCount: number,
-    ) =>
-      `named in ${named} of ${answers} answers: ${questions} questions × ${plural(engineCount, 'engine', 'engines')} (${engines})`,
+    ) => {
+      const missing = questions * engineCount - answers;
+      if (missing === 0) {
+        return `named in ${named} of ${answers} answers: ${questions} questions × ${plural(engineCount, 'engine', 'engines')} (${engines})`;
+      }
+      return `named in ${named} of ${answers} answers from ${engines}${missing > 0 ? ` (${noAnswer(missing)})` : ''}`;
+    },
     kpiQuestions: 'Questions asked',
     kpiQuestionsSub: (engines: number, answers: number, unanswered: number) =>
       `in ${plural(engines, 'AI engine', 'AI engines')}: ${answers} answers${unanswered > 0 ? ` (${unanswered} got no answer)` : ''}`,
@@ -229,8 +246,16 @@ export const en = {
       total: number,
       engines: string,
       engineCount: number,
-    ) =>
-      `${company} wasn’t named in any of the ${total} questions: ${answers} answers from ${engines} (${total} questions × ${plural(engineCount, 'engine', 'engines')}).`,
+    ) => {
+      const missing = total * engineCount - answers;
+      const base =
+        missing === 0
+          ? `${total} questions × ${plural(engineCount, 'engine', 'engines')}`
+          : missing > 0
+            ? noAnswer(missing)
+            : null;
+      return `${company} wasn’t named in any of the ${total} questions: ${answers} answers from ${engines}${base ? ` (${base})` : ''}.`;
+    },
     summary: (named: number, answers: number, questions: number, total: number, engines: string) =>
       `Named in ${questions} of the ${total} questions: in ${named} of the ${answers} answers from ${engines}.`,
     legendNamed: 'Named you',
