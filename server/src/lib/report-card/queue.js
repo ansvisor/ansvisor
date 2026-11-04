@@ -18,6 +18,12 @@ export const QUEUE_SCHEDULE = '* * * * *';
 export const PRUNE_SCHEDULE = '23 3 * * *';
 /** A run still "running" after this was lost (a restart): it goes again, or fails. */
 export const STALE_MS = 60 * 60 * 1000;
+/**
+ * How long a run may ask the engines: well below STALE_MS, so a slow run
+ * (100 tasks, 12 in flight, up to 15 minutes an answer) ends before the
+ * tick takes it as lost and starts a second, paid copy next to it.
+ */
+export const RUN_DEADLINE_MS = 40 * 60 * 1000;
 /** How often a card is tried before it fails for good. */
 export const MAX_ATTEMPTS = 2;
 const KEEP_REQUESTS_DAYS = 365;
@@ -29,13 +35,16 @@ const startOfMonth = (now) => new Date(Date.UTC(now.getUTCFullYear(), now.getUTC
 
 /**
  * Runs one claimed card to its end: ready with its figures, or failed with
- * why, with what it cost either way.
+ * why, with what it cost either way. It asks the engines until
+ * RUN_DEADLINE_MS, and writes only while the card is still this attempt's
+ * (finishCard), so a run the tick took as lost can't overwrite the next.
  */
 export async function runCard(
   card,
   { store = reportCardStore(), build = buildReportCard, now = () => new Date() } = {},
 ) {
   const meter = costMeter();
+  const deadline = now().getTime() + RUN_DEADLINE_MS;
   try {
     const inputs = await store.cardInputs(card.id);
     const { payload, questions } = await build(
@@ -48,9 +57,9 @@ export async function runCard(
         industry: inputs.industry,
         dealValue: inputs.dealValue,
       },
-      { meter },
+      { meter, deadline },
     );
-    await store.finishCard(card.id, {
+    await store.finishCard(card.id, card.attempts, {
       status: 'ready',
       payload,
       questions,
@@ -63,7 +72,7 @@ export async function runCard(
   } catch (err) {
     logger.error({ err, cardId: card.id }, '[report-card] card failed');
     await store
-      .finishCard(card.id, {
+      .finishCard(card.id, card.attempts, {
         status: 'failed',
         cost_usd: Math.round(meter.total() * 10_000) / 10_000,
         finished_at: now().toISOString(),
@@ -94,6 +103,7 @@ export async function tickReportCards({
     }
     await store.releaseCard(
       card.id,
+      card.attempts,
       card.attempts < MAX_ATTEMPTS
         ? { status: 'queued', started_at: null }
         : {

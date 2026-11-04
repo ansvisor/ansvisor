@@ -74,7 +74,7 @@ describe('buildReportCard', () => {
         languageName: 'Turkish',
       }),
     );
-    expect(deps.ask).toHaveBeenCalledWith(questions, 'TR');
+    expect(deps.ask).toHaveBeenCalledWith(questions, 'TR', { deadline: Infinity });
     // One competitor call for the engine that answered.
     expect(deps.competitors).toHaveBeenCalledTimes(1);
     expect(deps.cpcOf).toHaveBeenCalledWith(['kahve', 'kahve abonelik'], {
