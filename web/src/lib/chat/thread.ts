@@ -13,6 +13,7 @@ import {
   type ChatWhatsNewEntry,
 } from './events';
 import { clientMove } from './next-moves';
+import { latestChoice, type ChatModelChoice } from './models';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
 import { readDeliverableTasks, readStrips, weekEndIn, type DeliverableTask } from './task-strip';
@@ -84,6 +85,11 @@ export interface ChatThread {
   /** The person's own chat; false for a teammate's shared one, which they only read. */
   mine: boolean;
   messages: ThreadMessage[];
+  /**
+   * The model and effort its latest run ran with: the composer's model menu
+   * starts on it (W4-02). Missing: Auto at Normal.
+   */
+  choice?: ChatModelChoice;
 }
 
 /** A file in Files the chat's runs made or saved, as the thread reads it. */
@@ -224,7 +230,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       .order('created_at', { ascending: true }),
     supabase
       .from('chat_runs')
-      .select('id, message_id, status')
+      .select('id, message_id, status, model, effort, created_at')
       .eq('conversation_id', conversationId),
   ]);
   if (messages.error) throw new Error(`Could not read the chat: ${messages.error.message}`);
@@ -382,6 +388,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
     title: chat.title,
     brandId: chat.brand_id,
     mine,
+    choice: latestChoice(runs.data ?? []),
     messages: (messages.data ?? []).map((message) => ({
       role: message.role as 'user' | 'assistant',
       text: message.content_md,
