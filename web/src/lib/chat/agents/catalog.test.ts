@@ -210,6 +210,19 @@ describe('a ready preset', () => {
     ]);
   });
 
+  it('finishes at most 2 tasks a run as Task Finisher, and says the rest go in the next run', () => {
+    // A run that took every task asked for a dozen cards at once (agent eval, 2026-11-03).
+    expect(readyPreset('task-finisher')?.skills).toEqual(['tasks']);
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'tasks')?.body ?? '';
+    expect(body).toContain('Finish at most two tasks in one run');
+    // No third task, yet the Getting started steps after the tasks are still helped with.
+    expect(body).toContain('Take no third task');
+    expect(body).toContain('Then help with the open Getting started steps');
+    expect(body).toContain('"2 of 6 tasks done; the rest go in the next run."');
+    expect(body).not.toMatch(/at most four/);
+    expect(chatAgents.presets['task-finisher'].description).toContain('finishes two a run');
+  });
+
   it('is found by its id; a soon one, or no id, is not', () => {
     expect(readyPreset('weekly-report')?.id).toBe('weekly-report');
     expect(readyPreset('onboarding-help')).toBeNull();
