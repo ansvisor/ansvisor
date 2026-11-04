@@ -110,6 +110,7 @@ vi.mock('@/lib/actions/chat-prefs', () => ({ saveChatPanelSize: vi.fn() }));
 const ownKey = vi.hoisted(() => ({ chatRunsOnOwnKey: vi.fn(async () => false) }));
 vi.mock('@/lib/chat/key', () => ownKey);
 vi.mock('@/lib/chat/key-health', () => ({ failingKeyFor: vi.fn(async () => null) }));
+vi.mock('@/lib/chat/skills/store', () => ({ skillMenuFor: vi.fn(async () => []) }));
 vi.mock('@/components/providers/auth-provider', () => ({ AuthProvider: none }));
 // The layout's plan dialog asks the AI usage whether the new Chat is on.
 vi.mock('@/components/providers/ai-usage-provider', () => ({

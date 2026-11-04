@@ -11,13 +11,14 @@ import { createClient } from '@/lib/supabase/server';
  * or its agents reached 80% or all of their monthly limit on it (§4.2 item
  * 4, PR 10), for Admins; an agent went live on its own, or an edit stopped
  * it (AUTONOMOUS-GO-LIVE §6.4, 00446), for its owner and the people it
- * notifies. The server writes them. Read with the person's session (RLS:
+ * notifies; a scheduled job's run failed or the job paused (00461), for its
+ * owner. The server writes them. Read with the person's session (RLS:
  * their own rows, about brands they reach), open ones only: a key that works
  * again, a period that renews or a limit raised resolves its notice; one
  * about an agent closes once the person opens it.
  */
 
-export type { ChatNotice } from '@/lib/chat/notices';
+export type { ChatNotice, ScheduleNotice } from '@/lib/chat/notices';
 
 export type ChatNoticesRead = { ok: true; notices: ChatNotice[] } | { ok: false };
 

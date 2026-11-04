@@ -17,6 +17,16 @@ import type { Json } from '@/types/supabase';
  * length, or, inside one row or one column, a difference, a percent change
  * or a share; small counts (0–10), numbering ("Step 2", "1."), dates,
  * times, this or last year and names with a number ("Claude 3.5") pass.
+ *
+ * Chat's own, not the audit's: a figure written with a time unit ("the last
+ * 30 days", "a 30-day window", "son 30 gün", "14 months old") is a period,
+ * not a metric. It is known, too, when it is one of the app's own periods
+ * (a read's 30 days), a span one read states (its date_from to date_to,
+ * its first to its last date) or the age today of a read's first or last
+ * date, in days, weeks, months or years as the answer rounds it. Any other
+ * duration ("cited within 45 days") is checked as before. A word or
+ * character count ("80-word", "155 characters") is known, too, when a
+ * loaded skill sets it as a target.
  * Pure.
  */
 
@@ -34,6 +44,13 @@ export interface KnownFigures {
   values: ReadonlySet<number>;
   /** Numbers that belong together, a row's or a column's: what may be compared. */
   groups: readonly (readonly number[])[];
+  /**
+   * Days a period may name: the app's periods, the spans one source states
+   * and its first and last date's age today.
+   */
+  spans: ReadonlySet<number>;
+  /** Word and character counts a loaded skill sets as targets. */
+  targets: ReadonlySet<number>;
 }
 
 /** Values kept, at most, and groups: a run's reads are capped well under this. */
@@ -42,6 +59,48 @@ const MAX_GROUPS = 500;
 const MAX_GROUP = 50;
 
 const DIGITS = /\d+(?:[.,]\d+)*/g;
+const MONTH = String.raw`(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)`;
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+const DAY_MS = 86_400_000;
+
+// Keys an object states a range's two ends under (a read's input, the page's scope).
+const RANGE_KEYS = [
+  ['date_from', 'date_to'],
+  ['from', 'to'],
+] as const;
+
+// A date written in full: "2025-02-14" (a timestamp's too), "February 14, 2025", "14 Feb 2025".
+const FULL_DATE_RE = new RegExp(
+  [
+    String.raw`\b(\d{4})-(\d{2})-(\d{2})(?!\d)`,
+    String.raw`\b(${MONTH})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b`,
+    String.raw`\b(\d{1,2})(?:st|nd|rd|th)?\s+(${MONTH})\.?,?\s+(\d{4})\b`,
+  ].join('|'),
+  'gi',
+);
+
+/** The day of each full date in a text. */
+function datesIn(text: string): number[] {
+  const days: number[] = [];
+  for (const m of text.matchAll(FULL_DATE_RE)) {
+    const day = m[1]
+      ? dayOf(Number(m[1]), Number(m[2]) - 1, Number(m[3]))
+      : m[4]
+        ? dayOf(Number(m[6]), monthOf(m[4]), Number(m[5]))
+        : dayOf(Number(m[9]), monthOf(m[8]), Number(m[7]));
+    if (day !== null) days.push(day);
+  }
+  return days;
+}
+
+/** A date's day (days since 1970-01-01), or null when there is no such day. */
+function dayOf(year: number, month: number, day: number): number | null {
+  if (month < 0 || month > 11 || day < 1 || day > 31) return null;
+  const at = Date.UTC(year, month, day);
+  return new Date(at).getUTCDate() === day ? at / DAY_MS : null;
+}
+
+const monthOf = (name: string) => MONTHS.indexOf(name.slice(0, 3).toLowerCase());
 
 /** A digit group as a number: "1,234" → 1234, "12.5" → 12.5, "12,5" → 12.5 (a decimal comma). */
 export function parseFigure(raw: string): number | null {
@@ -57,11 +116,21 @@ export function parseFigure(raw: string): number | null {
 /**
  * The figures a run may state: from its reads' JSON (numbers, numbers in
  * texts, list lengths, each column's total and average, rows and columns as
- * groups) and from texts (the question, the chat so far).
+ * groups) and from texts (the question, the chat so far). The spans a
+ * period may name: `periods` (the app's, in days), the ranges a source
+ * states under RANGE_KEYS, its first to its last date, and those two
+ * dates' age on `now`. Never every pair of a source's dates: a daily series
+ * would make almost any number of days known.
  */
-export function knownFigures(sources: readonly unknown[]): KnownFigures {
+export function knownFigures(
+  sources: readonly unknown[],
+  options: { periods?: readonly number[]; now?: Date } = {},
+): KnownFigures {
   const values = new Set<number>();
   const groups: number[][] = [];
+  const spans = new Set<number>(options.periods);
+  let first = Infinity;
+  let last = -Infinity;
   const add = (n: number) => {
     if (Number.isFinite(n) && values.size < MAX_VALUES) values.add(n);
   };
@@ -69,6 +138,20 @@ export function knownFigures(sources: readonly unknown[]): KnownFigures {
     for (const match of text.matchAll(DIGITS)) {
       const n = parseFigure(match[0]);
       if (n !== null) add(n);
+    }
+    for (const day of datesIn(text)) {
+      first = Math.min(first, day);
+      last = Math.max(last, day);
+    }
+  };
+  const addRanges = (node: Record<string, unknown>) => {
+    for (const [fromKey, toKey] of RANGE_KEYS) {
+      const from = node[fromKey];
+      const to = node[toKey];
+      if (typeof from !== 'string' || typeof to !== 'string') continue;
+      const [start] = datesIn(from);
+      const [end] = datesIn(to);
+      if (start !== undefined && end !== undefined) spans.add(Math.abs(end - start));
     }
   };
   const group = (list: number[]) => {
@@ -100,6 +183,7 @@ export function knownFigures(sources: readonly unknown[]): KnownFigures {
       }
       return;
     }
+    addRanges(node as Record<string, unknown>);
     const siblings: number[] = [];
     for (const field of Object.values(node as Record<string, unknown>)) {
       if (typeof field === 'number' && Number.isFinite(field)) siblings.push(field);
@@ -107,8 +191,18 @@ export function knownFigures(sources: readonly unknown[]): KnownFigures {
     }
     group(siblings);
   };
-  for (const source of sources) walk(source, 0);
-  return { values, groups };
+  const today = Math.floor((options.now ?? new Date()).getTime() / DAY_MS);
+  for (const source of sources) {
+    first = Infinity;
+    last = -Infinity;
+    walk(source, 0);
+    // Within one source only, as a row's or a column's numbers are compared.
+    if (first > last) continue;
+    spans.add(last - first);
+    spans.add(Math.abs(today - first));
+    spans.add(Math.abs(today - last));
+  }
+  return { values, groups, spans, targets: new Set() };
 }
 
 // ─── Figures in an answer ───────────────────────────────────────────────────
@@ -127,7 +221,6 @@ const MASK_RE = new RegExp(
 );
 
 const NUM = String.raw`\d+(?:[.,]\d+)*`;
-const MONTH = String.raw`(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)`;
 
 // Mirrors recommendation-guard.js' VALUE_RE, with a time ("09:14") read as a date and ":" kept off a number.
 const VALUE_RE = new RegExp(
@@ -149,6 +242,82 @@ const NUMBERING_AFTER_RE = /^[.)]\s/;
 // "Claude 3.5", "GPT 4.1": a name's version, right after it.
 const NAME_BEFORE_RE = /\b[A-Z][\w-]*\s$/;
 const VERSION_RE = /^\d{1,2}\.\d{1,2}$/;
+
+// A period: its time unit right after the figure, in English or Turkish
+// ("30 days", "30-day", "14 months old", "son 30 gün", "30 günlük", "12 ayda").
+const PERIOD_RE = new RegExp(
+  [
+    String.raw`^\s?[-–]?\s?(?:(?<day>days?|gün(?:lük|de|den|dür|ü|e|ün)?)`,
+    String.raw`(?<week>weeks?|hafta(?:lık|da|dan|dır|ya|yı|nın)?)`,
+    String.raw`(?<month>months?|ay(?:lık|da|dan|dır|a|ı|ın)?)`,
+    String.raw`(?<year>years?|yrs?|yıl(?:lık|da|dan|dır|a|ı|ın)?|sene(?:lik|de|den|dir|ye|yi|nin)?))(?![\p{L}\d])`,
+  ].join('|'),
+  'iu',
+);
+
+type PeriodUnit = 'day' | 'week' | 'month' | 'year';
+const PERIOD_UNITS: readonly PeriodUnit[] = ['day', 'week', 'month', 'year'];
+/** A unit's days, as a span is written in it. */
+const UNIT_DAYS: Record<PeriodUnit, number> = {
+  day: 1,
+  week: 7,
+  month: 365.25 / 12,
+  year: 365.25,
+};
+
+/** The time unit a figure is written with, from the text right after it, or null. */
+function periodUnit(tail: string): PeriodUnit | null {
+  const groups = PERIOD_RE.exec(tail)?.groups;
+  return groups ? (PERIOD_UNITS.find((unit) => groups[unit] !== undefined) ?? null) : null;
+}
+
+/**
+ * Whether a period is known: a small count, or a known span in its unit,
+ * in days exactly or counting both ends, in weeks, months or years rounded
+ * down or up ("almost 21 months" or "over 20 months" for 20.5), never
+ * further.
+ */
+function isKnownPeriod(
+  figure: { value: number; tolerance: number },
+  unit: PeriodUnit,
+  known: KnownFigures,
+): boolean {
+  if (Number.isInteger(figure.value) && figure.value <= 10) return true;
+  for (const span of known.spans) {
+    if (unit === 'day') {
+      if (Math.abs(figure.value - span) <= figure.tolerance) return true;
+      if (Math.abs(figure.value - (span + 1)) <= figure.tolerance) return true;
+    } else {
+      const ratio = span / UNIT_DAYS[unit];
+      if (figure.value === Math.floor(ratio) || figure.value === Math.ceil(ratio)) return true;
+      if (Math.abs(figure.value - ratio) <= figure.tolerance) return true;
+    }
+  }
+  return false;
+}
+
+// A length: "80 words", "80-word", "155 characters", "300 kelime", "155 karakterlik".
+const LENGTH_UNIT = String.raw`\s?[-–]?\s?(?:words?|char(?:acter)?s?|kelime\p{L}*|karakter\p{L}*)(?![\p{L}\d])`;
+const LENGTH_RE = new RegExp(`^${LENGTH_UNIT}`, 'iu');
+// A skill's target with its unit, a range's two ends too ("40 to 80 words", "50–60 characters").
+const TARGET_RE = new RegExp(
+  String.raw`(${NUM})(?:\s*(?:to|and|or|-|–|ile|ila|veya)\s*(${NUM}))?${LENGTH_UNIT}`,
+  'giu',
+);
+
+/** The word and character targets in a skill's text. */
+function targetsIn(texts: readonly string[]): Set<number> {
+  const targets = new Set<number>();
+  for (const text of texts) {
+    for (const m of text.matchAll(TARGET_RE)) {
+      for (const raw of [m[1], m[2]]) {
+        const n = raw === undefined ? null : parseFigure(raw);
+        if (n !== null) targets.add(n);
+      }
+    }
+  }
+  return targets;
+}
 
 const SCALE: Record<string, number> = {
   k: 1e3,
@@ -266,15 +435,23 @@ export function checkFigures(
       }
       const figures = figuresOf(match);
       const percent = !!groups.percent;
+      let period: PeriodUnit | null = null;
+      let length = false;
       if (groups.number) {
         if (figures.every((f) => Number.isInteger(f.value) && f.value <= 10)) return match;
         const line = lead.slice(lead.lastIndexOf('\n') + 1);
         if (NUMBERING_WORD_RE.test(lead)) return match;
         if (/^\s*$/.test(line) && NUMBERING_AFTER_RE.test(tail)) return match;
         if (NAME_BEFORE_RE.test(lead) && VERSION_RE.test(match)) return match;
+        period = periodUnit(tail);
+        length = LENGTH_RE.test(tail);
       }
       checked += 1;
-      if (figures.every((f) => isKnown(f, known, percent))) return match;
+      const isFact = (f: { value: number; tolerance: number }) =>
+        isKnown(f, known, percent) ||
+        (period !== null && isKnownPeriod(f, period, known)) ||
+        (length && known.targets.has(f.value));
+      if (figures.every(isFact)) return match;
       replaced.push(match);
       return groups.price ? PLACEHOLDER.price : PLACEHOLDER.metric;
     }),
@@ -312,11 +489,25 @@ export function figureHold(text: string): number | null {
   return start;
 }
 
-/** The figures a run's reads and messages make known: what checkFigures checks against. */
+/**
+ * The figures a run's reads and messages make known: what checkFigures
+ * checks against. `given` is what else the answer was written from (the
+ * page's scope); `skills` the loaded skills' text, of which only the word
+ * and character targets count, and only as lengths ("80 words", never
+ * "80 visits"); `periods` the app's own, in days.
+ */
 export function figuresOfRun(parts: {
   question: string;
   history: readonly unknown[];
   reads: readonly Json[];
+  given?: readonly unknown[];
+  skills?: readonly string[];
+  periods?: readonly number[];
+  now?: Date;
 }): KnownFigures {
-  return knownFigures([parts.question, ...parts.history, ...parts.reads]);
+  const known = knownFigures(
+    [parts.question, ...parts.history, ...parts.reads, ...(parts.given ?? [])],
+    { periods: parts.periods, now: parts.now },
+  );
+  return { ...known, targets: targetsIn(parts.skills ?? []) };
 }

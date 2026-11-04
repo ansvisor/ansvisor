@@ -11,6 +11,7 @@ import { useUserRole } from '@/hooks/use-user-role';
 import { readFocusFill, readHomeShortcuts, readSinceYouLeft } from '@/lib/actions/chat-home';
 import { track } from '@/lib/analytics';
 import type { FocusArea } from '@/lib/chat/focus';
+import { startChatRun } from '@/lib/chat/start-chat';
 import {
   focusGreeting,
   focusNews,
@@ -27,6 +28,8 @@ import type { SinceMove, SinceYouLeft } from '@/lib/chat/since';
 import { platformName } from '@/lib/signals/names';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { NewPill } from '@/components/agentic/new-pill';
+import { useFillHomeDraft } from './home-draft';
 import { useChatList } from './chat-list-provider';
 import { inboxItems, useNow } from './chat-inbox';
 import { FocusPill, useChatFocus } from './focus-picker';
@@ -65,6 +68,52 @@ export interface ChatHomeViewProps {
    * (CHAT-24 §4); null until read, so no question shows in the wrong words.
    */
   words?: { fill: FocusFill; rivalMove: RivalMove | null } | null;
+  /**
+   * What's new (CHAT-11 §B): the newest unread update of the last 14 days
+   * for the New line, and whether any is unread for the chip's dot; null
+   * until read.
+   */
+  whatsNew?: WhatsNewHome | null;
+  /** Show me: puts the update's question in the box, unsent. */
+  onShowMe?: (feature: string) => void;
+}
+
+/** What's new as Chat Home shows it. */
+export interface WhatsNewHome {
+  line: { feature: string; homeLine: string } | null;
+  unread: boolean;
+}
+
+/**
+ * The New line under the shortcuts (CHAT-11 items 7–9, mockup `#s-home`):
+ * the New tag, the update's one sentence and Show me, which fills the box
+ * with "What's new: how can {feature} help me?" and doesn't send.
+ */
+function WhatsNewLine({
+  line,
+  onShowMe,
+}: {
+  line: { feature: string; homeLine: string };
+  onShowMe: (feature: string) => void;
+}) {
+  const t = useTranslations('chatShell.home.whatsNew');
+  return (
+    <div
+      data-slot="whats-new-line"
+      className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border bg-card px-3 py-2 text-[13px]"
+    >
+      <NewPill />
+      <span className="min-w-0 flex-1">{line.homeLine}</span>
+      <button
+        type="button"
+        data-action="whatsNew.showMe"
+        onClick={() => onShowMe(line.feature)}
+        className="rounded-[20px] border border-foreground px-[9px] py-px text-[11.5px] font-medium text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        {t('showMe')}
+      </button>
+    </div>
+  );
 }
 
 /**
@@ -283,6 +332,8 @@ export function ChatHomeView({
   since = null,
   focus = null,
   words = null,
+  whatsNew = null,
+  onShowMe,
 }: ChatHomeViewProps) {
   const t = useTranslations('chatShell.home');
   const areas = focus?.areas ?? [];
@@ -352,7 +403,9 @@ export function ChatHomeView({
         starting={starting}
         onAsk={onAsk}
         focus={areas}
+        whatsNew={whatsNew ? { unread: whatsNew.unread } : null}
       />
+      {whatsNew?.line && onShowMe && <WhatsNewLine line={whatsNew.line} onShowMe={onShowMe} />}
       {areas.length > 0 && words && (
         <StartWithQuestion areas={areas} fill={words.fill} starting={starting} onAsk={onAsk} />
       )}
@@ -485,6 +538,28 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
 
   useHomeSeen();
 
+  // What's new for the person's plan: the New line and the chip's dot (CHAT-11 §B, item 19).
+  const [whatsNew, setWhatsNew] = useState<WhatsNewHome | null>(null);
+  const fillBox = useFillHomeDraft();
+  useEffect(() => {
+    let current = true;
+    void fetch('/api/chat/whats-new?unread=true&limit=1&days=14')
+      .then((res) => res.json())
+      .then((body: { ok?: boolean; hasUnread?: boolean; entries?: WhatsNewHome['line'][] }) => {
+        if (!current || !body?.ok) return;
+        const first = body.entries?.[0] ?? null;
+        setWhatsNew({
+          line: first ? { feature: first.feature, homeLine: first.homeLine } : null,
+          unread: !!body.hasUnread,
+        });
+        if (first) track('chat_whats_new_line_shown', { feature: first.feature });
+      })
+      .catch(() => undefined);
+    return () => {
+      current = false;
+    };
+  }, []);
+
   async function startChat(message: string, shortcutId?: ShortcutId) {
     if (starting) return;
     // A read-only workspace, or the demo brand, starts no run: the upgrade
@@ -494,30 +569,16 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       return;
     }
     setStarting(true);
-    const res = await fetch('/api/chat/runs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message,
-        brandId: brandId ?? undefined,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        ...(shortcutId ? { shortcutId } : {}),
-      }),
-    }).catch(() => null);
-    const chatId = res?.ok ? res.headers.get('x-chat-conversation') : null;
-    if (!res?.ok || !chatId) {
+    const started = await startChatRun(message, brandId ?? null, { shortcutId });
+    if (!started.ok) {
       setStarting(false);
-      const body = (await res?.json().catch(() => null)) as {
-        code?: string;
-        error?: string;
-      } | null;
-      if (body?.code === 'subscription_inactive') openUpgrade();
-      else toast.error(body?.error ?? t('startFailed'));
+      // A read-only workspace, or a chat on the demo brand: the plans.
+      if (started.code === 'subscription_inactive' || started.code === 'demo_brand') openUpgrade();
+      else toast.error(started.error ?? t('startFailed'));
       return;
     }
     // The run goes on without this page: the chat picks up its stream.
-    void res.body?.cancel().catch(() => undefined);
-    router.push(`/dashboard/chat/${chatId}`);
+    router.push(`/dashboard/chat/${started.chatId}`);
   }
 
   // The counts of the brand open now: none while another brand's are shown.
@@ -537,6 +598,12 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       since={since && since.brandId === brandId ? since.since : null}
       focus={focusCtx ? { areas: focusCtx.focus, onEdit: focusCtx.edit } : null}
       words={words && words.key === wordsKey ? words : null}
+      whatsNew={whatsNew}
+      onShowMe={(feature) => {
+        track('chat_whats_new_show_me', { feature });
+        fillBox?.(t('whatsNew.showMeMessage', { feature }));
+        document.querySelector<HTMLTextAreaElement>('[data-action="composer.input"]')?.focus();
+      }}
     />
   );
 }

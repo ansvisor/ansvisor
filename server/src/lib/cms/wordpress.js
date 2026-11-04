@@ -373,6 +373,24 @@ export async function publishPost(site, credentials, id, { request } = {}) {
 }
 
 /**
+ * Takes a post down (AUTONOMOUS-GO-LIVE PR 10): its status `draft` again,
+ * so its address stops working; its content stays. The post as WordPress
+ * answers.
+ */
+export async function unpublishPost(site, credentials, id, { request } = {}) {
+  const path = postId(id);
+  if (!path) throw new WordPressError('not_found', 'WordPress has no such post.');
+  return postOf(
+    await call(site, `/wp/v2/posts/${path}`, {
+      credentials,
+      method: 'POST',
+      body: { status: 'draft' },
+      request,
+    }),
+  );
+}
+
+/**
  * Revokes the Application Password the connection signs in with, where the
  * site allows it (WordPress 5.7+ tells a password its own id). Best effort:
  * false when it couldn't, and the connection goes anyway.

@@ -17,6 +17,7 @@ vi.mock('@/lib/supabase/admin', async () => ({
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const general = await import('./general-settings');
+const { LANGUAGES } = await import('./language');
 
 const ME = { userId: PEOPLE.manager, organizationId: ORG };
 
@@ -142,5 +143,11 @@ describe('generalPatchRefusal and generalPatchRow', () => {
     expect(general.generalPatchRow({ pageOpen: 'editor' })).toEqual({ page_open: 'editor' });
     expect(general.generalPatchRefusal({ pageOpen: 'chat' }, { ...open, modes: false })).toBeNull();
     expect(general.generalPatch.safeParse({ pageOpen: 'here' }).success).toBe(false);
+  });
+});
+
+describe('ANSWER_LANGUAGES', () => {
+  it('are the languages Chat reads and names, so a set one is the one the engine uses', () => {
+    expect([...general.ANSWER_LANGUAGES].sort()).toEqual(Object.keys(LANGUAGES).sort());
   });
 });

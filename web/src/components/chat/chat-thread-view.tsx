@@ -8,6 +8,7 @@ import { saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
 import type { PageOpen } from '@/lib/chat/page-open';
 import { keepPageChoice, pageChoiceMade, pageHrefOf } from '@/lib/chat/page-open';
 import { ApprovalCard } from '@/components/agentic/approval-card';
+import { FormCard, type FormCardValues } from '@/components/agentic/form-card';
 import { DenialCard } from '@/components/agentic/denial-card';
 import {
   QuestionAnswered,
@@ -22,6 +23,7 @@ import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import { ghostOf } from '@/lib/chat/next-moves';
 import type { ChatEvent, ChatTaskStrip } from '@/lib/chat/events';
+import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
 import {
@@ -48,6 +50,9 @@ import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { WhyCard } from './run/why-card';
+import { WhatsNewCards } from './run/whats-new-cards';
+import { useHomeDraft } from './home-draft';
+import { useFormAssist } from './run/form-assist';
 import { NextMoves } from './run/next-moves';
 import { OpenPageCard, type OpenPageChoice } from './run/open-page-card';
 import { RunAnswer } from './run/run-answer';
@@ -117,6 +122,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         tasks: message.run.tasks ?? null,
         nextMoves: message.run.nextMoves ?? [],
         why: message.run.why ?? [],
+        whatsNew: message.run.whatsNew ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
@@ -229,6 +235,10 @@ export function ChatThreadView({
     thread?.conversationId ?? null,
   );
   const [mode, setMode] = useState<ChatMode>(defaultMode);
+  // The model menu's pick for this chat: its latest run's, Auto at first (W4-02).
+  const [modelChoice, setModelChoice] = useState<ChatModelChoice>(
+    () => thread?.choice ?? AUTO_CHOICE,
+  );
   const [reconnecting, setReconnecting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   // While the view is on screen: what it streams stops once it goes (another
@@ -247,6 +257,8 @@ export function ChatThreadView({
       : null;
   });
   const brandId = thread?.brandId ?? activeBrandId ?? null;
+  // On Chat Home, what its page put in the box (What's new's Show me).
+  const homeDraft = useHomeDraft();
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
@@ -473,6 +485,8 @@ export function ChatThreadView({
       body: JSON.stringify({
         message,
         mode,
+        model: modelChoice.model,
+        effort: modelChoice.effort,
         conversationId: conversationId ?? undefined,
         brandId: conversationId ? undefined : (brandId ?? undefined),
         // A chat the side panel starts names the page it started on.
@@ -493,7 +507,8 @@ export function ChatThreadView({
         code?: string;
       } | null;
       setTurns((all) => all.filter((turn) => turn.key !== answerKey && turn.key !== questionKey));
-      if (body?.code === 'subscription_inactive') openUpgrade();
+      // A read-only workspace, or a chat on the demo brand: the plans.
+      if (body?.code === 'subscription_inactive' || body?.code === 'demo_brand') openUpgrade();
       else toast.error(body?.error ?? t('sendFailed'));
       return false;
     }
@@ -511,13 +526,19 @@ export function ChatThreadView({
   }
 
   /** Approve (or the click) or Skip on the card the run waits on. */
-  async function answer(turn: Turn, action: 'approve' | 'skip', dontAskAgain = false) {
+  async function answer(
+    turn: Turn,
+    action: 'approve' | 'skip',
+    dontAskAgain = false,
+    form?: FormCardValues,
+  ) {
     const run = turn.run;
     if (!turn.runId || !run?.confirm) return;
     const runId = turn.runId;
+    // An editable card sends its values with the Approve (W3-02); the server checks them again.
     const body =
       action === 'approve'
-        ? { n: run.confirm.n, digest: run.confirm.digest, dontAskAgain }
+        ? { n: run.confirm.n, digest: run.confirm.digest, dontAskAgain, ...(form ? { form } : {}) }
         : { n: run.confirm.n };
     const res = await fetch(`/api/chat/runs/${runId}/${action}?after=${run.lastSeq}`, {
       method: 'POST',
@@ -667,7 +688,7 @@ export function ChatThreadView({
                   turn={turn}
                   now={now}
                   reconnecting={reconnecting && turn === last}
-                  onApprove={(dontAskAgain) => answer(turn, 'approve', dontAskAgain)}
+                  onApprove={(dontAskAgain, form) => answer(turn, 'approve', dontAskAgain, form)}
                   onSkip={() => answer(turn, 'skip')}
                   onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
@@ -736,12 +757,14 @@ export function ChatThreadView({
           disabled={atCap}
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
           usage={<ComposerUsageMeter />}
+          modelChoice={modelChoice}
+          onModelChoice={setModelChoice}
           // An answer is its text only: no page chips, @ data or files go with it.
           chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}
           references={asking ? undefined : pageReferences}
           skills={skills}
-          draft={draft}
+          draft={homeDraft ?? draft}
           onSend={(message, sent) =>
             asking && last
               ? answerQuestion(last, composerAnswer(asking, message), 'composer')
@@ -792,7 +815,8 @@ function Answer({
   turn: Turn;
   now: number;
   reconnecting: boolean;
-  onApprove: (dontAskAgain: boolean) => Promise<void>;
+  /** form: an editable card's values (W3-02). */
+  onApprove: (dontAskAgain: boolean, form?: FormCardValues) => Promise<void>;
   onSkip: () => Promise<void>;
   onAnswerQuestion: (value: QuestionAnswerValue) => Promise<boolean>;
   onFiled: (fileId: string) => void;
@@ -815,6 +839,7 @@ function Answer({
   const workingMs = run.summary?.workingMs ?? (turn.startedAt ? now - turn.startedAt : 0);
   const confirmStep = run.confirm ? run.steps.find((s) => s.n === run.confirm!.n) : undefined;
   const filedAt = filedNumbers(run.deliverables);
+  const formAssist = useFormAssist(run.confirm?.form);
 
   const cards = (
     <>
@@ -855,7 +880,18 @@ function Answer({
           }}
         />
       )}
-      {run.confirm && (
+      {run.confirm?.form && (
+        <FormCard
+          key={`${run.confirm.n}-${run.confirm.digest}`}
+          step={{ n: run.confirm.n, total: Math.max(run.steps.length, run.confirm.n) }}
+          title={run.confirm.action}
+          form={run.confirm.form}
+          assist={formAssist}
+          onSubmit={(values) => void onApprove(false, values)}
+          onCancel={() => void onSkip()}
+        />
+      )}
+      {run.confirm && !run.confirm.form && (
         <ApprovalCard
           kind={confirmStep?.kind === 'execute' ? 'execute' : 'write'}
           step={{ n: run.confirm.n, total: Math.max(run.steps.length, run.confirm.n) }}
@@ -876,6 +912,7 @@ function Answer({
         </ApprovalCard>
       )}
       {turn.runId && run.why.map((why) => <WhyCard key={why.n} runId={turn.runId!} why={why} />)}
+      <WhatsNewCards entries={run.whatsNew} />
       {turn.runId &&
         run.deliverables.map((deliverable, i) => (
           <DeliverableCard
