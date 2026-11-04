@@ -7341,7 +7341,11 @@
         },
         "runNowTag": "Run now",
         "openChat": "Open in Chat",
-        "readOnly": "Only its creator can change this job."
+        "readOnly": "Only its creator can change this job.",
+        "timeZone": "Time zone",
+        "timeZoneHint": "This job’s own clock. Changing your time zone in Settings doesn’t move it.",
+        "timeZoneSearch": "Search time zones",
+        "timeZoneEmpty": "No time zone matches."
       },
       "errors": {
         "not_found": "This job is gone.",
@@ -7351,6 +7355,7 @@
         "limit": "Your plan’s scheduled jobs are all on. Turn one off first, or upgrade.",
         "when": "That time doesn’t work.",
         "prompt": "Say what Chat does each run.",
+        "zone": "Pick a time zone from the list.",
         "failed": "That didn’t work. Try again."
       }
     }
@@ -14057,6 +14062,15 @@
     "danger": "Danger Zone",
     "displayName": "Display Name",
     "email": "Email",
+    "timeZone": {
+      "label": "Time zone",
+      "automatic": "Automatic ({zone})",
+      "hint": "New scheduled jobs, Chat’s dates and times and your daily suggestions use it. Jobs you already have keep their own.",
+      "search": "Search time zones",
+      "empty": "No time zone matches.",
+      "saved": "Time zone saved",
+      "saveFailed": "Couldn’t save your time zone. Try again."
+    },
     "save": "Save changes",
     "saved": "Changes saved!",
     "signOut": "Sign out",

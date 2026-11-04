@@ -3,6 +3,7 @@ import { Output, streamText, tool as aiTool, type ModelMessage, type ToolSet } f
 import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
+import { personTimeZone } from '@/lib/account-time-zone';
 import type { AiProvider } from '@/lib/agent/providers';
 import { hasBrandAccess } from '@/lib/brand-access';
 import { searchHelp } from '@/lib/help/search';
@@ -798,7 +799,8 @@ export async function startChatRun(
     throw new Error("Chat could not note the brands of the message's references");
   }
 
-  const timezone = validTimezone(input.timezone);
+  // The person's own zone (Settings › Account) before their browser's: the run's times and cards.
+  const timezone = await personTimeZone(actor.userId, input.timezone);
   const keptBrand = input.context?.chips.some((chip) => chip.key === 'brand') ?? false;
   const scope = messageScopeOf(
     input,
