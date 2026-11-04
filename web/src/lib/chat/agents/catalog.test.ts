@@ -215,6 +215,9 @@ describe('a ready preset', () => {
     expect(readyPreset('task-finisher')?.skills).toEqual(['tasks']);
     const body = SKILL_LIBRARY.find((skill) => skill.name === 'tasks')?.body ?? '';
     expect(body).toContain('Finish at most two tasks in one run');
+    // No third task, yet the Getting started steps after the tasks are still helped with.
+    expect(body).toContain('Take no third task');
+    expect(body).toContain('Then help with the open Getting started steps');
     expect(body).toContain('"2 of 6 tasks done; the rest go in the next run."');
     expect(body).not.toMatch(/at most four/);
     expect(chatAgents.presets['task-finisher'].description).toContain('finishes two a run');
