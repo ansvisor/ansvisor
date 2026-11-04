@@ -881,6 +881,48 @@ export type Database = {
           },
         ]
       }
+      brand_integrations: {
+        Row: {
+          account_id: string
+          brand_id: string
+          created_at: string
+          provider: string
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          brand_id: string
+          created_at?: string
+          provider: string
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          brand_id?: string
+          created_at?: string
+          provider?: string
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brand_integrations_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "integration_accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brand_integrations_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brand_platforms: {
         Row: {
           api_model: string | null
@@ -6000,6 +6042,73 @@ export type Database = {
             columns: ["brand_id"]
             isOneToOne: false
             referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_accounts: {
+        Row: {
+          cms_connection_id: string | null
+          composio_account_id: string | null
+          composio_entity_id: string | null
+          connected_by: string | null
+          created_at: string
+          id: string
+          integration_connection_id: string | null
+          label: string | null
+          organization_id: string
+          provider: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cms_connection_id?: string | null
+          composio_account_id?: string | null
+          composio_entity_id?: string | null
+          connected_by?: string | null
+          created_at?: string
+          id?: string
+          integration_connection_id?: string | null
+          label?: string | null
+          organization_id: string
+          provider: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cms_connection_id?: string | null
+          composio_account_id?: string | null
+          composio_entity_id?: string | null
+          connected_by?: string | null
+          created_at?: string
+          id?: string
+          integration_connection_id?: string | null
+          label?: string | null
+          organization_id?: string
+          provider?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_accounts_connected_by_fkey"
+            columns: ["connected_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_accounts_integration_connection_id_fkey"
+            columns: ["integration_connection_id"]
+            isOneToOne: true
+            referencedRelation: "integration_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_accounts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]

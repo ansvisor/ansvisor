@@ -28,6 +28,19 @@ vi.mock('./composio.js', () => ({
   },
 }));
 vi.mock('./logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+// The brand uses the Account's Google sign-in (00470).
+vi.mock('./brand-integrations.js', () => ({
+  connectedBrands: async () => [
+    {
+      brandId: state.brand.id,
+      organizationId: 'o1',
+      entityId: 'org_o1',
+      composioAccountId: 'ca_1',
+      connected: true,
+    },
+  ],
+  composioTarget: (c) => ({ entityId: c.entityId, accountId: c.composioAccountId }),
+}));
 vi.mock('../config/supabase.js', () => ({
   default: {
     from: (table) => {
@@ -52,9 +65,6 @@ vi.mock('../config/supabase.js', () => ({
           if (deleting) {
             state.deletes.push([table, where]);
             return resolve({ error: null });
-          }
-          if (table === 'integration_connections') {
-            return resolve({ data: [{ organization_id: 'o1' }], error: null });
           }
           if (table === 'brands') return resolve({ data: [{ ...state.brand }], error: null });
           return resolve({ error: null });

@@ -74,6 +74,13 @@ export interface AgentFormSetup {
    * for Automatic: a new Schedule trigger starts on it, before the browser's.
    */
   timeZone: string | null;
+  /**
+   * Can call's choices (CHAT-27 item 14): the workspace's agents the person
+   * sees, on or paused, by name; the form leaves out the one it edits.
+   */
+  callable?: { id: string; name: string }[];
+  /** Running other agents is Growth and up: the row shows, locked. */
+  canCallLocked?: boolean;
 }
 
 /** How often a Schedule fires, as its token offers it (mockup: Monday, Weekday, 1st of the month). */
@@ -147,6 +154,8 @@ export interface AgentFormState {
   effort: AgentEffort;
   notifyUserIds: string[];
   followupDays: number;
+  /** The agents it may run (CHAT-27 item 14), at most 5. */
+  canCall: string[];
   name: string;
   /** The person typed a name: a skill or brand change no longer renames it. */
   nameEdited: boolean;
@@ -487,6 +496,7 @@ export function newForm(
     effort: 'normal',
     notifyUserIds: [],
     followupDays: 14,
+    canCall: [],
     name: '',
     nameEdited: false,
     visibility: 'private',
@@ -577,6 +587,7 @@ export function formFromAgent(
     effort: settings.effort,
     notifyUserIds: settings.notifyUserIds,
     followupDays: settings.followupDays,
+    canCall: settings.canCall ?? [],
     name: agent.name,
     nameEdited: true,
     visibility: agent.visibility,
@@ -754,6 +765,7 @@ export function createBody(
     scope: scopeOf(state),
     notifyUserIds: state.notifyUserIds,
     followupDays: state.followupDays,
+    ...(state.canCall.length > 0 ? { canCall: state.canCall } : {}),
     triggers: builtTriggers(state),
   };
 }
@@ -793,6 +805,7 @@ export function patchBody(
   if (state.model !== settings.model) patch.model = state.model;
   const scope = scopeOf(state);
   if (scopeKey(scope) !== scopeKey(settings.scope)) patch.scope = scope;
+  if (canonical(state.canCall) !== canonical(settings.canCall ?? [])) patch.canCall = state.canCall;
   const triggers = builtTriggers(state);
   const was = agent.triggers.map((t) => ({ kind: t.kind, config: t.config, enabled: t.enabled }));
   if (canonical(triggers) !== canonical(was)) patch.triggers = triggers;
