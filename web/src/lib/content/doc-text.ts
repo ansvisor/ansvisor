@@ -1,5 +1,4 @@
 import { getSchema } from '@tiptap/core';
-import Image from '@tiptap/extension-image';
 import { TableKit } from '@tiptap/extension-table';
 import { DOMParser as PmDOMParser, type Node as PmNode } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
@@ -8,6 +7,7 @@ import { contentDom } from './dom';
 import { HtmlBlockNode } from './html-block-node';
 import { JsonLd } from './json-ld-node';
 import type { ProofSpot } from './page-read';
+import { ContentImage } from './content-image';
 
 /**
  * Places in the editor's document (ProseMirror), for the editor and the
@@ -87,7 +87,7 @@ export function pageDoc(html: string): PmNode {
   const schema = getSchema([
     StarterKit.configure(EDITOR_STARTER_KIT),
     TableKit.configure({ table: { resizable: false } }),
-    Image,
+    ContentImage,
     JsonLd,
     HtmlBlockNode,
   ]);

@@ -898,3 +898,64 @@ describe('ChatComposer: attached files (W1-13)', () => {
     expect(container.querySelector('input[type="file"]')).toBeNull();
   });
 });
+
+describe('ChatComposer: own keys (W4-06)', () => {
+  const KEY = `sk-proj-${'Xy9_'.repeat(12)}`;
+  const action = (name: string) => container.querySelector<HTMLElement>(`[data-action="${name}"]`);
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ access: { state: 'plan' }, providers: [] }))),
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('answers "use my OpenAI key" with the Add API key card, sending nothing to Chat', async () => {
+    await render({ keyForm: true });
+    await type('Please use my OpenAI key for Chat');
+    await press('Enter');
+    expect(handlers.onSend).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-slot="add-key-card"]')).not.toBeNull();
+    // The message stays: a misread loses nothing, and a second send sends it.
+    expect(box().value).toBe('Please use my OpenAI key for Chat');
+    await act(async () => action('addKey.close')!.click());
+    expect(container.querySelector('[data-slot="add-key-card"]')).toBeNull();
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledWith(
+      'Please use my OpenAI key for Chat',
+      expect.anything(),
+    );
+  });
+
+  it('sends a question that only says "key", as "our key competitors"', async () => {
+    await render({ keyForm: true });
+    await type('Add our key competitors to the brief');
+    await press('Enter');
+    expect(container.querySelector('[data-slot="add-key-card"]')).toBeNull();
+    expect(handlers.onSend).toHaveBeenCalledWith(
+      'Add our key competitors to the brief',
+      expect.anything(),
+    );
+  });
+
+  it('opens the card with a pasted key on Save securely, for an Admin, the key out of the box', async () => {
+    await render({ keyForm: true });
+    await type(`use this ${KEY}`);
+    await act(async () => action('composer.saveKey')!.click());
+    expect(box().value).toBe('use this');
+    expect((action('addKey.key') as HTMLInputElement).value).toBe(KEY);
+    expect(handlers.onSend).not.toHaveBeenCalled();
+  });
+
+  it('shows no Save securely to a Manager, and sends a key question as ever without the forms', async () => {
+    await render({ keyForm: true }, 'manager');
+    await type(`key ${KEY}`);
+    expect(action('composer.saveKey')).toBeNull();
+
+    await render();
+    await type('use my OpenAI key');
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledWith('use my OpenAI key', expect.anything());
+  });
+});

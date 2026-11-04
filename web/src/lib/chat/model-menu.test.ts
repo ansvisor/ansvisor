@@ -121,7 +121,7 @@ describe('readModelMenu', () => {
       catalogCount: 312,
       updatedAt: '2026-11-02T05:17:00.000Z',
     });
-    const menu = await readModelMenu({ ownKeyProvider: 'anthropic' });
+    const menu = await readModelMenu({ ownKeyProviders: ['anthropic'] });
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toContain(
       '/api/internal/chat/models?ids=anthropic%2Fclaude-haiku-5.5%2Canthropic%2Fclaude-sonnet-5.5%2Canthropic%2Fclaude-opus-5.5',
@@ -138,6 +138,22 @@ describe('readModelMenu', () => {
     expect(menu.catalogCount).toBe(312);
     expect(menu.updatedAt).toBe('2026-11-02T05:17:00.000Z');
     expect(menu.selected).toBeNull();
+  });
+
+  it('marks Your key where an own key runs the model: its provider’s, else OpenRouter’s', async () => {
+    const yourKeys = async (ownKeyProviders: string[]) => {
+      answer({
+        models: [serverModel('anthropic/claude-haiku-5.5', '0.1x', 'low')],
+        catalogCount: 1,
+        updatedAt: null,
+      });
+      return (await readModelMenu({ ownKeyProviders })).models.map((m) => m.yourKey);
+    };
+    // An OpenRouter key runs a picked Claude model by its catalog id.
+    expect(await yourKeys(['openai', 'openrouter'])).toEqual([true]);
+    // An OpenAI key doesn't run a Claude model, even when it is the active one.
+    expect(await yourKeys(['openai'])).toEqual([false]);
+    expect(await yourKeys([])).toEqual([false]);
   });
 
   it('leaves out a model the catalog dropped, and says when the chat’s model was dropped', async () => {
