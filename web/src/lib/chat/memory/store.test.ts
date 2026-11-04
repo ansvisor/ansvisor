@@ -175,6 +175,7 @@ describe('saveMemory (items 7, 10, 12, 19, 25)', () => {
         scope: 'user',
         text: 'Write blog posts in US English',
         replaced: false,
+        brandName: null,
       },
     });
     expect(live()).toEqual([
@@ -498,8 +499,11 @@ describe('the Memory page’s list (items 21, 24, 25)', () => {
     seedLine({ user_id: PEOPLE.analyst, text: 'Not mine' });
     seedLine({ scope: 'brand', user_id: null, brand_id: BRAND, text: 'Say Northwind CRM' });
     seedLine({ scope: 'workspace', user_id: null, text: 'House style: AP' });
+    db.tables.brands[0].brand_rules = ['No topics comparing us with a named competitor'];
     const list = await store.listMemory(await viewer(PEOPLE.manager), BRAND);
     expect(list.brand).toEqual({ id: BRAND, name: 'Northwind' });
+    // Read-only, outside the brand's 4,000 (Wave 3 decision 14).
+    expect(list.brandRules).toEqual(['No topics comparing us with a named competitor']);
     expect(list.items.user.map((i) => i.text)).toEqual(['Write in US English']);
     expect(list.items.brand.map((i) => i.can)).toEqual([{ edit: true, remove: true }]);
     expect(list.items.workspace.map((i) => i.can)).toEqual([{ edit: false, remove: false }]);
@@ -510,6 +514,7 @@ describe('the Memory page’s list (items 21, 24, 25)', () => {
 
     const analyst = await store.listMemory(await viewer(PEOPLE.analyst), null);
     expect(analyst.brand).toBeNull();
+    expect(analyst.brandRules).toEqual([]);
     expect(analyst.items.user.map((i) => i.text)).toEqual(['Not mine']);
     expect(analyst.rights).toEqual({ user: 'edit', brand: null, workspace: null });
   });

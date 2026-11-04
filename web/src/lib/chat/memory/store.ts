@@ -508,12 +508,38 @@ export interface MemoryList {
   canSwitchWorkspace: boolean;
   /** The brand the Brand tab is about; null when none was asked for or it isn't theirs. */
   brand: { id: string; name: string } | null;
+  /**
+   * The brand's own rules (Settings › Content, 00450 brands.brand_rules),
+   * shown read-only in its tab and kept out of its 4,000 (Wave 3 decision
+   * 14): they are edited where they live. None before 00450 is applied.
+   */
+  brandRules: string[];
   items: Record<MemoryScope, MemoryItemView[]>;
   /** Characters used a scope, against MAX_MEMORY_SCOPE. */
   used: Record<MemoryScope, number>;
   /** What the person may do in each scope: edit, ask the Admins, or only read. */
   rights: Record<MemoryScope, 'edit' | 'request' | null>;
   limits: { line: number; scope: number };
+}
+
+/**
+ * A brand's rules (00450 brands.brand_rules), read by the whole row so the
+ * read works before and after that column exists; none when it can't be
+ * read. Only for the Memory page: they reach Chat's writing where they
+ * apply already, never through memory.
+ */
+async function readBrandRules(brandId: string): Promise<string[]> {
+  const { data, error } = await supabaseAdmin
+    .from('brands')
+    .select('*')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (error) {
+    console.error('[chat/memory] could not read the brand rules:', error.message);
+    return [];
+  }
+  const rules = (data as { brand_rules?: unknown } | null)?.brand_rules;
+  return Array.isArray(rules) ? rules.filter((r): r is string => typeof r === 'string') : [];
 }
 
 /**
@@ -537,15 +563,16 @@ export async function listMemory(
   const writable = viewer.plan.writable;
   const shown = switches.workspace || viewer.role === 'admin';
   if (shown) await syncProfileLine(viewer.userId, viewer.organizationId);
-  const [me, ofBrand, workspace] = shown
+  const [brandRules, me, ofBrand, workspace] = shown
     ? await Promise.all([
+        brand ? readBrandRules(brand.id) : Promise.resolve([]),
         scopeRows(viewer.organizationId, { scope: 'user', userId: viewer.userId }),
         brand
           ? scopeRows(viewer.organizationId, { scope: 'brand', brandId: brand.id })
           : Promise.resolve([]),
         scopeRows(viewer.organizationId, { scope: 'workspace' }),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
   const view = (row: ItemRow): MemoryItemView => {
     const scope = scopeOf(row);
     const may = rights[scope] === 'edit';
@@ -563,6 +590,7 @@ export async function listMemory(
     switches,
     canSwitchWorkspace: viewer.role === 'admin' && writable,
     brand,
+    brandRules,
     items: { user: me.map(view), brand: ofBrand.map(view), workspace: workspace.map(view) },
     used: { user: usedBy(me), brand: usedBy(ofBrand), workspace: usedBy(workspace) },
     rights,
@@ -590,7 +618,15 @@ export type SaveMemoryInput = z.input<typeof saveMemoryInput>;
 
 /** What a save did: a line kept (new, or its old one replaced), or a request sent to the Admins. */
 export type SavedMemory =
-  | { saved: true; id: string; scope: MemoryScope; text: string; replaced: boolean }
+  | {
+      saved: true;
+      id: string;
+      scope: MemoryScope;
+      text: string;
+      replaced: boolean;
+      /** A Brand line's brand, for its step ("Brand: Northwind"). */
+      brandName: string | null;
+    }
   | { requested: true };
 
 /** A save as the checks found it. */
@@ -664,7 +700,8 @@ export async function saveMemory(
 ): Promise<MemoryResult<SavedMemory>> {
   const checked = await checkMemorySave(viewer, raw, approval ? 'approval' : source);
   if (!checked.ok) return checked;
-  const { scope, text, key, replaced, right } = checked.value;
+  const { scope, text, key, brand, replaced, right } = checked.value;
+  const brandName = brand?.name ?? null;
 
   if (right === 'request') {
     // The server's own request: the browser's can't carry a drafted line (requestAccess).
@@ -693,7 +730,10 @@ export async function saveMemory(
     if (isFull(error)) return memoryRefusal('full');
     if (error) throw new Error(`Could not save the memory: ${error.message}`);
     if ((data ?? []).length === 0) return memoryRefusal('not_found');
-    return { ok: true, value: { saved: true, id: replaced.id, scope, text, replaced: true } };
+    return {
+      ok: true,
+      value: { saved: true, id: replaced.id, scope, text, replaced: true, brandName },
+    };
   }
 
   const { data, error } = await supabaseAdmin
@@ -713,7 +753,14 @@ export async function saveMemory(
   if (error || !data) throw new Error(`Could not save the memory: ${error?.message ?? 'no row'}`);
   return {
     ok: true,
-    value: { saved: true, id: (data as { id: string }).id, scope, text, replaced: false },
+    value: {
+      saved: true,
+      id: (data as { id: string }).id,
+      scope,
+      text,
+      replaced: false,
+      brandName,
+    },
   };
 }
 
@@ -941,9 +988,6 @@ export async function visibleMemoryLine(
   const row = await readVisible(viewer, id);
   return row ? { id: row.id, scope: scopeOf(row), text: row.text } : null;
 }
-
-/** "Replaces: {old}", under a save's card (item 7). */
-export const replacesWords = (text: string) => memoryT('card.replaces', { text });
 
 /** A brand of the workspace's name, for a card's words; null when there's none. */
 export async function brandNameOf(organizationId: string, brandId: string): Promise<string | null> {
