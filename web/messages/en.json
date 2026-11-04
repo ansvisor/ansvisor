@@ -9181,7 +9181,9 @@
           "image": "Image",
           "imageHint": "Insert an image on this line",
           "products": "Products",
-          "productsHint": "Insert products from your catalog on this line"
+          "productsHint": "Insert products from your catalog on this line",
+          "aiImage": "Generate image",
+          "aiImageHint": "Generate an image with AI on this line"
         },
         "attach": "Attach a file: Excel, CSV, Word, Markdown, HTML or text",
         "products": "Insert products from your catalog",
@@ -9228,7 +9230,52 @@
         "altPlaceholder": "What the image shows",
         "invalid": "Enter the image's web address (https://…).",
         "cancel": "Cancel",
-        "insert": "Insert"
+        "insert": "Insert",
+        "tabs": {
+          "label": "How to add the image",
+          "address": "Upload or address",
+          "ai": "Generate with AI"
+        },
+        "ai": {
+          "prompt": "Describe the image",
+          "promptDefault": "A cover image about {title}",
+          "style": "Style",
+          "styles": {
+            "brand": "Brand style",
+            "illustration": "Illustration",
+            "photo": "Photo-like"
+          },
+          "ratio": "Shape",
+          "model": "Image model",
+          "loadingModels": "Reading the image models…",
+          "modelCost": "{multiplier} · about {percent}% of your monthly AI limit per image",
+          "modelOwnKey": "{multiplier} · Your key",
+          "recommended": "Recommended",
+          "count": "Options",
+          "rules": "No product screenshots, realistic people or charts with numbers. No text unless you ask for it.",
+          "generate": "Generate {count} images",
+          "regenerate": "Regenerate",
+          "share": "About {percent}% of your monthly AI limit",
+          "generating": "Generating…",
+          "pick": "Option {n} of {count}",
+          "selected": "Selected",
+          "alt": "Alt text",
+          "altHint": "What the image shows, for people who can't see it and for search",
+          "use": "Use this image",
+          "uploading": "Adding…",
+          "unsaved": "{count, plural, one {# more image was made but couldn't be saved; it still counts} other {# more images were made but couldn't be saved; they still count}} toward your AI limit.",
+          "aiGenerated": "AI-generated",
+          "failed": {
+            "unavailable": "Image generation isn't available in this workspace right now.",
+            "own_key": "Your workspace's own OpenRouter key can't be read. An Admin can replace it in Settings › AI Providers.",
+            "ai_limit": "What's left of your monthly AI limit doesn't cover {count} images, so none was made.",
+            "refused": "The image model didn't make an image for this description: {why} Try describing it another way.",
+            "demo": "The demo brand makes no images. Switch to your brand to generate one.",
+            "not_saved": "{count, plural, one {The image was} other {The # images were}} made, and count toward your AI limit, but couldn't be saved. Try again.",
+            "failed": "Couldn't generate images. Try again.",
+            "upload": "Couldn't add the image. Try again."
+          }
+        }
       },
       "panel": {
         "label": "Side panel",
