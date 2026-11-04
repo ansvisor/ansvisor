@@ -4,6 +4,7 @@ import { CLOSED_ACTION_STATUSES, type ActionStatus } from '@/lib/action-center/r
 import { TASK_DONE, actionPages, draftMethodForTask } from '@/lib/content/action-drafts';
 import type { DraftMethod } from '@/lib/content/drafts';
 import { formatMonthDay } from '@/lib/format';
+import { effectiveTimeZone } from '@/lib/time-zone';
 
 /**
  * Daily suggestions in Chat's Inbox (CHAT-26 §2.2, §2.4, §5, §6; mockup
@@ -166,16 +167,27 @@ export const ZONE_DAYS = 30;
 export const ZONE_ANSWERS = 300;
 
 /**
- * The time zone the nightly job dates a person's suggestions in: their
- * latest Chat answer's (chat_messages.timezone, the browser's zone it was
- * shown in); else the one most of the workspace's latest answers were read
- * in, the newest on a tie; else UTC. A copy of resolveZones in
+ * The time zone the nightly job dates a person's suggestions in: the one
+ * they picked in Settings › Account (profiles.time_zone, 00468); else their
+ * latest Chat answer's (chat_messages.timezone, the zone it was shown in);
+ * else the one most of the workspace's latest answers were read in, the
+ * newest on a tie; else UTC (effectiveTimeZone). A copy of resolveZones in
  * server/src/lib/chat-suggestions/rules.js (W2-24): a change there changes
  * sent_on, so it changes here too, or "Today" drifts from it.
  *
  * @param answers the workspace's latest answers, newest first
+ * @param chosen the person's Settings › Account zone; null for Automatic
  */
 export function sendingZone(
+  answers: readonly { userId: string | null; timezone: string | null }[],
+  userId: string,
+  chosen: string | null = null,
+): string {
+  return effectiveTimeZone(chosen, answersZone(answers, userId));
+}
+
+/** The person's latest answer's zone, else the workspace's most read in, else UTC. */
+function answersZone(
   answers: readonly { userId: string | null; timezone: string | null }[],
   userId: string,
 ): string {

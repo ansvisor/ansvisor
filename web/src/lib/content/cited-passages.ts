@@ -10,6 +10,8 @@
  * of it. Words compare without case, punctuation or Markdown.
  */
 
+import { parseHtml } from './dom';
+
 /** The window the answers are read over. */
 export const CITED_DAYS = 30;
 
@@ -21,6 +23,15 @@ export const MIN_PASSAGE_WORDS = 6;
 
 /** The most passages a page sends to be checked. */
 export const MAX_PASSAGES = 1000;
+
+/** The page's headings and paragraphs, as the editor's passages, with the content DOM (dom.ts). */
+export function pagePassages(html: string): string[] {
+  const doc = parseHtml(html);
+  return [...doc.querySelectorAll('h1, h2, h3, h4, h5, h6, p')]
+    .map((el) => (el.textContent ?? '').trim().slice(0, 5_000))
+    .filter(Boolean)
+    .slice(0, MAX_PASSAGES);
+}
 
 /** An answer that cites the page. */
 export interface CitedAnswer {

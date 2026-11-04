@@ -84,6 +84,8 @@ vi.mock('@/lib/actions/content', () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: tracked.track('actions/content-drafts.createContentDraft'),
   updateContentDraft: tracked.track('actions/content-drafts.updateContentDraft'),
+  setContentDraftReady: tracked.track('actions/content-drafts.setContentDraftReady'),
+  suggestDraftChanges: tracked.track('actions/content-drafts.suggestDraftChanges'),
 }));
 vi.mock('@/lib/chat/actor/drafts', () => ({
   createContentDraftFor: tracked.track('chat/actor/drafts.createContentDraftFor'),
@@ -363,6 +365,8 @@ describe('the Chat tool registry', () => {
     await runInChat('attach_file_to_task', { brand_id: brand, task_id: item, file_id: item });
     await runInChat('set_task_ready_for_review', { brand_id: brand, task_id: item });
     await run('update_draft', { draft_id: item, body_html: '<h1>FAQ</h1>' });
+    await run('suggest_draft_changes', { draft_id: item, request: 'Make answer 3 shorter' });
+    await run('set_draft_ready', { draft_id: item });
     await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
     await run('publish_cms', { draft_id: item, destination: 'wix' });
     await run('build_report', {
@@ -438,6 +442,8 @@ describe('the Chat tool registry', () => {
         'actions/content-drafts.updateContentDraft',
         [item, { title: undefined, bodyHtml: '<h1>FAQ</h1>' }],
       ],
+      ['actions/content-drafts.suggestDraftChanges', [item, 'Make answer 3 shorter']],
+      ['actions/content-drafts.setContentDraftReady', [item]],
       ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
       ['actions/cms-send.publishDraftToCms', [item, 'wix']],
       [
@@ -715,6 +721,8 @@ describe('approval policies', () => {
       set_task_ready_for_review: ['admin', 'manager'],
       // Content, reports and Site Audit (W2-07, DECISIONS T): an Analyst only saves drafts.
       update_draft: ['admin', 'manager'],
+      suggest_draft_changes: ['admin', 'manager'],
+      set_draft_ready: ['admin', 'manager'],
       push_cms_draft: ['admin', 'manager'],
       publish_cms: ['admin', 'manager'],
       // Take down (AUTONOMOUS-GO-LIVE PR 10): as the API's route, a Manager even while publishing is off.

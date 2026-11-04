@@ -57,6 +57,12 @@ describe('noticeOf', () => {
     expect(noticeOf(row({ payload: null }))).toBeNull();
     expect(noticeOf(row({ kind: 'own_key_limit_80', payload: { capUsd: 250 } }))).toBeNull();
     expect(noticeOf(row({ kind: 'something_new' }))).toBeNull();
+    // An agent waiting for its person (00474): the row records its e-mail; its chat is in Needs you.
+    expect(
+      noticeOf(
+        row({ kind: 'agent_needs_you', payload: { agent: 'Brief', runId: 'r', chatId: 'c' } }),
+      ),
+    ).toBeNull();
   });
 
   it('reads an agent’s go-live notices (AUTONOMOUS-GO-LIVE §6.4, §7.2, 00446)', () => {

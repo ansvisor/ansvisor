@@ -11,6 +11,7 @@ import { readEntityCounts } from '@/lib/action-center/entity-counts';
 import { ACTION_COLUMNS, actionItemFromRow, type ActionRow } from '@/lib/action-center/rows';
 import { actionPages } from '@/lib/content/action-drafts';
 import { pageKey } from '@/lib/content/sources';
+import { isTimeZone } from '@/lib/time-zone';
 import type { ActionItem } from '@/lib/actions/action-center';
 import {
   SNOOZE_DAYS,
@@ -104,6 +105,8 @@ interface Person {
   userId: string;
   orgId: string;
   role: ReturnType<typeof parseTeamRole>;
+  /** Their Settings › Account time zone (00468); null for Automatic. */
+  timeZone: string | null;
 }
 
 /** The signed-in person with the new Chat on for their workspace, or null. */
@@ -115,21 +118,29 @@ async function chatPerson(): Promise<Person | null> {
   if (!user) return null;
   const { data: profile } = await client
     .from('profiles')
-    .select('organization_id, role')
+    .select('organization_id, role, time_zone')
     .eq('id', user.id)
     .maybeSingle();
   const orgId = profile?.organization_id ?? null;
   if (!orgId || !chatAgenticEnabled(orgId)) return null;
-  return { client, userId: user.id, orgId, role: parseTeamRole(profile?.role) };
+  return {
+    client,
+    userId: user.id,
+    orgId,
+    role: parseTeamRole(profile?.role),
+    timeZone: profile?.time_zone ?? null,
+  };
 }
 
 /**
- * The person's today as the nightly job dates sent_on (sendingZone): read
+ * The person's today as the nightly job dates sent_on (sendingZone): their
+ * Settings › Account zone, with no more to read; else the answers', read
  * with the service role, since the workspace's answers aren't all theirs to
  * read; only their zones and authors, and only the day leaves the server.
  * Null, logged, when it can't be read: no row says Today then.
  */
 async function personToday(me: Person, now: Date): Promise<string | null> {
+  if (isTimeZone(me.timeZone)) return dayIn(now, sendingZone([], me.userId, me.timeZone));
   const { data, error } = await supabaseAdmin
     .from('chat_messages')
     .select(
