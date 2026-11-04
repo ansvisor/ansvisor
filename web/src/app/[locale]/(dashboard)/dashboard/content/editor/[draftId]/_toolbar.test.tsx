@@ -7,10 +7,30 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { ContentImage } from '@/lib/content/content-image';
 
 vi.mock('@/lib/actions/shopping-path', () => ({
   searchProductsForBlock: vi.fn(),
   getProductsForBlock: vi.fn(),
+}));
+// Generate with AI's panel (its own test): here, a stub that hands back an image it made.
+vi.mock('./_ai-image-panel', () => ({
+  AiImagePanel: ({
+    draftId,
+    onUse,
+  }: {
+    draftId: string;
+    onUse: (image: { src: string; alt: string }) => void;
+  }) => (
+    <button
+      type="button"
+      data-slot="ai-panel-stub"
+      data-draft={draftId}
+      onClick={() => onUse({ src: 'https://cdn.example/ai.jpg', alt: 'A coffee cup' })}
+    >
+      use
+    </button>
+  ),
 }));
 
 const { EditorToolbar, onEmptyLine } = await import('./_toolbar');
@@ -60,9 +80,13 @@ describe('EditorToolbar', () => {
   });
 
   /** `isLocked`: a read-only workspace (plan not active). */
-  async function render(productsBrandId: string | null, isLocked = false) {
+  async function render(
+    productsBrandId: string | null,
+    isLocked = false,
+    aiImages: { draftId: string; title: string } | null = null,
+  ) {
     editor = new Editor({
-      extensions: [StarterKit, CharacterCount],
+      extensions: [StarterKit, CharacterCount, ContentImage],
       content: '<h1>Title</h1><p>Text</p>',
     });
     container = document.createElement('div');
@@ -82,6 +106,7 @@ describe('EditorToolbar', () => {
               onToggleHtml={() => {}}
               onAttach={() => {}}
               productsBrandId={productsBrandId}
+              aiImages={aiImages}
             />
           </UpgradeDialogContext.Provider>
         </NextIntlClientProvider>,
@@ -111,5 +136,32 @@ describe('EditorToolbar', () => {
     await act(async () => products()!.click());
     expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Editing the page needs a plan');
     expect(document.body.textContent).not.toContain('Add products');
+  });
+
+  const imageButton = () =>
+    document.body.querySelector<HTMLButtonElement>('button[aria-label="Insert an image"]');
+
+  it('offers Generate with AI beside the address in a draft’s image dialog, and adds the image marked as AI’s (W4-09)', async () => {
+    await render(null, false, { draftId: 'draft-1', title: 'GEO strategies' });
+    await act(async () => imageButton()!.click());
+    const tabs = [...document.body.querySelectorAll('[role="tab"]')].map((t) => t.textContent);
+    expect(tabs).toEqual(['Upload or address', 'Generate with AI']);
+    expect(document.body.querySelector('[data-slot="ai-panel-stub"]')).toBeNull();
+    await act(async () =>
+      document.body.querySelector<HTMLButtonElement>('[data-tab="ai"]')!.click(),
+    );
+    const stub = document.body.querySelector<HTMLButtonElement>('[data-slot="ai-panel-stub"]')!;
+    expect(stub.dataset.draft).toBe('draft-1');
+    await act(async () => stub.click());
+    expect(editor!.getHTML()).toContain(
+      '<img src="https://cdn.example/ai.jpg" alt="A coffee cup" data-ai-generated="true">',
+    );
+  });
+
+  it('keeps the image dialog as it was outside a draft', async () => {
+    await render(null);
+    await act(async () => imageButton()!.click());
+    expect(document.body.querySelector('[role="tab"]')).toBeNull();
+    expect(document.body.textContent).toContain('Image address');
   });
 });

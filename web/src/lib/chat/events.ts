@@ -298,6 +298,34 @@ export interface ChatDeliverable {
    * Action Center has the task completed. None when that isn't certain.
    */
   task?: { title: string; state: 'open' | 'done' };
+  /** A page made or changed in chat, as its version card shows it (CHAT-25 §6, W4-12a). */
+  version?: ChatPageVersion;
+}
+
+/** A section of a page as a version card lists it. */
+export interface ChatPageSection {
+  heading: string;
+  text: string;
+}
+
+/**
+ * A page's version in chat (CHAT-25 §6, mockup #e-chat; W4-12a): its number
+ * in this chat (the page Chat made is 1, each change made here one more),
+ * its counts, what changed since the one before, its sections (cut to fit)
+ * for the preview and Show all, and whether Undo can put the version before
+ * back. No id: the server keeps which History version that is (the run's
+ * progress, by its file), and Undo names the card by its run and place.
+ */
+export interface ChatPageVersion {
+  n: number;
+  counts: { questions: number; sections: number; characters: number };
+  changes: {
+    shortened: { heading: string; before: number; after: number }[];
+    added: string[];
+    placeholders: string[];
+  };
+  sections: ChatPageSection[];
+  canUndo?: boolean;
 }
 
 /**
@@ -400,7 +428,7 @@ export interface ChatEventPayloads {
   'tasks.updated': ChatTaskStrip;
   // Editor in Chat (CHAT-25 §12, Phase 4): payloads grow with it.
   /** A new version card of a page Chat writes. */
-  'deliverable.updated': ChatDeliverable & { version: number };
+  'deliverable.updated': ChatDeliverable;
   /** Suggestions Chat made on the open page, for the editor to show. */
   'suggestion.created': { count: number };
   'suggestion.resolved': { count: number };

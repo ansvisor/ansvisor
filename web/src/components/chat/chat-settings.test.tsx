@@ -105,12 +105,6 @@ describe('ChatSettings', () => {
     expect(action('policy.open')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
   });
 
-  it('hides the setting nothing reads yet: notifications', async () => {
-    await render();
-    expect(action('chatSettings.notifyChannel')).toHaveLength(0);
-    expect(host.textContent).not.toContain('Notify me when an agent needs me');
-  });
-
   it('shows "Thought for N s" as a switch, on by default, and keeps a change at once', async () => {
     await render();
     const toggle = () => action('chatSettings.toggleThinking')[0];
@@ -119,6 +113,22 @@ describe('ChatSettings', () => {
     await act(async () => toggle().click());
     expect(saved.patches).toEqual([{ showThought: false }]);
     expect(toggle().getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('offers how to hear that an agent needs you, Slack only once it connects, and keeps a pick', async () => {
+    await render();
+    const select = action('chatSettings.notifyChannel')[0] as HTMLSelectElement;
+    expect([...select.options].map((option) => [option.textContent, option.disabled])).toEqual([
+      ['Inbox + email', false],
+      ['Inbox only', false],
+      ['Inbox + Slack (connect Slack first)', true],
+    ]);
+    expect(select.value).toBe('inbox_email');
+    await act(async () => {
+      select.value = 'inbox';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(saved.patches).toEqual([{ notifyVia: 'inbox' }]);
   });
 
   it('offers the answer languages Chat reads, "Same as my question" first, and keeps a pick at once', async () => {

@@ -5,9 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 const key = vi.hoisted(() => ({
   resolve: vi.fn(),
+  picked: vi.fn(),
   failure: vi.fn(async (): Promise<unknown> => null),
 }));
-vi.mock('./key', () => ({ resolveChatModelKey: key.resolve }));
+vi.mock('./key', () => ({
+  resolveChatModelKey: key.resolve,
+  resolvePickedModelKey: key.picked,
+}));
 vi.mock('./key-health', () => ({ ownKeyFailure: key.failure }));
 
 const {
@@ -116,48 +120,74 @@ describe('the run models', () => {
     expect(max.pick('write').maxOutputTokens).toBe(32_000);
   });
 
-  it('take the pick on an Anthropic key, Auto otherwise, and the own key’s model on another provider (W4-03)', async () => {
-    const anthropic = {
+  it('run a pick on its provider’s key, Auto for a model not offered (W4-03, W4-06)', async () => {
+    key.picked.mockResolvedValueOnce({
       source: 'ansvisor',
       config: { provider: 'anthropic', apiKey: 'k', settings: {} },
-    };
-    key.resolve.mockResolvedValueOnce(anthropic);
+    });
     const sonnet = await resolveChatModels('org', {
       model: 'anthropic/claude-sonnet-5.5',
       effort: 'max',
     });
+    expect(key.picked).toHaveBeenCalledWith('org', 'anthropic', { ansvisorOnly: false });
     expect(sonnet?.model).toBe('anthropic/claude-sonnet-5.5');
     expect(modelId(sonnet!.pick('read'))).toBe('claude-sonnet-5-5');
     expect(sonnet?.pick('write').providerOptions).toMatchObject({ anthropic: { effort: 'max' } });
 
-    // Not offered (not tested, or never listed): Auto, the effort kept.
-    key.resolve.mockResolvedValueOnce(anthropic);
+    // Not offered (not tested, or never listed): no picked key is looked for, the run takes Auto.
+    key.picked.mockClear();
+    key.resolve.mockResolvedValueOnce({
+      source: 'ansvisor',
+      config: { provider: 'anthropic', apiKey: 'k', settings: {} },
+    });
     const opus = await resolveChatModels('org', {
       model: 'mistralai/mistral-large-3',
       effort: 'max',
     });
+    expect(key.picked).not.toHaveBeenCalled();
     expect(opus?.model).toBe('auto');
     expect(modelId(opus!.pick('write'))).toBe('claude-sonnet-5-5');
-    expect(opus?.pick('write').providerOptions).toMatchObject({ anthropic: { effort: 'max' } });
 
-    key.resolve.mockResolvedValueOnce(anthropic);
+    key.resolve.mockResolvedValueOnce({
+      source: 'ansvisor',
+      config: { provider: 'anthropic', apiKey: 'k', settings: {} },
+    });
     const unknown = await resolveChatModels('org', {
       model: 'openai/gpt-6.1-sol',
       effort: 'normal',
     });
     expect(unknown?.model).toBe('auto');
     expect(modelId(unknown!.pick('read'))).toBe('claude-haiku-5-5');
+  });
 
-    key.resolve.mockResolvedValueOnce({
+  it('run a Claude pick through the own OpenRouter key by its catalog id (W4-06)', async () => {
+    key.picked.mockResolvedValueOnce({
       source: 'own',
-      config: { provider: 'openai', apiKey: 'k', settings: {} },
+      config: { provider: 'openrouter', apiKey: 'or', settings: { model: 'x/y' } },
     });
-    const own = await resolveChatModels('org', {
+    key.failure.mockResolvedValueOnce({ provider: 'openrouter', class: 'no_credit' });
+    const models = await resolveChatModels('org', {
       model: 'anthropic/claude-sonnet-5.5',
-      effort: 'high',
+      effort: 'normal',
     });
-    expect(own?.phases).toBe('single');
-    expect(own?.model).toBe('openai/gpt-5.5');
+    expect(models).toMatchObject({
+      source: 'own',
+      provider: 'openrouter',
+      phases: 'single',
+      model: 'anthropic/claude-sonnet-5.5',
+      keyFailing: true,
+    });
+    expect(modelId(models!.pick('write'))).toBe('anthropic/claude-sonnet-5.5');
+    expect(models!.pick('write').budgetModel).toBe('anthropic/claude-sonnet-5.5');
+  });
+
+  it('pass "Use Ansvisor’s limit" on to the key, for Auto too (W4-06)', async () => {
+    key.resolve.mockResolvedValueOnce({
+      source: 'ansvisor',
+      config: { provider: 'anthropic', apiKey: 'k', settings: {} },
+    });
+    await resolveChatModels('org', { model: 'auto', effort: 'normal' }, { ansvisorOnly: true });
+    expect(key.resolve).toHaveBeenLastCalledWith('org', { ansvisorOnly: true });
   });
 
   it('run a model through OpenRouter in one phase, with its reasoning effort (W4-03)', () => {
