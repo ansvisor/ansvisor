@@ -144,6 +144,28 @@ describe('agentWriteRequest', () => {
     expect(request.textRules).toEqual(['Short sentences']);
   });
 
+  it('sends a Length range the person set, aimed at its middle (editor test 2026-11-03)', async () => {
+    const ranged = draft({
+      rules: { ...NO_DRAFT_RULES, overrides: { length: { value: '4500-5500' } } },
+    });
+    const request = await agentWriteRequest(ranged, describe_);
+    expect(request.sources).toMatchObject({ length: 5000, lengthBand: { min: 4500, max: 5500 } });
+    expect(request.rules.find((rule) => rule.key === 'length')?.detail).toBe('4500-5500');
+    // One number: aimed at, with no range of its own, as before.
+    const one = await agentWriteRequest(
+      draft({ rules: { ...NO_DRAFT_RULES, overrides: { length: { value: '5000' } } } }),
+      describe_,
+    );
+    expect(one.sources.length).toBe(5000);
+    expect(one.sources).not.toHaveProperty('lengthBand');
+    // Without the sources too.
+    getDraftSources.mockResolvedValue(null);
+    expect((await agentWriteRequest(ranged, describe_)).sources.lengthBand).toEqual({
+      min: 4500,
+      max: 5500,
+    });
+  });
+
   it('still sends the rules when the sources can’t be read', async () => {
     getDraftSources.mockResolvedValue(null);
     const request = await agentWriteRequest(draft({ pageType: null }), describe_);

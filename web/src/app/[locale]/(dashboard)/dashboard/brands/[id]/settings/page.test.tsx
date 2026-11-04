@@ -108,6 +108,7 @@ vi.mock('./_brand-facts-tab', () => ({
 
 // The client logo is _client-logo-card.test.tsx's.
 vi.mock('./_client-logo-card', () => ({ ClientLogoCard: () => null }));
+vi.mock('./_people-tab', () => ({ PeopleTab: () => null }));
 
 import BrandSettingsPage from './page';
 
