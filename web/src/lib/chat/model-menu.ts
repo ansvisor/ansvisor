@@ -98,6 +98,8 @@ export async function readModelMenu({
   const byId = new Map((server?.models ?? []).map((model) => [model.id, model]));
   const models: ChatMenuModel[] = [];
   for (const offered of OFFERED_MODELS) {
+    // A model through OpenRouter needs Ansvisor's OpenRouter key (W4-03).
+    if (offered.provider === 'openrouter' && !process.env.OPENROUTER_API_KEY) continue;
     const listed = byId.get(offered.id);
     // The server leaves a dropped model out; with no answer, every offered one shows.
     if (server && !listed) continue;

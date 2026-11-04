@@ -24,6 +24,7 @@ import {
   openlyCoveredClusterIds,
   opportunityScore,
   pickClusters,
+  requestScope,
   scoreComponents,
 } from './opportunity-limits.js';
 import { loadClusterOpportunities, loadOpportunityBaskets } from './open-opportunities.js';
@@ -371,7 +372,9 @@ export const IDEA_MAX_LENGTH = 500;
  *   such cluster nothing is written and `noMatch` says so.
  *   Every request but `alternativeOf` adds a cluster whose question an open
  *   opportunity already answers to that one instead (opportunity-same-question.js).
- * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, sameQuestion?: number, limited?: boolean, noMatch?: boolean, opportunityIds?: string[], existingId?: string }>}
+ *   `scope` (every request but `alternativeOf`) says what the request could
+ *   draw on (requestScope), so the page can say why fewer came back.
+ * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, sameQuestion?: number, limited?: boolean, noMatch?: boolean, opportunityIds?: string[], existingId?: string, scope?: { focus: string, requested: number, needs: number, covered: number, noAnswers: number } }>}
  */
 export async function generateContentOpportunities(
   brandId,
@@ -512,6 +515,18 @@ export async function generateContentOpportunities(
     (!promptId || clusterById.get(c.id).prompt_ids.includes(promptId)) &&
     (!focusIds || focusIds.includes(c.id));
   const open = openCandidates(candidates, { covered, inFocus, alternativeOf });
+  // What the request could draw on, so the page can say why fewer came back
+  // than were asked for. Another angle is for one known need.
+  const scope = alternativeOf
+    ? {}
+    : {
+        scope: requestScope(candidates, {
+          covered,
+          inFocus,
+          requested: count ?? OPPORTUNITIES_PER_RUN,
+          focus: pagePath ? 'page' : promptId ? 'prompt' : topicId ? 'topic' : 'auto',
+        }),
+      };
   // A page's request goes to its best-matching cluster that has an open
   // opportunity, which it points at, or answers, which it writes from.
   if (focusIds) {
@@ -593,6 +608,7 @@ export async function generateContentOpportunities(
       reopened,
       duplicates,
       sameQuestion: sameQuestion.size,
+      ...scope,
       ...(existingId ? { existingId } : {}),
     };
   }
@@ -604,7 +620,7 @@ export async function generateContentOpportunities(
   const picked = slots.unlimited ? wanted : wanted.slice(0, slots.ids.length);
   if (!picked.length) {
     logger.info({ brandId }, '[opportunities] monthly opportunity limit reached');
-    return { generated: 0, merged: 0, reopened, limited: true };
+    return { generated: 0, merged: 0, reopened, limited: true, ...scope };
   }
   const releaseAll = () =>
     releaseOpportunitySlots(slots.ids).catch((err) =>
@@ -848,6 +864,7 @@ Write every title and description in ${getLanguageName(brand.language)}.`;
     reopened,
     duplicates,
     sameQuestion: sameQuestion.size,
+    ...scope,
     opportunityIds: created.map((row) => row.id),
   };
 }

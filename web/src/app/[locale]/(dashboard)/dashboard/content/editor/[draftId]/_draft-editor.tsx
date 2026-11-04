@@ -193,7 +193,7 @@ import {
   notForAgentMessage,
   openRulesForAgent,
   overLengthFor,
-  lengthBand,
+  lengthSpan,
   rewriteAdvice,
   NO_RULE_CONTEXT,
   checkRule,
@@ -798,11 +798,9 @@ export function DraftEditor({
       : pageTextLength(html);
   // The Length the page is written to, for what the agent's rewrite reached.
   const lengthRule = rules.rules.find(({ rule }) => rule.key === 'length' && rule.on)?.rule;
-  const lengthTarget = Number(lengthRule?.current);
-  const length =
-    lengthRule && Number.isFinite(lengthTarget) && lengthTarget > 0
-      ? { target: lengthTarget, ...lengthBand(lengthTarget), kept: keptChars }
-      : null;
+  // One number, or a range the person set (lengthSpan).
+  const lengthSet = lengthRule ? lengthSpan(lengthRule.current) : null;
+  const length = lengthSet ? { ...lengthSet, kept: keptChars } : null;
   // How well the page reads as written (Quality spec, CE-036/039): read in the
   // browser, no AI cost; off until Quality's first phase is live. Read in the
   // language the page is written in: its Language rule when that is on (the
@@ -2398,6 +2396,7 @@ export function DraftEditor({
             sourceUrl: draft.sourceUrl,
             html: ed.getHTML(),
             length: rules.length,
+            lengthBand: rules.lengthBand,
           }),
         }
       : {}),

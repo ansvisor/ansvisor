@@ -72,6 +72,9 @@ async function startApp() {
     assertOpportunitiesAccess: vi.fn(),
     assertOpportunityAccess,
     assertPromptAccess: vi.fn(),
+    // The caller may (the role rule's own tests: run-roles.test.js).
+    MANAGER_ROLES: ['admin', 'manager'],
+    allowRole: vi.fn(async () => true),
   }));
   vi.doMock('../config/supabase.js', () => ({ default: { from: (table) => query(table) } }));
   vi.doMock('../lib/prompt-clusters.js', () => ({ loadClusters: vi.fn() }));

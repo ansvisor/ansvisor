@@ -41,14 +41,14 @@ Each row's **…** menu has the quick actions:
 - **Open in new tab**, which opens it as a page of its own;
 - **Dismiss**, for a new one. Undo it from the message that appears.
 
-Send to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions.
+Send to Plan, Send to Workflow and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions.
 
 ## Work on many at once
 
-Tick rows, or the box in the header for every row shown, then:
+Admins and managers tick rows, or the box in the header for every row shown, then:
 
 - **Send All** sends each one to your workflow tool, which suits kicking off a content sprint.
-- **Done**, **Dismiss All** and **Delete** change them all at once. They're for admins and managers.
+- **Done**, **Dismiss All** and **Delete** change them all at once.
 
 **Delete** removes the opportunities for good, with any brief they have, and doesn't give back the month's opportunities or briefs. Dismissing keeps them out of your way instead.
 
@@ -72,11 +72,19 @@ The dialog shows how many groups in your focus have no opportunity yet, and **Ho
 
 ## No duplicates
 
-Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is written, the message says so and counts any duplicates it skipped.
+Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped.
 
 A question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.
 
 For a second take on the same need, use **Another angle** on the opportunity.
+
+## When fewer come back
+
+When a run writes fewer than you asked for, or none, the message says why:
+
+- some needs were added to existing opportunities that answer the same thing;
+- some needs have no tracked answers from the last 30 days yet, so there's nothing to write from;
+- the other needs in your focus already have an opportunity. Add prompts for new needs, or use **Another angle** on an opportunity.
 
 ## How many you get
 

@@ -469,6 +469,44 @@ describe('the Rules tab', () => {
     expect(change).toHaveBeenCalledWith('whoFor', { value: 'Sales leaders at B2B teams' });
   });
 
+  it('sets Length as a range, the least and the most, its band shown until then (editor test 2026-11-03)', async () => {
+    await render(state());
+    const [min, max] = row('Length').querySelectorAll('input');
+    expect(min.getAttribute('aria-label')).toBe('Length, at least');
+    expect(max.getAttribute('aria-label')).toBe('Length, at most');
+    // One number, 3,000: its band, 20% either side.
+    expect([min.value, max.value]).toEqual(['2400', '3600']);
+    const enter = (input: HTMLInputElement) =>
+      act(async () => {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      });
+    await act(async () => {
+      min.focus();
+      setValue(min, '4.500');
+      setValue(max, '5,500');
+    });
+    await enter(max);
+    expect(change).toHaveBeenCalledWith('length', { value: '4500-5500' });
+    // The larger first is put the right way round; one left empty, or as it was, changes nothing.
+    change.mockReset();
+    await act(async () => {
+      setValue(min, '6000');
+      setValue(max, '5000');
+    });
+    await enter(min);
+    expect(change).toHaveBeenCalledWith('length', { value: '5000-6000' });
+    change.mockReset();
+    await act(async () => setValue(max, ''));
+    await enter(max);
+    await act(async () => setValue(min, '2400'));
+    await enter(min);
+    expect(change).not.toHaveBeenCalled();
+    // A range set reads back as it is.
+    await render(state({ overrides: { length: { value: '4500-5500' } } }));
+    const shown = [...row('Length').querySelectorAll('input')].map((i) => i.value);
+    expect(shown).toEqual(['4500', '5500']);
+  });
+
   it('turns a rule off, and shows it off', async () => {
     await render(state());
     await act(async () =>

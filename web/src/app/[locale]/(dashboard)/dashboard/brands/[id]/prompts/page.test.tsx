@@ -70,7 +70,11 @@ vi.mock('@/lib/supabase/client', () => ({
 vi.mock('@/components/providers/plan-provider', () => ({
   usePlanContext: () => ({ planId: 'growth', allowedModelIds: null }),
 }));
-vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage: true }) }));
+// An admin or a manager unless a test says otherwise.
+const viewer = vi.hoisted(() => ({ canManage: true }));
+vi.mock('@/hooks/use-user-role', () => ({
+  useUserRole: () => ({ canManage: viewer.canManage }),
+}));
 vi.mock('@/lib/tracking-job-store', () => ({ saveTrackingJob: vi.fn() }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -133,6 +137,7 @@ const include = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  viewer.canManage = true;
   vi.stubGlobal('fetch', fetchMock);
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -227,6 +232,19 @@ describe('Manage prompts on a read-only workspace', () => {
     await act(async () => include().click());
     expect(actions.setPromptActive).toHaveBeenCalledWith('p1', false);
     expect(openUpgrade).not.toHaveBeenCalled();
+  });
+
+  // Changing locations and tracking the prompts now are for admins and managers (2026-11-03).
+  it('offers Locations and Analyze Prompts to an admin or a manager only', async () => {
+    await render(false);
+    expect(button('Locations')).toBeDefined();
+    expect(button('Analyze Prompts')).toBeDefined();
+    act(() => root.unmount());
+    root = createRoot(container);
+    viewer.canManage = false;
+    await render(false);
+    expect(button('Locations')).toBeUndefined();
+    expect(button('Analyze Prompts')).toBeUndefined();
   });
 });
 

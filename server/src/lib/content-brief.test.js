@@ -538,6 +538,17 @@ describe('rebuildSources', () => {
     expect(rebuildSources.parse(sources({ length: 50 })).length).toBe(100);
     expect(rebuildSources.parse(sources({ length: 60_000 })).length).toBe(50_000);
   });
+
+  it('keeps a Length range the person set, and drops one that doesn’t read (editor test 2026-11-03)', () => {
+    const band = (lengthBand) => rebuildSources.parse(sources({ length: 5000, lengthBand }));
+    expect(band({ min: 4500, max: 5500 }).lengthBand).toEqual({ min: 4500, max: 5500 });
+    expect(band(undefined).lengthBand).toBeUndefined();
+    expect(band({ min: 5500, max: 4500 }).lengthBand).toBeUndefined();
+    expect(band({ min: 0, max: 4500 }).lengthBand).toBeUndefined();
+    expect(band('4500-5500').lengthBand).toBeUndefined();
+    // The rest of the request stands.
+    expect(band({ min: 5500, max: 4500 }).length).toBe(5000);
+  });
 });
 
 describe('briefRules', () => {
