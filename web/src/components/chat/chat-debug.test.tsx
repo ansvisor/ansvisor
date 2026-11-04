@@ -24,6 +24,7 @@ vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
+vi.mock('@/lib/actions/chat-schedules', () => ({ countChatSchedules: vi.fn(async () => 2) }));
 vi.mock('./chat-list-provider', () => ({
   useChatList: () => ({
     status: 'ready',
