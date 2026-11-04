@@ -1006,6 +1006,7 @@ function scripted(script: Step[]) {
     source: 'ansvisor',
     provider: 'anthropic',
     keyFailing: false,
+    model: 'auto',
     phases: 'single',
     pick: () => choice,
   } satisfies ChatModels);
@@ -1297,6 +1298,7 @@ function openRouterAuto(apiKey: string): ChatModels {
     source: 'ansvisor',
     provider: 'anthropic',
     keyFailing: false,
+    model: 'auto',
     phases: 'auto',
     pick: (phase) => (phase === 'read' ? read : write),
   };

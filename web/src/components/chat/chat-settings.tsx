@@ -13,6 +13,7 @@ import type {
   ChatGeneralSettings,
   GeneralPatch,
 } from '@/lib/chat/general-settings';
+import { PAGE_OPENS } from '@/lib/chat/page-open';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { cn } from '@/lib/utils';
 import { useFocusLabel } from './focus-picker';
@@ -262,6 +263,38 @@ export function ChatSettings({
               action="chatSettings.toggleAskChatEverywhere"
               onChange={(next) => void change({ panelOnPages: next })}
             />
+          </Row>
+
+          {/* Where a page Chat writes opens (CHAT-25 §3, W4-11): "Open here" comes with W4-15. */}
+          <Row label={t('pageOpen.label')} note={t('pageOpen.note')}>
+            <span
+              role="radiogroup"
+              aria-label={t('pageOpen.label')}
+              className="inline-flex shrink-0 rounded-[9px] border bg-muted/60 p-0.5"
+            >
+              {PAGE_OPENS.map((where) => {
+                const on = settings.pageOpen === where;
+                return (
+                  <button
+                    key={where}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    data-action="chatSettings.pageOpen"
+                    onClick={() => {
+                      if (!on) void change({ pageOpen: where });
+                    }}
+                    className={cn(
+                      'inline-flex items-center rounded-[7px] px-[9px] py-[3px] text-xs whitespace-nowrap text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                      on &&
+                        'bg-background font-medium text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]',
+                    )}
+                  >
+                    {t(`pageOpen.${where}`)}
+                  </button>
+                );
+              })}
+            </span>
           </Row>
         </section>
       </div>

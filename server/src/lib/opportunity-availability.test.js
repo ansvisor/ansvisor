@@ -16,17 +16,19 @@ const opportunities = [
   { id: 'o1', status: 'new', cluster_id: 'c1', related_cluster_ids: ['c4'] },
   { id: 'o2', status: 'dismissed', cluster_id: 'c2', related_cluster_ids: [] },
 ];
-const testedPromptIds = new Set(['p1', 'p3', 'p4', 'p5', 'p6']);
+const promptMetrics = new Map(
+  ['p1', 'p3', 'p4', 'p5', 'p6'].map((id) => [id, { cells: 10, visibility: 50 }]),
+);
 
 describe('needAvailability', () => {
-  const result = needAvailability({ clusters, opportunities, testedPromptIds });
+  const result = needAvailability({ clusters, opportunities, promptMetrics });
 
   it('counts the needs with answers and no opportunity, per topic and in all', () => {
-    expect(result).toMatchObject({ needs: 6, open: 2, covered: 3, noAnswers: 1 });
+    expect(result).toMatchObject({ needs: 6, open: 2, covered: 3, noAnswers: 1, angles: 0 });
     expect(result.topics).toEqual({
-      t1: { open: 1, covered: 2, noAnswers: 0 },
-      t2: { open: 0, covered: 1, noAnswers: 1 },
-      [NO_TOPIC]: { open: 1, covered: 0, noAnswers: 0 },
+      t1: { open: 1, covered: 2, noAnswers: 0, angles: 0 },
+      t2: { open: 0, covered: 1, noAnswers: 1, angles: 0 },
+      [NO_TOPIC]: { open: 1, covered: 0, noAnswers: 0, angles: 0 },
     });
   });
 
@@ -38,16 +40,45 @@ describe('needAvailability', () => {
     expect(result.promptOpportunity.p3).toBeUndefined();
   });
 
-  it('reads an empty brand as nothing to write for', () => {
-    expect(
-      needAvailability({ clusters: [], opportunities: [], testedPromptIds: new Set() }),
-    ).toEqual({
-      needs: 0,
-      open: 0,
-      covered: 0,
-      noAnswers: 0,
-      topics: {},
-      promptOpportunity: {},
+  it('counts the covered needs New may write another angle on', () => {
+    const now = Date.parse('2026-11-03T12:00:00Z');
+    const old = new Date(now - 40 * 86_400_000).toISOString();
+    const result = needAvailability({
+      clusters,
+      // o2 is dismissed (not "doesn't matter"); c2's brand is seen in 5% of answers.
+      opportunities: opportunities.map((o) => ({ ...o, created_at: old })),
+      promptMetrics: new Map([...promptMetrics, ['p3', { cells: 20, visibility: 5 }]]),
+      now,
     });
+    expect(result.angles).toBe(1);
+    expect(result.topics.t1.angles).toBe(1);
+  });
+
+  it('rounds a need’s visibility as the generator does, so 19.96% counts no angle', () => {
+    const now = Date.parse('2026-11-03T12:00:00Z');
+    const old = new Date(now - 40 * 86_400_000).toISOString();
+    const angles = (visibility) =>
+      needAvailability({
+        clusters,
+        opportunities: opportunities.map((o) => ({ ...o, created_at: old })),
+        promptMetrics: new Map([...promptMetrics, ['p3', { cells: 20, visibility }]]),
+        now,
+      }).angles;
+    expect(angles(19.96)).toBe(0);
+    expect(angles(19.94)).toBe(1);
+  });
+
+  it('reads an empty brand as nothing to write for', () => {
+    expect(needAvailability({ clusters: [], opportunities: [], promptMetrics: new Map() })).toEqual(
+      {
+        needs: 0,
+        open: 0,
+        covered: 0,
+        noAnswers: 0,
+        angles: 0,
+        topics: {},
+        promptOpportunity: {},
+      },
+    );
   });
 });
