@@ -46,7 +46,12 @@ import {
   pickPageCluster,
 } from './opportunity-page-focus.js';
 import { reopenStrengthened } from './opportunity-reopen.js';
-import { NIGHTLY_ANGLES, angleCandidates, angleLine } from './opportunity-angles.js';
+import {
+  NIGHTLY_ANGLES,
+  angleCandidates,
+  angleLine,
+  recentNightlyAngle,
+} from './opportunity-angles.js';
 import {
   claimOpportunitySlots,
   linkOpportunitySlots,
@@ -369,6 +374,7 @@ export const IDEA_MAX_LENGTH = 500;
  *   alternativeOf?: { id: string, title: string, description?: string|null, decision?: string|null, clusterId: string } | null,
  *   explicit?: boolean,
  *   pagePath?: string | null,
+ *   nightly?: boolean,
  * }} [opts] - `count`, the focus (`topicId` / `promptId`) and `idea` come from
  *   an on-demand request (CONTENT-003); the nightly run passes none of them.
  *   `alternativeOf` asks for one more opportunity on that opportunity's
@@ -390,6 +396,8 @@ export const IDEA_MAX_LENGTH = 500;
  *   A New request (`count`, no prompt or page) that runs out of needs with
  *   no opportunity writes the rest as another angle on needs the brand is
  *   still barely seen for (opportunity-angles.js); `angles` names them.
+ *   `nightly` marks the nightly cron run (tracking-worker.js): only it may
+ *   write an angle with no count, at most NIGHTLY_ANGLES a night.
  * @returns {Promise<{ generated: number, merged: number, reopened?: number, duplicates?: number, sameQuestion?: number, limited?: boolean, noMatch?: boolean, opportunityIds?: string[], existingId?: string, angles?: { need: string, of: string }[], scope?: { focus: string, requested: number, needs: number, covered: number, noAnswers: number } }>}
  */
 export async function generateContentOpportunities(
@@ -405,6 +413,7 @@ export async function generateContentOpportunities(
     alternativeOf = null,
     explicit = false,
     pagePath = null,
+    nightly = false,
   } = {},
 ) {
   // The user asked for this cluster, or this page, by name: the duplicate
@@ -591,17 +600,27 @@ export async function generateContentOpportunities(
       });
   // A New request that runs out of needs without an opportunity writes the
   // rest as another angle on needs the brand is still barely seen for
-  // (opportunity-angles.js); a night with no need left writes at most
-  // NIGHTLY_ANGLES. A prompt's or a page's request is for its need.
-  const nightly = count === undefined;
+  // (opportunity-angles.js); the nightly cron run with no need left writes
+  // at most NIGHTLY_ANGLES, and none when one was written in the last
+  // NIGHTLY_ANGLE_GAP_HOURS (a retry, or two runs finishing together). Other
+  // runs without a count (on-demand tracking, a new prompt's first run, the
+  // legacy generate route) write none. A prompt's or a page's request is for
+  // its need.
+  const atNight = count === undefined && nightly;
   const angleRoom =
-    targeted || promptId ? 0 : nightly ? (fresh.length ? 0 : NIGHTLY_ANGLES) : count - fresh.length;
+    targeted || promptId
+      ? 0
+      : count !== undefined
+        ? count - fresh.length
+        : atNight && !fresh.length && !recentNightlyAngle(rows)
+          ? NIGHTLY_ANGLES
+          : 0;
   const angles =
     angleRoom > 0
       ? angleCandidates(candidates, existing, {
           covered: coveredBefore,
           inFocus,
-          nightly,
+          nightly: atNight,
           openRows: rows,
         }).slice(0, angleRoom)
       : [];

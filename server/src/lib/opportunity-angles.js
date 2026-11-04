@@ -120,6 +120,24 @@ export function angleCandidates(
     : picked.sort((a, b) => b.score - a.score);
 }
 
+/** Hours after a nightly angle in which the nightly run writes no other. */
+export const NIGHTLY_ANGLE_GAP_HOURS = 20;
+
+/**
+ * Whether the nightly run wrote another angle lately (NIGHTLY_ANGLE_GAP_HOURS):
+ * a system opportunity marked as an angle (source_data.alternativeOf).
+ *
+ * @param {{ source?: string, created_at?: string, source_data?: { alternativeOf?: unknown } }[]} rows
+ */
+export function recentNightlyAngle(rows, now = Date.now()) {
+  return (rows || []).some(
+    (r) =>
+      r.source === 'system' &&
+      !!r.source_data?.alternativeOf &&
+      now - Date.parse(r.created_at) < NIGHTLY_ANGLE_GAP_HOURS * 3_600_000,
+  );
+}
+
 /**
  * What the model is told for a need it writes another angle on, in that
  * need's own entry: the opportunity it already has, and that this one must

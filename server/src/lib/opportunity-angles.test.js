@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest';
 import {
   ANGLE_AFTER_DAYS,
   NIGHTLY_ANGLES,
+  NIGHTLY_ANGLE_GAP_HOURS,
   STILL_LOW_VISIBILITY,
   angleCandidates,
   angleLine,
+  recentNightlyAngle,
 } from './opportunity-angles.js';
 
 const now = Date.parse('2026-11-03T12:00:00Z');
@@ -168,6 +170,40 @@ describe('angleCandidates, against the same run and the brand’s other opportun
   });
 });
 
+describe('recentNightlyAngle', () => {
+  const angle = (over) => ({
+    source: 'system',
+    created_at: daysAgo(0.5),
+    source_data: { alternativeOf: { id: 'o1', title: 'A' } },
+    ...over,
+  });
+
+  it('sees a system angle written within the last NIGHTLY_ANGLE_GAP_HOURS', () => {
+    expect(NIGHTLY_ANGLE_GAP_HOURS).toBe(20);
+    expect(recentNightlyAngle([angle()], now)).toBe(true);
+    expect(recentNightlyAngle([angle({ created_at: daysAgo(1) })], now)).toBe(false);
+  });
+
+  it("ignores a person's own angle and an opportunity that isn't one", () => {
+    expect(recentNightlyAngle([angle({ source: 'manual' })], now)).toBe(false);
+    expect(recentNightlyAngle([angle({ source_data: {} })], now)).toBe(false);
+    expect(recentNightlyAngle([], now)).toBe(false);
+  });
+});
+
+describe('the nightly run', () => {
+  const worker = readFileSync(
+    fileURLToPath(new URL('../workers/tracking-worker.js', import.meta.url)),
+    'utf8',
+  );
+
+  it('is the only run after tracking that may write an angle', () => {
+    expect(worker).toContain(
+      "generateContentOpportunities(brandId, { nightly: source === 'cron' })",
+    );
+  });
+});
+
 describe('angleLine', () => {
   it('tells the model what the need has and that this one must differ', () => {
     const line = angleLine({ title: 'Compare coffee subscriptions', decision: 'create' });
@@ -184,11 +220,11 @@ describe('the generator', () => {
 
   it('fills a New request, or a night with no need left, never a prompt or page request', () => {
     const flat = code.replace(/\s+/g, ' ');
-    expect(flat).toContain('const nightly = count === undefined;');
+    expect(flat).toContain('const atNight = count === undefined && nightly;');
     expect(flat).toContain(
-      'targeted || promptId ? 0 : nightly ? (fresh.length ? 0 : NIGHTLY_ANGLES) : count - fresh.length;',
+      ': atNight && !fresh.length && !recentNightlyAngle(rows) ? NIGHTLY_ANGLES : 0;',
     );
-    expect(flat).toContain('covered: coveredBefore, inFocus, nightly, openRows: rows,');
+    expect(flat).toContain('covered: coveredBefore, inFocus, nightly: atNight, openRows: rows,');
     expect(NIGHTLY_ANGLES).toBe(1);
   });
 
