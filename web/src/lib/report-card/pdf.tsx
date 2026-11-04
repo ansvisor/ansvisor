@@ -18,11 +18,10 @@ import {
   adsVerdict,
   alsoNamed,
   buyVsEarn,
+  cents,
   clip,
   conversionRange,
   count,
-  localCents,
-  localMoney,
   engineLabel,
   engineList,
   examplePrompt,
@@ -770,12 +769,6 @@ function ValuePage({ card, t, font }: PageProps) {
   const rate = conversionRange(card.siteType);
   const pct = (r: number) => `${Math.round(r * 1000) / 10}%`;
   const usd = (amount: number) => money(amount, 'USD', t.locale);
-  // Ads and ad costs in the card's currency, approximate; prices in USD
-  // with the local amount beside them.
-  const local = (amount: number) => localMoney(amount, card, t.locale);
-  const localIn = (amount: number) => localMoney(amount, card, t.locale, { mark: false });
-  const price = (amount: number) =>
-    card.currency ? v.usdPrice(usd(amount), local(amount)) : usd(amount);
   const country = t.country(card.country);
   const growth = growthEngineRows(card);
   // Starter's own engines, whatever the card asked (an older card asked others).
@@ -797,13 +790,13 @@ function ValuePage({ card, t, font }: PageProps) {
         )}
         {ads.kind === 'odd' && (
           <Text style={[styles.paragraph, styles.muted]}>
-            {v.oddAds(localCents(ads.usd, card, t.locale), ads.keywords)}
+            {v.oddAds(cents(ads.usd, 'USD', t.locale), ads.keywords)}
           </Text>
         )}
         {values && ads.kind === 'ok' && (
           <>
             <Text style={[styles.paragraph, styles.muted, { marginBottom: 4 }]}>
-              {v.cpcLine(localCents(ads.usd, card, t.locale), ads.keywords, card.questionCount)}
+              {v.cpcLine(cents(ads.usd, 'USD', t.locale), ads.keywords, card.questionCount)}
             </Text>
             <View style={styles.tableHeader}>
               <Text style={[styles.th, { flex: 1.3 }]}>{v.colShare}</Text>
@@ -820,11 +813,9 @@ function ValuePage({ card, t, font }: PageProps) {
                   {count(row.visits, t.locale)}
                 </Text>
                 <Text style={[styles.td, styles.bold, { flex: 1.3, textAlign: 'right' }]}>
-                  {local(row.monthly)}
+                  {usd(row.monthly)}
                 </Text>
-                <Text style={[styles.td, { flex: 1, textAlign: 'right' }]}>
-                  {local(row.yearly)}
-                </Text>
+                <Text style={[styles.td, { flex: 1, textAlign: 'right' }]}>{usd(row.yearly)}</Text>
               </View>
             ))}
             <Text style={[styles.small, { marginTop: 3 }]}>{v.tableNote}</Text>
@@ -837,7 +828,7 @@ function ValuePage({ card, t, font }: PageProps) {
           {compare.cheap ? (
             <View style={[styles.box, styles.tinted]}>
               <Text style={styles.paragraph}>
-                {v.cheap(localIn(compare.adsMonthly), 'Starter', price(compare.starterMonthly))}
+                {v.cheap(usd(compare.adsMonthly), 'Starter', usd(compare.starterMonthly))}
               </Text>
             </View>
           ) : (
@@ -847,15 +838,15 @@ function ValuePage({ card, t, font }: PageProps) {
                 <Text style={[styles.paragraph, { marginTop: 2 }]}>
                   {v.buyingBody(
                     count(compare.visits, t.locale),
-                    localIn(compare.adsMonthly),
-                    localIn(compare.adsYearly),
+                    usd(compare.adsMonthly),
+                    usd(compare.adsYearly),
                   )}
                 </Text>
               </View>
               <View style={[styles.box, styles.tinted, { flex: 1 }]}>
                 <Text style={styles.eyebrow}>{v.earning}</Text>
                 <Text style={[styles.paragraph, { marginTop: 2 }]}>
-                  {v.earningBody('Starter', price(compare.starterMonthly))}
+                  {v.earningBody('Starter', usd(compare.starterMonthly))}
                 </Text>
               </View>
             </View>
@@ -891,10 +882,10 @@ function ValuePage({ card, t, font }: PageProps) {
         <Text style={styles.sectionTitle}>{v.planTitle}</Text>
         <View style={[styles.box, { borderColor: INK }]}>
           <Text style={[styles.paragraph, styles.bold]}>
-            Ansvisor Starter · {v.perMonth(price(planMonthly('starter')))}
+            Ansvisor Starter · {v.perMonth(usd(planMonthly('starter')))}
             <Text style={[styles.muted, { fontWeight: 400 }]}>
               {' '}
-              · {v.yearly(price(planYearly('starter')))}
+              · {v.yearly(usd(planYearly('starter')))}
             </Text>
           </Text>
           <Text style={[styles.paragraph, styles.muted]}>
@@ -907,8 +898,8 @@ function ValuePage({ card, t, font }: PageProps) {
         <Text style={[styles.small, { marginTop: 3 }]}>
           {v.growthLine(
             growth.length ? engineList(growth, t) : v.googleEngines,
-            price(planMonthly('growth')),
-            price(planYearly('growth')),
+            usd(planMonthly('growth')),
+            usd(planYearly('growth')),
             planPrompts('growth'),
             planBrands('growth'),
           )}
@@ -934,17 +925,6 @@ function ValuePage({ card, t, font }: PageProps) {
           {v.ctaLink}
         </Link>
         <Text style={[styles.small, { marginTop: 5 }]}>{v.scenarios}</Text>
-        {card.currency && card.currency.code !== 'USD' && (
-          <Text style={[styles.small, { marginTop: 2 }]}>
-            {v.fx(
-              card.currency.code,
-              new Intl.NumberFormat(t.locale, { maximumFractionDigits: 2 }).format(
-                card.currency.perUsd,
-              ),
-              dateOf(`${card.currency.asOf}T00:00:00Z`, t.locale),
-            )}
-          </Text>
-        )}
       </View>
       <Footer t={t} />
     </Page>

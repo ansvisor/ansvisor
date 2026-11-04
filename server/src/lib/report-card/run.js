@@ -2,8 +2,8 @@ import logger from '../logger.js';
 import { fetchPage } from '../safe-fetch.js';
 import { detectSiteType, pageExcerpt } from '../site-type-detect.js';
 import { brandKey, citedHosts, competitorsIn, summarize } from './analyze.js';
-import { CHECK_BELOW, cardCurrency, reportCardLimits } from './config.js';
-import { countryCurrency, countryName, languageName } from './countries.js';
+import { CHECK_BELOW, reportCardLimits } from './config.js';
+import { countryName, languageName } from './countries.js';
 import { keywordFigures, keywordKey, medianCpc } from './cpc.js';
 import { MAIN_ENGINES, askEngines } from './engines.js';
 import { pickQuestions, writeQuestions } from './questions.js';
@@ -223,9 +223,6 @@ export async function buildReportCard(
       keywords.figures,
     ),
     dealValue,
-    // The currency the card shows amounts in, with the rate it converts
-    // USD at; none for a card in US dollars.
-    currency: cardCurrency(countryCurrency(country)),
     ...(checkByHand ? { checkByHand } : {}),
   };
 

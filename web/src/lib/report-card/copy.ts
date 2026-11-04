@@ -332,9 +332,6 @@ export const en = {
       'Open the Action Center after the first run: what to do next, ranked.',
     ],
     ctaLink: 'Start a free trial at app.ansvisor.com',
-    fx: (code: string, rate: string, date: string) =>
-      `Amounts in ${code} are approximate: Google Ads’ costs and Ansvisor’s prices are in US dollars, converted at 1 USD = ${rate} ${code} (${date}).`,
-    usdPrice: (usd: string, local: string) => `${usd} (${local})`,
   },
 };
 

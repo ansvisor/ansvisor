@@ -71,42 +71,6 @@ export function estimatedCardUsd(limits = reportCardLimits()) {
   return QUESTION_MAX * ENGINE_COUNT * limits.answerUsd + limits.volumeUsd + 0.05;
 }
 
-/**
- * What one US dollar is worth in the currencies a card shows (owner
- * decision 2026-11-04): the cost per click and Ansvisor's prices are in
- * USD, so a card in another currency shows them as approximate, with the
- * rate's date. A rate set by hand, not a live feed:
- * REPORT_CARD_FX_RATES ("TRY=41.9,GBP=0.76,EUR=0.87,CAD=1.39,AUD=1.52")
- * and REPORT_CARD_FX_DATE (YYYY-MM-DD), else these.
- */
-export const DEFAULT_FX = Object.freeze({
-  date: '2026-11-01',
-  rates: Object.freeze({ TRY: 41.9, GBP: 0.76, EUR: 0.87, CAD: 1.39, AUD: 1.52 }),
-});
-
-/** The rates in force, and their date. */
-export function reportCardFx(env = process.env) {
-  const rates = { ...DEFAULT_FX.rates };
-  for (const pair of String(env.REPORT_CARD_FX_RATES ?? '').split(',')) {
-    const [code, raw] = pair.split('=').map((part) => part?.trim());
-    const value = Number(raw);
-    if (/^[A-Z]{3}$/.test(code ?? '') && Number.isFinite(value) && value > 0) rates[code] = value;
-  }
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(env.REPORT_CARD_FX_DATE ?? '').trim())
-    ? String(env.REPORT_CARD_FX_DATE).trim()
-    : DEFAULT_FX.date;
-  return { rates, date };
-}
-
-/**
- * A card's currency, with what a US dollar is worth in it and when the
- * rate was set; null for US dollars, or a currency without a rate.
- */
-export function cardCurrency(code, fx = reportCardFx()) {
-  if (!code || code === 'USD' || !fx.rates[code]) return null;
-  return { code, perUsd: fx.rates[code], asOf: fx.date };
-}
-
 /** The origins the form may post from: REPORT_CARD_ORIGINS, comma-separated. */
 export function reportCardOrigins(env = process.env) {
   const listed = String(env.REPORT_CARD_ORIGINS ?? '')

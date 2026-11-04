@@ -769,31 +769,6 @@ export function money(amount: number, currency = 'USD', locale = 'en-US'): strin
   }
 }
 
-/**
- * An amount that is in USD at its source (a cost per click, Ansvisor's
- * prices), in the card's currency: approximate ("≈ ₺2.053") at the rate
- * the card was stamped with, or in dollars.
- */
-export function localMoney(
-  usd: number,
-  card: ReportCardPayload,
-  locale = 'en-US',
-  { mark = true }: { mark?: boolean } = {},
-): string {
-  const fx = card.currency;
-  if (!fx || fx.code === 'USD') return money(usd, 'USD', locale);
-  const amount = money(usd * fx.perUsd, fx.code, locale);
-  // A sentence that already says "≈" or "about" takes the amount alone.
-  return mark ? `≈ ${amount}` : amount;
-}
-
-/** A cost per click in the card's currency, to the cent: "≈ ₺17,18" or "$0.41". */
-export function localCents(usd: number, card: ReportCardPayload, locale = 'en-US'): string {
-  const fx = card.currency;
-  if (!fx || fx.code === 'USD') return cents(usd, 'USD', locale);
-  return `≈ ${cents(usd * fx.perUsd, fx.code, locale)}`;
-}
-
 /** "$1.85": a cost per click, to the cent. */
 export const cents = (amount: number, currency = 'USD', locale = 'en-US'): string =>
   new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);

@@ -38,7 +38,7 @@ Everything on the card is picked from your results by fixed rules: no model writ
 
 ## Language and currency
 
-The questions and answers are in your target country's language. The PDF and its e-mail are in Turkish for Türkiye and in English elsewhere. Amounts are in your country's currency: lira for Türkiye, pounds, Canadian and Australian dollars, euros in the euro area, US dollars elsewhere. Google Ads' costs and Ansvisor's prices are in US dollars, so the card shows them as approximate, with the exchange rate and its date.
+The questions and answers are in your target country's language. The PDF and its e-mail are in Turkish for Türkiye and in English elsewhere. Amounts are in US dollars, as Ansvisor's plans are: Google Ads' costs, the value table and the prices. An average order or deal value you gave stays in its own currency.
 
 ## Why the app shows other numbers
 

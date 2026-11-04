@@ -294,8 +294,5 @@ export const tr: CardCopy = {
       'İlk çalışmadan sonra Aksiyon Merkezi’ni açın: sıradaki işler, öncelik sırasıyla.',
     ],
     ctaLink: 'app.ansvisor.com adresinde ücretsiz denemeyi başlatın',
-    fx: (code, rate, date) =>
-      `${code} tutarları yaklaşıktır: Google Ads maliyetleri ve Ansvisor fiyatları ABD doları cinsindendir; 1 USD = ${rate} ${code} kuruyla çevrildi (${date}).`,
-    usdPrice: (usd, local) => `${usd} (${local})`,
   },
 };

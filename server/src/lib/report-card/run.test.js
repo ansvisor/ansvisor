@@ -137,8 +137,6 @@ describe('buildReportCard', () => {
       ],
       cpc: { usd: 0.42, keywords: 2 },
       dealValue: { amount: 500, currency: 'TRY' },
-      // A Turkish card shows lira, at the rate set by hand.
-      currency: { code: 'TRY', perUsd: expect.any(Number), asOf: expect.any(String) },
       questionRows: [
         {
           text: 'en iyi kahve',

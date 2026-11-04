@@ -188,20 +188,19 @@ describe('ReportCardPdfDocument', () => {
     expect(value).toContain('0.5% to 1% of AI visits become a deal');
   });
 
-  it('draws a Turkish card in Turkish, in lira with the rate and its date', () => {
+  it('draws a Turkish card in Turkish, with its amounts in dollars', () => {
     const pages = draw({
       ...SAMPLE_REPORT_CARD,
       country: { code: 'TR', name: 'Türkiye' },
       language: 'Turkish',
-      currency: { code: 'TRY', perUsd: 41.9, asOf: '2026-11-01' },
     });
     expect(pages[0]).toContain('Brewline Coffee, yapay zekâ yanıtlarında ne kadar görünür?');
     expect(pages[0]).toContain('Tek seferlik bir ölçüm');
     expect(pages[0]).toContain('Ansvisor ile hazırlandı · www.ansvisor.com');
     expect(pages[1]).toContain('25 soru ve her motorun yanıtı');
     expect(pages[2]).toContain('Üç bulgu ve ilk haftada yapacaklarınız');
-    expect(pages[3]).toContain('Starter ayda $49 (≈ ₺2.053)');
-    expect(pages[3]).toContain('1 USD = 41,9 TRY');
+    expect(pages[3]).toContain('Starter ayda $49.');
+    expect(pages[3]).not.toMatch(/₺|USD =/);
     expect(pages[3]).toContain('Kendi sorularınızı ölçün');
     expect(pages.join(' ')).not.toMatch(/How visible|Week one|Start a free trial/);
   });

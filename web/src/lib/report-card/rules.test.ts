@@ -17,8 +17,6 @@ import {
   examplePrompt,
   growthEngineRows,
   interCanDraw,
-  localCents,
-  localMoney,
   isTargetSite,
   mainEngineRows,
   mainTotals,
@@ -509,11 +507,10 @@ describe('formats', () => {
   });
 });
 
-describe('the card’s language and currency', () => {
+describe('the card’s language', () => {
   const turkish = card({
     country: { code: 'TR', name: 'Türkiye' },
     language: 'Turkish',
-    currency: { code: 'TRY', perUsd: 41.9, asOf: '2026-11-01' },
   });
 
   it('is Turkish for Türkiye and English elsewhere', () => {
@@ -538,10 +535,8 @@ describe('the card’s language and currency', () => {
     );
   });
 
-  it('shows USD amounts in the card’s currency as approximate, and dollars without one', () => {
-    expect(localMoney(49, turkish, 'tr-TR')).toBe('≈ ₺2.053');
-    expect(localCents(0.41, turkish, 'tr-TR')).toBe('≈ ₺17,18');
-    expect(localMoney(49, SAMPLE_REPORT_CARD)).toBe('$49');
-    expect(localCents(0.41, SAMPLE_REPORT_CARD)).toBe('$0.41');
+  it('writes dollar amounts the card’s language’s way', () => {
+    expect(money(2390, 'USD', 'tr-TR')).toBe('$2.390');
+    expect(money(2390)).toBe('$2,390');
   });
 });

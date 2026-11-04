@@ -1,14 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULTS,
-  DEFAULT_FX,
-  cardCurrency,
-  estimatedCardUsd,
-  reportCardFx,
-  reportCardLimits,
-  reportCardOrigins,
-} from './config.js';
-import { countryCurrency } from './countries.js';
+import { DEFAULTS, estimatedCardUsd, reportCardLimits, reportCardOrigins } from './config.js';
 import {
   countryInSentence,
   countryLanguage,
@@ -83,37 +74,5 @@ describe('countries', () => {
   it('asks in English where no main language is named', () => {
     expect(countryLanguage('IN')).toBe('en');
     expect(countryLanguage('NG')).toBe('en');
-  });
-});
-
-describe('the card’s currency', () => {
-  it('is TRY for Türkiye, GBP, CAD, AUD, EUR in the euro area and USD elsewhere', () => {
-    expect(countryCurrency('TR')).toBe('TRY');
-    expect(countryCurrency('gb')).toBe('GBP');
-    expect(countryCurrency('CA')).toBe('CAD');
-    expect(countryCurrency('AU')).toBe('AUD');
-    expect(countryCurrency('DE')).toBe('EUR');
-    expect(countryCurrency('US')).toBe('USD');
-    expect(countryCurrency('JP')).toBe('USD');
-  });
-
-  it('takes the rates and their date from the environment, else the defaults', () => {
-    expect(reportCardFx({})).toEqual({ rates: DEFAULT_FX.rates, date: DEFAULT_FX.date });
-    const fx = reportCardFx({
-      REPORT_CARD_FX_RATES: 'TRY=43.5, GBP=abc, JPY=150',
-      REPORT_CARD_FX_DATE: '2026-12-01',
-    });
-    expect(fx.rates.TRY).toBe(43.5);
-    expect(fx.rates.GBP).toBe(DEFAULT_FX.rates.GBP);
-    expect(fx.rates.JPY).toBe(150);
-    expect(fx.date).toBe('2026-12-01');
-    expect(reportCardFx({ REPORT_CARD_FX_DATE: 'soon' }).date).toBe(DEFAULT_FX.date);
-  });
-
-  it('stamps a card with its currency, rate and date; none for US dollars', () => {
-    const fx = { rates: { TRY: 41.9 }, date: '2026-11-01' };
-    expect(cardCurrency('TRY', fx)).toEqual({ code: 'TRY', perUsd: 41.9, asOf: '2026-11-01' });
-    expect(cardCurrency('USD', fx)).toBeNull();
-    expect(cardCurrency('SEK', fx)).toBeNull();
   });
 });
