@@ -1379,20 +1379,22 @@
         "used skill",
         "save a skill",
         "my skills",
-        "faq from fan-outs",
-        "weekly report",
-        "win back citations",
-        "ready to publish",
-        "buyer questions",
-        "rival brief",
-        "listing gaps",
         "skills page",
         "turn off a skill",
         "schedule a skill",
         "import a skill",
         "upload a skill",
         "skill from github",
-        "review a skill"
+        "review a skill",
+        "skill update",
+        "update available",
+        "faq from fan-outs",
+        "weekly report",
+        "win back citations",
+        "ready to publish",
+        "buyer questions",
+        "rival brief",
+        "listing gaps"
       ],
       "synonyms": [
         "slash commands",
@@ -1401,7 +1403,7 @@
         "templates"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1426,6 +1428,10 @@
         {
           "heading": "Import a skill",
           "text": "Admins and Managers on a paid plan can bring in a skill from outside. On the **Skills** page, click **New skill**, then **Upload a SKILL.md or .zip** (up to 5 MB), or **Import from GitHub** and paste a public github.com link. Only the skill's instructions come in: scripts, commands and allowed tools are removed, and nothing runs. A GitHub skill is read at today's commit and never updates by itself. Only MIT, Apache-2.0, BSD and ISC licenses are accepted.\n\nAn imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it."
+        },
+        {
+          "heading": "Updates to an imported skill",
+          "text": "Once a week, Ansvisor checks the source of each approved GitHub skill. When its SKILL.md changed, its card in **My skills** shows **Update available**. **Review update** shows what changed, line by line, and the safety scan of the new version. Nothing changes until an Admin clicks **Approve update**, and the new version is cleaned and scanned again first. A skill whose saved file was changed some other way is turned off."
         },
         {
           "heading": "What a skill can't change",
