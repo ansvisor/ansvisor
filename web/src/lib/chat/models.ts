@@ -15,13 +15,18 @@
 /** What a run's `model` is when the person picked nothing: Haiku reads, Sonnet writes. */
 export const AUTO_MODEL = 'auto';
 
-/** The providers an offered model runs on, by their own API. */
-export type OfferedModelProvider = 'anthropic';
+/**
+ * How an offered model is called: Anthropic's own API (on Ansvisor's key or
+ * the workspace's own Anthropic key), or OpenRouter (Ansvisor's
+ * OPENROUTER_API_KEY; offered only where it is set). None of OpenRouter's is
+ * offered yet.
+ */
+export type OfferedModelProvider = 'anthropic' | 'openrouter';
 
 export interface OfferedModel {
   /** The catalog's id ("anthropic/claude-sonnet-5.5"): what a run keeps as its model. */
   id: string;
-  /** The provider's own API id ("claude-sonnet-5-5"). */
+  /** The provider's own API id ("claude-sonnet-5-5"); OpenRouter's is its catalog id. */
   api: string;
   provider: OfferedModelProvider;
   /** Its name on the composer's model button, a product name ("Sonnet 5.5"). */

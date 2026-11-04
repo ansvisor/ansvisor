@@ -98,6 +98,8 @@ vi.mock('./content-links.js', async (importOriginal) => ({
 const {
   asksMoreThanOne,
   buildFixPrompt,
+  capToLength,
+  lengthCapLine,
   cleanInsertHtml,
   draftPassages,
   addsAttribution,
@@ -265,6 +267,47 @@ describe('the page as the agent reads it', () => {
         'Industry: Food & Beverage\nSite type: E-commerce (an online shop selling products)\nDescription:',
       );
     });
+  });
+
+  it('tells it the room its Length leaves, and keeps a run within it (editor UX review 2026-11-03)', () => {
+    const prompt = (lengthCap) =>
+      buildFixPrompt({
+        brand: { name: 'Acme Coffee', language: 'en' },
+        draft: rows.content_drafts,
+        passages: draftPassages(BODY),
+        lockedKeys: new Set(),
+        input: { ...input(), lengthCap },
+      });
+    expect(prompt({ count: 700, max: 960 })).toContain(
+      'The page is 700 characters and its Length allows up to 960: all your changes together may add at most 260 characters.',
+    );
+    expect(prompt({ count: 2_706, max: 960 })).toContain(
+      'at or past the most its Length allows (960): add no words without cutting as many elsewhere.',
+    );
+    expect(prompt(undefined)).not.toContain('its Length allows');
+    expect(lengthCapLine(undefined)).toBe('');
+
+    const replace = (before, after) => ({
+      kind: 'replace',
+      before_text: before,
+      after_text: after,
+    });
+    const insert = (html) => ({ kind: 'insert', before_text: '', after_text: html });
+    const rowsIn = [
+      insert('<p>' + 'a'.repeat(150) + '</p>'),
+      replace('a long sentence that says little', 'short'),
+      insert('<h2>More</h2><p>' + 'b'.repeat(200) + '</p>'),
+      replace('x', 'y'.repeat(60)),
+    ];
+    // 260 of room: the first insert (150), the cut (-27), the last replace (59);
+    // the second insert (204) would take it past.
+    const capped = capToLength(rowsIn, { count: 700, max: 960 });
+    expect(capped.rows).toEqual([rowsIn[0], rowsIn[1], rowsIn[3]]);
+    expect(capped.dropped).toBe(1);
+    // Past it already: only cuts.
+    expect(capToLength(rowsIn, { count: 2_706, max: 960 }).rows).toEqual([rowsIn[1]]);
+    // No cap: every row.
+    expect(capToLength(rowsIn, undefined)).toEqual({ rows: rowsIn, dropped: 0 });
   });
 
   it('tells it of a page over its Length it isn’t asked to shorten (editor test 2026-10-26)', () => {

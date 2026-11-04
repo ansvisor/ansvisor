@@ -9,7 +9,7 @@ import {
 } from '../lib/plan-guard.js';
 import supabaseAdmin from '../config/supabase.js';
 import { selectInChunks } from '../lib/chunked-in.js';
-import { assertBrandAccess, assertPromptAccess } from '../lib/access.js';
+import { MANAGER_ROLES, allowRole, assertBrandAccess, assertPromptAccess } from '../lib/access.js';
 import { extractIntentKeywords } from '../lib/intent-extraction.js';
 import {
   mapVolumeRow,
@@ -54,6 +54,9 @@ function releaseVolumeAnalysis(brandId) {
  * If keywords already exist for this prompt, only refreshes volumes (skips LLM).
  * Pass force=true to re-generate keywords via LLM even if they exist.
  */
+/** Volumes are bought from DataForSEO per prompt: admins and managers ask for them (2026-11-03). */
+const VOLUMES_REFUSAL = 'Only admins and managers can analyze search volumes.';
+
 router.post('/analyze', requireFeature('prompt_volumes'), async (req, res) => {
   try {
     const { remaining, orgId } = await enforceVolumeQuota(req.user.id);
@@ -65,6 +68,7 @@ router.post('/analyze', requireFeature('prompt_volumes'), async (req, res) => {
     }
 
     await assertPromptAccess(promptId, req.user.id);
+    if (!(await allowRole(res, req.user.id, MANAGER_ROLES, VOLUMES_REFUSAL))) return;
 
     let resolvedLocationCode = locationCode;
     let resolvedLanguageCode = languageCode;
@@ -168,6 +172,7 @@ router.post('/analyze-batch', requireFeature('prompt_volumes'), async (req, res)
     }
 
     await assertBrandAccess(brandId, req.user.id);
+    if (!(await allowRole(res, req.user.id, MANAGER_ROLES, VOLUMES_REFUSAL))) return;
 
     // A second click while the first run is still going would analyse every
     // prompt twice and bill the quota twice.
@@ -259,6 +264,7 @@ router.post('/bootstrap', requireFeature('prompt_volumes'), async (req, res) => 
     }
 
     await assertBrandAccess(brandId, req.user.id);
+    if (!(await allowRole(res, req.user.id, MANAGER_ROLES, VOLUMES_REFUSAL))) return;
 
     // Claim before reading the counts, not after: the read is awaited, and a
     // check that finishes before the claim leaves a gap two calls can both
@@ -377,6 +383,7 @@ router.post('/refresh', requireFeature('prompt_volumes'), async (req, res) => {
     }
 
     await assertBrandAccess(brandId, req.user.id);
+    if (!(await allowRole(res, req.user.id, MANAGER_ROLES, VOLUMES_REFUSAL))) return;
 
     const results = await refreshBrandVolumes(brandId, { locationCode, languageCode });
     const refreshed = results.filter((r) => !r.error).length;

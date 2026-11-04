@@ -116,7 +116,14 @@ vi.mock('@/lib/member-emails', () => ({
     ]),
 }));
 vi.mock('@/lib/brand-access', () => ({
-  brandReaders: vi.fn(),
+  // Both see Acme Coffee; nobody sees another brand.
+  brandReaders: async (_org: string, ids: string[]) =>
+    ids.includes(ACME)
+      ? new Map([
+          [ME, new Set([ACME])],
+          [BOB, new Set([ACME])],
+        ])
+      : new Map(),
   readMemberBrandAccess: async () =>
     new Map([
       [ME, { scope: 'all', brandIds: [] }],
@@ -129,8 +136,14 @@ vi.mock('@/lib/guards/plan-guard', () => ({
 }));
 vi.mock('@/lib/subscription-guard', () => ({ assertWritable: vi.fn() }));
 
-const { acceptInvitation, getTeamInfo, inviteMember, listMembers, setMemberBrands } =
-  await import('./team');
+const {
+  acceptInvitation,
+  getTeamInfo,
+  inviteMember,
+  listBrandPeople,
+  listMembers,
+  setMemberBrands,
+} = await import('./team');
 
 beforeEach(() => {
   db.calls = [];
@@ -292,5 +305,29 @@ describe('acceptInvitation', () => {
     const updates = db.calls.filter((c) => c.op === 'update');
     expect(updates.map((c) => c.table)).toEqual(['profiles', 'invitations']);
     expect(updates[0].payload).toMatchObject({ organization_id: ORG, role: 'analyst' });
+  });
+});
+
+describe('listBrandPeople', () => {
+  it('lists who can see the brand, and why, to an admin', async () => {
+    const read = await listBrandPeople(ACME);
+    expect(read.isAdmin).toBe(true);
+    expect(read.people.map((p) => [p.userId, p.email, p.access])).toEqual([
+      [ME, 'ada@acme.test', 'all'],
+      [BOB, 'bob@acme.test', 'shared'],
+    ]);
+  });
+
+  it('gives anyone else names and roles, not e-mails or why', async () => {
+    db.viewerRole = 'manager';
+    const read = await listBrandPeople(ACME);
+    expect(read.people.map((p) => [p.name, p.email, p.access])).toEqual([
+      ['Ada', null, null],
+      ['Bob', null, null],
+    ]);
+  });
+
+  it('answers a brand the caller can’t see as not found', async () => {
+    await expect(listBrandPeople(GLOBEX)).rejects.toThrow('Brand not found');
   });
 });
