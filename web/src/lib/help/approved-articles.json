@@ -839,7 +839,11 @@
         },
         {
           "heading": "When a run asks before a change",
-          "text": "A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions and **Send to Action Center**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**."
+          "text": "A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions, **Send to Action Center** and setting an Action Center task **Ready for review**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**."
+        },
+        {
+          "heading": "When outside text makes a run ask",
+          "text": "Once a run has read text from outside your workspace, such as AI answers, citations or a web page, every change asks first, in any mode. Reading your own drafts and reports doesn't do that. Action Center actions and tasks can quote AI answers, so reading them does. If one of them holds instructions aimed at the AI, the run ignores them and asks before every change."
         },
         {
           "heading": "Let an agent publish on its own",
@@ -926,6 +930,7 @@
       "keywords": [
         "chat",
         "ask chat",
+        "task finisher",
         "download answer",
         "save to files",
         "export chat",
@@ -1083,6 +1088,10 @@
         {
           "heading": "Work through your Action Center tasks",
           "text": "Type **/tasks**, or click **Complete tasks** under **For you now** on Chat Home, and Chat works through the brand's Action Center tasks: those due this week first, highest Priority Score first.\n\nUnder the answer, **Action Center tasks** lists up to 4 tasks it takes on and how many are ready (\"1 of 3 ready\"). Each row shows the task, \"Priority 86 · Fix\" and where Chat's work stands:\n\n- **Queued**: not started yet.\n- **Writing**: Chat is working on it now.\n- **Ready for review**: Chat finished its part, for you to check.\n- **Done**: you completed it in Action Center.\n\nThese show Chat's work, not the task's Action Center status. Once the run ends, **Close tasks in Action Center** opens your actions: Chat never marks a task done.\n\nAfter the tasks, Chat helps with your open **Getting started** steps. It never marks a step done or skips one."
+        },
+        {
+          "heading": "How many tasks one run finishes",
+          "text": "Chat finishes at most 2 tasks in one run, so you get fewer changes to approve at once. Its answer starts with how many it finished, for example \"2 of 6 tasks done; the rest go in the next run\". The other tasks under **Action Center tasks** stay **Queued** for the next run. The **Task Finisher** agent in Agent Center works the same way: it finishes 2 tasks each time it runs."
         },
         {
           "heading": "Drafts, reports and audits",
@@ -2224,7 +2233,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -2256,7 +2265,7 @@
         },
         {
           "heading": "Dismiss an opportunity",
-          "text": "**Dismiss**, for admins and managers, asks why:\n\n- **The topic doesn't matter to us** keeps it from being suggested again in this form for 90 days.\n- **Right topic, wrong angle** dismisses it and opens **Another angle**, so you can ask for a better take on the same need."
+          "text": "**Dismiss**, for admins and managers, asks why:\n\n- **The topic doesn't matter to us** keeps it from being suggested again in this form for 90 days. After that, its need can get a new suggestion.\n- **Right topic, wrong angle** dismisses it and opens **Another angle**, so you can ask for a better take on the same need."
         },
         {
           "heading": "Follow it to Done",
