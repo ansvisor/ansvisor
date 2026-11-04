@@ -121,6 +121,34 @@ describe('renderReportCardEmail', () => {
     expect(failed.subject).toBe('turadahil.com için karnenizi tamamlayamadık');
   });
 
+  it('states one visibility figure: every stat counts the headline’s answers', () => {
+    // As the sample card: ChatGPT 7 of 25 and Copilot 2 of 25 head it; the
+    // competitor and the citations are counted over those 50 answers.
+    const { html } = renderReportCardEmail({
+      firstName: 'Ayşe',
+      payload: {
+        ...payload,
+        mainEngines: ['chatgpt-web', 'copilot-web'],
+        engines: [
+          { engine: 'chatgpt-web', answers: 25, named: 7 },
+          { engine: 'copilot-web', answers: 25, named: 2 },
+          { engine: 'gemini-web', answers: 25, named: 4 },
+          { engine: 'google-aio', answers: 25, named: 5 },
+          { engine: 'google-aimode', answers: 25, named: 2 },
+        ],
+        competitors: [{ name: 'Ridge & Co', answers: 41 }],
+        ownCitations: 4,
+      },
+      kind: 'new',
+      madeAt: '2026-11-04T10:00:00Z',
+    });
+    expect(html).toContain('18%');
+    expect(html).toContain('named in 9 of 50 answers');
+    expect(html).toContain('Answers that cite your site, of 50');
+    // Never every engine's 125 answers, nor their 20 naming the company.
+    expect(html).not.toMatch(/\b125\b|\b16%|named in 20\b/);
+  });
+
   it('speaks of a publisher’s readers', () => {
     const { html } = renderReportCardEmail({
       firstName: 'Ayşe',

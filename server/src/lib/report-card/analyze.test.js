@@ -100,6 +100,43 @@ describe('summarize', () => {
       },
     ]);
   });
+
+  it('counts competitors, sites and its own citations over the main engines, as the headline', () => {
+    const figures = summarize(questions, answers, competitors, {
+      ...company,
+      mainEngines: ['chatgpt-web'],
+    });
+    expect(figures.mainEngines).toEqual(['chatgpt-web']);
+    // Gemini keeps its own row, and counts nowhere else.
+    expect(figures.engines).toEqual([
+      { engine: 'chatgpt-web', answers: 3, named: 2 },
+      { engine: 'gemini-web', answers: 2, named: 0 },
+    ]);
+    expect(figures.competitors).toEqual([
+      { name: 'Ridge Roasters', answers: 2 },
+      { name: 'Copper Kettle', answers: 1 },
+    ]);
+    expect(figures.citedSites).toEqual([
+      { domain: 'coffeereview.example', answers: 1, own: false, competitor: false, kind: null },
+      { domain: 'shop.acme.example', answers: 1, own: true, competitor: false, kind: 'own' },
+    ]);
+    // Of ChatGPT's 3 answers, as the headline's 2 of 3.
+    expect(figures.ownCitations).toBe(1);
+    expect(figures.missedCount).toBe(1);
+    expect(figures.missedQuestions[0]).toMatchObject({ text: 'how to grind coffee', answers: 1 });
+  });
+
+  it('counts every engine when no main engine answered', () => {
+    const figures = summarize(questions, answers, competitors, {
+      ...company,
+      mainEngines: ['copilot-web'],
+    });
+    expect(figures.mainEngines).toEqual([]);
+    expect(figures.ownCitations).toBe(2);
+    expect(figures.competitors).toEqual(
+      summarize(questions, answers, competitors, company).competitors,
+    );
+  });
 });
 
 describe('names and sites sorted', () => {

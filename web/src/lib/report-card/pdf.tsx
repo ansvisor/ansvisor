@@ -313,8 +313,11 @@ interface PageProps {
 
 function StatusPage({ card, t, font }: PageProps) {
   const s = t.status;
-  const { answers, named } = totals(card);
+  // Every engine's answers, for the questions asked; every other figure
+  // counts the headline's (the main engines').
+  const { answers: asked } = totals(card);
   const headline = mainTotals(card);
+  const { answers, named } = headline;
   const main = mainEngineRows(card);
   const growth = growthEngineRows(card);
   const leader = card.competitors[0];
@@ -384,8 +387,8 @@ function StatusPage({ card, t, font }: PageProps) {
           <Text style={styles.kpiSub}>
             {s.kpiQuestionsSub(
               card.engines.length,
-              answers,
-              Math.max(card.questionCount * card.engines.length - answers, 0),
+              asked,
+              Math.max(card.questionCount * card.engines.length - asked, 0),
             )}
           </Text>
         </View>

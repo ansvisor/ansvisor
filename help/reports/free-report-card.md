@@ -15,7 +15,7 @@ The free AI visibility report card is a one-time snapshot you can ask for on the
 
 ## What the card measured
 
-- **AI visibility**: the share of ChatGPT's and Microsoft Copilot's answers that name your brand or your site. These are the engines Ansvisor Starter tracks. Gemini, Google AI Overviews and Google AI Mode, which Growth adds, are shown apart in an "In Ansvisor Growth" band. Competitors and cited sites are counted over every engine's answers.
+- **AI visibility**: the share of ChatGPT's and Microsoft Copilot's answers that name your brand or your site. These are the engines Ansvisor Starter tracks. Gemini, Google AI Overviews and Google AI Mode, which Growth adds, are shown apart in an "In Ansvisor Growth" band. Competitors, cited sites and your citations count the same answers.
 - The same share for each engine.
 - The competitors the answers named most, and the sites they cite, with yours, your competitors' and marketplaces marked.
 

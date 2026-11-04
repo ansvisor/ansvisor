@@ -78,7 +78,10 @@ describe('ReportCardPdfDocument', () => {
       'named in 8 of 50 answers: 25 questions × 2 engines (ChatGPT and Microsoft Copilot)',
     );
     expect(status).toContain('in 5 AI engines: 122 answers (3 got no answer)');
-    expect(status).toContain('named in 52 of all 122 answers, every engine');
+    // The competitor and the citations are counted over the headline's answers.
+    expect(status).toContain('named in 21 of the same 50 answers');
+    expect(status).toContain('of the same 50 answers cite a page of yours');
+    expect(status).toContain('competitors and sites are counted over the same answers');
     expect(status).toContain('In Ansvisor Growth: Google’s AI engines, measured too.');
     expect(status).toContain('6 of 25 · 24%');
     expect(status).toContain('Brewline Coffee (you)');
@@ -94,6 +97,29 @@ describe('ReportCardPdfDocument', () => {
     expect(status).not.toContain('Your starting point');
     // One trial invitation, on page 4 only.
     expect(status).not.toMatch(/free trial/i);
+  });
+
+  it('states one visibility figure on every page: the headline’s engines', () => {
+    const pages = draw(SAMPLE_REPORT_CARD);
+    // ChatGPT 6 of 25 and Microsoft Copilot 2 of 25.
+    expect(pages[0]).toContain('named in 8 of 50 answers');
+    expect(pages[0]).toContain('Brewline Coffee (you)8 answers');
+    expect(pages[1]).toContain('in 8 of the 50 answers from ChatGPT and Microsoft Copilot');
+    expect(pages[2]).toContain('Your site is cited in 2 of 50 answers.');
+    for (const page of pages) expect(page).not.toMatch(/\d+ of (all |the )?122 answers/);
+  });
+
+  it('page 1 says how many got no answer instead of 25 questions × 2 engines over 49 answers', () => {
+    const [status] = draw({
+      ...SAMPLE_REPORT_CARD,
+      engines: SAMPLE_REPORT_CARD.engines.map((e) =>
+        e.engine === 'chatgpt-web' ? { ...e, answers: 24 } : e,
+      ),
+    });
+    expect(status).toContain(
+      'named in 8 of 49 answers from ChatGPT and Microsoft Copilot (1 question got no answer from one engine)',
+    );
+    expect(status).not.toContain('25 questions × 2 engines');
   });
 
   it('page 1 calls a zero the starting point, and points at the pages AI already reads', () => {
