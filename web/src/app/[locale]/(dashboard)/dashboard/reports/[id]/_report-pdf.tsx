@@ -7,7 +7,8 @@
  *
  * Inter is embedded from /public/fonts so Turkish characters (ş, ğ, ı…) in
  * brand names and prompt texts render correctly — the built-in Helvetica
- * only covers WinAnsi.
+ * only covers WinAnsi. It is registered for each PDF (reportPdf): one Inter
+ * for every PDF of a tab lost letters from the second PDF on.
  *
  * With a white label kit in use (00429) it is the agency's: its logo and
  * "Prepared for" the brand with the client's logo on top, its color, its
@@ -15,6 +16,7 @@
  */
 
 import {
+  pdf,
   Document,
   Page,
   Text,
@@ -29,15 +31,9 @@ import {
 } from '@react-pdf/renderer';
 import type { Report, ReportPromptPerf } from '@/lib/actions/reports';
 import { formatDate } from '@/lib/format';
+import { withInter } from '@/lib/pdf-font';
 import { reportLook, type ReportBranding } from '@/lib/white-label/kit';
 
-Font.register({
-  family: 'Inter',
-  fonts: [
-    { src: '/fonts/Inter-Regular.ttf', fontWeight: 400 },
-    { src: '/fonts/Inter-Bold.ttf', fontWeight: 700 },
-  ],
-});
 // Word-splitting hyphenation looks broken in tables; wrap whole words only.
 Font.registerHyphenationCallback((word) => [word]);
 
@@ -50,7 +46,6 @@ const RED = '#dc2626';
 
 const styles = StyleSheet.create({
   page: {
-    fontFamily: 'Inter',
     fontSize: 9,
     color: TEXT,
     paddingTop: 40,
@@ -263,10 +258,13 @@ function PromptTable({ title, prompts }: { title: string; prompts: ReportPromptP
 export function ReportPdfDocument({
   report,
   branding = null,
+  fontFamily,
 }: {
   report: Report;
   /** The kit in use, its logos as PNG or JPEG; null for Ansvisor's look. */
   branding?: ReportBranding | null;
+  /** The Inter registered for this PDF (withInter). */
+  fontFamily: string;
 }) {
   const { payload } = report;
   const look = reportLook(branding);
@@ -349,7 +347,7 @@ export function ReportPdfDocument({
 
   return (
     <Document title={report.title} author={look.author} creator={look.author}>
-      <Page size="A4" style={styles.page}>
+      <Page size="A4" style={[styles.page, { fontFamily }]}>
         {/* The kit's cover: the agency, and the client it is prepared for. */}
         {branding && (
           <View style={styles.coverRow}>
@@ -771,5 +769,20 @@ export function ReportPdfDocument({
         </View>
       </Page>
     </Document>
+  );
+}
+
+/**
+ * The report's PDF, with Inter of its own (see withInter): a second PDF in the
+ * same tab, another report's or this one again, keeps every letter. `fontDir`
+ * holds Inter-Regular.ttf and Inter-Bold.ttf: the app's /fonts in the browser.
+ */
+export function reportPdf(
+  report: Report,
+  branding: ReportBranding | null,
+  fontDir = '/fonts',
+): Promise<Blob> {
+  return withInter('Inter', fontDir, (fontFamily) =>
+    pdf(<ReportPdfDocument report={report} branding={branding} fontFamily={fontFamily} />).toBlob(),
   );
 }

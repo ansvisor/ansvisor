@@ -243,15 +243,12 @@ export default function ReportDetailPage() {
         kit = read.branding;
         setBranding(kit);
       }
-      const [{ pdf }, { ReportPdfDocument }, logo, clientLogo] = await Promise.all([
-        import('@react-pdf/renderer'),
+      const [{ reportPdf }, logo, clientLogo] = await Promise.all([
         import('./_report-pdf'),
         pdfImage(kit?.logo ?? null),
         pdfImage(kit?.clientLogo ?? null),
       ]);
-      const blob = await pdf(
-        <ReportPdfDocument report={report} branding={kit && { ...kit, logo, clientLogo }} />,
-      ).toBlob();
+      const blob = await reportPdf(report, kit && { ...kit, logo, clientLogo });
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

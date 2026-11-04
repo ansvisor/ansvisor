@@ -30,6 +30,7 @@ import { AuditReport } from '@/components/audit/audit-report';
 import { failingChecks } from '@/lib/audit/failing-checks';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useUserRole } from '@/hooks/use-user-role';
 
 export default function AuditDetailPage() {
   const params = useParams();
@@ -41,6 +42,7 @@ export default function AuditDetailPage() {
   // A read-only workspace (plan not active): Re-audit and Delete open the
   // upgrade dialog instead (Delete without its confirm).
   const { guard, isLocked, openUpgrade } = useUpgradeGate();
+  const { canManage } = useUserRole();
   const tActions = useTranslations('readOnly.actions');
 
   const [audit, setAudit] = useState<AuditResult | null>(null);
@@ -265,38 +267,41 @@ export default function AuditDetailPage() {
                   <RefreshCw className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <Dialog
-                onOpenChange={(open, details) => {
-                  if (!open || !isLocked) return;
-                  details.cancel();
-                  openUpgrade(tActions('deleteAudits'));
-                }}
-              >
-                <DialogTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      aria-label={t('deleteAudit')}
-                    />
-                  }
+              {/* Deleting an audit: admins and managers (2026-11-03). */}
+              {canManage && (
+                <Dialog
+                  onOpenChange={(open, details) => {
+                    if (!open || !isLocked) return;
+                    details.cancel();
+                    openUpgrade(tActions('deleteAudits'));
+                  }}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle>{t('deleteAudit')}</DialogTitle>
-                    <DialogDescription>{t('deleteConfirm')}</DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
-                    <DialogClose render={<Button variant="destructive" onClick={handleDelete} />}>
-                      {t('deleteAudit')}
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                  <DialogTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        aria-label={t('deleteAudit')}
+                      />
+                    }
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle>{t('deleteAudit')}</DialogTitle>
+                      <DialogDescription>{t('deleteConfirm')}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
+                      <DialogClose render={<Button variant="destructive" onClick={handleDelete} />}>
+                        {t('deleteAudit')}
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
             </div>
           )}
         </div>

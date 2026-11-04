@@ -4,14 +4,14 @@ route: /dashboard/audit
 keywords: [audit report, audit score, signals, audit categories, grade, readability, first person]
 synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/site-audit.mdx]
 ---
-Each audit has its own report. It opens right after you run an audit, or from a row on the **Pages** tab. It scores the page out of 100, breaks the score down by category and lists every signal checked. The icons at the top re-run the audit on the same page or delete it; **Delete audit** can't be undone.
+Each audit has its own report. It opens right after you run an audit, or from a row on the **Pages** tab. It scores the page out of 100, breaks the score down by category and lists every signal checked. The icons at the top re-run the audit on the same page or, for admins and managers, delete it; **Delete audit** can't be undone.
 
 ## Total score
 
