@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BrandFact } from './brand-facts';
 import type { QualityState } from './quality-inputs';
@@ -7,7 +8,8 @@ import type { QualityState } from './quality-inputs';
  * §6.2, PR 2b-2): each score 60+ and their average 75+, no fact that differs
  * from the brand's approved ones, nothing the page states unchecked, and
  * every read the scores need made; else the page waits for a click, with
- * why.
+ * why. Run in Node, with the server's own DOM (withContentDom), as the gate
+ * runs: a page reader that needs the browser's globals fails here.
  */
 
 const pkg = vi.hoisted(() => ({ value: {} as unknown }));
@@ -19,7 +21,6 @@ const authors = vi.hoisted(() => ({
 }));
 vi.mock('./authors-read', () => ({ readContentAuthors: async () => authors.value }));
 vi.mock('./catalog-match', () => ({ catalogMatchFor: async () => null }));
-vi.mock('./server-dom', () => ({ withContentDom: async () => {} }));
 
 /** The admin client's reads: a table's rows, a query's one row, an RPC's answer. */
 const db = vi.hoisted(() => ({ tables: {} as Record<string, unknown>, rpc: {} as unknown }));
@@ -161,6 +162,29 @@ describe('statesBrandFacts', () => {
     expect(statesBrandFacts(['Grind fresh, pour slowly.', 'Free shipping on everything.'])).toBe(
       false,
     );
+  });
+});
+
+describe('the page readers the gate runs on the server', () => {
+  it('read a page with the content DOM, never the browser’s globals', async () => {
+    const { withContentDom } = await import('./server-dom');
+    const { trustBlocks, shippingOnPage } = await import('./quality-checks');
+    const { readPage, pageTextLength } = await import('./rules');
+    const { pageImages } = await import('./page-read');
+    const { introFacts } = await import('./intro-facts');
+    const { pageDoc } = await import('./doc-text');
+    await withContentDom();
+    expect(typeof (globalThis as { DOMParser?: unknown }).DOMParser).toBe('undefined');
+    const html =
+      '<h2>Can I get a refund?</h2><p>Yes, within 30 days. <a href="https://acme.example/returns">Returns</a></p><p><img src="https://acme.example/a.png" alt="A"></p>';
+    expect(trustBlocks(html)).toEqual([
+      { tag: 'p', text: 'Yes, within 30 days. Returns', links: ['https://acme.example/returns'] },
+    ]);
+    expect(readPage(html, pageTextLength(html)).blocks[0]).toMatchObject({ tag: 'h2' });
+    expect(shippingOnPage(html)).toMatchObject({ returns: true });
+    expect(pageImages(html)).toEqual([{ src: 'https://acme.example/a.png', alt: 'A' }]);
+    expect(Array.isArray(introFacts(html))).toBe(true);
+    expect(pageDoc(html).childCount).toBeGreaterThan(0);
   });
 });
 

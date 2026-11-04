@@ -146,6 +146,7 @@ function created(init?: RequestInit): Response {
           scope: body.scope,
           notifyUserIds: body.notifyUserIds,
           followupDays: body.followupDays,
+          canCall: body.canCall ?? [],
         },
         triggers: body.triggers.map((t: object) => ({ ...t, nextFireAt: null, lastFiredAt: null })),
       }),
@@ -459,6 +460,35 @@ describe('AgentForm: new agent', () => {
     expect(bodyOf(0)).not.toHaveProperty('maxMonthShare');
     expect(toast).toHaveBeenCalledWith('Saved as a draft · Win back');
     expect(nav.push).toHaveBeenCalledWith(`/dashboard/agents/${NEW_ID}`);
+  });
+
+  it('picks the agents it may run on the last step, up to 5, and sends them; locked below Growth', async () => {
+    const FAQ = 'cccccccc-0000-4000-8000-000000000001';
+    await render({
+      ...SETUP,
+      callable: [
+        { id: FAQ, name: 'FAQ writer' },
+        { id: 'cccccccc-0000-4000-8000-000000000002', name: 'Rival brief' },
+      ],
+      canCallLocked: false,
+    });
+    await toLastStep();
+    const pills = action('agentNew.canCall');
+    expect(pills.map((p) => p.textContent)).toEqual(['FAQ writer', 'Rival brief']);
+    expect(container.textContent).toContain('Each run asks you first.');
+    await click(pills[0]);
+    expect(action('agentNew.canCall')[0].getAttribute('aria-pressed')).toBe('true');
+    await click(action('agentNew.saveDraft')[0]);
+    expect(bodyOf(0).canCall).toEqual([FAQ]);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ ...SETUP, callable: [{ id: FAQ, name: 'FAQ writer' }], canCallLocked: true });
+    await toLastStep();
+    expect(action('agentNew.canCall')).toHaveLength(0);
+    expect(one('[data-slot="agent-form-can-call-locked"]')!.textContent).toBe(
+      'Running other agents needs the Growth plan.',
+    );
   });
 
   it('turns it on: the draft first, then Activate', async () => {

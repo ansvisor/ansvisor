@@ -16,7 +16,7 @@ vi.mock('@/lib/supabase/server', () => ({
 vi.mock('@/lib/subscription-guard', () => ({ assertWritable: async () => {} }));
 vi.mock('@/config/api', () => ({ API_BASE_URL: 'https://api.example' }));
 
-const { disconnectIntegration, getMerchantCenterOffered, setBrandGscProperty } =
+const { disconnectIntegration, getMerchantCenterOffered, setBrandGaProperty, setBrandGscProperty } =
   await import('./integrations');
 
 const fetchMock = vi.fn();
@@ -54,12 +54,33 @@ describe('integrations actions', () => {
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("starts a mapped brand's first sync within a time limit, and keeps the pick when it can't", async () => {
-    timedOut();
+  it('saves a property pick through the API, which checks it, within a time limit', async () => {
+    answer(200, { saved: true, syncStarted: true });
     await expect(setBrandGscProperty('b1', 'https://acme.com/')).resolves.toBeUndefined();
-    expect(update).toHaveBeenCalledWith('id', 'b1');
+    // Never straight into brands: the API checks the pick against the brand's sign-in.
+    expect(update).not.toHaveBeenCalled();
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://api.example/api/integrations/google-search-console/sync');
+    expect(url).toBe(
+      'https://api.example/api/integrations/google-search-console/brands/b1/property',
+    );
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body)).toEqual({ property: 'https://acme.com/' });
     expect(init.signal).toBeInstanceOf(AbortSignal);
+
+    await setBrandGaProperty('b1', null);
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      'https://api.example/api/integrations/google-analytics/brands/b1/property',
+    );
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ property: null });
+  });
+
+  it("says why the API refused a pick, and doesn't keep it", async () => {
+    answer(400, {
+      error: "That property isn't on the Google Search Console account this brand uses.",
+    });
+    await expect(setBrandGscProperty('b1', 'https://other.example/')).rejects.toThrow(
+      "isn't on the Google Search Console account",
+    );
+    expect(update).not.toHaveBeenCalled();
   });
 });
