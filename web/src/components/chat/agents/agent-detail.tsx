@@ -169,12 +169,18 @@ function RunRow({
 }) {
   const t = useTranslations('chatAgents');
   const tRuns = useTranslations('chatAgents.detail.runs');
+  const tCalls = useTranslations('chatAgents.calls');
+  // The agents it ran open under its row, each with its own share (CHAT-27 item 25).
+  const [callsOpen, setCallsOpen] = useState(false);
   const trigger =
     run.triggerKind === 'manual' && run.by
       ? t('manualBy', { name: run.by })
-      : t.has(`runTrigger.${run.triggerKind}`)
-        ? t(`runTrigger.${run.triggerKind}`)
-        : run.triggerKind;
+      : run.triggerKind === 'agent' && run.calledBy
+        ? tCalls('calledBy', { agent: run.calledBy })
+        : t.has(`runTrigger.${run.triggerKind}`)
+          ? t(`runTrigger.${run.triggerKind}`)
+          : run.triggerKind;
+  const calls = run.calls ?? [];
   const status = t.has(`runStatus.${run.status}`) ? t(`runStatus.${run.status}`) : run.status;
   const reason =
     run.status === 'stopped' && run.stopReason && t.has(`stopReason.${run.stopReason}`)
@@ -208,6 +214,18 @@ function RunRow({
           {trigger}
         </b>
         <em className={EM}>{run.brand ?? tRuns('noBrand')}</em>
+        {calls.length > 0 && (
+          <button
+            type="button"
+            data-action="agent.toggleRunCalls"
+            aria-expanded={callsOpen}
+            onClick={() => setCallsOpen((open) => !open)}
+            // Above the row's link, which fills the row.
+            className="relative z-10 mt-0.5 text-[11.5px] text-foreground/80 underline-offset-2 hover:underline"
+          >
+            {tCalls('callsLine', { count: calls.length })} {callsOpen ? '▴' : '▾'}
+          </button>
+        )}
       </span>
       <span role="cell" className="flex min-w-0 items-start gap-1.5">
         <ListDot state={runDot(run.status)} decorative className="mt-px" />
@@ -249,18 +267,51 @@ function RunRow({
     </>
   );
   return (
-    <div
-      role="row"
-      data-slot="agent-run"
-      className={cn(
-        RUN_COLS,
-        'relative min-h-[52px] border-t py-2.5 text-[13px]',
-        run.chatId &&
-          'hover:bg-muted/40 has-[a:focus-visible]:ring-[3px] has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-inset',
-      )}
-    >
-      {cells}
-    </div>
+    <>
+      <div
+        role="row"
+        data-slot="agent-run"
+        className={cn(
+          RUN_COLS,
+          'relative min-h-[52px] border-t py-2.5 text-[13px]',
+          run.chatId &&
+            'hover:bg-muted/40 has-[a:focus-visible]:ring-[3px] has-[a:focus-visible]:ring-ring/50 has-[a:focus-visible]:ring-inset',
+        )}
+      >
+        {cells}
+      </div>
+      {callsOpen &&
+        calls.map((call, i) => (
+          <div
+            key={`${call.agent}-${i}`}
+            role="row"
+            data-slot="agent-run-call"
+            className={cn(RUN_COLS, 'border-t border-dashed bg-muted/30 py-2 text-[12.5px]')}
+          >
+            <span role="cell" className="text-muted-foreground">
+              ↳
+            </span>
+            <span role="cell" className="min-w-0 truncate font-medium">
+              {tCalls('step.ran', { agent: call.agent || '—' })}
+            </span>
+            <span role="cell" className="flex min-w-0 items-start gap-1.5">
+              <ListDot state={runDot(call.status)} decorative className="mt-px" />
+              <span className="truncate">
+                {t.has(`runStatus.${call.status}`) ? t(`runStatus.${call.status}`) : call.status}
+              </span>
+            </span>
+            <span role="cell" className={HIDE_NARROW} />
+            <span role="cell" className="text-xs text-muted-foreground tabular-nums">
+              {metered
+                ? tRuns('aiUse', {
+                    used: percentOf(call.usageShare),
+                    cap: percentOf(call.maxShare),
+                  })
+                : tRuns('noOutcome')}
+            </span>
+          </div>
+        ))}
+    </>
   );
 }
 
@@ -275,6 +326,7 @@ export function AgentDetail({
 }) {
   const t = useTranslations('chatAgents');
   const tDetail = useTranslations('chatAgents.detail');
+  const tCalls = useTranslations('chatAgents.calls');
   const router = useRouter();
   const [state, setState] = useState<DetailState>({ status: 'loading' });
   const [runs, setRuns] = useState<AgentRunView[] | null | 'loading'>('loading');
@@ -819,6 +871,17 @@ export function AgentDetail({
             </Row>
             <Row label={tDetail('side.runsAs')}>{tDetail('side.runsAsValue')}</Row>
             <Row label={tDetail('side.approvals')}>{tDetail('side.approvalsValue')}</Row>
+            <Row label={tCalls('canCall.label')} slot="canCall">
+              {(a.settings?.canCall ?? []).length > 0
+                ? (a.settings?.canCall ?? [])
+                    .map(
+                      (id) =>
+                        a.canCall?.options.find((o) => o.id === id)?.name ??
+                        tCalls('canCall.hidden'),
+                    )
+                    .join(', ')
+                : tCalls('canCall.none')}
+            </Row>
           </SideCard>
 
           {a.goLive && (a.goLive.permission || a.goLive.recent.length > 0) && (

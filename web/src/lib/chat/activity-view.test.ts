@@ -42,6 +42,7 @@ describe('approvalLabel', () => {
           status: 'done',
           canUndo: false,
           undoneAt: null,
+          takeDown: null,
           ...row,
         },
       ],
@@ -73,6 +74,7 @@ describe('activityCsv', () => {
       status: 'done',
       canUndo: false,
       undoneAt: null,
+      takeDown: null,
     };
     const csv = activityCsv([row], (key, params) => `${key}:${params.tool}`);
     expect(csv.split('\n')[1]).toBe(

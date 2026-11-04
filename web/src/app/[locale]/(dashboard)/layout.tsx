@@ -20,7 +20,7 @@ import { DEFAULT_CHAT_SETTINGS, parseTeamRole } from '@/lib/chat/precedence';
 import { composerSetupOf } from '@/lib/chat/composer-setup';
 import { chatRunsOnOwnKey } from '@/lib/chat/key';
 import { failingKeyFor } from '@/lib/chat/key-health';
-import { skillMenuOf } from '@/lib/chat/skills/library';
+import { skillMenuFor } from '@/lib/chat/skills/store';
 import { ChatPanelPage, ChatPanelProvider } from '@/components/chat/panel/chat-panel-provider';
 import { ChatSidePanelSlot } from '@/components/chat/panel/chat-side-panel-slot';
 import { BrandLoader } from '@/components/providers/brand-loader';
@@ -204,7 +204,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     onOwnKey: chatOnOwnKey,
     // Read only where Chat runs on the own key (AGENT-OWN-KEY §5.2 item 5).
     keyFailure: chatOnOwnKey ? await failingKeyFor(profile.organization_id) : null,
-    skills: skillMenuOf(profile.organization_id),
+    skills: await skillMenuFor(profile.organization_id, user.id),
     // Where a page Chat writes opens (W4-11), as Chat's pages read it.
     pageOpen: pageOpenOf(chatPrefs?.page_open),
   };

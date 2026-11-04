@@ -26,6 +26,7 @@ const createJob = vi.fn();
 const runContentJob = vi.fn();
 const openOpportunityForPrompt = vi.fn();
 const runningSuggestionJob = vi.fn();
+const loadNeedAvailability = vi.fn();
 let previousJob = null;
 
 let server;
@@ -69,6 +70,7 @@ async function startApp() {
     return { default: { from: () => chain } };
   });
   vi.doMock('../lib/prompt-clusters.js', () => ({ loadClusters: vi.fn() }));
+  vi.doMock('../lib/opportunity-availability.js', () => ({ loadNeedAvailability }));
   vi.doMock('../lib/action-center/from-opportunity.js', () => ({ sendToActionCenter: vi.fn() }));
   vi.doMock('../lib/ai-provider.js', () => ({ resolveModel: vi.fn() }));
   vi.doMock('../lib/logger.js', () => {
@@ -236,5 +238,56 @@ describe('POST /opportunities/generate for one page (AT-006 part B3)', () => {
     getOpportunityRequestAllowance.mockResolvedValue(allowance(0));
     expect((await generate({ count: 1, pagePath: '/gifts' })).status).toBe(429);
     expect(createJob).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /opportunities/generate with a focus (CONTENT-003)', () => {
+  const BRAND = '33333333-3333-3333-3333-333333333333';
+  const TOPIC = '44444444-4444-4444-4444-444444444444';
+  const PROMPT = '55555555-5555-5555-5555-555555555555';
+  const generate = (body) =>
+    fetch(`${baseUrl}/opportunities/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ brandId: BRAND, idempotencyKey: 'key-focus-1', ...body }),
+    });
+  const request = () => createJob.mock.calls[0][0].data.request;
+
+  it('asks for a picked prompt on purpose, as its own Suggest content does', async () => {
+    expect((await generate({ count: 1, promptId: PROMPT })).status).toBe(202);
+    expect(request()).toMatchObject({ promptId: PROMPT, explicit: true });
+  });
+
+  it("leaves a topic's or Ansvisor's own choice to the usual rules", async () => {
+    expect((await generate({ count: 3, topicId: TOPIC })).status).toBe(202);
+    expect(request()).toMatchObject({ topicId: TOPIC, explicit: false });
+  });
+});
+
+describe('GET /brand/:brandId/availability', () => {
+  it("returns what New can still write for, after checking the caller's access", async () => {
+    const availability = {
+      needs: 3,
+      open: 1,
+      covered: 2,
+      noAnswers: 0,
+      topics: { t1: { open: 1, covered: 2, noAnswers: 0 } },
+      promptOpportunity: { p1: 'o1' },
+    };
+    loadNeedAvailability.mockResolvedValue(availability);
+    const res = await fetch(`${baseUrl}/brand/b1/availability`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual(availability);
+    expect(assertBrandAccess).toHaveBeenCalledWith('b1', 'u1');
+    expect(loadNeedAvailability).toHaveBeenCalledWith('b1');
+  });
+
+  it("reads nothing for a brand the caller can't see", async () => {
+    assertBrandAccess.mockRejectedValueOnce(
+      Object.assign(new Error('Brand not found'), { status: 404 }),
+    );
+    const res = await fetch(`${baseUrl}/brand/b2/availability`);
+    expect(res.status).toBe(404);
+    expect(loadNeedAvailability).not.toHaveBeenCalled();
   });
 });
