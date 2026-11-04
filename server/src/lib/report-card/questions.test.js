@@ -23,11 +23,12 @@ const input = {
 describe('writeQuestions', () => {
   it('asks for 25 questions in the target language, with the page as data', async () => {
     const generate = vi.fn(async () => ({
-      object: { questions: Array.from({ length: 26 }, (_, i) => question(i)) },
+      object: { siteKind: 'seller', questions: Array.from({ length: 26 }, (_, i) => question(i)) },
       usage: { inputTokens: 2000, outputTokens: 3000 },
     }));
-    const { questions, costUsd } = await writeQuestions(input, { generate, env: {} });
+    const { questions, costUsd, audience } = await writeQuestions(input, { generate, env: {} });
     expect(questions).toHaveLength(25);
+    expect(audience).toBe('buyers');
     expect(questions[0]).toEqual({
       text: 'soru numara 0 burada',
       textEn: 'question number 0 here',
@@ -48,6 +49,7 @@ describe('writeQuestions', () => {
   it('drops a repeated question, and keeps no English for an English card', async () => {
     const generate = vi.fn(async () => ({
       object: {
+        siteKind: 'seller',
         questions: [question(1), question(1, { text: 'SORU numara 1 burada ' }), question(2)],
       },
       usage: {},
@@ -61,9 +63,27 @@ describe('writeQuestions', () => {
   });
 
   it('says when the page could not be read', async () => {
-    const generate = vi.fn(async () => ({ object: { questions: [question(1)] }, usage: {} }));
+    const generate = vi.fn(async () => ({
+      object: { siteKind: 'seller', questions: [question(1)] },
+      usage: {},
+    }));
     await writeQuestions({ ...input, excerpt: null }, { generate, env: {} });
     expect(generate.mock.calls[0][0].prompt).toContain('The home page could not be read');
+  });
+});
+
+describe('a publisher', () => {
+  it('asks its readers’ questions, when the home page says it is one', async () => {
+    const generate = vi.fn(async () => ({
+      object: { siteKind: 'publisher', questions: [question(1)] },
+      usage: {},
+    }));
+    const { audience } = await writeQuestions(input, { generate, env: {} });
+    expect(audience).toBe('readers');
+    const { system } = generate.mock.calls[0][0];
+    expect(system).toContain('"publisher" for a news site, magazine, blog, newsletter');
+    expect(system).toContain('best blogs about');
+    expect(system).toContain('Not questions about buying the products its articles write about');
   });
 });
 

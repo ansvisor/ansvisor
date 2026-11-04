@@ -4071,6 +4071,7 @@
     }
   },
   "chatRun": {
+    "thoughtFor": "Thought for {seconds, plural, one {# s} other {# s}}",
     "openPage": {
       "question": "Where should we open this page?",
       "editor": "Open in Content Editor",
@@ -4192,6 +4193,12 @@
       "seePlans": "See plans"
     },
     "removeChip": "Remove {label}",
+    "voice": {
+      "start": "Speak your message",
+      "stop": "Stop listening",
+      "listening": "Listening…",
+      "denied": "Allow microphone access to use voice."
+    },
     "keyPaste": {
       "line": "This looks like an API key. Save it securely instead of sending it?",
       "remove": "Remove",
@@ -5228,7 +5235,7 @@
       },
       "thought": {
         "label": "Show “Thought for N s”",
-        "note": "A short summary of the agent’s reasoning under answers"
+        "note": "How long Chat worked before writing, above each answer"
       },
       "everyPage": {
         "label": "Open Chat on every page",
@@ -15507,5 +15514,34 @@
       "crm": "CRM & revenue",
       "team": "Team & data"
     }
+  },
+  "reportCardAdmin": {
+    "title": "Free report cards",
+    "description": "Ansvisor staff only. Requests from the form on www.ansvisor.com, the cards made and what they cost. No names or e-mails are shown.",
+    "today": "Today (UTC)",
+    "todayValue": "{started} of {cap} cards",
+    "todaySub": "{requests, plural, one {# request} other {# requests}} · {resent} sent again · {capped} for tomorrow",
+    "month": "This month",
+    "monthValue": "{cost} of {budget}",
+    "monthSub": "{cards, plural, one {# card} other {# cards}} made",
+    "errorRate": "Failed, last 30 days",
+    "errorRateNone": "None finished yet",
+    "queued": "Waiting to start",
+    "optIns": "Marketing opt-ins, last 30 days",
+    "byDay": "By day (UTC)",
+    "columns": {
+      "date": "Day",
+      "requests": "Requests",
+      "resent": "Sent again",
+      "capped": "For tomorrow",
+      "started": "Started",
+      "ready": "Ready",
+      "failed": "Failed",
+      "cost": "Cost",
+      "emailsSent": "E-mails sent",
+      "emailsFailed": "E-mails not sent"
+    },
+    "failures": "Latest failures",
+    "noFailures": "No card has failed."
   }
 }
