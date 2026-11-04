@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, for you now, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key]
+keywords: [chat, ask chat, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, agents at work, hide menu, inbox, chat home, for you now, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-11-03
@@ -29,7 +29,7 @@ Next to the arrow, pick how much Chat does on its own: **Ask me first** asks bef
 
 Analysts and Agency partners only read; their box says **Read-only**, with a link to their role.
 
-On the demo brand or a read-only workspace, sending or starting from **Home** opens the plan dialog.
+The demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog.
 
 ## Chat beside any page
 
@@ -103,6 +103,11 @@ Under the answer, **Action Center tasks** lists up to 4 tasks it takes on and ho
 These show Chat's work, not the task's Action Center status. Once the run ends, **Close tasks in Action Center** opens your actions: Chat never marks a task done.
 
 After the tasks, Chat helps with your open **Getting started** steps. It never marks a step done or skips one.
+
+## How many tasks one run finishes
+
+Chat finishes at most 2 tasks in one run, so you get fewer changes to approve at once. Its answer starts with how many it finished, for example "2 of 6 tasks done; the rest go in the next run". The other tasks under **Action Center tasks** stay **Queued** for the next run. The **Task Finisher** agent in Agent Center works the same way: it finishes 2 tasks each time it runs.
+
 ## Drafts, reports and audits
 
 Admins and Managers can also ask Chat to change a draft in the Library, send a draft to your connected CMS, publish a new page on your site, make a report, or start Site Audit on pages. Analysts can ask Chat to save new drafts only.

@@ -752,7 +752,12 @@
         "publish on its own",
         "go live on its own",
         "daily limit",
-        "went live notice"
+        "went live notice",
+        "can call",
+        "run another agent",
+        "called by",
+        "sub-agents",
+        "agent calls agent"
       ],
       "synonyms": [
         "my agents",
@@ -768,10 +773,13 @@
         "change an agent",
         "remove an agent",
         "publish without a click",
-        "agent sends to cms"
+        "agent sends to cms",
+        "agent runs an agent",
+        "chain agents",
+        "helper agent"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -826,8 +834,16 @@
           "text": "Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox.\n\nA run may use only its share of your monthly AI limit. A run a trigger started ends **Stopped at its limit** when it reaches it; a **Run now** run pauses there instead. After 3 failed runs in a row the agent pauses. When the monthly AI limit is used up, the agent pauses and starts again by itself once the limit resets."
         },
         {
+          "heading": "Let an agent run other agents",
+          "text": "On Growth and up, an agent can run up to 5 of your other agents. Pick them under **Can call** on the agent's last step. A paused agent isn't run until you resume it.\n\nA run may run other agents up to 3 times and asks you first each time: the card names the agent, what it asks and how much of your monthly AI limit it may use. The other agent works on the same brand, in a chat of its own, and asks before most changes. It gets only what is left of the first run's **Max per run**, and can't run agents itself. It stops when the first run stops, or after 4 minutes.\n\nIn **Run history**, its run shows **Called by** and the first agent. The first run says how many agents it ran: click it for each one's result and AI use."
+        },
+        {
           "heading": "When a run asks before a change",
-          "text": "A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions and **Send to Action Center**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**."
+          "text": "A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions, **Send to Action Center** and setting an Action Center task **Ready for review**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**."
+        },
+        {
+          "heading": "When outside text makes a run ask",
+          "text": "Once a run has read text from outside your workspace, such as AI answers, citations or a web page, every change asks first, in any mode. Reading your own drafts and reports doesn't do that. Action Center actions and tasks can quote AI answers, so reading them does. If one of them holds instructions aimed at the AI, the run ignores them and asks before every change."
         },
         {
           "heading": "Let an agent publish on its own",
@@ -914,6 +930,7 @@
       "keywords": [
         "chat",
         "ask chat",
+        "task finisher",
         "download answer",
         "save to files",
         "export chat",
@@ -1034,7 +1051,7 @@
         },
         {
           "heading": "Ask Chat",
-          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nNext to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; their box says **Read-only**, with a link to their role.\n\nOn the demo brand or a read-only workspace, sending or starting from **Home** opens the plan dialog."
+          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nNext to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; their box says **Read-only**, with a link to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
         },
         {
           "heading": "Chat beside any page",
@@ -1071,6 +1088,10 @@
         {
           "heading": "Work through your Action Center tasks",
           "text": "Type **/tasks**, or click **Complete tasks** under **For you now** on Chat Home, and Chat works through the brand's Action Center tasks: those due this week first, highest Priority Score first.\n\nUnder the answer, **Action Center tasks** lists up to 4 tasks it takes on and how many are ready (\"1 of 3 ready\"). Each row shows the task, \"Priority 86 · Fix\" and where Chat's work stands:\n\n- **Queued**: not started yet.\n- **Writing**: Chat is working on it now.\n- **Ready for review**: Chat finished its part, for you to check.\n- **Done**: you completed it in Action Center.\n\nThese show Chat's work, not the task's Action Center status. Once the run ends, **Close tasks in Action Center** opens your actions: Chat never marks a task done.\n\nAfter the tasks, Chat helps with your open **Getting started** steps. It never marks a step done or skips one."
+        },
+        {
+          "heading": "How many tasks one run finishes",
+          "text": "Chat finishes at most 2 tasks in one run, so you get fewer changes to approve at once. Its answer starts with how many it finished, for example \"2 of 6 tasks done; the rest go in the next run\". The other tasks under **Action Center tasks** stay **Queued** for the next run. The **Task Finisher** agent in Agent Center works the same way: it finishes 2 tasks each time it runs."
         },
         {
           "heading": "Drafts, reports and audits",
@@ -1194,6 +1215,8 @@
         "chat settings",
         "default mode",
         "your focus",
+        "answer language",
+        "chat language",
         "ask chat on every page",
         "full auto"
       ],
@@ -1203,7 +1226,7 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1216,6 +1239,10 @@
         {
           "heading": "Your focus",
           "text": "**Your focus** lists the eight areas Chat can focus on for you, such as **Competitors** or **Content**. Tick the ones you work on: Chat Home and its suggestions follow them. Your focus doesn't change what you can do; your role decides that."
+        },
+        {
+          "heading": "Answer language",
+          "text": "**Answer language** sets the language Chat answers in. **Same as my question**, the default, answers in the language you write in. Pick a language, such as English, and Chat answers in it whatever language you write in: useful for agencies and teams that write in several languages. Asking for a language in a message, such as \"answer in German\", always wins for that answer. The app itself stays in English."
         },
         {
           "heading": "Chat on every page",
@@ -1379,20 +1406,22 @@
         "used skill",
         "save a skill",
         "my skills",
-        "faq from fan-outs",
-        "weekly report",
-        "win back citations",
-        "ready to publish",
-        "buyer questions",
-        "rival brief",
-        "listing gaps",
         "skills page",
         "turn off a skill",
         "schedule a skill",
         "import a skill",
         "upload a skill",
         "skill from github",
-        "review a skill"
+        "review a skill",
+        "skill update",
+        "update available",
+        "faq from fan-outs",
+        "weekly report",
+        "win back citations",
+        "ready to publish",
+        "buyer questions",
+        "rival brief",
+        "listing gaps"
       ],
       "synonyms": [
         "slash commands",
@@ -1401,7 +1430,7 @@
         "templates"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -1426,6 +1455,10 @@
         {
           "heading": "Import a skill",
           "text": "Admins and Managers on a paid plan can bring in a skill from outside. On the **Skills** page, click **New skill**, then **Upload a SKILL.md or .zip** (up to 5 MB), or **Import from GitHub** and paste a public github.com link. Only the skill's instructions come in: scripts, commands and allowed tools are removed, and nothing runs. A GitHub skill is read at today's commit and never updates by itself. Only MIT, Apache-2.0, BSD and ISC licenses are accepted.\n\nAn imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it."
+        },
+        {
+          "heading": "Updates to an imported skill",
+          "text": "Once a week, Ansvisor checks the source of each approved GitHub skill. When its SKILL.md changed, its card in **My skills** shows **Update available**. **Review update** shows what changed, line by line, and the safety scan of the new version. Nothing changes until an Admin clicks **Approve update**, and the new version is cleaned and scanned again first. A skill whose saved file was changed some other way is turned off."
         },
         {
           "heading": "What a skill can't change",
@@ -2162,7 +2195,7 @@
         },
         {
           "heading": "Rewrite the whole page",
-          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule in the set, with the cited passages kept. It uses more AI usage than fixing open rules. The menu marks it **Recommended** when the page is far off its Length or many rules are open. Pick it, and the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. A rewrite isn't offered once the page is ready or published.\n\nWhen the quoted passages it keeps stop the page reaching its Length, a note offers **Raise Length to …** and **Rewrite, cited passages too**, which may stop those passages being quoted."
+          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. A rewrite isn't offered once the page is ready or published. One past its Length is cut to it with one more pass; accept one still a little long, and the next rewrite starts from there.\n\nWhen the passages it keeps stop the page reaching its Length, a note offers **Raise Length to …** and **Rewrite, cited passages too**, which may stop those passages being quoted. The **Length** rule says so too."
         },
         {
           "heading": "Before you run it again",
@@ -2200,7 +2233,7 @@
         "follow an opportunity"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -2232,7 +2265,7 @@
         },
         {
           "heading": "Dismiss an opportunity",
-          "text": "**Dismiss**, for admins and managers, asks why:\n\n- **The topic doesn't matter to us** keeps it from being suggested again in this form for 90 days.\n- **Right topic, wrong angle** dismisses it and opens **Another angle**, so you can ask for a better take on the same need."
+          "text": "**Dismiss**, for admins and managers, asks why:\n\n- **The topic doesn't matter to us** keeps it from being suggested again in this form for 90 days. After that, its need can get a new suggestion.\n- **Right topic, wrong angle** dismisses it and opens **Another angle**, so you can ask for a better take on the same need."
         },
         {
           "heading": "Follow it to Done",
