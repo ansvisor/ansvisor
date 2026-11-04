@@ -104,4 +104,16 @@ describe('handOffDraft', () => {
     await handOffDraft({ draftId: 'd1', brandId: 'b1', input: zero });
     expect(fixDraftRules.mock.calls.at(-1)[0].input).not.toHaveProperty('overLength');
   });
+
+  it('passes on the room its Length leaves, so its checks never take the page past it (editor UX review 2026-11-03)', async () => {
+    const input = handOffInput.parse({
+      items: [{ key: 'readability:longSentences', detail: '' }],
+      lengthCap: { count: 700, max: 960 },
+    });
+    await handOffDraft({ draftId: 'd1', brandId: 'b1', input });
+    expect(fixDraftRules.mock.calls.at(-1)[0].input.lengthCap).toEqual({ count: 700, max: 960 });
+    const none = handOffInput.parse({ items: [{ key: 'readability:longSentences', detail: '' }] });
+    await handOffDraft({ draftId: 'd1', brandId: 'b1', input: none });
+    expect(fixDraftRules.mock.calls.at(-1)[0].input).not.toHaveProperty('lengthCap');
+  });
 });

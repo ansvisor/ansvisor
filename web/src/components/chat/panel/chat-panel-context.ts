@@ -6,6 +6,7 @@ import type { ChatPageContext } from '@/lib/chat/page-context';
 import type { PanelSize } from '@/lib/chat/panel';
 import type { ChatReference } from '@/lib/chat/references';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
+import type { PageOpen } from '@/lib/chat/page-open';
 import type { ChatMode } from '@/lib/chat/precedence';
 
 /**
@@ -34,6 +35,8 @@ export interface ChatPanelSetup {
   usageNoticeSeen: string | null;
   /** The / menu's Skills group (CHAT-13 item 5). */
   skills: ChatSkillItem[];
+  /** Where a page Chat writes opens (W4-11, Settings › Chat): ask when not given. */
+  pageOpen?: PageOpen;
 }
 
 export interface ChatPanelState {

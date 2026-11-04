@@ -12,6 +12,7 @@ import {
   fanoutsToUse,
   readPage,
   ruleLength,
+  ruleLengthBand,
   ruleSet,
   type ActiveRule,
   type DraftRules,
@@ -171,14 +172,25 @@ export async function agentWriteRequest(
   const textRules =
     inEffect?.textRules ?? effective.textRules.filter((rule) => rule.on).map((rule) => rule.text);
   const length = ruleLength(rules, setType);
+  // A range the person set is kept to, not only aimed at (editor test 2026-11-03).
+  const lengthBand = ruleLengthBand(rules);
   const sources = read
     ? rebuildSources(read.data, read.choices, {
         title: draft.title,
         sourceUrl: draft.sourceUrl,
         html: draft.bodyHtml,
         length,
+        lengthBand,
       })
-    : { promptIds: [], fanouts: [], pages: [], queries: [], headings: [], length };
+    : {
+        promptIds: [],
+        fanouts: [],
+        pages: [],
+        queries: [],
+        headings: [],
+        length,
+        ...(lengthBand ? { lengthBand } : {}),
+      };
   // The fan-out rules name the fan-outs the page doesn't use yet: an existing
   // page's own; a page the agent writes anew starts from none of them.
   const page = readPage(draft.method === 'optimize' ? (draft.bodyHtml ?? '') : '', 0);

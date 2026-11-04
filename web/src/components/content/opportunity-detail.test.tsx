@@ -234,7 +234,8 @@ describe("the opportunity panel's costly AI work", () => {
   });
 });
 
-describe("the opportunity panel's Dismiss", () => {
+// Sending to the webhook is for admins and managers too (2026-11-03).
+describe("the opportunity panel's Send to Workflow and Dismiss", () => {
   const menuItems = async () => {
     await act(async () =>
       container.querySelector<HTMLElement>('[aria-label="More actions"]')!.click(),
@@ -244,7 +245,9 @@ describe("the opportunity panel's Dismiss", () => {
 
   it('is offered to an admin or a manager', async () => {
     await render(false);
-    expect(await menuItems()).toContain('Dismiss');
+    const items = await menuItems();
+    expect(items).toContain('Send to Workflow');
+    expect(items).toContain('Dismiss');
   });
 
   it('is left out for an analyst or an agency partner, who keep Mark as reviewed', async () => {
@@ -252,6 +255,7 @@ describe("the opportunity panel's Dismiss", () => {
     await render(false);
     const items = await menuItems();
     expect(items).toContain('Mark as reviewed');
+    expect(items).not.toContain('Send to Workflow');
     expect(items).not.toContain('Dismiss');
   });
 });

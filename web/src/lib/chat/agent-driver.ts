@@ -501,7 +501,7 @@ export async function openAgentRun(
     timezone,
     brandId: brand.id,
     mode: call ? call.mode : version.mode,
-    // The agent's model preference and effort (CHAT-16): the engine picks Auto's models today.
+    // The agent's model and effort (CHAT-16): the engine runs them as the plan allows (W4-03).
     model: version.model,
     effort: version.effort,
     // Started already: the agent's slot (chat_start_next_agent_run) is its place in line.
