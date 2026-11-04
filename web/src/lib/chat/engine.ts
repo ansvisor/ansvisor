@@ -170,7 +170,7 @@ import {
   saveCached,
   type CachedRead,
 } from './tool-cache';
-import { dataBlock, guardData, isUntrustedRead } from './untrusted';
+import { dataBlock, guardData, isUntrustedRead, taintsRun } from './untrusted';
 import { keepShingles, textsOf } from './go-live-checks';
 import { readGoLiveFacts, type GoLivePage } from './go-live-facts';
 import { reserveGoLive } from './go-live-send';
@@ -3519,8 +3519,9 @@ async function readCall(
     }
   }
   const latencyMs = Date.now() - started;
-  // Outside text (§16a): the run is tainted, kept or not.
-  if (untrusted) rc.progress.tainted = true;
+  // Outside text (§16a): the run is tainted, kept or not. The workspace's own drafts, tasks and
+  // reports are read as data and scanned all the same, but don't taint it (WORKSPACE_READS).
+  if (taintsRun(tool.name)) rc.progress.tainted = true;
   if (read.injection) rc.progress.injection = true;
   // An agent's page may not copy it whole to go live on its own (AUTONOMOUS-GO-LIVE §6.3).
   if (untrusted && rc.agentRunId) {
