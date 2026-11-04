@@ -114,7 +114,9 @@ export function PlanCard({
     state: 'pending',
     pill: step.pill ?? planStepPill(step.cls, mode),
   }));
-  const missing = connections.filter((c) => !c.connected);
+  // A missing tool's line goes once skipped: the run does the rest without it.
+  const [skipped, setSkipped] = useState<string[]>([]);
+  const missing = connections.filter((c) => !c.connected && !skipped.includes(c.name));
 
   return (
     <div data-slot="plan-card">
@@ -168,18 +170,27 @@ export function PlanCard({
               key={c.name}
               className="mt-1.5 flex flex-wrap items-center gap-2 rounded-[10px] border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12.5px] text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
             >
-              {t('notConnected', { name: c.name })}
-              {onConnect && (
+              {t('missingOptional', { name: c.name })}
+              <span className="ml-auto flex gap-1.5">
+                {onConnect && (
+                  <Button
+                    data-action="integrations.connect"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onConnect(c.name)}
+                  >
+                    {t('connect', { name: c.name })}
+                  </Button>
+                )}
                 <Button
-                  data-action="integrations.connect"
-                  variant="outline"
+                  data-action="integrations.skip"
+                  variant="ghost"
                   size="sm"
-                  className="ml-auto"
-                  onClick={() => onConnect(c.name)}
+                  onClick={() => setSkipped((was) => [...was, c.name])}
                 >
-                  {t('connect', { name: c.name })}
+                  {t('skip')}
                 </Button>
-              )}
+              </span>
             </div>
           ))}
         </AgentCardBody>

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   TRUSTED_READS,
+  WORKSPACE_READS,
   dataBlock,
   guardData,
   isUntrustedRead,
   looksLikeInjection,
   stripHidden,
+  taintsRun,
 } from './untrusted';
 
 /**
@@ -119,5 +121,23 @@ describe('dataBlock', () => {
     expect(isUntrustedRead('list_mentions')).toBe(true);
     expect(isUntrustedRead('a_tool_added_later')).toBe(true);
     expect(TRUSTED_READS.has('list_ai_answers')).toBe(false);
+  });
+
+  it('scans the workspace’s own drafts and reports, but only outside text taints a run', () => {
+    for (const read of WORKSPACE_READS) {
+      // Still data in its labelled block, scanned for instructions.
+      expect(isUntrustedRead(read)).toBe(true);
+      expect(taintsRun(read)).toBe(false);
+    }
+    for (const outside of ['list_ai_answers', 'list_citations', 'fetch_page', 'list_mentions']) {
+      expect(taintsRun(outside)).toBe(true);
+    }
+    // An action's payload, tasks and signals carry outside text (evidence excerpts): they taint.
+    for (const action of ['list_action_center_tasks', 'get_action', 'get_action_history']) {
+      expect(WORKSPACE_READS.has(action)).toBe(false);
+      expect(taintsRun(action)).toBe(true);
+    }
+    expect(taintsRun('get_visibility_summary')).toBe(false);
+    expect(taintsRun('a_tool_added_later')).toBe(true);
   });
 });
