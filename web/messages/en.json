@@ -5155,12 +5155,28 @@
             "name": "Personal memory and personal in-app watch rules",
             "scope": "Chat · only you"
           },
+          "dailyWork": {
+            "name": "Action Center work, writing in the Content Editor, running a Site Audit",
+            "scope": "App"
+          },
           "actions": {
-            "name": "Create or attach actions · prompts, topics, competitors",
+            "name": "Prompts, topics, competitors · create or attach actions from Chat",
             "scope": "App and Chat"
           },
+          "tracking": {
+            "name": "Run tracking now, or stop a run",
+            "scope": "App · uses the plan's tracking"
+          },
+          "volumes": {
+            "name": "Analyze search volumes",
+            "scope": "App · uses the plan's analyses"
+          },
+          "generate": {
+            "name": "Generate suggestions, opportunities, briefs, Improve and tasks",
+            "scope": "App and Chat · uses the AI allowance"
+          },
           "drafts": {
-            "name": "Drafts, briefs, schedules, CMS drafts",
+            "name": "Briefs, schedules, CMS drafts · drafts from Chat",
             "scope": "App and Chat · approval card"
           },
           "agents": { "name": "Create triggered agents", "scope": "Run with the creator's role" },
