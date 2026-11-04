@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: false
 sources: [docs/api-reference/report-card.mdx]
 ---
-The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor writes 25 questions your buyers might ask from your home page, asks each one once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a three-page PDF. One card is made per company every 30 days: asking again within that time sends the same card again.
+The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor writes 25 questions your buyers might ask from your home page, asks each one once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a three-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once.
 
 ## What the card measured
 
