@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PLANS } from '@/config/plans';
-import { en } from './copy';
+import { cardCopy, en } from './copy';
+import { tr } from './copy-tr';
 import type { CitedSiteKind, ReportCardPayload } from './payload';
 import {
   MAX_CPC_USD,
@@ -16,6 +17,8 @@ import {
   examplePrompt,
   growthEngineRows,
   interCanDraw,
+  localCents,
+  localMoney,
   isTargetSite,
   mainEngineRows,
   mainTotals,
@@ -502,5 +505,42 @@ describe('formats', () => {
     expect(money(1_850)).toBe('$1,850');
     expect(money(380, 'EUR')).toBe('€380');
     expect(money(380, 'TRY')).toBe('TRY\u00a0380');
+  });
+});
+
+describe('the card’s language and currency', () => {
+  const turkish = card({
+    country: { code: 'TR', name: 'Türkiye' },
+    language: 'Turkish',
+    currency: { code: 'TRY', perUsd: 41.9, asOf: '2026-11-01' },
+  });
+
+  it('is Turkish for Türkiye and English elsewhere', () => {
+    expect(cardCopy(turkish)).toBe(tr);
+    expect(cardCopy(SAMPLE_REPORT_CARD)).toBe(en);
+    expect(cardCopy({ country: { code: 'GB' } })).toBe(en);
+  });
+
+  it('writes the findings in Turkish without a case ending on a name', () => {
+    const wins = quickWins(turkish, tr);
+    expect(wins[0].title).toBe(
+      'Sitenizde şu soruyu yanıtlayın: “where to buy fresh roasted coffee beans online”',
+    );
+    expect(wins[0].detail).toBe(
+      'Yapay zekâ bu soruda Ridgeline Roasters, Harborline Beans ve Copper Kettle Coffee markalarını öneriyor, Brewline Coffee markasını değil.',
+    );
+    expect(wins[1].title).toBe(
+      'coffeereview.example sitesinde Brewline Coffee markasını listeletin',
+    );
+    expect(questionSummary(turkish, tr)).toBe(
+      '50 yanıtın 8 tanesinde, 25 sorunun 6 tanesinde adınız geçti.',
+    );
+  });
+
+  it('shows USD amounts in the card’s currency as approximate, and dollars without one', () => {
+    expect(localMoney(49, turkish, 'tr-TR')).toBe('≈ ₺2.053');
+    expect(localCents(0.41, turkish, 'tr-TR')).toBe('≈ ₺17,18');
+    expect(localMoney(49, SAMPLE_REPORT_CARD)).toBe('$49');
+    expect(localCents(0.41, SAMPLE_REPORT_CARD)).toBe('$0.41');
   });
 });

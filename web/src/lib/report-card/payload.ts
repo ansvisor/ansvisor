@@ -167,6 +167,21 @@ export const reportCardPayloadSchema = z.object({
    * still sent, and staff check it by hand on the admin page.
    */
   checkByHand: z.object({ reason: text(300) }).optional(),
+  /**
+   * The currency the card shows amounts in (TRY for Türkiye, GBP, CAD,
+   * AUD, EUR in the euro area), with what a US dollar was worth in it and
+   * when that rate was set; absent for US dollars and older cards. The
+   * cost per click and Ansvisor's prices are in USD: the card shows them
+   * converted, as approximate.
+   */
+  currency: z
+    .object({
+      code: z.string().length(3),
+      perUsd: z.number().positive(),
+      asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    })
+    .nullable()
+    .optional(),
   /** The average order or deal value the person gave, if any. */
   dealValue: z.object({ amount: z.number().positive(), currency: z.string().length(3) }).nullable(),
 });

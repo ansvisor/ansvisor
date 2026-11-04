@@ -173,3 +173,47 @@ export function countryLanguage(code) {
 export function languageName(code) {
   return languageNames.of(code) ?? code;
 }
+
+/**
+ * The euro area's countries, and those that use the euro without being in
+ * it, whose cards show amounts in euros.
+ */
+const EURO = new Set([
+  'AT',
+  'BE',
+  'HR',
+  'CY',
+  'EE',
+  'FI',
+  'FR',
+  'DE',
+  'GR',
+  'IE',
+  'IT',
+  'LV',
+  'LT',
+  'LU',
+  'MT',
+  'NL',
+  'PT',
+  'SK',
+  'SI',
+  'ES',
+  'AD',
+  'MC',
+  'SM',
+  'VA',
+  'ME',
+  'XK',
+]);
+const CURRENCY = { TR: 'TRY', GB: 'GBP', CA: 'CAD', AU: 'AUD' };
+
+/**
+ * The currency a card shows its amounts in (owner decision 2026-11-04):
+ * TRY for Türkiye, GBP, CAD and AUD, EUR in the euro area, USD elsewhere.
+ */
+export function countryCurrency(code) {
+  const upper = String(code ?? '').toUpperCase();
+  if (CURRENCY[upper]) return CURRENCY[upper];
+  return EURO.has(upper) ? 'EUR' : 'USD';
+}

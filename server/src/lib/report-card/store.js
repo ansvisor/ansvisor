@@ -163,7 +163,7 @@ export function reportCardStore(db = supabaseAdmin) {
       const { data, error } = await db
         .from('report_card_requests')
         .select(
-          'id, first_name, email, outcome, email_attempts, report_cards!report_card_requests_report_card_id_fkey!inner(id, status, payload, site, created_at)',
+          'id, first_name, email, country, outcome, email_attempts, report_cards!report_card_requests_report_card_id_fkey!inner(id, status, payload, site, created_at)',
         )
         .is('emailed_at', null)
         .in('report_cards.status', ['ready', 'failed'])
