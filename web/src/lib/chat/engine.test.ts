@@ -1234,6 +1234,10 @@ describe('a step the provider ends in an error, with nothing in it', () => {
     { type: 'text-end', id: 't' },
     { type: 'finish', finishReason: { unified: 'other', raw: 'error' }, usage: usage(0, 0) },
   ];
+  /** The model's own reply with nothing in it, finished as usual. */
+  const empty = text();
+  const noted = (options: CallOptions) =>
+    JSON.stringify(options.prompt).includes(JSON.stringify(ANSWER_NOTE).slice(1, 60));
 
   it('runs again once, and is never taken as the answer', async () => {
     const { sonnet } = useModels([READY], [errored, text('Two pages lost most of it.')]);
@@ -1241,14 +1245,61 @@ describe('a step the provider ends in an error, with nothing in it', () => {
     expect(sonnet.seen).toHaveLength(2);
     expect(runRow(runId).status).toBe('done');
     expect(runFromEvents(await eventsOf(runId)).text).toBe('Two pages lost most of it.');
-    // The second try asks the same: nothing from the failed one is in it.
+    // The second try asks the same, with the same tools: nothing from the failed one is in it.
     expect(sonnet.seen[1].prompt).toEqual(sonnet.seen[0].prompt);
+    expect(sonnet.seen[1].tools).toEqual(sonnet.seen[0].tools);
   });
 
   it('runs again only once a run', async () => {
     const { sonnet } = useModels([READY], [errored, errored, text('Never asked.')]);
     const runId = await turn(ADMIN, 'Why did citations fall?');
     expect(sonnet.seen).toHaveLength(2);
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('is the run’s one recovery: an empty reply after it isn’t asked for the answer', async () => {
+    const { sonnet } = useModels([READY], [errored, empty, text('Never asked.')]);
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(sonnet.seen).toHaveLength(2);
+    expect(noted(sonnet.seen[1])).toBe(false);
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('never runs the step that asked for the answer again', async () => {
+    const { sonnet } = useModels([READY], [empty, errored, text('Never asked.')]);
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(sonnet.seen).toHaveLength(2);
+    expect(noted(sonnet.seen[1])).toBe(true);
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('leaves its one retry to the writer when a reading step ends so', async () => {
+    // An empty reading step moves on to writing: no retry is spent on it.
+    const { haiku, sonnet } = useModels([errored], [errored, text('Two pages lost most of it.')]);
+    const runId = await turn(ADMIN, 'Why did citations fall?');
+    expect(haiku.seen).toHaveLength(1);
+    expect(sonnet.seen).toHaveLength(2);
+    expect(runRow(runId).status).toBe('done');
+    expect(runFromEvents(await eventsOf(runId)).text).toBe('Two pages lost most of it.');
+  });
+
+  it('stays the run’s one recovery after a card: the run goes on without another', async () => {
+    // A run that waits on a card (an agent's run_agent too, W4-26) goes on as the same run.
+    const { sonnet } = useModels(
+      [READY],
+      [
+        errored,
+        calls(toolCall('w1', 'publish_page', { brand_id: BRAND, title: 'Pricing FAQ' })),
+        empty,
+        text('Never asked.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Publish the pricing FAQ', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    expect(sonnet.seen).toHaveLength(2);
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    expect(sonnet.seen).toHaveLength(3);
+    expect(noted(sonnet.seen[2])).toBe(false);
     expect(runRow(runId).status).toBe('done');
   });
 });
@@ -6640,6 +6691,23 @@ describe('"Notify only if the answer changed" (W3-04a, CHAT-12 item 20)', () => 
     const second = await jobRun(progressOf(first).fingerprint!);
     expect(progressOf(second).unchanged).toBeUndefined();
     expect(sonnet.seen.length).toBeGreaterThan(0);
+  });
+
+  it('stops so too when the reading step after its reads ends in an error, with no retry', async () => {
+    // A reading step the provider ended with nothing in it is read enough: never run again.
+    const errored = [
+      { type: 'text-start', id: 't' },
+      { type: 'text-end', id: 't' },
+      { type: 'finish', finishReason: { unified: 'other', raw: 'error' }, usage: usage(0, 0) },
+    ];
+    useModels([readStep(), READY], [text('Up 12% this week.')]);
+    const first = await jobRun(null);
+    const { haiku, sonnet } = useModels([readStep(), errored], [text('Never asked.')]);
+    const second = await jobRun(progressOf(first).fingerprint!);
+    expect(haiku.seen).toHaveLength(2);
+    expect(sonnet.seen).toHaveLength(0);
+    expect(progressOf(second).unchanged).toBe(true);
+    expect(runRow(second).status).toBe('done');
   });
 });
 

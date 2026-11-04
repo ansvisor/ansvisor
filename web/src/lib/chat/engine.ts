@@ -871,10 +871,12 @@ const STEP_RETRY_MS = 1_000;
 type Progress = RunProgress & {
   question?: string;
   scope?: MessageScope;
-  /** A model step the provider ended in an error, with nothing in it, ran again (once a run). */
-  stepRetried?: boolean;
-  /** A reply had no words for the person, and the model was asked for them (ANSWER_NOTE). */
-  answerAsked?: boolean;
+  /**
+   * The run's one recovery from a reply with no answer, by its cause: 'retry' ran a step the
+   * provider ended in an error, with nothing in it, again; 'answer' asked the model for the
+   * words its reply left out (ANSWER_NOTE).
+   */
+  recovered?: 'retry' | 'answer';
   /** The lines its "Used memory" step listed, once it has one (CHAT-14 item 17). */
   memoryItems?: number;
 };
@@ -1614,14 +1616,15 @@ async function modelLoop(rc: RunContext): Promise<void> {
     const phase: ChatPhase = rc.models.phases === 'single' ? 'write' : rc.progress.phase;
     // Next moves belong to the answer they came with: a later step suggests its own, or none.
     // Once the answer was asked for, the moves of the reply that had none stay.
-    if (phase === 'write' && !rc.progress.answerAsked) rc.progress.nextMoves = undefined;
+    if (phase === 'write' && rc.progress.recovered !== 'answer') rc.progress.nextMoves = undefined;
     const step = await modelStep(rc, phase);
     if (step.kind === 'ended') return;
     rc.progress.modelSteps += 1;
-    // The provider ended the step in an error with nothing in it (Gemini through OpenRouter
-    // finished "other" with no output, W4-35): the same step once more, never as an answer.
-    if (step.failedEmpty && !rc.progress.stepRetried) {
-      rc.progress.stepRetried = true;
+    // The provider ended a writing step in an error with nothing in it (Gemini through OpenRouter
+    // finished "other" with no output, W4-35): the same step once more, never as an answer. It's
+    // the run's one recovery (recovered); an empty reading step moves on to writing anyway.
+    if (step.failedEmpty && phase === 'write' && !rc.progress.recovered) {
+      rc.progress.recovered = 'retry';
       await new Promise((resolve) => setTimeout(resolve, STEP_RETRY_MS));
       continue;
     }
@@ -1650,17 +1653,12 @@ async function modelLoop(rc: RunContext): Promise<void> {
     }
 
     const onlyMoves = step.toolCalls.every((call) => call.toolName === NEXT_MOVES_TOOL);
-    // A step the provider ended in an error isn't a reply without words: it ran again once (above).
-    if (
-      onlyMoves &&
-      !step.failedEmpty &&
-      !rc.progress.answerAsked &&
-      rc.progress.text.trim() === ''
-    ) {
+    if (onlyMoves && !rc.progress.recovered && rc.progress.text.trim() === '') {
       // The run's last reply, next moves alone or nothing, and no words for the person in the
       // whole run (GPT-6 Luna and Gemini 3.8 Flash answer "hi" so): its moves are kept, and one
-      // more step, told so and without the next moves tool, writes the answer. Once a run.
-      rc.progress.answerAsked = true;
+      // more step, told so and without the next moves tool, writes the answer. The run's one
+      // recovery: never after a retry (above), and a recovery step with nothing in it ends the run.
+      rc.progress.recovered = 'answer';
       if (step.toolCalls.length > 0) {
         rc.messages.push(...withoutEmptyText(step.responseMessages));
         if (calls.length > 0 && (await handleCalls(rc, calls, 0, [])) !== 'continue') return;
@@ -1956,7 +1954,7 @@ function toolSet(rc: RunContext, phase: ChatPhase): ToolSet {
   }
   // Next moves (CHAT-07 §C): with the final answer, in the same model step. Not in the step that
   // writes an answer its reply left out: that reply's moves are kept (modelLoop).
-  if (phase === 'write' && !rc.progress.answerAsked) {
+  if (phase === 'write' && rc.progress.recovered !== 'answer') {
     set[NEXT_MOVES_TOOL] = aiTool({
       description:
         'With your final answer, in the same reply: 2–3 things the person could do next, best first. A click sends the prompt as their next message.',
