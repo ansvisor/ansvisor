@@ -6,7 +6,8 @@ import messages from '../../../../../../messages/en.json';
 
 /**
  * Settings' list of sections: Menu access is listed for admins and the
- * managers they let change menus, and nobody else.
+ * managers they let change menus, and nobody else. Account has the
+ * person's time zone (00468).
  */
 
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
@@ -46,11 +47,12 @@ for (const [path, name] of [
   ['@/components/settings/white-label-section', 'WhiteLabelSection'],
   ['@/components/settings/menu-access-section', 'MenuAccessSection'],
   ['@/components/settings/work-areas-card', 'WorkAreasCard'],
+  ['@/components/settings/time-zone-field', 'TimeZoneField'],
   ['@/components/chat-access/roles-access-section', 'RolesAccessSection'],
   ['@/components/chat-access/your-access-card', 'YourAccessSlot'],
   ['@/components/chat-access/chat-settings-section', 'ChatSettingsSection'],
 ]) {
-  vi.doMock(path, () => ({ [name]: () => null }));
+  vi.doMock(path, () => ({ [name]: () => <div data-mock={name} /> }));
 }
 
 const { SettingsView } = await import('./_settings-view');
@@ -113,6 +115,13 @@ describe('SettingsView', () => {
       expect(list.indexOf('White label'), String(cloud)).toBe(list.indexOf('Organization') + 1);
     }
     isCloud = false;
+  });
+
+  it('shows the time zone on Account, with the name and sign-in details', async () => {
+    await sections();
+    const card = container.querySelector('[data-mock="TimeZoneField"]');
+    expect(card).not.toBeNull();
+    expect(container.querySelector('#name')).not.toBeNull();
   });
 
   it("counts an Admin's waiting access requests on Roles & access", async () => {

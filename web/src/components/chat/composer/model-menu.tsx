@@ -62,10 +62,13 @@ export function ModelMenu({
   choice,
   onChange,
   onClose,
+  onOpenKeys,
 }: {
   choice: ChatModelChoice;
   onChange: (choice: ChatModelChoice) => void;
   onClose: () => void;
+  /** Opens "Your API keys" (W4-06): Admins, where own keys are open to the workspace. */
+  onOpenKeys?: () => void;
 }) {
   const t = useTranslations('chatComposer.modelMenu');
   const { usage } = useAiUsage();
@@ -259,6 +262,20 @@ export function ModelMenu({
                   <span className="ml-auto text-right text-muted-foreground">
                     {t('ownKeyLocked', { plan: ready.access.planName ?? '' })}
                   </span>
+                ) : onOpenKeys ? (
+                  <button
+                    type="button"
+                    data-action="model.ownKeys"
+                    onClick={() => {
+                      onClose();
+                      onOpenKeys();
+                    }}
+                    className="ml-auto text-right text-foreground underline underline-offset-2"
+                  >
+                    {ready.access.ownKeys.state === 'kept' && ready.access.ownKeys.until
+                      ? t('ownKeyUntil', { date: formatMonthDay(ready.access.ownKeys.until) })
+                      : t('ownKeyIncluded')}
+                  </button>
                 ) : (
                   <Link
                     data-action="model.ownKeys"

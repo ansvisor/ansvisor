@@ -86,6 +86,23 @@ const pushCmsDraft: UndoRule = {
   href: (id) => `/dashboard/content/editor/${id}`,
 };
 
+// ─── suggest_draft_changes: recorded, no Undo (the person accepts or rejects them) ─
+
+const suggestDraftChanges: UndoRule = {
+  ...NO_UNDO,
+  targetType: 'content_draft',
+  async record(input): Promise<WriteRecord> {
+    const { draft_id: id } = asObject(input);
+    const title = typeof id === 'string' ? await draftTitle(id).catch(() => null) : null;
+    return {
+      target: { type: 'content_draft', id: textOf(id) },
+      summaryParams: { title: summaryValue(title) },
+      undo: null,
+    };
+  },
+  href: (id) => `/dashboard/content/editor/${id}`,
+};
+
 // ─── run_site_audit: recorded, no Undo (results stay, quota used) ───────────
 
 const runSiteAudit: UndoRule = {
@@ -149,6 +166,8 @@ export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   publish_cms: pushCmsDraft,
   // A page taken down (PR 10): recorded the same way, its CMS from the output; publish it again to undo.
   unpublish_cms: pushCmsDraft,
+  // Suggestions in the editor beside the chat (W4-14): the page changes only on the person's Accept.
+  suggest_draft_changes: suggestDraftChanges,
   run_site_audit: runSiteAudit,
   run_agent: runAgent,
   generate_image: generateImage,

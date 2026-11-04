@@ -12,6 +12,7 @@ import type {
   ChatGeneralAccess,
   ChatGeneralSettings,
   GeneralPatch,
+  NotifyChannel,
 } from '@/lib/chat/general-settings';
 import { PAGE_OPENS } from '@/lib/chat/page-open';
 import type { ChatMode } from '@/lib/chat/precedence';
@@ -29,6 +30,7 @@ import { useFocusLabel } from './focus-picker';
  */
 
 const MODES: ChatMode[] = ['ask_first', 'auto', 'full_auto'];
+const CHANNELS: NotifyChannel[] = ['inbox_email', 'inbox', 'inbox_slack'];
 /** general-settings.ts ANSWER_LANGUAGES, in the order the list shows them. */
 const LANGUAGES: AnswerLanguage[] = ['en', 'tr', 'de', 'fr', 'es', 'it', 'pt', 'nl'];
 
@@ -252,9 +254,31 @@ export function ChatSettings({
             </select>
           </Row>
 
-          {/* "Notify me when an agent needs me" and "Show Thought for N s" are
-              kept on the person but nothing reads them yet, so they stay hidden
-              until they're wired up; their saved values and schema stay. */}
+          {/* "Show Thought for N s" is kept on the person but nothing reads it
+              yet, so it stays hidden until it's wired up; its saved value and
+              schema stay. */}
+
+          <Row label={t('notify.label')} note={t('notify.note')}>
+            <select
+              data-action="chatSettings.notifyChannel"
+              aria-label={t('notify.label')}
+              value={settings.notifyVia}
+              onChange={(event) => void change({ notifyVia: event.target.value as NotifyChannel })}
+              className={SELECT}
+            >
+              {CHANNELS.map((channel) => (
+                <option
+                  key={channel}
+                  value={channel}
+                  disabled={channel === 'inbox_slack' && !access.slack}
+                >
+                  {channel === 'inbox_slack' && !access.slack
+                    ? t('notify.slackSoon')
+                    : t(`notify.${channel}`)}
+                </option>
+              ))}
+            </select>
+          </Row>
 
           <Row label={t('everyPage.label')} note={t('everyPage.note')}>
             <Switch
