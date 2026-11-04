@@ -62,7 +62,11 @@ const adminsOnly: Record<TeamRole, RoleCell> = {
 /**
  * CHAT-20 §4's role matrix, as the Roles & access page groups it (mockup
  * #g-roles). The live Team roles; RLS lets Admins and Managers write and
- * the others read, and Chat follows the same split.
+ * the others read, and Chat follows the same split. Two things the app
+ * does differently (role model A, 2026-11-03): daily work (the Action
+ * Center, writing in the Content Editor, running a Site Audit) is every
+ * member's, and running tracking, volume analyses and AI generation, which
+ * spend the plan, is Admins' and Managers'.
  */
 export const ROLE_MATRIX: readonly RoleMatrixGroup[] = [
   {
@@ -71,12 +75,16 @@ export const ROLE_MATRIX: readonly RoleMatrixGroup[] = [
       { key: 'readApp', class: 'read', cells: every('yes') },
       { key: 'askChat', class: 'read', cells: every('yes') },
       { key: 'personal', class: 'write', cells: every('yes') },
+      { key: 'dailyWork', class: 'write', cells: every('yes') },
     ],
   },
   {
     key: 'workspace',
     rows: [
       { key: 'actions', class: 'write', cells: adminsAndManagers },
+      { key: 'tracking', class: 'write', cells: adminsAndManagers },
+      { key: 'volumes', class: 'write', cells: adminsAndManagers },
+      { key: 'generate', class: 'write', cells: adminsAndManagers },
       { key: 'drafts', class: 'write', cells: adminsAndManagers },
       { key: 'agents', class: 'write', cells: adminsAndManagers },
       {
