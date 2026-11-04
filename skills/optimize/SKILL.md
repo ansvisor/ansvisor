@@ -33,7 +33,7 @@ Use `list_brands` only when no brand is selected, and `open_page` to link the Co
 1. Score the page against the cited pages: does it answer the prompts directly, cover the fan-outs, carry structured data, and pass its audit checks?
 2. List the changes, most impact first: what to change, where, and why AI would cite it after.
 3. Write the changed passages, ready to paste, and the structured data as code.
-4. When the person wants a draft changed, use `update_draft`; for a live page, save the new version with `create_draft`. The app asks them first when it should.
+4. When the person wants a draft changed, use `update_draft`; for a live page, save the new version with `create_draft`. The app asks them first when it should. In an agent's run nobody is there to ask: always save it with its tool, and the app holds it for approval where the agent's mode needs it.
 
 ## Output
 

@@ -171,6 +171,13 @@ describe('entryProblems', () => {
       'Agent_Center: the file name is not kebab-case',
     );
   });
+
+  it('takes a known switch in requires, and only a known one', () => {
+    expect(entryProblems(entry({ requires: 'auto_go_live' }), pageExists)).toEqual([]);
+    expect(entryProblems(entry({ requires: 'beta' }), pageExists)).toEqual([
+      'agent-center: requires must be one of auto_go_live',
+    ]);
+  });
 });
 
 describe('parseEntryFile and approvedEntry', () => {
@@ -210,6 +217,23 @@ describe('parseEntryFile and approvedEntry', () => {
       published: '2026-11-03',
       lines: parsed.lines,
     });
+  });
+
+  it('keeps the switch an entry requires, and none when it names none', () => {
+    const gated = parseEntryFile(
+      'whats-new/agent-center.md',
+      text.replace('plan_mode: hide', 'plan_mode: hide\nrequires: auto_go_live'),
+    );
+    expect(approvedEntry(gated, pageExists)?.requires).toBe('auto_go_live');
+    expect(approvedEntry(parseEntryFile('whats-new/a.md', text), pageExists)).not.toHaveProperty(
+      'requires',
+    );
+  });
+
+  it('gates the auto go-live entry behind its switch', () => {
+    expect(WHATS_NEW_ENTRIES.find((e) => e.slug === 'agents-publish-on-their-own')?.requires).toBe(
+      'auto_go_live',
+    );
   });
 
   it('keeps out an entry not approved, or not within the rules', () => {

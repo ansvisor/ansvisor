@@ -44,6 +44,8 @@ export interface AccessRequest {
   toolKey: string | null;
   ruleKind: (typeof ACCESS_REQUEST_RULES)[number];
   ruleDetail: string;
+  /** The line an approval saves (a Manager's Workspace memory request); null for any other. */
+  draftedText: string | null;
   status: AccessRequestStatus;
   createdAt: string;
   decidedAt: string | null;

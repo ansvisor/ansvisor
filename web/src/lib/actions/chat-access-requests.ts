@@ -1,6 +1,5 @@
 'use server';
 
-import { createHash } from 'crypto';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
@@ -9,14 +8,17 @@ import type { TeamRole } from '@/components/providers/role-provider';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { parseTeamRole } from '@/lib/chat/precedence';
 import {
-  ACCESS_REQUEST_RULES,
-  MAX_DRAFTED_CHANGE_CHARS,
-  MAX_PENDING_REQUESTS,
-  MAX_REQUESTS_PER_DAY,
   REQUEST_HISTORY_DAYS,
   type AccessRequest,
   type AccessRequestStatus,
 } from '@/lib/chat/access-requests';
+import {
+  draftedMemoryText,
+  isServerDraftedChange,
+  sendAccessRequest,
+  type AccessRequestInput,
+  type RequestAccessResult,
+} from '@/lib/chat/access-request-store';
 
 /**
  * "Ask your Admin" (CHAT-20 §4c, registry row 80a `access.request`), behind
@@ -52,109 +54,18 @@ async function member(): Promise<Member | null> {
   return { userId: user.id, organizationId, role };
 }
 
-const requestSchema = z.object({
-  asked: z.string().trim().min(1).max(500),
-  ruleKind: z.enum(ACCESS_REQUEST_RULES),
-  ruleDetail: z.string().trim().max(500).default(''),
-  toolKey: z
-    .string()
-    .regex(/^[a-z][A-Za-z0-9]{1,63}$/)
-    .nullish(),
-  // guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
-  brandId: z.guid().nullish(),
-  conversationId: z.guid().nullish(),
-  draftedChange: z
-    .record(z.string(), z.unknown())
-    .nullish()
-    .refine(
-      (change) => change == null || JSON.stringify(change).length <= MAX_DRAFTED_CHANGE_CHARS,
-    ),
-});
+export type { AccessRequestInput, RequestAccessResult };
 
-export type AccessRequestInput = z.input<typeof requestSchema>;
-
-export type RequestAccessResult =
-  | { ok: true; id: string }
-  | {
-      ok: false;
-      reason: 'chat_off' | 'admin' | 'invalid' | 'too_many' | 'daily_limit' | 'already_today';
-    };
-
-/** The fingerprint of an asked change: one request a day for the same one. */
-function askedHash(toolKey: string | null, asked: string): string {
-  return createHash('sha256')
-    .update(`${toolKey ?? ''}\n${asked.toLowerCase().replace(/\s+/g, ' ')}`)
-    .digest('hex');
-}
-
-/** Sends a request to the workspace's Admins. Admins don't need to ask. */
+/**
+ * Sends a request to the workspace's Admins. Admins don't need to ask. A
+ * drafted Workspace memory line isn't the browser's to send: an Admin's
+ * approval saves it as is, so only the memory store makes one.
+ */
 export async function requestAccess(input: AccessRequestInput): Promise<RequestAccessResult> {
   const who = await member();
   if (!who) return { ok: false, reason: 'chat_off' };
-  if (who.role === 'admin') return { ok: false, reason: 'admin' };
-  const parsed = requestSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, reason: 'invalid' };
-  const req = parsed.data;
-
-  const [pending, sentToday, brand, conversation] = await Promise.all([
-    supabaseAdmin
-      .from('chat_access_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('requester_id', who.userId)
-      .eq('status', 'pending'),
-    // The table's requested_on: today in UTC.
-    supabaseAdmin
-      .from('chat_access_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('requester_id', who.userId)
-      .eq('requested_on', new Date().toISOString().slice(0, 10)),
-    req.brandId
-      ? supabaseAdmin
-          .from('brands')
-          .select('id')
-          .eq('id', req.brandId)
-          .eq('organization_id', who.organizationId)
-          .maybeSingle()
-      : null,
-    req.conversationId
-      ? supabaseAdmin
-          .from('chat_conversations')
-          .select('id')
-          .eq('id', req.conversationId)
-          .eq('user_id', who.userId)
-          .eq('organization_id', who.organizationId)
-          .is('deleted_at', null)
-          .maybeSingle()
-      : null,
-  ]);
-  if (pending.error) throw new Error(pending.error.message);
-  if ((pending.count ?? 0) >= MAX_PENDING_REQUESTS) return { ok: false, reason: 'too_many' };
-  if (sentToday.error) throw new Error(sentToday.error.message);
-  if ((sentToday.count ?? 0) >= MAX_REQUESTS_PER_DAY) return { ok: false, reason: 'daily_limit' };
-
-  const toolKey = req.toolKey ?? null;
-  const { data, error } = await supabaseAdmin
-    .from('chat_access_requests')
-    .insert({
-      organization_id: who.organizationId,
-      requester_id: who.userId,
-      // A brand or chat that isn't theirs is dropped, not trusted.
-      brand_id: brand?.data ? req.brandId! : null,
-      conversation_id: conversation?.data ? req.conversationId! : null,
-      asked: req.asked,
-      asked_hash: askedHash(toolKey, req.asked),
-      tool_key: toolKey,
-      rule_kind: req.ruleKind,
-      rule_detail: req.ruleDetail,
-      drafted_change: (req.draftedChange ?? null) as never,
-    })
-    .select('id')
-    .single();
-  if (error) {
-    if (error.code === '23505') return { ok: false, reason: 'already_today' };
-    throw new Error(error.message);
-  }
-  return { ok: true, id: data.id };
+  if (isServerDraftedChange(input?.draftedChange)) return { ok: false, reason: 'invalid' };
+  return sendAccessRequest(who, input);
 }
 
 /** Withdraws the person's own pending request. False when it isn't one any more. */
@@ -173,18 +84,29 @@ export async function withdrawAccessRequest(id: string): Promise<boolean> {
   return (data ?? []).length > 0;
 }
 
+/** What an Admin's decision did. */
+export type DecideAccessResult =
+  | { ok: true }
+  /** Another Admin decided it first, or the requester withdrew it. */
+  | { ok: false; reason: 'already_decided' }
+  /** An approved Workspace memory line memory can't keep now: the request waits again. */
+  | { ok: false; reason: 'not_saved'; message: string };
+
 /**
  * An Admin approves or dismisses a pending request of their workspace. The
- * first Admin to act decides it: false when another already had.
+ * first Admin to act decides it. An approved request for a Workspace memory
+ * line saves it (CHAT-14 item 25), checked again; when it can't be saved
+ * the request is pending again and the Admin is told why, so an approval
+ * never shows for a line that isn't there.
  */
 export async function decideAccessRequest(
   id: string,
   decision: 'approved' | 'rejected',
-): Promise<boolean> {
+): Promise<DecideAccessResult> {
   const who = await member();
   if (!who || who.role !== 'admin') throw new Error('Only Admins decide access requests');
   if (!z.guid().safeParse(id).success || !['approved', 'rejected'].includes(decision)) {
-    return false;
+    return { ok: false, reason: 'already_decided' };
   }
   const { data, error } = await supabaseAdmin
     .from('chat_access_requests')
@@ -192,9 +114,41 @@ export async function decideAccessRequest(
     .eq('id', id)
     .eq('organization_id', who.organizationId)
     .eq('status', 'pending')
-    .select('id');
+    .select('id, requester_id, tool_key, drafted_change');
   if (error) throw new Error(error.message);
-  return (data ?? []).length > 0;
+  const decided = (data ?? []) as {
+    requester_id: string;
+    tool_key: string | null;
+    drafted_change: unknown;
+  }[];
+  if (decided.length === 0) return { ok: false, reason: 'already_decided' };
+  if (decision !== 'approved') return { ok: true };
+
+  // Back to pending, as this Admin's approval left it: the line wasn't saved.
+  const reopen = async () => {
+    const { error: reopenError } = await supabaseAdmin
+      .from('chat_access_requests')
+      .update({ status: 'pending', decided_by: null, decided_at: null })
+      .eq('id', id)
+      .eq('organization_id', who.organizationId)
+      .eq('status', 'approved')
+      .eq('decided_by', who.userId);
+    if (reopenError) throw new Error(reopenError.message);
+  };
+  // Loaded only on an approval: the memory store is a large module.
+  const { applyMemoryRequest } = await import('@/lib/chat/memory/store');
+  let applied: Awaited<ReturnType<typeof applyMemoryRequest>>;
+  try {
+    applied = await applyMemoryRequest(who, decided[0]);
+  } catch (err) {
+    await reopen();
+    throw err;
+  }
+  if (applied && !applied.ok) {
+    await reopen();
+    return { ok: false, reason: 'not_saved', message: applied.refusal.message };
+  }
+  return { ok: true };
 }
 
 /** Why a read gave nothing: Chat is off for the person, or the database didn't answer. */
@@ -228,7 +182,7 @@ async function readAccessRequests(): Promise<{
   let query = supabaseAdmin
     .from('chat_access_requests')
     .select(
-      'id, requester_id, asked, tool_key, rule_kind, rule_detail, status, created_at, decided_at',
+      'id, requester_id, asked, tool_key, rule_kind, rule_detail, drafted_change, status, created_at, decided_at',
     )
     .eq('organization_id', who.organizationId)
     .or(`status.eq.pending,created_at.gte."${since}"`)
@@ -258,6 +212,7 @@ async function readAccessRequests(): Promise<{
     toolKey: row.tool_key,
     ruleKind: row.rule_kind as AccessRequest['ruleKind'],
     ruleDetail: row.rule_detail,
+    draftedText: draftedMemoryText(row.tool_key, row.drafted_change),
     status: row.status as AccessRequestStatus,
     createdAt: row.created_at,
     decidedAt: row.decided_at,

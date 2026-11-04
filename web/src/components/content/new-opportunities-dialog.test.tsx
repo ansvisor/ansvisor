@@ -9,6 +9,9 @@ import { NewOpportunitiesDialog } from './new-opportunities-dialog';
   true;
 
 vi.mock('@/lib/actions/topic', () => ({ getTopics: vi.fn(async () => []) }));
+// What New can still write for: unknown (the read failed) unless a test sets it.
+const getOpportunityAvailability = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/content', () => ({ getOpportunityAvailability }));
 vi.mock('@/lib/actions/tracking', () => ({
   getBrandPrompts: vi.fn(async () => [{ id: 'p1', text: 'best crm for agencies' }]),
 }));
@@ -44,6 +47,7 @@ vi.mock('@/components/ui/combobox', () => ({
 }));
 
 const onSubmit = vi.fn();
+const onOpenExisting = vi.fn();
 let container: HTMLDivElement;
 let root: Root;
 
@@ -58,6 +62,7 @@ async function render() {
           max={3}
           remaining={8}
           onSubmit={onSubmit}
+          onOpenExisting={onOpenExisting}
         />
       </NextIntlClientProvider>,
     );
@@ -81,6 +86,8 @@ beforeEach(() => {
   document.body.appendChild(container);
   root = createRoot(container);
   onSubmit.mockReset().mockResolvedValue(true);
+  onOpenExisting.mockReset();
+  getOpportunityAvailability.mockReset().mockRejectedValue(new Error('offline'));
 });
 
 afterEach(() => {
@@ -120,5 +127,53 @@ describe('New content opportunities', () => {
     await click(button('Let Ansvisor choose'));
     expect(button('Generate 3')).toBeDefined();
     expect(text()).not.toContain('One per prompt.');
+  });
+
+  const availability = (open: number, over = {}) => ({
+    needs: 11,
+    open,
+    covered: 11 - open,
+    noAnswers: 0,
+    topics: {},
+    promptOpportunity: {},
+    ...over,
+  });
+
+  it('asks for no more than the needs that have no opportunity yet', async () => {
+    getOpportunityAvailability.mockResolvedValue(availability(1));
+    await render();
+    expect(text()).toContain('1 of 11 needs has no opportunity yet.');
+    expect(button('Generate 1')).toBeDefined();
+    expect(button('More')!.disabled).toBe(true);
+    expect(text()).toContain('max 1');
+  });
+
+  it("doesn't send a request that would write nothing", async () => {
+    getOpportunityAvailability.mockResolvedValue(availability(0));
+    await render();
+    expect(text()).toContain(
+      'Every need already has an opportunity. Add prompts for new needs, or use Another angle on an opportunity.',
+    );
+    expect(button('Generate 1')!.disabled).toBe(true);
+    expect(text()).not.toContain('max 0');
+    expect(text()).not.toContain('Uses 1');
+  });
+
+  it("offers the open opportunity a prompt's need already has", async () => {
+    getOpportunityAvailability.mockResolvedValue(
+      availability(2, { promptOpportunity: { p1: 'o1' } }),
+    );
+    await render();
+    await click(button('Prompt'));
+    const select = document.querySelector<HTMLSelectElement>('[data-combobox]')!;
+    await act(async () => {
+      select.value = 'p1';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(text()).toContain("This prompt's need already has an opportunity.");
+    expect(button('Generate 1')!.disabled).toBe(true);
+    await click(button('Open existing'));
+    expect(onOpenExisting).toHaveBeenCalledWith('o1');
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
