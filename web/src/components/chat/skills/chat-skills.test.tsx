@@ -369,10 +369,11 @@ describe('ChatSkills', () => {
     await click(container.querySelector<HTMLElement>('[data-action="skills.newSkill"]')!);
     const items = all('[role="menuitem"]', document.body);
     expect(items.map((item) => item.textContent)).toEqual([
+      'Create in Chat',
       'Upload a SKILL.md or .zip',
       'Import from GitHub',
     ]);
-    await click(items[1]);
+    await click(items[2]);
     const dialog = document.querySelector<HTMLElement>('[data-slot="import-skill"]')!;
     expect(dialog.textContent).toContain('Import a skill from GitHub');
     const input = dialog.querySelector<HTMLInputElement>('[data-action="skills.importUrl"]')!;
@@ -385,6 +386,15 @@ describe('ChatSkills', () => {
     });
     await click(dialog.querySelector<HTMLElement>('[data-action="skills.importSubmit"]')!);
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/skills/new-1');
+  });
+
+  it('creates a skill in Chat from New skill: Chat Home with "Create a skill that " in the box (W3-08)', async () => {
+    await render();
+    await click(container.querySelector<HTMLElement>('[data-action="skills.newSkill"]')!);
+    await click(all('[data-action="skills.create"]', document.body)[0]);
+    expect(nav.push).toHaveBeenCalledWith(
+      `/dashboard/chat?${new URLSearchParams({ compose: 'Create a skill that ' })}`,
+    );
   });
 
   it('offers New skill only to those who may save skills', async () => {

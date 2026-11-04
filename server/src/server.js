@@ -96,6 +96,7 @@ import { startModelPriceSync } from './lib/model-prices.js';
 import { startDailySuggestions } from './lib/chat-suggestions/job.js';
 import { startImpactLedger } from './lib/impact-ledger/job.js';
 import { startFollowUpChecks } from './lib/impact-ledger/follow-up.js';
+import { startReportCardQueue } from './lib/report-card/queue.js';
 
 // Before anything starts: a stray rejection is logged, not a crash.
 handleProcessErrors();
@@ -927,6 +928,11 @@ server.listen(PORT, async () => {
     // impact ledger only (no engine query, no model call).
     startFollowUpChecks();
   }
+
+  // The free report cards from www.ansvisor.com's form (lib/report-card):
+  // Ansvisor's own marketing, so the cloud server's only. Every minute the
+  // due cards start within the day's cap and the month's budget.
+  if (isCloud()) startReportCardQueue();
 
   if (!isCloud()) {
     const schedule = process.env.DAILY_CRON_SCHEDULE || '0 6 * * *';

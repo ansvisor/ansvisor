@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   RESERVE_TIMEOUT_MS,
   fitChatUnits,
+  fitImages,
   meteredAs,
+  readImageShares,
   reserveChatStep,
+  reserveImages,
   type ChatBudgetStep,
   type ChatStepBudget,
   type ChatStepReservation,
@@ -363,5 +366,115 @@ describe('fitChatUnits (CHAT-04 item 17a)', () => {
     expect(await fitChatUnits(job())).toEqual({ ok: false, refusal: 'unavailable' });
     answers.push({ status: 200, body: { success: true, fits: 'many' } });
     expect(await fitChatUnits(job())).toEqual({ ok: false, refusal: 'unavailable' });
+  });
+});
+
+describe('an image request (W4-07)', () => {
+  const IMAGE = 'google/gemini-3.1-flash-lite-image';
+  const job = (over = {}) => ({
+    organizationId: ORG,
+    runId: RUN,
+    stepId: STEP,
+    model: IMAGE,
+    images: 4,
+    source: 'ansvisor' as const,
+    ...over,
+  });
+
+  it('holds its images, then charges exactly the cost the provider reported', async () => {
+    answers = [{ status: 201, body: { success: true, usageId: USAGE } }];
+    const held = await reserveImages(job());
+    if (!held.ok) throw new Error('not held');
+    expect(calls[0]).toMatchObject({
+      path: 'reserve',
+      body: {
+        orgId: ORG,
+        runId: RUN,
+        stepId: STEP,
+        feature: 'image',
+        model: IMAGE,
+        images: 4,
+        ownKey: false,
+      },
+      auth: 'Bearer shh',
+    });
+    expect(calls[0].body).not.toHaveProperty('inputTokens');
+    await held.budget.charge({ produced: 4, costUsd: 0.1564 });
+    expect(calls[1]).toMatchObject({
+      path: 'charge',
+      body: { usageId: USAGE, model: IMAGE, usage: {}, images: { produced: 4, costUsd: 0.1564 } },
+    });
+    // Settled once.
+    await held.budget.charge({ produced: 4, costUsd: 0.1564 });
+    await held.budget.release();
+    expect(calls).toHaveLength(2);
+  });
+
+  it('charges each image made at its price when the provider said no cost, and lets a hold go that made none', async () => {
+    answers = [{ status: 201, body: { success: true, usageId: USAGE } }];
+    const held = await reserveImages(job());
+    if (!held.ok) throw new Error('not held');
+    await held.budget.charge({ produced: 3, costUsd: null });
+    expect(calls[1].body.images).toEqual({ produced: 3 });
+
+    answers = [{ status: 201, body: { success: true, usageId: USAGE } }];
+    const none = await reserveImages(job({ source: 'own' }));
+    if (!none.ok) throw new Error('not held');
+    expect(calls[2].body.ownKey).toBe(true);
+    await none.budget.release();
+    expect(calls[3]).toMatchObject({ path: 'release', body: { usageId: USAGE } });
+  });
+
+  it('says why it can’t start: the limit, or no answer', async () => {
+    answers = [{ status: 429, body: { success: false, error: 'ai_limit', trial: false } }];
+    expect(await reserveImages(job())).toMatchObject({ ok: false, refusal: 'ai_limit' });
+    answers = [
+      () => {
+        throw new Error('down');
+      },
+    ];
+    expect(await reserveImages(job())).toMatchObject({
+      ok: false,
+      refusal: 'unavailable',
+      retryable: true,
+    });
+  });
+
+  it('asks how many images fit, per image, and every one fits on the own key', async () => {
+    answers = [{ status: 200, body: { success: true, fits: 1, limit: 'month' } }];
+    expect(await fitImages(job())).toEqual({ ok: true, fits: 1, limit: 'month' });
+    expect(calls[0]).toMatchObject({ path: 'fit', body: { model: IMAGE, image: true, units: 4 } });
+    expect(await fitImages(job({ source: 'own' }))).toEqual({ ok: true, fits: 4, limit: 'month' });
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe('readImageShares (W4-07)', () => {
+  const IMAGE = 'google/gemini-3.1-flash-lite-image';
+  const MINI = 'openai/gpt-5-image-mini';
+
+  it('reads each model’s share of the monthly limit, a percent, never a dollar', async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json({ success: true, unlimited: false, shares: [{ model: IMAGE, percent: 0.77 }] }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await readImageShares(ORG, [IMAGE, MINI])).toEqual([
+      { model: IMAGE, percent: 0.77 },
+      { model: MINI, percent: null },
+    ]);
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain('/api/internal/chat/budget/image-shares?');
+    expect(new URL(url).searchParams.get('models')).toBe(`${IMAGE},${MINI}`);
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer shh' });
+  });
+
+  it('answers no shares when the API doesn’t answer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('down');
+      }),
+    );
+    expect(await readImageShares(ORG, [IMAGE])).toEqual([{ model: IMAGE, percent: null }]);
   });
 });
