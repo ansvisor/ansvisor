@@ -104,11 +104,9 @@ describe('ChatSettings', () => {
     expect(action('policy.open')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
   });
 
-  it('hides the settings nothing reads yet: answer language, notifications', async () => {
+  it('hides the setting nothing reads yet: notifications', async () => {
     await render();
-    expect(action('chatSettings.answerLanguage')).toHaveLength(0);
     expect(action('chatSettings.notifyChannel')).toHaveLength(0);
-    expect(host.textContent).not.toContain('Answer language');
     expect(host.textContent).not.toContain('Notify me when an agent needs me');
   });
 
@@ -120,6 +118,32 @@ describe('ChatSettings', () => {
     await act(async () => toggle().click());
     expect(saved.patches).toEqual([{ showThought: false }]);
     expect(toggle().getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('offers the answer languages Chat reads, "Same as my question" first, and keeps a pick at once', async () => {
+    await render();
+    const select = action('chatSettings.answerLanguage')[0] as HTMLSelectElement;
+    expect([...select.options].map((option) => option.textContent)).toEqual([
+      'Same as my question',
+      'English',
+      'Türkçe',
+      'Deutsch',
+      'Français',
+      'Español',
+      'Italiano',
+      'Português',
+      'Nederlands',
+    ]);
+    expect(select.value).toBe('');
+    await act(async () => {
+      select.value = 'tr';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await act(async () => {
+      select.value = '';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(saved.patches).toEqual([{ answerLanguage: 'tr' }, { answerLanguage: null }]);
   });
 
   it('keeps each pick at once', async () => {
