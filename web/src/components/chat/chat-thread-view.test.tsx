@@ -291,6 +291,23 @@ describe('ChatThreadView', () => {
     expect(container.querySelector('ol')).toBeNull();
   });
 
+  it('opens the plans when the run API says the chat is on the demo brand', async () => {
+    gate.openUpgrade.mockClear();
+    vi.mocked(toast.error).mockClear();
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return Response.json(
+        { ok: false, failure: 'subscription', error: 'demo_brand', code: 'demo_brand' },
+        { status: 402 },
+      );
+    });
+    await render();
+    await type('And on Gemini?');
+    await enter();
+    expect(gate.openUpgrade).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('steers a run under way: Stop first, then the text as the next message', async () => {
     const thread: ChatThread = {
       conversationId: CHAT,
