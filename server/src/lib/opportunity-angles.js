@@ -9,6 +9,10 @@
  * done or dismissed, or has been open for ANGLE_AFTER_DAYS. A need dismissed
  * as "The topic doesn't matter to us" never gets one.
  *
+ * The nightly run does the same, more sparingly: on a night with no need
+ * left to write for, at most NIGHTLY_ANGLES, on the need with the most
+ * demand whose opportunity has been done for ANGLE_AFTER_DAYS.
+ *
  * Pure on purpose: the generator and the New dialog's availability read the
  * rows, this picks.
  */
@@ -21,6 +25,9 @@ export const STILL_LOW_VISIBILITY = 20;
 
 /** How long an open opportunity has had its chance before its need may get another angle. */
 export const ANGLE_AFTER_DAYS = 30;
+
+/** Angles one nightly run may write, only when no need is left without an opportunity. */
+export const NIGHTLY_ANGLES = 1;
 
 const DAY_MS = 86_400_000;
 
@@ -45,13 +52,17 @@ function openSince(row) {
   return times.length ? Math.max(...times) : NaN;
 }
 
-/** Whether this opportunity's work has had its chance, so its need may get another angle. */
-function hadItsChance(row, now) {
+/**
+ * Whether this opportunity's work has had its chance, so its need may get
+ * another angle. At night only work done ANGLE_AFTER_DAYS ago counts.
+ */
+function hadItsChance(row, now, nightly) {
+  const days = (at) => (now - at) / DAY_MS;
+  if (nightly) return row.status === 'done' && days(Date.parse(row.updated_at)) >= ANGLE_AFTER_DAYS;
   if (row.status === 'done') return true;
   if (row.status === 'dismissed') return row.dismissReason !== 'not_relevant';
   if (!OPEN_OPPORTUNITY_STATUSES.includes(row.status)) return false;
-  const since = openSince(row);
-  return Number.isFinite(since) && now - since >= ANGLE_AFTER_DAYS * DAY_MS;
+  return days(openSince(row)) >= ANGLE_AFTER_DAYS;
 }
 
 /**
@@ -71,29 +82,30 @@ function answeredElsewhere(c, own, openRows) {
 }
 
 /**
- * Covered needs a request may write another angle on, best score first:
- * with answers, the brand still under STILL_LOW_VISIBILITY, and every
- * opportunity on the need past its chance (hadItsChance), and no other open
- * opportunity in `openRows` answering it (answeredElsewhere). Each comes with
- * the opportunity it's an angle on: the newest on the need.
+ * Covered needs a request may write another angle on, best score first (at
+ * night, most demand first): with answers, the brand still under
+ * STILL_LOW_VISIBILITY, every opportunity on the need past its chance
+ * (hadItsChance), and no other open opportunity in `openRows` answering it
+ * (answeredElsewhere). Each comes with the opportunity it's an angle on: the
+ * newest on the need.
  *
- * @param {{ id: string, score: number, metrics: { tested: number, visibility: number } }[]} candidates
- * @param {{ id: string, title: string, status: string, created_at?: string, reopenedAt?: string|null, dismissReason?: string|null, decision?: string|null, cluster_id: string, related_cluster_ids?: string[] }[]} rows
- * @param {{ covered: Set<string>, inFocus?: (c: object) => boolean, now?: number, openRows?: object[] }} opts
+ * @param {{ id: string, score: number, metrics: { tested: number, visibility: number, demand?: number } }[]} candidates
+ * @param {{ id: string, title: string, status: string, created_at?: string, updated_at?: string, reopenedAt?: string|null, dismissReason?: string|null, decision?: string|null, cluster_id: string, related_cluster_ids?: string[] }[]} rows
+ * @param {{ covered: Set<string>, inFocus?: (c: object) => boolean, now?: number, nightly?: boolean, openRows?: object[] }} opts
  *   `openRows`: every opportunity of the brand, as loadOpportunityBaskets reads them
  * @returns {(object & { angleOf: { id: string, title: string, decision: string|null } })[]}
  */
 export function angleCandidates(
   candidates,
   rows,
-  { covered, inFocus = () => true, now = Date.now(), openRows = [] },
+  { covered, inFocus = () => true, now = Date.now(), nightly = false, openRows = [] },
 ) {
   const picked = [];
   for (const c of candidates) {
     if (!covered.has(c.id) || !inFocus(c)) continue;
     if (!(c.metrics.tested > 0) || !(c.metrics.visibility < STILL_LOW_VISIBILITY)) continue;
     const on = onCluster(rows, c.id);
-    if (!on.length || !on.every((r) => hadItsChance(r, now))) continue;
+    if (!on.length || !on.every((r) => hadItsChance(r, now, nightly))) continue;
     if (answeredElsewhere(c, new Set(on.map((r) => r.id)), openRows)) continue;
     const latest = [...on].sort(
       (a, b) => (Date.parse(b.created_at) || 0) - (Date.parse(a.created_at) || 0),
@@ -103,7 +115,27 @@ export function angleCandidates(
       angleOf: { id: latest.id, title: latest.title, decision: latest.decision ?? null },
     });
   }
-  return picked.sort((a, b) => b.score - a.score);
+  return nightly
+    ? picked.sort((a, b) => (b.metrics.demand || 0) - (a.metrics.demand || 0))
+    : picked.sort((a, b) => b.score - a.score);
+}
+
+/** Hours after a nightly angle in which the nightly run writes no other. */
+export const NIGHTLY_ANGLE_GAP_HOURS = 20;
+
+/**
+ * Whether the nightly run wrote another angle lately (NIGHTLY_ANGLE_GAP_HOURS):
+ * a system opportunity marked as an angle (source_data.alternativeOf).
+ *
+ * @param {{ source?: string, created_at?: string, source_data?: { alternativeOf?: unknown } }[]} rows
+ */
+export function recentNightlyAngle(rows, now = Date.now()) {
+  return (rows || []).some(
+    (r) =>
+      r.source === 'system' &&
+      !!r.source_data?.alternativeOf &&
+      now - Date.parse(r.created_at) < NIGHTLY_ANGLE_GAP_HOURS * 3_600_000,
+  );
 }
 
 /**

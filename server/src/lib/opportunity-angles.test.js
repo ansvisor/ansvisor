@@ -3,9 +3,12 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   ANGLE_AFTER_DAYS,
+  NIGHTLY_ANGLES,
+  NIGHTLY_ANGLE_GAP_HOURS,
   STILL_LOW_VISIBILITY,
   angleCandidates,
   angleLine,
+  recentNightlyAngle,
 } from './opportunity-angles.js';
 
 const now = Date.parse('2026-11-03T12:00:00Z');
@@ -94,6 +97,38 @@ describe('angleCandidates', () => {
   });
 });
 
+describe('angleCandidates at night', () => {
+  const nightly = (candidates, rows) => pick(candidates, rows, { nightly: true });
+
+  it('takes only needs whose opportunity has been done for 30 days, most demand first', () => {
+    const candidates = [
+      cand('c1', { metrics: { tested: 3, visibility: 5, demand: 900 } }),
+      cand('c2', { metrics: { tested: 3, visibility: 5, demand: 4000 } }),
+      cand('c3', { metrics: { tested: 3, visibility: 5, demand: 9000 } }),
+      cand('c4', { metrics: { tested: 3, visibility: 5, demand: 9500 } }),
+    ];
+    const rows = [
+      row('o1', 'c1', { updated_at: daysAgo(ANGLE_AFTER_DAYS) }),
+      row('o2', 'c2', { updated_at: daysAgo(45) }),
+      row('o3', 'c3', { updated_at: daysAgo(ANGLE_AFTER_DAYS - 1) }),
+      row('o4', 'c4', { status: 'dismissed', updated_at: daysAgo(60) }),
+    ];
+    expect(nightly(candidates, rows)).toEqual(['c2', 'c1']);
+  });
+
+  it('leaves out a need still open, however old, and one the brand is seen for', () => {
+    const candidates = [
+      cand('c1'),
+      cand('c2', { metrics: { tested: 3, visibility: 35, demand: 100 } }),
+    ];
+    const rows = [
+      row('o1', 'c1', { status: 'new', created_at: daysAgo(200), updated_at: daysAgo(200) }),
+      row('o2', 'c2', { updated_at: daysAgo(90) }),
+    ];
+    expect(nightly(candidates, rows)).toEqual([]);
+  });
+});
+
 describe('angleCandidates, against the same run and the brand’s other opportunities', () => {
   it('counts an opportunity reopened in this run, or lately, from its reopening', () => {
     const candidates = [cand('c1'), cand('c2'), cand('c3')];
@@ -135,6 +170,40 @@ describe('angleCandidates, against the same run and the brand’s other opportun
   });
 });
 
+describe('recentNightlyAngle', () => {
+  const angle = (over) => ({
+    source: 'system',
+    created_at: daysAgo(0.5),
+    source_data: { alternativeOf: { id: 'o1', title: 'A' } },
+    ...over,
+  });
+
+  it('sees a system angle written within the last NIGHTLY_ANGLE_GAP_HOURS', () => {
+    expect(NIGHTLY_ANGLE_GAP_HOURS).toBe(20);
+    expect(recentNightlyAngle([angle()], now)).toBe(true);
+    expect(recentNightlyAngle([angle({ created_at: daysAgo(1) })], now)).toBe(false);
+  });
+
+  it("ignores a person's own angle and an opportunity that isn't one", () => {
+    expect(recentNightlyAngle([angle({ source: 'manual' })], now)).toBe(false);
+    expect(recentNightlyAngle([angle({ source_data: {} })], now)).toBe(false);
+    expect(recentNightlyAngle([], now)).toBe(false);
+  });
+});
+
+describe('the nightly run', () => {
+  const worker = readFileSync(
+    fileURLToPath(new URL('../workers/tracking-worker.js', import.meta.url)),
+    'utf8',
+  );
+
+  it('is the only run after tracking that may write an angle', () => {
+    expect(worker).toContain(
+      "generateContentOpportunities(brandId, { nightly: source === 'cron' })",
+    );
+  });
+});
+
 describe('angleLine', () => {
   it('tells the model what the need has and that this one must differ', () => {
     const line = angleLine({ title: 'Compare coffee subscriptions', decision: 'create' });
@@ -149,13 +218,14 @@ describe('the generator', () => {
     'utf8',
   );
 
-  it('fills only a New request, never a prompt or page request, from coverage before its checks', () => {
-    expect(code).toContain(
-      'const angleRoom = !targeted && count !== undefined && !promptId ? count - fresh.length : 0;',
+  it('fills a New request, or a night with no need left, never a prompt or page request', () => {
+    const flat = code.replace(/\s+/g, ' ');
+    expect(flat).toContain('const atNight = count === undefined && nightly;');
+    expect(flat).toContain(
+      ': atNight && !fresh.length && !recentNightlyAngle(rows) ? NIGHTLY_ANGLES : 0;',
     );
-    expect(code).toContain(
-      'angleCandidates(candidates, existing, {\n          covered: coveredBefore,\n          inFocus,\n          openRows: rows,\n        })',
-    );
+    expect(flat).toContain('covered: coveredBefore, inFocus, nightly: atNight, openRows: rows,');
+    expect(NIGHTLY_ANGLES).toBe(1);
   });
 
   it('never folds an angle into another opportunity, and marks it as one', () => {
