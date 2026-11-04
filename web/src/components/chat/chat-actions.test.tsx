@@ -33,6 +33,7 @@ const list = vi.hoisted(() => ({
   chats: [] as ChatListItem[],
   refresh: vi.fn(async () => undefined),
 }));
+vi.mock('@/lib/actions/chat-schedules', () => ({ countChatSchedules: vi.fn(async () => 2) }));
 vi.mock('./chat-list-provider', () => ({
   useChatList: () => ({
     status: 'ready',
