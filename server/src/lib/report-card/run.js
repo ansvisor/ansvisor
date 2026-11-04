@@ -46,6 +46,7 @@ async function readHome(site, fetcher) {
 
 /**
  * @param {{ companyName: string, domain: string, site: string, country: string, language: string, industry?: string|null, dealValue?: { amount: number, currency: string }|null }} card
+ * `deadline` (epoch ms) bounds the engine answers, the long part (askEngines).
  * @returns {Promise<{ payload: object, questions: object[] }>}
  */
 export async function buildReportCard(
@@ -60,6 +61,7 @@ export async function buildReportCard(
     ask = askEngines,
     competitors = competitorsIn,
     figuresOf = keywordFigures,
+    deadline = Infinity,
   } = {},
 ) {
   const { companyName, domain, site, country, language } = card;
@@ -104,7 +106,7 @@ export async function buildReportCard(
   if (!questions.length) throw new Error('No question matched the site');
   const products = written.products ?? [];
 
-  const asked = await ask(questions, country);
+  const asked = await ask(questions, country, { deadline });
   meter.answers += asked.tasks * limits.answerUsd;
   const answered = asked.answers.filter((a) => typeof a.text === 'string' && a.text.trim());
   if (!answered.length) throw new Error('No engine answered');

@@ -89,6 +89,33 @@ export function totals(card: ReportCardPayload): Totals {
 
 // ─── Page 1: three things to do now ──────────────────────────────────────────
 
+/** "two", "three", "four": how many engines a card asked. */
+const ENGINE_COUNT: Record<number, string> = { 2: 'two', 3: 'three', 4: 'four' };
+
+/** A company's name as compared with a site's: nameKey without "Inc.", "Ltd" and the like. */
+const companyKey = (name: string): string =>
+  nameKey(
+    name.replace(/ı/g, 'i').replace(/[\s,]+(inc|llc|ltd|gmbh|co|corp|company|plc)\.?$/iu, ''),
+  );
+
+/**
+ * Whether a cited site is a listed competitor's own (as the server's
+ * competitorSite): a label of its host, the top-level domain aside, is a
+ * competitor's name or begins one. For cards made before the server marked it.
+ */
+export function competitorSite(domain: string, competitors: readonly { name: string }[]): boolean {
+  const keys = competitors.map((c) => companyKey(c.name)).filter(Boolean);
+  return domain
+    .split('.')
+    .slice(0, -1)
+    .map(companyKey)
+    .some(
+      (label) =>
+        !!label &&
+        keys.some((key) => key === label || (label.length >= 4 && key.startsWith(label))),
+    );
+}
+
 export interface QuickWin {
   title: string;
   detail: string;
@@ -137,7 +164,10 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
     });
   }
 
-  const thirdParty = card.citedSites.find((s) => !s.own);
+  // Not the company's own site, nor a competitor's: a listing there helps no one.
+  const thirdParty = card.citedSites.find(
+    (s) => !s.own && !s.competitor && !competitorSite(s.domain, card.competitors),
+  );
   if (thirdParty) {
     wins.push({
       title: `Get ${company} onto ${clip(thirdParty.domain, NAME_MAX)}`,
@@ -161,13 +191,23 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
     });
   }
 
+  // Only when the engines differ: with one engine, or all alike, none is the weakest.
+  const shares = card.engines.map((e) => percent(e.named, e.answers));
   const weakest = [...card.engines].sort(
     (a, b) => percent(a.named, a.answers) - percent(b.named, b.answers),
   )[0];
-  if (weakest) {
+  if (weakest && Math.min(...shares) < Math.max(...shares)) {
     wins.push({
       title: `Look at what ${engineLabel(weakest.engine)} says about your market`,
-      detail: `It names you in ${weakest.named} of ${weakest.answers} answers, the fewest of the four engines.`,
+      detail: `It names you in ${weakest.named} of ${weakest.answers} answers, the fewest of the ${ENGINE_COUNT[card.engines.length] ?? card.engines.length} engines.`,
+    });
+  }
+
+  // A company that leads everywhere, named alike by every engine, still gets one step.
+  if (!wins.length) {
+    wins.push({
+      title: `Keep ${company} where it is`,
+      detail: `AI names you in ${named} of ${answers} answers, alike in every engine. Answers change as engines update, so check them again each month.`,
     });
   }
 

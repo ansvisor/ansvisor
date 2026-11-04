@@ -98,7 +98,7 @@ describe('buildReportCard', () => {
         now: new Date('2026-11-03T10:00:00Z'),
       }),
     );
-    expect(deps.ask).toHaveBeenCalledWith(picked, 'TR');
+    expect(deps.ask).toHaveBeenCalledWith(picked, 'TR', { deadline: Infinity });
     // One competitor call for the engine that answered.
     expect(deps.competitors).toHaveBeenCalledTimes(1);
     expect(deps.figuresOf).toHaveBeenCalledWith(['kahve', 'kahve abonelik'], {
