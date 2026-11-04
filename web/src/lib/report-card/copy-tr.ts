@@ -264,7 +264,9 @@ export const tr: CardCopy = {
     noAds: (country) =>
       `${country} için sorularınızda yeterli reklam verisi yok: bu karnede ziyaret fiyatlanmadı.`,
     oddAds: (cpc, keywords) =>
-      `Anahtar kelimelerinizin reklam fiyatları ziyaretleri fiyatlamak için fazla dengesiz (${keywords} kelimeden ${cpc} ortanca): bu karnede ziyaret fiyatlanmadı.`,
+      `Anahtar kelimeleriniz için bulunan reklam fiyatları hatalı görünüyor (${keywords} kelimeden ${cpc} ortanca): bu karnede ziyaret fiyatlanmadı.`,
+    tableNote:
+      'Senaryodur, tahmin değil: yapay zekâ yanıtları bu ziyaretleri size gönderseydi reklamda ne tutacağı.',
     revenueTitle: 'Bir gelir senaryosu',
     revenue: (kind, value, low, high) =>
       `Ortalama ${kind === 'order' ? 'sipariş' : 'anlaşma'} değeriniz: ${value}. Varsayım: yapay zekâ ziyaretlerinin ${low} ile ${high} arası ${kind === 'order' ? 'siparişe' : 'anlaşmaya'} dönüşür, diğer ziyaretlerden daha iyi değil.`,
