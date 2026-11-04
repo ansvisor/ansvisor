@@ -28,6 +28,7 @@ import {
   assertRole,
 } from '../lib/access.js';
 import { loadClusters } from '../lib/prompt-clusters.js';
+import { loadNeedAvailability } from '../lib/opportunity-availability.js';
 import { sendToActionCenter } from '../lib/action-center/from-opportunity.js';
 import { IDEA_MAX_LENGTH } from '../lib/opportunity-generator.js';
 import { cleanStoredOpportunity } from '../lib/opportunity-text.js';
@@ -209,6 +210,10 @@ router.post('/opportunities/generate', requireFeature('content_optimization'), a
       count: pagePath ? 1 : Math.min(count, allowance.max),
       topicId: topicId ?? null,
       promptId: promptId ?? null,
+      // A prompt picked by name is asked for on purpose, as its own Suggest
+      // content (PROMPT-006): a dismissed or finished opportunity on its need
+      // doesn't hold it back, an open one does.
+      explicit: !!promptId,
       idea: idea || null,
       pagePath: pagePath ?? null,
       idempotencyKey,
@@ -747,6 +752,31 @@ router.get('/brand/:brandId/topics', async (req, res) => {
     return res.status(error.status || 500).json({ error: 'Failed to list opportunity topics' });
   }
 });
+
+/**
+ * GET /api/content/brand/:brandId/availability
+ * What "+ New" can still write for (opportunity-availability.js): per topic
+ * and in all, the needs with answers and no opportunity yet, and the prompts
+ * whose need has an open opportunity, so its dialog doesn't send a request
+ * that writes nothing.
+ */
+router.get(
+  '/brand/:brandId/availability',
+  requireFeature('content_optimization', { readOnly: true }),
+  async (req, res) => {
+    try {
+      const { brandId } = req.params;
+      await assertBrandAccess(brandId, req.user.id);
+      return res.json(await loadNeedAvailability(brandId));
+    } catch (error) {
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message, code: error.code });
+      }
+      req.log.error({ err: error }, 'opportunity availability error');
+      return res.status(500).json({ error: 'Failed to read what New can write for' });
+    }
+  },
+);
 
 /**
  * POST /api/content/bulk/status
@@ -1483,7 +1513,6 @@ Opportunity:
 
 Related Prompt: "${promptText}"
 ${clusterContext}${decisionContext}${taskContext}Intent: ${sourceData.intent || 'unknown'}
-Est. AI Volume: ${sourceData.estAiVolume || 0}/mo
 Current Visibility: ${sourceData.visibilityScore || 0}%
 Competitor Gap: ${sourceData.competitorGap || 0}%
 Keywords: ${(sourceData.keywords || []).join(', ') || 'none'}

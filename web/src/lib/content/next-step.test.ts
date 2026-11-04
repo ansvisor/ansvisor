@@ -4,7 +4,9 @@ import {
   nextStep,
   rulesForNext,
   stepState,
+  stepsLeft,
   thirdPassOf,
+  thirdPassesToRead,
   thirdStepPasses,
   thirdStepTried,
   type NextStepState,
@@ -141,15 +143,77 @@ describe('nextStep', () => {
       'proof:now',
       'check:ahead',
     ]);
-    expect(nextStep(low).tips).toEqual([{ id: 'lowTrust', action: 'showTodos' }]);
+    expect(nextStep(low).tips).toEqual([{ id: 'lowTrust', action: 'showTrust' }]);
+    // No to-do left, Trust still low: what raises it, not to-dos (editor test 2026-11-03).
     expect(
       nextStep(state({ quality: { trust: 54, trustLow: true, todos: [] } })).step.primary,
+    ).toBe('showTrust');
+    expect(
+      nextStep(
+        state({ quality: { trust: 54, trustLow: true, todos: [todo({ id: 'placeholders' })] } }),
+      ).step.primary,
     ).toBe('showTodos');
     expect(
       nextStep(
         state({ quality: { trust: 80, trustLow: false, todos: [todo({ action: 'addAuthor' })] } }),
       ).step.primary,
     ).toBe('addAuthor');
+  });
+
+  it('asks to review the agent’s suggestions while they wait, the path on the step they’re for (editor UX review 2026-11-03)', () => {
+    const fixing = state({ openRules: ['faq'], waiting: 3 });
+    expect(nextStep(fixing).step).toEqual({
+      id: 'review',
+      primary: 'review',
+      alternative: null,
+      skippable: false,
+    });
+    expect(ids(fixing)).toEqual([
+      'plan:done',
+      'write:done',
+      'fixRules:now',
+      'proof:ahead',
+      'check:ahead',
+    ]);
+    // No tip to run anything else meanwhile.
+    expect(nextStep({ ...fixing, quality: { trust: 40, trustLow: true, todos: [] } }).tips).toEqual(
+      [],
+    );
+    // Decided: the step is the page's again.
+    expect(nextStep({ ...fixing, waiting: 0 }).step.id).toBe('fixRules');
+    // A page marked ready has nothing to review from Next.
+    expect(nextStep({ ...fixing, open: false }).step.id).toBe('ready');
+  });
+
+  it('asks for sources first when the brief has nothing to build from (editor UX review 2026-11-03)', () => {
+    const none = state({ hasBrief: false, briefSources: false });
+    expect(nextStep(none).step).toMatchObject({ id: 'plan', primary: 'addSources' });
+    expect(nextStep({ ...none, briefSources: true }).step.primary).toBe('buildBrief');
+    // Not read yet: Build brief, as before.
+    expect(nextStep({ ...none, briefSources: null }).step.primary).toBe('buildBrief');
+  });
+
+  it('shows a step marked ready past as skipped, not done, and counts it left (editor UX review 2026-11-03)', () => {
+    const ready = state({
+      open: false,
+      openRules: ['faq'],
+      quality: { trust: 40, trustLow: true, todos: [todo({ id: 'placeholders' })] },
+    });
+    expect(nextStep(ready).step.id).toBe('ready');
+    expect(ids(ready)).toEqual([
+      'plan:done',
+      'write:done',
+      'fixRules:skipped',
+      'proof:skipped',
+      'check:done',
+    ]);
+    expect(stepsLeft(nextStep(ready).path)).toBe(2);
+    // The agent took Fix open rules: ticked, its rest still the person's, so left too.
+    const taken = { ...ready, thirdPasses: { fixRules: thirdPassOf(ready) } };
+    expect(ids(taken)[2]).toBe('fixRules:passed');
+    expect(stepsLeft(nextStep(taken).path)).toBe(2);
+    // Nothing open: every step done.
+    expect(stepsLeft(nextStep(state({ open: false })).path)).toBe(0);
   });
 
   it('checks before marking ready, and exports once ready', () => {
@@ -324,6 +388,55 @@ describe('the third step, once the agent took it (editor test 2026-10-26)', () =
     const over = { ...long, thirdPasses: passes };
     expect(thirdStepPasses(over)).toEqual(new Set());
     expect(nextStep(over).step.id).toBe('length');
+  });
+
+  it("keeps a step passed through the agent's own later batch, and reads it again once decided (editor test 2026-11-03)", () => {
+    // Fix open rules taken with its batch b1: on to proof.
+    const taken = {
+      ...fix,
+      batch: 'b1',
+      thirdPasses: { fixRules: thirdPassOf({ ...fix, batch: 'b1' }) },
+    };
+    expect(taken.thirdPasses.fixRules.batch).toBe('b1');
+    expect(nextStep(taken).step.id).toBe('proof');
+    // A hand-off from Quality leaves b2; accepted, it opens a rule the Fix never saw.
+    const handedOff = { ...taken, batch: 'b2', openRules: ['faq', 'h2Answer'] };
+    // Its own change: the step holds while b2 waits and is read, never back to Fix.
+    expect(nextStep(handedOff).step.id).toBe('proof');
+    expect(thirdPassesToRead(handedOff.thirdPasses, { batch: 'b2', open: 2, busy: false })).toEqual(
+      [],
+    );
+    expect(thirdPassesToRead(handedOff.thirdPasses, { batch: 'b2', open: 0, busy: true })).toEqual(
+      [],
+    );
+    expect(thirdPassesToRead(handedOff.thirdPasses, { batch: 'b2', open: 0, busy: false })).toEqual(
+      ['fixRules'],
+    );
+    // Read again as the page reads then: the step stays passed.
+    const read = { ...handedOff, thirdPasses: { fixRules: thirdPassOf(handedOff) } };
+    expect(read.thirdPasses.fixRules).toEqual({
+      rules: ['faq', 'h2Answer'],
+      length: '',
+      batch: 'b2',
+    });
+    expect(thirdPassesToRead(read.thirdPasses, { batch: 'b2', open: 0, busy: false })).toEqual([]);
+    expect(nextStep(read).step.id).toBe('proof');
+    // The person's own edits after it still bring the step back.
+    expect(nextStep({ ...read, openRules: ['faq', 'h2Answer', 'summary'] }).step.id).toBe(
+      'fixRules',
+    );
+    // A pass kept before batches were noted is read again, as one with a batch since.
+    const kept = {
+      ...fix,
+      batch: 'b1',
+      thirdPasses: { fixRules: { rules: ['h2Answer'], length: '' } },
+    };
+    expect(nextStep({ ...kept, openRules: ['faq'] }).step.id).toBe('proof');
+    expect(thirdPassesToRead(kept.thirdPasses, { batch: 'b1', open: 0, busy: false })).toEqual([
+      'fixRules',
+    ]);
+    // No batch on the page at all: nothing to read again.
+    expect(thirdPassesToRead(kept.thirdPasses, { batch: null, open: 0, busy: false })).toEqual([]);
   });
 
   it('keeps the steps before it: an empty page is still written first', () => {

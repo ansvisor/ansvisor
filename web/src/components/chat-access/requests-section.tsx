@@ -9,6 +9,7 @@ import {
   decideAccessRequest,
   listAccessRequests,
   withdrawAccessRequest,
+  type DecideAccessResult,
 } from '@/lib/actions/chat-access-requests';
 import type { AccessRequest } from '@/lib/chat/access-requests';
 import { cn } from '@/lib/utils';
@@ -71,11 +72,13 @@ export function RequestsSection({
   }
   const pending = data.requests.filter((r) => r.status === 'pending').length;
 
-  async function act(id: string, run: () => Promise<boolean>, done: string) {
+  async function act(id: string, run: () => Promise<DecideAccessResult>, done: string) {
     setBusy(id);
     try {
-      const changed = await run();
-      if (changed) toast.success(done);
+      const result = await run();
+      if (result.ok) toast.success(done);
+      else if (result.reason === 'not_saved')
+        toast.error(t('notSaved', { reason: result.message }));
       else toast.info(t('alreadyDecided'));
       setReload((n) => n + 1);
       onChanged?.();
@@ -114,6 +117,11 @@ export function RequestsSection({
             >
               <div className="min-w-0 flex-1">
                 <p className="font-medium break-words">{request.asked}</p>
+                {request.draftedText && (
+                  <p className="text-xs break-words text-muted-foreground">
+                    {t('saves', { text: request.draftedText })}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   {[
                     data.isAdmin && t('from', { name: request.requester }),
@@ -139,7 +147,7 @@ export function RequestsSection({
                         void act(
                           request.id,
                           () => decideAccessRequest(request.id, 'approved'),
-                          t('approved'),
+                          request.draftedText ? t('approvedSaved') : t('approved'),
                         )
                       }
                     >
@@ -167,7 +175,14 @@ export function RequestsSection({
                     variant="outline"
                     disabled={busy === request.id}
                     onClick={() =>
-                      void act(request.id, () => withdrawAccessRequest(request.id), t('withdrawn'))
+                      void act(
+                        request.id,
+                        async () =>
+                          (await withdrawAccessRequest(request.id))
+                            ? { ok: true }
+                            : { ok: false, reason: 'already_decided' },
+                        t('withdrawn'),
+                      )
                     }
                   >
                     {t('withdraw')}

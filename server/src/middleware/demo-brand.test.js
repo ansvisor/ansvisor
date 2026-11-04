@@ -465,6 +465,8 @@ describe('coverage of the write routes', () => {
       'internal-chat-pages.js',
       // The first run after a payment (CRON_SECRET): refuses a demo brand itself.
       'internal-trigger-tracking.js',
+      // The free report card's form on www.ansvisor.com: no sign-in and no brand (00472).
+      'public-report-card.js',
       'traffic.js',
       'webhook-content-callback.js',
       'webhook-content-draft-callback.js',

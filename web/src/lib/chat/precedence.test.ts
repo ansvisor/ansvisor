@@ -1347,6 +1347,7 @@ describe("an Admin's go-live permission (AUTONOMOUS-GO-LIVE §5.2, step 4b)", ()
     page: 'ready',
     text: { hold: null },
     liveItem: false,
+    takenDown: false,
     gate: { pass: true, scores: { eeat: 80, trust: 82, readability: 78, average: 80 } },
     usage: { used: 0, counted: false, nextAt: null },
   };
@@ -1416,6 +1417,7 @@ describe("an Admin's go-live permission (AUTONOMOUS-GO-LIVE §5.2, step 4b)", ()
       host: 'rival.example',
     });
     expect(held({ ...PASSED, liveItem: true })).toEqual({ code: 'live_page' });
+    expect(held({ ...PASSED, takenDown: true })).toEqual({ code: 'taken_down' });
     // The quality gate, with what the card names.
     for (const hold of ['quality_off', 'placeholders', 'fields', 'suggestions'] as const) {
       expect(held({ ...PASSED, gate: { pass: false, hold } })).toEqual({ code: hold });
@@ -1462,6 +1464,7 @@ describe("an Admin's go-live permission (AUTONOMOUS-GO-LIVE §5.2, step 4b)", ()
       page: 'ready',
       text: { hold: 'instructions' },
       liveItem: true,
+      takenDown: true,
       gate: { pass: false, hold: 'quality', score: 40 },
       usage: { used: 9, counted: false, nextAt: NEXT },
     };
@@ -1471,9 +1474,17 @@ describe("an Admin's go-live permission (AUTONOMOUS-GO-LIVE §5.2, step 4b)", ()
       code: 'live_page',
     });
     expect(held({ ...worst, runUntrusted: false, text: { hold: null }, liveItem: false })).toEqual({
-      code: 'quality',
-      score: 40,
+      code: 'taken_down',
     });
+    expect(
+      held({
+        ...worst,
+        runUntrusted: false,
+        text: { hold: null },
+        liveItem: false,
+        takenDown: false,
+      }),
+    ).toEqual({ code: 'quality', score: 40 });
   });
 
   it('holds on the closed side when a fact it needs is missing', () => {
@@ -1482,8 +1493,29 @@ describe("an Admin's go-live permission (AUTONOMOUS-GO-LIVE §5.2, step 4b)", ()
     expect(decided({ runUntrusted: false })).toEqual(unchecked);
     expect(decided({ ...PASSED, text: undefined })).toEqual(unchecked);
     expect(decided({ ...PASSED, liveItem: undefined })).toEqual(unchecked);
+    expect(decided({ ...PASSED, takenDown: undefined })).toEqual(unchecked);
     expect(decided({ ...PASSED, gate: undefined })).toEqual(unchecked);
     expect(decided({ ...PASSED, usage: undefined })).toEqual(unchecked);
+  });
+
+  it('never takes a page down on its own, and a Manager takes it down with publishing off (PR 10)', () => {
+    // Take down's own shape: an EXECUTE outside the go-live groups, with no goLive.
+    const takeDown = row('takeDown', {
+      class: 'execute',
+      minRole: 'manager',
+      executeGroup: null,
+      inputSchema: z.object({ brand_id: z.guid() }),
+      fixture: { input: { brand_id: BRAND_A } },
+    });
+    expect(goLiveCandidate(takeDown, allowed())).toBe(false);
+    expect(decideToolCall(takeDown, allowed(), call({ goLive: PASSED }))).toEqual(CLICK);
+    const off = settings({ managerExecuteOff: ['publishing'] });
+    expect(decideToolCall(takeDown, ctx({ role: 'manager', settings: off }), call())).toEqual(
+      CLICK,
+    );
+    expect(decideToolCall(takeDown, ctx({ role: 'analyst' }), call())).toMatchObject({
+      kind: 'deny',
+    });
   });
 
   it('decides every earlier step first: a denial or a deny-free click is never lifted', () => {

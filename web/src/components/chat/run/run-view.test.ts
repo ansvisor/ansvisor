@@ -84,6 +84,21 @@ describe('doneSteps and dataUsed', () => {
     expect(dataUsed([goTo, step({ n: 2, kind: 'read', label: 'Worked on a step' })])).toEqual([]);
   });
 
+  it('names memory by its subject, counted in items (CHAT-14 item 17)', () => {
+    const memory = step({
+      n: 1,
+      kind: 'read',
+      label: 'Used memory',
+      rowCount: 3,
+      scope: { subject: 'Memory', unit: 'items' },
+    });
+    expect(dataUsed([memory, ...steps])).toEqual([
+      { label: 'Memory', rows: 3, unit: 'items' },
+      { label: 'Citations', rows: 42 },
+      { label: 'ansvisor.com/pricing' },
+    ]);
+  });
+
   it('names each source once with its largest count, and each page opened; skills, checks and failed reads aren’t sources', () => {
     expect(dataUsed(steps)).toEqual([
       { label: 'Citations', rows: 42 },

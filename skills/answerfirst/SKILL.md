@@ -34,7 +34,7 @@ If the person pasted the text, work from it and read nothing else unless needed.
 
 ## Output
 
-For each section: **Before**, **After**, and one line on what changed. Then the full rewritten text in one block, ready to paste. When the person wants it kept, save it as a new draft with `create_draft`; the app asks them first when it should.
+For each section: **Before**, **After**, and one line on what changed. Then the full rewritten text in one block, ready to paste. When the person wants it kept, save it as a new draft with `create_draft`; the app asks them first when it should. In an agent's run nobody is there to ask: always save it with its tool, and the app holds it for approval where the agent's mode needs it.
 
 ## Don't
 
