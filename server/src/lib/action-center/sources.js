@@ -11,6 +11,7 @@
  */
 
 import supabaseAdmin from '../../config/supabase.js';
+import { brandConnection } from '../brand-integrations.js';
 
 /**
  * Every source a definition may declare. Validation rejects anything else, so
@@ -24,7 +25,7 @@ export const SOURCES = Object.freeze([
   'competitors',
   /** Site Audit runs. */
   'site_audits',
-  /** A Google Analytics connection for the brand's organization. */
+  /** A Google Analytics connection the brand uses (00470). */
   'analytics',
   /** A Google Search Console connection with synced query data. */
   'search_console',
@@ -54,15 +55,7 @@ export async function resolveBrandSources(brandId) {
   const available = new Set(['tracking']);
   const recent = new Date(Date.now() - 30 * DAY_MS).toISOString();
 
-  const { data: brand, error: brandErr } = await supabaseAdmin
-    .from('brands')
-    .select('organization_id')
-    .eq('id', brandId)
-    .limit(1);
-  if (brandErr) throw new Error(brandErr.message);
-  const organizationId = (brand ?? [])[0]?.organization_id;
-
-  const [competitors, audits, gscRows, analyticsPages, snippetRows, topics, volumes] =
+  const [competitors, audits, gscRows, analyticsPages, snippetRows, topics, volumes, analytics] =
     await Promise.all([
       hasRow(supabaseAdmin.from('competitors').select('id').eq('brand_id', brandId)),
       hasRow(supabaseAdmin.from('site_audits').select('id').eq('brand_id', brandId)),
@@ -85,6 +78,9 @@ export async function resolveBrandSources(brandId) {
         supabaseAdmin.from('topics').select('id').eq('brand_id', brandId).eq('is_active', true),
       ),
       hasVolumes(brandId),
+      // The Google sign-in the brand uses for Analytics: every brand of a
+      // workspace uses its one connection until a brand picks its own (PR 15).
+      brandConnection(brandId, 'google-analytics'),
     ]);
 
   if (competitors) available.add('competitors');
@@ -93,20 +89,7 @@ export async function resolveBrandSources(brandId) {
   if (analyticsPages || snippetRows) available.add('ai_traffic');
   if (topics) available.add('topics');
   if (volumes) available.add('volumes');
-
-  // Integrations are connected per organization, not per brand: every brand in
-  // a workspace sees the same analytics connection.
-  if (organizationId) {
-    const connected = await hasRow(
-      supabaseAdmin
-        .from('integration_connections')
-        .select('id')
-        .eq('organization_id', organizationId)
-        .eq('provider', 'google-analytics')
-        .eq('status', 'connected'),
-    );
-    if (connected) available.add('analytics');
-  }
+  if (analytics?.connected) available.add('analytics');
 
   return available;
 }
