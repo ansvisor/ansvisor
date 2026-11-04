@@ -24,7 +24,10 @@ import type { ChatTaskRow, ChatTaskStatus, ChatTaskStrip } from './events';
  * Getting started steps aren't action_tasks: they get no row.
  */
 
-/** The most tasks a strip holds (the /tasks skill and mockup: "4 due"). */
+/**
+ * The most tasks a strip holds (mockup: "4 due"). A run finishes at most 2
+ * of them (the /tasks skill); the rest stay Queued for the next run.
+ */
 export const STRIP_MAX = 4;
 
 /** An action Chat works through: new or in progress, not on hold, dismissed or done. */

@@ -105,6 +105,22 @@ const runSiteAudit: UndoRule = {
   href: () => '/dashboard/audit',
 };
 
+// ─── run_agent: recorded, no Undo (the agent it ran keeps its own run) ──────
+
+const runAgent: UndoRule = {
+  ...NO_UNDO,
+  targetType: 'agent',
+  async record(input, output): Promise<WriteRecord> {
+    const agent = textOf(asObject(output).agent);
+    return {
+      target: { type: 'agent', id: textOf(asObject(input).agent) },
+      summaryParams: { agent: summaryValue(agent) },
+      undo: null,
+    };
+  },
+  href: (id) => `/dashboard/agents/${id}`,
+};
+
 /** The output rows' records and Undo, by tool name (undo.ts UNDO_RULES). */
 export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   build_report: buildReport,
@@ -116,4 +132,5 @@ export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   // A page sent to the brand's webhook (PR 11): recorded the same way; its workflow's now, no Undo.
   trigger_content_webhook: pushCmsDraft,
   run_site_audit: runSiteAudit,
+  run_agent: runAgent,
 };

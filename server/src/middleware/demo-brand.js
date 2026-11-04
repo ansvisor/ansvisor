@@ -196,6 +196,9 @@ export const DEMO_GUARDED = [
   // a brand, the organization's sync, which skips demo brands itself.
   guard('POST /integrations/google-search-console/sync', brandIn('body')),
   guard('POST /integrations/google-analytics/sync', brandIn('body')),
+  // A brand's property pick (the route refuses the demo brand itself too).
+  guard('PUT /integrations/google-search-console/brands/:brandId/property', brandIn('path')),
+  guard('PUT /integrations/google-analytics/brands/:brandId/property', brandIn('path')),
 
   // Mentions (mentions.js).
   guard('POST /mentions/action', brandIn('body')),
