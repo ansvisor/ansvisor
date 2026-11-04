@@ -25,6 +25,7 @@ approved: false
 - `route`: the page **Try it** opens, with the brand open at the time. An address of the app, no query.
 - `plans`: the plans that include it (`starter`, `growth`, `enterprise`). Self-hosted sees every entry.
 - `plan_mode`: what a workspace on another plan sees: `hide` (nothing) or `show_upgrade` (the entry, with "On {plans}." and See plans).
+- `requires` (optional): a switch staff turn on per workspace that the feature also needs. `auto_go_live` (Agents that publish on their own) shows the entry only where that switch is on. Leave it out for a feature every workspace on the plans has.
 - `published`: the day it starts to show (YYYY-MM-DD). An entry can be merged before its day.
 - `approved`: `false` until Cihan approves it.
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
+const { PageFetchError } = await import('../safe-fetch.js');
 const { reportCardLimits } = await import('./config.js');
 const { FIELD_MESSAGES, siteOpens, submitReportCardRequest } = await import('./intake.js');
 
@@ -265,5 +266,26 @@ describe('siteOpens', () => {
   it('is false when neither opens', async () => {
     const fetcher = vi.fn().mockRejectedValue(new Error('refused'));
     expect(await siteOpens('acme.example', { fetcher })).toBe(false);
+  });
+
+  it('opens when the site answers, even with an error or a page that is not HTML', async () => {
+    for (const err of [
+      new PageFetchError('http_error', 'The page answered 403', { status: 403 }),
+      new PageFetchError('http_error', 'The page answered 503', { status: 503 }),
+      new PageFetchError('not_html', 'The address is not a web page'),
+      new PageFetchError('too_many_redirects', 'Too many redirects'),
+    ]) {
+      const fetcher = vi.fn().mockRejectedValue(err);
+      expect(await siteOpens('acme.example', { fetcher })).toBe(true);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('is false when the site cannot be reached or is not allowed', async () => {
+    for (const code of ['unreachable', 'timeout', 'blocked', 'invalid_url']) {
+      const fetcher = vi.fn().mockRejectedValue(new PageFetchError(code, code));
+      expect(await siteOpens('acme.example', { fetcher })).toBe(false);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+    }
   });
 });

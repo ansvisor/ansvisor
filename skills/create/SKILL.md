@@ -36,7 +36,7 @@ Scope: the last 30 days, every platform the plan tracks.
 1. Pick the questions the piece must answer: the prompts and fan-outs with the most demand.
 2. See what the cited pages answer, and what they leave out.
 3. Write the piece answer-first: a direct answer under each heading, then detail. For an FAQ or a comparison page, add the structured data as a code block.
-4. When the person wants it kept, save it as a draft with `create_draft`; the app asks them first when it should.
+4. When the person wants it kept, save it as a draft with `create_draft`; the app asks them first when it should. In an agent's run nobody is there to ask: always save it with its tool, and the app holds it for approval where the agent's mode needs it.
 
 ## Output
 
