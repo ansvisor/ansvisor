@@ -33,7 +33,7 @@ A balanced comparison page that answers "X or Y?" the way AI engines like to quo
    - A comparison table: one row per feature or need, a column for each option, and an "as of {date}" line under it.
    - A short section for each option's strengths, the competitor's included, and an FAQ from the fan-outs.
    - Facts about the competitor come only from pages read in this chat or from the person, each with the date it was true. Facts about the brand come from the person or its own pages; anything else is a [placeholder].
-4. Save it as a draft when the person wants it kept, with `create_draft` (page type comparison or alternatives); the app asks them first when it should.
+4. Save it as a draft when the person wants it kept, with `create_draft` (page type comparison or alternatives); the app asks them first when it should. In an agent's run nobody is there to ask: always save it with its tool, and the app holds it for approval where the agent's mode needs it.
 
 ## Output
 

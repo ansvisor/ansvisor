@@ -1401,13 +1401,13 @@ describe('Rewrite the page to these rules', () => {
     expect(writes.find((w) => w.table === 'content_draft_suggestions')).toBeUndefined();
   });
 
-  describe('a rewrite well past its Length: one more pass cuts it', () => {
+  describe('a rewrite past its Length: one more pass cuts it', () => {
     const cutBudget = {
       charge: vi.fn(async () => {}),
       release: vi.fn(async () => {}),
       keep: vi.fn(async () => {}),
     };
-    // A Length of 100 (up to 120): a cut pass past 135.
+    // A Length of 100 (up to 120): a cut pass past 120. The first answer is 199 characters.
     const toLength = (length = 100) => ({
       rules: [{ key: 'length', name: 'Length', detail: `aim: ${length} characters` }],
       sources: { ...input().sources, length },
@@ -1526,6 +1526,17 @@ describe('Rewrite the page to these rules', () => {
       expect(
         writes.find((w) => w.table === 'content_draft_suggestions' && w.kind === 'insert'),
       ).toBeUndefined();
+    });
+
+    it('cuts a rewrite only a little past its band too (editor test 2026-11-03)', async () => {
+      // A Length of 150 (up to 180): 199 is past it, though within 15% of it.
+      answers(long, short);
+      await run(toLength(150));
+      expect(generateObject).toHaveBeenCalledTimes(2);
+      expect(generateObject.mock.calls[1][0].prompt).toContain(
+        'Its Length is 150 characters, up to 180. Cut it to about 150.',
+      );
+      expect(row().after_text).toContain('Short.');
     });
 
     it('cuts nothing within reach of the Length, or with Length off', async () => {
@@ -1831,5 +1842,150 @@ describe('the brief rules (2026) in the Content Agent', () => {
     expect(row.after_text).toContain('<p>Try [figure, source] tools for it.</p>');
     // A person it wasn't given is the person's to name: "Your input needed".
     expect(row.after_text).toContain(`<p>${NAME_PLACEHOLDER} said the bloom matters.</p>`);
+  });
+});
+
+describe('a health brand’s page (owner’s safety rule, 2026-11-03)', () => {
+  const vitaroot = {
+    ...brand,
+    name: 'VitaRoot',
+    industry: 'Dietary supplements',
+    description: 'Makes magnesium and vitamin D supplements in capsules.',
+  };
+  const DISCLAIMER =
+    'This product is not intended to diagnose, treat, cure or prevent any disease.';
+  const OWN = 'VitaRoot Magnesium Glycinate helps you relax after a long day.';
+  const SLEEP_FIND = '{{find: what clinical research says about magnesium glycinate and sleep}}';
+  const draft = (over = {}) =>
+    draftRow({
+      title: 'Magnesium glycinate: what to know before you buy',
+      body_html: `<h1>Magnesium glycinate: what to know before you buy</h1><p>${OWN}</p><p>${DISCLAIMER}</p>`,
+      ...over,
+    });
+  const run = (over = {}, rewrite = false) =>
+    runDraftWriting({
+      draft: draft(over),
+      brand: vitaroot,
+      model: 'model:m',
+      input: input(),
+      budget,
+      rewrite,
+    });
+  /** What the facts pass was asked to look up, in all its calls. */
+  const lookedUp = () => generateText.mock.calls.map(([call]) => call.prompt).join('\n');
+
+  it('writes a new page without a claim it didn’t make, and never looks one up', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        title: 'Magnesium glycinate: what to know before you buy',
+        intro: [
+          `${OWN} Magnesium glycinate may help some people sleep.`,
+          'A bottle costs {{find: VitaRoot magnesium glycinate bottle price}}.',
+        ],
+        sections: [
+          {
+            heading: 'Does magnesium glycinate help you sleep?',
+            paragraphs: [`Research says ${SLEEP_FIND}.`],
+            bullets: [],
+          },
+          { heading: 'Is it a medicine?', paragraphs: [DISCLAIMER], bullets: [] },
+        ],
+        faqHeading: '',
+        faq: [],
+      },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    await expect(run()).resolves.toEqual({ written: true });
+    expect(generateObject.mock.calls[0][0].system).toContain(
+      'never write {{find: …}} for one: none is looked up',
+    );
+    // The price is looked up; the health effect never is.
+    expect(lookedUp()).toContain('find: VitaRoot magnesium glycinate bottle price');
+    expect(lookedUp()).not.toContain('clinical research');
+    const written = draftUpdates().find((u) => u.body_html).body_html;
+    expect(written).not.toContain('may help some people sleep');
+    expect(written).not.toContain('Does magnesium glycinate help you sleep?');
+    // The brand's own claim and its safety line stay.
+    expect(written).toContain(`<p>${OWN}</p>`);
+    expect(written).toContain(`<h2>Is it a medicine?</h2><p>${DISCLAIMER}</p>`);
+  });
+
+  it('leaves no suggestion that adds a claim or asks for one, and keeps the others', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        suggestions: [
+          {
+            kind: 'insert',
+            passage: 2,
+            before: '',
+            after: `<h2>Does magnesium glycinate help you sleep?</h2><p>Research says ${SLEEP_FIND}.</p>`,
+            reason: 'answer the fan-out',
+            rules: ['faq'],
+          },
+          {
+            kind: 'insert',
+            passage: 2,
+            before: '',
+            after: '<p>Magnesium glycinate may help some people sleep.</p>',
+            reason: 'answer the fan-out',
+            rules: ['faq'],
+          },
+          {
+            kind: 'insert',
+            passage: 3,
+            before: '',
+            after:
+              '<h2>Who is it for?</h2><p>Adults who want a magnesium supplement. Talk to your doctor before you start any supplement.</p>',
+            reason: 'add a section',
+            rules: ['faq'],
+          },
+        ],
+      },
+      usage: {},
+    });
+    await expect(run({ method: 'optimize' })).resolves.toEqual({ suggestions: 1 });
+    // Nothing to look up once the health effect went.
+    expect(lookedUp()).not.toContain('clinical research');
+    const batch = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    expect(batch.map((row) => row.after_text)).toEqual([
+      '<h2>Who is it for?</h2><p>Adults who want a magnesium supplement. Talk to your doctor before you start any supplement.</p>',
+    ]);
+  });
+
+  it('rewrites a page without a claim it didn’t make, and never looks one up', async () => {
+    generateObject.mockResolvedValue({
+      object: {
+        html:
+          `<h1>Magnesium glycinate</h1><p>${OWN} It supports restful sleep.</p>` +
+          `<h2>Does it help you sleep?</h2><p>Research says ${SLEEP_FIND}.</p>` +
+          `<h2>Is it a medicine?</h2><p>${DISCLAIMER}</p>`,
+        reason: 'answered each heading first',
+      },
+      usage: { inputTokens: 900, outputTokens: 700 },
+    });
+    await expect(run({ method: 'optimize', status: 'in_review' }, true)).resolves.toEqual({
+      rewritten: true,
+    });
+    expect(generateObject.mock.calls[0][0].system).toContain('never write {{find: …}} for one');
+    expect(lookedUp()).not.toContain('clinical research');
+    const row = writes.find((w) => w.table === 'content_draft_suggestions').value;
+    // The question left with no answer goes with it.
+    expect(row.after_text).toBe(
+      `<h1>Magnesium glycinate</h1><p>${OWN}</p><h2>Is it a medicine?</h2><p>${DISCLAIMER}</p>`,
+    );
+  });
+
+  it('leaves another brand’s page to the prompt: its guards don’t read health claims', async () => {
+    generateObject.mockResolvedValue({
+      object: { ...page, intro: ['A warm cup helps you relax.'] },
+      usage: { inputTokens: 10, outputTokens: 20 },
+    });
+    await expect(
+      runDraftWriting({ draft: draftRow(), brand, model: 'model:m', input: input(), budget }),
+    ).resolves.toEqual({ written: true });
+    expect(generateObject.mock.calls[0][0].system).toContain('- Health: never write');
+    expect(draftUpdates().find((u) => u.body_html).body_html).toContain(
+      '<p>A warm cup helps you relax.</p>',
+    );
   });
 });

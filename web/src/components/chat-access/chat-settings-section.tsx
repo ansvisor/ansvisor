@@ -36,6 +36,7 @@ import { cn } from '@/lib/utils';
 import { ClassBadge } from './class-badge';
 import { YourPlanCard } from './plan-card';
 import { AskAdminButton } from './ask-admin-button';
+import { MemorySwitchRow } from './memory-switch-row';
 import { GoLiveSection } from './go-live-section';
 import { SettingsSwitch as Switch } from './settings-switch';
 
@@ -190,6 +191,7 @@ export function ChatSettingsSection() {
               </span>
             </li>
           ))}
+          <MemorySwitchRow />
         </ul>
       </section>
 

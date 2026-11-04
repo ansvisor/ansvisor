@@ -10,7 +10,8 @@ vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: 
 
 const { logger } = await import('../logger.js');
 const { MAX_TARGET_PROMPTS } = await import('./method.js');
-const { REPUBLISH_DAYS, resolveTargets, shipCmsPublish } = await import('./ship.js');
+const { REPUBLISH_DAYS, closeTakenDown, resolveTargets, shipCmsPublish } =
+  await import('./ship.js');
 
 /**
  * A page the CMS confirmed live, into the impact ledger (CHAT-22 §2 item
@@ -351,6 +352,68 @@ describe('shipCmsPublish', () => {
     expect(await record(db)).toEqual(expect.any(String));
     expect(db.tables.ship_events).toHaveLength(1);
     expect(db.tables.impact_measurements).toHaveLength(0);
+  });
+});
+
+describe('closeTakenDown (AUTONOMOUS-GO-LIVE PR 10)', () => {
+  const AT = '2026-11-02T12:00:00.000Z';
+  const ship = (id, kind = 'cms_publish', draft = 'dr1') => ({
+    id,
+    organization_id: ORG,
+    brand_id: 'b1',
+    kind,
+    content_draft_id: draft,
+  });
+  const measuring = (id, shipId, over = {}) => ({
+    id,
+    ship_event_id: shipId,
+    outcome: 'pending',
+    checkpoint: 'd7',
+    checkpoints_json: [{ checkpoint: 'd7', outcome: 'pending' }],
+    next_check_at: '2026-11-05T00:00:00.000Z',
+    ...over,
+  });
+
+  it('closes the taken-down page’s measurements Not measurable, keeping what was measured', async () => {
+    const db = useDb(
+      world({
+        ship_events: [ship('s1'), ship('s2', 'manual'), ship('s3', 'cms_publish', 'dr2')],
+        impact_measurements: [
+          measuring('m1', 's1'),
+          measuring('m2', 's2'),
+          measuring('m3', 's3'),
+          measuring('m4', 's1', { outcome: 'improved', next_check_at: null }),
+        ],
+      }),
+    );
+    expect(await closeTakenDown({ draftId: 'dr1', at: AT, db })).toBe(1);
+    const [m1, m2, m3, m4] = db.tables.impact_measurements;
+    expect(m1).toMatchObject({
+      outcome: 'not_measurable',
+      confidence: null,
+      not_measurable_reason: 'taken_down',
+      checkpoint: 'd90',
+      next_check_at: null,
+      measured_at: AT,
+    });
+    expect(m1.checkpoints_json.map((e) => [e.checkpoint, e.outcome])).toEqual([
+      ['d7', 'pending'],
+      ['d90', 'not_measurable'],
+    ]);
+    // Another kind of ship, another page, and a measurement already done stay as they were.
+    expect([m2.outcome, m3.outcome, m4.outcome]).toEqual(['pending', 'pending', 'improved']);
+  });
+
+  it('closes nothing for a page never shipped, and never throws', async () => {
+    const db = useDb(world());
+    expect(await closeTakenDown({ draftId: 'dr1', at: AT, db })).toBe(0);
+    const broken = {
+      from: () => ({
+        select: () => ({ eq: () => ({ eq: async () => ({ error: { code: 'x' } }) }) }),
+      }),
+    };
+    expect(await closeTakenDown({ draftId: 'dr1', at: AT, db: broken })).toBe(0);
+    expect(logger.warn).toHaveBeenCalled();
   });
 });
 

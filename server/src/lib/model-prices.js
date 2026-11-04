@@ -78,8 +78,18 @@ export function rowOf(model, syncedAt) {
       ? pricing.overrides.filter((o) => o && typeof o === 'object')
       : [],
     is_batch: id.endsWith(':batch'),
+    // What the model takes ("tools", "reasoning"…) and its window (00462):
+    // the model menu offers only a model that can call tools.
+    supported_parameters: list(model.supported_parameters).slice(0, 64),
+    context_length: contextLengthOf(model.context_length),
     synced_at: syncedAt,
   };
+}
+
+/** The catalog's context_length as a whole number of tokens; null when it gives none. */
+function contextLengthOf(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 && n <= 2_147_483_647 ? n : null;
 }
 
 /** The catalog's response as rows, the ones without an id left out. */

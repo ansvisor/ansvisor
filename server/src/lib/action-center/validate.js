@@ -320,7 +320,8 @@ export function fullWindowCounts(metrics, gaps) {
 
 /** A target the night engine names that a basket can be measured on (learning A1). */
 const TARGET_BASKETS = new Set(['prompts', 'pages']);
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** A prompt id, as against a key that is a prompt's text (a suggestion's). */
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The brand's primary domain as a host, for a page target written as a path. */
 async function primaryHost(brandId, { db = supabaseAdmin } = {}) {
