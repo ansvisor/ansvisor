@@ -18,6 +18,7 @@ import {
   overridesForImport,
   readPage,
   ruleLength,
+  ruleLengthBand,
   ruleSet,
   ruleSetFits,
   rulesMet,
@@ -51,6 +52,8 @@ export interface DraftRulesState {
   total: number;
   /** The page length the rules ask for. */
   length: number;
+  /** The least and most characters the Length rule asks for, while it is on (ruleLengthBand). */
+  lengthBand?: { min: number; max: number };
   /**
    * Whether the count stands (set by the editor once the set, the fan-outs,
    * the brief and the catalog are read): before, rules come and go from it.
@@ -292,6 +295,7 @@ export function useDraftRules({
     met,
     total,
     length: ruleLength(rules, setType),
+    lengthBand: ruleLengthBand(rules),
     lengthConflict: conflict,
     merchantCenter: typeof shopping === 'object' && shopping !== null && shopping.merchantCenter,
     checkHtml,

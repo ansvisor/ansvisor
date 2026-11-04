@@ -37,7 +37,8 @@ import {
   RULE_GROUPS,
   notForAgentMessage,
   openRulesForAgent,
-  lengthBand,
+  lengthRangeValue,
+  lengthSpan,
   lengthOutOfReach,
   rewriteAdvice,
   splitRules,
@@ -281,7 +282,7 @@ export function RulesTab({
     !!outOfReach &&
     !!cited &&
     cited.count > 0 &&
-    (pageRewrite?.reach ?? NO_REACH).floor - cited.chars <= lengthBand(outOfReach.target).max;
+    (pageRewrite?.reach ?? NO_REACH).floor - cited.chars <= outOfReach.max;
   // The rules the page doesn't meet now, in the tab's order, and those the agent fixes.
   const open = state.rules.filter(({ rule, status }) => rule.on && status.state === 'bad');
   const { forAgent, notForAgent, held: heldOpen } = openRulesForAgent(state.rules, undefined, held);
@@ -740,7 +741,11 @@ function RuleRow({
       </div>
       {rule.kind !== 'switch' && (
         <div className="mt-1 flex items-center gap-1 pl-9">
-          <RuleValue rule={rule} name={name} onCommit={(value) => onChange({ value })} />
+          {rule.key === 'length' ? (
+            <LengthValue rule={rule} name={name} onCommit={(value) => onChange({ value })} />
+          ) : (
+            <RuleValue rule={rule} name={name} onCommit={(value) => onChange({ value })} />
+          )}
         </div>
       )}
       {note && rule.on && (
@@ -801,6 +806,84 @@ function RuleValue({
           rule.changed && 'border-primary/50',
         )}
       />
+      {rule.unit && (
+        <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+          {t(`units.${rule.unit}`)}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Length as a range (editor test 2026-11-03): the least and the most
+ * characters the page may have, the band around one number shown as such
+ * until the person sets their own. Changed once focus leaves both fields,
+ * or Enter is pressed; kept as "4500-5500" (lengthRangeValue).
+ */
+function LengthValue({
+  rule,
+  name,
+  onCommit,
+}: {
+  rule: ActiveRule;
+  name: string;
+  onCommit: (value: string) => void;
+}) {
+  const t = useTranslations('contentEditor.editor.rules');
+  const span = lengthSpan(rule.current);
+  const now = { min: span ? String(span.min) : '', max: span ? String(span.max) : '' };
+  const [text, setText] = useState<{ min: string; max: string } | null>(null);
+  const shown = text ?? now;
+  const commit = () => {
+    const typed = text;
+    setText(null);
+    if (!typed) return;
+    const read = (value: string) => {
+      const digits = value.replace(/[\s.,]/g, '');
+      return /^\d{1,6}$/.test(digits) && Number(digits) > 0 ? Number(digits) : null;
+    };
+    const min = read(typed.min);
+    const max = read(typed.max);
+    // A bound left empty or not a number: the Length stays as it was.
+    if (min === null || max === null) return;
+    if (span && Math.min(min, max) === span.min && Math.max(min, max) === span.max) return;
+    onCommit(lengthRangeValue(min, max));
+  };
+  const field = (bound: 'min' | 'max') => (
+    <input
+      value={shown[bound]}
+      inputMode="numeric"
+      aria-label={t(bound === 'min' ? 'lengthMin' : 'lengthMax', { name })}
+      maxLength={9}
+      onFocus={() => setText((prev) => prev ?? now)}
+      onChange={(e) => {
+        const value = e.target.value;
+        setText((prev) => ({ ...(prev ?? now), [bound]: value }));
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit();
+        if (e.key === 'Escape') setText(null);
+      }}
+      className={cn(
+        'h-6 w-14 rounded-md border bg-background px-1.5 text-right text-xs tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+        rule.changed && 'border-primary/50',
+      )}
+    />
+  );
+  return (
+    <span
+      className="flex shrink-0 items-center gap-1"
+      // Left as a whole: moving from one field to the other changes nothing yet.
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) commit();
+      }}
+    >
+      {field('min')}
+      <span aria-hidden className="text-[11px] text-muted-foreground">
+        –
+      </span>
+      {field('max')}
       {rule.unit && (
         <span className="text-[11px] whitespace-nowrap text-muted-foreground">
           {t(`units.${rule.unit}`)}

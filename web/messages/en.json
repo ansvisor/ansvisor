@@ -10609,6 +10609,8 @@
           "open": "Recommended: Content Agent can fix {count, number} of them, and a rewrite meets them together."
         },
         "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthMin": "{name}, at least",
+        "lengthMax": "{name}, at most",
         "lengthOutOfReachNote": "A rewrite can't get this page much under {least, number} characters, so the agent leaves the Length to you. Run Agent above says why.",
         "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
         "lengthOutOfReachHeadings": "The page is {count, number} characters for a Length of {target, number}, but its headings and an answer under each come to about {least, number}. Raise the Length to about {suggested, number}, or use fewer sections.",
