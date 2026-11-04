@@ -1,6 +1,6 @@
 import type { ChatNotice } from '@/lib/actions/chat-notices';
 import type { ChatConfirmForm } from '@/lib/chat/events';
-import type { ChatStep } from '@/lib/chat/events';
+import type { ChatDeliverable, ChatStep } from '@/lib/chat/events';
 import type { TrayResponse } from '@/lib/chat/runs-tray';
 import type { PlanStep } from '@/components/agentic/plan-card';
 import type { StepRow } from '@/components/agentic/step-list';
@@ -183,6 +183,56 @@ export const NEXT_MOVES = [
     prompt: 'Win back the Google AI Overviews citations we lost this week',
   },
   { label: 'Save these steps as a skill', prompt: 'Save these steps as a skill' },
+];
+
+/** A FAQ Chat wrote, then changed (CHAT-25 §6, mockup #e-chat): versions 1 and 2. */
+const FAQ_PAGE: Omit<ChatDeliverable, 'version'> = {
+  title: 'FAQ: Pricing',
+  type: 'document',
+  formats: ['html', 'md', 'docx', 'pdf'],
+  status: 'draft',
+  href: '/dashboard/content/editor/preview',
+  filed: 'in_files',
+};
+const FAQ_SECTIONS = [
+  {
+    heading: 'Which AI platforms does it track?',
+    text: 'Starter: ChatGPT and Copilot. Growth: six platforms. Enterprise adds Claude.',
+  },
+  { heading: 'Can I change plans?', text: 'Yes, any time from Billing.' },
+  { heading: 'Is there a free trial?', text: 'Yes, every plan starts with a free trial.' },
+  {
+    heading: 'How many prompts can I track?',
+    text: 'It depends on your plan; Billing shows yours.',
+  },
+  { heading: 'Can I add teammates?', text: 'Yes, from Settings › People.' },
+  { heading: 'Can I pay yearly?', text: 'Yes, yearly plans cost less than twelve months.' },
+  { heading: 'Can I get a refund?', text: 'Yes, within [REFUND PERIOD] of your first payment.' },
+];
+export const PAGE_VERSIONS: ChatDeliverable[] = [
+  {
+    ...FAQ_PAGE,
+    version: {
+      n: 1,
+      counts: { questions: 6, sections: 6, characters: 820 },
+      changes: { shortened: [], added: [], placeholders: [] },
+      sections: FAQ_SECTIONS.slice(0, 6),
+    },
+  },
+  {
+    ...FAQ_PAGE,
+    version: {
+      n: 2,
+      counts: { questions: 7, sections: 7, characters: 905 },
+      changes: {
+        shortened: [{ heading: 'Can I change plans?', before: 212, after: 140 }],
+        added: ['Can I get a refund?'],
+        placeholders: ['[REFUND PERIOD]'],
+      },
+      sections: FAQ_SECTIONS,
+      canUndo: true,
+    },
+  },
 ];
 
 /** Two questions asked together before a FAQ draft (CHAT-07 §A). */

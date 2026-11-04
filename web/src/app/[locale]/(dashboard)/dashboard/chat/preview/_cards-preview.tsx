@@ -18,6 +18,7 @@ import { RunsTray, RunsTrayView } from '@/components/agentic/runs-tray';
 import { NoticeRows } from '@/components/chat/inbox-notices';
 import { NextMoves } from '@/components/chat/run/next-moves';
 import { OpenPageCard } from '@/components/chat/run/open-page-card';
+import { DeliverableCard } from '@/components/chat/run/deliverable-card';
 import {
   APPROVAL,
   APPROVAL_HEAD,
@@ -25,6 +26,7 @@ import {
   DENIALS,
   FAILED,
   NEXT_MOVES,
+  PAGE_VERSIONS,
   PUBLISH,
   PUSH_APPROVAL,
   QUALITY_PLAN,
@@ -214,6 +216,15 @@ export function CardsPreview() {
       <Group title={t('sections.openPage')}>
         <State caption={s('openPage')}>
           <OpenPageCard onChoose={noop} />
+        </State>
+      </Group>
+
+      <Group title={t('sections.pageVersions')}>
+        <State caption={s('pageVersion1')}>
+          <DeliverableCard runId="preview" n={1} deliverable={PAGE_VERSIONS[0]} />
+        </State>
+        <State caption={s('pageVersion2')}>
+          <DeliverableCard runId="preview" n={2} deliverable={PAGE_VERSIONS[1]} />
         </State>
       </Group>
 

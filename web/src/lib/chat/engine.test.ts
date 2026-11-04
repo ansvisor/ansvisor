@@ -299,7 +299,7 @@ vi.mock('./registry/tools', async (importOriginal) => {
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { createContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraft, updateContentDraft } = await import('@/lib/actions/content-drafts');
 const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
 const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
 const { checkChatActionCoverFor, createChatActionFor, setTaskReadyForReviewFor } =
@@ -1769,6 +1769,13 @@ describe('changes wait for the person', () => {
         status: 'draft',
         href: `/dashboard/content/editor/${draftId}`,
         filed: 'in_files',
+        // Version 1 of the page in this chat (W4-12a): nothing before it to undo to.
+        version: {
+          n: 1,
+          counts: { questions: 0, sections: 0, characters: expect.any(Number) },
+          changes: { shortened: [], added: [], placeholders: [] },
+          sections: [],
+        },
       },
     ]);
     expectClean(await eventsOf(runId));
@@ -7558,6 +7565,104 @@ describe('brand access (BRAND-ACCESS PR 9)', () => {
   });
 });
 
+describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
+  const BEFORE = '99999999-9999-4999-8999-000000000412';
+  const PAGE = [
+    '<h1>Pricing FAQ</h1>',
+    '<h2>Which AI platforms does it track?</h2><p>Six of them.</p>',
+    '<h2>Can I get a refund?</h2><p>Yes, within [REFUND PERIOD] of your first payment.</p>',
+  ].join('');
+
+  beforeEach(() => {
+    seedDraft(db);
+    db.tables.content_draft_versions = [];
+    // The change as the member's session makes it: History keeps the page before, then it saves.
+    vi.mocked(updateContentDraft).mockImplementation(async (id, change) => {
+      const row = db.tables.content_drafts.find((d) => d.id === id)!;
+      db.tables.content_draft_versions.push({ id: BEFORE, draft_id: id, body_html: row.body_html });
+      row.body_html = change.bodyHtml ?? row.body_html;
+      return {
+        ok: true,
+        updatedAt: new Date().toISOString(),
+        bodyHash: 'h'.repeat(64),
+        beforeVersionId: BEFORE,
+      };
+    });
+  });
+
+  it('shows a change to a Library page as version 2, with what changed, and Undo kept on the server', async () => {
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: PAGE })), text('Done.')],
+    );
+    const runId = await turn(ADMIN, 'Add a refunds question', 'full_auto');
+    expect(runRow(runId).status).toBe('done');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    expect(ofType(events, 'deliverable.created')).toEqual([]);
+    const [card] = ofType(events, 'deliverable.updated').map((e) => e.data);
+    expect(card).toMatchObject({
+      title: 'Pricing FAQ',
+      href: `/dashboard/content/editor/${DRAFT}`,
+      filed: 'in_files',
+      version: {
+        // The page it changed, from the Library, is version 1.
+        n: 2,
+        counts: { questions: 2, sections: 2 },
+        changes: {
+          shortened: [],
+          added: ['Which AI platforms does it track?', 'Can I get a refund?'],
+          placeholders: ['[REFUND PERIOD]'],
+        },
+        canUndo: true,
+      },
+    });
+    // No id reaches the page; the server keeps which History version Undo puts back.
+    const file = db.tables.chat_files.find((f) => f.run_id === runId)!;
+    const state = db.tables.chat_run_state.find((r) => r.run_id === runId)!;
+    expect((state.progress as { pageUndos?: unknown }).pageUndos).toEqual({
+      [file.id as string]: { draftId: DRAFT, versionId: BEFORE },
+    });
+    // Filling the placeholder comes first among the next moves.
+    expect(
+      db.tables.chat_next_moves
+        .filter((m) => m.run_id === runId)
+        .sort((a, b) => (a.rank as number) - (b.rank as number))[0],
+    ).toMatchObject({ prompt: 'Fill the refund period', class: 'write', ghost_ok: true });
+  });
+
+  it('makes no card for a change of the title alone', async () => {
+    useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, title: 'Pricing for teams' })),
+        text('Done.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Rename it', 'full_auto');
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'deliverable.updated')).toEqual([]);
+    expect(ofType(events, 'deliverable.created')).toEqual([]);
+  });
+
+  it('still files an untitled page when its version can’t be read, as a plain card', async () => {
+    const draft = db.tables.content_drafts.find((d) => d.id === DRAFT)!;
+    draft.title = '';
+    db.failures.content_draft_versions = { message: 'down' };
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: PAGE })), text('Done.')],
+    );
+    const runId = await turn(ADMIN, 'Add a refunds question', 'full_auto');
+    const [card] = ofType(await eventsOf(runId), 'deliverable.created').map((e) => e.data);
+    expect(card).toMatchObject({ title: 'Untitled page', filed: 'in_files' });
+    expect(card).not.toHaveProperty('version');
+    delete db.failures.content_draft_versions;
+    error.mockRestore();
+  });
+});
+
 describe('the model menu’s pick (W4-02)', () => {
   it('keeps the model and effort picked on the run, and Auto at Normal in the free trial', async () => {
     const started = await engine.startChatRun(ADMIN, {
@@ -7624,10 +7729,11 @@ describe('the run’s model (W4-03)', () => {
     });
     if (!started.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, started.runId);
-    expect(fakes.resolveModels).toHaveBeenCalledWith(ORG, {
-      model: 'anthropic/claude-sonnet-5.5',
-      effort: 'max',
-    });
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'anthropic/claude-sonnet-5.5', effort: 'max' },
+      { ansvisorOnly: false },
+    );
     expect(fakes.readModelMenu).toHaveBeenCalledExactlyOnceWith({
       selected: 'anthropic/claude-sonnet-5.5',
     });
@@ -7647,7 +7753,11 @@ describe('the run’s model (W4-03)', () => {
     });
     if (!started.ok) throw new Error('not started');
     await engine.driveRun(ADMIN, started.runId);
-    expect(fakes.resolveModels).toHaveBeenCalledWith(ORG, { model: 'auto', effort: 'high' });
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'auto', effort: 'high' },
+      { ansvisorOnly: false },
+    );
     const dropped = stepsOf(started.runId).filter((s) => s.label === 'Ran on Auto');
     expect(dropped).toHaveLength(1);
     expect(dropped[0]).toMatchObject({
@@ -7664,7 +7774,11 @@ describe('the run’s model (W4-03)', () => {
     // An agent saved on a model the menu doesn't offer.
     Object.assign(runRow(started.runId), { model: 'mistralai/mistral-large-3', effort: 'max' });
     await engine.driveRun(ADMIN, started.runId);
-    expect(fakes.resolveModels).toHaveBeenCalledWith(ORG, { model: 'auto', effort: 'max' });
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'auto', effort: 'max' },
+      { ansvisorOnly: false },
+    );
     expect(fakes.readModelMenu).not.toHaveBeenCalled();
     expect(stepsOf(started.runId).map((s) => s.label)).not.toContain('Ran on Auto');
   });
@@ -7677,7 +7791,43 @@ describe('the run’s model (W4-03)', () => {
     Object.assign(runRow(started.runId), { model: 'anthropic/claude-haiku-5.5', effort: 'high' });
     db.tables.organizations[0].subscription_status = 'trialing';
     await engine.driveRun(ADMIN, started.runId);
-    expect(fakes.resolveModels).toHaveBeenCalledWith(ORG, { model: 'auto', effort: 'normal' });
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'auto', effort: 'normal' },
+      { ansvisorOnly: false },
+    );
     expect(fakes.readModelMenu).not.toHaveBeenCalled();
+  });
+});
+
+describe('"Use Ansvisor’s limit" (W4-06)', () => {
+  it('runs on Ansvisor’s key when an Admin asks, and never for anyone else', async () => {
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      keySource: 'ansvisor',
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenLastCalledWith(
+      ORG,
+      { model: 'auto', effort: 'normal' },
+      { ansvisorOnly: true },
+    );
+
+    useModels([READY], [text('Done.')]);
+    const asked = await engine.startChatRun(ANALYST, {
+      message: 'Why did citations fall?',
+      brandId: BRAND,
+      keySource: 'ansvisor',
+    });
+    if (!asked.ok) throw new Error('not started');
+    await engine.driveRun(ANALYST, asked.runId);
+    expect(fakes.resolveModels).toHaveBeenLastCalledWith(
+      ORG,
+      { model: 'auto', effort: 'normal' },
+      { ansvisorOnly: false },
+    );
   });
 });
