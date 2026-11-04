@@ -1950,7 +1950,7 @@
         },
         {
           "heading": "What the brief reads from cited pages",
-          "text": "Building the brief also reads a few of the pages AI cited. Their typical length shows beside **Length**, and **Cited pages have** lists what Site Audit's checks find on at least half of them, such as an FAQ schema, tables or statistics. The Content Agent then writes the page toward what its text can carry, not its schema, dates or byline, which your site sets.\n\nOnce the brief has an outline, **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent. The page you have now stays in History."
+          "text": "Building the brief also reads a few of the pages AI cited. Their typical length shows beside **Length**, and **Cited pages have** lists what Site Audit's checks find on at least half of them, such as an FAQ schema, tables or statistics. The Content Agent then writes the page toward what its text can carry, not its schema, dates or byline, which your site sets. The brief plans no more sections than your Length holds.\n\nOnce the brief has an outline, **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent. The page you have now stays in History."
         },
         {
           "heading": "Sources",
@@ -2084,7 +2084,11 @@
         },
         {
           "heading": "How many are left",
-          "text": "The dialog shows how many groups in your focus have no opportunity yet, and **How many** goes no higher. When none are left, it says so and **Generate** stays off: add prompts for new groups, or use **Another angle** on an opportunity. Groups without tracked answers from the last 30 days have nothing to write from yet."
+          "text": "The dialog shows how many groups in your focus have no opportunity yet, and how many more can get another angle. **How many** goes no higher. When none are left, it says so and **Generate** stays off: add prompts for new groups. Groups without tracked answers from the last 30 days have nothing to write from yet."
+        },
+        {
+          "heading": "Another angle when groups run out",
+          "text": "When **Let Ansvisor choose** or a **Topic** runs out of groups without an opportunity, New writes the rest as another angle on groups your brand is still barely seen for: mentioned or cited in fewer than 1 in 5 answers. Only where the existing opportunity had its chance: it's done, dismissed (not as \"The topic doesn't matter to us\"), or has been open for 30 days. The list marks these **Another angle**, the message names their groups, and they use the monthly allowance like any other."
         },
         {
           "heading": "No duplicates",
@@ -2096,7 +2100,11 @@
         },
         {
           "heading": "How many you get",
-          "text": "New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. The up to three new opportunities Ansvisor writes by itself each night come from the same allowance."
+          "text": "New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. The opportunities Ansvisor writes by itself come from the same allowance."
+        },
+        {
+          "heading": "Automatic suggestions",
+          "text": "After each day's tracking run, Ansvisor writes new opportunities by itself, on a plan with an active subscription:\n\n- **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.\n- **When no group is left, at most 1 a night** as another angle (at most 7 a week). It goes to the group with the most estimated AI volume whose opportunity has been done for 30 days, where your brand is still mentioned or cited in fewer than 1 in 5 answers. On many nights nothing qualifies, and nothing is written."
         },
         {
           "heading": "Owned and earned",
@@ -2204,11 +2212,11 @@
         },
         {
           "heading": "Fix open rules",
-          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Running the agent uses your workspace's monthly AI usage.\n\nAn open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide: change the page yourself, or the rule."
+          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage.\n\nAn open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide: change the page yourself, or the rule."
         },
         {
           "heading": "Rewrite the whole page",
-          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. A rewrite isn't offered once the page is ready or published. One past its Length is cut to it with one more pass; accept one still a little long, and the next rewrite starts from there.\n\nWhen the passages it keeps stop the page reaching its Length, a note offers **Raise Length to …** and **Rewrite, cited passages too**, which may stop those passages being quoted. The **Length** rule says so too."
+          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published.\n\nYour Length has the last word: a rewrite merges or drops the least useful sections rather than go past it, and one still long is cut once more. When the passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**. The **Length** rule says so too."
         },
         {
           "heading": "Before you run it again",

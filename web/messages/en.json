@@ -10655,11 +10655,11 @@
           "length": "Recommended: the page is {count, number} characters for a Length of {target, number} ({percent, number}% off). A rewrite gets there in one go.",
           "open": "Recommended: Content Agent can fix {count, number} of them, and a rewrite meets them together."
         },
-        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are, and each heading needs its answer. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReach": "The page is {count, number} characters for a Length of {target, number}, but a rewrite can't go much under {least, number}: {kept, number} are passages AI answers quote, tables and other blocks it keeps as they are. Unlock passages you're fine to have reworded, or raise the Length to about {suggested, number}.",
         "lengthMin": "{name}, at least",
         "lengthMax": "{name}, at most",
         "lengthOutOfReachNote": "A rewrite can't get this page much under {least, number} characters, so the agent leaves the Length to you. Run Agent above says why.",
-        "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Raise the Length to about {suggested, number}, or unlock passages you're fine to have reworded.",
+        "lengthOutOfReachRun": "The page is {count, number} characters for a Length of {target, number}. The last rewrite came to {least, number}, so another won't get there. Unlock passages you're fine to have reworded, or raise the Length to about {suggested, number}.",
         "lengthOutOfReachHeadings": "The page is {count, number} characters for a Length of {target, number}, but its headings and an answer under each come to about {least, number}. Raise the Length to about {suggested, number}, or use fewer sections.",
         "raiseLength": "Raise Length to {suggested, number}",
         "rewriteCitedToo": "Rewrite, cited passages too",
@@ -10913,7 +10913,8 @@
       "noAnswers": "{count, plural, one {# need has} other {# needs have}} no tracked answers from the last 30 days yet, so there's nothing to write from. {count, plural, one {It's} other {They're}} suggested once tracking has answers.",
       "covered": "{count, plural, one {# need} other {# needs}}{focus, select, topic { in this topic} other {}} already {count, plural, one {has an opportunity} other {have one}}. Add prompts for new needs, or use Another angle on an opportunity.",
       "fewNeeds": "{count, plural, =0 {There are no prompt groups{focus, select, topic { in this topic} other {}} yet.} one {There's only # need{focus, select, topic { in this topic} other {}}.} other {There are only # needs{focus, select, topic { in this topic} other {}}.}} Add prompts for new needs.",
-      "fewerWritten": "The AI wrote fewer than asked for. Try again for the rest."
+      "fewerWritten": "The AI wrote fewer than asked for. Try again for the rest.",
+      "angles": "{count, plural, one {1 is another angle on a need you're still barely seen for} other {# are another angle on needs you're still barely seen for}}: {needs}."
     },
     "newExisting": "This prompt already has an opportunity",
     "openExisting": "Open existing",
@@ -10926,7 +10927,7 @@
       "button": "Another angle",
       "running": "Writing another angle…",
       "hint": "Suggest one more opportunity for the same need, with a different angle",
-      "badge": "Alternative",
+      "badge": "Another angle",
       "of": "Another angle on",
       "title": "Another angle",
       "description": "Ansvisor writes one more opportunity for the same need, with a different content type, format, audience or approach. Both stay in the list so you can keep the one you prefer.",
@@ -10956,7 +10957,7 @@
     },
     "newDialog": {
       "title": "New content opportunities",
-      "description": "Get suggestions now. Ansvisor also writes up to 3 a night by itself, one per topic, for needs that have no opportunity yet.",
+      "description": "Get suggestions now. Ansvisor also writes up to 3 a night by itself, one per topic, for needs that have no opportunity yet, and once none are left, at most 1 a night as another angle.",
       "focus": "Focus (optional)",
       "focusOptions": {
         "auto": "Let Ansvisor choose",
@@ -10966,9 +10967,12 @@
       "pickTopic": "Choose a topic",
       "pickPrompt": "Choose a prompt",
       "topicOpen": "{count} new",
+      "topicAngles": "{count} for another angle",
       "topicCovered": "All covered",
       "promptHasOne": "Has one",
       "needsOpen": "{open} of {needs} {needs, plural, one {need} other {needs}}{focus, select, topic { in this topic} other {}} {open, plural, one {has} other {have}} no opportunity yet.",
+      "needsAngles": "{focus, select, topic {Every need in this topic} other {Every need}} already has an opportunity. New writes another angle on the ones you're still barely seen for: up to {angles}.",
+      "needsMoreAngles": "Past that, up to {angles} more as another angle on needs you're still barely seen for.",
       "needsNone": "Every need{focus, select, topic { in this topic} other {}} already has an opportunity{noAnswers, plural, =0 {} other {, or has no tracked answers from the last 30 days yet}}. Add prompts for new needs, or use Another angle on an opportunity.",
       "promptExisting": "This prompt's need already has an opportunity.",
       "openExisting": "Open existing",
@@ -14853,6 +14857,20 @@
           "founded": "Founded",
           "claim": "Claim"
         }
+      },
+      "people": {
+        "tab": "People",
+        "title": "People",
+        "description": "Who in your workspace can see this brand: everyone with All brands, and those it's shared with.",
+        "demoDescription": "The sample brand is visible to everyone in your workspace.",
+        "count": "{count, plural, one {# person} other {# people}} can see this brand",
+        "access": {
+          "all": "All brands",
+          "shared": "Shared with them"
+        },
+        "editInTeam": "Change who sees which brands in Team",
+        "loadError": "Couldn't load who can see this brand.",
+        "retry": "Retry"
       },
       "title": "Brand Settings",
       "generalTab": "General",

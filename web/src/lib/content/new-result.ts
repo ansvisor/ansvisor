@@ -19,10 +19,11 @@ export interface NewResultMessage {
 
 /**
  * What the "+ New" toast says when its run ends (CONTENT-003): how many were
- * created and, when that's fewer than asked for, why: needs added to
- * existing opportunities, needs with no tracked answers to write from yet,
- * and needs that already have an opportunity. A result without `scope`
- * (a server from before it) keeps the old wording.
+ * created, which were another angle on a need that already had one, and,
+ * when that's fewer than asked for, why: needs added to existing
+ * opportunities, needs with no tracked answers to write from yet, and needs
+ * that already have an opportunity. A result without `scope` (a server from
+ * before it) keeps the old wording.
  */
 export function newResultMessage(result: JobResult): NewResultMessage {
   if (result.limited) return { tone: 'error', title: { key: 'newLimitReached' }, reasons: [] };
@@ -36,10 +37,22 @@ export function newResultMessage(result: JobResult): NewResultMessage {
       existingId: result.existingId,
     };
   }
+  // Written as another angle once the needs without one ran out: named.
+  const angles: NewResultLine[] = result.angles?.length
+    ? [
+        {
+          key: 'newReason.angles',
+          values: {
+            count: result.angles.length,
+            needs: result.angles.map((a) => a.need).join(', '),
+          },
+        },
+      ]
+    : [];
   const done: NewResultMessage = {
     tone: 'success',
     title: { key: 'newDone', values: { generated, duplicates } },
-    reasons: [],
+    reasons: angles,
   };
   const scope = result.scope;
   if (!scope) {
@@ -49,7 +62,7 @@ export function newResultMessage(result: JobResult): NewResultMessage {
   }
   if (generated >= scope.requested) return done;
 
-  const reasons: NewResultLine[] = [];
+  const reasons: NewResultLine[] = [...angles];
   const joined = (result.merged ?? 0) + duplicates + (result.sameQuestion ?? 0);
   if (joined) reasons.push({ key: 'newReason.joined', values: { count: joined } });
   if (scope.noAnswers) {
@@ -63,7 +76,7 @@ export function newResultMessage(result: JobResult): NewResultMessage {
   }
   // Nothing held the rest back: the focus has fewer needs than were asked
   // for, or the model wrote fewer than it was asked for.
-  if (!reasons.length) {
+  if (reasons.length === angles.length) {
     reasons.push(
       scope.needs < scope.requested
         ? { key: 'newReason.fewNeeds', values: { count: scope.needs, focus: scope.focus } }

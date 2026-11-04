@@ -68,7 +68,11 @@ Titles leave years out unless the need is about one. A year that has passed in a
 
 ## How many are left
 
-The dialog shows how many groups in your focus have no opportunity yet, and **How many** goes no higher. When none are left, it says so and **Generate** stays off: add prompts for new groups, or use **Another angle** on an opportunity. Groups without tracked answers from the last 30 days have nothing to write from yet.
+The dialog shows how many groups in your focus have no opportunity yet, and how many more can get another angle. **How many** goes no higher. When none are left, it says so and **Generate** stays off: add prompts for new groups. Groups without tracked answers from the last 30 days have nothing to write from yet.
+
+## Another angle when groups run out
+
+When **Let Ansvisor choose** or a **Topic** runs out of groups without an opportunity, New writes the rest as another angle on groups your brand is still barely seen for: mentioned or cited in fewer than 1 in 5 answers. Only where the existing opportunity had its chance: it's done, dismissed (not as "The topic doesn't matter to us"), or has been open for 30 days. The list marks these **Another angle**, the message names their groups, and they use the monthly allowance like any other.
 
 ## No duplicates
 
@@ -88,7 +92,14 @@ When a run writes fewer than you asked for, or none, the message says why:
 
 ## How many you get
 
-New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. The up to three new opportunities Ansvisor writes by itself each night come from the same allowance.
+New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. The opportunities Ansvisor writes by itself come from the same allowance.
+
+## Automatic suggestions
+
+After each day's tracking run, Ansvisor writes new opportunities by itself, on a plan with an active subscription:
+
+- **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.
+- **When no group is left, at most 1 a night** as another angle (at most 7 a week). It goes to the group with the most estimated AI volume whose opportunity has been done for 30 days, where your brand is still mentioned or cited in fewer than 1 in 5 answers. On many nights nothing qualifies, and nothing is written.
 
 ## Owned and earned
 
