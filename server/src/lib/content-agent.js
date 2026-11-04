@@ -19,6 +19,7 @@ import {
   pageOwn,
   withFactLinks,
 } from './content-research.js';
+import { HEALTH_RULE, addsHealthClaim, healthGuard, withoutHealthFinds } from './content-health.js';
 import { linkAllowList, linkKey, linkTargetsPrompt, readLinkTargets } from './content-links.js';
 import { shoppingGiven, shoppingPathFor, withShopping } from './shopping-links.js';
 import { siteTypeLine, pageTypeFormat } from './content-page-types.js';
@@ -201,6 +202,7 @@ ${FANOUT_RULE}
 - Never change a passage marked LOCKED: AI assistants quote its wording today. You may insert after it.
 - Use only facts from the page, the brand and your data, and the ones you ask to have looked up. Never invent numbers, prices, dates, names, sources or quotes.
 ${RESEARCH_RULE}
+${HEALTH_RULE}
 ${SOURCES_RULE}
 ${ATTRIBUTION_RULE}
 - Keep the page's voice and change as little as each rule needs. At most ${MAX_AGENT_SUGGESTIONS} suggestions.
@@ -886,6 +888,8 @@ export function splitReplace(after, tag, links = null) {
  * adds a number with no source is not kept. A person's name or a quote
  * that what it was given doesn't have becomes a placeholder, read in its
  * words as written, blockquotes too, before they are cleaned (CE-044).
+ * On a health brand's page (`sourcing.health`, content-health.js), one that
+ * adds a health claim the brand didn't make, or asks for one, is not kept.
  * `sourcing` is the numbered sources, the numbers known already
  * (the page's, the brand's) and the words names and quotes are looked up in
  * (knownPeople): without it, the page's.
@@ -902,6 +906,8 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
   const attributable = sourcing.attributable ?? people;
   // The Banned words rule's words: a change taking one out may drop that item only.
   const banned = sourcing.banned ?? [];
+  // A health brand's guard (content-health.js healthGuard): null for any other brand.
+  const health = sourcing.health ?? null;
   const kept = [];
   const seen = new Set();
   for (const answer of raw) {
@@ -925,7 +931,9 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
       return lines.some((line) => line.trim()) &&
         html.length <= 20_000 &&
         // A claim given to a source it wasn't given (editor test 2026-10-25).
-        !lines.some((line) => addsAttribution('', line, attributable))
+        !lines.some((line) => addsAttribution('', line, attributable)) &&
+        // A health claim the brand didn't make (owner's safety rule, 2026-11-03).
+        !lines.some((line) => addsHealthClaim(line, health))
         ? {
             id: `insert:${passage.text}:${html}`,
             row: {
@@ -973,6 +981,11 @@ export function keepSuggestions(raw, passages, lockedKeys, ruleKeys, links = nul
           growsPastLimit(passage, before, words) ||
           asksMoreThanOne(passage, before, words) ||
           addsAttribution(before, words, attributable) ||
+          // Read in the passage as changed: a question it asks claims nothing.
+          addsHealthClaim(
+            passage.text.replace(before, () => words),
+            health,
+          ) ||
           (!/^h[1-6]$/.test(passage.tag) &&
             dropsName(passage.text, before, words, rules, htmlLines(blocks).join(' '), banned)))
       )
@@ -1475,6 +1488,21 @@ async function fixWithRun({
     ...numbered.map(sourceWords),
     ...authors,
   );
+  // A health brand's guard: the claims it made in its own words (the page,
+  // its description, Your input, its approved facts and the rules people
+  // wrote), never the brief's or a buyer's (content-health.js).
+  const health = healthGuard(brand, {
+    html: draft.body_html,
+    texts: [
+      draft.title,
+      brand.name,
+      brand.description,
+      ...facts,
+      ...shopping.names,
+      ...(handoff ? [] : [...input.textRules, ...(brand.rules ?? [])]),
+    ],
+    numbered,
+  });
   // The sources a claim may be given to: the ones the page gives claims to,
   // and its Your input and authors (never just a name the page lists).
   const attributable = attributableSources(
@@ -1543,12 +1571,22 @@ async function fixWithRun({
   }
 
   await advanceRun(run, 3);
+  // One that asks for a health claim to be looked up ({{find: …}}) goes
+  // first: none is searched (content-health.js). The claims the rest make
+  // are read once placed (keepSuggestions).
+  const asked = withoutHealthFinds(object.suggestions, health);
+  if (asked.length < object.suggestions.length) {
+    logger.info(
+      { draftId, health: object.suggestions.length - asked.length },
+      '[content-agent] suggestions asking for a health claim dropped',
+    );
+  }
   // The facts it asked for, and the figures it wrote with no source, looked
   // up on the web and written in with their links, or their sentences
   // written without them (content-research.js). The figures its data's
   // words have are its sources' (sourceSuggestion), not ones to look up.
   const looked = await lookUpSuggestionFacts({
-    suggestions: object.suggestions,
+    suggestions: asked,
     known: withNamedNumbers(
       new Set([...known, ...knownNumbers(...numbered.map(sourceWords))]),
       shopping.names,
@@ -1575,6 +1613,7 @@ async function fixWithRun({
       attributable,
       keepPlaceholders: handoff,
       banned: bannedWordsOf(input.rules),
+      health,
     },
   );
   // Stopped meanwhile: nothing it wrote is kept.

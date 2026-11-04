@@ -28,7 +28,8 @@ vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { checkChatActionCoverFor, createChatActionFor } = await import('./action-center');
+const { checkChatActionCoverFor, createChatActionFor, setTaskReadyForReviewFor } =
+  await import('./action-center');
 
 const place = {
   conversationId: CHAT,
@@ -204,5 +205,75 @@ describe('checkChatActionCoverFor', () => {
     expect(await checkChatActionCoverFor(actor, BRAND, entities)).toEqual({ ok: true });
     expect(error).toHaveBeenCalledTimes(1);
     error.mockRestore();
+  });
+});
+
+describe('setTaskReadyForReviewFor', () => {
+  const TASK = '99999999-9999-4999-8999-999999999991';
+  function seedTask(brand = BRAND) {
+    db.tables.action_tasks = [
+      {
+        id: TASK,
+        action_id: ACTION,
+        task_key: null,
+        title: 'Add a pricing FAQ block to /pricing',
+        status: 'todo',
+        actions: { brand_id: brand, status: 'new' },
+      },
+    ];
+    db.tables.chat_task_state = [];
+    db.tables.action_events = [];
+    // The step the change runs on is this tool's, and the brand is the person's to use.
+    for (const step of db.tables.chat_run_steps) step.tool = 'set_task_ready_for_review';
+    db.rpcs = { ...db.rpcs, can_access_brand: () => true };
+  }
+
+  it('sets the task Ready for review in the run’s chat, its History naming the run’s person', async () => {
+    seedTask();
+    expect(await setTaskReadyForReviewFor(actor, BRAND, TASK, place)).toEqual({
+      ok: true,
+      task_id: TASK,
+      action_id: ACTION,
+      conversation_id: CHAT,
+      previous: null,
+    });
+    expect(db.tables.chat_task_state).toEqual([
+      expect.objectContaining({
+        conversation_id: CHAT,
+        action_task_id: TASK,
+        chat_status: 'ready_for_review',
+        run_id: RUN,
+      }),
+    ]);
+    expect(db.tables.action_events).toEqual([
+      expect.objectContaining({
+        action_id: ACTION,
+        event: 'task_ready_for_review',
+        actor_id: PERSON,
+        data: expect.objectContaining({ execution: { mode: 'automated' } }),
+      }),
+    ]);
+  });
+
+  it('refuses an Analyst, another brand’s task and a teammate’s chat, and changes nothing', async () => {
+    seed('analyst');
+    seedTask();
+    expect(await setTaskReadyForReviewFor(actor, BRAND, TASK, place)).toMatchObject({
+      ok: false,
+      reason: 'forbidden_role',
+    });
+    seed();
+    seedTask(DEMO);
+    expect(await setTaskReadyForReviewFor(actor, BRAND, TASK, place)).toMatchObject({
+      ok: false,
+      reason: 'not_found',
+    });
+    seed('manager', TEAMMATE);
+    seedTask();
+    expect(await setTaskReadyForReviewFor(actor, BRAND, TASK, place)).toMatchObject({
+      ok: false,
+      reason: 'invalid',
+    });
+    expect(db.tables.chat_task_state).toEqual([]);
   });
 });

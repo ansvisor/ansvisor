@@ -11,7 +11,7 @@ vi.mock('@/lib/supabase/admin', async () => {
 });
 const facts = vi.hoisted(() => ({ planId: 'starter', planName: 'Starter', selfHosted: false }));
 vi.mock('@/lib/mcp/chat-facts', () => ({ planFactsOf: async () => facts }));
-// Two approved entries, as entries.json would hold them.
+// Three approved entries, as entries.json would hold them.
 vi.mock('./entries.json', () => ({
   default: {
     entries: [
@@ -33,6 +33,17 @@ vi.mock('./entries.json', () => ({
         plans: ['growth', 'enterprise'],
         planMode: 'hide',
         published: '2026-11-01',
+        lines: ['One.', 'Two.', 'Three.'],
+      },
+      {
+        slug: 'go-live',
+        feature: 'Go live',
+        homeLine: 'Agents can publish on their own.',
+        route: '/dashboard/settings/chat',
+        plans: ['growth', 'enterprise'],
+        planMode: 'show_upgrade',
+        requires: 'auto_go_live',
+        published: '2026-11-04',
         lines: ['One.', 'Two.', 'Three.'],
       },
     ],
@@ -209,6 +220,24 @@ describe('pickWhatsNew', () => {
       ['months-ago', null],
     ]);
   });
+  it('shows an entry that requires a switch only where the switch is on', () => {
+    const gated = [
+      day('2026-11-05', 'go-live', { requires: 'auto_go_live' }),
+      day('2026-11-04', 'everyone'),
+    ];
+    const growth = { planId: 'growth' as const, selfHosted: false };
+    const slugs = (flags?: Set<'auto_go_live'>) =>
+      pickWhatsNew({ entries: gated, plan: growth, flags, read: new Set(), now }).items.map(
+        (i) => i.slug,
+      );
+    expect(slugs()).toEqual(['everyone']);
+    expect(slugs(new Set())).toEqual(['everyone']);
+    expect(slugs(new Set(['auto_go_live']))).toEqual(['go-live', 'everyone']);
+    // Unread but gated off: no dot for it.
+    expect(
+      pickWhatsNew({ entries: gated, plan: growth, read: new Set(['everyone']), now }).hasUnread,
+    ).toBe(false);
+  });
 });
 
 describe('read state', () => {
@@ -249,5 +278,32 @@ describe('read state', () => {
     expect(read.items.map((i) => [i.slug, i.read])).toEqual([['agent-center', true]]);
     expect(read.planName).toBe('Starter');
     expect(read.hasUnread).toBe(false);
+  });
+
+  it('shows the auto go-live entry only to a workspace with CHAT_AUTO_GO_LIVE on', async () => {
+    facts.planId = 'growth';
+    facts.planName = 'Growth';
+    const slugs = async () =>
+      (
+        await readWhatsNew({
+          userId: 'u1',
+          organizationId: 'org-1',
+          now: new Date('2026-11-06T00:00:00Z'),
+        })
+      ).items.map((i) => i.slug);
+    try {
+      vi.stubEnv('CHAT_AGENTIC', 'true');
+      vi.stubEnv('CHAT_AUTO_GO_LIVE', '');
+      expect(await slugs()).toEqual(['agent-center', 'full-auto']);
+      vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
+      vi.stubEnv('CHAT_AUTO_GO_LIVE_ORGS', 'org-2');
+      expect(await slugs()).toEqual(['agent-center', 'full-auto']);
+      vi.stubEnv('CHAT_AUTO_GO_LIVE_ORGS', 'org-1');
+      expect(await slugs()).toEqual(['go-live', 'agent-center', 'full-auto']);
+    } finally {
+      vi.unstubAllEnvs();
+      facts.planId = 'starter';
+      facts.planName = 'Starter';
+    }
   });
 });
