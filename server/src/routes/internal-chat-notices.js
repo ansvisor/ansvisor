@@ -15,11 +15,17 @@
  *   `version` (AUTONOMOUS-GO-LIVE §7.2, 00446): the Admin who allowed it and
  *   its owner, but not the editor, are told, Inbox and e-mail, once per version
  *   (lib/chat-notices/go-live.js). An agent not allowed for it: 0 and 0.
+ *
+ * POST /api/internal/chat/notices/needs-you { orgId, agentRunId }
+ *   An agent's run waits for its person (status needs_you, 00474): by their
+ *   "Notify me when an agent needs me", one e-mail, once per run
+ *   (lib/chat-notices/needs-you.js). A run that doesn't wait: 0 and 0.
  */
 
 import { Router } from 'express';
 import { z } from 'zod';
 import { tellGoLiveOff } from '../lib/chat-notices/go-live.js';
+import { tellNeedsYou } from '../lib/chat-notices/needs-you.js';
 import { notifyOwnKeyFailure } from '../lib/chat-notices/own-key.js';
 import logger from '../lib/logger.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
@@ -74,6 +80,25 @@ router.post('/go-live-off', async (req, res) => {
     return res.json({ success: true, ...told });
   } catch (err) {
     logger.error({ err, agentId: parsed.data.agentId }, 'go-live off notice failed');
+    return res.status(500).json({ success: false, message: 'Could not tell them' });
+  }
+});
+
+const needsYouSchema = z.object({
+  orgId: z.guid(),
+  agentRunId: z.guid(),
+});
+
+router.post('/needs-you', async (req, res) => {
+  const parsed = needsYouSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ success: false, message: 'Invalid request' });
+  }
+  try {
+    const told = await tellNeedsYou(parsed.data);
+    return res.json({ success: true, ...told });
+  } catch (err) {
+    logger.error({ err, agentRunId: parsed.data.agentRunId }, 'needs-you notice failed');
     return res.status(500).json({ success: false, message: 'Could not tell them' });
   }
 });
