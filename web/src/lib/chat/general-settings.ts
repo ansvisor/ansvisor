@@ -17,8 +17,12 @@ import { CHAT_MODES, parseTeamRole, type ChatMode } from './precedence';
  * is connected. Server only.
  */
 
-/** The answer languages offered (mockup #s-settings), as BCP 47 tags. */
-export const ANSWER_LANGUAGES = ['en', 'tr', 'de'] as const;
+/**
+ * The answer languages offered, as BCP 47 tags: the ones Chat reads and
+ * names (language.ts LANGUAGES), so a set language is the one the engine
+ * tells the writer and rewrites into.
+ */
+export const ANSWER_LANGUAGES = ['en', 'tr', 'de', 'fr', 'es', 'it', 'pt', 'nl'] as const;
 export type AnswerLanguage = (typeof ANSWER_LANGUAGES)[number];
 
 /** How the person hears that an agent needs them (00408 notify_via). */

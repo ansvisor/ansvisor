@@ -48,12 +48,15 @@ function section(title: string | null, lines: Maybe<OpportunityLine>[]): Opportu
 }
 
 /**
- * The AI volume an opportunity kept when it was made or last updated, as a
- * low estimate (PROMPT-013): what shows when its prompts' current estimates
+ * The AI volume an opportunity kept when it was made, its question's, as a
+ * low estimate (PROMPT-013): what shows when its question's current estimate
  * can't be read. Null when it kept none.
  */
 export function keptVolume(opportunity: ContentOpportunity): VolumeEstimate | null {
-  const kept = opportunity.sourceData.estAiVolume;
+  const sd = opportunity.sourceData;
+  // Its question's volume; a single prompt's sum is that prompt's. A group's
+  // older sum is no question's volume, so nothing is kept for it.
+  const kept = sd.questionVolume ?? (opportunity.clusterId ? undefined : sd.estAiVolume);
   return kept && kept > 0 ? snapshotVolumeEstimate(kept) : null;
 }
 
@@ -155,6 +158,14 @@ export function opportunityDocument(
             : 'Estimate',
         ),
       estimate && field('Volume confidence', humanize(estimate.confidence)),
+      // An opportunity's volume is its question's (question-volume.ts).
+      estimate &&
+        field(
+          'Volume of',
+          (sd.prompts?.length ?? 0) > 1
+            ? `Its related prompt, one of ${sd.prompts!.length} prompts`
+            : 'Its related prompt',
+        ),
       sd.visibilityScore != null && field('Visibility', `${Math.round(sd.visibilityScore)}%`),
       sd.competitorGap != null && field('Competitor gap', `${Math.round(sd.competitorGap)}%`),
       field('Intent', sd.intent),
