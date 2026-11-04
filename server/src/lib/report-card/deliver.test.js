@@ -4,6 +4,7 @@ vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
 const {
   PRIVACY_URL,
+  MAX_PDF_ATTEMPTS,
   deliverReportCards,
   pdfName,
   renderCardPdf,
@@ -150,6 +151,7 @@ describe('deliverReportCards', () => {
     return {
       undeliveredRequests: vi.fn(async () => rows),
       markEmailed: vi.fn(async () => {}),
+      markEmailAttempt: vi.fn(async () => {}),
     };
   }
 
@@ -213,6 +215,7 @@ describe('deliverReportCards', () => {
       env: {},
     });
     expect(down.markEmailed).not.toHaveBeenCalled();
+    expect(down.markEmailAttempt).toHaveBeenCalledWith('r1', 1);
     const refused = store([request('r1', ready)]);
     await deliverReportCards({
       store: refused,
@@ -225,5 +228,33 @@ describe('deliverReportCards', () => {
     });
     expect(refused.markEmailed).toHaveBeenCalledWith('r1', 'refused', NOW);
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('tries again after a 401, a 404 or a 5xx, and gives up after MAX_PDF_ATTEMPTS', async () => {
+    for (const status of [401, 404, 503]) {
+      const s = store([{ ...request('r1', ready), email_attempts: 3 }]);
+      await deliverReportCards({
+        store: s,
+        render: async () => {
+          throw Object.assign(new Error('no'), { status });
+        },
+        send: vi.fn(),
+        now: () => NOW,
+        env: {},
+      });
+      expect(s.markEmailed).not.toHaveBeenCalled();
+      expect(s.markEmailAttempt).toHaveBeenCalledWith('r1', 4);
+    }
+    const last = store([{ ...request('r1', ready), email_attempts: MAX_PDF_ATTEMPTS - 1 }]);
+    await deliverReportCards({
+      store: last,
+      render: async () => {
+        throw Object.assign(new Error('no'), { status: 500 });
+      },
+      send: vi.fn(),
+      now: () => NOW,
+      env: {},
+    });
+    expect(last.markEmailed).toHaveBeenCalledWith('r1', 'refused', NOW);
   });
 });

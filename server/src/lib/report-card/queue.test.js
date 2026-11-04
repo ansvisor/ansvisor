@@ -3,8 +3,16 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
 const { reportCardLimits } = await import('./config.js');
-const { MAX_ATTEMPTS, pruneReportCardRequests, runCard, startReportCardQueue, tickReportCards } =
-  await import('./queue.js');
+const {
+  MAX_ATTEMPTS,
+  RUN_DEADLINE_MS,
+  STALE_MS,
+  pruneReportCardRequests,
+  runCard,
+  startReportCardQueue,
+  tickReportCards,
+} = await import('./queue.js');
+const { reportCardStore } = await import('./store.js');
 
 const NOW = new Date('2026-11-03T10:00:00Z');
 
@@ -111,9 +119,10 @@ describe('tickReportCards', () => {
       run: vi.fn(),
       deliver,
     });
-    expect(s.releaseCard).toHaveBeenCalledWith('once', { status: 'queued', started_at: null });
+    expect(s.releaseCard).toHaveBeenCalledWith('once', 1, { status: 'queued', started_at: null });
     expect(s.releaseCard).toHaveBeenCalledWith(
       'twice',
+      MAX_ATTEMPTS,
       expect.objectContaining({ status: 'failed' }),
     );
   });
@@ -136,7 +145,7 @@ describe('runCard', () => {
       industry: 'saas',
       dealValue: { amount: 9000, currency: 'EUR' },
     });
-    expect(s.finishCard).toHaveBeenCalledWith('a', {
+    expect(s.finishCard).toHaveBeenCalledWith('a', 1, {
       status: 'ready',
       payload: { companyName: 'Acme' },
       questions: [{ text: 'q' }],
@@ -153,12 +162,57 @@ describe('runCard', () => {
       throw new Error('No engine answered');
     });
     expect(await runCard(card('a'), { store: s, build, now: () => NOW })).toBe('failed');
-    expect(s.finishCard).toHaveBeenCalledWith('a', {
+    expect(s.finishCard).toHaveBeenCalledWith('a', 1, {
       status: 'failed',
       cost_usd: 0.01,
       finished_at: NOW.toISOString(),
       error: 'No engine answered',
     });
+  });
+});
+
+describe('a slow run', () => {
+  it('asks the engines until a deadline well below the time a run is taken as lost', async () => {
+    expect(RUN_DEADLINE_MS).toBeLessThanOrEqual(STALE_MS - 15 * 60 * 1000);
+    const build = vi.fn(async () => ({ payload: {}, questions: [] }));
+    await runCard(card('a'), { store: store(), build, now: () => NOW });
+    expect(build.mock.calls[0][1].deadline).toBe(NOW.getTime() + RUN_DEADLINE_MS);
+  });
+
+  it('writes only as the attempt it was started as', async () => {
+    const s = store();
+    const build = vi.fn(async () => ({ payload: {}, questions: [] }));
+    await runCard({ ...card('a'), attempts: 2 }, { store: s, build, now: () => NOW });
+    expect(s.finishCard.mock.calls[0][1]).toBe(2);
+  });
+});
+
+describe('the store', () => {
+  /** A query builder that records its filters. */
+  const recorder = () => {
+    const filters = [];
+    const q = {
+      from: () => q,
+      update: () => q,
+      eq: (col, val) => {
+        filters.push([col, val]);
+        return q;
+      },
+      then: (resolve) => resolve({ error: null }),
+    };
+    return { db: q, filters };
+  };
+
+  it('finishes and releases a card only while it is still that attempt’s run', async () => {
+    for (const write of ['finishCard', 'releaseCard']) {
+      const { db, filters } = recorder();
+      await reportCardStore(db)[write]('a', 2, { status: 'failed' });
+      expect(filters).toEqual([
+        ['id', 'a'],
+        ['status', 'running'],
+        ['attempts', 2],
+      ]);
+    }
   });
 });
 
