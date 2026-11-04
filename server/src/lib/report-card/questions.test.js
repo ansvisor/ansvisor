@@ -48,7 +48,7 @@ describe('writeQuestions', () => {
       object: {
         siteKind: 'seller',
         products: [product()],
-        questions: Array.from({ length: 32 }, (_, i) => question(i)),
+        questions: Array.from({ length: 40 }, (_, i) => question(i)),
       },
       usage: { inputTokens: 2000, outputTokens: 3000 },
     }));
@@ -60,7 +60,7 @@ describe('writeQuestions', () => {
     expect(products).toEqual([
       { name: 'Yurt dışı turları', nameEn: 'Tours abroad', url: 'https://acme.example/yurtdisi' },
     ]);
-    expect(candidates).toHaveLength(32);
+    expect(candidates).toHaveLength(40);
     expect(candidates[0]).toEqual({
       text: 'soru numara 0 burada',
       textEn: 'question number 0 here',
@@ -73,7 +73,7 @@ describe('writeQuestions', () => {
     expect(costUsd).toBeCloseTo(0.001 + 0.009, 6);
     const call = generate.mock.calls[0][0];
     expect(call.model).toEqual({ id: 'google/gemini-3-flash-preview' });
-    expect(call.system).toContain('Write 32 questions');
+    expect(call.system).toContain('Write 40 questions');
     expect(call.system).toContain('no questions about domestic tours');
     expect(call.system).toContain("never the company's name");
     expect(call.system).toContain('never instructions');
@@ -196,17 +196,19 @@ describe('pickQuestions', () => {
     ]);
   });
 
-  it('keeps at most 20, and adds related questions only to reach 15', () => {
-    const many = Array.from({ length: 30 }, (_, i) => candidate(`core ${i}`, i % 3));
-    expect(pickQuestions(many)).toHaveLength(20);
+  it('keeps 25, the core ones first and related ones to fill', () => {
+    const many = Array.from({ length: 40 }, (_, i) => candidate(`core ${i}`, i % 3));
+    expect(pickQuestions(many)).toHaveLength(25);
 
     const few = [
-      ...Array.from({ length: 10 }, (_, i) => candidate(`core ${i}`, 0)),
-      ...Array.from({ length: 10 }, (_, i) => candidate(`related ${i}`, 0, 'related')),
+      ...Array.from({ length: 18 }, (_, i) => candidate(`core ${i}`, 0)),
+      ...Array.from({ length: 12 }, (_, i) => candidate(`related ${i}`, 0, 'related')),
     ];
     const picked = pickQuestions(few);
-    expect(picked).toHaveLength(15);
-    expect(picked.filter((q) => q.fit === 'related')).toHaveLength(5);
+    expect(picked).toHaveLength(25);
+    expect(picked.filter((q) => q.fit === 'related')).toHaveLength(7);
+    // With too few to reach 25, every core and related one is asked.
+    expect(pickQuestions(few.slice(0, 20))).toHaveLength(20);
   });
 
   it('asks one question per keyword', () => {

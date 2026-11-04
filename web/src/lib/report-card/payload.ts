@@ -95,6 +95,8 @@ export const reportCardPayloadSchema = z.object({
         answers: count,
         own: z.boolean(),
         kind: z.enum(CITED_SITE_KINDS).nullable().optional(),
+        /** A competitor's own site (cards made before it was marked have none). */
+        competitor: z.boolean().optional(),
       }),
     )
     .max(10),
@@ -147,6 +149,11 @@ export const reportCardPayloadSchema = z.object({
    * when none has.
    */
   cpc: z.object({ usd: z.number().positive(), keywords: count.min(1) }).nullable(),
+  /**
+   * Set when fewer than 10 questions matched the site well: the card was
+   * still sent, and staff check it by hand on the admin page.
+   */
+  checkByHand: z.object({ reason: text(300) }).optional(),
   /** The average order or deal value the person gave, if any. */
   dealValue: z.object({ amount: z.number().positive(), currency: z.string().length(3) }).nullable(),
 });

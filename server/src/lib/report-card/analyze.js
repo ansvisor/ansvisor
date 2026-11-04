@@ -240,6 +240,23 @@ export function citedHosts(answers, limit = 25) {
     .slice(0, limit);
 }
 
+/**
+ * Whether a cited site is a competitor's own: a label of its host (the
+ * top-level domain aside) is a competitor's name, or begins one ("hubspot"
+ * in hubspot.com for "HubSpot CRM"). Such a site is no place to get listed.
+ *
+ * @param {string} host
+ * @param {Set<string>} rivalKeys the competitors' brandKey
+ */
+export function competitorSite(host, rivalKeys) {
+  const labels = String(host).split('.').slice(0, -1).map(brandKey).filter(Boolean);
+  return labels.some(
+    (label) =>
+      rivalKeys.has(label) ||
+      (label.length >= 4 && [...rivalKeys].some((key) => key.startsWith(label))),
+  );
+}
+
 /** Whether a site is the company's: its site or its e-mail's domain, or under either. */
 const ownSite = (host, domains) =>
   domains.some((d) => host === d || host.endsWith(`.${d}`) || d.endsWith(`.${host}`));
@@ -398,10 +415,14 @@ export function summarize(
     competitors: ranked,
     marketplaces: listOthers('marketplace'),
     otherNames: listOthers('other'),
+    // A competitor's own site is marked: the card never says to get onto it.
     citedSites: [...siteCounts.values()]
       .sort((a, b) => b.answers - a.answers || a.domain.localeCompare(b.domain))
       .slice(0, TOP_SITES)
-      .map((entry) => ({ ...entry, kind: siteKind(entry) })),
+      .map((entry) => {
+        const competitor = !entry.own && competitorSite(entry.domain, new Set(rivalCounts.keys()));
+        return { ...entry, competitor, kind: competitor ? 'competitor' : siteKind(entry) };
+      }),
     ownCitations,
     missedQuestions,
     missedCount: missed.length,
