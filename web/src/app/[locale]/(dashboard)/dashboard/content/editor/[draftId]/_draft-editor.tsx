@@ -1734,6 +1734,7 @@ export function DraftEditor({
   const suggestionLabels = useMemo<SuggestionLabels>(
     () => ({
       agent: t('suggestions.agent'),
+      agentFromChat: t('suggestions.agentFromChat'),
       breaks: (names: string) => t('suggestions.breaks', { names }),
       accept: t('suggestions.accept'),
       reject: t('suggestions.reject'),

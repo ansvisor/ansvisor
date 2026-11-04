@@ -12,6 +12,15 @@ import type { ChatPageVersion } from './events';
 /** The most sections a version card carries for Show all. */
 export const VERSION_SECTIONS = 30;
 
+/** A page's version as the write that made it read it, and whether the draft is Ready or published. */
+export interface PageVersionRead {
+  title: string;
+  version: ChatPageVersion;
+  undoVersionId: string | null;
+  /** Ready or published already: no "Mark ready" move after it (W4-12b). */
+  done: boolean;
+}
+
 /**
  * A page's version in a chat (CHAT-25 §6, W4-12a), read as the write that
  * made it ends: its number (1 + the versions of it this chat already filed:
@@ -25,10 +34,14 @@ export async function readPageVersion(input: {
   draftId: string;
   conversationId: string;
   beforeVersionId?: string | null;
-}): Promise<{ title: string; version: ChatPageVersion; undoVersionId: string | null } | null> {
+}): Promise<PageVersionRead | null> {
   const { draftId, conversationId, beforeVersionId } = input;
   const [draft, filed, before] = await Promise.all([
-    supabaseAdmin.from('content_drafts').select('title, body_html').eq('id', draftId).maybeSingle(),
+    supabaseAdmin
+      .from('content_drafts')
+      .select('title, body_html, status')
+      .eq('id', draftId)
+      .maybeSingle(),
     supabaseAdmin
       .from('chat_files')
       .select('id', { count: 'exact', head: true })
@@ -64,6 +77,7 @@ export async function readPageVersion(input: {
       ...(beforeVersionId ? { canUndo: true } : {}),
     },
     undoVersionId: beforeVersionId ?? null,
+    done: draft.data.status === 'ready' || draft.data.status === 'published',
   };
 }
 

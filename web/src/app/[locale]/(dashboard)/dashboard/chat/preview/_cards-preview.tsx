@@ -25,6 +25,7 @@ import {
   DENIALS,
   FAILED,
   NEXT_MOVES,
+  PAGE_MOVES,
   PAGE_VERSIONS,
   PUBLISH,
   PUSH_APPROVAL,
@@ -218,7 +219,10 @@ export function CardsPreview() {
           <DeliverableCard runId="preview" n={1} deliverable={PAGE_VERSIONS[0]} />
         </State>
         <State caption={s('pageVersion2')}>
-          <DeliverableCard runId="preview" n={2} deliverable={PAGE_VERSIONS[1]} />
+          <DeliverableCard runId="preview" n={2} deliverable={PAGE_VERSIONS[1]} canChange />
+        </State>
+        <State caption={s('pageMarkReady')}>
+          <NextMoves moves={PAGE_MOVES} onPick={noop} />
         </State>
       </Group>
 
