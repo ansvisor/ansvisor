@@ -15,13 +15,15 @@ Chat can remember short notes between chats, so you don't repeat the same prefer
 
 ## Ask Chat to remember
 
-Start a message with "Remember that…", in any language, for example: "Remember that our blog uses US English." Chat writes the fact as one short line and shows it on a card with where it goes: **Me**, the chat's brand, or **Workspace**. It is saved only when you approve the card, in every mode, Full auto too. After that, the step reads **Saved to memory**.
+Start a message with "Remember that…", in any language, for example: "Remember that our blog uses US English." Chat writes the fact as one short line on a card. You can change the words, with a counter under them, and pick where it goes under **Save to**: **Me**, the chat's brand, or **Workspace**. A place your role can't change is shown but can't be picked. When the note repeats or contradicts one you have, the card says **Replaces:** with the old note; untick it to keep both.
 
-Say "Forget that…" to remove a note. Chat finds the note and removes it once you approve, or by itself in Full auto.
+Nothing is saved until you click **Save**, in every mode, Full auto too. After that, the step reads **Saved to memory** with where it went.
+
+Say "Forget that…" to remove a note. Chat finds the note and removes it once you approve, or by itself in Full auto. The step reads **Removed from memory**.
 
 ## Where a note goes
 
-**Me** notes are yours alone: your name and how you like to work. Every role keeps its own. **Brand** notes are facts and rules for one brand, such as its product names or words to avoid. Admins and Managers change them. **Workspace** notes are rules for every brand and member. Admins change them; when a Manager saves one, it goes to the Admins as a request, and it is added once one of them approves it.
+**Me** notes are yours alone: your name and how you like to work. Every role keeps its own. **Brand** notes are facts and rules for one brand, such as its product names or words to avoid. Admins and Managers change them. **Workspace** notes are rules for every brand and member. Admins change them; when a Manager saves one, the step reads **Sent to your Admins**, and the note is added once one of them approves the request.
 
 Your first name from your profile becomes a **Call me** note, so Chat greets you by it.
 

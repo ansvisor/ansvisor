@@ -117,6 +117,9 @@ vi.mock('@/lib/actions/prompt-suggestions', () => ({
 vi.mock('@/lib/actions/chat-schedules', () => ({
   createChatSchedule: tracked.track('actions/chat-schedules.createChatSchedule'),
 }));
+vi.mock('@/lib/actions/chat-agent-calls', () => ({
+  runAgentFromChat: tracked.track('actions/chat-agent-calls.runAgentFromChat'),
+}));
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: tracked.track('actions/chat-access-requests.requestAccess'),
 }));
@@ -723,6 +726,8 @@ describe('approval policies', () => {
       // Memory (W3-11, CHAT-14 item 25): every role has its Me; the store checks the scope.
       save_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
       forget_memory: ['admin', 'manager', 'analyst', 'agency_partner'],
+      // An agent running another agent (CHAT-27 phase 2): Admins and Managers, as agents are.
+      run_agent: ['admin', 'manager'],
     });
     for (const tool of CHAT_TOOLS.filter((t) => t.class === 'read')) {
       expect(allowedRoles(tool)).toEqual(['admin', 'manager', 'analyst', 'agency_partner']);
@@ -1070,7 +1075,11 @@ describe("the model's tool list on the registry's rows", () => {
       'request_access',
       ...memory,
     ]);
-    expect(list('manager', starter)).toEqual([...withoutShopping, ...writes]);
+    // Running another agent is Growth and up (CHAT-27 decision 4).
+    expect(list('manager', starter)).toEqual([
+      ...withoutShopping,
+      ...writes.filter((name) => name !== 'run_agent'),
+    ]);
     expect(list('admin', growth)).toEqual([...reads, ...writes]);
     expect(list('analyst', facts(null, false))).toEqual([
       ...reads,

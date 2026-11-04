@@ -116,7 +116,7 @@ describe('AgentCard', () => {
     ]);
     expect(container.textContent).toContain('Content Agent has 2 suggestions for you');
     expect(container.textContent).toContain(
-      'Remove an AI trace (rule) · +1 more · Rules 9 → 11 of 14',
+      'Remove an AI trace (rule) · +1 more · 9 → 11/14 rules',
     );
     expect(buttons()).toEqual(['Review', 'Reject all', 'Accept all']);
     await click('Review');
@@ -131,10 +131,10 @@ describe('AgentCard', () => {
       suggestion({ id: 's2', status: 'rejected' }),
     ]);
     expect(container.textContent).toContain('All suggestions reviewed');
-    expect(container.textContent).toContain('1 accepted · Rules 9 of 14 · 5 still open');
-    expect(buttons().slice(0, 2)).toEqual(['Undo all', 'Run Agent']);
+    expect(container.textContent).toContain('1 accepted · 9/14 rules · 5 still open');
+    expect(buttons().slice(0, 2)).toEqual(['Undo all', 'Fix open rules']);
     expect(container.querySelector('button[aria-label="Close"]')).not.toBeNull();
-    await click('Run Agent');
+    await click('Fix open rules');
     expect(handlers.onRun).toHaveBeenCalled();
   });
 
@@ -356,12 +356,12 @@ describe('AgentCard', () => {
     await render([suggestion()], false, {
       rules: { ...rules, after: { now: 9, met: 8, breaks: 'Internal links' } },
     });
-    expect(container.textContent).toContain('Rules 9 → 8 of 14 · would break Internal links');
+    expect(container.textContent).toContain('9 → 8/14 rules · would break Internal links');
     // Counted from the page as it is now, not a read a beat behind it.
     await render([suggestion()], false, {
       rules: { ...rules, met: 7, after: { now: 9, met: 10, breaks: null } },
     });
-    expect(container.textContent).toContain('Rules 9 → 10 of 14');
+    expect(container.textContent).toContain('9 → 10/14 rules');
     // A whole page rewritten: its count beside its characters.
     await render(
       [
@@ -376,7 +376,7 @@ describe('AgentCard', () => {
       { rules: { ...rules, after: { now: 9, met: 8, breaks: 'FAQ' } } },
     );
     expect(container.textContent).toContain(
-      'answered each heading first · Rules 9 → 8 of 14 · would break FAQ',
+      'answered each heading first · 9 → 8/14 rules · would break FAQ',
     );
   });
 
@@ -576,7 +576,7 @@ describe('AgentCard', () => {
       );
     });
     const run = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Run Agent',
+      (b) => b.textContent === 'Fix open rules',
     )!;
     expect(run.disabled).toBe(true);
     expect(run.title).toBe('');

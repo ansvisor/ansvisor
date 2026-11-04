@@ -192,8 +192,11 @@ release.
 
 **An AEO coach skill** for Claude clients goes in its own folder with its
 `references/`, and joins the AEO coach list in
-`web/src/lib/chat/skills/library.test.ts`, which leaves those out. A few
-principles we follow for those:
+`web/src/lib/chat/skills/library.test.ts`, which leaves those out. It still
+gets a row in the table at the top, and CI still scans every file in it for
+hidden characters, secrets, email addresses and base64 blobs, as it does
+every file in this folder (`web/src/lib/chat/skills/public-skills.test.ts`).
+A few principles we follow for those:
 
 - **Skills layer knowledge, not data.** Data comes from the MCP server
   or the matching REST endpoint. A skill's job is to know _when_ and

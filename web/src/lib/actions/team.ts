@@ -2,14 +2,28 @@
 
 import { randomBytes } from 'crypto';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readMemberEmails } from '@/lib/member-emails';
-import { brandReaders } from '@/lib/brand-access';
+import { brandReaders, readMemberBrandAccess } from '@/lib/brand-access';
 import { enforceLimit, getOrgPlan } from '@/lib/guards/plan-guard';
 import { assertWritable } from '@/lib/subscription-guard';
 
 export type TeamRole = 'admin' | 'manager' | 'analyst' | 'agency_partner';
+
+/**
+ * Which brands a person sees (BRAND-ACCESS D2): All brands, or the brands
+ * shared with them (and the demo brand, which is everyone's). Admins always
+ * have All brands (D3).
+ */
+export type BrandScope = 'all' | 'selected';
+
+export interface BrandAccessChoice {
+  scope: BrandScope;
+  /** The brands shared, for Selected brands; empty for All brands. */
+  brandIds: string[];
+}
 
 export interface TeamMember {
   userId: string;
@@ -19,6 +33,12 @@ export interface TeamMember {
   role: TeamRole;
   createdAt: string;
   isCurrentUser: boolean;
+  /**
+   * The member's brand access. An admin reads everyone's; anyone else their
+   * own, and the others' as All brands (which brands an admin shared with
+   * someone is the admins' to see).
+   */
+  brandAccess: BrandAccessChoice;
 }
 
 export interface TeamInvitation {
@@ -30,6 +50,8 @@ export interface TeamInvitation {
   expiresAt: string;
   createdAt: string;
   acceptedAt: string | null;
+  /** The brands it shares: admins only (00390); All brands for anyone else. */
+  brandAccess: BrandAccessChoice;
 }
 
 export interface TeamInfo {
@@ -39,7 +61,23 @@ export interface TeamInfo {
   maxTeamMembers: number;
   canInvite: boolean;
   planName: string;
+  /**
+   * Whether the plan allows more than one brand: only then is there a brand
+   * to choose (BRAND-ACCESS §9 Q1).
+   */
+  multiBrand: boolean;
 }
+
+/** A brand an admin may share, as the brand picker lists it. */
+export interface ShareableBrand {
+  id: string;
+  name: string;
+}
+
+const ALL_BRANDS: BrandAccessChoice = { scope: 'all', brandIds: [] };
+
+/** Brand ids a choice may name: a few hundred at most, each a uuid. */
+const brandIdsSchema = z.array(z.guid()).max(500);
 
 async function getCurrentUserAndOrg() {
   const supabase = await createClient();
@@ -100,12 +138,61 @@ export async function getTeamInfo(): Promise<TeamInfo> {
     maxTeamMembers: max,
     canInvite,
     planName: plan.name,
+    multiBrand: plan.limits.maxBrands !== 1,
   };
+}
+
+/**
+ * The organization's brands an admin may share with someone, oldest first:
+ * not the demo brand, which everyone sees. Admins only.
+ */
+export async function listShareableBrands(): Promise<ShareableBrand[]> {
+  const { profile } = await requireAdmin();
+  return readShareableBrands(profile.organization_id);
+}
+
+async function readShareableBrands(organizationId: string): Promise<ShareableBrand[]> {
+  const { data, error } = await supabaseAdmin
+    .from('brands')
+    .select('id, name')
+    .eq('organization_id', organizationId)
+    .eq('is_demo', false)
+    .order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((b) => ({ id: b.id as string, name: b.name as string }));
+}
+
+/**
+ * A brand choice checked against the organization: All brands for an admin
+ * (D3), and for Selected brands the organization's brands it names, at least
+ * one. Null when there is none left to share.
+ */
+async function checkedChoice(
+  organizationId: string,
+  role: TeamRole,
+  choice: BrandAccessChoice,
+): Promise<BrandAccessChoice | null> {
+  if (role === 'admin' || choice.scope !== 'selected') return ALL_BRANDS;
+  const ids = brandIdsSchema.safeParse(choice.brandIds);
+  if (!ids.success) return null;
+  const shareable = new Set((await readShareableBrands(organizationId)).map((b) => b.id));
+  const brandIds = [...new Set(ids.data)].filter((id) => shareable.has(id));
+  return brandIds.length > 0 ? { scope: 'selected', brandIds } : null;
 }
 
 export async function listMembers(): Promise<TeamMember[]> {
   const { user, profile } = await getCurrentUserAndOrg();
-  return readMembers(user.id, profile.organization_id);
+  const [members, access] = await Promise.all([
+    readMembers(user.id, profile.organization_id),
+    readMemberBrandAccess(profile.organization_id),
+  ]);
+  return members.map((member) => ({
+    ...member,
+    brandAccess:
+      profile.role === 'admin' || member.isCurrentUser
+        ? (access.get(member.userId) ?? ALL_BRANDS)
+        : ALL_BRANDS,
+  }));
 }
 
 /**
@@ -121,11 +208,16 @@ export async function listBrandMembers(brandId: string): Promise<TeamMember[]> {
     readMembers(user.id, profile.organization_id),
   ]);
   if (!readers.has(user.id)) throw new Error('Brand not found');
-  return members.filter((member) => readers.has(member.userId));
+  return members
+    .filter((member) => readers.has(member.userId))
+    .map((member) => ({ ...member, brandAccess: ALL_BRANDS }));
 }
 
 /** The organization's members, the earliest first, with their e-mails. */
-async function readMembers(userId: string, organizationId: string): Promise<TeamMember[]> {
+async function readMembers(
+  userId: string,
+  organizationId: string,
+): Promise<Omit<TeamMember, 'brandAccess'>[]> {
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('id, full_name, avatar_url, role, created_at')
@@ -158,10 +250,13 @@ async function readMembers(userId: string, organizationId: string): Promise<Team
  */
 export async function listInvitations(): Promise<TeamInvitation[]> {
   const { profile } = await getCurrentUserAndOrg();
+  const isAdmin = profile.role === 'admin';
 
   const { data, error } = await supabaseAdmin
     .from('invitations')
-    .select('id, email, role, status, invited_by, expires_at, created_at, accepted_at')
+    .select(
+      'id, email, role, status, invited_by, expires_at, created_at, accepted_at, brand_scope, brand_ids',
+    )
     .eq('organization_id', profile.organization_id)
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
@@ -177,6 +272,10 @@ export async function listInvitations(): Promise<TeamInvitation[]> {
     expiresAt: i.expires_at as string,
     createdAt: i.created_at as string,
     acceptedAt: (i.accepted_at as string | null) ?? null,
+    brandAccess:
+      isAdmin && i.brand_scope === 'selected'
+        ? { scope: 'selected', brandIds: (i.brand_ids as string[] | null) ?? [] }
+        : ALL_BRANDS,
   }));
 }
 
@@ -189,7 +288,11 @@ export type InviteMemberResult = { inviteLink: string; emailSent: boolean } | { 
  * already exists for this email") would otherwise reach users as the
  * meaningless digest string (#550).
  */
-export async function inviteMember(email: string, role: TeamRole): Promise<InviteMemberResult> {
+export async function inviteMember(
+  email: string,
+  role: TeamRole,
+  brands: BrandAccessChoice = ALL_BRANDS,
+): Promise<InviteMemberResult> {
   await assertWritable();
   const { user, profile } = await requireAdmin();
   const normalizedEmail = email.trim().toLowerCase();
@@ -197,6 +300,10 @@ export async function inviteMember(email: string, role: TeamRole): Promise<Invit
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
     return { error: 'Invalid email address' };
   }
+
+  // The brands it shares, kept by the invitation until it is accepted.
+  const access = await checkedChoice(profile.organization_id, role, brands);
+  if (!access) return { error: 'Choose at least one brand' };
 
   const [{ count: memberCount }, { count: inviteCount }] = await Promise.all([
     supabaseAdmin
@@ -264,6 +371,8 @@ export async function inviteMember(email: string, role: TeamRole): Promise<Invit
       role,
       token,
       invited_by: user.id,
+      brand_scope: access.scope,
+      brand_ids: access.brandIds,
     })
     .select()
     .single();
@@ -372,6 +481,54 @@ export async function updateMemberRole(userId: string, role: TeamRole) {
   revalidatePath('/dashboard/settings');
 }
 
+export type SetMemberBrandsResult = { brandAccess: BrandAccessChoice } | { error: string };
+
+/**
+ * An admin's Edit brands (BRAND-ACCESS §3.2, Q2: admins only): All brands,
+ * or the organization's brands named (at least one). An admin always has
+ * All brands, and so does the caller (admins can't narrow themselves).
+ * Written in one transaction (set_member_brand_access, 00471): the person
+ * sees the new brands from their next page.
+ */
+export async function setMemberBrands(
+  userId: string,
+  brands: BrandAccessChoice,
+): Promise<SetMemberBrandsResult> {
+  await assertWritable();
+  const { user, profile } = await requireAdmin();
+  if (userId === user.id) return { error: 'Admins always have All brands' };
+
+  const { data: member, error: memberError } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .eq('organization_id', profile.organization_id)
+    .maybeSingle();
+  if (memberError) throw new Error(memberError.message);
+  if (!member) return { error: 'Member not found' };
+  if (member.role === 'admin') return { error: 'Admins always have All brands' };
+
+  const access = await checkedChoice(profile.organization_id, member.role as TeamRole, brands);
+  if (!access) return { error: 'Choose at least one brand' };
+
+  const { data, error } = await supabaseAdmin.rpc('set_member_brand_access', {
+    p_organization_id: profile.organization_id,
+    p_user_id: userId,
+    p_brand_scope: access.scope,
+    p_brand_ids: access.brandIds,
+    p_granted_by: user.id,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath('/dashboard/settings');
+  return {
+    brandAccess:
+      access.scope === 'all'
+        ? ALL_BRANDS
+        : { scope: 'selected', brandIds: (data as string[] | null) ?? access.brandIds },
+  };
+}
+
 /** Open while the workspace is read-only: it takes back access, never gives it. */
 export async function removeMember(userId: string) {
   const { user, profile } = await requireAdmin();
@@ -403,6 +560,9 @@ export async function removeMember(userId: string) {
 }
 
 export type AcceptInvitationResult = { organizationId: string; role: TeamRole } | { error: string };
+
+/** Postgres' code for a function that isn't there, and PostgREST's for one not in its cache. */
+const MISSING_FUNCTION = new Set(['42883', 'PGRST202']);
 
 /**
  * User-facing failures (stale/invalid token, expired invite, wrong signed-in
@@ -446,24 +606,35 @@ export async function acceptInvitation(token: string): Promise<AcceptInvitationR
     return { error: `This invitation was sent to ${inviteEmail}. Please sign in with that email.` };
   }
 
-  const { error: profileErr } = await supabaseAdmin
-    .from('profiles')
-    .update({
-      organization_id: invitation.organization_id,
-      role: invitation.role,
-      onboarding_completed: true,
-    })
-    .eq('id', user.id);
+  // The person joins with the invitation's role and brands, and the
+  // invitation is used, in one transaction (00471): a Selected-brands
+  // invitation never leaves them with All brands.
+  const { error: acceptErr } = await supabaseAdmin.rpc('accept_invitation', {
+    p_invitation_id: invitation.id,
+    p_user_id: user.id,
+  });
 
-  if (profileErr) return { error: profileErr.message };
-
-  await supabaseAdmin
-    .from('invitations')
-    .update({
-      status: 'accepted',
-      accepted_at: new Date().toISOString(),
-    })
-    .eq('id', invitation.id);
+  if (acceptErr && MISSING_FUNCTION.has(acceptErr.code ?? '')) {
+    // Before 00471 is applied: as before, for an All-brands invitation only.
+    if (invitation.brand_scope === 'selected') {
+      return { error: 'This invitation can’t be accepted yet. Please try again later.' };
+    }
+    const { error: profileErr } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        organization_id: invitation.organization_id,
+        role: invitation.role,
+        onboarding_completed: true,
+      })
+      .eq('id', user.id);
+    if (profileErr) return { error: profileErr.message };
+    await supabaseAdmin
+      .from('invitations')
+      .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+      .eq('id', invitation.id);
+  } else if (acceptErr) {
+    return { error: acceptErr.message };
+  }
 
   revalidatePath('/dashboard');
 

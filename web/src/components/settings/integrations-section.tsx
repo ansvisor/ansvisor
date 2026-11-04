@@ -127,6 +127,7 @@ export function IntegrationsSection() {
       </CardHeader>
       <CardContent className="space-y-4">
         <IntegrationCard
+          anchor="google-search-console"
           provider="google-search-console"
           label="Google Search Console"
           description="Real search queries and impressions for your site — powers prompt suggestions and search-vs-AI insights."
@@ -137,6 +138,7 @@ export function IntegrationsSection() {
         </IntegrationCard>
 
         <IntegrationCard
+          anchor="google-analytics"
           provider="google-analytics"
           label="Google Analytics"
           description="Sessions and conversions from your GA4 property — the basis for AI traffic history without installing the tracking snippet."
@@ -150,6 +152,7 @@ export function IntegrationsSection() {
           {/* On the demo brand it shows, as Coming soon (lib/demo/integrations). */}
           {(merchantCenterOffered || isDemo) && (
             <IntegrationCard
+              anchor="merchant-center"
               provider="google-merchant-center"
               label={MERCHANT_CENTER_LABEL}
               description={t('merchantCenter.description')}
@@ -168,20 +171,31 @@ export function IntegrationsSection() {
               <UpcomingIntegrationCard key={id} id={id} />
             ))}
 
-          <CatalogSourcesCard refreshKey={catalogReads} onSources={onCatalogSources} />
+          <div id="product-catalog" className="scroll-mt-4">
+            <CatalogSourcesCard refreshKey={catalogReads} onSources={onCatalogSources} />
+          </div>
 
           <CatalogCategoryPages refreshKey={categoryReads} />
         </IntegrationGroup>
 
         {/* Send to CMS destinations: a new CMS's card goes in this group. */}
         <IntegrationGroup title={t('integrations_cms')}>
-          <WebflowCard />
+          {/* Each has its anchor: Chat's Connections opens it by name (#webflow). */}
+          <div id="webflow" className="scroll-mt-4">
+            <WebflowCard />
+          </div>
 
-          <WordPressCard />
+          <div id="wordpress" className="scroll-mt-4">
+            <WordPressCard />
+          </div>
 
-          <FramerCard />
+          <div id="framer" className="scroll-mt-4">
+            <FramerCard />
+          </div>
 
-          <WixCard />
+          <div id="wix" className="scroll-mt-4">
+            <WixCard />
+          </div>
           {isDemo &&
             upcomingDemoIntegrations('cms').map((id) => (
               <UpcomingIntegrationCard key={id} id={id} />
@@ -257,6 +271,7 @@ function UpcomingIntegrationCard({ id }: { id: string }) {
  * Coming soon. No set-up line there.
  */
 function IntegrationCard({
+  anchor,
   provider,
   label,
   description,
@@ -264,6 +279,8 @@ function IntegrationCard({
   authConfigEnv,
   children,
 }: {
+  /** Its id on the page, which Chat's Connections opens it by (#google-analytics). */
+  anchor: string;
   provider: IntegrationProvider;
   label: string;
   description: string;
@@ -317,7 +334,7 @@ function IntegrationCard({
   const soon = demo === 'soon';
 
   return (
-    <div className="space-y-4">
+    <div id={anchor} className="scroll-mt-4 space-y-4">
       <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">

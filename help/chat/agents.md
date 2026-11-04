@@ -1,15 +1,15 @@
 ---
 title: See and run your agents in Agent Center
 route: /dashboard/agents
-keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice]
-synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms]
+keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent]
+synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent]
 plan: all
-updated: 2026-11-02
-last_checked: 2026-11-02
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts, web/src/lib/chat/agents/catalog.ts, web/src/lib/content/page-types.ts, web/src/lib/menu-access.ts, web/src/lib/chat/agent-go-live.ts, web/src/lib/chat/precedence.ts]
+sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts, web/src/lib/chat/agents/catalog.ts, web/src/lib/content/page-types.ts, web/src/lib/menu-access.ts, web/src/lib/chat/agent-go-live.ts, web/src/lib/chat/precedence.ts, web/src/lib/chat/agent-calls.ts]
 ---
 An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
 
@@ -109,6 +109,14 @@ Signals that come close together don't each start a run. Signals within 15 minut
 Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox.
 
 A run may use only its share of your monthly AI limit. A run a trigger started ends **Stopped at its limit** when it reaches it; a **Run now** run pauses there instead. After 3 failed runs in a row the agent pauses. When the monthly AI limit is used up, the agent pauses and starts again by itself once the limit resets.
+
+## Let an agent run other agents
+
+On Growth and up, an agent can run up to 5 of your other agents. Pick them under **Can call** on the agent's last step. A paused agent isn't run until you resume it.
+
+A run may run other agents up to 3 times and asks you first each time: the card names the agent, what it asks and how much of your monthly AI limit it may use. The other agent works on the same brand, in a chat of its own, and asks before most changes. It gets only what is left of the first run's **Max per run**, and can't run agents itself. It stops when the first run stops, or after 4 minutes.
+
+In **Run history**, its run shows **Called by** and the first agent. The first run says how many agents it ran: click it for each one's result and AI use.
 
 ## When a run asks before a change
 

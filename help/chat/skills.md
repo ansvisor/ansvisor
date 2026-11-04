@@ -1,10 +1,10 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [skills, skill, slash menu, ansvisor skills, used skill, save a skill, my skills, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, review a skill]
+keywords: [skills, skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, review a skill, skill update, update available, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
 synonyms: [slash commands, playbooks, how-tos, templates]
 plan: all
-updated: 2026-11-02
+updated: 2026-11-03
 last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
@@ -43,6 +43,10 @@ Admins and Managers on a paid plan can bring in a skill from outside. On the **S
 
 An imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it.
 
+
+## Updates to an imported skill
+
+Once a week, Ansvisor checks the source of each approved GitHub skill. When its SKILL.md changed, its card in **My skills** shows **Update available**. **Review update** shows what changed, line by line, and the safety scan of the new version. Nothing changes until an Admin clicks **Approve update**, and the new version is cleaned and scanned again first. A skill whose saved file was changed some other way is turned off.
 ## What a skill can't change
 
 A skill shapes how Chat works, not what it may do. It gives Chat no new tools, doesn't skip the card a change waits on, and doesn't publish by itself: only an agent an Admin allows may send pages on its own. Your role, your plan and your workspace's Chat settings still decide what Chat can change, and a change still asks you first where it should.
