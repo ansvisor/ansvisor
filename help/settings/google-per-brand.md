@@ -4,8 +4,8 @@ route: /dashboard/settings/integrations
 keywords: [google account per brand, use the same account, connect another google account, search console per brand, analytics per brand]
 synonyms: [different gsc account for a brand, client google account, agency google login, switch google account]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-04
+last_checked: 2026-11-04
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -21,7 +21,7 @@ Open the brand's **Settings › Integrations**. Each Google card says which acco
 - **Connect another Google account**: sign in with Google in the window that opens. The brand keeps its account until you finish.
 - **Disconnect**: the brand stops reading from Google. The workspace's account stays for the other brands.
 
-Then pick the brand's property from the new account's list.
+Changing or disconnecting the account clears the brand's property, since it was picked from the old account. Pick it again from the new account's list.
 
 ## See which brand uses which account
 

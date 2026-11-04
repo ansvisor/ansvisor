@@ -8,6 +8,7 @@ import {
   isComposioConfigured,
   initiateConnection,
   getActiveConnection,
+  listActiveConnections,
   deleteConnection,
   connectedAccountStatus,
   listGscSites,
@@ -67,6 +68,39 @@ async function upsertConnectionRow(organizationId, provider, fields) {
     { onConflict: 'organization_id,provider' },
   );
   if (error) throw new Error(`Failed to save connection: ${error.message}`);
+}
+
+/** Postgres' code for a missing table, PostgREST's for one not in its cache (before 00470). */
+const NOT_MIGRATED = new Set(['42P01', 'PGRST205']);
+
+/**
+ * The workspace's own live Composio account for `provider`: the one its
+ * integration_connections row names. Brands' own logins share the
+ * workspace's entity (BRAND-ACCESS PR 15), so the entity alone could answer
+ * with a brand's. A row with no account id (never connected, or reset)
+ * takes the entity's first active account that is no brand's own login.
+ */
+async function workspaceActiveConnection(organizationId, provider, entityId) {
+  const { data: row, error } = await supabaseAdmin
+    .from('integration_connections')
+    .select('composio_account_id')
+    .eq('organization_id', organizationId)
+    .eq('provider', provider)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (row?.composio_account_id) {
+    return getActiveConnection(provider, entityId, row.composio_account_id);
+  }
+  const { data: own, error: ownError } = await supabaseAdmin
+    .from('integration_accounts')
+    .select('composio_account_id')
+    .eq('organization_id', organizationId)
+    .eq('provider', provider)
+    .is('integration_connection_id', null);
+  if (ownError && !NOT_MIGRATED.has(ownError.code)) throw new Error(ownError.message);
+  const brandLogins = new Set((own ?? []).map((a) => a.composio_account_id).filter(Boolean));
+  const active = await listActiveConnections(provider, entityId);
+  return active.find((item) => !brandLogins.has(item.id)) ?? null;
 }
 
 /**
@@ -136,7 +170,7 @@ router.get('/:provider/status', async (req, res) => {
     const profile = await getProfile(req.user.id);
     const entityId = entityIdFor(profile.organization_id);
 
-    const active = await getActiveConnection(provider, entityId);
+    const active = await workspaceActiveConnection(profile.organization_id, provider, entityId);
     if (active) {
       await upsertConnectionRow(profile.organization_id, provider, {
         composio_account_id: active.id,
@@ -244,7 +278,7 @@ router.delete('/:provider', async (req, res) => {
     }
 
     const entityId = entityIdFor(profile.organization_id);
-    const active = await getActiveConnection(provider, entityId);
+    const active = await workspaceActiveConnection(profile.organization_id, provider, entityId);
     if (active) {
       await deleteConnection(active.id);
     }
@@ -321,7 +355,7 @@ async function propertiesConnection(req, provider, brandId) {
   await assertAllBrands(req.user.id);
   const profile = await getProfile(req.user.id);
   const entityId = entityIdFor(profile.organization_id);
-  const active = await getActiveConnection(provider, entityId);
+  const active = await workspaceActiveConnection(profile.organization_id, provider, entityId);
   return active ? { entityId, accountId: active.id } : null;
 }
 
@@ -708,6 +742,9 @@ router.post('/:provider/brands/:brandId/use', async (req, res) => {
     const body = accountBody.safeParse(req.body ?? {});
     if (!body.success) return res.status(400).json({ error: 'Invalid request' });
     const brand = await brandFor(req, { write: true });
+    // Reading through the target sign-in lists the properties of every brand
+    // that uses it, so the caller needs each of them (assertSignInReach).
+    await assertSignInReach(req.user.id, { accountId: body.data.accountId });
     const brandIds = await reachableBrandIds(req.user.id, brand.organization_id);
     await useAccountForBrand(
       { brand, provider, accountId: body.data.accountId, brandIds },
@@ -755,6 +792,7 @@ router.post('/:provider/brands/:brandId/connect', async (req, res) => {
       {
         initiate: (entityId) =>
           initiateConnection(provider, entityId, callbackUrl, { allowMultiple: true }),
+        deleteRemote: deleteConnection,
       },
     );
     return res.json(started);

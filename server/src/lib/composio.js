@@ -108,18 +108,23 @@ export async function initiateConnection(
   };
 }
 
+/** Every ACTIVE connected account of the entity for this provider on Composio. */
+export async function listActiveConnections(provider, entityId) {
+  const connections = await getClient().connectedAccounts.list({
+    authConfigIds: [authConfigId(provider)],
+    userIds: [entityId],
+    statuses: ['ACTIVE'],
+  });
+  return connections.items ?? [];
+}
+
 /**
  * The entity's ACTIVE connection for this provider on Composio, or null: the
  * account `accountId` when one is named (an entity may hold several), else
  * the first.
  */
 export async function getActiveConnection(provider, entityId, accountId = null) {
-  const connections = await getClient().connectedAccounts.list({
-    authConfigIds: [authConfigId(provider)],
-    userIds: [entityId],
-    statuses: ['ACTIVE'],
-  });
-  const items = connections.items ?? [];
+  const items = await listActiveConnections(provider, entityId);
   if (accountId) return items.find((item) => item.id === accountId) ?? null;
   return items[0] ?? null;
 }

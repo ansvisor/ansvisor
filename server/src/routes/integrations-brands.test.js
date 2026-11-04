@@ -12,6 +12,9 @@ const BRAND = '22222222-2222-4222-8222-222222222222';
 const ACCOUNT = '33333333-3333-4333-8333-333333333333';
 
 const access = vi.fn();
+const allBrands = vi.fn();
+const everyBrand = vi.fn();
+const signInBrandIds = vi.fn();
 const lib = {
   brandConnection: vi.fn(),
   usableAccounts: vi.fn(),
@@ -53,6 +56,7 @@ vi.mock('../lib/composio.js', () => ({
 vi.mock('../lib/brand-integrations.js', () => ({
   BRAND_GOOGLE_PROVIDERS: ['google-search-console', 'google-analytics'],
   composioTarget: vi.fn(),
+  signInBrandIds: (...args) => signInBrandIds(...args),
   ...Object.fromEntries(Object.entries(lib).map(([k, fn]) => [k, (...a) => fn(...a)])),
 }));
 vi.mock('../lib/ga-sync.js', () => ({ runGaSync: vi.fn() }));
@@ -60,7 +64,8 @@ vi.mock('../lib/gsc-sync.js', () => ({ runGscSync: vi.fn() }));
 vi.mock('../lib/page-opportunities.js', () => ({ detectPageOpportunitiesInWindow: vi.fn() }));
 vi.mock('../lib/access.js', () => ({
   assertBrandAccess: (...args) => access(...args),
-  assertAllBrands: vi.fn(),
+  assertAllBrands: (...args) => allBrands(...args),
+  assertEveryBrand: (...args) => everyBrand(...args),
   brandAccessOf: async () => ({ all: true, brandIds: new Set() }),
 }));
 
@@ -98,6 +103,10 @@ beforeEach(() => {
   for (const fn of Object.values(lib)) fn.mockReset();
   access.mockReset().mockResolvedValue({ brand: brand(), role: 'manager' });
   initiateConnection.mockClear();
+  allBrands.mockReset().mockResolvedValue({ orgId: 'org-1' });
+  everyBrand.mockReset().mockResolvedValue({ orgId: 'org-1' });
+  // The target sign-in is used by this brand and another.
+  signInBrandIds.mockReset().mockResolvedValue([BRAND, 'b-other']);
   lib.brandConnection.mockResolvedValue({
     accountId: ACCOUNT,
     label: null,
@@ -194,6 +203,30 @@ describe('changing a brand’s sign-in', () => {
       expect.objectContaining({ provider: 'google-search-console' }),
       expect.anything(),
     );
+  });
+
+  it('needs every brand on the target sign-in, since reading through it lists theirs', async () => {
+    const ok = await post(`/google-analytics/brands/${BRAND}/use`, { accountId: ACCOUNT });
+    expect(ok.status).toBe(200);
+    expect(signInBrandIds).toHaveBeenCalledWith({ accountId: ACCOUNT });
+    expect(everyBrand).toHaveBeenCalledWith([BRAND, 'b-other'], 'u1');
+
+    everyBrand.mockRejectedValue(
+      Object.assign(new Error('nope'), { status: 403, code: 'no_brand_access' }),
+    );
+    lib.useAccountForBrand.mockClear();
+    const res = await post(`/google-analytics/brands/${BRAND}/use`, { accountId: ACCOUNT });
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'no_brand_access' });
+    expect(lib.useAccountForBrand).not.toHaveBeenCalled();
+  });
+
+  it('passes the Composio delete to connect, to drop unfinished logins', async () => {
+    await post(`/google-search-console/brands/${BRAND}/connect`, {
+      callbackUrl: 'http://localhost:3000/x',
+    });
+    const [, deps] = lib.startBrandAccount.mock.calls[0];
+    expect(typeof deps.deleteRemote).toBe('function');
   });
 
   it('is for admins and managers only', async () => {

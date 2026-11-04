@@ -99,8 +99,14 @@ beforeEach(() => {
       { brand_id: 'b1', provider: 'google-analytics', account_id: OWN },
       { brand_id: 'b2', provider: 'google-analytics', account_id: WORKSPACE },
     ],
+    brands: [
+      { id: 'b1', gsc_property: 'sc-domain:b1.test', ga_property_id: '111' },
+      { id: 'b2', gsc_property: 'sc-domain:b2.test', ga_property_id: '222' },
+    ],
   };
 });
+
+const brandRow = (id) => db.tables.brands.find((b) => b.id === id);
 
 // brandConnection's embed: the brand's row with its account.
 function withEmbeds() {
@@ -121,6 +127,20 @@ describe('useAccountForBrand', () => {
     );
     expect(deleteRemote).toHaveBeenCalledWith(`ca_${OWN}`);
     expect(db.tables.integration_accounts.map((a) => a.id)).toEqual([WORKSPACE]);
+    // The property was picked from the old account: cleared, the other product's kept.
+    expect(brandRow('b1')).toMatchObject({
+      ga_property_id: null,
+      gsc_property: 'sc-domain:b1.test',
+    });
+  });
+
+  it('keeps the property when the brand already uses that account', async () => {
+    withEmbeds();
+    await useAccountForBrand(
+      { brand: BRAND, provider: 'google-analytics', accountId: OWN, brandIds: ['b1', 'b2'] },
+      { deleteRemote },
+    );
+    expect(brandRow('b1').ga_property_id).toBe('111');
   });
 
   it('refuses a sign-in no brand the person reaches uses', async () => {
@@ -184,6 +204,31 @@ describe('a login of the brand’s own', () => {
       'connected',
     );
     expect(deleteRemote).toHaveBeenCalledWith(`ca_${OWN}`);
+    expect(brandRow('b1').ga_property_id).toBeNull();
+  });
+
+  it('drops the person’s unfinished logins, and anyone’s older than a day, when one starts', async () => {
+    const old = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const recent = new Date().toISOString();
+    db.tables.integration_accounts.push(
+      account('acct-mine', { status: 'pending', connected_by: 'u1', created_at: recent }),
+      account('acct-old', { status: 'pending', connected_by: 'u2', created_at: old }),
+      account('acct-theirs', { status: 'pending', connected_by: 'u2', created_at: recent }),
+    );
+    await startBrandAccount(
+      { brand: BRAND, provider: 'google-analytics', userId: 'u1', entityId: `org_${ORG}` },
+      {
+        initiate: async () => ({ redirectUrl: 'https://g.test', connectedAccountId: 'ca_new' }),
+        deleteRemote,
+      },
+    );
+    const ids = db.tables.integration_accounts.map((a) => a.id);
+    expect(ids).not.toContain('acct-mine');
+    expect(ids).not.toContain('acct-old');
+    expect(ids).toEqual(expect.arrayContaining([WORKSPACE, OWN, 'acct-theirs', 'acct-new']));
+    expect(deleteRemote).toHaveBeenCalledWith('ca_acct-mine');
+    expect(deleteRemote).toHaveBeenCalledWith('ca_acct-old');
+    expect(deleteRemote).not.toHaveBeenCalledWith('ca_acct-theirs');
   });
 
   it('is activated only by the person who started it', async () => {
@@ -209,5 +254,10 @@ describe('removeBrandAccount', () => {
     expect(db.tables.brand_integrations.some((u) => u.brand_id === 'b2')).toBe(false);
     expect(db.tables.integration_accounts.some((a) => a.id === WORKSPACE)).toBe(true);
     expect(deleteRemote).not.toHaveBeenCalled();
+    // Reading through no account, its property no longer applies.
+    expect(brandRow('b2')).toMatchObject({
+      ga_property_id: null,
+      gsc_property: 'sc-domain:b2.test',
+    });
   });
 });

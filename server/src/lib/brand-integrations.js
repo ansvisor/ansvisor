@@ -224,6 +224,67 @@ function httpError(message, status, code) {
   return Object.assign(new Error(message), { status, ...(code ? { code } : {}) });
 }
 
+/** The brand's column holding its property for each Google product. */
+const PROPERTY_COLUMN = Object.freeze({
+  'google-search-console': 'gsc_property',
+  'google-analytics': 'ga_property_id',
+});
+
+/**
+ * The brand's property was picked from the sign-in it used: once it reads
+ * through another account, or none, the pick no longer applies and is
+ * cleared, so nothing syncs a property the new account may not see.
+ */
+async function clearBrandProperty(brandId, provider) {
+  const column = PROPERTY_COLUMN[provider];
+  if (!column) return;
+  const { error } = await supabaseAdmin
+    .from('brands')
+    .update({ [column]: null })
+    .eq('id', brandId);
+  if (error) throw new Error(error.message);
+}
+
+/** How long a login that was started but never finished is kept. */
+const PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Drops the organization's pending logins for `provider` that won't be
+ * finished: the person's own earlier ones (they're starting again) and
+ * anyone's older than a day. No brand uses a pending login (activation
+ * links it), so only its row and its Composio account go.
+ */
+async function forgetStalePending({ organizationId, provider, userId }, { deleteRemote }) {
+  const { data, error } = await supabaseAdmin
+    .from('integration_accounts')
+    .select('id, composio_account_id, connected_by, created_at')
+    .eq('organization_id', organizationId)
+    .eq('provider', provider)
+    .eq('status', 'pending');
+  if (error) throw new Error(error.message);
+  const cutoff = Date.now() - PENDING_TTL_MS;
+  const stale = (data ?? []).filter(
+    (a) => a.connected_by === userId || Date.parse(a.created_at) < cutoff,
+  );
+  for (const account of stale) {
+    if (account.composio_account_id && deleteRemote) {
+      try {
+        await deleteRemote(account.composio_account_id);
+      } catch (err) {
+        logger.warn(
+          { err, accountId: account.id },
+          '[brand-integrations] could not remove an unfinished sign-in',
+        );
+      }
+    }
+    const { error: deleteError } = await supabaseAdmin
+      .from('integration_accounts')
+      .delete()
+      .eq('id', account.id);
+    if (deleteError) throw new Error(deleteError.message);
+  }
+}
+
 /**
  * The sign-ins a brand may use for `provider`: the connected ones of the
  * organization that a brand the person can access uses (`brandIds`), each
@@ -321,6 +382,7 @@ export async function useAccountForBrand(
     { onConflict: 'brand_id,provider' },
   );
   if (error) throw new Error(error.message);
+  if (before?.accountId !== accountId) await clearBrandProperty(brand.id, provider);
   if (before?.accountId && before.accountId !== accountId) {
     await forgetUnusedAccount(before.accountId, { deleteRemote });
   }
@@ -330,8 +392,16 @@ export async function useAccountForBrand(
  * Starts a login of the brand's own: one more connected account under the
  * Account's entity, kept as a pending sign-in until Composio says it's
  * active (activateBrandAccount). The brand keeps its sign-in meanwhile.
+ * Logins started before and never finished go first (forgetStalePending).
  */
-export async function startBrandAccount({ brand, provider, userId, entityId }, { initiate }) {
+export async function startBrandAccount(
+  { brand, provider, userId, entityId },
+  { initiate, deleteRemote },
+) {
+  await forgetStalePending(
+    { organizationId: brand.organization_id, provider, userId },
+    { deleteRemote },
+  );
   const { redirectUrl, connectedAccountId } = await initiate(entityId);
   if (!connectedAccountId) throw new Error('Composio returned no connected account');
   const { data, error } = await supabaseAdmin
@@ -392,6 +462,7 @@ export async function activateBrandAccount(
     { onConflict: 'brand_id,provider' },
   );
   if (useError) throw new Error(useError.message);
+  if (before?.accountId !== accountId) await clearBrandProperty(brand.id, provider);
   if (before?.accountId && before.accountId !== accountId) {
     await forgetUnusedAccount(before.accountId, { deleteRemote });
   }
@@ -410,5 +481,6 @@ export async function removeBrandAccount({ brand, provider }, { deleteRemote }) 
     .eq('brand_id', brand.id)
     .eq('provider', provider);
   if (error) throw new Error(error.message);
+  await clearBrandProperty(brand.id, provider);
   if (before?.accountId) await forgetUnusedAccount(before.accountId, { deleteRemote });
 }
