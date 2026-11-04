@@ -126,6 +126,15 @@ vi.mock('@/lib/actions/chat-schedules', () => ({
     },
   ),
 }));
+// Save skill through the person's session (W3-08): here, as the run's person (an Admin).
+vi.mock('@/lib/actions/chat-skills', () => ({
+  saveChatSkill: vi.fn(async (input: never) => {
+    const { readSkillViewer, saveSkill } = await import('./skills/store');
+    const { ORG, PEOPLE } = await import('./testing/chat-fixtures');
+    const viewer = await readSkillViewer({ userId: PEOPLE.admin, organizationId: ORG });
+    return saveSkill(viewer!, input);
+  }),
+}));
 // Remember and Forget through the person's session (W3-12a): here, as the run's person.
 vi.mock('@/lib/actions/chat-memory', () => ({
   saveChatMemory: vi.fn(async (input: Record<string, string>) => {
@@ -6930,6 +6939,216 @@ describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
     const results = JSON.stringify(sonnet.seen[1].prompt);
     expect(results).toContain("Memory doesn't keep secrets or personal details.");
     expect(db.tables.chat_memory_items).toEqual([]);
+  });
+});
+
+describe('the skill draft card (W3-08, CHAT-13 item 12)', () => {
+  const draft = (over: Record<string, unknown> = {}) =>
+    toolCall('k1', 'save_skill', {
+      name: 'pricing-brief',
+      description: 'Writes a pricing brief that opens with the answer.',
+      instructions: 'Open with the answer in two sentences, then three short sections.',
+      ...over,
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    db.tables.chat_skills = [];
+  });
+
+  it('waits on the draft card even in Full auto, then saves the skill as the card was edited', async () => {
+    useModels([READY], [calls(draft()), text('Saved it.')]);
+    const runId = await turn(ADMIN, 'Create a skill that writes our pricing briefs', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const confirm = ofType(events, 'confirm.required')[0].data;
+    expect(confirm.form).toMatchObject({ kind: 'skill', submit: 'Save skill' });
+    expect(confirm.form!.fields.map((f) => f.name)).toEqual([
+      'name',
+      'title',
+      'description',
+      'instructions',
+    ]);
+    // Nothing is kept before Save.
+    expect(db.tables.chat_skills).toEqual([]);
+
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { name: '/Team-Pricing', title: 'Team pricing brief' },
+    });
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    await engine.driveRun(ADMIN, runId, prepared.resume);
+    expect(db.tables.chat_skills).toHaveLength(1);
+    expect(db.tables.chat_skills[0]).toMatchObject({
+      name: 'team-pricing',
+      title: 'Team pricing brief',
+      source: 'user',
+      status: 'approved',
+      visibility: 'private',
+      created_by: PEOPLE.admin,
+    });
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      status: 'done',
+      label: 'Saved skill: /team-pricing',
+      detail: 'Private to you · Skills › My skills',
+    });
+  });
+
+  it('keeps the card when the name can’t be kept, and saves nothing', async () => {
+    useModels([READY], [calls(draft()), text('Saved it.')]);
+    const runId = await turn(ADMIN, 'Create a skill that writes our pricing briefs', 'auto');
+    const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    const refused = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { name: 'winback' },
+    });
+    expect(refused).toMatchObject({
+      ok: false,
+      status: 400,
+      code: 'invalid',
+      message: '/winback is an Ansvisor skill or shortcut. Pick another name.',
+    });
+    expect(runRow(runId).status).toBe('waiting');
+    expect(db.tables.chat_skills).toEqual([]);
+  });
+});
+
+describe('"Save these steps as a skill" (W4-32, CHAT-13 item 13)', () => {
+  const SAVE = 'Save these steps as a skill';
+  /** The final answer and its next moves, in one model step. */
+  const answerWithMoves = (answer: string, moves: unknown) => [
+    { type: 'text-start', id: 't' },
+    { type: 'text-delta', id: 't', delta: answer },
+    { type: 'text-end', id: 't' },
+    toolCall('m1', NEXT_MOVES_TOOL, { moves }),
+    { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool_use' }, usage: usage() },
+  ];
+  const MOVES = [
+    {
+      label: 'Do the same for /features',
+      prompt: 'Do the same for /features',
+      kind: 'continue',
+      class: 'write',
+    },
+    {
+      label: 'Compare with Perplexity',
+      prompt: 'Compare with Perplexity',
+      kind: 'deepen',
+      class: 'read',
+    },
+  ];
+  const twoReads = () =>
+    calls(
+      toolCall('r1', 'read_visibility', { brand_id: BRAND, platform: 'chatgpt-web' }),
+      toolCall('r2', 'list_citations', { brand_id: BRAND }),
+    );
+  const movesOf = (runId: string) =>
+    db.tables.chat_next_moves
+      .filter((m) => m.run_id === runId)
+      .sort((a, b) => (a.rank as number) - (b.rank as number))
+      .map((m) => m.prompt);
+  const progressOf = (runId: string) =>
+    db.tables.chat_run_state.find((s) => s.run_id === runId)!.progress as {
+      saveSteps?: unknown[];
+    };
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    db.tables.chat_skills = [];
+  });
+
+  it('offers it third after a chat that read twice, to an Admin; never to an Analyst', async () => {
+    useModels(
+      [twoReads(), READY, twoReads(), READY],
+      [answerWithMoves('Two pages lost most of it.', MOVES), answerWithMoves('Same here.', MOVES)],
+    );
+    const admin = await turn(ADMIN, 'Why did citations fall?');
+    expect(movesOf(admin)).toEqual(['Do the same for /features', 'Compare with Perplexity', SAVE]);
+    expect(ofType(await eventsOf(admin), 'next_moves')[0].data.moves.at(-1)).toEqual({
+      label: SAVE,
+      prompt: SAVE,
+    });
+    const analyst = await turn(ANALYST, 'Why did citations fall?');
+    expect(movesOf(analyst)).toEqual(['Compare with Perplexity']);
+  });
+
+  it('offers it when the model suggested nothing, but not after a single read', async () => {
+    useModels(
+      [twoReads(), READY, calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Two pages lost most of it.'), text('Visibility is flat.')],
+    );
+    expect(movesOf(await turn(ADMIN, 'Why did citations fall?'))).toEqual([SAVE]);
+    expect(movesOf(await turn(ADMIN, 'How is visibility?'))).toEqual([]);
+  });
+
+  it('its click drafts the card from the steps the chat ran, with no question, and keeps nothing before Save', async () => {
+    const { sonnet } = useModels(
+      [twoReads(), READY, READY],
+      [
+        text('Two pages lost most of it.'),
+        calls(
+          toolCall('k1', 'save_skill', {
+            name: 'citation-drop',
+            description: 'Explains a drop in citations.',
+            instructions: 'Read visibility on ChatGPT, then the citations, then say why.',
+          }),
+        ),
+      ],
+    );
+    const first = await turn(ADMIN, 'Why did citations fall?');
+    const started = await engine.startChatRun(ADMIN, {
+      message: SAVE,
+      conversationId: runRow(first).conversation_id as string,
+      mode: 'full_auto',
+    });
+    if (!started.ok) throw new Error(started.code);
+    expect(progressOf(started.runId).saveSteps).toMatchObject([
+      { tool: 'read_visibility', platforms: ['ChatGPT'] },
+      { tool: 'list_citations' },
+    ]);
+    await engine.driveRun(ADMIN, started.runId);
+
+    const prompt = JSON.stringify(sonnet.seen.at(-1)!.prompt);
+    expect(prompt).toContain('<steps_to_save>');
+    expect(prompt).toContain('Read nothing again: call save_skill now, without asking questions');
+    expect(runRow(started.runId).status).toBe('waiting');
+    const confirm = ofType(await eventsOf(started.runId), 'confirm.required')[0].data;
+    expect(confirm.form).toMatchObject({ kind: 'skill', submit: 'Save skill' });
+    expect(db.tables.chat_skills).toEqual([]);
+    // It waits on the card: no moves before it ends.
+    expect(movesOf(started.runId)).toEqual([]);
+  });
+
+  it('gives no steps to the words typed in a chat that never offered them', async () => {
+    useModels([READY, READY], [text('Hello.'), text('Which steps?')]);
+    const first = await turn(ADMIN, 'Hello');
+    const started = await engine.startChatRun(ADMIN, {
+      message: SAVE,
+      conversationId: runRow(first).conversation_id as string,
+      mode: 'auto',
+    });
+    if (!started.ok) throw new Error(started.code);
+    expect(progressOf(started.runId).saveSteps).toBeUndefined();
+  });
+
+  it('isn’t offered in a scheduled job’s own run', async () => {
+    const JOB = '88888888-8888-4888-8888-888888888888';
+    useModels([twoReads(), READY], [text('Two pages lost most of it.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Why did citations fall?',
+      brandId: BRAND,
+      mode: 'auto',
+    });
+    if (!started.ok) throw new Error(started.code);
+    scheduledRun(started, JOB);
+    await engine.driveRun(ADMIN, started.runId);
+    expect(movesOf(started.runId)).toEqual([]);
   });
 });
 
