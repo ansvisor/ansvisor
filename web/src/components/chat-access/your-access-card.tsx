@@ -36,7 +36,18 @@ export function YourAccessCard({ access }: { access: ChatAccess }) {
       <CardContent className="space-y-3 text-sm">
         <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-2">
           <span className="text-muted-foreground">{t('yourAccess.brands')}</span>
-          <span>{t('roles.allBrands')}</span>
+          <span>
+            {access.brands.scope === 'all' ? (
+              t('roles.allBrands')
+            ) : (
+              <>
+                {(access.brands.names ?? []).join(', ') || t('yourAccess.noBrands')}
+                <span className="block text-xs text-muted-foreground">
+                  {t('yourAccess.selectedNote')}
+                </span>
+              </>
+            )}
+          </span>
         </div>
         <div>
           <p className="mb-1 text-xs font-medium text-muted-foreground">

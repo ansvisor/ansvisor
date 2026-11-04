@@ -14,8 +14,11 @@ import type { ChatTool } from './registry/define-tool';
 import { chatToolByKey } from './registry/tools';
 import { DAY_MS, asObject, check, textOf, type Snapshot } from './undo-parts';
 import { OUTPUT_UNDO_RULES } from './undo-output';
+import { SKILL_UNDO_RULES } from './undo-skills';
+import { MEMORY_UNDO_RULES } from './undo-memory';
 import { SETUP_UNDO_RULES } from './undo-setup';
 import { ACTION_CENTER_UNDO_RULES } from './undo-action-center';
+import { scheduleUndo } from './schedule/undo';
 
 /**
  * Undo (CHAT-20 §10b): the inverse of each WRITE, stored when it ran (the
@@ -443,6 +446,9 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   ...SETUP_UNDO_RULES,
   ...ACTION_CENTER_UNDO_RULES,
   ...OUTPUT_UNDO_RULES,
+  create_schedule: scheduleUndo,
+  ...SKILL_UNDO_RULES,
+  ...MEMORY_UNDO_RULES,
 };
 
 /**
