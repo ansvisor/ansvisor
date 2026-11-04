@@ -1171,7 +1171,9 @@ describe('fixDraftRules', () => {
   });
 
   it('sends the room the Length leaves, to Fix and to a hand-off (#2092 review)', async () => {
-    const fetchMock = vi.fn(async () => Response.json({ count: 1 }));
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () =>
+      Response.json({ count: 1 }),
+    );
     vi.stubGlobal('fetch', fetchMock);
     const lengthCap = { count: 4_800, max: 6_000 };
     await fixDraftRules(DRAFT, BRAND, { ...request, lengthCap });
@@ -1183,16 +1185,14 @@ describe('fixDraftRules', () => {
       lengthCap,
     });
     const [fix, handOff] = fetchMock.mock.calls.map(
-      ([, init]) => JSON.parse((init as RequestInit).body as string) as Record<string, unknown>,
+      ([, init]) => JSON.parse(init?.body as string) as Record<string, unknown>,
     );
     expect(fix).toEqual({ brandId: BRAND, ...request, lengthCap });
     expect(handOff.lengthCap).toEqual(lengthCap);
     // With no Length on, none is sent.
     fetchMock.mockClear();
     await fixDraftRules(DRAFT, BRAND, request);
-    expect(
-      JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string),
-    ).not.toHaveProperty('lengthCap');
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).not.toHaveProperty('lengthCap');
     vi.unstubAllGlobals();
   });
 
