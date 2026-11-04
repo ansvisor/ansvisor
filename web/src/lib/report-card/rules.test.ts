@@ -15,6 +15,8 @@ import {
   money,
   planOffers,
   quickWins,
+  productLabel,
+  questionGroups,
   questionLines,
   questionSummary,
   quotedQuestion,
@@ -356,9 +358,12 @@ describe('questionLines', () => {
       }),
     );
     expect(lines[0]).toEqual({
+      number: 1,
       text: 'kısa soru',
       named: { 'chatgpt-web': 'named' },
       instead: null,
+      volume: null,
+      fit: null,
     });
     expect(lines[1].text).toBe('Where to buy coffee beans');
     expect(lines[2].text.length).toBeLessThanOrEqual(QUESTION_ROW_MAX);
@@ -368,6 +373,35 @@ describe('questionLines', () => {
 
   it('has none for a card without its questions', () => {
     expect(questionLines(card({ questionRows: undefined }))).toEqual([]);
+    expect(questionGroups(card({ questionRows: undefined }))).toEqual([]);
+  });
+});
+
+describe('questionGroups', () => {
+  it('groups the questions by product, the main one first, with its page', () => {
+    const groups = questionGroups(SAMPLE_REPORT_CARD);
+    expect(groups.map((g) => [g.product, g.page, g.lines.length])).toEqual([
+      ['Whole bean coffee', 'brewlinecoffee.example/beans', 19],
+      ['Coffee subscriptions', 'brewlinecoffee.example/subscribe', 5],
+      ['Gift boxes', null, 1],
+    ]);
+    expect(groups[0].lines[0]).toMatchObject({ number: 1, volume: 2900, fit: 'core' });
+    expect(groups[0].lines.find((l) => l.number === 17)?.fit).toBe('related');
+  });
+
+  it('keeps an older card’s questions in one group without a product', () => {
+    const rows = SAMPLE_REPORT_CARD.questionRows?.map((row) => ({ ...row, product: null }));
+    const groups = questionGroups(card({ products: undefined, questionRows: rows }));
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ product: null, page: null });
+    expect(groups[0].lines).toHaveLength(25);
+  });
+
+  it('names a product in a script Inter has no letters for by its English', () => {
+    expect(productLabel({ name: 'コーヒー豆', nameEn: 'Coffee beans' })).toBe('Coffee beans');
+    expect(productLabel({ name: 'Yurt dışı turları', nameEn: 'Tours abroad' })).toBe(
+      'Yurt dışı turları',
+    );
   });
 });
 

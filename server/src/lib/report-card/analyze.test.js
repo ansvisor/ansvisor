@@ -78,7 +78,14 @@ describe('summarize', () => {
     const figures = summarize(questions, answers, competitors, company);
     expect(figures.missedCount).toBe(1);
     expect(figures.missedQuestions).toEqual([
-      { text: 'how to grind coffee', textEn: null, competitors: ['Ridge Roasters'], answers: 1 },
+      {
+        text: 'how to grind coffee',
+        textEn: null,
+        product: null,
+        volume: null,
+        competitors: ['Ridge Roasters'],
+        answers: 1,
+      },
     ]);
   });
 });

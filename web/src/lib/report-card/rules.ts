@@ -294,10 +294,12 @@ export function firstDaySteps(card: ReportCardPayload): string[] {
 
 // ─── Page 4: the questions ───────────────────────────────────────────────────
 
-/** How long a question may run on page 4: two lines at most, so 25 fit. */
+/** How long a question may run on page 4: two lines at most, so 25 fit with their groups. */
 export const QUESTION_ROW_MAX = 90;
 
 export interface QuestionLine {
+  /** The question's number on the card, from 1. */
+  number: number;
   /** The question as the card quotes it: as asked, or its English. */
   text: string;
   /** Each engine's answer: named the company, didn't, or gave none. */
@@ -306,15 +308,68 @@ export interface QuestionLine {
   >;
   /** The brand named most in its answers, if any. */
   instead: string | null;
+  /** Its keyword's Google searches a month; null when unknown. */
+  volume: number | null;
+  /** Why it was chosen: about a main product, or a need the same buyers have. */
+  fit: 'core' | 'related' | null;
+}
+
+export interface QuestionGroup {
+  /** The product or category the questions are about; null on older cards. */
+  product: string | null;
+  /** Its page on the site, without the scheme. */
+  page: string | null;
+  lines: QuestionLine[];
+}
+
+/** A product as the card names it: as the site does, or its English. */
+export function productLabel(product: { name: string; nameEn: string | null }): string {
+  if (interCanDraw(product.name)) return product.name;
+  return product.nameEn && interCanDraw(product.nameEn) ? product.nameEn : product.name;
 }
 
 /** Page 4's rows: every question asked, quoted as page 1 quotes one. */
 export function questionLines(card: ReportCardPayload): QuestionLine[] {
-  return (card.questionRows ?? []).map((row) => ({
+  return (card.questionRows ?? []).map((row, i) => ({
+    number: i + 1,
     text: clip(quotedQuestion(row) ?? row.textEn ?? row.text, QUESTION_ROW_MAX),
     named: row.named,
     instead: row.instead ? clip(row.instead, 28) : null,
+    volume: row.volume ?? null,
+    fit: row.fit ?? null,
   }));
+}
+
+/**
+ * Page 4's rows grouped by the product they ask about, in the products'
+ * order (the main one first); one group without a product on a card made
+ * before products were found.
+ */
+export function questionGroups(card: ReportCardPayload): QuestionGroup[] {
+  const lines = questionLines(card);
+  const products = card.products ?? [];
+  const rows = card.questionRows ?? [];
+  const groups = new Map<number, QuestionLine[]>();
+  const loose: QuestionLine[] = [];
+  lines.forEach((line, i) => {
+    const product = rows[i]?.product;
+    if (typeof product === 'number' && products[product]) {
+      groups.set(product, [...(groups.get(product) ?? []), line]);
+    } else {
+      loose.push(line);
+    }
+  });
+  const out: QuestionGroup[] = [...groups.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([index, groupLines]) => ({
+      product: clip(productLabel(products[index]), 60),
+      page: products[index].url
+        ? clip(products[index].url.replace(/^https?:\/\/(www\.)?/, ''), 60)
+        : null,
+      lines: groupLines,
+    }));
+  if (loose.length) out.push({ product: null, page: null, lines: loose });
+  return out;
 }
 
 /**

@@ -3,8 +3,8 @@ import { SITE_TYPES } from '@/lib/content/page-types';
 
 /**
  * The free AI visibility report card (CUSTOMER-PRIORITIES §5): what one
- * card measured, as the PDF draws it. The server asks 25 questions in the
- * four engines below and sends these figures; the PDF only lays them out
+ * card measured, as the PDF draws it. The server asks 15 to 20 questions
+ * (25 on cards made before 2026-11-04) in the engines below and sends these figures; the PDF only lays them out
  * and picks its advice from them by fixed rules (./rules.ts).
  */
 
@@ -34,6 +34,22 @@ export const reportCardPayloadSchema = z.object({
   siteType: z.enum(SITE_TYPES).nullable(),
   generatedAt: z.iso.datetime({ offset: true }),
   questionCount: count.min(1),
+  /**
+   * The main products or categories found on the site, which the questions
+   * were written from, as the site names them, in English when it is
+   * another language, and their page on the site; absent on cards made
+   * before 2026-11-04.
+   */
+  products: z
+    .array(
+      z.object({
+        name: text(80),
+        nameEn: text(80).nullable(),
+        url: z.string().url().max(500).nullable(),
+      }),
+    )
+    .max(7)
+    .optional(),
   /** Each engine's answers, and how many of them named the company. */
   engines: z
     .array(z.object({ engine: z.enum(REPORT_CARD_ENGINES), answers: count, named: count }))
@@ -55,6 +71,10 @@ export const reportCardPayloadSchema = z.object({
         competitors: z.array(text(100)).max(10),
         /** The engines that answered it. */
         answers: count.optional(),
+        /** Its product's index in `products`. */
+        product: count.nullable().optional(),
+        /** Its keyword's Google searches a month in the country; null when unknown. */
+        volume: count.nullable().optional(),
       }),
     )
     .max(10),
@@ -69,6 +89,12 @@ export const reportCardPayloadSchema = z.object({
       z.object({
         text: text(500),
         textEn: text(500).nullable(),
+        /** Its product's index in `products`. */
+        product: count.nullable().optional(),
+        /** Its keyword's Google searches a month in the country; null when unknown. */
+        volume: count.nullable().optional(),
+        /** Why it was chosen: about a main product, or a need the same buyers have. */
+        fit: z.enum(['core', 'related']).optional(),
         named: z.partialRecord(z.enum(REPORT_CARD_ENGINES), z.enum(['named', 'missed', 'none'])),
         instead: text(100).nullable(),
       }),

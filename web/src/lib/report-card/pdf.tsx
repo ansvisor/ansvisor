@@ -28,7 +28,7 @@ import {
   money,
   percent,
   planOffers,
-  questionLines,
+  questionGroups,
   questionSummary,
   quickWins,
   revenueRows,
@@ -366,11 +366,14 @@ function ResultsPage({ card }: { card: ReportCardPayload }) {
       <View style={[styles.box, { marginTop: 'auto' }]} wrap={false}>
         <Text style={styles.small}>
           How we measured: we wrote {card.questionCount} questions a{' '}
-          {card.audience === 'readers' ? 'reader' : 'buyer'} might ask, from your site, and asked
-          each one once in {card.engines.map((e) => engineLabel(e.engine)).join(', ')} in{' '}
-          {countryName(card.country)}, in {card.language}, on {date}. AI answers change from day to
-          day, so this is a snapshot. Visibility here is the share of answers that name you; the AI
-          Visibility Score in Ansvisor also weighs citations and how early you’re named.
+          {card.audience === 'readers' ? 'reader' : 'buyer'} might ask
+          {card.products?.length
+            ? ' about the main products on your site, kept those that match what you sell best'
+            : ', from your site'}
+          , and asked each one once in {card.engines.map((e) => engineLabel(e.engine)).join(', ')}{' '}
+          in {countryName(card.country)}, in {card.language}, on {date}. AI answers change from day
+          to day, so this is a snapshot. Visibility here is the share of answers that name you; the
+          AI Visibility Score in Ansvisor also weighs citations and how early you’re named.
           {(card.questionRows?.length ?? 0) > 0
             ? ` All ${card.questionRows?.length} questions are on page 4.`
             : ''}
@@ -644,17 +647,24 @@ function Faint({ children }: { children: string }) {
   return <Text style={[styles.qText, { color: MUTED, opacity: 0.5 }]}>{children}</Text>;
 }
 
-/** Page 4: every question asked, and what each engine did with it. */
+/** Page 4: every question asked, by product, and what each engine did with it. */
 function QuestionsPage({ card }: { card: ReportCardPayload }) {
-  const lines = questionLines(card);
+  const groups = questionGroups(card);
+  const count = groups.reduce((sum, g) => sum + g.lines.length, 0);
   const summary = questionSummary(card);
   const engines = card.engines.map((e) => e.engine);
+  const withProducts = groups.some((g) => g.product);
+  const withVolume = groups.some((g) => g.lines.some((l) => l.volume !== null));
   return (
     <Page size="A4" style={styles.page}>
       <Header
         eyebrow="What we measured"
-        title={`The ${lines.length} questions we asked`}
-        subtitle={`As asked in ${countryName(card.country)}, in ${card.language}. “Named instead” is the brand its answers named most.`}
+        title={`The ${count} questions we asked`}
+        subtitle={
+          withProducts
+            ? `Written from the main products on ${clip(card.domain, 60)} and kept for how closely they match what you sell and how often people search for them. As asked in ${countryName(card.country)}, in ${card.language}. “Named instead” is the brand its answers named most.`
+            : `As asked in ${countryName(card.country)}, in ${card.language}. “Named instead” is the brand its answers named most.`
+        }
       />
       {summary && (
         <Text style={[styles.paragraph, styles.bold, { marginBottom: 6 }]}>{summary}</Text>
@@ -672,10 +682,20 @@ function QuestionsPage({ card }: { card: ReportCardPayload }) {
           <Faint>n/a</Faint>
           <Text style={styles.qText}>No answer</Text>
         </View>
+        {withVolume && (
+          <Text style={[styles.qText, { color: MUTED }]}>
+            Searches: Google searches a month for the question’s keyword
+          </Text>
+        )}
       </View>
       <View style={styles.tableHeader}>
         <Text style={[styles.th, { width: 16 }]}>#</Text>
         <Text style={[styles.th, { flex: 1 }]}>Question</Text>
+        {withVolume && (
+          <Text style={[styles.th, { width: 44, textAlign: 'right', paddingRight: 6 }]}>
+            Searches
+          </Text>
+        )}
         {engines.map((engine) => (
           <Text key={engine} style={[styles.th, styles.qCell]}>
             {SHORT_ENGINE[engine] ?? engineLabel(engine)}
@@ -683,20 +703,44 @@ function QuestionsPage({ card }: { card: ReportCardPayload }) {
         ))}
         <Text style={[styles.th, { width: 96 }]}>Named instead</Text>
       </View>
-      {lines.map((line, i) => (
-        <View key={`${i}-${line.text}`} style={styles.qRow}>
-          <Text style={[styles.qText, { width: 16, color: MUTED }]}>{i + 1}</Text>
-          <Text style={[styles.qText, { flex: 1, paddingRight: 6 }]}>{line.text}</Text>
-          {engines.map((engine) => (
-            <View key={engine} style={[styles.qCell, { alignItems: 'center' }]}>
-              {line.named[engine] === 'named' ? (
-                <Tick />
-              ) : (
-                <Faint>{line.named[engine] === 'missed' ? '–' : 'n/a'}</Faint>
+      {groups.map((group) => (
+        <View key={group.product ?? 'other'}>
+          {group.product && (
+            <Text style={[styles.qText, styles.bold, { marginTop: 5, marginBottom: 1 }]}>
+              {group.product}
+              <Text style={{ color: MUTED, fontWeight: 400 }}>
+                {' '}
+                · {group.lines.length} {group.lines.length === 1 ? 'question' : 'questions'}
+                {group.page ? ` · ${group.page}` : ''}
+              </Text>
+            </Text>
+          )}
+          {group.lines.map((line) => (
+            <View key={`${line.number}-${line.text}`} style={styles.qRow} wrap={false}>
+              <Text style={[styles.qText, { width: 16, color: MUTED }]}>{line.number}</Text>
+              <Text style={[styles.qText, { flex: 1, paddingRight: 6 }]}>
+                {line.text}
+                {line.fit === 'related' ? (
+                  <Text style={{ color: MUTED }}> (a need your buyers also have)</Text>
+                ) : null}
+              </Text>
+              {withVolume && (
+                <Text style={[styles.qText, { width: 44, textAlign: 'right', paddingRight: 6 }]}>
+                  {line.volume === null ? '–' : formatNumber(line.volume)}
+                </Text>
               )}
+              {engines.map((engine) => (
+                <View key={engine} style={[styles.qCell, { alignItems: 'center' }]}>
+                  {line.named[engine] === 'named' ? (
+                    <Tick />
+                  ) : (
+                    <Faint>{line.named[engine] === 'missed' ? '–' : 'n/a'}</Faint>
+                  )}
+                </View>
+              ))}
+              <Text style={[styles.qText, { width: 96, color: MUTED }]}>{line.instead ?? '—'}</Text>
             </View>
           ))}
-          <Text style={[styles.qText, { width: 96, color: MUTED }]}>{line.instead ?? '—'}</Text>
         </View>
       ))}
       <Footer />

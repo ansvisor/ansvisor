@@ -219,7 +219,7 @@ describe('submitReportCardRequest', () => {
   });
 
   it('keeps room in the budget for the cards still to run', async () => {
-    const store = memoryStore({ spent: 150, pending: 160 });
+    const store = memoryStore({ spent: 150, pending: 180 });
     expect((await submit(form(), store)).body.code).toBe('unavailable');
   });
 });

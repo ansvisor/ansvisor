@@ -9,8 +9,17 @@
  * cost is counted from each call's tokens.
  */
 
-/** Questions on a card. */
-export const QUESTION_COUNT = 25;
+/**
+ * Questions on a card (owner decision 2026-11-04: fewer but right): the
+ * question writer drafts CANDIDATE_QUESTIONS, those that match the site
+ * weakly are dropped and at most QUESTION_MAX are kept, QUESTION_MIN or
+ * more when that many match well.
+ */
+export const QUESTION_MAX = 20;
+export const QUESTION_MIN = 15;
+export const CANDIDATE_QUESTIONS = 32;
+/** Engines a card asks each question in (lib/report-card/engines.js). */
+export const ENGINE_COUNT = 4;
 /** What the caps fall back to with nothing set. */
 export const DEFAULTS = Object.freeze({
   dailyCap: 200,
@@ -53,12 +62,12 @@ export function reportCardLimits(env = process.env) {
 }
 
 /**
- * What one card is expected to cost before it runs: every question in all
- * four engines, the keyword call, and a margin for the model calls. The
+ * What one card is expected to cost before it runs: the most questions in
+ * every engine, the keyword call, and a margin for the model calls. The
  * monthly budget keeps room for the cards queued.
  */
 export function estimatedCardUsd(limits = reportCardLimits()) {
-  return QUESTION_COUNT * 4 * limits.answerUsd + limits.volumeUsd + 0.05;
+  return QUESTION_MAX * ENGINE_COUNT * limits.answerUsd + limits.volumeUsd + 0.05;
 }
 
 /** The origins the form may post from: REPORT_CARD_ORIGINS, comma-separated. */
