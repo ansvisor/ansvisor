@@ -140,6 +140,23 @@ export async function competitorsIn(
 /** A cited page's site, without "www.". */
 const siteOf = (url) => extractHostname(url)?.replace(/^www\./, '') ?? null;
 
+/**
+ * Whether a cited site is a competitor's own: a label of its host (the
+ * top-level domain aside) is a competitor's name, or begins one ("hubspot"
+ * in hubspot.com for "HubSpot CRM"). Such a site is no place to get listed.
+ *
+ * @param {string} host
+ * @param {Set<string>} rivalKeys the competitors' brandKey
+ */
+export function competitorSite(host, rivalKeys) {
+  const labels = String(host).split('.').slice(0, -1).map(brandKey).filter(Boolean);
+  return labels.some(
+    (label) =>
+      rivalKeys.has(label) ||
+      (label.length >= 4 && [...rivalKeys].some((key) => key.startsWith(label))),
+  );
+}
+
 /** Whether a site is the company's: its site or its e-mail's domain, or under either. */
 const ownSite = (host, domains) =>
   domains.some((d) => host === d || host.endsWith(`.${d}`) || d.endsWith(`.${host}`));
@@ -220,9 +237,14 @@ export function summarize(questions, answers, competitors, { companyName, site, 
   return {
     engines: engines.map((engine) => engineRows.get(engine)),
     competitors: [...rivalCounts.values()].sort(byCount).slice(0, TOP_COMPETITORS),
+    // A competitor's own site is marked: the card never says to get onto it.
     citedSites: [...siteCounts.values()]
       .sort((a, b) => b.answers - a.answers || a.domain.localeCompare(b.domain))
-      .slice(0, TOP_SITES),
+      .slice(0, TOP_SITES)
+      .map((entry) => ({
+        ...entry,
+        competitor: !entry.own && competitorSite(entry.domain, new Set(rivalCounts.keys())),
+      })),
     ownCitations,
     missedQuestions,
     missedCount: missed.length,
