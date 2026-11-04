@@ -29,6 +29,7 @@ import cloroCallbackRoutes from './routes/cloro-callback.js';
 import internalTriggerTrackingRoutes from './routes/internal-trigger-tracking.js';
 import internalChatBudgetRoutes from './routes/internal-chat-budget.js';
 import internalChatNoticesRoutes from './routes/internal-chat-notices.js';
+import internalChatSchedulesRoutes from './routes/internal-chat-schedules.js';
 import internalChatPagesRoutes from './routes/internal-chat-pages.js';
 import internalChatModelsRoutes from './routes/internal-chat-models.js';
 import internalChatGoLiveRoutes from './routes/internal-chat-go-live.js';
@@ -669,6 +670,11 @@ app.use('/api/internal/chat/budget', internalChatBudgetRoutes);
 // The workspace's own AI key failed: each Admin's Inbox notice and e-mail, once
 // per failure episode and one reminder (routes/internal-chat-notices.js, 00441).
 app.use('/api/internal/chat/notices', internalChatNoticesRoutes);
+
+// --- Internal Chat scheduled jobs (CRON_SECRET auth, called by the web's scheduled-job worker) ---
+// A job's result by e-mail, and its "didn't run" and "paused" notes, to its creator and
+// the workspace's people it names (routes/internal-chat-schedules.js, CHAT-12).
+app.use('/api/internal/chat/schedules', internalChatSchedulesRoutes);
 
 // --- Internal Chat page reads (CRON_SECRET auth, called by the web's Chat engine) ---
 // fetch_page (CHAT-10 §B): a public page opened through safe-fetch's rules and

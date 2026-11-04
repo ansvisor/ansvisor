@@ -9,6 +9,7 @@ import {
   addDays,
   blocksAction,
   dueNow,
+  effectiveTimeZone,
   firstSinceUse,
   idleDays,
   inMorning,
@@ -109,6 +110,33 @@ describe('time zones', () => {
     expect(zones.ofPerson('u4')).toBe('America/New_York');
     expect(zones.ofPerson('nobody')).toBe('America/New_York');
     expect(resolveZones([]).ofPerson('u1')).toBe('UTC');
+  });
+
+  it('takes the zone a person picked in Settings › Account before any answer’s (00468)', () => {
+    const answers = [
+      { userId: 'u1', timezone: 'Europe/Istanbul' },
+      { userId: 'u2', timezone: 'America/New_York' },
+      { userId: 'u3', timezone: 'America/New_York' },
+    ];
+    const zones = resolveZones(answers, [
+      { id: 'u1', time_zone: 'Asia/Tokyo' },
+      { id: 'u2', time_zone: null },
+      { id: 'u4', time_zone: 'Europe/Berlin' },
+      { id: 'u5', time_zone: 'Mars/Olympus' },
+    ]);
+    expect(zones.ofPerson('u1')).toBe('Asia/Tokyo');
+    // Automatic: their answers', as before; with none, the workspace's.
+    expect(zones.ofPerson('u2')).toBe('America/New_York');
+    expect(zones.ofPerson('u4')).toBe('Europe/Berlin');
+    expect(zones.ofPerson('u5')).toBe('America/New_York');
+    // A pick isn't an answer: the workspace's zone still counts answers only.
+    expect(zones.workspace).toBe('America/New_York');
+  });
+
+  it('reads a zone in the same order as the web app: the pick, the browser’s, UTC', () => {
+    expect(effectiveTimeZone('Asia/Tokyo', 'Europe/Istanbul')).toBe('Asia/Tokyo');
+    expect(effectiveTimeZone(null, 'Europe/Istanbul')).toBe('Europe/Istanbul');
+    expect(effectiveTimeZone('Mars/Olympus', undefined)).toBe('UTC');
   });
 
   it('breaks a workspace tie on the newest answer', () => {

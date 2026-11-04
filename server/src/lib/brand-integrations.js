@@ -209,3 +209,278 @@ export async function signInBrandIds(connection) {
   if (error) throw new Error(error.message);
   return [...new Set((data ?? []).map((use) => use.brand_id))];
 }
+
+// ─── A brand's own Google sign-in (BRAND-ACCESS PR 15) ──────────────────────
+// Brand settings › Integrations: a brand keeps the Account's Google sign-in,
+// uses the one another brand uses ("Use the same account as…", D6), or a
+// login of its own. Every Google login stays one connected account under the
+// Account's Composio entity (several may share it: calls name the account).
+// The server writes these for an admin or manager who can access the brand.
+
+/** The Google products a brand connects on its own. */
+export const BRAND_GOOGLE_PROVIDERS = Object.freeze(['google-search-console', 'google-analytics']);
+
+function httpError(message, status, code) {
+  return Object.assign(new Error(message), { status, ...(code ? { code } : {}) });
+}
+
+/** The brand's column holding its property for each Google product. */
+const PROPERTY_COLUMN = Object.freeze({
+  'google-search-console': 'gsc_property',
+  'google-analytics': 'ga_property_id',
+});
+
+/**
+ * The brand's property was picked from the sign-in it used: once it reads
+ * through another account, or none, the pick no longer applies and is
+ * cleared, so nothing syncs a property the new account may not see.
+ */
+async function clearBrandProperty(brandId, provider) {
+  const column = PROPERTY_COLUMN[provider];
+  if (!column) return;
+  const { error } = await supabaseAdmin
+    .from('brands')
+    .update({ [column]: null })
+    .eq('id', brandId);
+  if (error) throw new Error(error.message);
+}
+
+/** How long a login that was started but never finished is kept. */
+const PENDING_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Drops the organization's pending logins for `provider` that won't be
+ * finished: the person's own earlier ones (they're starting again) and
+ * anyone's older than a day. No brand uses a pending login (activation
+ * links it), so only its row and its Composio account go.
+ */
+async function forgetStalePending({ organizationId, provider, userId }, { deleteRemote }) {
+  const { data, error } = await supabaseAdmin
+    .from('integration_accounts')
+    .select('id, composio_account_id, connected_by, created_at')
+    .eq('organization_id', organizationId)
+    .eq('provider', provider)
+    .eq('status', 'pending');
+  if (error) throw new Error(error.message);
+  const cutoff = Date.now() - PENDING_TTL_MS;
+  const stale = (data ?? []).filter(
+    (a) => a.connected_by === userId || Date.parse(a.created_at) < cutoff,
+  );
+  for (const account of stale) {
+    if (account.composio_account_id && deleteRemote) {
+      try {
+        await deleteRemote(account.composio_account_id);
+      } catch (err) {
+        logger.warn(
+          { err, accountId: account.id },
+          '[brand-integrations] could not remove an unfinished sign-in',
+        );
+      }
+    }
+    const { error: deleteError } = await supabaseAdmin
+      .from('integration_accounts')
+      .delete()
+      .eq('id', account.id);
+    if (deleteError) throw new Error(deleteError.message);
+  }
+}
+
+/**
+ * The sign-ins a brand may use for `provider`: the connected ones of the
+ * organization that a brand the person can access uses (`brandIds`), each
+ * with those brands. The Account's own sign-in is always among them while
+ * it is connected, since every brand used it.
+ */
+export async function usableAccounts(organizationId, provider, brandIds) {
+  const { data: accounts, error } = await supabaseAdmin
+    .from('integration_accounts')
+    .select(`${ACCOUNT_COLUMNS}, integration_connection_id, connected_by, created_at`)
+    .eq('organization_id', organizationId)
+    .eq('provider', provider)
+    .eq('status', 'connected');
+  if (error) throw new Error(error.message);
+  if (!accounts?.length) return [];
+  const { data: uses, error: useError } = await selectInChunks(brandIds, (ids) =>
+    supabaseAdmin
+      .from('brand_integrations')
+      .select('brand_id, account_id')
+      .eq('provider', provider)
+      .in('brand_id', ids),
+  );
+  if (useError) throw new Error(useError.message);
+  const usedBy = new Map();
+  for (const use of uses ?? []) {
+    usedBy.set(use.account_id, [...(usedBy.get(use.account_id) ?? []), use.brand_id]);
+  }
+  return accounts
+    .filter((a) => a.integration_connection_id || usedBy.has(a.id))
+    .map((a) => ({
+      accountId: a.id,
+      label: a.label ?? null,
+      accountLevel: Boolean(a.integration_connection_id),
+      connectedBy: a.connected_by ?? null,
+      connectedAt: a.created_at ?? null,
+      brandIds: usedBy.get(a.id) ?? [],
+    }));
+}
+
+/**
+ * Drops a brand's own sign-in nobody uses any more: its connected account on
+ * Composio (best effort) and its row. The Account's own sign-in and a CMS
+ * site's are left to Settings › Integrations and the CMS cards.
+ */
+async function forgetUnusedAccount(accountId, { deleteRemote }) {
+  const { data: account, error } = await supabaseAdmin
+    .from('integration_accounts')
+    .select('id, composio_account_id, integration_connection_id, cms_connection_id')
+    .eq('id', accountId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!account || account.integration_connection_id || account.cms_connection_id) return;
+  const { count, error: countError } = await supabaseAdmin
+    .from('brand_integrations')
+    .select('brand_id', { count: 'exact', head: true })
+    .eq('account_id', accountId);
+  if (countError) throw new Error(countError.message);
+  if (count) return;
+  if (account.composio_account_id) {
+    try {
+      await deleteRemote(account.composio_account_id);
+    } catch (err) {
+      logger.warn({ err, accountId }, '[brand-integrations] could not remove an unused sign-in');
+    }
+  }
+  const { error: deleteError } = await supabaseAdmin
+    .from('integration_accounts')
+    .delete()
+    .eq('id', accountId);
+  if (deleteError) throw new Error(deleteError.message);
+}
+
+/**
+ * The brand uses `accountId` for `provider` from now on. The sign-in must be
+ * a connected one of the brand's organization for that product, and one the
+ * person may use (usableAccounts). The sign-in it used before goes when no
+ * brand uses it any more and it was the brand's own.
+ */
+export async function useAccountForBrand(
+  { brand, provider, accountId, brandIds },
+  { deleteRemote },
+) {
+  const usable = await usableAccounts(brand.organization_id, provider, brandIds);
+  if (!usable.some((a) => a.accountId === accountId)) {
+    throw httpError('That sign-in is not one this brand can use.', 404, 'unknown_account');
+  }
+  const before = await brandConnection(brand.id, provider);
+  const { error } = await supabaseAdmin.from('brand_integrations').upsert(
+    {
+      brand_id: brand.id,
+      provider,
+      account_id: accountId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'brand_id,provider' },
+  );
+  if (error) throw new Error(error.message);
+  if (before?.accountId !== accountId) await clearBrandProperty(brand.id, provider);
+  if (before?.accountId && before.accountId !== accountId) {
+    await forgetUnusedAccount(before.accountId, { deleteRemote });
+  }
+}
+
+/**
+ * Starts a login of the brand's own: one more connected account under the
+ * Account's entity, kept as a pending sign-in until Composio says it's
+ * active (activateBrandAccount). The brand keeps its sign-in meanwhile.
+ * Logins started before and never finished go first (forgetStalePending).
+ */
+export async function startBrandAccount(
+  { brand, provider, userId, entityId },
+  { initiate, deleteRemote },
+) {
+  await forgetStalePending(
+    { organizationId: brand.organization_id, provider, userId },
+    { deleteRemote },
+  );
+  const { redirectUrl, connectedAccountId } = await initiate(entityId);
+  if (!connectedAccountId) throw new Error('Composio returned no connected account');
+  const { data, error } = await supabaseAdmin
+    .from('integration_accounts')
+    .insert({
+      organization_id: brand.organization_id,
+      provider,
+      composio_entity_id: entityId,
+      composio_account_id: connectedAccountId,
+      status: 'pending',
+      connected_by: userId,
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  return { redirectUrl, accountId: data.id };
+}
+
+/**
+ * Once Composio says the brand's new login is active: the sign-in is
+ * connected and the brand uses it. 'pending' while it isn't yet.
+ */
+export async function activateBrandAccount(
+  { brand, provider, accountId, userId },
+  { status, deleteRemote },
+) {
+  const { data: account, error } = await supabaseAdmin
+    .from('integration_accounts')
+    .select('id, organization_id, provider, composio_account_id, status, connected_by')
+    .eq('id', accountId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (
+    !account ||
+    account.organization_id !== brand.organization_id ||
+    account.provider !== provider ||
+    account.connected_by !== userId ||
+    !account.composio_account_id
+  ) {
+    throw httpError('That sign-in is not one this brand can use.', 404, 'unknown_account');
+  }
+  if (account.status !== 'connected') {
+    if ((await status(account.composio_account_id)) !== 'ACTIVE') return 'pending';
+    const { error: updateError } = await supabaseAdmin
+      .from('integration_accounts')
+      .update({ status: 'connected', updated_at: new Date().toISOString() })
+      .eq('id', accountId);
+    if (updateError) throw new Error(updateError.message);
+  }
+  const before = await brandConnection(brand.id, provider);
+  const { error: useError } = await supabaseAdmin.from('brand_integrations').upsert(
+    {
+      brand_id: brand.id,
+      provider,
+      account_id: accountId,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'brand_id,provider' },
+  );
+  if (useError) throw new Error(useError.message);
+  if (before?.accountId !== accountId) await clearBrandProperty(brand.id, provider);
+  if (before?.accountId && before.accountId !== accountId) {
+    await forgetUnusedAccount(before.accountId, { deleteRemote });
+  }
+  return 'connected';
+}
+
+/**
+ * The brand stops using any sign-in for `provider` (Disconnect on its card):
+ * its own login, used by no other brand, goes too; the Account's stays.
+ */
+export async function removeBrandAccount({ brand, provider }, { deleteRemote }) {
+  const before = await brandConnection(brand.id, provider);
+  const { error } = await supabaseAdmin
+    .from('brand_integrations')
+    .delete()
+    .eq('brand_id', brand.id)
+    .eq('provider', provider);
+  if (error) throw new Error(error.message);
+  await clearBrandProperty(brand.id, provider);
+  if (before?.accountId) await forgetUnusedAccount(before.accountId, { deleteRemote });
+}

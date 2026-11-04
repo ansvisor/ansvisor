@@ -230,6 +230,18 @@ describe('running a due job', () => {
     expect(db.tables.chat_messages).toHaveLength(4);
   });
 
+  it('keeps a job on the zone it was made with when its creator picks another one (00468)', async () => {
+    seedJob();
+    // Since the job was made, the creator set New York in Settings › Account.
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.time_zone = 'America/New_York';
+    await worker.fireDueJobs(NOW, driver);
+    // Monday 09:00 in Istanbul still, never New York's 09:00 (14:00 UTC).
+    expect(jobRow()).toMatchObject({ timezone: 'Europe/Istanbul', next_run_at: NEXT_SLOT });
+    const answer = db.tables.chat_messages.find((m) => m.role === 'assistant')!;
+    expect(answer.timezone).toBe('Europe/Istanbul');
+    expect(db.tables.chat_run_state[0].progress).toMatchObject({ timezone: 'Europe/Istanbul' });
+  });
+
   it('runs a slot once with two workers at once, and the slot’s row is the backstop', async () => {
     seedJob();
     const [a, b] = await Promise.all([
@@ -779,5 +791,52 @@ describe('delivering a run (W3-04a)', () => {
     expect(notices().map((n) => [n.kind, (n.payload as { reason: string }).reason])).toEqual([
       ['schedule_paused', 'Its brand or what it worked on is gone.'],
     ]);
+  });
+});
+
+describe('Run now (W3-03, CHAT-12 item 23)', () => {
+  it('runs the job at once as its creator, outside its slots, and keeps its next slot', async () => {
+    seedJob();
+    const at = minutes(30);
+    expect(await worker.runJobNow(JOB, at, driver)).toEqual({ kind: 'started' });
+    expect(runsOf()).toEqual([
+      expect.objectContaining({ slot_at: at.toISOString(), run_now: true, status: 'running' }),
+    ]);
+    expect(opened).toHaveLength(1);
+    expect(jobRow().next_run_at).toBe(SLOT);
+  });
+
+  it('says why it can’t, as a due run’s checks do, and waits for a free slot', async () => {
+    seedJob();
+    busy = { workspace: 99, user: 0 };
+    expect(await worker.runJobNow(JOB, NOW, driver)).toEqual({ kind: 'busy' });
+    busy = { workspace: 0, user: 0 };
+    db.tables.brands = [];
+    expect(await worker.runJobNow(JOB, NOW, driver)).toEqual({
+      kind: 'refused',
+      reason: 'Its brand was deleted.',
+    });
+    expect(jobRow()).toMatchObject({ enabled: false, paused_reason: 'missing_source' });
+    expect(await worker.runJobNow('00000000-0000-4000-8000-000000000000', NOW, driver)).toEqual({
+      kind: 'gone',
+    });
+  });
+});
+
+describe('settling a Run now', () => {
+  it('neither retries a failed Run now nor counts it toward the job’s failed runs', async () => {
+    seedJob({ fail_count: 2 });
+    expect(await worker.runJobNow(JOB, NOW, driver)).toEqual({ kind: 'started' });
+    chatEnds(runsOf()[0].id, 'error');
+    expect(await worker.settleScheduleRun(runsOf()[0].id as string, { now: minutes(1) })).toBe(
+      'failed',
+    );
+    expect(jobRow()).toMatchObject({
+      enabled: true,
+      paused_reason: null,
+      fail_count: 2,
+      retry_at: null,
+      next_run_at: SLOT,
+    });
   });
 });

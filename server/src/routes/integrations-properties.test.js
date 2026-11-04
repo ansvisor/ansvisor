@@ -22,6 +22,10 @@ const brandConnection = vi.fn();
 const signInBrandIds = vi.fn();
 const brandUpdates = [];
 const getActiveConnection = vi.fn();
+const listActiveConnections = vi.fn();
+// The workspace's integration_connections row, and its brands' own logins.
+let workspaceRow;
+let ownLogins;
 const listGscSites = vi.fn(async () => [{ siteUrl: 'https://acme.example/' }]);
 const listGaProperties = vi.fn(async () => [{ propertyId: '123', displayName: 'Acme' }]);
 const runGscSync = vi.fn(async () => ({ synced: 1 }));
@@ -29,13 +33,18 @@ const runGaSync = vi.fn(async () => ({ synced: 1 }));
 
 vi.mock('../config/supabase.js', () => ({
   default: {
-    from: () => {
+    from: (table) => {
       const chain = {
         select: () => chain,
         update: (fields) => (brandUpdates.push(fields), chain),
         eq: () => chain,
+        is: () => chain,
         single: async () => ({ data: { organization_id: 'org-1', role }, error: null }),
-        then: (resolve) => resolve({ error: null }),
+        maybeSingle: async () => ({ data: workspaceRow, error: null }),
+        then: (resolve) =>
+          resolve(
+            table === 'integration_accounts' ? { data: ownLogins, error: null } : { error: null },
+          ),
       };
       return chain;
     },
@@ -48,6 +57,7 @@ vi.mock('../lib/composio.js', () => ({
   isComposioConfigured: () => true,
   initiateConnection: vi.fn(),
   getActiveConnection: (...args) => getActiveConnection(...args),
+  listActiveConnections: (...args) => listActiveConnections(...args),
   deleteConnection: vi.fn(),
   listGscSites: (...args) => listGscSites(...args),
   listGaProperties: (...args) => listGaProperties(...args),
@@ -103,6 +113,9 @@ beforeEach(() => {
     connected: true,
   });
   getActiveConnection.mockReset().mockResolvedValue({ id: 'acct-1' });
+  listActiveConnections.mockReset().mockResolvedValue([{ id: 'acct-brand' }, { id: 'acct-1' }]);
+  workspaceRow = { composio_account_id: 'acct-1' };
+  ownLogins = [{ composio_account_id: 'acct-brand' }];
   allBrands.mockReset().mockResolvedValue({ orgId: 'org-1' });
   // The Account's Google sign-in: every brand of it uses it.
   signInBrandIds.mockReset().mockResolvedValue([BRAND, OTHER]);
@@ -129,8 +142,21 @@ describe.each([
     expect((await res.json()).properties).toHaveLength(1);
     expect(allBrands).toHaveBeenCalledWith('u1');
     expect(brandAccess).not.toHaveBeenCalled();
-    expect(getActiveConnection).toHaveBeenCalledWith(provider, 'org_org-1');
+    // The workspace row's own account, by name: brands' own logins share the entity.
+    expect(getActiveConnection).toHaveBeenCalledWith(provider, 'org_org-1', 'acct-1');
     expect(list()).toHaveBeenCalledWith({ entityId: 'org_org-1', accountId: 'acct-1' });
+  });
+
+  it("never lists the Account's from a brand's own login when its row names no account", async () => {
+    workspaceRow = { composio_account_id: null };
+    const res = await fetch(`${baseUrl}/${provider}/properties`);
+    expect(res.status).toBe(200);
+    expect(getActiveConnection).not.toHaveBeenCalled();
+    expect(list()).toHaveBeenCalledWith({ entityId: 'org_org-1', accountId: 'acct-1' });
+
+    ownLogins = [{ composio_account_id: 'acct-brand' }, { composio_account_id: 'acct-1' }];
+    const none = await fetch(`${baseUrl}/${provider}/properties`);
+    expect(none.status).toBe(409);
   });
 
   it("refuses the Account's list to Selected brands, with the code, and reads nothing", async () => {

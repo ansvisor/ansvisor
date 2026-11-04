@@ -183,6 +183,15 @@ describe('sendingZone', () => {
     ).toBe('UTC');
     expect(sendingZone([], ME)).toBe('UTC');
   });
+
+  it("is the zone the person picked in Settings › Account before any answer's (00468)", () => {
+    const answers = [{ userId: ME, timezone: 'Europe/Istanbul' }];
+    expect(sendingZone(answers, ME, 'Asia/Tokyo')).toBe('Asia/Tokyo');
+    expect(sendingZone([], ME, 'Asia/Tokyo')).toBe('Asia/Tokyo');
+    // Automatic (none picked), or a zone nobody knows: the answers' zone, as before.
+    expect(sendingZone(answers, ME, null)).toBe('Europe/Istanbul');
+    expect(sendingZone(answers, ME, 'Mars/Olympus')).toBe('Europe/Istanbul');
+  });
 });
 
 describe('dayIn', () => {

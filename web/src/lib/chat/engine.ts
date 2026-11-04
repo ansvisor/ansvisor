@@ -3,6 +3,7 @@ import { Output, streamText, tool as aiTool, type ModelMessage, type ToolSet } f
 import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
+import { personTimeZone } from '@/lib/account-time-zone';
 import type { AiProvider } from '@/lib/agent/providers';
 import { hasBrandAccess } from '@/lib/brand-access';
 import { searchHelp } from '@/lib/help/search';
@@ -46,6 +47,7 @@ import {
 import {
   isChatHref,
   maskIds,
+  type ChatDeliverable,
   type ChatDenialCard,
   type ChatEventPayloads,
   type ChatRunSummary,
@@ -224,6 +226,8 @@ import {
   withSaveStepsMove,
   type StepToSave,
 } from './skills/save-steps';
+import { placeholderWords } from '@/lib/content/page-version';
+import { openDraftOf } from './editor-page';
 import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
 import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
@@ -802,7 +806,8 @@ export async function startChatRun(
     throw new Error("Chat could not note the brands of the message's references");
   }
 
-  const timezone = validTimezone(input.timezone);
+  // The person's own zone (Settings › Account) before their browser's: the run's times and cards.
+  const timezone = await personTimeZone(actor.userId, input.timezone);
   const keptBrand = input.context?.chips.some((chip) => chip.key === 'brand') ?? false;
   const scope = messageScopeOf(
     input,
@@ -951,6 +956,8 @@ interface RunContext {
   budget: ReadBudget;
   offered: Map<string, ChatTool>;
   refused: { tool: ChatTool; denial: ToolDenial }[];
+  /** The draft open in the Content Editor beside the chat, by its chip (W4-14); null when none. */
+  openDraft: string | null;
   /**
    * The skills the person may use (CHAT-13 items 3–4): every enabled one
    * (the library's and the workspace's, skills/store.ts), and the ones the
@@ -1210,7 +1217,11 @@ async function openContext(
   // A shortcut's run reads only its data plan (W2-09).
   const playbook = shortcutPlaybook(actor.organizationId, progress.shortcut);
   const shown = await offeredInRun(tools, { agentRunId });
-  const offered = playbook ? playbookTools(shown.offered, playbook) : shown.offered;
+  // Suggestions in the editor are only for the page open there beside the chat (W4-14).
+  const openDraft = openDraftOf(progress.scope);
+  const offered = (playbook ? playbookTools(shown.offered, playbook) : shown.offered).filter(
+    (tool) => tool.name !== SUGGEST_TOOL || openDraft !== null,
+  );
   const { refused } = shown;
   // An agent's run reads what its skills list (run-limits.ts AGENT_READS).
   const budget = readBudget(choice.effort, { agent: agentRunId !== null });
@@ -1237,6 +1248,7 @@ async function openContext(
     budget,
     offered: new Map(offered.map((tool) => [tool.name, tool])),
     refused,
+    openDraft,
     agentRunId,
     answerLanguage,
     // The job's own run only: a person's message in its chat is theirs.
@@ -2572,6 +2584,8 @@ async function handleCall(
     return result(call, { code: 'invalid_input', issues }, true);
   }
   const input = parsed.data as Record<string, unknown>;
+  const notHere = openPageRefusal(rc, tool, input);
+  if (notHere) return result(call, notHere, true);
   // A change asked with a question waits for its answer: the model calls it again then.
   if (tool.class !== 'read' && (rc.stepCalls ?? []).some((c) => c.toolName === ASK_TOOL)) {
     return result(
@@ -2643,6 +2657,43 @@ async function handleCall(
     case 'click':
       return openCard(rc, tool, call, input, facts, decision);
   }
+}
+
+/** The editor's suggestions for the page open beside the chat (W4-14). */
+const SUGGEST_TOOL = 'suggest_draft_changes';
+
+/**
+ * The page open in the Content Editor beside the chat (W4-14): only the
+ * person's Accept there changes it, so update_draft refuses it, and the
+ * suggestions go to that page only. Said to the model, which asks again.
+ */
+function openPageRefusal(
+  rc: RunContext,
+  tool: ChatTool,
+  input: Record<string, unknown>,
+): { code: string; message: string } | null {
+  const draftId = typeof input.draft_id === 'string' ? input.draft_id.toLowerCase() : null;
+  if (tool.name === 'update_draft' && rc.openDraft !== null && draftId === rc.openDraft) {
+    return {
+      code: 'open_in_editor',
+      message:
+        'This page is open in the Content Editor beside the chat: it changes only when the person accepts a suggestion there. Call suggest_draft_changes with their request instead.',
+    };
+  }
+  if (tool.name === SUGGEST_TOOL && draftId !== rc.openDraft) {
+    return {
+      code: 'not_open',
+      message: 'Only for the page open in the Content Editor beside this chat.',
+    };
+  }
+  return null;
+}
+
+/** How many suggestions a suggest_draft_changes call left in the editor; 0 for any other call. */
+function suggestedCount(tool: ChatTool, output: unknown): number {
+  if (tool.name !== SUGGEST_TOOL || !output || typeof output !== 'object') return 0;
+  const done = output as { ok?: unknown; count?: unknown };
+  return done.ok === true && typeof done.count === 'number' ? done.count : 0;
 }
 
 /**
@@ -4041,6 +4092,9 @@ async function writeCall(
   const output = outcome.code === 'ok' ? outcome.output : null;
   const fileId = await deliver(rc, tool, input, output, facts.brandId);
   showResultCard(rc, tool, input, output);
+  // The Content Agent's suggestions, waiting in the editor beside the chat (W4-14).
+  const suggested = suggestedCount(tool, output);
+  if (suggested > 0) rc.sink.emit('suggestion.created', { count: suggested });
   // Ready for review (W2-10) is Chat's status in the strip: it shows it.
   if (tool.name === 'set_task_ready_for_review') {
     rc.progress.taskStrip = true;
@@ -4145,11 +4199,23 @@ async function deliver(
 ): Promise<string | null> {
   const made = tool.deliverable?.(input as never, output);
   if (!made) return null;
+  // A page made or changed in chat: its version card (W4-12a). Read before it is filed,
+  // so it is numbered after the versions this chat filed already.
+  const paged = tool.versionOf
+    ? await tool
+        .versionOf(input as never, output, { conversationId: rc.run.conversationId })
+        .catch((error: unknown) => {
+          console.error('[chat] could not read a page version:', error);
+          return null;
+        })
+    : null;
+  // Files needs a title: a change to an untitled draft whose version couldn't be read has none.
+  const title = paged?.title || made.title || t('pageMoves.untitled');
   const filed = await fileChatOutput({
     organizationId: rc.actor.organizationId,
     createdBy: rc.actor.userId,
     brandId,
-    title: made.title,
+    title,
     type: made.type,
     formats: made.formats,
     body: new TextEncoder().encode(made.body),
@@ -4168,15 +4234,30 @@ async function deliver(
     return { ok: false as const, failure: 'failed' as const };
   });
   const task = filed.ok ? await taskOfDeliverable(rc, filed.id, !!made.contentDraftId) : null;
-  rc.sink.emit('deliverable.created', {
-    title: made.title,
+  const card: ChatDeliverable = {
+    title,
     type: made.type,
     formats: made.formats,
     status: 'draft',
     ...(made.href ? { href: made.href } : {}),
     filed: filed.ok ? 'in_files' : filed.failure,
     ...(task ? { task } : {}),
-  });
+    ...(paged ? { version: paged.version } : {}),
+  };
+  if (paged && paged.version.n > 1) rc.sink.emit('deliverable.updated', card);
+  else rc.sink.emit('deliverable.created', card);
+  if (paged) {
+    rc.progress.pagePlaceholder = paged.version.changes.placeholders[0] ?? null;
+    // A page with nothing left to fill, not Ready yet: Mark ready is a next move (W4-12b).
+    rc.progress.pageMayBeReady = !rc.progress.pagePlaceholder && !paged.done;
+  }
+  // Which History version the card's Undo puts back: kept on the server, by its file.
+  if (paged?.undoVersionId && filed.ok && made.contentDraftId) {
+    rc.progress.pageUndos = {
+      ...rc.progress.pageUndos,
+      [filed.id]: { draftId: made.contentDraftId, versionId: paged.undoVersionId },
+    };
+  }
   return filed.ok ? filed.id : null;
 }
 
@@ -4771,14 +4852,39 @@ async function checkedFactsStep(rc: RunContext): Promise<void> {
  */
 async function offerNextMoves(rc: RunContext): Promise<void> {
   const moves = rc.progress.nextMoves ?? [];
+  const placeholder = rc.progress.pagePlaceholder;
+  const markReady = rc.progress.pageMayBeReady === true;
   // A person's own chat only: an agent's or a job's run has no one to click it.
   const mayOfferSteps = !rc.agentRunId && !rc.scheduleId;
-  if (moves.length === 0 && !mayOfferSteps) return;
+  if (moves.length === 0 && !placeholder && !markReady && !mayOfferSteps) return;
   try {
     const ctx = await contextFor(rc);
     if (!ctx) return;
     // A move never names a tool (CHAT-03 item 22), even in words the model made up.
     let clean = moves.filter((move) => !namesTool(move.label) && !namesTool(move.prompt));
+    // A page version that leaves a placeholder: filling it comes first (CHAT-25 §6, W4-12a).
+    if (placeholder) {
+      const fill = t('pageMoves.fill', { what: placeholderWords(placeholder) });
+      clean = [
+        { label: fill, prompt: fill, kind: 'continue', class: 'write', continues_this_run: true },
+        ...clean.filter((move) => move.kind !== 'continue'),
+      ];
+    }
+    // A page done with its placeholders and not Ready yet: Mark ready, as the editor's (W4-12b).
+    if (markReady) {
+      const label = t('pageMoves.markReady');
+      clean = [
+        ...clean.filter((move) => move.kind === 'continue'),
+        {
+          label,
+          prompt: t('pageMoves.markReadyPrompt'),
+          kind: 'act',
+          class: 'write',
+          continues_this_run: true,
+        },
+        ...clean.filter((move) => move.kind !== 'continue' && move.kind !== 'act'),
+      ];
+    }
     if (mayOfferSteps && (await offersSaveStepsTo(rc, ctx))) {
       clean = withSaveStepsMove(clean, {
         label: t('saveSteps.label'),

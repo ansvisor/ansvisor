@@ -830,6 +830,10 @@
           "text": "A **Schedule** trigger runs at its time on the clock of the time zone it was set in, also when summer time starts or ends. A time missed while the agent was paused isn't made up later. A **Signal** trigger runs when Action Center finds a new signal of its category, and of the definitions, pages and engines you picked. **KPI changed** and **Watch rule** triggers are saved, but don't start runs yet.\n\nSignals that come close together don't each start a run. Signals within 15 minutes join one run, a brand gets at most one signal run every 6 hours, and your plan sets how many signal runs an agent may start a day. A signal that had to wait is listed in the agent's next run, and in **Run history** as **Skipped** with the reason."
         },
         {
+          "heading": "A schedule's time zone",
+          "text": "A new **Schedule** trigger starts on your time zone from **Settings › Account** (your browser's when that's **Automatic**), shown beside its time. Changing your time zone later doesn't move a trigger you already have."
+        },
+        {
           "heading": "How a run works",
           "text": "Each run works on one brand, in a chat of its own. A run a trigger started acts as the agent's owner, with their role; **Run now** acts as the person who clicked it. The chat shows in that person's Inbox.\n\nA run may use only its share of your monthly AI limit. A run a trigger started ends **Stopped at its limit** when it reaches it; a **Run now** run pauses there instead. After 3 failed runs in a row the agent pauses. When the monthly AI limit is used up, the agent pauses and starts again by itself once the limit resets."
         },
@@ -1032,7 +1036,14 @@
         "paste api key",
         "remove key",
         "where pages open",
-        "keep working in chat"
+        "keep working in chat",
+        "page version",
+        "what changed",
+        "placeholder",
+        "undo version",
+        "show all questions",
+        "mark ready",
+        "set ready"
       ],
       "synonyms": [
         "assistant",
@@ -1102,6 +1113,10 @@
         {
           "heading": "Where a page opens",
           "text": "When Chat writes a page, it asks **Where should we open this page?** **Open in Content Editor** opens the full editor with Brief, Rules and Quality; **Keep working in chat** keeps the page here, and you ask for changes in plain words. Tick **Don't ask again** to keep your choice. Change it anytime in **Settings › Chat › Where pages open**."
+        },
+        {
+          "heading": "Versions of a page in chat",
+          "text": "Each time Chat writes or changes a page, its card shows the version, such as **Version 2 · 7 questions · 905 characters**. **What changed** lists sections Chat made shorter, new questions or sections, and placeholders in [BRACKETS] for you to fill; the first next move offers to fill one. The card previews the first sections; **Show all** opens the rest. **Undo to version 1** puts the version before back, as the editor's History does. Every version is saved to the Library as a draft. Admins and Managers can **Send to CMS** from the card, as from the Library. Once nothing is left to fill, **Mark ready** is a next move: it sets the draft to Ready as the editor does, and Undo takes it back for 7 days."
         },
         {
           "heading": "Send or publish a page from Chat",
@@ -1223,6 +1238,9 @@
         "your focus",
         "answer language",
         "chat language",
+        "notify me",
+        "agent needs me",
+        "email when an agent waits",
         "ask chat on every page",
         "full auto"
       ],
@@ -1249,6 +1267,10 @@
         {
           "heading": "Answer language",
           "text": "**Answer language** sets the language Chat answers in. **Same as my question**, the default, answers in the language you write in. Pick a language, such as English, and Chat answers in it whatever language you write in: useful for agencies and teams that write in several languages. Asking for a language in a message, such as \"answer in German\", always wins for that answer. The app itself stays in English."
+        },
+        {
+          "heading": "Notify me when an agent needs me",
+          "text": "When one of your agents stops to ask you something or to wait for your OK on a change, its chat moves to **Needs you** in your Inbox. **Notify me when an agent needs me** sets whether you also get an email: **Inbox + email**, the default, sends one email per run, with a link to open it; **Inbox only** sends none. **Inbox + Slack** comes once Slack can be connected."
         },
         {
           "heading": "Chat on every page",
