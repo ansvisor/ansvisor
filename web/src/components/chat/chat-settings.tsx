@@ -254,10 +254,6 @@ export function ChatSettings({
             </select>
           </Row>
 
-          {/* "Show Thought for N s" is kept on the person but nothing reads it
-              yet, so it stays hidden until it's wired up; its saved value and
-              schema stay. */}
-
           <Row label={t('notify.label')} note={t('notify.note')}>
             <select
               data-action="chatSettings.notifyChannel"
@@ -278,6 +274,15 @@ export function ChatSettings({
                 </option>
               ))}
             </select>
+          </Row>
+
+          <Row label={t('thought.label')} note={t('thought.note')}>
+            <Switch
+              checked={settings.showThought}
+              label={t('thought.label')}
+              action="chatSettings.toggleThinking"
+              onChange={(next) => void change({ showThought: next })}
+            />
           </Row>
 
           <Row label={t('everyPage.label')} note={t('everyPage.note')}>

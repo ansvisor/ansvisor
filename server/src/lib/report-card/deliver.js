@@ -90,7 +90,9 @@ export function renderReportCardEmail({
   origin,
 }) {
   // The headline is Starter's engines (ChatGPT and Microsoft Copilot); a
-  // card made before they were split counts every engine.
+  // card made before they were split counts every engine. The competitors
+  // and own citations are counted over the same answers (analyze.js
+  // summarize), so the three figures share one base.
   const banded = Array.isArray(payload.mainEngines) && payload.mainEngines.length > 0;
   const main = banded
     ? payload.engines.filter((e) => payload.mainEngines.includes(e.engine))

@@ -82,10 +82,10 @@ export const en = {
     kpiLeader: 'Top competitor',
     kpiLeaderNone: 'None named',
     kpiLeaderSub: (answers: number, total: number) =>
-      `named in ${answers} of all ${total} answers, every engine`,
+      `named in ${answers} of the same ${total} answers`,
     kpiLeaderNoneSub: 'in these answers',
     kpiCited: 'Your site cited',
-    kpiCitedSub: (total: number) => `of all ${total} answers, every engine, cite a page of yours`,
+    kpiCitedSub: (total: number) => `of the same ${total} answers cite a page of yours`,
     startTitle: 'Your starting point',
     startCited: (engines: string, cited: number) =>
       `${engines} don’t name you yet, but AI already reads your site: it cited your pages in ${plural(cited, 'answer', 'answers')} without saying your name. That is where to start.`,
@@ -122,7 +122,7 @@ export const en = {
       country: string,
       date: string,
     ) =>
-      `How we measured: ${questions} questions a ${readers ? 'reader' : 'buyer'} might ask, asked once each in ${engines} in ${country}, on ${date}. Visibility is the share of answers that name you, by your name or your site; competitors and sites are counted over every engine’s answers. All the questions are on page 2.`,
+      `How we measured: ${questions} questions a ${readers ? 'reader' : 'buyer'} might ask, asked once each in ${engines} in ${country}, on ${date}. Visibility is the share of answers that name you, by your name or your site; competitors and sites are counted over the same answers. All the questions are on page 2.`,
   },
 
   // ─── The findings (pages 1 and 3) ───────────────────────────────────────────

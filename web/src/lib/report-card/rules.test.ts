@@ -45,7 +45,7 @@ const card = (patch: Partial<ReportCardPayload> = {}): ReportCardPayload => ({
 });
 
 describe('totals', () => {
-  it('counts every engine for competitors and sites, and Starter’s for the headline', () => {
+  it('counts every engine’s answers, and Starter’s for the headline', () => {
     expect(totals(SAMPLE_REPORT_CARD)).toEqual({ answers: 122, named: 19, visibility: 16 });
     // ChatGPT 6 of 25 and Microsoft Copilot 2 of 25.
     expect(mainTotals(SAMPLE_REPORT_CARD)).toEqual({ answers: 50, named: 8, visibility: 16 });
@@ -65,6 +65,45 @@ describe('totals', () => {
     const old = card({ mainEngines: undefined });
     expect(mainTotals(old)).toEqual(totals(old));
     expect(growthEngineRows(old)).toEqual([]);
+  });
+});
+
+describe('one card, one visibility figure', () => {
+  // Every "N of M answers" the findings and the questions page state about
+  // the company: the headline's M answers.
+  const bases = (texts: (string | null)[]) =>
+    texts.flatMap((text) => [...(text ?? '').matchAll(/(\d+) of (?:the )?(\d+) answers/g)]);
+
+  it('counts the findings and the questions page over the headline’s engines', () => {
+    const headline = mainTotals(SAMPLE_REPORT_CARD);
+    expect(headline).toEqual({ answers: 50, named: 8, visibility: 16 });
+    const wins = quickWins(SAMPLE_REPORT_CARD).map((win) => win.detail);
+    // The guide AI cites and your own citations, of the same 50 answers.
+    expect(wins.join(' ')).toContain('A guide AI cites in 11 of 50 answers about your market.');
+    expect(wins.join(' ')).toContain('Your site is cited in 2 of 50 answers.');
+    const found = bases([...wins, questionSummary(SAMPLE_REPORT_CARD)]);
+    expect(found.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(found.map((m) => Number(m[2])))).toEqual(new Set([headline.answers]));
+    expect(questionSummary(SAMPLE_REPORT_CARD)).toContain(
+      `in ${headline.named} of the ${headline.answers} answers`,
+    );
+  });
+
+  it('sets the leading competitor against the headline’s count of the company', () => {
+    const { named } = mainTotals(SAMPLE_REPORT_CARD);
+    const gap = quickWins(card({ missedQuestions: [], citedSites: [] })).find(
+      (win) => win.feature === 'competitors',
+    );
+    expect(gap?.detail).toBe(
+      `Ridgeline Roasters is named in 21 answers, Brewline Coffee in ${named}.`,
+    );
+  });
+
+  it('counts every engine on a card made before the split', () => {
+    const old = card({ mainEngines: undefined });
+    const found = bases(quickWins(old).map((win) => win.detail));
+    expect(found.length).toBeGreaterThan(0);
+    expect(new Set(found.map((m) => Number(m[2])))).toEqual(new Set([totals(old).answers]));
   });
 });
 

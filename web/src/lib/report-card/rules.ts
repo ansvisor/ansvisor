@@ -216,7 +216,7 @@ export interface Totals {
   visibility: number;
 }
 
-/** Every engine's answers: what the card's competitors and sites are counted over. */
+/** Every engine's answers: how many answers the card got in all. */
 export function totals(card: ReportCardPayload): Totals {
   const answers = card.engines.reduce((sum, e) => sum + e.answers, 0);
   const named = card.engines.reduce((sum, e) => sum + e.named, 0);
@@ -225,7 +225,10 @@ export function totals(card: ReportCardPayload): Totals {
 
 /**
  * The headline: the share of the main engines' answers that name the
- * company (Starter's, ChatGPT and Microsoft Copilot).
+ * company (Starter's, ChatGPT and Microsoft Copilot). Every figure the card
+ * states beside it (the findings, the competitors, the sites and the
+ * e-mail) counts these same answers: the server counts the competitors,
+ * sites and own citations over the main engines too.
  */
 export function mainTotals(card: ReportCardPayload): Totals {
   return totals({ ...card, engines: mainEngineRows(card) });
@@ -294,7 +297,7 @@ export function leadQuestion(card: ReportCardPayload): Missed | null {
 function targetWin(site: CitedSite, card: ReportCardPayload, t: CardCopy): QuickWin {
   const company = clip(card.companyName, NAME_MAX);
   const domain = clip(site.domain, NAME_MAX);
-  const { answers } = totals(card);
+  const { answers } = mainTotals(card);
   const kind = kindOf(site);
   const copy = t.wins.target[kind && kind in t.wins.target ? (kind as TargetKind) : 'other'];
   return {
@@ -315,7 +318,8 @@ function targetWin(site: CitedSite, card: ReportCardPayload, t: CardCopy): Quick
  * week one and where Ansvisor helps.
  */
 export function quickWins(card: ReportCardPayload, t: CardCopy = cardCopy(card)): QuickWin[] {
-  const { answers, named } = totals(card);
+  const headline = mainTotals(card);
+  const { answers, named } = headline;
   const company = clip(card.companyName, NAME_MAX);
   const wins: QuickWin[] = [];
 
@@ -340,7 +344,6 @@ export function quickWins(card: ReportCardPayload, t: CardCopy = cardCopy(card))
   const target = targetSite(card);
   if (target) wins.push(targetWin(target, card, t));
 
-  const headline = mainTotals(card);
   if (headline.named === 0 && card.ownCitations > 0) {
     // AI reads the site but doesn't say the name: the best place to start.
     wins.push({

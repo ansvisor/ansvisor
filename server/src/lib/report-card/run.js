@@ -160,7 +160,7 @@ export async function buildReportCard(
     questions,
     asked.answers,
     named,
-    { companyName, site, domain, engines: asked.engines },
+    { companyName, site, domain, engines: asked.engines, mainEngines: MAIN_ENGINES },
     { others, siteKinds },
   );
 
@@ -205,11 +205,10 @@ export async function buildReportCard(
     // The main products or categories the questions were written from.
     products: products.map((p) => ({ name: p.name, nameEn: p.nameEn, url: p.url })),
     engines: figures.engines.filter((e) => e.answers > 0),
-    // The card's main result: Starter's engines that answered. The others
-    // are shown apart, as Growth's.
-    mainEngines: figures.engines
-      .filter((e) => e.answers > 0 && MAIN_ENGINES.includes(e.engine))
-      .map((e) => e.engine),
+    // The card's main result: Starter's engines that answered. Every
+    // figure but the engine rows counts their answers; the others are
+    // shown apart, as Growth's.
+    mainEngines: figures.mainEngines,
     competitors: figures.competitors,
     marketplaces: figures.marketplaces,
     otherNames: figures.otherNames,

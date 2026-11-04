@@ -38,9 +38,8 @@ const base64Bytes = (text) => {
  *     no-op, so self-host and misconfigured environments never fail a caller.
  * `replyTo`, when given, is where a reply goes instead of the sender;
  * `from` sends from another address than RESEND_FROM_EMAIL (it must be on
- * a domain Resend has verified: the free report card's
- * REPORT_CARD_FROM_EMAIL); `fromName` the sender's display name
- * (senderOf); `attachments`
+ * a domain Resend has verified: the report card's own sender);
+ * `fromName` the sender's display name (senderOf); `attachments`
  * ({ filename, content: base64 }) go with it, refused as a whole past
  * ATTACHMENTS_MAX_BYTES.
  */
