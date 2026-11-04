@@ -22,6 +22,7 @@ import {
   Quote,
   Rows3,
   ShoppingBag,
+  Sparkles,
   Table2,
   Trash2,
   type LucideIcon,
@@ -42,6 +43,7 @@ import { Label } from '@/components/ui/label';
 import { formatNumber } from '@/lib/format';
 import { safeImageSrc, safeLinkHref } from '@/lib/content/editor';
 import { cn } from '@/lib/utils';
+import { AiImagePanel } from './_ai-image-panel';
 import { HtmlBlockDialog } from './_html-block';
 import { ProductBlockDialog } from './_product-block-dialog';
 import { h1Positions } from './_one-h1';
@@ -70,7 +72,8 @@ export function onEmptyLine(editor: Editor, state: EditorState): boolean {
  * table. While the HTML view is open, only its own button works. On an empty
  * line, a small menu offers an HTML block, a table or an image there. With
  * `productsBrandId` (an online shop's draft), both offer products from its
- * catalog too (shopping path, part 5).
+ * catalog too (shopping path, part 5). With `aiImages` (a draft's), both
+ * offer Generate with AI too (W4-09).
  */
 export function EditorToolbar({
   editor,
@@ -82,6 +85,7 @@ export function EditorToolbar({
   linkRequest = 0,
   placeholders,
   productsBrandId = null,
+  aiImages = null,
 }: {
   editor: Editor;
   target: number;
@@ -99,6 +103,8 @@ export function EditorToolbar({
   placeholders?: { hidden: number; onShowHidden: () => void };
   /** The brand whose catalog + Insert › Products picks from; null hides it. */
   productsBrandId?: string | null;
+  /** The draft an image generated with AI is for (CHAT-25 §9); null offers none. */
+  aiImages?: { draftId: string; title: string } | null;
 }) {
   const t = useTranslations('contentEditor.editor.toolbar');
   // A read-only workspace (plan not active): each tool that changes the page
@@ -106,7 +112,9 @@ export function EditorToolbar({
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const edit = (run: () => void) => guard(run, { action: tActions('editContent') });
-  const [dialog, setDialog] = useState<'link' | 'image' | 'htmlBlock' | 'products' | null>(null);
+  const [dialog, setDialog] = useState<
+    'link' | 'image' | 'aiImage' | 'htmlBlock' | 'products' | null
+  >(null);
   // Only a new request opens it: not the toolbar showing again.
   const [linkAsked, setLinkAsked] = useState(linkRequest);
   if (linkRequest !== linkAsked) {
@@ -306,6 +314,9 @@ export function EditorToolbar({
             { key: 'html', icon: Code2, run: () => setDialog('htmlBlock') },
             { key: 'table', icon: Table2, run: insertTable },
             { key: 'image', icon: ImagePlus, run: () => setDialog('image') },
+            ...(aiImages
+              ? [{ key: 'aiImage', icon: Sparkles, run: () => setDialog('aiImage') }]
+              : []),
             ...(productsBrandId
               ? [{ key: 'products', icon: ShoppingBag, run: () => setDialog('products') }]
               : []),
@@ -320,7 +331,14 @@ export function EditorToolbar({
 
       {/* Mounted while open, so each opening starts from the selection. */}
       {dialog === 'link' && <LinkDialog editor={editor} onClose={() => setDialog(null)} />}
-      {dialog === 'image' && <ImageDialog editor={editor} onClose={() => setDialog(null)} />}
+      {(dialog === 'image' || dialog === 'aiImage') && (
+        <ImageDialog
+          editor={editor}
+          onClose={() => setDialog(null)}
+          ai={aiImages}
+          startOnAi={dialog === 'aiImage'}
+        />
+      )}
       {dialog === 'products' && productsBrandId && (
         <ProductBlockDialog
           brandId={productsBrandId}
@@ -487,9 +505,24 @@ function LinkDialog({ editor, onClose }: { editor: Editor; onClose: () => void }
   );
 }
 
-/** Insert an image by its address, or uploaded from the person's computer (00272). */
-function ImageDialog({ editor, onClose }: { editor: Editor; onClose: () => void }) {
+/**
+ * Insert an image by its address, or uploaded from the person's computer
+ * (00272); with `ai` (a draft's), or generated with AI (W4-09), marked as
+ * AI's on the page.
+ */
+function ImageDialog({
+  editor,
+  onClose,
+  ai = null,
+  startOnAi = false,
+}: {
+  editor: Editor;
+  onClose: () => void;
+  ai?: { draftId: string; title: string } | null;
+  startOnAi?: boolean;
+}) {
   const t = useTranslations('contentEditor.editor.image');
+  const [tab, setTab] = useState<'address' | 'ai'>(ai && startOnAi ? 'ai' : 'address');
   const tUpload = useTranslations('content.imageUpload');
   const [src, setSrc] = useState('');
   const [alt, setAlt] = useState('');
@@ -510,13 +543,58 @@ function ImageDialog({ editor, onClose }: { editor: Editor; onClose: () => void 
     onClose();
   };
 
+  // An image AI made, uploaded as an upload is: marked as AI's on the page (W4-09).
+  const insertAi = (image: { src: string; alt: string }) => {
+    const safe = safeImageSrc(image.src);
+    if (!safe) return;
+    editor
+      .chain()
+      .focus()
+      .insertContent({
+        type: 'image',
+        attrs: { src: safe, alt: image.alt || null, aiGenerated: true },
+      })
+      .run();
+    onClose();
+  };
+  const onAi = ai !== null && tab === 'ai';
+
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
-      <DialogContent className="sm:max-w-md" initialFocus={fieldRef}>
+      <DialogContent
+        className={ai ? 'max-h-[90vh] overflow-y-auto sm:max-w-lg' : 'sm:max-w-md'}
+        initialFocus={fieldRef}
+      >
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>
+        {ai && (
+          <div role="tablist" aria-label={t('tabs.label')} className="flex gap-1 border-b">
+            {(['address', 'ai'] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                aria-selected={tab === key}
+                data-tab={key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  '-mb-px border-b-2 px-2.5 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                  tab === key
+                    ? 'border-foreground text-foreground'
+                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                )}
+              >
+                {t(`tabs.${key}`)}
+              </button>
+            ))}
+          </div>
+        )}
+        {ai && tab === 'ai' && (
+          <AiImagePanel draftId={ai.draftId} title={ai.title} onUse={insertAi} />
+        )}
         <form
+          hidden={onAi}
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
@@ -561,7 +639,7 @@ function ImageDialog({ editor, onClose }: { editor: Editor; onClose: () => void 
           {/* Enter in either field inserts. */}
           <button type="submit" hidden />
         </form>
-        <DialogFooter>
+        <DialogFooter className={onAi ? 'hidden' : undefined}>
           <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
           <Button onClick={insert}>{t('insert')}</Button>
         </DialogFooter>

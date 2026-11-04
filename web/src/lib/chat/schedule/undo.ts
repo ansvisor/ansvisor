@@ -35,5 +35,5 @@ export const scheduleUndo: UndoRule = {
     if (error) throw new Error(`Could not delete the scheduled job: ${error.message}`);
     return (data ?? []).length > 0 ? 'ok' : 'gone';
   },
-  href: () => '/dashboard/chat',
+  href: () => '/dashboard/chat/scheduled',
 };

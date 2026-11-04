@@ -55,6 +55,7 @@ const SETUP: AgentFormSetup = {
   runShareDefault: 0.1,
   takenNames: ['Win back lost citations'],
   ownKeyProvider: null,
+  timeZone: null,
 };
 
 let container: HTMLDivElement;
@@ -69,6 +70,8 @@ async function render(
   setup: AgentFormSetup = SETUP,
   agent: AgentDetail | null = null,
   preset: string | null = null,
+  /** The form's clock; null, the person's zone (`setup.timeZone`), else the browser's. */
+  timeZone: string | null = 'UTC',
 ) {
   await act(async () => {
     root.render(
@@ -78,7 +81,7 @@ async function render(
           agent={agent}
           preset={readyPreset(preset)}
           now={NOW}
-          timeZone="UTC"
+          timeZone={timeZone ?? undefined}
         />
       </NextIntlClientProvider>,
     );
@@ -462,6 +465,34 @@ describe('AgentForm: new agent', () => {
     expect(nav.push).toHaveBeenCalledWith(`/dashboard/agents/${NEW_ID}`);
   });
 
+  it('starts a new Schedule trigger on the person’s Settings › Account time zone', async () => {
+    await render({ ...SETUP, timeZone: 'Asia/Tokyo' }, null, null, null);
+    await click(one('[data-skill="winback"]')!);
+    await next();
+    expect(all('[data-slot="agent-form-trigger"]')[0].textContent).toContain('Asia/Tokyo time');
+    // A trigger added next starts on it too.
+    await click(action('agentNew.addTrigger')[0]);
+    expect(all('[data-slot="agent-form-trigger"]')[1].textContent).toContain('Asia/Tokyo time');
+    await click(action('agentNew.removeTrigger')[1]);
+    await next();
+    await next();
+    await click(action('agentNew.saveDraft')[0]);
+    expect(bodyOf(0).triggers[0].config).toEqual({
+      type: 'recurring',
+      rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=7;BYMINUTE=0',
+      timezone: 'Asia/Tokyo',
+    });
+  });
+
+  it('starts it on the browser’s time zone when the person left Automatic', async () => {
+    await render({ ...SETUP, timeZone: null }, null, null, null);
+    await toLastStep();
+    await click(action('agentNew.saveDraft')[0]);
+    expect(bodyOf(0).triggers[0].config.timezone).toBe(
+      Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    );
+  });
+
   it('picks the agents it may run on the last step, up to 5, and sends them; locked below Growth', async () => {
     const FAQ = 'cccccccc-0000-4000-8000-000000000001';
     await render({
@@ -762,6 +793,18 @@ describe('AgentForm: edit', () => {
       name: 'Win back weekly',
     });
     expect(toast).toHaveBeenLastCalledWith('Saved · Win back weekly');
+  });
+
+  it('keeps a saved Schedule trigger’s own time zone when the person picked another', async () => {
+    await render({ ...SETUP, timeZone: 'Asia/Tokyo' }, editable(), null, null);
+    await click(one('[data-step-button="1"]')!);
+    expect(all('[data-slot="agent-form-trigger"]')[0].textContent).toContain(
+      'Next run Mon 09:00 · Europe/Istanbul time',
+    );
+    // A new one starts on the person's zone.
+    await click(action('agentNew.addTrigger')[0]);
+    const rows = all('[data-slot="agent-form-trigger"]');
+    expect(rows[rows.length - 1].textContent).toContain('Asia/Tokyo time');
   });
 
   it('shows a save over someone else’s with Reload', async () => {

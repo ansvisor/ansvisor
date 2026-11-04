@@ -2371,6 +2371,19 @@ describe('the content editor', () => {
       expect(pageText()).not.toContain('Accuracy is shown');
     });
 
+    it('says a suggestion came from a request typed in Chat beside the editor (W4-14)', async () => {
+      getContentDraft.mockResolvedValue(page);
+      getDraftSuggestions.mockResolvedValue([
+        { ...batch[0], ruleKeys: ['chat'], reason: 'shorten answer 3' },
+        batch[1],
+      ]);
+      await renderPage();
+      expect(cardOf('s1')!.textContent).toContain(
+        'Content Agent · from your chat · shorten answer 3',
+      );
+      expect(cardOf('s2')!.textContent).not.toContain('from your chat');
+    });
+
     it('reviews the first open suggestion: scrolls to it and marks it for a moment', async () => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       const scrolled = vi.fn();

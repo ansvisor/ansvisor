@@ -463,6 +463,9 @@ describe('coverage of the write routes', () => {
       'internal-chat-notices.js',
       // Chat's page reads (CRON_SECRET, called by the web's engine): a public URL, no brand.
       'internal-chat-pages.js',
+      // Chat's scheduled jobs' e-mails (CRON_SECRET, called by the web's worker): a job's own
+      // recipients, checked as they are sent; nothing a demo brand writes.
+      'internal-chat-schedules.js',
       // The first run after a payment (CRON_SECRET): refuses a demo brand itself.
       'internal-trigger-tracking.js',
       // The free report card's form on www.ansvisor.com: no sign-in and no brand (00472).

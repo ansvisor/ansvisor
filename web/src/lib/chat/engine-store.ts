@@ -174,6 +174,12 @@ export interface RunProgress {
   whys?: number;
   /** The next moves the model suggested last (CHAT-07 §C), kept once the run ends. */
   nextMoves?: NextMoveInput[];
+  /** The first placeholder the run's last page version leaves to fill (W4-12a), for its next move. */
+  pagePlaceholder?: string | null;
+  /** The run's last page version left nothing to fill and isn't Ready yet: a Mark ready move (W4-12b). */
+  pageMayBeReady?: boolean;
+  /** By the file a page version was filed as: the draft and the History version its Undo puts back (W4-12a). */
+  pageUndos?: Record<string, { draftId: string; versionId: string }>;
   /**
    * The message is "Save these steps as a skill" (W4-32): the steps of the
    * run that offered it, which this run drafts save_skill's card from.
