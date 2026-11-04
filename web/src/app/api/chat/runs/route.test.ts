@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * POST /api/chat/runs and the run routes (C3): not there while the new Chat
  * is off for the workspace (404), the server's own 402 body while it is
- * read-only, and a run's events as Server-Sent Events with the chat and run
+ * read-only or the chat is the demo brand's, and a run's events as Server-Sent Events with the chat and run
  * in headers, never in an event.
  */
 
@@ -15,6 +15,10 @@ const state = vi.hoisted(() => ({
   user: { id: 'user-1', email: 'me@example.com' } as { id: string; email: string } | null,
   org: '11111111-1111-4111-8111-111111111111' as string | null,
   reads: 0,
+  /** The chat's row, as the demo check reads its brand. */
+  chat: null as { brand_id: string } | null,
+  /** The brand's row, as readBrandIsDemo reads it. */
+  brand: { is_demo: false },
 }));
 
 vi.mock('@/lib/supabase/server', () => ({
@@ -29,13 +33,22 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
-    from: () => ({
-      select: () => ({
-        eq: () => ({
-          maybeSingle: async () => ({ data: { organization_id: state.org }, error: null }),
+    from: (table: string) => {
+      const chain = {
+        select: () => chain,
+        eq: () => chain,
+        maybeSingle: async () => ({
+          data:
+            table === 'chat_conversations'
+              ? state.chat
+              : table === 'brands'
+                ? state.brand
+                : { organization_id: state.org },
+          error: null,
         }),
-      }),
-    }),
+      };
+      return chain;
+    },
   },
 }));
 const engine = vi.hoisted(() => ({
@@ -86,6 +99,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   state.user = { id: 'user-1', email: 'me@example.com' };
   state.org = ORG;
+  state.chat = null;
+  state.brand = { is_demo: false };
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
 });
@@ -137,6 +152,32 @@ describe('the run routes', () => {
     });
     const approve = await APPROVE(post({ n: 1, digest: 'a'.repeat(32) }), params(RUN));
     expect(approve.status).toBe(402);
+  });
+
+  it("answer a message on the demo brand with the server's 402 body, before anything runs", async () => {
+    // In a sample chat of the demo brand (the server's lib/demo/chat.js).
+    state.chat = { brand_id: 'demo-brand' };
+    state.brand = { is_demo: true };
+    const res = await POST(
+      post({ message: 'And on Gemini?', conversationId: '44444444-4444-4444-8444-444444444444' }),
+    );
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ ok: false, code: 'demo_brand', error: 'demo_brand' });
+    // A new chat on it.
+    state.chat = null;
+    expect((await POST(post({ message: 'Hi', brandId: 'demo-brand' }))).status).toBe(402);
+    expect(engine.startChatRun).not.toHaveBeenCalled();
+
+    // Another brand's chat goes on to the engine.
+    state.brand = { is_demo: false };
+    engine.startChatRun.mockResolvedValue({
+      ok: false,
+      status: 404,
+      code: 'not_found',
+      message: 'x',
+    });
+    expect((await POST(post({ message: 'Hi', brandId: 'own-brand' }))).status).toBe(404);
+    expect(engine.startChatRun).toHaveBeenCalledTimes(1);
   });
 
   it('stream the run as Server-Sent Events, its ids in headers only', async () => {

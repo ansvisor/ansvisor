@@ -532,6 +532,48 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
     await render(<ChatInbox suggestions={ok()} notices={{ ok: false }} />);
     expect(noticeRows()).toHaveLength(0);
   });
+
+  it('says a scheduled job didn’t run, or paused, and why, with Open to its chat (W3-04a)', async () => {
+    const job = {
+      id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c10',
+      kind: 'schedule_failed' as const,
+      title: 'Weekly report',
+      reason: 'Something went wrong.',
+      href: '/dashboard/chat/0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c11' as const,
+      createdAt: '2026-11-02T06:10:00Z',
+      read: false,
+    };
+    await render(
+      <ChatInbox
+        suggestions={ok()}
+        notices={{
+          ok: true,
+          notices: [
+            job,
+            {
+              ...job,
+              id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c12',
+              kind: 'schedule_paused',
+              reason: 'The monthly AI limit was reached.',
+              href: '/dashboard/chat',
+            },
+          ],
+        }}
+      />,
+    );
+    const [failed, paused] = noticeRows();
+    expect(failed.textContent).toContain('Weekly report didn’t run');
+    expect(failed.textContent).toContain('Something went wrong.');
+    expect(failed.querySelector('[data-action="inbox.openSchedule"]')!.getAttribute('href')).toBe(
+      job.href,
+    );
+    expect(paused.textContent).toContain('Weekly report is paused');
+    expect(paused.textContent).toContain('The monthly AI limit was reached.');
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([
+      job.id,
+      '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c12',
+    ]);
+  });
 });
 
 describe('the daily suggestions', () => {

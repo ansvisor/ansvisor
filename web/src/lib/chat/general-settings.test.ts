@@ -17,6 +17,7 @@ vi.mock('@/lib/supabase/admin', async () => ({
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const general = await import('./general-settings');
+const { LANGUAGES } = await import('./language');
 
 const ME = { userId: PEOPLE.manager, organizationId: ORG };
 
@@ -134,5 +135,11 @@ describe('generalPatchRefusal and generalPatchRow', () => {
       answer_language: null,
       panel_on_pages: true,
     });
+  });
+});
+
+describe('ANSWER_LANGUAGES', () => {
+  it('are the languages Chat reads and names, so a set one is the one the engine uses', () => {
+    expect([...general.ANSWER_LANGUAGES].sort()).toEqual(Object.keys(LANGUAGES).sort());
   });
 });

@@ -156,7 +156,10 @@ export interface ChatConfirm {
   /** What it aims at. */
   goal?: string;
   /** What it is about, by kind, in the person's words: frozen once it's made. */
-  targets?: { kind: 'prompts' | 'pages' | 'competitors' | 'platforms'; values: string[] }[];
+  targets?: {
+    kind: 'prompts' | 'pages' | 'competitors' | 'platforms' | 'aiUse';
+    values: string[];
+  }[];
   /**
    * An editable card (CHAT-12 item 7; W3-02): its fields, as the change
    * would be made. Its button sends the edited values with the Approve; the
@@ -174,8 +177,11 @@ export interface ChatFormField {
   value: string | boolean;
   /** The longest text it takes. */
   maxLength?: number;
-  /** A choice's options, in order. */
-  options?: { value: string; label: string }[];
+  /**
+   * A choice's options, in order; `disabled`: shown, but not the person's to
+   * pick (a memory's scope their role doesn't change, W3-12a).
+   */
+  options?: { value: string; label: string; disabled?: boolean }[];
   /** The line under it: "Every Monday, 09:00 · Europe/Istanbul · Next: Mon 9 Nov, 09:00". */
   hint?: string;
   /** A text that can't be left empty. */
@@ -322,6 +328,21 @@ export interface ChatRunSummary {
   sources: { label: string; count: number }[];
 }
 
+/**
+ * A What's new entry as its card shows it (CHAT-11 item 10): the team's
+ * words as approved, never a price. `slug` is the entry's file name, to mark
+ * it read when Try it is opened: not an id.
+ */
+export interface ChatWhatsNewEntry {
+  slug: string;
+  feature: string;
+  lines: string[];
+  /** Try it: the feature's page, with the brand open now. */
+  href: ChatHref;
+  /** "Growth and Enterprise": the plans that include it, when the person's doesn't. */
+  onPlans?: string;
+}
+
 /** Where a page Chat writes was opened (CHAT-25 §3). */
 export type ChatPageWhere = 'chat' | 'here' | 'editor';
 
@@ -383,6 +404,8 @@ export interface ChatEventPayloads {
   'suggestion.resolved': { count: number };
   /** href: the page's draft, in the editor beside the chat or the Content Editor. */
   'page.opened': { where: ChatPageWhere; href?: ChatHref };
+  /** What's new's cards under the answer (CHAT-11 item 10). */
+  'whats_new.ready': { entries: ChatWhatsNewEntry[] };
 }
 
 export type ChatEventType = keyof ChatEventPayloads;
@@ -416,6 +439,7 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'suggestion.created': true,
   'suggestion.resolved': true,
   'page.opened': true,
+  'whats_new.ready': true,
 };
 
 export const CHAT_EVENT_TYPES = Object.keys(EVENT_TYPES) as ChatEventType[];

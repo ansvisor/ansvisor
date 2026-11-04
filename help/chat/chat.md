@@ -29,7 +29,7 @@ Next to the arrow, pick how much Chat does on its own: **Ask me first** asks bef
 
 Analysts and Agency partners only read; their box says **Read-only**, with a link to their role.
 
-On the demo brand or a read-only workspace, sending or starting from **Home** opens the plan dialog.
+The demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog.
 
 ## Chat beside any page
 

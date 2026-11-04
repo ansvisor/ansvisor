@@ -157,13 +157,13 @@ export function FormCard({
                         role="radio"
                         aria-checked={checked}
                         data-action={`formCard.${field.name}`}
-                        disabled={busy}
+                        disabled={busy || option.disabled}
                         onClick={() => set(field.name, option.value)}
                         className={cn(
-                          'rounded-full border px-3 py-1 text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none',
+                          'rounded-full border px-3 py-1 text-[13px] outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none',
                           checked
                             ? 'border-foreground bg-foreground text-background'
-                            : 'bg-card text-foreground hover:bg-muted',
+                            : 'bg-card text-foreground hover:bg-muted disabled:hover:bg-card',
                         )}
                       >
                         {option.label}

@@ -96,7 +96,7 @@ export async function promptsFor(
   if (source.kind === 'opportunity') {
     const { data, error } = await supabase
       .from('content_opportunities')
-      .select('id, prompt_id, cluster_id, related_cluster_ids')
+      .select('id, prompt_id, cluster_id, related_cluster_ids, source_data')
       .eq('id', source.id)
       .eq('brand_id', brandId)
       .maybeSingle();
@@ -114,7 +114,15 @@ export async function promptsFor(
       .in('cluster_id', clusterIds)
       .limit(MAX_DRAFT_PROMPTS);
     if (members.error) throw new Error(members.error.message);
-    return { promptIds: (members.data ?? []).map((m) => m.prompt_id), opportunityId: data.id };
+    const memberIds = (members.data ?? []).map((m) => m.prompt_id);
+    if (memberIds.length) return { promptIds: memberIds, opportunityId: data.id };
+    // Its clusters have no members (re-clustered since, or never written):
+    // the prompts its card counts, by their words, and its own prompt
+    // (editor UX review 2026-11-03: "2 prompts" on the card, none in the draft).
+    return {
+      promptIds: await opportunityOwnPrompts(supabase, brandId, data),
+      opportunityId: data.id,
+    };
   }
 
   const query = supabase
@@ -134,6 +142,41 @@ export async function promptsFor(
   if (error) throw new Error(error.message);
   if (!data?.length) throw new Error('not_found');
   return { promptIds: data.map((p) => p.id), opportunityId: null };
+}
+
+/** The most prompt texts of an opportunity's card read back to prompts. */
+const CARD_PROMPTS_READ = 50;
+
+/**
+ * An opportunity's prompts without its clusters: its own prompt, then the
+ * brand's prompts whose words are the ones its card lists
+ * (`source_data.prompts`, what the card counts), each once.
+ */
+async function opportunityOwnPrompts(
+  supabase: DraftClient,
+  brandId: string,
+  opportunity: { prompt_id: string | null; source_data: unknown },
+): Promise<string[]> {
+  const own = opportunity.prompt_id ? [opportunity.prompt_id] : [];
+  const listed = (opportunity.source_data as { prompts?: unknown } | null)?.prompts;
+  const texts = Array.isArray(listed)
+    ? [
+        ...new Set(listed.filter((p): p is string => typeof p === 'string' && p.trim() !== '')),
+      ].slice(0, CARD_PROMPTS_READ)
+    : [];
+  if (!texts.length) return own;
+  const { data, error } = await supabase
+    .from('prompts')
+    .select('id, text, prompt_sets!inner(brand_id)')
+    .eq('prompt_sets.brand_id', brandId)
+    .in('text', texts)
+    .limit(CARD_PROMPTS_READ);
+  // Without them the draft still starts, with its own prompt, the rest to add in Sources.
+  if (error) {
+    console.error("Failed to read an opportunity's prompts by their words:", error);
+    return own;
+  }
+  return [...new Set([...own, ...(data ?? []).map((p) => p.id)])].slice(0, MAX_DRAFT_PROMPTS);
 }
 
 /**
