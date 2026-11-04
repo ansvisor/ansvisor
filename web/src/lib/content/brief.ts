@@ -302,6 +302,8 @@ export interface RebuildSources {
   queries: string[];
   headings: string[];
   length: number;
+  /** The least and most characters the Length rule asks for (a range the person set, or its band). */
+  lengthBand?: { min: number; max: number };
 }
 
 /** The most of each the agent takes (content-brief.js rebuildSources). */
@@ -321,7 +323,13 @@ export const REBUILD_LIMITS = {
 export function rebuildSources(
   data: DraftSourcesData,
   choices: DraftSourceChoice[],
-  draft: { title: string; sourceUrl: string | null; html: string; length: number },
+  draft: {
+    title: string;
+    sourceUrl: string | null;
+    html: string;
+    length: number;
+    lengthBand?: { min: number; max: number };
+  },
 ): RebuildSources {
   const groups = buildSourceGroups(data, choices, draft);
   const kept = (kind: string) =>
@@ -345,6 +353,7 @@ export function rebuildSources(
       .map((h) => h.text)
       .slice(0, REBUILD_LIMITS.headings),
     length: draft.length,
+    ...(draft.lengthBand ? { lengthBand: draft.lengthBand } : {}),
   };
 }
 
