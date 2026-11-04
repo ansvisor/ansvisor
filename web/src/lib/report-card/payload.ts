@@ -70,6 +70,22 @@ export const reportCardPayloadSchema = z.object({
     .max(10),
   missedCount: count,
   /**
+   * Every question asked, for page 4: as asked and in English, what each
+   * engine's answer did (named the company, didn't, or gave none) and the
+   * brand its answers named most.
+   */
+  questionRows: z
+    .array(
+      z.object({
+        text: text(500),
+        textEn: text(500).nullable(),
+        named: z.partialRecord(z.enum(REPORT_CARD_ENGINES), z.enum(['named', 'missed', 'none'])),
+        instead: text(100).nullable(),
+      }),
+    )
+    .max(30)
+    .optional(),
+  /**
    * The median Google Ads cost per click in USD over the questions' keywords
    * that have one in the target country, from the search volume call; null
    * when none has.

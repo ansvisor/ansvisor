@@ -54,19 +54,24 @@ export function signUpUrl(origin = webAppOrigin()) {
 export const pdfName = (site) =>
   `ansvisor-ai-visibility-report-card-${String(site).replace(/[^a-z0-9.-]/gi, '-')}.pdf`;
 
+/** Ansvisor's colors (the brand style guide): ink, a warm grey and a sand border. */
+const INK = '#1C1A17';
+const GREY = '#464442';
+const SAND = '#EBE6DE';
+
 const shell = (
   inner,
-) => `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#111827;">
+) => `<div style="font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:${INK};">
 ${inner}
-  <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;margin-top:24px;">
-    You asked for this report card on ansvisor.com. AI answers change from day to day, so it is a snapshot. How we use your details: <a href="${PRIVACY_URL}" style="color:#6b7280;">Privacy Notice</a>.
+  <p style="font-size:12px;color:${GREY};border-top:1px solid ${SAND};padding-top:16px;margin-top:24px;">
+    You asked for this report card on ansvisor.com. AI answers change from day to day, so it is a snapshot. How we use your details: <a href="${PRIVACY_URL}" style="color:${GREY};">Privacy Notice</a>.
   </p>
 </div>`;
 
 const stat = (value, label) =>
-  `<td style="padding:12px;border:1px solid #e5e7eb;border-radius:6px;vertical-align:top;width:33%;">
-      <div style="font-size:20px;font-weight:700;color:#111827;">${value}</div>
-      <div style="font-size:12px;color:#6b7280;margin-top:4px;">${label}</div>
+  `<td style="padding:12px;border:1px solid ${SAND};border-radius:8px;vertical-align:top;width:33%;background:#ffffff;">
+      <div style="font-size:20px;font-weight:600;letter-spacing:-0.02em;color:${INK};">${value}</div>
+      <div style="font-size:12px;color:${GREY};margin-top:4px;">${label}</div>
     </td>`;
 
 /**
@@ -96,7 +101,7 @@ export function renderReportCardEmail({
       : `<p style="font-size:14px;margin:0 0 16px 0;">We asked ${escapeHtml(engines)} ${payload.questionCount} questions your ${payload.audience === 'readers' ? 'readers' : 'buyers'} ask, in ${escapeHtml(countryInSentence(payload.country.code, payload.country.name))}. Here is what came back for ${site}.</p>`;
 
   const html =
-    shell(`  <h1 style="font-size:20px;margin:0 0 16px 0;">Your AI visibility report card</h1>
+    shell(`  <h1 style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin:0 0 16px 0;">Your AI visibility report card</h1>
   <p style="font-size:14px;margin:0 0 12px 0;">Hi ${escapeHtml(firstName)},</p>
   ${intro}
   <table role="presentation" cellspacing="8" style="width:100%;border-collapse:separate;margin:0 -8px 8px -8px;">
@@ -106,11 +111,11 @@ export function renderReportCardEmail({
     ${stat(String(payload.ownCitations), `Answers that cite your site, of ${answers}`)}
     </tr>
   </table>
-  <p style="font-size:14px;margin:8px 0 16px 0;">Your report card is attached as a PDF, 3 pages: your results and three things to do now, what’s in Ansvisor and how you can use it, and what AI visits could be worth to you.</p>
+  <p style="font-size:14px;margin:8px 0 16px 0;">Your report card is attached as a PDF, 4 pages: your results and three things to do now, what’s in Ansvisor and how you can use it, what AI visits could be worth to you, and all ${payload.questionRows?.length || payload.questionCount} questions we asked.</p>
   <div style="margin:24px 0;">
-    <a href="${escapeHtml(signUpUrl(origin))}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">Start a free trial</a>
+    <a href="${escapeHtml(signUpUrl(origin))}" style="background:${INK};color:#ffffff;text-decoration:none;padding:8px 28px;border-radius:100px;font-size:15px;font-weight:500;display:inline-block;">Start a free trial</a>
   </div>
-  <p style="font-size:14px;color:#374151;margin:0;">Want this every day, for every question you care about? Ansvisor tracks your brand in AI answers and ranks what to do next.</p>`);
+  <p style="font-size:14px;color:${GREY};margin:0;">Want this every day, for every question you care about? Ansvisor tracks your brand in AI answers and ranks what to do next.</p>`);
 
   return { subject: `Your AI visibility report card: ${payload.domain}`, html };
 }
@@ -118,7 +123,7 @@ export function renderReportCardEmail({
 /** The note for a card that couldn't be made. */
 export function renderFailedEmail({ firstName, site }) {
   const html =
-    shell(`  <h1 style="font-size:20px;margin:0 0 16px 0;">We couldn’t finish your report card</h1>
+    shell(`  <h1 style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin:0 0 16px 0;">We couldn’t finish your report card</h1>
   <p style="font-size:14px;margin:0 0 12px 0;">Hi ${escapeHtml(firstName)},</p>
   <p style="font-size:14px;margin:0 0 16px 0;">We couldn’t finish the AI visibility report card for ${escapeHtml(site)}. Reply to this e-mail and we’ll look into it.</p>`);
   return { subject: `We couldn’t finish your report card for ${site}`, html };

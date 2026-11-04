@@ -3,18 +3,19 @@ title: "Free report card"
 description: "The public endpoint behind the free AI visibility report card form on www.ansvisor.com: request, answers and limits."
 ---
 
-The free AI visibility report card is Ansvisor's own marketing: a form on www.ansvisor.com posts to the API, and the person gets a three-page PDF by e-mail a few minutes later. It runs on the Ansvisor cloud only. A self-hosted server answers the endpoint but never starts its queue.
+The free AI visibility report card is Ansvisor's own marketing: a form on www.ansvisor.com posts to the API, and the person gets a four-page PDF by e-mail a few minutes later. It runs on the Ansvisor cloud only. A self-hosted server answers the endpoint but never starts its queue.
 
 ## What a card is
 
-- 25 questions a buyer might ask, written from the site's home page, in the target country's main language, without any brand name.
+- 25 questions a buyer (or, for a publisher, a reader) might ask, written from the site's home page, in the target country's main language, without any brand name.
 - Each question asked once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode, from the target country, through the tracking's own provider. An engine that doesn't answer from that country is left out.
 - The answers read for the company's name or site, the competitors they name, and the sites they cite.
 - The median Google Ads cost per click of the questions' keywords in that country, from the same search volume call prompt volumes use.
 - A PDF in English:
   - the results;
   - "What's in Ansvisor and how you can use it", whose feature descriptions are quoted from the approved Help articles;
-  - the outcomes, with a value table against the Starter and Growth plans, and a revenue scenario only when a deal value was given.
+  - the outcomes: buying the same visits in Google Ads, every month, against earning them with Ansvisor Growth (only when at least five keywords have a cost per click), how AI answers can lead to searches for the brand, and a revenue scenario only when a deal value was given;
+  - all 25 questions, with what each engine's answer did and the brand named most instead.
 
 ## Request
 

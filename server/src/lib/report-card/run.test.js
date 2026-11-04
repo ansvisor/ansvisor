@@ -105,6 +105,20 @@ describe('buildReportCard', () => {
       ],
       cpc: { usd: 0.42, keywords: 2 },
       dealValue: { amount: 500, currency: 'TRY' },
+      questionRows: [
+        {
+          text: 'en iyi kahve',
+          textEn: 'best coffee',
+          named: { 'chatgpt-web': 'named', 'google-aio': 'none' },
+          instead: 'Ridge',
+        },
+        {
+          text: 'kahve aboneliği',
+          textEn: 'coffee subscription',
+          named: { 'chatgpt-web': 'missed', 'google-aio': 'none' },
+          instead: 'Ridge',
+        },
+      ],
     });
     expect(kept[0].answers).toEqual({
       'chatgpt-web': { named: true, competitors: ['Ridge'], cited: ['https://ridge.example/a'] },
@@ -112,6 +126,21 @@ describe('buildReportCard', () => {
     });
     // $0.01 + $0.004 in models, 3 answers at $0.002, the keyword call $0.075.
     expect(meter.total()).toBeCloseTo(0.014 + 0.006 + 0.075, 6);
+  });
+
+  it('names the brand named most instead on page 4 under one spelling', async () => {
+    const deps = fakes({
+      competitors: vi.fn(async () => ({
+        byAnswer: new Map([
+          [0, ['Jolly Tur']],
+          [1, ['Jolly', 'Setur']],
+        ]),
+        costUsd: 0,
+      })),
+    });
+    const { payload } = await buildReportCard(card, deps);
+    expect(payload.competitors[0]).toEqual({ name: 'Jolly Tur', answers: 2 });
+    expect(payload.questionRows.map((row) => row.instead)).toEqual(['Jolly Tur', 'Jolly Tur']);
   });
 
   it('tells the competitor reader a publisher’s audience', async () => {

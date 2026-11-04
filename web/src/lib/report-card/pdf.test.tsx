@@ -26,6 +26,8 @@ vi.mock('@react-pdf/renderer', () => ({
     <span>{render ? render({ pageNumber: 1, totalPages: 3 }) : children}</span>
   ),
   Link: ({ children, src }: Props & { src: string }) => <a href={src}>{children}</a>,
+  Svg: ({ children }: Props) => <span data-tick="1">{children}</span>,
+  Path: () => null,
   StyleSheet: { create: <T,>(styles: T) => styles },
   Font: { register: () => {}, registerHyphenationCallback: () => {} },
   renderToBuffer: async () => new Uint8Array(),
@@ -56,9 +58,9 @@ function draw(card: ReportCardPayload) {
 }
 
 describe('ReportCardPdfDocument', () => {
-  it('has three pages, as Ansvisor', () => {
+  it('has four pages, as Ansvisor', () => {
     const pages = draw(SAMPLE_REPORT_CARD);
-    expect(pages).toHaveLength(3);
+    expect(pages).toHaveLength(4);
     const doc = container.firstElementChild as HTMLElement;
     expect(doc.dataset.author).toBe('Ansvisor');
     expect(doc.dataset.title).toBe('AI visibility report card: Brewline Coffee');
@@ -82,6 +84,7 @@ describe('ReportCardPdfDocument', () => {
     expect(results).toContain('brewlinecoffee.example (you)');
     expect(results).toContain('3 things to do now');
     expect(results).toContain('in the United States, in English');
+    expect(results).toContain('All 25 questions are on page 4.');
   });
 
   it('page 2 is the action plan with a trial link', () => {
@@ -96,20 +99,49 @@ describe('ReportCardPdfDocument', () => {
     );
   });
 
-  it('page 3 has the value table against Starter and Growth, the revenue scenario and the scenario note', () => {
+  it('page 3 sets buying the visits against earning them, and says how AI answers lead to searches', () => {
     const [, , outcomes] = draw(SAMPLE_REPORT_CARD);
     expect(outcomes).toContain('Maximize your visibility in AI answers');
+    expect(outcomes).toContain('Buying these visits vs earning them');
     expect(outcomes).toContain('$1.85');
-    expect(outcomes).toContain('vs Starter $49/mo');
-    expect(outcomes).toContain('vs Growth $249/mo');
-    expect(outcomes).toContain('$1,850');
-    expect(outcomes).toContain('1,000 AI visits ≈ $1,850 a month in Google Ads');
+    expect(outcomes).toContain('Ads a month');
+    expect(outcomes).toContain('Ads a year');
+    expect(outcomes).not.toMatch(/×|vs Starter|vs Growth/);
+    expect(outcomes).toContain('1,000 AI visits a month ≈ $1,850 in Google Ads, every month.');
+    expect(outcomes).toContain('Ad clicks stop when the budget stops. Over 12 months: ≈ $22,200');
+    expect(outcomes).toContain('Ansvisor Growth is $249 a month.');
+    expect(outcomes).toContain(
+      'can keep sending visits month after month, for as long as they’re cited',
+    );
+    expect(outcomes).toContain('Over 12 months: $2,988, or $2,390 paid yearly.');
+    expect(outcomes).toContain('AI answers can lead to Google searches for your name');
+    expect(outcomes).toContain('with Search Console connected');
     expect(outcomes).toContain('$470 a year');
     expect(outcomes).toContain('A revenue scenario');
     expect(outcomes).toContain('Assumption: 1% of visits place an order (range 1%–3%)');
     expect(outcomes).toContain('$380–$1,140');
     expect(outcomes).toContain('Scenarios, not a forecast or a guarantee.');
-    expect(outcomes).not.toMatch(/ChatGPT ads/i);
+    expect(outcomes).not.toMatch(/ChatGPT ads|will (grow|earn|rise)|guaranteed/i);
+  });
+
+  it('page 4 lists every question, with a tick where an engine named the company', () => {
+    const pages = draw(SAMPLE_REPORT_CARD);
+    const questions = pages[3];
+    expect(questions).toContain('The 25 questions we asked');
+    expect(questions).toContain('Named in 18 of 100 answers: 14 of the 25 questions.');
+    // The key above the table: a tick, a dash and n/a, each with its meaning.
+    expect(questions).toContain('Named–Not namedn/aNo answer');
+    expect(questions).toContain('best coffee beans for espresso at home');
+    expect(questions).toContain('best coffee beans under 20 dollars');
+    expect(questions).toContain('Named instead');
+    expect(questions).toContain('Ridgeline Roasters');
+    // 7 + 4 + 5 + 2 answers named Brewline: one tick each, and one in the key.
+    const ticks = container.querySelectorAll('section')[3].querySelectorAll('[data-tick]');
+    expect(ticks).toHaveLength(19);
+  });
+
+  it('has no page 4 for a card without its questions', () => {
+    expect(draw({ ...SAMPLE_REPORT_CARD, questionRows: undefined })).toHaveLength(3);
   });
 
   it('says there is not enough ad data without a cost per click, and leaves revenue out without a deal value', () => {

@@ -94,6 +94,37 @@ describe('summarize', () => {
   });
 });
 
+describe('one competitor under its spellings', () => {
+  it('counts “Jolly Tur” and “Jolly” as one, once an answer, under the spelling written most', () => {
+    const qs = [
+      { text: 'q0', textEn: null },
+      { text: 'q1', textEn: null },
+    ];
+    const answers = [
+      answer(0, 'chatgpt-web', 'no company'),
+      answer(0, 'gemini-web', 'no company'),
+      answer(1, 'chatgpt-web', 'no company'),
+    ];
+    const rivals = new Map([
+      ['0:chatgpt-web', ['Jolly Tur', 'Jolly']],
+      ['0:gemini-web', ['Jolly Tur', 'Setur']],
+      ['1:chatgpt-web', ['jollytur.com', 'Etstur']],
+    ]);
+    const figures = summarize(qs, answers, rivals, company);
+    expect(figures.competitors).toEqual([
+      { name: 'Jolly Tur', answers: 3 },
+      { name: 'Etstur', answers: 1 },
+      { name: 'Setur', answers: 1 },
+    ]);
+    expect(figures.missedQuestions[0]).toMatchObject({
+      text: 'q0',
+      competitors: ['Jolly Tur', 'Setur'],
+    });
+    expect(figures.competitorName('JOLLY')).toBe('Jolly Tur');
+    expect(figures.competitorName('Unknown Co')).toBe('Unknown Co');
+  });
+});
+
 describe('the questions missed, in order', () => {
   it('puts first the questions the main competitors win, then the most competitors, then the most answers', () => {
     const qs = [
@@ -129,6 +160,28 @@ describe('the questions missed, in order', () => {
 });
 
 describe('brandKey', () => {
+  it('reads one tour operator under “Tur”, its site and any case', () => {
+    const key = brandKey('Jolly Tur');
+    for (const name of [
+      'Jolly',
+      'JOLLY TUR',
+      'jollytur.com',
+      'https://www.jollytur.com/',
+      'Jollytur',
+    ]) {
+      expect(brandKey(name), name).toBe(key);
+    }
+    expect(brandKey('Coral Travel')).toBe(brandKey('Coral Tatil'));
+    expect(brandKey('Prontotour')).toBe(brandKey('Pronto Tour'));
+    expect(brandKey('Anadolu Turizm A.Ş.')).toBe(brandKey('Anadolu'));
+  });
+
+  it('keeps a short name with the ending in it as it is', () => {
+    expect(brandKey('Setur')).toBe('setur');
+    expect(brandKey('Etstur')).toBe('etstur');
+    expect(brandKey('Setur')).not.toBe(brandKey('Etstur'));
+  });
+
   it('reads one brand under its spellings and company forms', () => {
     expect(brandKey('Acme Inc.')).toBe(brandKey('ACME'));
     expect(brandKey('Türk Telekom')).toBe(brandKey('turk telekom'));

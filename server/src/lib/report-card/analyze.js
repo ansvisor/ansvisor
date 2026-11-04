@@ -22,6 +22,24 @@ const TOP_COMPETITORS = 10;
 const TOP_SITES = 10;
 const TOP_MISSED = 10;
 
+/**
+ * Words a brand's name may end with that don't tell it apart: "Jolly Tur"
+ * and "Jolly" are one tour operator, "Coral Travel" and "Coral Tatil" one
+ * travel brand. Dropped from the end of a key only when four letters or
+ * more are left, so "Setur" and "Etstur" stay themselves. Longest first.
+ */
+const GENERIC_ENDINGS = [
+  'turizm',
+  'tourism',
+  'holidays',
+  'seyahat',
+  'travel',
+  'tours',
+  'tatil',
+  'tour',
+  'tur',
+];
+
 const brandsSchema = z.object({
   answers: z.array(
     z.object({
@@ -82,19 +100,35 @@ const NOT_COMPETITORS = new Set(
   ].map((name) => brandKeyOf(name)),
 );
 
-/** "Acme Inc." and "ACME" as one: lower case, without a company form or punctuation. */
+/**
+ * One brand under its spellings: "Acme Inc." and "ACME", "Jolly Tur",
+ * "Jolly" and "jollytur.com". Lower case, without accents, a company form,
+ * punctuation or a generic ending such as "Tur" or "Travel".
+ */
 export function brandKey(name) {
   return brandKeyOf(name);
 }
 
 function brandKeyOf(name) {
-  return String(name ?? '')
+  let text = String(name ?? '')
+    .trim()
     .toLowerCase()
     .replace(/ı/g, 'i')
     .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
+    .replace(/\p{M}/gu, '');
+  // A site's address names its brand: "jollytur.com" is Jolly Tur.
+  const host = /^(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+)\.[a-z]{2,}(?:\.[a-z]{2,})?(?:\/\S*)?$/.exec(
+    text,
+  );
+  if (host) text = host[1];
+  let key = text
     .replace(/[\s,]+(inc|llc|ltd|gmbh|a\.?s|ltd\.? ?sti|co|corp|company|plc|s\.?a)\.?$/u, '')
     .replace(/[^\p{L}\p{N}]+/gu, '');
+  const ending = GENERIC_ENDINGS.find(
+    (word) => key.endsWith(word) && key.length - word.length >= 4,
+  );
+  if (ending) key = key.slice(0, -ending.length);
+  return key;
 }
 
 /**
@@ -183,7 +217,10 @@ export function summarize(questions, answers, competitors, { companyName, site, 
   const domains = [...new Set([site, domain])];
   const brand = { brandName: companyName, domains };
   const engineRows = new Map(engines.map((engine) => [engine, { engine, answers: 0, named: 0 }]));
+  /** brand key → answers naming it */
   const rivalCounts = new Map();
+  /** brand key → each spelling and how often it was written */
+  const spellingsOf = new Map();
   const siteCounts = new Map();
   const namedIn = new Set();
   const namedAnswers = new Set();
@@ -202,13 +239,19 @@ export function summarize(questions, answers, competitors, { companyName, site, 
     }
 
     const rivals = competitors.get(`${answer.question}:${answer.engine}`) ?? [];
+    // One brand under its spellings, counted once an answer.
+    const keys = new Set();
     for (const name of rivals) {
       const key = brandKey(name);
-      const entry = rivalCounts.get(key) ?? { name, answers: 0 };
-      entry.answers += 1;
-      rivalCounts.set(key, entry);
+      if (!key) continue;
+      const spellings = spellingsOf.get(key) ?? new Map();
+      spellings.set(name, (spellings.get(name) ?? 0) + 1);
+      spellingsOf.set(key, spellings);
+      if (keys.has(key)) continue;
+      keys.add(key);
+      rivalCounts.set(key, (rivalCounts.get(key) ?? 0) + 1);
       const forQuestion = rivalsByQuestion.get(answer.question) ?? new Map();
-      forQuestion.set(key, { name: entry.name, count: (forQuestion.get(key)?.count ?? 0) + 1 });
+      forQuestion.set(key, (forQuestion.get(key) ?? 0) + 1);
       rivalsByQuestion.set(answer.question, forQuestion);
     }
 
@@ -226,8 +269,17 @@ export function summarize(questions, answers, competitors, { companyName, site, 
     if (cited) ownCitations += 1;
   }
 
-  const byCount = (a, b) => b.answers - a.answers || a.name?.localeCompare?.(b.name) || 0;
-  const ranked = [...rivalCounts.values()].sort(byCount).slice(0, TOP_COMPETITORS);
+  // A brand's name is the spelling written most, the longer one on a tie.
+  const nameOf = new Map(
+    [...spellingsOf].map(([key, spellings]) => [
+      key,
+      [...spellings].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0][0],
+    ]),
+  );
+  const ranked = [...rivalCounts]
+    .map(([key, count]) => ({ name: nameOf.get(key), answers: count }))
+    .sort((a, b) => b.answers - a.answers || a.name.localeCompare(b.name))
+    .slice(0, TOP_COMPETITORS);
   // The card's first thing to do is a question its main competitors win:
   // those naming the top three come first, then the most competitors, then
   // the most answers.
@@ -243,15 +295,13 @@ export function summarize(questions, answers, competitors, { companyName, site, 
     .filter(({ index }) => !namedIn.has(index));
   const missedQuestions = missed
     .map(({ q, index }) => {
-      const rivals = [...(rivalsByQuestion.get(index)?.values() ?? [])].sort(
-        (a, b) => b.count - a.count,
-      );
+      const rivals = [...(rivalsByQuestion.get(index) ?? [])].sort((a, b) => b[1] - a[1]);
       return {
         text: q.text,
         textEn: q.textEn,
-        competitors: rivals.map((r) => r.name).slice(0, 10),
+        competitors: rivals.map(([key]) => nameOf.get(key)).slice(0, 10),
         answers: answeredBy.get(index) ?? 0,
-        main: rivals.filter((r) => topThree.has(brandKey(r.name))).length,
+        main: rivals.filter(([key]) => topThree.has(key)).length,
       };
     })
     .sort(
@@ -277,5 +327,7 @@ export function summarize(questions, answers, competitors, { companyName, site, 
     missedCount: missed.length,
     /** "{question}:{engine}" of each answer that names the company. */
     namedAnswers,
+    /** A competitor's name as the card writes it, for any of its spellings. */
+    competitorName: (name) => nameOf.get(brandKey(name)) ?? name,
   };
 }
