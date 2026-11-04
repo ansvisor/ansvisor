@@ -71,9 +71,10 @@ const placeSchema = z.object({
 
 /**
  * Makes a scheduled job from its card's click: the job as the card had it,
- * read on the person's clock (`timezone`, the run's), named with the run
- * whose card made it. Read again with the create_schedule tool's schema: a
- * server action can be called with anything.
+ * read on the person's clock (`timezone`, the run's: their Settings ›
+ * Account zone, else their browser's), named with the run whose card made
+ * it. Read again with the create_schedule tool's schema: a server action can
+ * be called with anything.
  */
 export async function createChatSchedule(
   input: NewSchedule,
@@ -223,6 +224,8 @@ const editsInput = z.object({
   when: z.string().trim().min(1).max(WHEN_MAX_LENGTH),
   deliver: z.enum(DELIVER_CHOICES),
   changeOnly: z.boolean(),
+  /** The job's own time zone; left out, it keeps the one it has. */
+  timezone: z.string().trim().min(1).max(64).optional(),
 });
 
 /** Saves the job page's edits (no confirm card, item 23). */

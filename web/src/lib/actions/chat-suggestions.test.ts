@@ -291,6 +291,19 @@ describe('readDailySuggestions', () => {
     expect(await zone()).toBeNull();
   });
 
+  it('dates today in the zone the person picked in Settings › Account, with no answers to read (00468)', async () => {
+    vi.setSystemTime(new Date('2026-10-29T13:00:00.000Z'));
+    answers['session.profiles.select'] = () => ({
+      data: { organization_id: ORG, role, time_zone: 'America/Los_Angeles' },
+      error: null,
+    });
+    const result = await readDailySuggestions();
+    // 13:00 UTC is 06:00 on Oct 29 in Los Angeles, though their answers read in Auckland (Oct 30).
+    expect(result.ok && result.read.today).toBe('2026-10-29');
+    expect(calls.some((c) => c.table === 'chat_messages')).toBe(false);
+    expect(calls.find((c) => c.table === 'profiles')?.columns).toContain('time_zone');
+  });
+
   it('gives an Analyst none, and reads nothing for them', async () => {
     role = 'analyst';
     expect(await readDailySuggestions()).toEqual({
