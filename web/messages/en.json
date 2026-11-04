@@ -3969,14 +3969,6 @@
       "creditsDetail": "Chat stops here, where you can add AI credits",
       "cancel": "Cancel"
     },
-    "partial": {
-      "question": "Your remaining AI limit covers about {fits} of the {parts} {unit}.",
-      "doFirst": "Do the first {fits} now",
-      "doFirstDetail": "The rest waits until there is more AI limit",
-      "credits": "Get more AI credits",
-      "creditsDetail": "Chat stops here, where you can add AI credits",
-      "cancel": "Cancel"
-    },
     "pageRefused": {
       "no_access": "No workspace to open pages for",
       "invalid_url": "Not an address Chat opens",
