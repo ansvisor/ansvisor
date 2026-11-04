@@ -9,7 +9,7 @@ import {
   type McpShoppingPath,
 } from './content-delivery';
 import type { McpAuthContext } from '@/lib/mcp-auth';
-import { brandInOrg } from '@/lib/mcp/data';
+import { brandAllowed, mayUseBrand } from '@/lib/mcp/data';
 import {
   draftPassages,
   keepAgentSuggestions,
@@ -71,7 +71,7 @@ interface DraftRow {
   actions: { action_no: number } | { action_no: number }[] | null;
 }
 
-/** A draft in the caller's organization, or null. */
+/** A draft of a brand the caller may use, or null. */
 async function draftFor(auth: McpAuthContext, draftId: string): Promise<DraftRow | null> {
   if (!auth.organizationId) return null;
   const { data, error } = await supabaseAdmin
@@ -81,7 +81,8 @@ async function draftFor(auth: McpAuthContext, draftId: string): Promise<DraftRow
     .eq('brands.organization_id', auth.organizationId)
     .maybeSingle();
   if (error) throw new Error(error.message);
-  return (data as unknown as DraftRow | null) ?? null;
+  const draft = (data as unknown as DraftRow | null) ?? null;
+  return draft && (await mayUseBrand(auth, draft.brand_id)) ? draft : null;
 }
 
 const actionNo = (row: DraftRow) => {
@@ -175,7 +176,7 @@ export async function listContentDraftsFor(
   brandId: string,
   status?: string,
 ): Promise<McpDraftSummary[] | null> {
-  if (!(await brandInOrg(auth, brandId))) return null;
+  if (!(await brandAllowed(auth, brandId))) return null;
   let query = supabaseAdmin
     .from('content_drafts')
     .select(
@@ -358,7 +359,7 @@ export async function createContentDraftFor(
   | 'off_domain'
   | null
 > {
-  if (!(await brandInOrg(auth, input.brandId))) return null;
+  if (!(await brandAllowed(auth, input.brandId))) return null;
   if (input.sourceUrl && !(await onBrandDomain(input.brandId, input.sourceUrl))) {
     return 'off_domain';
   }
@@ -409,6 +410,8 @@ export async function createContentDraftFor(
       source_url: input.sourceUrl ?? null,
       prompt_ids: promptIds,
       status: 'in_review',
+      // Made by an MCP client (00463, W4-10).
+      origin: 'mcp',
     })
     .select('id, status, page_type')
     .single();

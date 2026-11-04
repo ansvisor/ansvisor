@@ -23,6 +23,11 @@ export function syncedCount() {
   return synced.size;
 }
 
+/** Every row the process holds, for the model menu's search and counts. */
+export function syncedRows() {
+  return [...synced.values()];
+}
+
 /** A per-token price string as USD per million tokens; null when absent or variable ("-1"). */
 export function perMillion(value) {
   if (value === null || value === undefined || value === '') return null;

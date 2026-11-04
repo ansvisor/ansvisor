@@ -122,6 +122,84 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe('AgentDetail: publishing on its own (AUTONOMOUS-GO-LIVE §7.2)', () => {
+  const permission = {
+    on: true,
+    changed: false,
+    version: 2,
+    dailyLimit: 5,
+    by: 'Alex Kim',
+    at: '2026-11-01T10:00:00.000Z',
+  };
+  const card = () => one('[data-slot="agent-go-live-card"]');
+  const row = (slot: string) => one(`[data-slot="agent-go-live-card"] [data-row="${slot}"]`);
+
+  it('badges the mode, and lists who allowed it and the pages it sent in the last 24 hours', async () => {
+    agent = detail({
+      goLive: {
+        switch: 'on',
+        permission,
+        recent: [
+          {
+            title: 'Pricing FAQ',
+            target: 'Webflow',
+            at: '2026-10-30T09:14:00.000Z',
+            takenDown: false,
+          },
+          { title: '', target: 'WordPress', at: '2026-10-30T08:00:00.000Z', takenDown: true },
+        ],
+      },
+    });
+    await render();
+    expect(one('[data-field="mode"] [data-slot="agent-go-live-badge"]')?.textContent).toBe(
+      'Publishes on its own · 5 a day',
+    );
+    expect(row('goLiveStatus')?.textContent).toBe('On · up to 5 a day');
+    expect(row('goLiveBy')?.textContent).toBe('Alex Kim · Nov 1, 2026');
+    const recent = all('[data-slot="agent-go-live-recent"] li').map((li) => li.textContent);
+    expect(recent).toEqual([
+      '“Pricing FAQ” → WebflowToday 09:14',
+      '“Untitled page” → WordPressToday 08:00 · Taken down',
+    ]);
+  });
+
+  it('says why it is off: the switch in Settings › Chat, or a change to the agent; no badge', async () => {
+    agent = detail({ goLive: { switch: 'off', permission, recent: [] } });
+    await render();
+    expect(one('[data-slot="agent-go-live-badge"]')).toBeNull();
+    expect(row('goLiveStatus')?.textContent).toBe('Off in Settings › Chat');
+    expect(card()!.textContent).toContain('Nothing went live on its own yet.');
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    agent = detail({
+      goLive: {
+        switch: 'on',
+        permission: { ...permission, on: false, changed: true, by: null },
+        recent: [],
+      },
+    });
+    await render();
+    expect(one('[data-slot="agent-go-live-badge"]')).toBeNull();
+    expect(row('goLiveStatus')?.textContent).toBe(
+      'Off since the agent changed. An Admin can turn it on again.',
+    );
+    expect(row('goLiveBy')?.textContent).toBe('A former member · Nov 1, 2026');
+  });
+
+  it('shows no card for an agent never allowed, nor while the flag is off', async () => {
+    agent = detail({ goLive: { switch: 'on', permission: null, recent: [] } });
+    await render();
+    expect(card()).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    agent = detail();
+    await render();
+    expect(card()).toBeNull();
+    expect(one('[data-slot="agent-go-live-badge"]')).toBeNull();
+  });
+});
+
 describe('AgentDetail', () => {
   it('shows the name, state, owner, visibility and This period with the monthly cap', async () => {
     agent = detail({ maxMonthShare: 0.2 });
@@ -408,6 +486,50 @@ describe('AgentDetail', () => {
     expect(toast).toHaveBeenCalledWith('Citation win-back archived');
     expect(one('[data-slot="agent-run"]')?.textContent).toContain('Stopped by a person');
     expect(action('agent.restore')).toHaveLength(1);
+  });
+
+  it('says which agent called a run, and opens the agents a run ran with their AI use', async () => {
+    runs = [
+      run({
+        calls: [
+          { agent: 'FAQ writer', status: 'done', usageShare: 0.015, maxShare: 0.06 },
+          { agent: 'Rival brief', status: 'failed', usageShare: 0.002, maxShare: 0.05 },
+        ],
+      }),
+      run({ triggerKind: 'agent', calledBy: 'Weekly report', chatId: null }),
+    ];
+    await render();
+    const rows = all('[data-slot="agent-run"]');
+    expect(rows[1].textContent).toContain('Called by Weekly report');
+    const toggle = action('agent.toggleRunCalls');
+    expect(toggle).toHaveLength(1);
+    expect(toggle[0].textContent).toContain('Ran 2 agents');
+    expect(toggle[0].getAttribute('aria-expanded')).toBe('false');
+    expect(all('[data-slot="agent-run-call"]')).toHaveLength(0);
+    await click(toggle[0]);
+    const called = all('[data-slot="agent-run-call"]');
+    expect(called.map((r) => r.querySelectorAll('[role="cell"]').length)).toEqual([5, 5]);
+    expect(called[0].textContent).toContain('Ran FAQ writer');
+    expect(called[0].textContent).toContain('Done');
+    expect(called[0].textContent).toContain('1.5% of 6%');
+    expect(called[1].textContent).toContain('Failed');
+    await click(action('agent.toggleRunCalls')[0]);
+    expect(all('[data-slot="agent-run-call"]')).toHaveLength(0);
+  });
+
+  it('lists the agents it may run under Access, by name', async () => {
+    const FAQ = 'cccccccc-0000-4000-8000-000000000001';
+    agent = detail();
+    await render();
+    expect(one('[data-row="canCall"]')?.textContent).toBe('No other agents');
+    agent = detail({
+      settings: { ...detail().settings!, canCall: [FAQ, 'cccccccc-0000-4000-8000-000000000002'] },
+      canCall: { options: [{ id: FAQ, name: 'FAQ writer' }], locked: false },
+    });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    expect(one('[data-row="canCall"]')?.textContent).toBe('FAQ writer, An agent you can’t see');
   });
 
   it('shows Access, Scope and AI use as shares beside the runs', async () => {

@@ -34,6 +34,7 @@ function query(table) {
       );
       return chain;
     },
+    limit: () => chain,
     maybeSingle: async () => ({
       data: (db.tables[table] ?? []).find((row) => filters.every((f) => f(row))) ?? null,
       error: null,
@@ -97,6 +98,14 @@ vi.mock('../lib/brand-facts.js', () => ({
 vi.mock('../lib/site-trust.js', () => ({
   readSiteTrust: (...args) => reads.siteTrust(...args),
 }));
+const tellWentLive = vi.fn(async () => ({ notices: 1, emails: 1, history: false }));
+const publishContentPage = vi.fn();
+vi.mock('../lib/cms-publish.js', () => ({
+  publishContentPage: (...args) => publishContentPage(...args),
+}));
+vi.mock('../lib/chat-notices/go-live.js', () => ({
+  tellWentLive: (...args) => tellWentLive(...args),
+}));
 vi.mock('../lib/content-page-context.js', () => ({
   pageReadContext: async () => ({ siteType: 'b2b', brandName: 'Acme', facts: ['Founded 2019'] }),
 }));
@@ -141,6 +150,8 @@ let baseUrl;
 
 beforeEach(async () => {
   vi.stubEnv('CRON_SECRET', 'shh');
+  tellWentLive.mockClear();
+  publishContentPage.mockReset();
   flags.chatOn = true;
   flags.demo = false;
   flags.cloud = true;
@@ -237,11 +248,13 @@ describe('POST /api/internal/chat/go-live/send', () => {
         p_error: null,
       }),
     ]);
+    // Who should know is told once the step is done (AUTONOMOUS-GO-LIVE §6.4).
+    await vi.waitFor(() => expect(tellWentLive).toHaveBeenCalledWith({ eventId: STEP }));
   });
 
   it('answers only the web, and refuses a body it can’t read', async () => {
     expect((await send(BODY, 'nope')).status).toBe(401);
-    expect((await send({ ...BODY, kind: 'publish' })).status).toBe(400);
+    expect((await send({ ...BODY, kind: 'webhook' })).status).toBe(400);
     expect((await send({ ...BODY, target: 'webhook' })).status).toBe(400);
     expect((await send({ ...BODY, page: { ...PAGE, draftId: STEP } })).status).toBe(400);
     expect(sendContentPages).not.toHaveBeenCalled();
@@ -288,6 +301,14 @@ describe('POST /api/internal/chat/go-live/send', () => {
     flags.cloud = false;
     db.tables.organizations[0].plan = 'starter';
     expect((await send()).status).toBe(200);
+  });
+
+  it('never sends a page someone took down: a click does it (PR 10)', async () => {
+    db.tables.content_draft_deliveries = [{ id: 'd0', draft_id: DRAFT, status: 'taken_down' }];
+    const res = await send();
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ success: false, code: 'taken_down' });
+    expect(sendContentPages).not.toHaveBeenCalled();
   });
 
   it('answers 404 for a run or a draft that isn’t the workspace’s', async () => {
@@ -356,6 +377,59 @@ describe('POST /api/internal/chat/go-live/send', () => {
     expect((await send()).status).toBe(502);
     expect(finished().at(-1)).toMatchObject({ p_error: 'The page could not be sent' });
     expect(sendContentPages).toHaveBeenCalledTimes(3);
+    // Nothing went out: nobody is told it did.
+    expect(tellWentLive).not.toHaveBeenCalled();
+  });
+
+  it('puts a new page live for a publish step, and keeps its address on the step (PR 9)', async () => {
+    db.tables.chat_agent_go_live_events[0].kind = 'publish';
+    publishContentPage.mockResolvedValueOnce({
+      delivery: {
+        id: 'd9',
+        status: 'published',
+        external_id: 'wf-9',
+        published_url: 'https://acme.example/blog/pour-over-guide',
+      },
+      published: true,
+      url: 'https://acme.example/blog/pour-over-guide',
+    });
+    const res = await send({ ...BODY, kind: 'publish' });
+    expect(res.status).toBe(200);
+    expect(publishContentPage).toHaveBeenCalledWith({
+      orgId: ORG,
+      brandId: BRAND,
+      userId: ACTOR,
+      target: 'webflow',
+      agentRunId: AGENT_RUN,
+      page: expect.objectContaining({ draftId: DRAFT }),
+    });
+    expect(sendContentPages).not.toHaveBeenCalled();
+    expect(finished()).toEqual([
+      expect.objectContaining({
+        p_id: STEP,
+        p_status: 'done',
+        p_delivery_id: 'd9',
+        p_published_url: 'https://acme.example/blog/pour-over-guide',
+      }),
+    ]);
+    await vi.waitFor(() => expect(tellWentLive).toHaveBeenCalledWith({ eventId: STEP }));
+
+    // A page live already, or Framer: refused before anything went, its slot freed.
+    db.tables.chat_agent_go_live_events[0].status = 'reserved';
+    publishContentPage.mockRejectedValueOnce(
+      new DeliveryError('live_item', 'This page is live already.', 409),
+    );
+    const live = await send({ ...BODY, kind: 'publish' });
+    expect(live.status).toBe(409);
+    expect(await live.json()).toMatchObject({ code: 'live_item' });
+    expect(finished().at(-1)).toMatchObject({ p_status: 'failed' });
+  });
+
+  it('answers the step even when telling people fails', async () => {
+    tellWentLive.mockRejectedValueOnce(new Error('mail down'));
+    const res = await send();
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ success: true });
   });
 });
 

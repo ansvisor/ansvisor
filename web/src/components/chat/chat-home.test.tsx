@@ -29,8 +29,10 @@ vi.mock('@/i18n/navigation', () => ({
   usePathname: () => '/dashboard/chat',
   useRouter: () => ({ push: nav.push }),
 }));
+// Locked: the workspace is read-only, or the demo brand is open.
+const gate = vi.hoisted(() => ({ isLocked: false, openUpgrade: vi.fn() }));
 vi.mock('@/components/providers/upgrade-gate', () => ({
-  useUpgradeGate: () => ({ isLocked: false, openUpgrade: vi.fn() }),
+  useUpgradeGate: () => ({ isLocked: gate.isLocked, openUpgrade: gate.openUpgrade }),
 }));
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 const BRAND = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -100,6 +102,8 @@ beforeEach(() => {
   document.body.appendChild(host);
   root = createRoot(host);
   nav.push.mockClear();
+  gate.isLocked = false;
+  gate.openUpgrade.mockClear();
   list.chats = [];
   due.brand = BRAND;
   due.answer = { ok: true, dueTasks: 3, lostPages: 0, readyDrafts: 0 };
@@ -202,6 +206,7 @@ describe('ChatHomeView', () => {
     await act(async () => chips[0].click());
     expect(onAsk).toHaveBeenCalledWith(
       'Show the 2 pages that lost citations and what AI cites instead.',
+      undefined,
     );
   });
 
@@ -215,10 +220,15 @@ describe('ChatHomeView', () => {
     expect(onAsk.mock.calls).toEqual([
       [
         "/tasks Work through this week's Action Center tasks by priority and prepare what each one needs. I'll close the tasks.",
+        undefined,
       ],
-      ['Win back the citations we lost on 2 pages: refresh them against what AI cites now.'],
+      [
+        'Win back the citations we lost on 2 pages: refresh them against what AI cites now.',
+        undefined,
+      ],
       [
         'Check the 1 ready draft, fill their page fields and send them to our CMS as drafts. Going live stays my click.',
+        undefined,
       ],
     ]);
   });
@@ -299,8 +309,10 @@ describe('Since you left', () => {
   });
 
   it('keeps the person’s leave a moment after Home goes, not on a quick return', async () => {
-    const sent = vi.fn(async () => new Response('{"ok":true}'));
+    const sent = vi.fn(async (url: string) => new Response(url ? '{"ok":true}' : ''));
     globalThis.fetch = sent as unknown as typeof fetch;
+    // Home also reads What's new as it opens (W4-21): only the leaves count here.
+    const leaves = () => sent.mock.calls.filter(([url]) => url === '/api/chat/home-seen').length;
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     try {
       await render(<ChatHome firstName="Alex" />);
@@ -308,7 +320,7 @@ describe('Since you left', () => {
       root = createRoot(host);
       await render(<ChatHome firstName="Alex" />);
       vi.advanceTimersByTime(1500);
-      expect(sent).not.toHaveBeenCalled();
+      expect(leaves()).toBe(0);
       act(() => root.unmount());
       root = createRoot(host);
       vi.advanceTimersByTime(1000);
@@ -319,7 +331,7 @@ describe('Since you left', () => {
       // A page that closes on Home keeps it too.
       await render(<ChatHome firstName="Alex" />);
       window.dispatchEvent(new Event('pagehide'));
-      expect(sent).toHaveBeenCalledTimes(2);
+      expect(leaves()).toBe(2);
     } finally {
       vi.useRealTimers();
     }
@@ -407,6 +419,25 @@ describe('ChatHome', () => {
       message: 'Why did our Google AI Overviews citations drop since Oct 19?',
     });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/cccccccc-0000-4000-8000-000000000002');
+  });
+
+  // As the composer: a read-only workspace, or the demo brand on an active
+  // plan, starts no run (and spends no AI budget); the upgrade dialog opens.
+  it('starts nothing while locked, a shortcut or Why?, and opens the upgrade dialog', async () => {
+    gate.isLocked = true;
+    due.since = SINCE;
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(
+      async () => new Response('', { status: 200 }),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    await act(async () => (host.querySelector('[data-skill="tasks"]') as HTMLElement).click());
+    await act(async () => (host.querySelector('[data-action="why.open"]') as HTMLElement).click());
+    // Home still reads What's new; it starts no run.
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('/api/chat/runs');
+    expect(gate.openUpgrade).toHaveBeenCalledTimes(2);
+    expect(nav.push).not.toHaveBeenCalled();
   });
 });
 
@@ -519,18 +550,38 @@ describe('Home by focus (CHAT-24 §4)', () => {
     await render(view({ focus: focus('seo'), words: words(), dueTasks: 4, lostPages: 0, onAsk }));
     expect(chips().map((chip) => [chip.dataset.skill, chip.textContent])).toEqual([
       ['tasks', 'Complete tasks 4 due'],
-      ['auditFixes', 'Site audit fixes'],
+      ['audit-fix', 'Site audit fixes'],
       ['report', 'Weekly report'],
     ]);
     await act(async () => chips()[2].click());
-    expect(onAsk).toHaveBeenCalledWith("/report Write this week's report on our AI visibility.");
+    expect(onAsk).toHaveBeenCalledWith(
+      "/report Write this week's report on our AI visibility.",
+      undefined,
+    );
     expect(analytics.track).toHaveBeenCalledWith('chat_focus_shortcut_clicked', {
       area: 'seo',
       skill: 'report',
     });
     // A role that only reads: no job that changes things.
     await render(view({ focus: focus('seo'), words: words(), dueTasks: 4, canChange: false }));
-    expect(chips().map((chip) => chip.dataset.skill)).toEqual(['auditFixes', 'report']);
+    expect(chips().map((chip) => chip.dataset.skill)).toEqual(['audit-fix', 'report']);
+  });
+
+  it("sends a shortcut's id with a chip that runs its playbook (W2-09), and asks with a skill's /name", async () => {
+    const onAsk = vi.fn();
+    await render(view({ focus: focus('comp', 'pd'), words: words(), onAsk }));
+    const chip = (label: string) => chips().find((c) => c.textContent === label)!;
+    await act(async () => chip('Competitor moves').click());
+    await act(async () => chip('Cited for rivals, not us').click());
+    await act(async () => chip('Buyer questions').click());
+    expect(onAsk.mock.calls).toEqual([
+      ['Which competitors moved in AI answers this week, and on which prompts?', 'analyze'],
+      ['Which sources do AI engines cite for our competitors but not for us?', 'opportunities'],
+      [
+        '/questions Group the questions buyers ask AI in our category by topic, with search volume and who AI recommends.',
+        undefined,
+      ],
+    ]);
   });
 
   it('starts with four questions in the workspace’s words, a new chat each', async () => {
@@ -590,5 +641,92 @@ describe('Home by focus (CHAT-24 §4)', () => {
     expect(host.querySelector('h1 + p')?.textContent).toContain('1 thing needs you');
     await render(view({ focus: focus('comp'), words: words({ name: 'Kestrel CRM', points: 2 }) }));
     expect(host.querySelector('h1 + p')?.textContent).toBe('All caught up.');
+  });
+});
+
+const { HomeDraftProvider, useHomeDraft } = await import('./home-draft');
+
+describe('What’s new on Home (CHAT-11 §B, item 19)', () => {
+  const line = { feature: 'Agent Center', homeLine: 'Agent Center runs your routine work.' };
+
+  it('shows the New line under the shortcuts, and the chip with a dot while something is unread', async () => {
+    const onShowMe = vi.fn();
+    const onAsk = vi.fn();
+    await render(view({ whatsNew: { line, unread: true }, onShowMe, onAsk }));
+    const row = host.querySelector('[data-slot="whats-new-line"]')!;
+    expect(row.textContent).toBe('NewAgent Center runs your routine work.Show me');
+    await act(async () =>
+      row.querySelector<HTMLElement>('[data-action="whatsNew.showMe"]')!.click(),
+    );
+    expect(onShowMe).toHaveBeenCalledWith('Agent Center');
+    const chip = host.querySelector<HTMLElement>('[data-action="home.whatsNew"]')!;
+    expect(chip.textContent).toBe('What’s newYou have updates you haven’t read');
+    // Right after Ask anything (CHAT-08 v2).
+    expect(chip.previousElementSibling?.getAttribute('data-action')).toBe('home.askAnything');
+    await act(async () => chip.click());
+    expect(onAsk).toHaveBeenCalledWith('What’s new in Ansvisor and how can it help me?');
+  });
+
+  it('shows the chip without a dot and no line once all is read, and neither before it is read', async () => {
+    await render(view({ whatsNew: { line: null, unread: false }, onShowMe: vi.fn() }));
+    expect(host.querySelector('[data-slot="whats-new-line"]')).toBeNull();
+    expect(host.querySelector('[data-action="home.whatsNew"]')?.textContent).toBe('What’s new');
+    await render(view());
+    expect(host.querySelector('[data-action="home.whatsNew"]')).toBeNull();
+  });
+
+  it('keeps six chips with What’s new: four jobs at most beside it and Ask anything', async () => {
+    await render(
+      view({
+        whatsNew: { line: null, unread: false },
+        focus: { areas: ['lead', 'seo', 'content', 'brand'] as FocusArea[], onEdit: vi.fn() },
+      }),
+    );
+    expect(host.querySelectorAll('[data-action="home.runShortcut"]').length).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('What’s new in ChatHome', () => {
+  function Box() {
+    const draft = useHomeDraft();
+    return <output data-slot="box">{draft?.text ?? ''}</output>;
+  }
+
+  it('reads the newest unread update of the last 14 days, and Show me fills the box unsent', async () => {
+    const urls: string[] = [];
+    globalThis.fetch = vi.fn(async (url: string) => {
+      urls.push(url);
+      return new Response(
+        JSON.stringify(
+          url.startsWith('/api/chat/whats-new')
+            ? {
+                ok: true,
+                hasUnread: true,
+                entries: [
+                  { feature: 'Agent Center', homeLine: 'Agent Center runs your routine work.' },
+                ],
+              }
+            : { ok: false },
+        ),
+      );
+    }) as unknown as typeof fetch;
+    await render(
+      <HomeDraftProvider>
+        <ChatHome firstName="Alex" />
+        <Box />
+      </HomeDraftProvider>,
+    );
+    await act(async () => undefined);
+    expect(urls).toContain('/api/chat/whats-new?unread=true&limit=1&days=14');
+    expect(analytics.track).toHaveBeenCalledWith('chat_whats_new_line_shown', {
+      feature: 'Agent Center',
+    });
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="whatsNew.showMe"]')!.click(),
+    );
+    expect(host.querySelector('[data-slot="box"]')?.textContent).toBe(
+      'What’s new: how can Agent Center help me?',
+    );
+    expect(urls.some((url) => url === '/api/chat/runs')).toBe(false);
   });
 });

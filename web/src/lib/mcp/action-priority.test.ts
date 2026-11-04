@@ -103,6 +103,7 @@ const auth: McpAuthContext = {
   email: null,
   organizationId: 'org-1',
   apiKeyId: 'key-1',
+  brandAccess: 'all',
   role: 'admin',
 };
 
