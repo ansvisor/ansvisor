@@ -33,6 +33,7 @@ const agentUsageShares = vi.fn();
 const chatRunEstimate = vi.fn();
 const fitChatUnits = vi.fn();
 const ownKeyAgentSpend = vi.fn();
+const imageShares = vi.fn();
 vi.mock('../lib/plan-guard.js', () => ({ PlanLimitError }));
 vi.mock('../lib/chat-budget.js', () => ({
   CHAT_BUDGET_FEATURES: ['chat', 'agent', 'schedule', 'image'],
@@ -44,7 +45,9 @@ vi.mock('../lib/chat-budget.js', () => ({
   chatRunEstimate: (...args) => chatRunEstimate(...args),
   fitChatUnits: (...args) => fitChatUnits(...args),
   MAX_FIT_UNITS: 100,
+  MAX_IMAGES: 10,
   ownKeyAgentSpend: (...args) => ownKeyAgentSpend(...args),
+  imageShares: (...args) => imageShares(...args),
 }));
 const warnOwnKeyLimit = vi.fn();
 vi.mock('../lib/chat-notices/own-key-limit.js', () => ({
@@ -461,5 +464,89 @@ describe('GET /api/internal/chat/budget/own-key', () => {
     const res = await get(`orgId=${ORG}`);
     expect(res.status).toBe(403);
     expect(await res.json()).toMatchObject({ success: false, error: 'chat_off' });
+  });
+});
+
+describe('an image request (W4-07)', () => {
+  const IMAGE = 'google/gemini-3.1-flash-lite-image';
+  const get = (query, secret = 'shh') =>
+    fetch(`${baseUrl}/image-shares?${new URLSearchParams(query)}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+    });
+
+  it('holds its images in place of tokens, and charges what the provider said it cost', async () => {
+    const res = await post('reserve', {
+      orgId: ORG,
+      runId: RUN,
+      feature: 'image',
+      model: IMAGE,
+      images: 4,
+    });
+    expect(res.status).toBe(201);
+    expect(reserveChatStep).toHaveBeenCalledWith(
+      ORG,
+      expect.objectContaining({ feature: 'image', modelId: IMAGE, images: 4 }),
+    );
+    const charged = await post('charge', {
+      orgId: ORG,
+      usageId: USAGE,
+      model: IMAGE,
+      usage: {},
+      images: { produced: 4, costUsd: 0.1564 },
+    });
+    expect(charged.status).toBe(200);
+    expect(chargeChatStep).toHaveBeenCalledWith(
+      ORG,
+      USAGE,
+      expect.objectContaining({ modelId: IMAGE, images: { produced: 4, costUsd: 0.1564 } }),
+    );
+  });
+
+  it('refuses an image count without the image feature, more than 10, or a step without its tokens', async () => {
+    for (const body of [
+      { orgId: ORG, runId: RUN, model: IMAGE, images: 4 },
+      { orgId: ORG, runId: RUN, feature: 'image', model: IMAGE, images: 11 },
+      { orgId: ORG, runId: RUN, model: IMAGE },
+    ]) {
+      expect((await post('reserve', body)).status).toBe(400);
+    }
+    expect(
+      (
+        await post('charge', {
+          orgId: ORG,
+          usageId: USAGE,
+          model: IMAGE,
+          usage: {},
+          images: { produced: 2, costUsd: -1 },
+        })
+      ).status,
+    ).toBe(400);
+    expect(reserveChatStep).not.toHaveBeenCalled();
+    expect(chargeChatStep).not.toHaveBeenCalled();
+  });
+
+  it('counts the images that fit, per image', async () => {
+    const res = await post('fit', { orgId: ORG, model: IMAGE, image: true, units: 4 });
+    expect(res.status).toBe(200);
+    expect(fitChatUnits).toHaveBeenCalledWith(
+      ORG,
+      expect.objectContaining({ modelId: IMAGE, image: true, units: 4 }),
+    );
+    // One of perUnit or image, never both or neither.
+    expect((await post('fit', { orgId: ORG, model: IMAGE, units: 4 })).status).toBe(400);
+  });
+
+  it('answers each image model’s share of the monthly limit, never a dollar', async () => {
+    imageShares.mockReset().mockResolvedValue([{ model: IMAGE, percent: 0.77 }]);
+    const res = await get({ orgId: ORG, models: `${IMAGE}, ${IMAGE}` });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      success: true,
+      unlimited: false,
+      shares: [{ model: IMAGE, percent: 0.77 }],
+    });
+    expect(imageShares).toHaveBeenCalledWith(ORG, [IMAGE]);
+    expect((await get({ orgId: ORG, models: IMAGE }, 'nope')).status).toBe(401);
+    expect((await get({ orgId: ORG })).status).toBe(400);
   });
 });
