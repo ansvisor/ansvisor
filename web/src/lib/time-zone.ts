@@ -26,6 +26,61 @@ export function isTimeZone(timeZone: unknown): timeZone is string {
   }
 }
 
+/**
+ * The zone a person's times are read in (Settings › Account, 00468): the
+ * one they picked, else their browser's, else UTC. One rule for Chat's
+ * runs (and so a new schedule card's zone) and the daily suggestions'
+ * morning; a copy of it is in server/src/lib/chat-suggestions/rules.js
+ * (effectiveTimeZone): keep them in step. A zone this runtime doesn't know
+ * counts as none.
+ */
+export function effectiveTimeZone(
+  chosen: string | null | undefined,
+  browserZone: string | null | undefined,
+): string {
+  if (isTimeZone(chosen)) return chosen;
+  if (isTimeZone(browserZone)) return browserZone;
+  return 'UTC';
+}
+
+/** The IANA zones a person can pick from, A to Z, UTC among them. */
+export function timeZoneNames(): string[] {
+  let names: string[] = [];
+  try {
+    names = Intl.supportedValuesOf('timeZone');
+  } catch {
+    // An older runtime: UTC alone (the browser's zone is still Automatic).
+  }
+  return [...new Set([...names, 'UTC'])].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * "GMT+3", "GMT-4:30" or "GMT": a zone's offset from UTC at an instant. Some
+ * runtimes say UTC's as "GMT+0": it reads "GMT" everywhere, so the server's
+ * render and the browser's agree.
+ */
+export function zoneOffset(timeZone: string, at: Date = new Date()): string {
+  try {
+    const offset =
+      new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'shortOffset' })
+        .formatToParts(at)
+        .find((part) => part.type === 'timeZoneName')?.value ?? '';
+    return offset === 'GMT+0' ? 'GMT' : offset;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Whether a zone fits a search: its name with spaces for underscores
+ * ("new york" finds America/New_York), or its offset ("gmt+3"), any case.
+ */
+export function zoneMatches(timeZone: string, query: string, offset = ''): boolean {
+  const words = query.trim().toLowerCase().replace(/_/g, ' ');
+  if (!words) return true;
+  return `${timeZone.replace(/_/g, ' ')} ${offset}`.toLowerCase().includes(words);
+}
+
 const formats = new Map<string, Intl.DateTimeFormat>();
 
 /** The wall clock an instant shows in `timeZone`, field by field. */

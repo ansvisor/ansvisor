@@ -4,7 +4,7 @@ home_line: Chat can now do work on a schedule, such as a report every Monday at 
 route: /dashboard/chat
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
-published: 2026-11-03
+published: 2026-11-04
 approved: true
 ---
 Weekly reports and checks meant asking Chat the same thing every week.

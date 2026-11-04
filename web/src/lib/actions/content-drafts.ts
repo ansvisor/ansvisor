@@ -26,6 +26,7 @@ import {
   type LibraryTab,
   type PageImportError,
   type PageType,
+  isPageType,
   missingSchemaLeftOut,
   PAGE_IMPORT_ERRORS,
 } from '@/lib/content/drafts';
@@ -50,9 +51,13 @@ import { MAX_SOURCE_SITES, type AiSourceClass } from '@/lib/content/source-class
 import { draftShopping } from '@/lib/content/shopping-check';
 import {
   NO_DRAFT_RULES,
+  activeRules,
   draftLanguage,
   draftRulesFit,
   draftRulesSchema,
+  effectiveRules,
+  ruleLength,
+  ruleSet,
   ruleSetFits,
   savedRuleSetSchema,
   startingRules,
@@ -64,6 +69,7 @@ import {
   MAX_BRIEF_BYTES,
   briefFromOpportunity,
   draftBriefSchema,
+  rebuildSources,
   type DraftBrief,
   type RebuildSources,
 } from '@/lib/content/brief';
@@ -72,11 +78,13 @@ import type { ContentBrief } from '@/types';
 import {
   CITED_DAYS,
   MAX_PASSAGES,
+  pagePassages,
   quotedPassages,
   type CitedAnswer,
   type CitedPassage,
 } from '@/lib/content/cited-passages';
 import {
+  CHAT_RULE_KEY,
   MAX_DECIDE,
   SUGGESTION_STATUSES,
   suggestionLinks,
@@ -129,6 +137,7 @@ import {
 import { assertWritable } from '@/lib/subscription-guard';
 import { isManager } from '@/lib/session-role';
 import { refreshYears } from '@/lib/content/current-year';
+import { withContentDom } from '@/lib/content/server-dom';
 
 /**
  * Content drafts (Content Editor, CE-002), read through the signed-in member's
@@ -1553,6 +1562,37 @@ export async function markContentDraftReady(
   return { status: current.status, tasksDone: 0 };
 }
 
+export type SetDraftReadyResult =
+  | { ok: true; status: DraftStatus; tasksDone: number }
+  | { ok: false; reason: 'not_found' | 'invalid' | 'failed'; message: string };
+
+/**
+ * Chat's Mark ready (set_draft_ready, CHAT-20 §9 row 57; CHAT-25 §6): the
+ * editor's markContentDraftReady as the signed-in member, its errors as
+ * values. Nothing is published. A draft already ready or published keeps
+ * its status, which `status` says.
+ */
+export async function setContentDraftReady(id: string): Promise<SetDraftReadyResult> {
+  try {
+    await assertWritable();
+    return { ok: true, ...(await markContentDraftReady(id)) };
+  } catch (err) {
+    const code = err instanceof Error ? err.message : '';
+    if (code === 'not_found') {
+      return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
+    }
+    if (code === 'invalid') {
+      return { ok: false, reason: 'invalid', message: 'That isn’t a Library draft.' };
+    }
+    console.error('Failed to mark the draft ready:', err);
+    return {
+      ok: false,
+      reason: 'failed',
+      message: 'The draft couldn’t be marked ready. Try again.',
+    };
+  }
+}
+
 /**
  * Ready, clicked in the editor's header (Next step spec §3b): the page goes
  * back to review, only while it is still ready. One published from the
@@ -2178,6 +2218,8 @@ export interface AgentFixRequest {
   sources?: RebuildSources;
   /** The page over a Length it isn't sent (rules.ts overLengthFor). */
   overLength?: { count: number; max: number };
+  /** The page's characters and the most its Length allows (rules.ts lengthCapFor). */
+  lengthCap?: { count: number; max: number };
 }
 
 /** Why a run left nothing to review (content-agent.js emptyWhy). */
@@ -2224,6 +2266,8 @@ export async function fixDraftRules(
         // Already within the server's limits (rebuildSources).
         ...(request.sources ? { sources: request.sources } : {}),
         ...(request.overLength ? { overLength: request.overLength } : {}),
+        // The room the Length leaves: what the run adds stays within it (capToLength).
+        ...(request.lengthCap ? { lengthCap: request.lengthCap } : {}),
       }),
     });
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -2237,6 +2281,126 @@ export async function fixDraftRules(
   } catch (err) {
     console.error('Failed to run the Content Agent:', err);
     return { error: 'unconfirmed' };
+  }
+}
+
+/** The most characters of a request typed in Chat the Content Agent gets (its rule detail's). */
+const MAX_CHAT_REQUEST = 500;
+
+export type SuggestDraftResult =
+  | { ok: true; count: number; why?: AgentEmptyWhy }
+  | {
+      ok: false;
+      reason: 'not_found' | 'invalid' | 'conflict' | 'live_item' | 'quota_exceeded' | 'failed';
+      message: string;
+    };
+
+/** Fix's refusals, as Chat says them to the person (suggestDraftChanges). */
+const SUGGEST_REFUSALS: Partial<Record<AgentFixError, Extract<SuggestDraftResult, { ok: false }>>> =
+  {
+    open_suggestions: {
+      ok: false,
+      reason: 'conflict',
+      message:
+        'The Content Agent’s suggestions on this page still wait for review. Accept or reject them in the editor first.',
+    },
+    writing: {
+      ok: false,
+      reason: 'conflict',
+      message: 'The Content Agent is writing this page. Try again once it’s done.',
+    },
+    running: {
+      ok: false,
+      reason: 'conflict',
+      message: 'The Content Agent is already working on this page. Try again once it’s done.',
+    },
+    published: {
+      ok: false,
+      reason: 'live_item',
+      message: 'This page is published: the Content Agent doesn’t suggest changes to it.',
+    },
+    empty: { ok: false, reason: 'invalid', message: 'The page is empty.' },
+    ai_budget: {
+      ok: false,
+      reason: 'quota_exceeded',
+      message: 'The workspace’s monthly AI limit is used up.',
+    },
+  };
+
+/**
+ * A request typed in Chat beside the editor (CHAT-25 §4 item 5, W4-14):
+ * the page isn't changed. The Content Agent's Fix run (fixDraftRules) gets
+ * the request as its one rule (CHAT_RULE_KEY), with the page's own text
+ * rules, its sources and its locked passages, read as a rewrite reads them
+ * (agentWriteRequest), so every guard of the editor's agent applies, and
+ * leaves suggestions in the editor for Accept / Reject, "from your chat".
+ * As the signed-in member; metered from the workspace's AI usage, as Fix
+ * open rules is. Errors come back as values.
+ */
+export async function suggestDraftChanges(
+  id: string,
+  request: string,
+): Promise<SuggestDraftResult> {
+  try {
+    await assertWritable();
+    const words = request.trim().slice(0, MAX_CHAT_REQUEST);
+    if (!words) return { ok: false, reason: 'invalid', message: 'Say what to change.' };
+    const draft = await getContentDraft(id);
+    if (!draft) {
+      return { ok: false, reason: 'not_found', message: 'That draft isn’t in the Library.' };
+    }
+    const setType = draft.rules.set ?? (isPageType(draft.pageType) ? draft.pageType : null);
+    // Without the workspace's rules, the page type's defaults still apply.
+    const mine = await getMyRuleSets(draft.brandId).catch(
+      (): Awaited<ReturnType<typeof getMyRuleSets>> => ({}),
+    );
+    const effective = effectiveRules(draft.rules, setType ? mine[setType] : undefined);
+    const rules = activeRules(
+      ruleSet(setType, {
+        language: draftLanguage(draft.rules),
+        length: draft.rules.importLength,
+      }),
+      effective,
+    ).filter((rule) => rule.on);
+    // The sources and the passages are read from the page as saved, with the server's DOM.
+    await withContentDom();
+    const [read, cited] = await Promise.all([
+      getDraftSources(id),
+      draft.method === 'optimize' && draft.sourceUrl
+        ? getCitedPassages(id, pagePassages(draft.bodyHtml))
+        : Promise.resolve(null),
+    ]);
+    const sources = read
+      ? rebuildSources(read.data, read.choices, {
+          title: draft.title,
+          sourceUrl: draft.sourceUrl,
+          html: draft.bodyHtml,
+          length: ruleLength(rules, setType),
+        })
+      : undefined;
+    const done = await fixDraftRules(id, draft.brandId, {
+      rules: [{ key: CHAT_RULE_KEY, name: 'The person’s request in Chat', detail: words }],
+      textRules: effective.textRules.filter((rule) => rule.on).map((rule) => rule.text),
+      locked: (cited ?? []).map((passage) => passage.key),
+      ...(sources ? { sources } : {}),
+    });
+    if ('error' in done) {
+      return (
+        SUGGEST_REFUSALS[done.error] ?? {
+          ok: false,
+          reason: 'failed',
+          message: 'The Content Agent couldn’t suggest changes just now. Try again.',
+        }
+      );
+    }
+    return { ok: true, ...done };
+  } catch (err) {
+    console.error('Failed to ask the Content Agent for suggestions:', err);
+    return {
+      ok: false,
+      reason: 'failed',
+      message: 'The Content Agent couldn’t suggest changes just now. Try again.',
+    };
   }
 }
 
@@ -2296,6 +2460,7 @@ export async function handOffDraft(
         locked: request.locked.slice(0, 500).map((key) => key.slice(0, 5000)),
         ...(request.sources ? { sources: request.sources } : {}),
         ...(request.overLength ? { overLength: request.overLength } : {}),
+        ...(request.lengthCap ? { lengthCap: request.lengthCap } : {}),
         origin: request.origin,
       }),
     });

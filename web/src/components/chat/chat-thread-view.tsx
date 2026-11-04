@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { useRouter } from '@/i18n/navigation';
+import { saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
+import type { PageOpen } from '@/lib/chat/page-open';
+import { keepPageChoice, pageChoiceMade, pageHrefOf } from '@/lib/chat/page-open';
 import { ApprovalCard } from '@/components/agentic/approval-card';
 import { FormCard, type FormCardValues } from '@/components/agentic/form-card';
 import { DenialCard } from '@/components/agentic/denial-card';
@@ -50,6 +54,7 @@ import { WhatsNewCards } from './run/whats-new-cards';
 import { useHomeDraft } from './home-draft';
 import { useFormAssist } from './run/form-assist';
 import { NextMoves } from './run/next-moves';
+import { OpenPageCard, type OpenPageChoice } from './run/open-page-card';
 import { RememberThis } from './run/remember-this';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
@@ -189,6 +194,7 @@ export function ChatThreadView({
   onOwnKey = false,
   keyFailure = null,
   skills,
+  pageOpen = 'ask',
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
@@ -216,6 +222,8 @@ export function ChatThreadView({
   keyFailure?: FailingKey | null;
   /** The enabled skills, for the / menu (CHAT-13 item 5). */
   skills?: ChatSkillItem[];
+  /** Where a page Chat writes opens (W4-11, Settings › Chat). */
+  pageOpen?: PageOpen;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
@@ -242,7 +250,7 @@ export function ChatThreadView({
   const lostWords = useRef(t('connectionLost'));
   const tSent = useTranslations('chatRun.actionSent');
   const sentWords = useRef({ created: tSent('toastCreated'), added: tSent('toastAdded') });
-  const { canManage } = useUserRole();
+  const { canManage, canAdmin } = useUserRole();
   // The run under way when the page opened, which it picks up again.
   const [resumable] = useState(() => {
     const open = turns[turns.length - 1];
@@ -256,6 +264,59 @@ export function ChatThreadView({
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
+
+  // Where a page Chat writes opens (CHAT-25 §3, W4-11): the card asks under
+  // the latest answer once, in the person's own chat; "Don't ask again" keeps
+  // the choice, and a saved Content Editor opens it as its run ends here.
+  const router = useRouter();
+  const tPage = useTranslations('chatRun.openPage');
+  const [pagePref, setPagePref] = useState<PageOpen>(pageOpen);
+  const [pageAnswered, setPageAnswered] = useState<ReadonlySet<string>>(() => new Set());
+  const [pageSaving, setPageSaving] = useState(false);
+  const ownChat = !thread || thread.mine;
+  const lastPage = last?.run?.status === 'done' ? pageHrefOf(last.run.deliverables) : null;
+  const askPage =
+    !!lastPage && !!last?.runId && pagePref === 'ask' && ownChat && !pageAnswered.has(last.runId);
+  // Answered in this browser before (a reload): read after mount, as storage is the browser's.
+  const lastRunId = last?.runId ?? null;
+  useEffect(() => {
+    if (!lastRunId || !pageChoiceMade(lastRunId)) return;
+    setPageAnswered((was) => new Set(was).add(lastRunId));
+  }, [lastRunId]);
+  const liveRuns = useRef(new Set<string>());
+  useEffect(() => {
+    const runId = last?.runId;
+    if (!runId || !last.run) return;
+    if (OPEN.includes(last.run.status)) {
+      liveRuns.current.add(runId);
+      return;
+    }
+    if (!liveRuns.current.delete(runId)) return;
+    // Ended here, not opened ended: a saved Content Editor opens the page it wrote.
+    const href = last.run.status === 'done' ? pageHrefOf(last.run.deliverables) : null;
+    if (href && pagePref === 'editor' && ownChat) router.push(href);
+  }, [last, pagePref, ownChat, router]);
+
+  async function choosePage(runId: string, href: string, where: OpenPageChoice, remember: boolean) {
+    let kept = false;
+    if (remember) {
+      setPageSaving(true);
+      const saved = await saveChatGeneralSettings({ pageOpen: where }).catch(() => ({ ok: false }));
+      setPageSaving(false);
+      kept = saved.ok;
+      if (saved.ok) {
+        setPagePref(where);
+        toast(tPage('saved'));
+      } else {
+        toast.error(tPage('saveFailed'));
+      }
+    }
+    keepPageChoice(runId, where);
+    setPageAnswered((was) => new Set(was).add(runId));
+    if (where === 'editor') router.push(href);
+    // The side panel's setup is the layout's, read once: read again, so its next chat has the choice.
+    if (kept) router.refresh();
+  }
   // A question the run waits on: the composer's message answers it (CHAT-07 §A item 8).
   const asking = last?.run?.question ?? null;
   // The latest answer's next moves, once it finished, in the person's own chat (CHAT-07 §C).
@@ -391,6 +452,8 @@ export function ChatThreadView({
     route = pageRoute,
     /** The run whose answer it acts on (Send to Action Center): the server reads its taint. */
     fromRunId?: string,
+    /** "Use Ansvisor's limit" after the own key failed (W4-06): an Admin's click. */
+    keySource?: 'ansvisor',
   ): Promise<boolean> {
     if (isLocked) {
       openUpgrade();
@@ -442,6 +505,7 @@ export function ChatThreadView({
         ...(sent.context.length > 0 ? { context: { route, chips: sent.context } } : {}),
         ...(sent.references.length > 0 ? { references: sent.references } : {}),
         ...(fromRunId ? { fromRunId } : {}),
+        ...(keySource ? { keySource } : {}),
         ...(sent.shortcutId ? { shortcutId: sent.shortcutId } : {}),
       }),
     }).catch(() => null);
@@ -587,6 +651,29 @@ export function ChatThreadView({
   }
 
   /**
+   * "Use Ansvisor's limit" on the latest answer that stopped because the
+   * workspace's own key failed (W4-06): its question goes again on
+   * Ansvisor's key and the AI limit. An Admin's click only, never by itself,
+   * and not once the limit is used up.
+   */
+  function ansvisorRetryOf(index: number): (() => void) | undefined {
+    const question = questionOf(turns, index);
+    const resend = question?.resend;
+    if (!question || !resend || index !== turns.length - 1 || !canAdmin) return undefined;
+    if (!turns[index].run?.keyFailed || (thread && !thread.mine) || working || atCap) {
+      return undefined;
+    }
+    return () =>
+      void send(
+        question.text,
+        { context: resend.context, references: resend.references, attachments: [] },
+        resend.route,
+        undefined,
+        'ansvisor',
+      );
+  }
+
+  /**
    * Send to Action Center on the latest answer (CHAT-09 item 18): Chat
    * proposes the finding as an action, on its card. Admins and Managers, in
    * their own chat, while nothing else runs.
@@ -643,8 +730,17 @@ export function ChatThreadView({
                     )
                   }
                   onRetry={retryOf(index)}
+                  onUseAnsvisorLimit={ansvisorRetryOf(index)}
                   onSendToActionCenter={sendToActionCenterOf(index)}
                 />
+                {turn === last && askPage && lastPage && (
+                  <OpenPageCard
+                    saving={pageSaving}
+                    onChoose={(where, remember) =>
+                      void choosePage(turn.runId!, lastPage, where, remember)
+                    }
+                  />
+                )}
                 {turn === last && (
                   <RememberThis
                     text={remember}
@@ -708,6 +804,7 @@ export function ChatThreadView({
           usage={<ComposerUsageMeter />}
           modelChoice={modelChoice}
           onModelChoice={setModelChoice}
+          keyForm
           // An answer is its text only: no page chips, @ data or files go with it.
           chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}
@@ -759,6 +856,7 @@ function Answer({
   canChangeTasks,
   onTasks,
   onRetry,
+  onUseAnsvisorLimit,
   onSendToActionCenter,
 }: {
   turn: Turn;
@@ -775,6 +873,8 @@ function Answer({
   onTasks: (strip: ChatTaskStrip) => void;
   /** Sends its question again; none while another run works, or on a teammate's chat. */
   onRetry?: () => void;
+  /** Sends it again on Ansvisor's key after the own key failed (W4-06): Admins. */
+  onUseAnsvisorLimit?: () => void;
   /** Send to Action Center (CHAT-09 item 18): the latest answer, for Admins and Managers. */
   onSendToActionCenter?: () => void;
 }) {
@@ -891,6 +991,7 @@ function Answer({
       timezone={turn.timezone}
       reconnecting={reconnecting}
       onRetry={onRetry}
+      onUseAnsvisorLimit={onUseAnsvisorLimit}
       cards={cards}
       footer={
         turn.runId && run.text.trim() ? (

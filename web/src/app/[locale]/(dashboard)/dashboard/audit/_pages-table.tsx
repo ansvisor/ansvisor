@@ -139,7 +139,8 @@ function SinceFirst({ page }: { page: AuditedPage }) {
   );
 }
 
-function HistoryRun({ run, onDelete }: { run: AuditRun; onDelete: (id: string) => void }) {
+/** An earlier audit of the page; Delete only with `onDelete` (admins and managers, 2026-11-03). */
+function HistoryRun({ run, onDelete }: { run: AuditRun; onDelete?: (id: string) => void }) {
   const t = useTranslations('audit');
   // A read-only workspace (plan not active): the upgrade dialog instead of the confirm.
   const { isLocked, openUpgrade } = useUpgradeGate();
@@ -158,38 +159,42 @@ function HistoryRun({ run, onDelete }: { run: AuditRun; onDelete: (id: string) =
       <Link href={`/dashboard/audit/${run.id}`} className="text-primary hover:underline">
         {t('pages.viewReport')}
       </Link>
-      <Dialog
-        onOpenChange={(open, details) => {
-          if (!open || !isLocked) return;
-          details.cancel();
-          openUpgrade(tActions('deleteAudits'));
-        }}
-      >
-        <DialogTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon"
-              className="ml-auto h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
-              aria-label={t('deleteAudit')}
-            />
-          }
+      {onDelete && (
+        <Dialog
+          onOpenChange={(open, details) => {
+            if (!open || !isLocked) return;
+            details.cancel();
+            openUpgrade(tActions('deleteAudits'));
+          }}
         >
-          <Trash2 className="h-3.5 w-3.5" />
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>{t('deleteAudit')}</DialogTitle>
-            <DialogDescription>{t('deleteConfirm')}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
-            <DialogClose render={<Button variant="destructive" onClick={() => onDelete(run.id)} />}>
-              {t('deleteAudit')}
-            </DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <DialogTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                className="ml-auto h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label={t('deleteAudit')}
+              />
+            }
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{t('deleteAudit')}</DialogTitle>
+              <DialogDescription>{t('deleteConfirm')}</DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <DialogClose render={<Button variant="outline" />}>{t('cancel')}</DialogClose>
+              <DialogClose
+                render={<Button variant="destructive" onClick={() => onDelete(run.id)} />}
+              >
+                {t('deleteAudit')}
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </li>
   );
 }
@@ -218,7 +223,8 @@ export function AuditPagesTable({
   primaryHost: string | null;
   loadingMore: boolean;
   onLoadMore: () => void;
-  onDeleteRun: (id: string) => void;
+  /** Deleting an earlier audit: admins and managers only, else none. */
+  onDeleteRun?: (id: string) => void;
   /** Keys of the selected pages. */
   selected: Set<string>;
   onSelect: (keys: string[], on: boolean) => void;

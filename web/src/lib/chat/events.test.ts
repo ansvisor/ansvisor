@@ -180,7 +180,21 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
       total: 1,
       due: 1,
     }),
-  'deliverable.updated': () => chatEvent('deliverable.updated', 13, { ...DELIVERABLE, version: 2 }),
+  'deliverable.updated': () =>
+    chatEvent('deliverable.updated', 13, {
+      ...DELIVERABLE,
+      version: {
+        n: 2,
+        counts: { questions: 7, sections: 7, characters: 905 },
+        changes: {
+          shortened: [{ heading: 'Can I change plans?', before: 212, after: 140 }],
+          added: ['Can I get a refund?'],
+          placeholders: ['[REFUND PERIOD]'],
+        },
+        sections: [{ heading: 'Can I get a refund?', text: 'Yes, within [REFUND PERIOD].' }],
+        canUndo: true,
+      },
+    }),
   'suggestion.created': () => chatEvent('suggestion.created', 14, { count: 3 }),
   'suggestion.resolved': () => chatEvent('suggestion.resolved', 15, { count: 1 }),
   'page.opened': () => chatEvent('page.opened', 16, { where: 'here', href: EDITOR }),

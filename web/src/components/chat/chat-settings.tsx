@@ -12,7 +12,9 @@ import type {
   ChatGeneralAccess,
   ChatGeneralSettings,
   GeneralPatch,
+  NotifyChannel,
 } from '@/lib/chat/general-settings';
+import { PAGE_OPENS } from '@/lib/chat/page-open';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { cn } from '@/lib/utils';
 import { useFocusLabel } from './focus-picker';
@@ -28,6 +30,7 @@ import { useFocusLabel } from './focus-picker';
  */
 
 const MODES: ChatMode[] = ['ask_first', 'auto', 'full_auto'];
+const CHANNELS: NotifyChannel[] = ['inbox_email', 'inbox', 'inbox_slack'];
 /** general-settings.ts ANSWER_LANGUAGES, in the order the list shows them. */
 const LANGUAGES: AnswerLanguage[] = ['en', 'tr', 'de', 'fr', 'es', 'it', 'pt', 'nl'];
 
@@ -251,9 +254,36 @@ export function ChatSettings({
             </select>
           </Row>
 
-          {/* "Notify me when an agent needs me" and "Show Thought for N s" are
-              kept on the person but nothing reads them yet, so they stay hidden
-              until they're wired up; their saved values and schema stay. */}
+          <Row label={t('notify.label')} note={t('notify.note')}>
+            <select
+              data-action="chatSettings.notifyChannel"
+              aria-label={t('notify.label')}
+              value={settings.notifyVia}
+              onChange={(event) => void change({ notifyVia: event.target.value as NotifyChannel })}
+              className={SELECT}
+            >
+              {CHANNELS.map((channel) => (
+                <option
+                  key={channel}
+                  value={channel}
+                  disabled={channel === 'inbox_slack' && !access.slack}
+                >
+                  {channel === 'inbox_slack' && !access.slack
+                    ? t('notify.slackSoon')
+                    : t(`notify.${channel}`)}
+                </option>
+              ))}
+            </select>
+          </Row>
+
+          <Row label={t('thought.label')} note={t('thought.note')}>
+            <Switch
+              checked={settings.showThought}
+              label={t('thought.label')}
+              action="chatSettings.toggleThinking"
+              onChange={(next) => void change({ showThought: next })}
+            />
+          </Row>
 
           <Row label={t('everyPage.label')} note={t('everyPage.note')}>
             <Switch
@@ -262,6 +292,38 @@ export function ChatSettings({
               action="chatSettings.toggleAskChatEverywhere"
               onChange={(next) => void change({ panelOnPages: next })}
             />
+          </Row>
+
+          {/* Where a page Chat writes opens (CHAT-25 §3, W4-11): "Open here" comes with W4-15. */}
+          <Row label={t('pageOpen.label')} note={t('pageOpen.note')}>
+            <span
+              role="radiogroup"
+              aria-label={t('pageOpen.label')}
+              className="inline-flex shrink-0 rounded-[9px] border bg-muted/60 p-0.5"
+            >
+              {PAGE_OPENS.map((where) => {
+                const on = settings.pageOpen === where;
+                return (
+                  <button
+                    key={where}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    data-action="chatSettings.pageOpen"
+                    onClick={() => {
+                      if (!on) void change({ pageOpen: where });
+                    }}
+                    className={cn(
+                      'inline-flex items-center rounded-[7px] px-[9px] py-[3px] text-xs whitespace-nowrap text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                      on &&
+                        'bg-background font-medium text-foreground shadow-[0_1px_2px_rgba(0,0,0,.08)]',
+                    )}
+                  >
+                    {t(`pageOpen.${where}`)}
+                  </button>
+                );
+              })}
+            </span>
           </Row>
         </section>
       </div>

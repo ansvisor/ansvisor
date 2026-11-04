@@ -7,6 +7,8 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { PlanCard } from '@/components/agentic/plan-card';
 import { RunSteps } from '@/components/agentic/run-steps';
 import { ApprovalCard } from '@/components/agentic/approval-card';
+import { FormCard } from '@/components/agentic/form-card';
+import { useFormAssist } from '@/components/chat/run/form-assist';
 import { QuestionAnswered, QuestionCard } from '@/components/agentic/question-card';
 import { AgentHead } from '@/components/agentic/agent-card';
 import { ResultCard } from '@/components/agentic/result-card';
@@ -14,6 +16,8 @@ import { DenialCard } from '@/components/agentic/denial-card';
 import { ErrorCard } from '@/components/agentic/error-card';
 import { RunsTray, RunsTrayView } from '@/components/agentic/runs-tray';
 import { NextMoves } from '@/components/chat/run/next-moves';
+import { OpenPageCard } from '@/components/chat/run/open-page-card';
+import { DeliverableCard } from '@/components/chat/run/deliverable-card';
 import {
   APPROVAL,
   APPROVAL_HEAD,
@@ -21,6 +25,8 @@ import {
   DENIALS,
   FAILED,
   NEXT_MOVES,
+  PAGE_MOVES,
+  PAGE_VERSIONS,
   PUBLISH,
   PUSH_APPROVAL,
   QUALITY_PLAN,
@@ -28,6 +34,7 @@ import {
   RESULT,
   RUN_STEPS,
   SHOPPING_PLAN,
+  SKILL_DRAFT,
   TASKS_PLAN,
   TRAY,
 } from './_card-samples';
@@ -64,6 +71,12 @@ export function CardsPreview() {
   const s = (key: string) => t(`states.${key}` as never);
   const brandId = useBrandStore((state) => state.activeBrandId);
   const stepOf = (n: number) => ({ n, total: 6 });
+  const skillAssist = useFormAssist(SKILL_DRAFT);
+  // The same draft with a /name it can't keep: the card says why, and Save skill waits.
+  const reservedDraft = {
+    ...SKILL_DRAFT,
+    fields: SKILL_DRAFT.fields.map((f) => (f.name === 'name' ? { ...f, value: 'winback' } : f)),
+  };
 
   return (
     <div data-slot="cards-preview" className="space-y-6">
@@ -140,6 +153,40 @@ export function CardsPreview() {
         </State>
       </Group>
 
+      <Group title={t('sections.skillDraft')}>
+        <State caption={s('skillDraft')}>
+          <FormCard
+            step={stepOf(2)}
+            title="Save skill · /pricing-brief"
+            form={SKILL_DRAFT}
+            assist={skillAssist}
+            onSubmit={noop}
+            onCancel={noop}
+          />
+        </State>
+        <State caption={s('skillDraftReserved')}>
+          <FormCard
+            step={stepOf(2)}
+            title="Save skill · /winback"
+            form={reservedDraft}
+            assist={skillAssist}
+            onSubmit={noop}
+            onCancel={noop}
+          />
+        </State>
+        <State caption={s('skillSaved')}>
+          <FormCard
+            step={stepOf(2)}
+            title="Save skill · /pricing-brief"
+            form={SKILL_DRAFT}
+            status="approved"
+            doneLabel="Saved skill: /pricing-brief"
+            onSubmit={noop}
+            onCancel={noop}
+          />
+        </State>
+      </Group>
+
       <Group title={t('sections.question')}>
         <State caption={s('questionPending')}>
           <QuestionCard ask={QUESTIONS.page} onAnswer={noop} />
@@ -158,6 +205,24 @@ export function CardsPreview() {
             question={QUESTIONS.topics.question}
             answer="Skipped · used Plans and prices"
           />
+        </State>
+      </Group>
+
+      <Group title={t('sections.openPage')}>
+        <State caption={s('openPage')}>
+          <OpenPageCard onChoose={noop} />
+        </State>
+      </Group>
+
+      <Group title={t('sections.pageVersions')}>
+        <State caption={s('pageVersion1')}>
+          <DeliverableCard runId="preview" n={1} deliverable={PAGE_VERSIONS[0]} />
+        </State>
+        <State caption={s('pageVersion2')}>
+          <DeliverableCard runId="preview" n={2} deliverable={PAGE_VERSIONS[1]} canChange />
+        </State>
+        <State caption={s('pageMarkReady')}>
+          <NextMoves moves={PAGE_MOVES} onPick={noop} />
         </State>
       </Group>
 

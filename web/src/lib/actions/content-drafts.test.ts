@@ -121,6 +121,7 @@ vi.mock('@/lib/supabase/server', () => ({
 const {
   createContentDraft,
   fixDraftRules,
+  suggestDraftChanges,
   handOffDraft,
   decideDraftSuggestions,
   getDraftSuggestions,
@@ -133,6 +134,7 @@ const {
   classifyDraftSources,
   keepDraftSource,
   markContentDraftReady,
+  setContentDraftReady,
   restoreDraftVersion,
   saveContentDraft,
   setContentDraftAuthor,
@@ -558,6 +560,21 @@ describe('keepDraftSource (Quality CE-046)', () => {
     // 50 kept already: the list comes back without it.
     rpcResult = { data: ['https://x.example/1'], error: null };
     await expect(keepDraftSource(DRAFT, url)).rejects.toThrow('full');
+  });
+});
+
+describe('setContentDraftReady (Chat’s Mark ready, W4-12b)', () => {
+  it('marks the draft ready as the editor does, its errors as values', async () => {
+    updated = { status: 'ready' };
+    await expect(setContentDraftReady(DRAFT)).resolves.toEqual({
+      ok: true,
+      status: 'ready',
+      tasksDone: 0,
+    });
+    await expect(setContentDraftReady('not-a-draft')).resolves.toMatchObject({
+      ok: false,
+      reason: 'invalid',
+    });
   });
 });
 
@@ -1170,6 +1187,32 @@ describe('fixDraftRules', () => {
     vi.unstubAllGlobals();
   });
 
+  it('sends the room the Length leaves, to Fix and to a hand-off (#2092 review)', async () => {
+    const fetchMock = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async () =>
+      Response.json({ count: 1 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const lengthCap = { count: 4_800, max: 6_000 };
+    await fixDraftRules(DRAFT, BRAND, { ...request, lengthCap });
+    await handOffDraft(DRAFT, BRAND, {
+      items: [{ key: 'readability:longSentences', detail: '' }],
+      textRules: [],
+      locked: [],
+      origin: 'person',
+      lengthCap,
+    });
+    const [fix, handOff] = fetchMock.mock.calls.map(
+      ([, init]) => JSON.parse(init?.body as string) as Record<string, unknown>,
+    );
+    expect(fix).toEqual({ brandId: BRAND, ...request, lengthCap });
+    expect(handOff.lengthCap).toEqual(lengthCap);
+    // With no Length on, none is sent.
+    fetchMock.mockClear();
+    await fixDraftRules(DRAFT, BRAND, request);
+    expect(JSON.parse(fetchMock.mock.calls[0][1]?.body as string)).not.toHaveProperty('lengthCap');
+    vi.unstubAllGlobals();
+  });
+
   it('names the budget and the empty page, and anything else as failed', async () => {
     for (const [body, error] of [
       [{ code: 'ai_budget' }, 'ai_budget'],
@@ -1313,5 +1356,70 @@ describe('setDraftSchemaLeftOut (00448)', () => {
     updated = null;
     await expect(setDraftSchemaLeftOut(DRAFT, false)).resolves.toBe(false);
     await expect(setDraftSchemaLeftOut('nope', true)).resolves.toBe(false);
+  });
+});
+
+describe('suggestDraftChanges (Chat beside the editor, W4-14)', () => {
+  const draftRow = {
+    id: DRAFT,
+    brand_id: '9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d',
+    title: 'Pricing FAQ',
+    page_type: null,
+    method: 'create',
+    status: 'draft',
+    body_html: '<h2>Can I change plans?</h2><p>Yes, any time.</p>',
+    author: 'user',
+    updated_at: '2026-11-03T09:00:00Z',
+  };
+
+  it('asks the agent with the request as its one rule, from the page as saved', async () => {
+    row = draftRow;
+    rpcResult = { data: null, error: null };
+    const fetchMock = vi.fn(async () => Response.json({ count: 2, batchId: 'b' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(suggestDraftChanges(DRAFT, '  Make answer 3 shorter  ')).resolves.toEqual({
+      ok: true,
+      count: 2,
+    });
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toMatch(new RegExp(`/api/content-drafts/${DRAFT}/suggestions$`));
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      brandId: draftRow.brand_id,
+      rules: [
+        { key: 'chat', name: 'The person’s request in Chat', detail: 'Make answer 3 shorter' },
+      ],
+      textRules: [],
+      locked: [],
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('says the agent’s refusals in Chat’s words, and asks nothing for no request', async () => {
+    row = draftRow;
+    rpcResult = { data: null, error: null };
+    for (const [code, reason] of [
+      ['open_suggestions', 'conflict'],
+      ['running', 'conflict'],
+      ['published', 'live_item'],
+      ['ai_budget', 'quota_exceeded'],
+      ['teapot', 'failed'],
+    ] as const) {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => Response.json({ code }, { status: 409 })),
+      );
+      await expect(suggestDraftChanges(DRAFT, 'Shorter')).resolves.toMatchObject({
+        ok: false,
+        reason,
+      });
+    }
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(suggestDraftChanges(DRAFT, '   ')).resolves.toMatchObject({
+      ok: false,
+      reason: 'invalid',
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

@@ -84,6 +84,8 @@ vi.mock('@/lib/actions/content', () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: tracked.track('actions/content-drafts.createContentDraft'),
   updateContentDraft: tracked.track('actions/content-drafts.updateContentDraft'),
+  setContentDraftReady: tracked.track('actions/content-drafts.setContentDraftReady'),
+  suggestDraftChanges: tracked.track('actions/content-drafts.suggestDraftChanges'),
 }));
 vi.mock('@/lib/chat/actor/drafts', () => ({
   createContentDraftFor: tracked.track('chat/actor/drafts.createContentDraftFor'),
@@ -363,6 +365,8 @@ describe('the Chat tool registry', () => {
     await runInChat('attach_file_to_task', { brand_id: brand, task_id: item, file_id: item });
     await runInChat('set_task_ready_for_review', { brand_id: brand, task_id: item });
     await run('update_draft', { draft_id: item, body_html: '<h1>FAQ</h1>' });
+    await run('suggest_draft_changes', { draft_id: item, request: 'Make answer 3 shorter' });
+    await run('set_draft_ready', { draft_id: item });
     await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
     await run('publish_cms', { draft_id: item, destination: 'wix' });
     await run('build_report', {
@@ -438,6 +442,8 @@ describe('the Chat tool registry', () => {
         'actions/content-drafts.updateContentDraft',
         [item, { title: undefined, bodyHtml: '<h1>FAQ</h1>' }],
       ],
+      ['actions/content-drafts.suggestDraftChanges', [item, 'Make answer 3 shorter']],
+      ['actions/content-drafts.setContentDraftReady', [item]],
       ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
       ['actions/cms-send.publishDraftToCms', [item, 'wix']],
       [
@@ -715,6 +721,8 @@ describe('approval policies', () => {
       set_task_ready_for_review: ['admin', 'manager'],
       // Content, reports and Site Audit (W2-07, DECISIONS T): an Analyst only saves drafts.
       update_draft: ['admin', 'manager'],
+      suggest_draft_changes: ['admin', 'manager'],
+      set_draft_ready: ['admin', 'manager'],
       push_cms_draft: ['admin', 'manager'],
       publish_cms: ['admin', 'manager'],
       // Take down (AUTONOMOUS-GO-LIVE PR 10): as the API's route, a Manager even while publishing is off.
@@ -1107,5 +1115,80 @@ describe("the model's tool list on the registry's rows", () => {
       'save_memory',
       'forget_memory',
     ]);
+  });
+});
+
+describe("save_skill's draft card (W3-08)", () => {
+  const tool = () => chatTool('save_skill')!;
+  const ctx = {
+    timezone: 'UTC',
+    organizationId: 'org-1',
+    // W3-12a's card context carries who it is for too.
+    userId: 'user-1',
+    now: new Date('2026-11-02T10:00:00Z'),
+  };
+  const input = {
+    name: 'pricing-faq',
+    description: 'Writes a pricing FAQ in our tone.',
+    instructions: 'Read the pricing page. Answer each question in two sentences.',
+  };
+
+  it('is a card in every mode: nothing is kept before Save', () => {
+    expect(tool().flags.alwaysCard).toBe(true);
+    expect([tool().defaultPolicy, tool().maxPolicy]).toEqual(['ask', 'ask']);
+  });
+
+  it('shows the draft as editable fields, with Save skill and what it can’t change', async () => {
+    const form = await tool().form!.fields(input as never, ctx);
+    expect(form).toMatchObject({ kind: 'skill', submit: 'Save skill' });
+    expect(form.fields.map((f) => [f.name, f.kind, f.value])).toEqual([
+      ['name', 'text', 'pricing-faq'],
+      ['title', 'text', 'pricing faq'],
+      ['description', 'textarea', 'Writes a pricing FAQ in our tone.'],
+      ['instructions', 'textarea', 'Read the pricing page. Answer each question in two sentences.'],
+    ]);
+    expect(form.notes).toEqual([
+      'Private to you until an Admin shares it.',
+      'It shapes how Chat works: it adds no tool and skips no card.',
+    ]);
+  });
+
+  it('saves the draft as the card was edited, and refuses a /name it can’t keep', () => {
+    const apply = (values: Record<string, string>) =>
+      tool().form!.apply(input as never, values, ctx);
+    expect(
+      apply({
+        name: ' /Pricing-Brief ',
+        title: 'Pricing brief',
+        description: ' Opens with the answer. ',
+        instructions: 'Answer first, then three sections.',
+      }),
+    ).toEqual({
+      ok: true,
+      input: {
+        name: 'pricing-brief',
+        title: 'Pricing brief',
+        description: 'Opens with the answer.',
+        instructions: 'Answer first, then three sections.',
+      },
+    });
+    // An empty title falls back to the name.
+    expect(apply({ title: '' })).toMatchObject({ ok: true, input: { title: undefined } });
+    expect(apply({ name: 'pricing faq' })).toEqual({
+      ok: false,
+      error: 'Use lowercase letters, digits and single hyphens, such as pricing-faq.',
+    });
+    expect(apply({ name: 'winback' })).toEqual({
+      ok: false,
+      error: '/winback is an Ansvisor skill or shortcut. Pick another name.',
+    });
+  });
+
+  it('says it was saved on its step, and nothing when it wasn’t', () => {
+    expect(tool().doneStep!(input as never, { ok: true, value: { id: 's1' } })).toEqual({
+      label: 'Saved skill: /pricing-faq',
+      detail: 'Private to you · Skills › My skills',
+    });
+    expect(tool().doneStep!(input as never, { ok: false })).toBeNull();
   });
 });

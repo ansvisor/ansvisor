@@ -7,7 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./logger.js', () => ({ logger: { warn: vi.fn() } }));
 
-const { deliverEmail, sendEmail } = await import('./email.js');
+const { deliverEmail, deliverEmailWithId, senderOf, sendEmail, ATTACHMENTS_MAX_BYTES } =
+  await import('./email.js');
 
 const message = { to: ['team@acme.example'], subject: 'Hi', html: '<p>Hi</p>' };
 const answer = (status, body = '{}') => ({ ok: status < 300, status, text: async () => body });
@@ -31,6 +32,23 @@ describe('deliverEmail', () => {
     expect(await deliverEmail(message)).toBe('sent');
     fetchMock.mockResolvedValueOnce(answer(422, '{"message":"invalid"}'));
     expect(await deliverEmail(message)).toBe('refused');
+  });
+
+  it('sends from another address and with files when asked', async () => {
+    fetchMock.mockResolvedValueOnce(answer(200));
+    await deliverEmail({
+      ...message,
+      from: 'Ansvisor <reports@acme.example>',
+      attachments: [{ filename: 'card.pdf', content: 'JVBERi0=' }],
+    });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.from).toBe('Ansvisor <reports@acme.example>');
+    expect(body.attachments).toEqual([{ filename: 'card.pdf', content: 'JVBERi0=' }]);
+    fetchMock.mockResolvedValueOnce(answer(200));
+    await deliverEmail(message);
+    const plain = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(plain.from).toBe('Ansvisor <hello@acme.example>');
+    expect(plain).not.toHaveProperty('attachments');
   });
 
   it('says unknown when no answer came: a timeout or a dropped connection', async () => {
@@ -60,5 +78,33 @@ describe('sendEmail', () => {
     expect(await sendEmail(message)).toBe(true);
     fetchMock.mockRejectedValueOnce(new Error('socket hang up'));
     expect(await sendEmail(message)).toBe(false);
+  });
+});
+
+describe('deliverEmailWithId', () => {
+  it('answers Resend’s id, sends attachments and a display name on the configured address', async () => {
+    fetchMock.mockResolvedValueOnce(answer(200, '{"id":"e1"}'));
+    const outcome = await deliverEmailWithId({
+      ...message,
+      fromName: 'Northwind "Agency"',
+      attachments: [{ filename: 'report.pdf', content: 'aGk=' }],
+    });
+    expect(outcome).toEqual({ status: 'sent', id: 'e1' });
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.from).toBe('"Northwind Agency" <hello@acme.example>');
+    expect(body.attachments).toEqual([{ filename: 'report.pdf', content: 'aGk=' }]);
+    expect(senderOf('hello@acme.example', 'Acme')).toBe('"Acme" <hello@acme.example>');
+    expect(senderOf('Ansvisor <hello@acme.example>', null)).toBe('Ansvisor <hello@acme.example>');
+  });
+
+  it('refuses attachments past the limit without calling Resend, and sends none it isn’t given', async () => {
+    const big = Buffer.alloc(ATTACHMENTS_MAX_BYTES + 1, 1).toString('base64');
+    expect(
+      await deliverEmailWithId({ ...message, attachments: [{ filename: 'a.pdf', content: big }] }),
+    ).toEqual({ status: 'refused', id: null });
+    expect(fetchMock).not.toHaveBeenCalled();
+    fetchMock.mockResolvedValueOnce(answer(200, 'not json'));
+    expect(await deliverEmailWithId(message)).toEqual({ status: 'sent', id: null });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).not.toHaveProperty('attachments');
   });
 });

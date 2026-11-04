@@ -4,7 +4,7 @@ home_line: Pick your own time zone, so Chat's times and your schedules match you
 route: /dashboard/settings/account
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
-published: 2026-11-03
+published: 2026-11-04
 approved: true
 ---
 Times followed your browser, which was off when you travel or work in another time zone.

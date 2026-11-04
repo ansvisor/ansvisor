@@ -140,6 +140,8 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       next.status = 'waiting';
       return next;
     case 'deliverable.created':
+    // A page's next version in chat (W4-12a): a card of its own, under the one before.
+    case 'deliverable.updated':
       next.deliverables = [...run.deliverables, event.data];
       return next;
     case 'action.sent':

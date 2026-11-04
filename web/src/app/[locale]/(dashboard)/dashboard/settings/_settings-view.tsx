@@ -23,6 +23,7 @@ import { OrganizationSection } from '@/components/settings/organization-section'
 import { WhiteLabelSection } from '@/components/settings/white-label-section';
 import { MenuAccessSection } from '@/components/settings/menu-access-section';
 import { WorkAreasCard } from '@/components/settings/work-areas-card';
+import { TimeZoneField } from '@/components/settings/time-zone-field';
 import { useCanManageMenus } from '@/components/providers/menu-access-provider';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { RolesAccessSection } from '@/components/chat-access/roles-access-section';
@@ -210,6 +211,9 @@ export function SettingsView({ section }: { section: SettingsSection }) {
                   {savingName && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {t('save')}
                 </Button>
+                <Separator className="my-2" />
+                {/* Saved as it changes, apart from Save changes above. */}
+                <TimeZoneField />
                 <Separator className="my-2" />
                 <Button
                   variant="outline"

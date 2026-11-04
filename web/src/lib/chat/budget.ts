@@ -155,7 +155,7 @@ const UNMETERED: ChatStepBudget = {
   keep() {},
 };
 
-type BudgetPath = 'reserve' | 'charge' | 'release' | 'fit';
+type BudgetPath = 'reserve' | 'reserve-draft-images' | 'charge' | 'release' | 'fit';
 
 /** The proxy's answers while the API is down or restarting. */
 const isTransient = (status: number) => status === 502 || status === 503 || status === 504;
@@ -355,4 +355,242 @@ export async function fitChatUnits(
         ? (code as ChatBudgetRefusal)
         : 'unavailable',
   };
+}
+
+// ─── Images (CHAT-15 §E, W4-07) ─────────────────────────────────────────────
+
+/** An image request, as the budget holds it: its images, each at the model's image price. */
+export interface ChatImageJob {
+  organizationId: string;
+  /** The Chat run the request is part of. */
+  runId: string;
+  stepId?: string | null;
+  /** The image model's catalog id, as the server prices it. */
+  model: string;
+  /** How many images it may make (1–10). */
+  images: number;
+  source: ChatKeySource;
+  agentRunId?: string | null;
+}
+
+/** What an image request made: the images, and the provider's own cost if it reported one. */
+export interface ChatImageOutcome {
+  produced: number;
+  /** OpenRouter's usage.cost, in dollars; null when it said none. */
+  costUsd: number | null;
+}
+
+/** A held image request, settled once by charge, release or keep. */
+export interface ChatImageBudget {
+  /** It made images: the provider's own cost, as it said (no markup), else each image's price. */
+  charge(outcome: ChatImageOutcome): Promise<void>;
+  /** It made none and billed nothing: the hold goes. */
+  release(): Promise<void>;
+  /** A Stop cut it off after the provider billed: the hold stays as its cost. */
+  keep(): void;
+}
+
+export type ChatImageReservation =
+  | { ok: true; budget: ChatImageBudget }
+  | Extract<ChatStepReservation, { ok: false }>;
+
+const UNMETERED_IMAGES: ChatImageBudget = {
+  async charge() {},
+  async release() {},
+  keep() {},
+};
+
+/**
+ * Holds an image request on the AI budget before any image is made: each
+ * image at the model's image price (the server's catalog), on Ansvisor's key
+ * against the limit, on the workspace's own key never counted. Its charge
+ * takes the provider's own reported cost as it is (owner decision
+ * 2026-11-02: no markup), so the limit drops by exactly what OpenRouter
+ * billed. Asked once, as reserveChatStep.
+ */
+export async function reserveImages(job: ChatImageJob): Promise<ChatImageReservation> {
+  if (!chatAgenticEnabled(job.organizationId)) return { ok: true, budget: UNMETERED_IMAGES };
+  const images = Math.max(1, Math.min(10, Math.floor(job.images)));
+  const reserved = await post(
+    'reserve',
+    {
+      orgId: job.organizationId,
+      runId: job.runId,
+      stepId: job.stepId ?? null,
+      feature: 'image',
+      model: job.model,
+      images,
+      ownKey: job.source === 'own',
+      ...(job.agentRunId ? { agentRunId: job.agentRunId } : {}),
+    },
+    RESERVE_TIMEOUT_MS,
+  );
+  return heldImages(reserved, job.organizationId, job.model, images);
+}
+
+/**
+ * An image request's hold as the server answered it: its charge (the
+ * provider's own cost, else each image's price), release or keep, each
+ * settled once; or why it wasn't held.
+ */
+function heldImages(
+  reserved: Awaited<ReturnType<typeof post>>,
+  organizationId: string,
+  model: string,
+  images: number,
+): ChatImageReservation {
+  if (!reserved) return refused('unavailable', { retryable: true });
+  const usageId = reserved.body?.usageId;
+  if (reserved.status !== 201 || typeof usageId !== 'string') {
+    const code = reserved.body?.error;
+    if (typeof code === 'string' && (CHAT_BUDGET_REFUSALS as readonly string[]).includes(code)) {
+      return refused(code as ChatBudgetRefusal, { trial: reserved.body?.trial === true });
+    }
+    return refused('unavailable', { retryable: isTransient(reserved.status) });
+  }
+  let settled = false;
+  return {
+    ok: true,
+    budget: {
+      async charge(outcome) {
+        if (settled) return;
+        settled = true;
+        const produced = Math.max(0, Math.min(images, Math.floor(outcome.produced)));
+        await settle('charge', {
+          orgId: organizationId,
+          usageId,
+          model,
+          usage: {},
+          images: {
+            produced,
+            ...(outcome.costUsd !== null && Number.isFinite(outcome.costUsd)
+              ? { costUsd: Math.max(0, outcome.costUsd) }
+              : {}),
+          },
+        });
+      },
+      async release() {
+        if (settled) return;
+        settled = true;
+        await settle('release', { orgId: organizationId, usageId });
+      },
+      keep() {
+        settled = true;
+      },
+    },
+  };
+}
+
+/** An image request made in the Content Editor (W4-09): on a draft, with no Chat run. */
+export interface DraftImageJob {
+  organizationId: string;
+  draftId: string;
+  /** The image model's catalog id, as the server prices it. */
+  model: string;
+  /** How many images it may make (1–10). */
+  images: number;
+  source: ChatKeySource;
+}
+
+/**
+ * Holds a Content Editor image request on the AI budget (W4-09): each image
+ * at the model's image price, the row tied to the draft; on the workspace's
+ * own key written as its own and held at nothing. Charged at the provider's
+ * own cost and released as reserveImages' are.
+ */
+export async function reserveDraftImages(job: DraftImageJob): Promise<ChatImageReservation> {
+  if (!chatAgenticEnabled(job.organizationId)) return { ok: true, budget: UNMETERED_IMAGES };
+  const images = Math.max(1, Math.min(10, Math.floor(job.images)));
+  const reserved = await post(
+    'reserve-draft-images',
+    {
+      orgId: job.organizationId,
+      draftId: job.draftId,
+      model: job.model,
+      images,
+      ownKey: job.source === 'own',
+    },
+    RESERVE_TIMEOUT_MS,
+  );
+  return heldImages(reserved, job.organizationId, job.model, images);
+}
+
+/**
+ * How many of an image request's images the AI limit left covers, before
+ * any is made (CHAT-04 item 17a: "Your remaining AI limit covers 1 of the
+ * 4 images."): a count, never dollars. As fitChatUnits.
+ */
+export async function fitImages(
+  job: Omit<ChatImageJob, 'runId' | 'stepId'>,
+): Promise<
+  { ok: true; fits: number; limit: 'run' | 'month' } | { ok: false; refusal: ChatBudgetRefusal }
+> {
+  const units = Math.max(1, Math.min(10, Math.floor(job.images)));
+  if (job.source === 'own' || !chatAgenticEnabled(job.organizationId)) {
+    return { ok: true, fits: units, limit: 'month' };
+  }
+  const res = await post(
+    'fit',
+    {
+      orgId: job.organizationId,
+      model: job.model,
+      image: true,
+      units,
+      ...(job.agentRunId ? { agentRunId: job.agentRunId } : {}),
+    },
+    RESERVE_TIMEOUT_MS,
+  );
+  const fits = res?.body?.fits;
+  if (res?.status === 200 && typeof fits === 'number' && Number.isInteger(fits) && fits >= 0) {
+    return {
+      ok: true,
+      fits: Math.min(fits, units),
+      limit: res.body?.limit === 'run' ? 'run' : 'month',
+    };
+  }
+  const code = res?.body?.error;
+  return {
+    ok: false,
+    refusal:
+      typeof code === 'string' && (CHAT_BUDGET_REFUSALS as readonly string[]).includes(code)
+        ? (code as ChatBudgetRefusal)
+        : 'unavailable',
+  };
+}
+
+/**
+ * Each image model's one image as a percent of the plan's monthly AI limit
+ * (W4-07: the image's real price ÷ the limit, ×2 nowhere), for the model
+ * question; the server works it out, so no dollar reaches here. Null shares
+ * without a limit (self-hosted), or when the API doesn't answer.
+ */
+export async function readImageShares(
+  organizationId: string,
+  models: readonly string[],
+): Promise<{ model: string; percent: number | null }[]> {
+  const none = models.map((model) => ({ model, percent: null }));
+  const secret = process.env.CRON_SECRET;
+  if (!secret || models.length === 0 || !chatAgenticEnabled(organizationId)) return none;
+  try {
+    const query = new URLSearchParams({ orgId: organizationId, models: models.join(',') });
+    const res = await fetch(`${API_BASE_URL}/api/internal/chat/budget/image-shares?${query}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(RESERVE_TIMEOUT_MS),
+    });
+    const body = (await res.json().catch(() => null)) as {
+      shares?: { model?: unknown; percent?: unknown }[];
+    } | null;
+    if (!res.ok || !Array.isArray(body?.shares)) return none;
+    return models.map((model) => {
+      const percent = body.shares?.find((share) => share.model === model)?.percent;
+      return {
+        model,
+        percent: typeof percent === 'number' && Number.isFinite(percent) ? percent : null,
+      };
+    });
+  } catch (err) {
+    console.error('[chat/budget] image shares got no answer:', (err as Error)?.name ?? err);
+    return none;
+  }
 }

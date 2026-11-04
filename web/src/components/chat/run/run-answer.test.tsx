@@ -95,6 +95,38 @@ describe('RunAnswer', () => {
     expect(status()).toBe('Writing the answer…');
   });
 
+  it('says "Thought for N s" above the answer when the run kept it, and nothing when not', async () => {
+    const thought = () => container.querySelector('[data-slot="run-thought"]')?.textContent ?? null;
+    const done = {
+      status: 'done' as const,
+      steps,
+      text: 'Two pages lost most of it.',
+      generatedAt: '2026-11-03T10:00:00.000Z',
+    };
+    await render({
+      run: run({
+        ...done,
+        summary: { workingMs: 41_000, stepCount: 3, sources: [], thoughtMs: 12_400 },
+      }),
+    });
+    expect(thought()).toBe('Thought for 12 s');
+    const order = [...container.querySelectorAll('[data-slot]')].map((el) =>
+      el.getAttribute('data-slot'),
+    );
+    expect(order.indexOf('run-thought')).toBeLessThan(order.indexOf('run-text'));
+
+    // Turned off in Settings › Chat: the run keeps no thoughtMs, and no line shows.
+    await render({
+      run: run({ ...done, summary: { workingMs: 41_000, stepCount: 3, sources: [] } }),
+    });
+    expect(thought()).toBeNull();
+    // No words yet: no line either.
+    await render({
+      run: run({ summary: { workingMs: 400, stepCount: 0, sources: [], thoughtMs: 400 } }),
+    });
+    expect(thought()).toBeNull();
+  });
+
   it('chips the steps done, the fact check among them, with each detail a click away', async () => {
     await render({ run: run({ steps, text: 'Two pages lost most of it.' }) });
     expect(chips()).toEqual([
@@ -242,6 +274,34 @@ describe('RunAnswer', () => {
     // Any other error says neither.
     await render({ run: run({ status: 'error', errorReason: 'Something went wrong.' }) });
     expect(box().textContent).not.toContain('AI Providers');
+  });
+
+  it('offers an Admin "Use Ansvisor’s limit" after the own key failed, only where the page does (W4-06)', async () => {
+    const onUseAnsvisorLimit = vi.fn();
+    const failed = run({ status: 'error', errorReason: 'The key failed.', keyFailed: true });
+    const as = async (role: TeamRole, handler?: () => void) =>
+      act(async () => {
+        root.render(
+          <RoleContext.Provider value={{ role }}>
+            <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+              <RunAnswer workingMs={0} timezone="UTC" run={failed} onUseAnsvisorLimit={handler} />
+            </NextIntlClientProvider>
+          </RoleContext.Provider>,
+        );
+      });
+    const use = () =>
+      container.querySelector<HTMLButtonElement>('[data-action="run.useAnsvisorLimit"]');
+
+    await as('admin', onUseAnsvisorLimit);
+    expect(use()?.textContent).toBe("Use Ansvisor's limit");
+    await act(async () => use()!.click());
+    expect(onUseAnsvisorLimit).toHaveBeenCalledTimes(1);
+
+    // Not without the page's handler (the limit used up), nor for a Manager.
+    await as('admin');
+    expect(use()).toBeNull();
+    await as('manager', onUseAnsvisorLimit);
+    expect(use()).toBeNull();
   });
 
   it('says "Stopped after 41s · 5 steps" after a Stop, its stopped step skipped, its text kept', async () => {

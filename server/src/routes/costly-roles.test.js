@@ -4,8 +4,10 @@ import express from 'express';
 /**
  * Who may start costly AI work (2026-10-29): generating prompt and topic
  * suggestions, opportunities, briefs and Improve sets, and sending Improve to
- * the Action Center, is for admins and managers. An analyst or an agency
- * partner is refused before anything is generated or queued. Writing in the
+ * the Action Center, is for admins and managers; so are prompts from the
+ * setup's topics and opportunities sent to the webhook (2026-11-03). An
+ * analyst or an agency partner is refused before anything is generated,
+ * queued or sent. Writing in the
  * Content Editor and running a Site Audit stay open (their own routes).
  */
 
@@ -17,6 +19,7 @@ const createJob = vi.fn();
 const assertBrandAccess = vi.fn();
 const assertOpportunityAccess = vi.fn();
 const assertPromptAccess = vi.fn();
+const assertOpportunitiesAccess = vi.fn();
 
 /** Every brand and profile is the caller's organization; the caller is `role`. */
 function query(table) {
@@ -67,6 +70,7 @@ async function startApp() {
     ...(await importOriginal()),
     assertBrandAccess,
     assertOpportunityAccess,
+    assertOpportunitiesAccess,
     assertPromptAccess,
   }));
   vi.doMock('ai', () => ({ generateObject, NoObjectGeneratedError: class extends Error {} }));
@@ -158,6 +162,22 @@ const ROUTES = [
     'Only admins and managers can use Improve.',
   ],
   ['/topics/suggest', setup, 'Only admins and managers can generate topic suggestions.'],
+  // 2026-11-03: prompts from the setup's topics, and opportunities out to the webhook.
+  [
+    '/prompts/from-topics',
+    { ...setup, topics: ['Office coffee subscriptions'], language: 'en' },
+    'Only admins and managers can generate prompt suggestions.',
+  ],
+  [
+    '/content/o1/send-webhook',
+    {},
+    'Only admins and managers can send opportunities to the webhook.',
+  ],
+  [
+    '/content/bulk/send-webhook',
+    { ids: ['o1'] },
+    'Only admins and managers can send opportunities to the webhook.',
+  ],
   [
     `/topics/suggestions/${BRAND}/refresh`,
     {},
@@ -176,6 +196,7 @@ beforeEach(async () => {
   vi.clearAllMocks();
   assertBrandAccess.mockResolvedValue({ brand: { id: BRAND, organization_id: 'o1' }, orgId: 'o1' });
   assertOpportunityAccess.mockResolvedValue({ id: 'o1', brand_id: 'b1', source_data: {} });
+  assertOpportunitiesAccess.mockResolvedValue([{ id: 'o1', brand_id: 'b1' }]);
   assertPromptAccess.mockResolvedValue([
     { id: 'p1', prompt_sets: { brand_id: 'b1', brands: { organization_id: 'o1' } } },
   ]);

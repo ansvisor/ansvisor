@@ -44,6 +44,7 @@ import {
 } from './engine';
 import { OPEN_RUN_STATUSES, loadRun, type LoadedRun } from './engine-store';
 import { chatAgenticEnabled } from './flag';
+import { resolveAgentNeedsYou, tellAgentNeedsYou } from './agent-needs-you';
 import { openHeadlessRun } from './headless-run';
 import { callScopeOf, callableAgentsOf, type CallScope } from './agent-calls';
 
@@ -490,7 +491,7 @@ export async function openAgentRun(
     timezone,
     brandId: brand.id,
     mode: call ? call.mode : version.mode,
-    // The agent's model preference and effort (CHAT-16): the engine picks Auto's models today.
+    // The agent's model and effort (CHAT-16): the engine runs them as the plan allows (W4-03).
     model: version.model,
     effort: version.effort,
     // Started already: the agent's slot (chat_start_next_agent_run) is its place in line.
@@ -766,6 +767,10 @@ export async function settleAgentRun(
   ) {
     return (await readAgentRun(run.id))?.status ?? null;
   }
+  // Waiting for its person: an e-mail by their "Notify me when an agent needs me", once a
+  // run (00474); going on or ending closes its notice.
+  if (target.status === 'needs_you') await tellAgentNeedsYou(run.organization_id, run.id);
+  else if (run.status === 'needs_you') await resolveAgentNeedsYou(run.id);
 
   if (run.agent_id) {
     // The month's AI limit (not the run's own cap) pauses the agent until it resets (§L item 55).

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { looksLikeApiKey, pastedKeyOf, withoutApiKeys } from './key-paste';
+import { asksToAddKey, looksLikeApiKey, pastedKeyOf, withoutApiKeys } from './key-paste';
 
 /** Pasted API keys in the composer (W4-05): found by shape, taken out, never sent. */
 
@@ -52,5 +52,34 @@ describe('withoutApiKeys', () => {
     expect(withoutApiKeys('Why did ChatGPT visibility drop?')).toBe(
       'Why did ChatGPT visibility drop?',
     );
+  });
+});
+
+describe('asksToAddKey (W4-06)', () => {
+  it('finds a request to use or add the person’s own key', () => {
+    for (const text of [
+      'use my OpenAI key',
+      'Can you use our Anthropic API key from now on?',
+      'add my openrouter api key',
+      'I want to connect my key',
+    ]) {
+      expect(asksToAddKey(text), text).toBe(true);
+    }
+  });
+
+  it('leaves other questions about keys to Chat', () => {
+    for (const text of [
+      'Which keywords drive our citations?',
+      'What is the key takeaway from last week?',
+      'Use the key metrics from my report',
+      'How do API keys work in Ansvisor?',
+      // "Key" as a word of the question, not a key to add.
+      'Add our key competitors to the brief',
+      'Use our key topics to write an outline',
+      'Use my key prompts and key pages for the report.',
+      'Add my key takeaways.',
+    ]) {
+      expect(asksToAddKey(text), text).toBe(false);
+    }
   });
 });

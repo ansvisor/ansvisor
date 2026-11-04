@@ -92,6 +92,7 @@ export function RunAnswer({
   timezone,
   reconnecting = false,
   onRetry,
+  onUseAnsvisorLimit,
   cards,
   footer,
   className,
@@ -105,6 +106,11 @@ export function RunAnswer({
   reconnecting?: boolean;
   /** Retry on a run that ended in error: sends its question again (item 18). */
   onRetry?: () => void;
+  /**
+   * The own key failed (W4-06): "Use Ansvisor's limit" sends it again on
+   * Ansvisor's key, for an Admin, while the AI limit has room. Never by itself.
+   */
+  onUseAnsvisorLimit?: () => void;
   /** The run's own cards (an approval, a denial), under the answer. */
   cards?: ReactNode;
   /** What follows a finished answer: next moves and its actions (item 12f). */
@@ -188,6 +194,12 @@ export function RunAnswer({
           </div>
         )}
         {openedStep?.detail && <p className="text-xs text-muted-foreground">{openedStep.detail}</p>}
+        {run.text && run.summary?.thoughtMs !== undefined && (
+          // "Thought for N s": only when the person shows it (Settings › Chat).
+          <p data-slot="run-thought" className="text-xs text-muted-foreground">
+            {t('thoughtFor', { seconds: Math.max(1, Math.round(run.summary.thoughtMs / 1000)) })}
+          </p>
+        )}
         {run.text && (
           // Styled as the app's other AI answers (headings, lists, table cells).
           <div data-slot="run-text" className="prose prose-sm dark:prose-invert max-w-none">
@@ -211,13 +223,25 @@ export function RunAnswer({
               {/* The workspace's own key failed (AGENT-OWN-KEY §5.2): only an Admin can fix it. */}
               {run.keyFailed &&
                 (canAdmin ? (
-                  <Link
-                    href="/dashboard/settings/ai-providers"
-                    data-action="run.fixKey"
-                    className="font-medium underline underline-offset-2"
-                  >
-                    {t('keyFix')}
-                  </Link>
+                  <p className="flex flex-wrap gap-x-3">
+                    <Link
+                      href="/dashboard/settings/ai-providers"
+                      data-action="run.fixKey"
+                      className="font-medium underline underline-offset-2"
+                    >
+                      {t('keyFix')}
+                    </Link>
+                    {onUseAnsvisorLimit && (
+                      <button
+                        type="button"
+                        data-action="run.useAnsvisorLimit"
+                        onClick={onUseAnsvisorLimit}
+                        className="font-medium underline underline-offset-2"
+                      >
+                        {t('keyUseAnsvisor')}
+                      </button>
+                    )}
+                  </p>
                 ) : (
                   <p>{t('keyAskAdmin')}</p>
                 ))}

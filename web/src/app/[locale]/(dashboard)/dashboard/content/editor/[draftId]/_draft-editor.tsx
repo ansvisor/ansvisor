@@ -9,7 +9,6 @@ import type { Node as PmNode } from '@tiptap/pm/model';
 import { TextSelection, type Transaction } from '@tiptap/pm/state';
 import StarterKit from '@tiptap/starter-kit';
 import { TableKit } from '@tiptap/extension-table';
-import Image from '@tiptap/extension-image';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import {
   ArrowLeft,
@@ -46,6 +45,8 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { DraftMethodBadge, DraftStatusBadge } from '@/components/content/draft-badges';
 import { PublishDialog } from '@/components/content/publish-dialog';
+import { AiImageBadges } from '@/lib/content/ai-image-badges';
+import { ContentImage } from '@/lib/content/content-image';
 import { readLiveUrl } from '@/lib/content/publish-client';
 import { SendDialog } from '@/components/content/send-to-cms-dialog';
 import { CmsSentChip } from '@/components/content/cms-sent-chip';
@@ -192,7 +193,8 @@ import {
   notForAgentMessage,
   openRulesForAgent,
   overLengthFor,
-  lengthBand,
+  lengthCapFor,
+  lengthSpan,
   rewriteAdvice,
   NO_RULE_CONTEXT,
   checkRule,
@@ -642,7 +644,9 @@ export function DraftEditor({
     extensions: [
       StarterKit.configure(EDITOR_STARTER_KIT),
       TableKit.configure({ table: { resizable: false } }),
-      Image,
+      // An image says whether AI made it (W4-09), with "AI-generated" under it here.
+      ContentImage,
+      AiImageBadges.configure({ label: t('image.ai.aiGenerated') }),
       CharacterCount,
       Placeholder.configure({ placeholder: t('placeholder') }),
       JsonLd.configure({
@@ -777,13 +781,12 @@ export function DraftEditor({
     shopping: shoppingCheck.check,
   });
   // What a page rewrite keeps as it is (the passages AI answers quote, tables,
-  // images…), read as the characters are, and the least it comes to with the
-  // headings and their answers: a Length under that is out of reach.
+  // images…), read as the characters are: a Length under that is out of
+  // reach. Not its headings: a rewrite merges or drops sections to fit the
+  // Length the person set (editor UX review 2026-11-03, decision b).
   const summaryAsked = rules.rules.some(({ rule }) => rule.key === 'summary' && rule.on);
-  const { kept: keptChars, floor: floorChars } =
-    editor && citedRead
-      ? rewriteFloor(editor.state, { summary: summaryAsked })
-      : { kept: 0, floor: 0 };
+  const { kept: keptChars } =
+    editor && citedRead ? rewriteFloor(editor.state, { summary: summaryAsked }) : { kept: 0 };
   // A page's characters as the toolbar counts them (the editor's own
   // count), for a rewrite's before and after (editor test 2026-10-25: the
   // card said 6,725 → 5,571 where the counter said 6,617 → 5,468).
@@ -795,11 +798,9 @@ export function DraftEditor({
       : pageTextLength(html);
   // The Length the page is written to, for what the agent's rewrite reached.
   const lengthRule = rules.rules.find(({ rule }) => rule.key === 'length' && rule.on)?.rule;
-  const lengthTarget = Number(lengthRule?.current);
-  const length =
-    lengthRule && Number.isFinite(lengthTarget) && lengthTarget > 0
-      ? { target: lengthTarget, ...lengthBand(lengthTarget), kept: keptChars }
-      : null;
+  // One number, or a range the person set (lengthSpan).
+  const lengthSet = lengthRule ? lengthSpan(lengthRule.current) : null;
+  const length = lengthSet ? { ...lengthSet, kept: keptChars } : null;
   // How well the page reads as written (Quality spec, CE-036/039): read in the
   // browser, no AI cost; off until Quality's first phase is live. Read in the
   // language the page is written in: its Language rule when that is on (the
@@ -1733,6 +1734,7 @@ export function DraftEditor({
   const suggestionLabels = useMemo<SuggestionLabels>(
     () => ({
       agent: t('suggestions.agent'),
+      agentFromChat: t('suggestions.agentFromChat'),
       breaks: (names: string) => t('suggestions.breaks', { names }),
       accept: t('suggestions.accept'),
       reject: t('suggestions.reject'),
@@ -2011,7 +2013,7 @@ export function DraftEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- its page, once
     [lastRewrite, editor],
   );
-  const reach: RewriteReach = { kept: keptChars, floor: floorChars, last: lastCounted };
+  const reach: RewriteReach = { kept: keptChars, floor: keptChars, last: lastCounted };
   // The rules' count stands once My rules and the fan-outs (the fan-out
   // rules' own) are read: before, rules come and go from it.
   const rulesSettled =
@@ -2367,9 +2369,15 @@ export function DraftEditor({
     };
     // A page over a Length it isn't sent: what it adds stays short.
     const overLength = overLengthFor(rules.rules, open);
+    // Never past the Length the person set (decision b): the server drops what would be.
+    const lengthCap = lengthCapFor(rules.rules, editor.storage.characterCount.characters());
     await runAgentFix(
       () =>
-        fixDraftRules(draft.id, draft.brandId, overLength ? { ...request, overLength } : request),
+        fixDraftRules(draft.id, draft.brandId, {
+          ...request,
+          ...(overLength ? { overLength } : {}),
+          ...(lengthCap ? { lengthCap } : {}),
+        }),
       undefined,
       false,
       beginThirdTry('fix', { only }),
@@ -2395,6 +2403,7 @@ export function DraftEditor({
             sourceUrl: draft.sourceUrl,
             html: ed.getHTML(),
             length: rules.length,
+            lengthBand: rules.lengthBand,
           }),
         }
       : {}),
@@ -2589,6 +2598,7 @@ export function DraftEditor({
       : [];
     // Its checks add text too: on a page over its Length, kept short.
     const overLength = overLengthFor(rules.rules, []);
+    const lengthCap = lengthCapFor(rules.rules, editor.storage.characterCount.characters());
     setHandingOff(true);
     try {
       await runAgentFix(
@@ -2599,6 +2609,7 @@ export function DraftEditor({
             ...context,
             locked: [...context.locked, ...cases],
             ...(overLength ? { overLength } : {}),
+            ...(lengthCap ? { lengthCap } : {}),
           }),
         handedOff,
         origin === 'auto',
@@ -4325,6 +4336,9 @@ export function DraftEditor({
               placeholders={{ hidden: hiddenPlaceholders, onShowHidden: showHiddenPlaceholder }}
               // + Insert › Products, from an online shop's catalog (shopping path, part 5).
               productsBrandId={siteType === 'ecommerce' ? draft.brandId : null}
+              // Image › Generate with AI, and on an empty line (W4-09): only
+              // with Chat on, whose AI budget and image models it runs on.
+              aiImages={chatOn ? { draftId: draft.id, title } : null}
             />
           )}
 

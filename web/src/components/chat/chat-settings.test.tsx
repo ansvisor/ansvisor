@@ -53,6 +53,7 @@ const SETTINGS: ChatGeneralSettings = {
   notifyVia: 'inbox_email',
   showThought: true,
   panelOnPages: true,
+  pageOpen: 'ask',
 };
 const OPEN: ChatGeneralAccess = { modes: true, fullAutoLock: null, slack: false };
 
@@ -104,12 +105,30 @@ describe('ChatSettings', () => {
     expect(action('policy.open')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
   });
 
-  it("hides the settings nothing reads yet: notifications, 'Thought for N s'", async () => {
+  it('shows "Thought for N s" as a switch, on by default, and keeps a change at once', async () => {
     await render();
-    expect(action('chatSettings.notifyChannel')).toHaveLength(0);
-    expect(action('chatSettings.toggleThinking')).toHaveLength(0);
-    expect(host.textContent).not.toContain('Notify me when an agent needs me');
-    expect(host.textContent).not.toContain('Thought for');
+    const toggle = () => action('chatSettings.toggleThinking')[0];
+    expect(toggle().getAttribute('aria-checked')).toBe('true');
+    expect(host.textContent).toContain('Show “Thought for N s”');
+    await act(async () => toggle().click());
+    expect(saved.patches).toEqual([{ showThought: false }]);
+    expect(toggle().getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('offers how to hear that an agent needs you, Slack only once it connects, and keeps a pick', async () => {
+    await render();
+    const select = action('chatSettings.notifyChannel')[0] as HTMLSelectElement;
+    expect([...select.options].map((option) => [option.textContent, option.disabled])).toEqual([
+      ['Inbox + email', false],
+      ['Inbox only', false],
+      ['Inbox + Slack (connect Slack first)', true],
+    ]);
+    expect(select.value).toBe('inbox_email');
+    await act(async () => {
+      select.value = 'inbox';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(saved.patches).toEqual([{ notifyVia: 'inbox' }]);
   });
 
   it('offers the answer languages Chat reads, "Same as my question" first, and keeps a pick at once', async () => {
@@ -136,6 +155,21 @@ describe('ChatSettings', () => {
       select.dispatchEvent(new Event('change', { bubbles: true }));
     });
     expect(saved.patches).toEqual([{ answerLanguage: 'tr' }, { answerLanguage: null }]);
+  });
+
+  it('keeps where pages open: ask, in chat or the Content Editor, no Open here yet (W4-11)', async () => {
+    await render();
+    const choices = [...action('chatSettings.pageOpen')];
+    expect(choices.map((el) => el.textContent)).toEqual([
+      'Ask each time',
+      'Keep in chat',
+      'Content Editor',
+    ]);
+    expect(choices[0].getAttribute('aria-checked')).toBe('true');
+    await act(async () => choices[2].click());
+    expect(saved.patches).toEqual([{ pageOpen: 'editor' }]);
+    expect(action('chatSettings.pageOpen')[2].getAttribute('aria-checked')).toBe('true');
+    expect(host.textContent).toContain('Where pages open');
   });
 
   it('keeps each pick at once', async () => {

@@ -39,6 +39,8 @@ vi.mock('@/lib/supabase/admin', async () => ({
 vi.mock('@/lib/actions/content-drafts', () => ({
   createContentDraft: vi.fn(),
   updateContentDraft: vi.fn(),
+  setContentDraftReady: vi.fn(),
+  suggestDraftChanges: vi.fn(),
 }));
 // The drafts' writes for a run with no session (runFor): what the engine hands them is tested here,
 // their checks in actor/drafts.test.ts.
@@ -126,6 +128,15 @@ vi.mock('@/lib/actions/chat-schedules', () => ({
     },
   ),
 }));
+// Save skill through the person's session (W3-08): here, as the run's person (an Admin).
+vi.mock('@/lib/actions/chat-skills', () => ({
+  saveChatSkill: vi.fn(async (input: never) => {
+    const { readSkillViewer, saveSkill } = await import('./skills/store');
+    const { ORG, PEOPLE } = await import('./testing/chat-fixtures');
+    const viewer = await readSkillViewer({ userId: PEOPLE.admin, organizationId: ORG });
+    return saveSkill(viewer!, input);
+  }),
+}));
 // Remember and Forget through the person's session (W3-12a): here, as the run's person.
 vi.mock('@/lib/actions/chat-memory', () => ({
   saveChatMemory: vi.fn(async (input: Record<string, string>) => {
@@ -193,9 +204,12 @@ const fakes = vi.hoisted(() => ({
   markWorking: vi.fn(async () => ({ cleared: true, resumed: 0 })),
   openPage: vi.fn(),
   explain: vi.fn(),
+  readModelMenu: vi.fn(async () => ({ selected: null })),
   fit: vi.fn(),
   goLiveFacts: vi.fn(),
 }));
+// The model menu's catalog check (W4-03), without the API server.
+vi.mock('./model-menu', () => ({ readModelMenu: fakes.readModelMenu }));
 // Step 4b's guards' facts, as their reads would give them (go-live-facts.test.ts reads them).
 vi.mock('./go-live-facts', () => ({ readGoLiveFacts: fakes.goLiveFacts }));
 // fetch_page as it is, opening pages through a fake of the API's internal route.
@@ -287,7 +301,8 @@ vi.mock('./registry/tools', async (importOriginal) => {
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { createContentDraft } = await import('@/lib/actions/content-drafts');
+const { createContentDraft, suggestDraftChanges, updateContentDraft } =
+  await import('@/lib/actions/content-drafts');
 const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
 const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
 const { checkChatActionCoverFor, createChatActionFor, setTaskReadyForReviewFor } =
@@ -1757,6 +1772,13 @@ describe('changes wait for the person', () => {
         status: 'draft',
         href: `/dashboard/content/editor/${draftId}`,
         filed: 'in_files',
+        // Version 1 of the page in this chat (W4-12a): nothing before it to undo to.
+        version: {
+          n: 1,
+          counts: { questions: 0, sections: 0, characters: expect.any(Number) },
+          changes: { shortened: [], added: [], placeholders: [] },
+          sections: [],
+        },
       },
     ]);
     expectClean(await eventsOf(runId));
@@ -2256,6 +2278,27 @@ describe('question cards (CHAT-07)', () => {
     expect(await eventsOf(runId)).toHaveLength(before.length);
     expect(await answer(ADMIN, runId, { selected: [1] })).toMatchObject({ ok: true });
     expect(runRow(runId).status).toBe('done');
+  });
+});
+
+describe('"Thought for N s" (Settings › Chat)', () => {
+  it('keeps how long the run worked before its first words, on by default', async () => {
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Up 12%.')],
+    );
+    const runId = await turn(ADMIN, 'How are we doing?');
+    const end = ofType(await eventsOf(runId), 'run.finished')[0].data;
+    expect(end.thoughtMs).toEqual(expect.any(Number));
+    expect(end.thoughtMs).toBeGreaterThanOrEqual(0);
+    expect(end.thoughtMs).toBeLessThanOrEqual(end.workingMs);
+  });
+
+  it('keeps none for a person who turned it off', async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, show_thought: false }];
+    useModels([READY], [text('Up 12%.')]);
+    const runId = await turn(ADMIN, 'How are we doing?');
+    expect(ofType(await eventsOf(runId), 'run.finished')[0].data).not.toHaveProperty('thoughtMs');
   });
 });
 
@@ -4088,6 +4131,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'set_task_ready_for_review',
     // W2-07's content rows: Admins and Managers only.
     'update_draft',
+    'suggest_draft_changes',
+    'set_draft_ready',
     'push_cms_draft',
     'publish_cms',
     'unpublish_cms',
@@ -4171,11 +4216,13 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     }
     // The explainer comes with something left out, to say why: nothing is, for Admins and Managers.
     expect(explains).toEqual({ admin: false, manager: false, analyst: true, agency_partner: true });
+    // Suggestions in the editor come only with the page open there beside the chat (W4-14).
+    const anyPage = CHANGES.filter((name) => name !== 'suggest_draft_changes');
     expect(offered).toEqual({
       // Admins have no one to ask: no request to the Admins, and nothing to explain about it.
       // run_agent only in an agent's run with an agent to call: never a person's own chat.
-      admin: CHANGES.filter((name) => name !== 'request_access' && name !== 'run_agent').sort(),
-      manager: CHANGES.filter((name) => name !== 'run_agent').sort(),
+      admin: anyPage.filter((name) => name !== 'request_access' && name !== 'run_agent').sort(),
+      manager: anyPage.filter((name) => name !== 'run_agent').sort(),
       // A Manager's write and going live stay out for both; an Agency partner doesn't dismiss
       // suggestions.
       analyst: [
@@ -6606,6 +6653,61 @@ describe('the schedule card (W3-02, CHAT-12 items 7–9)', () => {
     expect(runRow(runId).status).toBe('done');
   });
 
+  /** Asks for the weekly job from a browser in `browserZone` (models set); the run's id and its card. */
+  async function cardFrom(browserZone: string) {
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Every Monday at 9, summarise last week',
+      brandId: BRAND,
+      mode: 'auto',
+      timezone: browserZone,
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(ADMIN, started.runId);
+    const confirm = ofType(await eventsOf(started.runId), 'confirm.required')[0].data;
+    return { runId: started.runId, confirm };
+  }
+
+  async function approve(runId: string, confirm: { n: number; digest: string }) {
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: {},
+    });
+    if (!prepared.ok) throw new Error('not approved');
+    await engine.driveRun(ADMIN, runId, prepared.resume);
+  }
+
+  it('reads the card and makes the job in the browser’s zone while the person picked none (Automatic)', async () => {
+    useModels([READY], [calls(schedule()), text('Scheduled it.')]);
+    const { runId, confirm } = await cardFrom('America/New_York');
+    expect(confirm.form).toMatchObject({ zone: 'America/New_York' });
+    await approve(runId, confirm);
+    expect(db.tables.chat_schedules[0]).toMatchObject({ timezone: 'America/New_York' });
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      detail: 'Every Monday, 09:00 · America/New_York · Chat',
+    });
+  });
+
+  it('takes the person’s own zone from Settings › Account over the browser’s (00468)', async () => {
+    db.tables.profiles.find((p) => p.id === PEOPLE.admin)!.time_zone = 'Europe/Istanbul';
+    useModels([READY], [calls(schedule()), text('Scheduled it.')]);
+    const { runId, confirm } = await cardFrom('America/New_York');
+    // The When line's zone, the job's and the answer's times: all the person's pick.
+    expect(confirm.form).toMatchObject({ zone: 'Europe/Istanbul' });
+    const answer = db.tables.chat_messages.find(
+      (m) => m.role === 'assistant' && m.conversation_id === runRow(runId).conversation_id,
+    )!;
+    expect(answer.timezone).toBe('Europe/Istanbul');
+    await approve(runId, confirm);
+    expect(db.tables.chat_schedules[0]).toMatchObject({
+      timezone: 'Europe/Istanbul',
+      rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0',
+    });
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      detail: 'Every Monday, 09:00 · Europe/Istanbul · Chat',
+    });
+  });
+
   it('keeps the card when an edit doesn’t read, and makes nothing', async () => {
     useModels([READY], [calls(schedule()), text('Scheduled it.')]);
     const runId = await turn(ADMIN, 'Every Monday at 9, summarise last week', 'auto');
@@ -6993,6 +7095,216 @@ describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
     const results = JSON.stringify(sonnet.seen[1].prompt);
     expect(results).toContain("Memory doesn't keep secrets or personal details.");
     expect(db.tables.chat_memory_items).toEqual([]);
+  });
+});
+
+describe('the skill draft card (W3-08, CHAT-13 item 12)', () => {
+  const draft = (over: Record<string, unknown> = {}) =>
+    toolCall('k1', 'save_skill', {
+      name: 'pricing-brief',
+      description: 'Writes a pricing brief that opens with the answer.',
+      instructions: 'Open with the answer in two sentences, then three short sections.',
+      ...over,
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    db.tables.chat_skills = [];
+  });
+
+  it('waits on the draft card even in Full auto, then saves the skill as the card was edited', async () => {
+    useModels([READY], [calls(draft()), text('Saved it.')]);
+    const runId = await turn(ADMIN, 'Create a skill that writes our pricing briefs', 'full_auto');
+    expect(runRow(runId).status).toBe('waiting');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const confirm = ofType(events, 'confirm.required')[0].data;
+    expect(confirm.form).toMatchObject({ kind: 'skill', submit: 'Save skill' });
+    expect(confirm.form!.fields.map((f) => f.name)).toEqual([
+      'name',
+      'title',
+      'description',
+      'instructions',
+    ]);
+    // Nothing is kept before Save.
+    expect(db.tables.chat_skills).toEqual([]);
+
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { name: '/Team-Pricing', title: 'Team pricing brief' },
+    });
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+    await engine.driveRun(ADMIN, runId, prepared.resume);
+    expect(db.tables.chat_skills).toHaveLength(1);
+    expect(db.tables.chat_skills[0]).toMatchObject({
+      name: 'team-pricing',
+      title: 'Team pricing brief',
+      source: 'user',
+      status: 'approved',
+      visibility: 'private',
+      created_by: PEOPLE.admin,
+    });
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      status: 'done',
+      label: 'Saved skill: /team-pricing',
+      detail: 'Private to you · Skills › My skills',
+    });
+  });
+
+  it('keeps the card when the name can’t be kept, and saves nothing', async () => {
+    useModels([READY], [calls(draft()), text('Saved it.')]);
+    const runId = await turn(ADMIN, 'Create a skill that writes our pricing briefs', 'auto');
+    const confirm = ofType(await eventsOf(runId), 'confirm.required')[0].data;
+    const refused = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { name: 'winback' },
+    });
+    expect(refused).toMatchObject({
+      ok: false,
+      status: 400,
+      code: 'invalid',
+      message: '/winback is an Ansvisor skill or shortcut. Pick another name.',
+    });
+    expect(runRow(runId).status).toBe('waiting');
+    expect(db.tables.chat_skills).toEqual([]);
+  });
+});
+
+describe('"Save these steps as a skill" (W4-32, CHAT-13 item 13)', () => {
+  const SAVE = 'Save these steps as a skill';
+  /** The final answer and its next moves, in one model step. */
+  const answerWithMoves = (answer: string, moves: unknown) => [
+    { type: 'text-start', id: 't' },
+    { type: 'text-delta', id: 't', delta: answer },
+    { type: 'text-end', id: 't' },
+    toolCall('m1', NEXT_MOVES_TOOL, { moves }),
+    { type: 'finish', finishReason: { unified: 'tool-calls', raw: 'tool_use' }, usage: usage() },
+  ];
+  const MOVES = [
+    {
+      label: 'Do the same for /features',
+      prompt: 'Do the same for /features',
+      kind: 'continue',
+      class: 'write',
+    },
+    {
+      label: 'Compare with Perplexity',
+      prompt: 'Compare with Perplexity',
+      kind: 'deepen',
+      class: 'read',
+    },
+  ];
+  const twoReads = () =>
+    calls(
+      toolCall('r1', 'read_visibility', { brand_id: BRAND, platform: 'chatgpt-web' }),
+      toolCall('r2', 'list_citations', { brand_id: BRAND }),
+    );
+  const movesOf = (runId: string) =>
+    db.tables.chat_next_moves
+      .filter((m) => m.run_id === runId)
+      .sort((a, b) => (a.rank as number) - (b.rank as number))
+      .map((m) => m.prompt);
+  const progressOf = (runId: string) =>
+    db.tables.chat_run_state.find((s) => s.run_id === runId)!.progress as {
+      saveSteps?: unknown[];
+    };
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    db.tables.chat_skills = [];
+  });
+
+  it('offers it third after a chat that read twice, to an Admin; never to an Analyst', async () => {
+    useModels(
+      [twoReads(), READY, twoReads(), READY],
+      [answerWithMoves('Two pages lost most of it.', MOVES), answerWithMoves('Same here.', MOVES)],
+    );
+    const admin = await turn(ADMIN, 'Why did citations fall?');
+    expect(movesOf(admin)).toEqual(['Do the same for /features', 'Compare with Perplexity', SAVE]);
+    expect(ofType(await eventsOf(admin), 'next_moves')[0].data.moves.at(-1)).toEqual({
+      label: SAVE,
+      prompt: SAVE,
+    });
+    const analyst = await turn(ANALYST, 'Why did citations fall?');
+    expect(movesOf(analyst)).toEqual(['Compare with Perplexity']);
+  });
+
+  it('offers it when the model suggested nothing, but not after a single read', async () => {
+    useModels(
+      [twoReads(), READY, calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Two pages lost most of it.'), text('Visibility is flat.')],
+    );
+    expect(movesOf(await turn(ADMIN, 'Why did citations fall?'))).toEqual([SAVE]);
+    expect(movesOf(await turn(ADMIN, 'How is visibility?'))).toEqual([]);
+  });
+
+  it('its click drafts the card from the steps the chat ran, with no question, and keeps nothing before Save', async () => {
+    const { sonnet } = useModels(
+      [twoReads(), READY, READY],
+      [
+        text('Two pages lost most of it.'),
+        calls(
+          toolCall('k1', 'save_skill', {
+            name: 'citation-drop',
+            description: 'Explains a drop in citations.',
+            instructions: 'Read visibility on ChatGPT, then the citations, then say why.',
+          }),
+        ),
+      ],
+    );
+    const first = await turn(ADMIN, 'Why did citations fall?');
+    const started = await engine.startChatRun(ADMIN, {
+      message: SAVE,
+      conversationId: runRow(first).conversation_id as string,
+      mode: 'full_auto',
+    });
+    if (!started.ok) throw new Error(started.code);
+    expect(progressOf(started.runId).saveSteps).toMatchObject([
+      { tool: 'read_visibility', platforms: ['ChatGPT'] },
+      { tool: 'list_citations' },
+    ]);
+    await engine.driveRun(ADMIN, started.runId);
+
+    const prompt = JSON.stringify(sonnet.seen.at(-1)!.prompt);
+    expect(prompt).toContain('<steps_to_save>');
+    expect(prompt).toContain('Read nothing again: call save_skill now, without asking questions');
+    expect(runRow(started.runId).status).toBe('waiting');
+    const confirm = ofType(await eventsOf(started.runId), 'confirm.required')[0].data;
+    expect(confirm.form).toMatchObject({ kind: 'skill', submit: 'Save skill' });
+    expect(db.tables.chat_skills).toEqual([]);
+    // It waits on the card: no moves before it ends.
+    expect(movesOf(started.runId)).toEqual([]);
+  });
+
+  it('gives no steps to the words typed in a chat that never offered them', async () => {
+    useModels([READY, READY], [text('Hello.'), text('Which steps?')]);
+    const first = await turn(ADMIN, 'Hello');
+    const started = await engine.startChatRun(ADMIN, {
+      message: SAVE,
+      conversationId: runRow(first).conversation_id as string,
+      mode: 'auto',
+    });
+    if (!started.ok) throw new Error(started.code);
+    expect(progressOf(started.runId).saveSteps).toBeUndefined();
+  });
+
+  it('isn’t offered in a scheduled job’s own run', async () => {
+    const JOB = '88888888-8888-4888-8888-888888888888';
+    useModels([twoReads(), READY], [text('Two pages lost most of it.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Why did citations fall?',
+      brandId: BRAND,
+      mode: 'auto',
+    });
+    if (!started.ok) throw new Error(started.code);
+    scheduledRun(started, JOB);
+    await engine.driveRun(ADMIN, started.runId);
+    expect(movesOf(started.runId)).toEqual([]);
   });
 });
 
@@ -7412,6 +7724,203 @@ describe('brand access (BRAND-ACCESS PR 9)', () => {
   });
 });
 
+describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
+  const BEFORE = '99999999-9999-4999-8999-000000000412';
+  const PAGE = [
+    '<h1>Pricing FAQ</h1>',
+    '<h2>Which AI platforms does it track?</h2><p>Six of them.</p>',
+    '<h2>Can I get a refund?</h2><p>Yes, within [REFUND PERIOD] of your first payment.</p>',
+  ].join('');
+
+  beforeEach(() => {
+    seedDraft(db);
+    db.tables.content_draft_versions = [];
+    // The change as the member's session makes it: History keeps the page before, then it saves.
+    vi.mocked(updateContentDraft).mockImplementation(async (id, change) => {
+      const row = db.tables.content_drafts.find((d) => d.id === id)!;
+      db.tables.content_draft_versions.push({ id: BEFORE, draft_id: id, body_html: row.body_html });
+      row.body_html = change.bodyHtml ?? row.body_html;
+      return {
+        ok: true,
+        updatedAt: new Date().toISOString(),
+        bodyHash: 'h'.repeat(64),
+        beforeVersionId: BEFORE,
+      };
+    });
+  });
+
+  it('shows a change to a Library page as version 2, with what changed, and Undo kept on the server', async () => {
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: PAGE })), text('Done.')],
+    );
+    const runId = await turn(ADMIN, 'Add a refunds question', 'full_auto');
+    expect(runRow(runId).status).toBe('done');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    expect(ofType(events, 'deliverable.created')).toEqual([]);
+    const [card] = ofType(events, 'deliverable.updated').map((e) => e.data);
+    expect(card).toMatchObject({
+      title: 'Pricing FAQ',
+      href: `/dashboard/content/editor/${DRAFT}`,
+      filed: 'in_files',
+      version: {
+        // The page it changed, from the Library, is version 1.
+        n: 2,
+        counts: { questions: 2, sections: 2 },
+        changes: {
+          shortened: [],
+          added: ['Which AI platforms does it track?', 'Can I get a refund?'],
+          placeholders: ['[REFUND PERIOD]'],
+        },
+        canUndo: true,
+      },
+    });
+    // No id reaches the page; the server keeps which History version Undo puts back.
+    const file = db.tables.chat_files.find((f) => f.run_id === runId)!;
+    const state = db.tables.chat_run_state.find((r) => r.run_id === runId)!;
+    expect((state.progress as { pageUndos?: unknown }).pageUndos).toEqual({
+      [file.id as string]: { draftId: DRAFT, versionId: BEFORE },
+    });
+    // Filling the placeholder comes first among the next moves.
+    expect(
+      db.tables.chat_next_moves
+        .filter((m) => m.run_id === runId)
+        .sort((a, b) => (a.rank as number) - (b.rank as number))[0],
+    ).toMatchObject({ prompt: 'Fill the refund period', class: 'write', ghost_ok: true });
+  });
+
+  it('makes no card for a change of the title alone', async () => {
+    useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, title: 'Pricing for teams' })),
+        text('Done.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Rename it', 'full_auto');
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'deliverable.updated')).toEqual([]);
+    expect(ofType(events, 'deliverable.created')).toEqual([]);
+  });
+
+  it('offers Mark ready after a version with nothing left to fill, not once it is Ready (W4-12b)', async () => {
+    const DONE = PAGE.replace('[REFUND PERIOD]', '30 days');
+    const firstMove = async (runId: string) =>
+      db.tables.chat_next_moves
+        .filter((m) => m.run_id === runId)
+        .sort((a, b) => (a.rank as number) - (b.rank as number))
+        .map((m) => [m.label, m.prompt, m.class]);
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: DONE })), text('Done.')],
+    );
+    const runId = await turn(ADMIN, 'Fill the refund period', 'full_auto');
+    expect(await firstMove(runId)).toContainEqual(['Mark ready', 'Mark this page ready', 'write']);
+    // A draft that is Ready already gets no Mark ready.
+    db.tables.content_drafts.find((d) => d.id === DRAFT)!.status = 'ready';
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w2', 'update_draft', { draft_id: DRAFT, body_html: `${DONE}<p>More.</p>` }),
+        ),
+        text('Done.'),
+      ],
+    );
+    const again = await turn(ADMIN, 'Add a line', 'full_auto');
+    expect((await firstMove(again)).map(([label]) => label)).not.toContain('Mark ready');
+  });
+
+  it('still files an untitled page when its version can’t be read, as a plain card', async () => {
+    const draft = db.tables.content_drafts.find((d) => d.id === DRAFT)!;
+    draft.title = '';
+    db.failures.content_draft_versions = { message: 'down' };
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: PAGE })), text('Done.')],
+    );
+    const runId = await turn(ADMIN, 'Add a refunds question', 'full_auto');
+    const [card] = ofType(await eventsOf(runId), 'deliverable.created').map((e) => e.data);
+    expect(card).toMatchObject({ title: 'Untitled page', filed: 'in_files' });
+    expect(card).not.toHaveProperty('version');
+    delete db.failures.content_draft_versions;
+    error.mockRestore();
+  });
+});
+
+describe('the page open in the Content Editor beside the chat (CHAT-25 §4–§5, W4-14)', () => {
+  const ROUTE = `/dashboard/content/editor/${DRAFT}`;
+  const inEditor = async (message: string, mode: Mode = 'full_auto', chip = true) => {
+    const started = await engine.startChatRun(ADMIN, {
+      message,
+      brandId: BRAND,
+      mode,
+      context: {
+        route: ROUTE,
+        chips: chip ? [{ key: 'draft', label: 'This draft', value: DRAFT }] : [],
+      },
+    });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(ADMIN, started.runId);
+    return started.runId;
+  };
+
+  beforeEach(() => {
+    seedDraft(db);
+    vi.mocked(suggestDraftChanges).mockReset().mockResolvedValue({ ok: true, count: 2 });
+  });
+
+  it('turns a change to the open page into the Content Agent’s suggestions there', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: '<h1>Shorter</h1>' })),
+        calls(
+          toolCall('w2', 'suggest_draft_changes', {
+            draft_id: DRAFT,
+            request: 'Make answer 3 shorter',
+          }),
+        ),
+        text('Two suggestions wait in the editor.'),
+      ],
+    );
+    const runId = await inEditor('Make answer 3 shorter');
+    expect(runRow(runId).status).toBe('done');
+    // The page itself never changed from the chat.
+    expect(updateContentDraft).not.toHaveBeenCalled();
+    expect(db.tables.content_drafts.find((d) => d.id === DRAFT)!.body_html).toBe(
+      '<h1>Pricing FAQ</h1>',
+    );
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('open_in_editor');
+    expect(suggestDraftChanges).toHaveBeenCalledWith(DRAFT, 'Make answer 3 shorter');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    expect(ofType(events, 'suggestion.created').map((e) => e.data)).toEqual([{ count: 2 }]);
+  });
+
+  it('offers suggestions only while the page is open there, and only for that page', async () => {
+    const { sonnet } = useModels([READY], [text('Done.')]);
+    await turn(ADMIN, 'Make answer 3 shorter', 'full_auto');
+    expect(sonnet.seen[0].tools?.map((t) => t.name)).not.toContain('suggest_draft_changes');
+    // The chip removed: the chat may change the page again, and doesn't suggest.
+    const without = useModels([READY], [text('Done.')]);
+    await inEditor('Make answer 3 shorter', 'full_auto', false);
+    expect(without.sonnet.seen[0].tools?.map((t) => t.name)).not.toContain('suggest_draft_changes');
+    const other = '44444444-4444-4444-8444-444444444444';
+    useModels(
+      [READY],
+      [
+        calls(toolCall('w1', 'suggest_draft_changes', { draft_id: other, request: 'Shorter' })),
+        text('Done.'),
+      ],
+    );
+    await inEditor('Make the other page shorter');
+    expect(suggestDraftChanges).not.toHaveBeenCalled();
+  });
+});
+
 describe('the model menu’s pick (W4-02)', () => {
   it('keeps the model and effort picked on the run, and Auto at Normal in the free trial', async () => {
     const started = await engine.startChatRun(ADMIN, {
@@ -7464,5 +7973,119 @@ describe('the model menu’s pick (W4-02)', () => {
     });
     expect(refused).toMatchObject({ ok: false, status: 400, code: 'invalid' });
     expect(db.tables.chat_runs).toHaveLength(0);
+  });
+});
+
+describe('the run’s model (W4-03)', () => {
+  it('runs the model and effort it was started with, checked once against the catalog', async () => {
+    useModels([READY], [text('Perplexity cites the pricing page.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      model: 'anthropic/claude-sonnet-5.5',
+      effort: 'max',
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'anthropic/claude-sonnet-5.5', effort: 'max' },
+      { ansvisorOnly: false },
+    );
+    expect(fakes.readModelMenu).toHaveBeenCalledExactlyOnceWith({
+      selected: 'anthropic/claude-sonnet-5.5',
+    });
+    expect(stepsOf(started.runId).map((s) => s.label)).not.toContain('Ran on Auto');
+  });
+
+  it('takes Auto for a model the catalog dropped, and says so in one step', async () => {
+    fakes.readModelMenu.mockResolvedValueOnce({
+      selected: { id: 'anthropic/claude-sonnet-5.5', removed: true },
+    } as never);
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      model: 'anthropic/claude-sonnet-5.5',
+      effort: 'high',
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'auto', effort: 'high' },
+      { ansvisorOnly: false },
+    );
+    const dropped = stepsOf(started.runId).filter((s) => s.label === 'Ran on Auto');
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0]).toMatchObject({
+      kind: 'check',
+      status: 'done',
+      detail: 'The model this chat used is no longer available',
+    });
+  });
+
+  it('runs Auto for a saved pick not offered, with no catalog check', async () => {
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, { message: 'Hi', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    // An agent saved on a model the menu doesn't offer.
+    Object.assign(runRow(started.runId), { model: 'mistralai/mistral-large-3', effort: 'max' });
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'auto', effort: 'max' },
+      { ansvisorOnly: false },
+    );
+    expect(fakes.readModelMenu).not.toHaveBeenCalled();
+    expect(stepsOf(started.runId).map((s) => s.label)).not.toContain('Ran on Auto');
+  });
+
+  it('runs an agent’s saved model as the plan allows, Auto in the free trial', async () => {
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, { message: 'Hi', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    // As agent-driver writes it: the agent's model on the run's row.
+    Object.assign(runRow(started.runId), { model: 'anthropic/claude-haiku-5.5', effort: 'high' });
+    db.tables.organizations[0].subscription_status = 'trialing';
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenCalledWith(
+      ORG,
+      { model: 'auto', effort: 'normal' },
+      { ansvisorOnly: false },
+    );
+    expect(fakes.readModelMenu).not.toHaveBeenCalled();
+  });
+});
+
+describe('"Use Ansvisor’s limit" (W4-06)', () => {
+  it('runs on Ansvisor’s key when an Admin asks, and never for anyone else', async () => {
+    useModels([READY], [text('Done.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Which pages does Perplexity cite?',
+      brandId: BRAND,
+      keySource: 'ansvisor',
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect(fakes.resolveModels).toHaveBeenLastCalledWith(
+      ORG,
+      { model: 'auto', effort: 'normal' },
+      { ansvisorOnly: true },
+    );
+
+    useModels([READY], [text('Done.')]);
+    const asked = await engine.startChatRun(ANALYST, {
+      message: 'Why did citations fall?',
+      brandId: BRAND,
+      keySource: 'ansvisor',
+    });
+    if (!asked.ok) throw new Error('not started');
+    await engine.driveRun(ANALYST, asked.runId);
+    expect(fakes.resolveModels).toHaveBeenLastCalledWith(
+      ORG,
+      { model: 'auto', effort: 'normal' },
+      { ansvisorOnly: false },
+    );
   });
 });
