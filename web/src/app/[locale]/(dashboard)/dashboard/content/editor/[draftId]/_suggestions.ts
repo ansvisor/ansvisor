@@ -12,6 +12,7 @@ import { passageKey } from '@/lib/content/cited-passages';
 import { normalizeDomain } from '@/lib/citations/classify';
 import type { SuggestionSourceKind } from '@/lib/content/sources';
 import {
+  fromChat,
   growsPastLimit,
   type DraftSuggestion,
   type SourceMark,
@@ -36,6 +37,8 @@ export type SuggestionDecision = 'accept' | 'reject' | 'undo' | 'restore';
 /** The words on the cards, from the editor's messages. */
 export interface SuggestionLabels {
   agent: string;
+  /** "Content Agent · from your chat": a request typed in Chat beside the editor (W4-14). */
+  agentFromChat?: string;
   /** "Would break …": the rules met now it would break, named (editor test 2026-10-25). */
   breaks?: (names: string) => string;
   accept: string;
@@ -528,7 +531,8 @@ function head(
   controls: HTMLElement[],
 ): HTMLElement {
   const line = el('div', 'flex items-center gap-2 text-xs text-muted-foreground');
-  line.append(el('span', 'min-w-0 truncate', `${labels.agent} · ${s.reason}`));
+  const who = fromChat(s) && labels.agentFromChat ? labels.agentFromChat : labels.agent;
+  line.append(el('span', 'min-w-0 truncate', `${who} · ${s.reason}`));
   if (s.status === 'open' && s.breaks && labels.breaks) {
     line.append(el('span', 'shrink-0 text-amber-700 dark:text-amber-400', labels.breaks(s.breaks)));
   }

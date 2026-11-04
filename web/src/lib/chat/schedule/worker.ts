@@ -74,7 +74,7 @@ const TICK_ROWS = 200;
 
 const JOB_COLUMNS =
   'id, organization_id, kind, run_mode, due_at, next_run_at, rrule, timezone, title, prompt, skill_name, brand_id, created_by, conversation_id, mode, enabled, paused_reason, fail_count, retry_at, change_only, last_fingerprint';
-const RUN_COLUMNS = 'id, schedule_id, slot_at, attempt, run_id, status, started_at';
+const RUN_COLUMNS = 'id, schedule_id, slot_at, attempt, run_now, run_id, status, started_at';
 
 /** Run statuses still open: working, waiting on a person, or held at the AI limit. */
 const OPEN_RUN = ['running', 'needs_you', 'paused_cap'] as const;
@@ -111,6 +111,7 @@ interface RunRow {
   schedule_id: string;
   slot_at: string;
   attempt: number;
+  run_now?: boolean;
   run_id: string | null;
   status: string;
   started_at: string;
@@ -648,6 +649,69 @@ async function fireDueRun(
   await driver(opened);
 }
 
+/** What Run now came to (W3-03): started, waiting for a free run slot, refused (with why), or gone. */
+export type RunNowResult =
+  | { kind: 'started' }
+  | { kind: 'busy' }
+  | { kind: 'refused'; reason: string }
+  | { kind: 'gone' };
+
+/**
+ * Run now (CHAT-12 item 23): one run of the job at once, outside its slots
+ * (its row run_now, its slot the click's time), with the checks a due run
+ * has; its next slot stays as it is. A job that is off runs too: its
+ * checks still refuse what a turned-off job couldn't do.
+ */
+export async function runJobNow(
+  jobId: string,
+  now: Date = new Date(),
+  driver: ScheduleRunDriver = scheduleRunDriver,
+): Promise<RunNowResult> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_schedules')
+    .select(JOB_COLUMNS)
+    .eq('id', jobId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read a scheduled job: ${error.message}`);
+  const job = data as JobRow | null;
+  if (!job || job.kind === 'followup_check') return { kind: 'gone' };
+  const plan = (await readJobOrgs([job.organization_id])).get(job.organization_id);
+  if (!plan) return { kind: 'gone' };
+  if (!plan.writable) return { kind: 'refused', reason: reasonWords('readOnly') };
+  if (!(await hasRoom(job, plan))) return { kind: 'busy' };
+  const due: DueRun = { job, slot: now.toISOString(), attempt: 1, by: 'next' };
+  const { data: row, error: rowError } = await supabaseAdmin
+    .from('chat_schedule_runs')
+    .insert({
+      schedule_id: job.id,
+      slot_at: due.slot,
+      attempt: 1,
+      run_now: true,
+      status: 'running',
+      started_at: now.toISOString(),
+    })
+    .select('id')
+    .single();
+  if (rowError || !row) {
+    throw new Error(`Could not start a scheduled run: ${rowError?.message ?? 'no row'}`);
+  }
+  const runRowId = (row as { id: string }).id;
+  const checked = await checkJob(job, runRowId);
+  if (!checked.ok) {
+    const reason = reasonWords(checked.refusal.reason, job.skill_name);
+    await moveRunRow(runRowId, 'running', checked.refusal.status, { reason, now });
+    if (checked.refusal.pause) await pauseJob(job.id, checked.refusal.pause);
+    return { kind: 'refused', reason };
+  }
+  const opened = await openJobRun(job, due, runRowId, checked.facts, now);
+  if (!opened) {
+    await moveRunRow(runRowId, 'running', 'failed', { reason: reasonWords('failed'), now });
+    return { kind: 'refused', reason: reasonWords('failed') };
+  }
+  await driver(opened);
+  return { kind: 'started' };
+}
+
 /**
  * Runs every job that is due (above): in workspaces where Chat is on, one
  * job's failure apart from the others'. Answers what the round did.
@@ -801,10 +865,11 @@ export async function settleScheduleRun(
   }
   let jobOn = true;
   if (target.status === 'paused_cap') await pauseJob(run.schedule_id, 'cap');
-  if (target.status === 'done' || target.status === 'unchanged') {
+  // A Run now is outside the job's slots: it isn't retried or counted toward its failed runs.
+  if (!run.run_now && (target.status === 'done' || target.status === 'unchanged')) {
     jobOn = await countRun(run.schedule_id, run.attempt, false, now);
   }
-  if (target.status === 'failed') {
+  if (!run.run_now && target.status === 'failed') {
     jobOn = await countRun(run.schedule_id, run.attempt, true, now);
   }
   // Its parts, fingerprint and notices (W3-04a: deliver.ts).

@@ -22,6 +22,21 @@ const SEAMS = {
 };
 
 describe('pageDoc', () => {
+  it('keeps whether AI made an image (W4-09), and only then', () => {
+    const doc = pageDoc(
+      '<img src="https://cdn.example/ai.jpg" alt="AI" data-ai-generated="true"><img src="https://cdn.example/own.png" alt="Ours">',
+    );
+    const images: { src: string; aiGenerated: boolean }[] = [];
+    doc.descendants((node) => {
+      if (node.type.name === 'image')
+        images.push({ src: node.attrs.src, aiGenerated: node.attrs.aiGenerated });
+    });
+    expect(images).toEqual([
+      { src: 'https://cdn.example/ai.jpg', aiGenerated: true },
+      { src: 'https://cdn.example/own.png', aiGenerated: false },
+    ]);
+  });
+
   it('reads the page into the editor’s nodes: headings, tables, images, JSON-LD and HTML blocks', () => {
     const doc = pageDoc(
       `<h2>Specs</h2><table><tbody><tr><td>Weight</td></tr></tbody></table><img src="https://acme.com/a.jpg" alt="A"><script type="application/ld+json">{"@type":"Product"}</script><div data-html-block="${encodeHtmlBlock('<b>hi</b>')}"></div><hr><pre><code>x</code></pre>`,
