@@ -3,6 +3,7 @@ import type { TeamRole } from '@/components/providers/role-provider';
 import type { Feature, PlanId } from '@/config/plans';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { ChatConfirmForm } from '../events';
+import type { PageVersionRead } from '../page-versions';
 
 /**
  * Chat's tool registry (CHAT-20 §9): one row per tool Chat may call, saying
@@ -303,6 +304,17 @@ interface ToolFields<S extends z.ZodObject> {
    * file; a row without it makes nothing.
    */
   deliverable?(input: z.output<S>, output: unknown): ToolDeliverable | null;
+  /**
+   * A page's version for the deliverable's card (CHAT-25 §6, W4-12a): the
+   * page Chat made, or its change, numbered in the run's chat, with what
+   * changed. Its title is the draft's as it is now. Null for none; a read
+   * that fails shows the plain card.
+   */
+  versionOf?(
+    input: z.output<S>,
+    output: unknown,
+    place: { conversationId: string },
+  ): Promise<PageVersionRead | null>;
   /**
    * A WRITE's check before its card or its run (CHAT-20 §12 rule 1: Send to
    * Action Center's duplicate check): a refusal it returns ({ ok: false,
