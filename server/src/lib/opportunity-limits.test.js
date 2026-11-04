@@ -55,14 +55,15 @@ describe('clusterMetrics', () => {
     expect(m.intent).toBe('best-top');
     expect(m.keywords[0]).toBe('x software');
     expect(m.competitorsCited).toEqual(['Rival', 'Other']);
-    expect(m.representative).toEqual({ id: 'a', text: 'best tools for x' });
+    // Its question's own volume, not the cluster's sum.
+    expect(m.representative).toEqual({ id: 'a', text: 'best tools for x', volume: 3000 });
   });
 
   it('reports a cluster with no answers as untested', () => {
     const m = clusterMetrics(['c'], prompts);
     expect(m.tested).toBe(0);
     expect(m.visibility).toBe(0);
-    expect(m.representative).toEqual({ id: 'c', text: 'how to pick x' });
+    expect(m.representative).toEqual({ id: 'c', text: 'how to pick x', volume: 500 });
   });
 });
 
@@ -175,6 +176,12 @@ describe('generators', () => {
     expect(code).toContain('refreshPromptClusters(');
     // It adds to the list instead of replacing it (#63).
     expect(code).not.toMatch(/\.delete\(\)/);
+  });
+
+  it("states no volume to the model: the page shows the question's estimate with its source", () => {
+    expect(source('./opportunity-generator.js')).not.toMatch(/AI volume: \$\{/);
+    expect(source('./opportunity-generator.js')).toContain('questionVolume:');
+    expect(source('../routes/content.js')).not.toMatch(/Est\. AI Volume: \$\{/);
   });
 
   it('runs at most the shared count per run', () => {

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { qualityAverage, qualityBand, qualityPhase } from './quality';
+import {
+  BAND_BAR_CLASSES,
+  BAND_CLASSES,
+  BAND_TEXT_CLASSES,
+  qualityAverage,
+  qualityBand,
+  qualityPhase,
+} from './quality';
 
 /** The Quality scores' bands, the header chip's average, and the phase flag (Quality spec §2). */
 describe('quality', () => {
@@ -12,6 +19,15 @@ describe('quality', () => {
     expect(qualityBand(79)).toBe('improve');
     expect(qualityBand(60)).toBe('improve');
     expect(qualityBand(59)).toBe('needsWork');
+  });
+
+  it('colours the bands green, neutral and amber: red is only for what blocks', () => {
+    for (const classes of [BAND_CLASSES, BAND_BAR_CLASSES, BAND_TEXT_CLASSES]) {
+      expect(classes.strong).toContain('emerald');
+      expect(classes.improve).not.toMatch(/emerald|amber|red|destructive/);
+      expect(classes.needsWork).toContain('amber');
+      expect(Object.values(classes).join(' ')).not.toMatch(/red|destructive/);
+    }
   });
 
   it('averages only the scores that could be read', () => {
