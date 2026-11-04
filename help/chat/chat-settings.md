@@ -1,7 +1,7 @@
 ---
 title: Change your Chat settings
 route: /dashboard/chat/settings
-keywords: [chat settings, default mode, your focus, notify me, agent needs me, email when an agent waits, ask chat on every page, full auto]
+keywords: [chat settings, default mode, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
 updated: 2026-11-03
@@ -20,6 +20,10 @@ sources: [web/messages/en.json]
 ## Your focus
 
 **Your focus** lists the eight areas Chat can focus on for you, such as **Competitors** or **Content**. Tick the ones you work on: Chat Home and its suggestions follow them. Your focus doesn't change what you can do; your role decides that.
+
+## Answer language
+
+**Answer language** sets the language Chat answers in. **Same as my question**, the default, answers in the language you write in. Pick a language, such as English, and Chat answers in it whatever language you write in: useful for agencies and teams that write in several languages. Asking for a language in a message, such as "answer in German", always wins for that answer. The app itself stays in English.
 
 ## Notify me when an agent needs me
 

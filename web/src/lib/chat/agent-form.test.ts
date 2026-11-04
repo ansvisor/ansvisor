@@ -507,6 +507,35 @@ describe('what is sent', () => {
       maxMonthShare: 0.3,
     });
   });
+
+  it('sends Can call only when it names agents, and patches it when it changes', () => {
+    const callee = 'cccccccc-0000-4000-8000-000000000001';
+    expect(createBody(fresh(), 'manager')).not.toHaveProperty('canCall');
+    expect(
+      createAgentInput.parse(createBody(fresh({ canCall: [callee] }), 'manager')).canCall,
+    ).toEqual([callee]);
+
+    const agent = detail();
+    const form = formFromAgent(agent, SETUP, { timeZone: 'UTC', triggerKey: (i) => `k${i}` })!;
+    expect(form.canCall).toEqual([]);
+    const added = patchBody({ ...form, canCall: [callee] }, agent, 'manager');
+    expect(added).toEqual({
+      expectedVersion: 2,
+      expectedUpdatedAt: '2026-10-29T10:00:00.000Z',
+      canCall: [callee],
+    });
+    expect(updateAgentInput.safeParse(added).success).toBe(true);
+    const calling = { ...agent, settings: { ...agent.settings!, canCall: [callee] } };
+    const reopened = formFromAgent(calling, SETUP, {
+      timeZone: 'UTC',
+      triggerKey: (i) => `k${i}`,
+    })!;
+    expect(reopened.canCall).toEqual([callee]);
+    expect(patchBody(reopened, calling, 'manager')).toBeNull();
+    expect(patchBody({ ...reopened, canCall: [] }, calling, 'manager')).toMatchObject({
+      canCall: [],
+    });
+  });
 });
 
 describe('the server’s refusals', () => {
@@ -525,6 +554,9 @@ describe('the server’s refusals', () => {
     expect(refusalPlace('forbidden_role', 'goLive')).toEqual({ step: 2, field: 'form' });
     expect(refusalPlace('forbidden_role', 'monthCap')).toEqual({ step: 3, field: 'maxMonth' });
     expect(refusalPlace('agent_limit', null)).toEqual({ step: 3, field: 'form' });
+    // Can call sits on the last step, under Max per run.
+    expect(refusalPlace('agent_not_found', null)).toEqual({ step: 3, field: 'form' });
+    expect(refusalPlace('plan_locked', 'canCall')).toEqual({ step: 3, field: 'form' });
     expect(refusalPlace('version_conflict', null)).toEqual({ step: 3, field: 'form' });
     expect(refusalPlace(null, null)).toEqual({ step: 3, field: 'form' });
   });

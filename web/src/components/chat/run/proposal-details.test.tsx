@@ -69,6 +69,27 @@ describe('ProposalDetails', () => {
     expect(showAll.getAttribute('aria-expanded')).toBe('true');
   });
 
+  it('labels what another agent may use “AI use”, as the agent’s page does (run_agent)', () => {
+    act(() =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <ProposalDetails
+            confirm={{
+              n: 2,
+              action: 'Run another agent',
+              target: 'FAQ writer',
+              digest: 'd'.repeat(32),
+              canDontAskAgain: false,
+              why: 'Draft the FAQ block for /pricing.',
+              targets: [{ kind: 'aiUse', values: ['Up to 6% of the monthly AI limit'] }],
+            }}
+          />
+        </NextIntlClientProvider>,
+      ),
+    );
+    expect(container.textContent).toBe('AI useUp to 6% of the monthly AI limit');
+  });
+
   it('shows nothing for a card without them', () => {
     act(() =>
       root.render(

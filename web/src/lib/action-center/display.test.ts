@@ -671,13 +671,16 @@ describe('History events', () => {
     .map((match) => match[1] ?? match[2]);
 
   // Chat writes its own (CHAT-09 §D–E): its changes, and their Undo.
-  const chatWritten = ['../actions/chat-action-center.ts', '../chat/undo-action-center.ts'].flatMap(
-    (file) =>
-      [
-        ...readFileSync(join(__dirname, file), 'utf8').matchAll(
-          /event: '(\w+)'|historyEvent\([^,]+,\s*'(\w+)'/g,
-        ),
-      ].map((match) => match[1] ?? match[2]),
+  const chatWritten = [
+    '../actions/chat-action-center.ts',
+    './ready-for-review.ts',
+    '../chat/undo-action-center.ts',
+  ].flatMap((file) =>
+    [
+      ...readFileSync(join(__dirname, file), 'utf8').matchAll(
+        /event: '(\w+)'|historyEvent\([^,]+,\s*'(\w+)'/g,
+      ),
+    ].map((match) => match[1] ?? match[2]),
   );
 
   const tPage = createTranslator({

@@ -8,6 +8,7 @@ import { saveChatFocus, saveChatGeneralSettings } from '@/lib/actions/chat-prefs
 import { track } from '@/lib/analytics';
 import { FOCUS_AREAS, type FocusArea } from '@/lib/chat/focus';
 import type {
+  AnswerLanguage,
   ChatGeneralAccess,
   ChatGeneralSettings,
   GeneralPatch,
@@ -29,6 +30,8 @@ import { useFocusLabel } from './focus-picker';
 
 const MODES: ChatMode[] = ['ask_first', 'auto', 'full_auto'];
 const CHANNELS: NotifyChannel[] = ['inbox_email', 'inbox', 'inbox_slack'];
+/** general-settings.ts ANSWER_LANGUAGES, in the order the list shows them. */
+const LANGUAGES: AnswerLanguage[] = ['en', 'tr', 'de', 'fr', 'es', 'it', 'pt', 'nl'];
 
 const SELECT =
   'h-7 rounded-lg border bg-background px-2 text-[12.5px] text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50';
@@ -229,10 +232,30 @@ export function ChatSettings({
             </span>
           </Row>
 
-          {/* Answer language and "Show Thought for N s" are kept on the person
-              but nothing reads them yet (Chat answers in the question's
-              language), so they stay hidden until they're wired up; their saved
-              values and schema stay. */}
+          <Row label={t('language.label')} note={t('language.note')}>
+            <select
+              data-action="chatSettings.answerLanguage"
+              aria-label={t('language.label')}
+              value={settings.answerLanguage ?? ''}
+              onChange={(event) =>
+                void change({
+                  answerLanguage: (event.target.value || null) as AnswerLanguage | null,
+                })
+              }
+              className={SELECT}
+            >
+              <option value="">{t('language.same')}</option>
+              {LANGUAGES.map((language) => (
+                <option key={language} value={language}>
+                  {t(`language.${language}`)}
+                </option>
+              ))}
+            </select>
+          </Row>
+
+          {/* "Show Thought for N s" is kept on the person but nothing reads it
+              yet, so it stays hidden until it's wired up; its saved value and
+              schema stay. */}
 
           <Row label={t('notify.label')} note={t('notify.note')}>
             <select
