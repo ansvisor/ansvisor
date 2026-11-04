@@ -291,6 +291,23 @@ describe('ChatThreadView', () => {
     expect(container.querySelector('ol')).toBeNull();
   });
 
+  it('opens the plans when the run API says the chat is on the demo brand', async () => {
+    gate.openUpgrade.mockClear();
+    vi.mocked(toast.error).mockClear();
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return Response.json(
+        { ok: false, failure: 'subscription', error: 'demo_brand', code: 'demo_brand' },
+        { status: 402 },
+      );
+    });
+    await render();
+    await type('And on Gemini?');
+    await enter();
+    expect(gate.openUpgrade).toHaveBeenCalledTimes(1);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
   it('steers a run under way: Stop first, then the text as the next message', async () => {
     const thread: ChatThread = {
       conversationId: CHAT,
@@ -452,6 +469,40 @@ describe('ChatThreadView', () => {
     expect(again.context).toEqual(first.context);
     expect(again.references).toEqual(first.references);
     expect(again.attachmentIds).toBeUndefined();
+  });
+
+  it('sends the shortcut picked from the / menu with its message, and again on Retry (W2-09)', async () => {
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        stream([
+          chatEvent('run.error', 1, {
+            workingMs: 1000,
+            stepCount: 0,
+            sources: [],
+            code: 'failed',
+            reason: 'Something went wrong, so Chat stopped here.',
+          }),
+        ]),
+        { status: 200, headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN } },
+      );
+    });
+    await render({ variant: 'panel', onConversation: vi.fn() });
+    await type('/an');
+    await enter();
+    expect(box().value).toBe('Analyze ');
+    await type('Analyze the mentions drop');
+    await enter();
+    const retry = container.querySelector<HTMLButtonElement>('[data-action="run.retry"]')!;
+    await act(async () => retry.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const sent = calls
+      .filter((c) => c.url === '/api/chat/runs')
+      .map((c) => JSON.parse(String(c.init!.body)));
+    expect(sent.map((body) => [body.message, body.shortcutId])).toEqual([
+      ['Analyze the mentions drop', 'analyze'],
+      ['Analyze the mentions drop', 'analyze'],
+    ]);
   });
 
   it('stops following a run once the view goes: no reconnect, no warning', async () => {

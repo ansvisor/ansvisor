@@ -58,7 +58,8 @@ export type CmsSendError =
 export interface CmsDelivery {
   id: string;
   draftId: string;
-  status: 'queued' | 'sent' | 'failed' | 'published';
+  /** taken_down: a person took the published page down to a draft in its CMS (00460). */
+  status: 'queued' | 'sent' | 'failed' | 'published' | 'taken_down';
   /** What the webhook answered, when it did. */
   http_status?: number | null;
   /** Why it failed, as the server wrote it ("The webhook could not be reached"). */
@@ -76,6 +77,8 @@ export interface CmsDelivery {
    * the site's next publish.
    */
   live?: boolean;
+  /** Where it went live, for a page published from Chat (AUTONOMOUS-GO-LIVE PR 9). */
+  published_url?: string | null;
 }
 
 export type CmsSendResult =
@@ -222,6 +225,11 @@ export interface CmsStatus {
   httpStatus: number | null;
   error: string | null;
   publishedUrl: string | null;
+  /**
+   * An agent sent it on its own (AUTONOMOUS-GO-LIVE §6.4, 00444): its name,
+   * or null when it can't be read by the person; absent for a person's send.
+   */
+  agent?: { name: string | null };
 }
 
 /** Ids a read takes: content_draft_last_deliveries (00262) reads up to 500. */
@@ -242,6 +250,7 @@ export async function readCmsStatuses(draftIds: string[]): Promise<Map<string, C
     chunks.map((ids) => supabase.rpc('content_draft_last_deliveries', { p_draft_ids: ids })),
   );
   const statuses = new Map<string, CmsStatus>();
+  const byAgent = new Map<string, string>();
   for (const { data, error } of reads) {
     if (error) {
       console.error('Failed to read the pages’ sends:', error);
@@ -254,9 +263,54 @@ export async function readCmsStatuses(draftIds: string[]): Promise<Map<string, C
         httpStatus: row.http_status,
         publishedUrl: row.published_url,
       });
+      if (row.agent_run_id) byAgent.set(row.draft_id, row.agent_run_id);
+    }
+  }
+  if (byAgent.size > 0) {
+    const names = await agentNamesOf(supabase, [...new Set(byAgent.values())]);
+    for (const [draftId, runId] of byAgent) {
+      const status = statuses.get(draftId);
+      if (status) statuses.set(draftId, { ...status, agent: { name: names.get(runId) ?? null } });
     }
   }
   return statuses;
+}
+
+/**
+ * The agents of agent runs, by run, as the person may read them; a run or an
+ * agent they can't see is left out (the send then says "an agent").
+ */
+async function agentNamesOf(
+  supabase: ReturnType<typeof createClient>,
+  runIds: string[],
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  const { data: runs, error } = await supabase
+    .from('chat_agent_runs')
+    .select('id, agent_id')
+    .in('id', runIds);
+  if (error) {
+    console.error('Failed to read who sent the pages:', error);
+    return names;
+  }
+  const agentIds = [
+    ...new Set((runs ?? []).map((run) => run.agent_id).filter((id): id is string => !!id)),
+  ];
+  if (agentIds.length === 0) return names;
+  const { data: agents, error: agentsError } = await supabase
+    .from('chat_agents')
+    .select('id, name')
+    .in('id', agentIds);
+  if (agentsError) {
+    console.error('Failed to read who sent the pages:', agentsError);
+    return names;
+  }
+  const nameOf = new Map((agents ?? []).map((agent) => [agent.id, agent.name]));
+  for (const run of runs ?? []) {
+    const name = run.agent_id ? nameOf.get(run.agent_id) : undefined;
+    if (name) names.set(run.id, name);
+  }
+  return names;
 }
 
 /** What a draft keeps of its sends: its slug and meta, where it went live, and its last send. */

@@ -236,6 +236,35 @@ export async function updateItem(account, collectionId, itemId, fieldData) {
   }
 }
 
+/**
+ * Puts an item live (AUTONOMOUS-GO-LIVE PR 9): out of draft, then published
+ * on its own, so other staged items of the site stay staged. Its id.
+ */
+export async function publishItem(account, collectionId, itemId) {
+  await run('WEBFLOW_UPDATE_COLLECTION_ITEM_V2', account, {
+    collection_id: collectionId,
+    item_id: itemId,
+    isDraft: false,
+  });
+  await run('WEBFLOW_PUBLISH_COLLECTION_ITEMS', account, {
+    collection_id: collectionId,
+    item_ids: [itemId],
+  });
+  return itemId;
+}
+
+/**
+ * Takes a live item down (AUTONOMOUS-GO-LIVE PR 10): Webflow unpublishes it
+ * from the live site and sets it back to a draft. Its id.
+ */
+export async function unpublishItem(account, collectionId, itemId) {
+  await run('WEBFLOW_UNPUBLISH_LIVE_COLLECTION_ITEM', account, {
+    collection_id: collectionId,
+    item_id: itemId,
+  });
+  return itemId;
+}
+
 /** The words a field's slug or name is read for, by part: the first field that has them is suggested. */
 const HINTS = {
   body: [/(^|-)(post-)?body($|-)/, /content/, /article/, /rich/],

@@ -37,10 +37,10 @@ Bring an older page up to date: its dates, numbers and examples, without losing 
 2. The updated passages, ready to paste.
 3. The to-do list of what only the person can supply.
 
-When the person wants it kept, save it as a new version with `create_draft`, method optimize, with the live page's address as its source; the app asks them first when it should.
+When the person wants it kept, save it as a new version with `create_draft`, method optimize, with the live page's address as its source; the app asks them first when it should. In an agent's run nobody is there to ask: always save it with its tool, and the app holds it for approval where the agent's mode needs it.
 
 ## Don't
 
 - Don't invent new facts or figures to make the page look fresh.
 - Don't change a date on the page unless its content changed.
-- Never publish: going live is always the person's click.
+- Never publish yourself: the app decides whether a page goes live, and asks the person unless an Admin allowed this agent to go live on its own.

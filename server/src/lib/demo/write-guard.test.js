@@ -26,7 +26,6 @@ const NOT_A_BRAND_ROW = {
   chat_user_prefs: "A person's own Chat preferences (00400): no brand's.",
   content_authors: "The organization's authors, shared by its brands.",
   content_rule_sets: "The organization's content rules per page type, shared by its brands.",
-  integration_connections: "The organization's Google connections.",
   invitations: "The organization's invitations.",
   organizations: 'The organization itself.',
   profiles: "A person's own profile.",
@@ -39,6 +38,8 @@ const NOT_A_BRAND_ROW = {
  * nothing of the demo's sample data, and nothing that costs.
  */
 const OPEN_ON_A_DEMO_BRAND = {
+  chat_notices:
+    "A person's own notes from the system (00446): they only mark them read or close them, no sample data and nothing that costs; none is ever written about a demo brand.",
   prompt_table_views:
     "A person's column layout of the Tracked Prompts table (00363): it changes no sample data and costs nothing; the web keeps it open while read-only too.",
 };

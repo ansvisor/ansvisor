@@ -9,6 +9,7 @@ import { resolveAgentModelConfig } from '@/lib/agent/key';
 import { recordAgentTokenUsage } from '@/lib/agent/token-quota';
 import { getPlan, hasFeature, type PlanId } from '@/config/plans';
 import { subscriptionActiveFor, subscriptionInactiveResponse } from '@/lib/mcp/subscription-gate';
+import { legacyAgentApiGone } from '@/lib/chat/legacy-route';
 
 // Streaming responses up to 5 min — agent loops can run multiple tool
 // calls plus a final generation, comfortably under this.
@@ -23,7 +24,8 @@ interface ChatBody {
  * POST /api/agent/chat
  *
  * Streaming chat endpoint for the in-product agent. Verifies the user is
- * signed in, the org's plan is active (a chat turn is an action: 402
+ * signed in, the new Chat is off for the org (with it on, 404:
+ * legacyAgentApiGone), the org's plan is active (a chat turn is an action: 402
  * subscription_inactive while the workspace is read-only, Cloud only), the
  * conversation belongs to them, the org's plan unlocks the
  * `ai_agent` feature, and the user hasn't blown through the monthly token
@@ -41,6 +43,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const organizationId: string = auth.organizationId;
+  const gone = legacyAgentApiGone(organizationId);
+  if (gone) return gone;
   if (!(await subscriptionActiveFor(organizationId))) return subscriptionInactiveResponse();
 
   let body: ChatBody;

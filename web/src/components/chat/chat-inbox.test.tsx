@@ -40,8 +40,12 @@ vi.mock('@/components/providers/upgrade-gate', () => ({
     openUpgrade: plan.openUpgrade,
   }),
 }));
-const sonner = vi.hoisted(() => ({ error: vi.fn() }));
-vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: sonner.error }) }));
+const sonner = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), { error: sonner.error, success: sonner.success }),
+}));
+const takeDown = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/cms-take-down', () => ({ takeDownDraft: takeDown }));
 /** The demo brand on screen, and one brand of the workspace's own. */
 const BRANDS = [
   { id: 'brand-a', name: 'Demo', isDemo: true },
@@ -73,12 +77,21 @@ vi.mock('@/lib/actions/chat-suggestions', () => ({
   setDailySuggestions: server.set,
   startDailySuggestions: server.start,
 }));
+const notices = vi.hoisted(() => ({
+  read: vi.fn(async () => true),
+  close: vi.fn(async () => true),
+}));
+vi.mock('@/lib/actions/chat-notices', () => ({
+  markChatNoticesRead: notices.read,
+  closeChatNotice: notices.close,
+}));
 const list = vi.hoisted(() => ({ chats: [] as ChatListItem[] }));
 vi.mock('./chat-list-provider', () => ({
   useChatList: () => ({ status: 'ready', chats: list.chats, refresh: async () => undefined }),
 }));
 
 const { ChatInboxView } = await import('./chat-inbox');
+const { RoleContext } = await import('@/components/providers/role-provider');
 const { ChatInbox } = await import('./chat-inbox-page');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -179,6 +192,8 @@ beforeEach(() => {
   plan.locked = false;
   plan.openUpgrade.mockClear();
   sonner.error.mockClear();
+  sonner.success.mockClear();
+  takeDown.mockReset();
   store.setActiveBrand.mockClear();
   store.brands = BRANDS;
   for (const fn of Object.values(server)) fn.mockClear();
@@ -258,6 +273,306 @@ describe('the topic tabs', () => {
     );
     expect(tabs()).toEqual(['All0', 'Daily suggestions0', 'Needs you0', 'Runs0']);
     expect(text()).toContain('Nothing here.');
+  });
+});
+
+describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
+  const KEY_NOTICE = {
+    id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c09',
+    kind: 'own_key_failed' as const,
+    provider: 'openai' as const,
+    class: 'no_credit' as const,
+    reminder: false,
+    createdAt: '2026-10-29T08:00:00Z',
+    read: false,
+  };
+  const withNotice = (over: Partial<typeof KEY_NOTICE> = {}) => ({
+    ok: true as const,
+    notices: [{ ...KEY_NOTICE, ...over }],
+  });
+  const noticeRows = () => [...host.querySelectorAll('[data-slot="inbox-notice"]')];
+
+  beforeEach(() => notices.read.mockClear());
+
+  it('leads Needs you and All with the key’s notice, counted in both, with Fix it', async () => {
+    await render(<ChatInbox suggestions={ok()} notices={withNotice()} />);
+    expect(tabs()).toEqual(['All6', 'Daily suggestions3', 'Needs you2', 'Runs1']);
+    expect(text()).toContain('2 need you · 1 running · 3 suggestions this week.');
+    const [row] = noticeRows();
+    expect(row.textContent).toContain('Your OpenAI key isn’t working · agents are paused');
+    expect(row.textContent).toContain('Your OpenAI account is out of credit.');
+    expect(row.querySelector('[data-action="inbox.fixKey"]')!.getAttribute('href')).toBe(
+      '/dashboard/settings/ai-providers',
+    );
+    // Shown: marked read, once.
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([KEY_NOTICE.id]);
+
+    await openTab('needsYou');
+    expect(noticeRows()).toHaveLength(1);
+    await openTab('runs');
+    expect(noticeRows()).toHaveLength(0);
+  });
+
+  it('says a reminder is one, and marks nothing read that was read', async () => {
+    await render(
+      <ChatInbox suggestions={ok()} notices={withNotice({ reminder: true, read: true })} />,
+    );
+    expect(noticeRows()[0].textContent).toContain(
+      'Your OpenAI account is out of credit. Still not working after 3 days.',
+    );
+    expect(notices.read).not.toHaveBeenCalled();
+  });
+
+  it('warns at 80% of the key’s agent limit, with the estimate and the way to the limit', async () => {
+    const limit = {
+      id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0a',
+      kind: 'own_key_limit' as const,
+      level: 80 as const,
+      usedUsd: 205.4,
+      capUsd: 250,
+      renewsAt: '2026-11-20T09:00:00.000Z',
+      createdAt: '2026-11-01T08:00:00Z',
+      read: false,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [limit] }} />);
+    const [row] = noticeRows();
+    expect(row.getAttribute('data-kind')).toBe('own_key_limit_80');
+    expect(row.textContent).toContain('Agents have used 80% of their monthly limit on your key');
+    expect(row.textContent).toContain('About $205 of $250 this month, estimated · renews Nov 20');
+    const link = row.querySelector('[data-action="inbox.keyLimit"]')!;
+    expect(link.textContent).toBe('Review limit');
+    expect(link.getAttribute('href')).toBe('/dashboard/settings/ai-providers');
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([limit.id]);
+  });
+
+  it('says the agents paused at the limit, and offers to raise it', async () => {
+    const reached = {
+      id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c0b',
+      kind: 'own_key_limit' as const,
+      level: 100 as const,
+      usedUsd: 251.2,
+      capUsd: 250,
+      renewsAt: '2026-11-20T09:00:00.000Z',
+      createdAt: '2026-11-01T08:00:00Z',
+      read: true,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [reached] }} />);
+    const [row] = noticeRows();
+    expect(row.textContent).toContain(
+      "Agents reached their monthly limit on your key · they're paused",
+    );
+    expect(row.textContent).toContain('They start again on Nov 20, or when you raise the limit.');
+    expect(row.querySelector('[data-action="inbox.keyLimit"]')!.textContent).toBe('Raise limit');
+    expect(notices.read).not.toHaveBeenCalled();
+  });
+
+  it('tells of a page an agent sent on its own, with Open page and Open run, closed once opened (AUTONOMOUS-GO-LIVE §6.4)', async () => {
+    notices.close.mockClear();
+    const wentLive = {
+      id: '7d8f2c1a-1b2c-4d3e-8f90-123456789abc',
+      kind: 'agent_went_live' as const,
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'webflow' as const,
+      draftId: 'draft-1',
+      chatId: 'chat-1',
+      url: null,
+      createdAt: '2026-11-02T08:00:00Z',
+      read: false,
+    };
+    const off = {
+      id: '8e9f3d2b-2c3d-4e5f-9a01-23456789abcd',
+      kind: 'agent_go_live_off' as const,
+      agent: 'Publisher',
+      agentId: 'agent-1',
+      createdAt: '2026-11-02T09:00:00Z',
+      read: true,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [wentLive, off] }} />);
+    const [sent, stopped] = noticeRows();
+    expect(sent.getAttribute('data-kind')).toBe('agent_went_live');
+    expect(sent.textContent).toContain('Publisher sent “Pricing FAQ” to Webflow as a draft');
+    expect(sent.textContent).toContain('On its own, after Quality and your brand facts');
+    const page = sent.querySelector<HTMLAnchorElement>('[data-action="inbox.openGoLivePage"]')!;
+    expect(page.getAttribute('href')).toBe('/dashboard/content/editor/draft-1');
+    expect(sent.querySelector('[data-action="inbox.openGoLiveRun"]')!.getAttribute('href')).toBe(
+      '/dashboard/chat/chat-1',
+    );
+    expect(stopped.textContent).toContain('Publisher no longer publishes on its own');
+    expect(stopped.textContent).toContain('It changed. Turn it on again if you still want it.');
+    expect(
+      stopped.querySelector('[data-action="inbox.openGoLiveAgent"]')!.getAttribute('href'),
+    ).toBe('/dashboard/agents/agent-1');
+    // Shown: the unread one marked read. Opened: closed.
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([wentLive.id]);
+    await act(async () => page.click());
+    expect(notices.close).toHaveBeenCalledExactlyOnceWith(wentLive.id);
+  });
+
+  it('tells of a page an agent published live on its own, Open page opening the live page (PR 9)', async () => {
+    const published = {
+      id: '9f0a4e3c-3d4e-4f60-8b12-3456789abcde',
+      kind: 'agent_went_live' as const,
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'wordpress' as const,
+      draftId: 'draft-1',
+      chatId: null,
+      url: 'https://www.acme.example/pricing-faq/',
+      createdAt: '2026-11-02T08:00:00Z',
+      read: true,
+    };
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [published] }} />);
+    const [row] = noticeRows();
+    expect(row.getAttribute('data-kind')).toBe('agent_published');
+    expect(row.textContent).toContain('Publisher published “Pricing FAQ” on acme.example');
+    expect(row.textContent).toContain('Live on acme.example · on its own');
+    const page = row.querySelector<HTMLAnchorElement>('[data-action="inbox.openGoLivePage"]')!;
+    expect(page.getAttribute('href')).toBe('https://www.acme.example/pricing-faq/');
+    expect(page.getAttribute('target')).toBe('_blank');
+    expect(row.querySelector('[data-action="inbox.openGoLiveRun"]')).toBeNull();
+  });
+
+  it('offers Take down on a page published on its own to an Admin or a Manager, then says it’s down (PR 10)', async () => {
+    const published = {
+      id: '9f0a4e3c-3d4e-4f60-8b12-3456789abcde',
+      kind: 'agent_went_live' as const,
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'wordpress' as const,
+      draftId: 'draft-1',
+      chatId: null,
+      url: 'https://www.acme.example/pricing-faq/',
+      createdAt: new Date().toISOString(),
+      read: true,
+    };
+    takeDown.mockResolvedValue({ ok: true, target: 'wordpress' });
+    // An Analyst sees the notice, not Take down.
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: true, notices: [published] }} />);
+    expect(host.querySelector('[data-action="inbox.takeDown"]')).toBeNull();
+
+    await render(
+      <RoleContext.Provider value={{ role: 'manager' }}>
+        <ChatInbox suggestions={ok()} notices={{ ok: true, notices: [published] }} />
+      </RoleContext.Provider>,
+    );
+    await click('[data-action="inbox.takeDown"]');
+    const dialog = document.querySelector('[data-slot="take-down-dialog"]')!;
+    expect(dialog.textContent).toContain('Take down “Pricing FAQ”?');
+    expect(dialog.textContent).toContain(
+      'It leaves acme.example now and goes back to a draft in WordPress.',
+    );
+    await act(async () =>
+      (dialog.querySelector('[data-action="takeDown.confirm"]') as HTMLElement).click(),
+    );
+    expect(takeDown).toHaveBeenCalledWith('draft-1');
+    expect(sonner.success).toHaveBeenCalledWith('Taken down. It’s a draft in WordPress again.');
+    const [row] = noticeRows();
+    expect(row.textContent).toContain('Taken down · a draft in WordPress again');
+    expect(row.querySelector('[data-action="inbox.takeDown"]')).toBeNull();
+    // The live address is gone: Open page opens the page in the Content Editor.
+    expect(
+      row.querySelector('[data-action="inbox.openGoLivePage"]')!.getAttribute('href'),
+    ).toContain('/dashboard/content/editor/draft-1');
+  });
+
+  it('keeps the dialog open with the CMS’s words when it refuses, and Keep it live closes it', async () => {
+    const published = {
+      id: '9f0a4e3c-3d4e-4f60-8b12-3456789abcdf',
+      kind: 'agent_went_live' as const,
+      agent: 'Publisher',
+      title: 'Pricing FAQ',
+      target: 'webflow' as const,
+      draftId: 'draft-1',
+      chatId: null,
+      url: 'https://acme.example/blog/pricing-faq',
+      createdAt: new Date().toISOString(),
+      read: true,
+    };
+    takeDown.mockResolvedValue({
+      ok: false,
+      reason: 'refused',
+      message: 'Webflow didn’t take it down: Forbidden.',
+    });
+    await render(
+      <RoleContext.Provider value={{ role: 'admin' }}>
+        <ChatInbox suggestions={ok()} notices={{ ok: true, notices: [published] }} />
+      </RoleContext.Provider>,
+    );
+    await click('[data-action="inbox.takeDown"]');
+    const dialog = () => document.querySelector('[data-slot="take-down-dialog"]');
+    await act(async () =>
+      (dialog()!.querySelector('[data-action="takeDown.confirm"]') as HTMLElement).click(),
+    );
+    expect(dialog()!.querySelector('[role="alert"]')!.textContent).toBe(
+      'Webflow didn’t take it down: Forbidden.',
+    );
+    await act(async () =>
+      (dialog()!.querySelector('[data-action="takeDown.keep"]') as HTMLElement).click(),
+    );
+    expect(dialog()).toBeNull();
+    expect(noticeRows()[0].querySelector('[data-action="inbox.takeDown"]')).not.toBeNull();
+  });
+
+  it('shows the notice in the Inbox without tabs too, and none that couldn’t be read', async () => {
+    list.chats = [];
+    await render(
+      <ChatInboxView
+        status="ready"
+        items={[]}
+        now={null}
+        onRetry={() => {}}
+        notices={withNotice().notices}
+      />,
+    );
+    expect(noticeRows()).toHaveLength(1);
+    expect(text()).not.toContain('Nothing needs you.');
+    expect(text()).toContain('1 needs you.');
+
+    await render(<ChatInbox suggestions={ok()} notices={{ ok: false }} />);
+    expect(noticeRows()).toHaveLength(0);
+  });
+
+  it('says a scheduled job didn’t run, or paused, and why, with Open to its chat (W3-04a)', async () => {
+    const job = {
+      id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c10',
+      kind: 'schedule_failed' as const,
+      title: 'Weekly report',
+      reason: 'Something went wrong.',
+      href: '/dashboard/chat/0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c11' as const,
+      createdAt: '2026-11-02T06:10:00Z',
+      read: false,
+    };
+    await render(
+      <ChatInbox
+        suggestions={ok()}
+        notices={{
+          ok: true,
+          notices: [
+            job,
+            {
+              ...job,
+              id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c12',
+              kind: 'schedule_paused',
+              reason: 'The monthly AI limit was reached.',
+              href: '/dashboard/chat',
+            },
+          ],
+        }}
+      />,
+    );
+    const [failed, paused] = noticeRows();
+    expect(failed.textContent).toContain('Weekly report didn’t run');
+    expect(failed.textContent).toContain('Something went wrong.');
+    expect(failed.querySelector('[data-action="inbox.openSchedule"]')!.getAttribute('href')).toBe(
+      job.href,
+    );
+    expect(paused.textContent).toContain('Weekly report is paused');
+    expect(paused.textContent).toContain('The monthly AI limit was reached.');
+    expect(notices.read).toHaveBeenCalledExactlyOnceWith([
+      job.id,
+      '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c12',
+    ]);
   });
 });
 

@@ -37,7 +37,7 @@ export interface ChatComposerSetup {
    * says so, and sending stays on. Null otherwise.
    */
   keyFailure: FailingKey | null;
-  /** The / menu's Skills group: the enabled skills (skillMenuOf); none while the new Chat is off. */
+  /** The / menu's Skills group: the skills the person may use (skillMenuFor); none while the new Chat is off. */
   skills: ChatSkillItem[];
 }
 
