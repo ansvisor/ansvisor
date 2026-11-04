@@ -54,6 +54,7 @@ const own = (over: Partial<WorkspaceSkillView> = {}): WorkspaceSkillView => ({
   enabled: true,
   mine: true,
   warnings: [],
+  updateAvailable: false,
   createdAt: '2026-11-01T10:00:00.000Z',
   updatedAt: '2026-11-01T10:00:00.000Z',
   can: { toggle: true, remove: true, share: 'request' },
@@ -302,8 +303,22 @@ describe('ChatSkills', () => {
       '/dashboard/chat/skills/aaaaaaaa-0000-4000-8000-000000000002',
     );
     expect(inCard('board-update', 'skills.review')).toBeNull();
+    expect(container.querySelector('[data-slot="update-available"]')).toBeNull();
     // No filter chips here: workspace skills have none.
     expect(container.querySelector('[data-action="skills.filter"]')).toBeNull();
+  });
+
+  it('marks an import whose source has a new version, and opens its update (W4-31)', async () => {
+    const copy = list.skills.find((skill) => skill.name === 'copy-editing')!;
+    Object.assign(copy, { status: 'approved', enabled: true, updateAvailable: true });
+    await render();
+    await click(container.querySelector<HTMLElement>('[data-tab="mine"]')!);
+    expect(card('copy-editing').querySelector('[data-slot="update-available"]')!.textContent).toBe(
+      'Update available',
+    );
+    expect(inCard('copy-editing', 'skills.reviewUpdate')!.getAttribute('href')).toBe(
+      '/dashboard/chat/skills/aaaaaaaa-0000-4000-8000-000000000002/update',
+    );
   });
 
   it('opens a skill’s details: Ask an Admin to share, and Delete after a second click', async () => {

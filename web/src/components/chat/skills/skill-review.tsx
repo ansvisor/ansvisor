@@ -12,9 +12,9 @@ import type { SkillReview as Review } from '@/lib/chat/skills/store';
 import { cn } from '@/lib/utils';
 
 /** A review card's look (mockup `#s-skill-review .card`). */
-const CARD = 'rounded-[14px] border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)]';
-const CARD_HEAD = 'flex items-center gap-2 border-b px-4 py-2.5 text-[13px] font-semibold';
-const PILL =
+export const CARD = 'rounded-[14px] border bg-card shadow-[0_1px_2px_rgba(10,10,10,.04)]';
+export const CARD_HEAD = 'flex items-center gap-2 border-b px-4 py-2.5 text-[13px] font-semibold';
+export const PILL =
   'ml-auto rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground';
 
 /** The status pill's colors, as the Skills page's badges. */
@@ -303,7 +303,8 @@ export function SkillReview({ id }: { id: string }) {
   );
 }
 
-function ScanList({
+/** One list of what the safety scan found, under its title; nothing when it is empty. */
+export function ScanList({
   title,
   items,
   tone,

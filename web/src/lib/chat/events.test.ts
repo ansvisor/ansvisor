@@ -67,6 +67,8 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
   'step.updated': () => chatEvent('step.updated', 2, { step: { ...STEP, status: 'running' } }),
   'step.finished': () => chatEvent('step.finished', 3, { step: STEP }),
   'text.delta': () => chatEvent('text.delta', 4, { text: 'Citations on Perplexity fell **18%**' }),
+  'text.replaced': () =>
+    chatEvent('text.replaced', 5, { text: "Perplexity'deki atıflar **%18** düştü" }),
   'ask.created': () =>
     chatEvent('ask.created', 5, {
       n: 3,
@@ -180,6 +182,18 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
   'suggestion.created': () => chatEvent('suggestion.created', 14, { count: 3 }),
   'suggestion.resolved': () => chatEvent('suggestion.resolved', 15, { count: 1 }),
   'page.opened': () => chatEvent('page.opened', 16, { where: 'here', href: EDITOR }),
+  'whats_new.ready': () =>
+    chatEvent('whats_new.ready', 17, {
+      entries: [
+        {
+          slug: 'agent-center',
+          feature: 'Agent Center',
+          lines: ['Why.', 'What.', 'How it helps.'],
+          href: '/dashboard/agents',
+          onPlans: 'Growth and Enterprise',
+        },
+      ],
+    }),
 };
 
 /** Every key in a type, at any depth. */

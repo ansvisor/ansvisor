@@ -19,7 +19,12 @@ const { chatTool } = await import('./registry/tools');
 const tool = chatTool('create_schedule')!;
 const IST = 'Europe/Istanbul';
 // Friday 16 October 2026, 14:00 in Istanbul.
-const ctx = { timezone: IST, organizationId: 'org-1', now: new Date('2026-10-16T11:00:00.000Z') };
+const ctx = {
+  timezone: IST,
+  organizationId: 'org-1',
+  userId: 'user-1',
+  now: new Date('2026-10-16T11:00:00.000Z'),
+};
 const asked = tool.inputSchema.parse({
   title: 'Citations check',
   when: 'in 3 days',
