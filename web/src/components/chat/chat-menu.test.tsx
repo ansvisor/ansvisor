@@ -163,9 +163,8 @@ describe('ChatMenuView', () => {
     // Agent Center, out of Chat, with "New" until it is first opened (governance mockup #cnav).
     expect(action('chatMenu.openAgents')[0].getAttribute('href')).toBe('/dashboard/agents');
     expect(action('chatMenu.openAgents')[0].textContent).toBe('Agent CenterNew');
-    for (const unbuilt of ['chatMenu.openSkills']) {
-      expect(action(unbuilt)).toHaveLength(0);
-    }
+    // Skills (W3-07).
+    expect(action('chatMenu.openSkills')[0].getAttribute('href')).toBe('/dashboard/chat/skills');
     // Scheduled (W3-03), with no count while no job is on.
     expect(action('chatMenu.openScheduled')[0].getAttribute('href')).toBe(
       '/dashboard/chat/scheduled',

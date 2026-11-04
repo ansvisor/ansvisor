@@ -13,7 +13,7 @@ import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { PAGE_TYPES, type DraftMethod, type DraftStart, type PageType } from '@/lib/content/drafts';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { contentUuid, isHttpUrl } from '@/lib/mcp/content-schemas';
-import { FIXTURE_IDS, defineTool } from './define-tool';
+import { FIXTURE_IDS, defineTool, type ChatToolContext } from './define-tool';
 
 /**
  * Chat's first WRITE rows (CHAT-20 §9), enough to try the approval flow.
@@ -35,15 +35,24 @@ import { FIXTURE_IDS, defineTool } from './define-tool';
 const BRAND = FIXTURE_IDS.brand;
 const ITEM = FIXTURE_IDS.item;
 
-/** A create_draft call's start, as New content gives one. */
-function draftStart(input: {
-  method: DraftMethod;
-  title: string;
-  page_type: PageType;
-  source: DraftStart['source'];
-  body_html?: string;
-  source_url?: string;
-}): DraftStart {
+/**
+ * A create_draft call's start, as New content gives one, made in the run's
+ * chat (00463, W4-10): an agent's run's drafts are the agent's. A write in
+ * the person's own session may only say chat (00463's guard), so `agent`
+ * only on the run's own write (runFor).
+ */
+function draftStart(
+  input: {
+    method: DraftMethod;
+    title: string;
+    page_type: PageType;
+    source: DraftStart['source'];
+    body_html?: string;
+    source_url?: string;
+  },
+  chat: ChatToolContext['chat'],
+  { asRun }: { asRun: boolean },
+): DraftStart {
   return {
     method: input.method,
     title: input.title,
@@ -53,6 +62,8 @@ function draftStart(input: {
     source: input.source,
     bodyHtml: input.body_html,
     sourceUrl: input.source_url,
+    origin: asRun && chat?.agentRunId ? 'agent' : 'chat',
+    conversationId: chat?.conversationId ?? null,
   };
 }
 
@@ -95,10 +106,15 @@ export const WRITE_TOOLS = [
         .optional()
         .describe('For optimize: the live page.'),
     }),
-    run: (_ctx, input) => createContentDraft(input.brand_id, draftStart(input)),
+    run: (ctx, input) =>
+      createContentDraft(input.brand_id, draftStart(input, ctx.chat, { asRun: false })),
     sessionFree: true,
     runFor: async (ctx, input) =>
-      createContentDraftFor(actorOf(ctx), input.brand_id, draftStart(input)),
+      createContentDraftFor(
+        actorOf(ctx),
+        input.brand_id,
+        draftStart(input, ctx.chat, { asRun: true }),
+      ),
     // The page it saved (CHAT-06 item 6): a document, open in the Content Editor. Filed as the
     // draft keeps it: cleaned, so no script or handler a page it read slipped in goes out.
     deliverable: (input, output) =>

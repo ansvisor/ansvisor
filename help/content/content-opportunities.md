@@ -4,8 +4,8 @@ route: /dashboard/content
 keywords: [content opportunities, opportunity score, impact, visibility gap, content ideas, export csv, filter opportunities, bulk actions]
 synonyms: [content optimization, content gaps, what to write, content suggestions]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -63,12 +63,18 @@ Titles leave years out unless the need is about one. A year that has passed in a
 ## What each focus picks
 
 - **Let Ansvisor choose** takes the highest-scoring groups that have no opportunity yet, one from each topic first.
-- **Topic** takes only that topic's groups.
-- **Prompt** takes only that prompt's group, so it writes at most one opportunity, and **How many** stays at 1. If that prompt already has an open opportunity, a message says so when the run ends, with **Open existing**.
+- **Topic** takes only that topic's groups. Each topic in the list shows how many new groups it has, or **All covered**.
+- **Prompt** takes only that prompt's group, so it writes at most one opportunity, and **How many** stays at 1. If the group already has an open opportunity, the dialog says so and offers **Open existing** instead; prompts like that show **Has one** in the list. A prompt whose opportunity was dismissed or done can be asked for again.
+
+## How many are left
+
+The dialog shows how many groups in your focus have no opportunity yet, and **How many** goes no higher. When none are left, it says so and **Generate** stays off: add prompts for new groups, or use **Another angle** on an opportunity. Groups without tracked answers from the last 30 days have nothing to write from yet.
 
 ## No duplicates
 
 Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is written, the message says so and counts any duplicates it skipped.
+
+A question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.
 
 For a second take on the same need, use **Another angle** on the opportunity.
 
