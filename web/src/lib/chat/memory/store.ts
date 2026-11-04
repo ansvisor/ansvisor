@@ -508,12 +508,38 @@ export interface MemoryList {
   canSwitchWorkspace: boolean;
   /** The brand the Brand tab is about; null when none was asked for or it isn't theirs. */
   brand: { id: string; name: string } | null;
+  /**
+   * The brand's own rules (Settings › Content, 00450 brands.brand_rules),
+   * shown read-only in its tab and kept out of its 4,000 (Wave 3 decision
+   * 14): they are edited where they live. None before 00450 is applied.
+   */
+  brandRules: string[];
   items: Record<MemoryScope, MemoryItemView[]>;
   /** Characters used a scope, against MAX_MEMORY_SCOPE. */
   used: Record<MemoryScope, number>;
   /** What the person may do in each scope: edit, ask the Admins, or only read. */
   rights: Record<MemoryScope, 'edit' | 'request' | null>;
   limits: { line: number; scope: number };
+}
+
+/**
+ * A brand's rules (00450 brands.brand_rules), read by the whole row so the
+ * read works before and after that column exists; none when it can't be
+ * read. Only for the Memory page: they reach Chat's writing where they
+ * apply already, never through memory.
+ */
+async function readBrandRules(brandId: string): Promise<string[]> {
+  const { data, error } = await supabaseAdmin
+    .from('brands')
+    .select('*')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (error) {
+    console.error('[chat/memory] could not read the brand rules:', error.message);
+    return [];
+  }
+  const rules = (data as { brand_rules?: unknown } | null)?.brand_rules;
+  return Array.isArray(rules) ? rules.filter((r): r is string => typeof r === 'string') : [];
 }
 
 /**
@@ -537,15 +563,16 @@ export async function listMemory(
   const writable = viewer.plan.writable;
   const shown = switches.workspace || viewer.role === 'admin';
   if (shown) await syncProfileLine(viewer.userId, viewer.organizationId);
-  const [me, ofBrand, workspace] = shown
+  const [brandRules, me, ofBrand, workspace] = shown
     ? await Promise.all([
+        brand ? readBrandRules(brand.id) : Promise.resolve([]),
         scopeRows(viewer.organizationId, { scope: 'user', userId: viewer.userId }),
         brand
           ? scopeRows(viewer.organizationId, { scope: 'brand', brandId: brand.id })
           : Promise.resolve([]),
         scopeRows(viewer.organizationId, { scope: 'workspace' }),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
   const view = (row: ItemRow): MemoryItemView => {
     const scope = scopeOf(row);
     const may = rights[scope] === 'edit';
@@ -563,6 +590,7 @@ export async function listMemory(
     switches,
     canSwitchWorkspace: viewer.role === 'admin' && writable,
     brand,
+    brandRules,
     items: { user: me.map(view), brand: ofBrand.map(view), workspace: workspace.map(view) },
     used: { user: usedBy(me), brand: usedBy(ofBrand), workspace: usedBy(workspace) },
     rights,
