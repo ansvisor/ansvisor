@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
-import { assertBrandAccess } from '../lib/access.js';
+import { MANAGER_ROLES, assertBrandAccess, assertRole } from '../lib/access.js';
 import { isOrgActive } from '../lib/active-subscriptions.js';
 import { readBrandFacts, setFactStatus } from '../lib/brand-facts.js';
 import { qualityPhase } from '../lib/content-quality.js';
@@ -56,6 +56,12 @@ router.post('/fetch', brandFactsLimiter, async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
   try {
     const { orgId } = await assertBrandAccess(parsed.data.brandId, req.user.id);
+    // Reading the site again costs a model's read: admins and managers (2026-11-03).
+    await assertRole(
+      req.user.id,
+      MANAGER_ROLES,
+      'Only admins and managers can read the brand facts again.',
+    );
     return res.json(await readBrandFacts(parsed.data.brandId, { orgId, refresh: true }));
   } catch (err) {
     return failed(req, res, err, 'brand facts fetch error');
@@ -79,6 +85,12 @@ router.patch('/:id', async (req, res) => {
     if (error) throw error;
     if (!fact) return res.status(404).json({ error: 'Fact not found', code: 'not_found' });
     await assertBrandAccess(fact.brand_id, req.user.id);
+    // What Chat's /facts and the Brand Facts Guardian hold drafts to: admins and managers say.
+    await assertRole(
+      req.user.id,
+      MANAGER_ROLES,
+      'Only admins and managers can approve or reject brand facts.',
+    );
     return res.json(await setFactStatus(fact, body.data.status, req.user.id));
   } catch (err) {
     return failed(req, res, err, 'brand fact status error');

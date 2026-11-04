@@ -316,7 +316,7 @@
         "task checks"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -340,7 +340,7 @@
         },
         {
           "heading": "Hand a task on",
-          "text": "From a task you can:\n\n- **Create content** or **Optimize page**: open a draft in the Content Editor for this task. **Open draft** returns to it, and marking the draft ready completes the task.\n- **Send to Content**: send a content task to Content as an opportunity, where a brief can be written for it.\n- **Send to webhook**: post the task to the brand's webhook, for a workflow outside Ansvisor. Set it up under **Content › Webhook Settings** with the **Action Center task sent** event selected."
+          "text": "From a task you can:\n\n- **Create content** or **Optimize page**: open a draft in the Content Editor for this task. **Open draft** returns to it, and marking the draft ready completes the task.\n- **Send to Content**: send a content task to Content as an opportunity, where a brief can be written for it.\n- **Send to webhook**: post the task to the brand's webhook, for a workflow outside Ansvisor. Set it up under **Content › Webhook Settings** with the **Action Center task sent** event selected. It's for admins and managers."
         },
         {
           "heading": "Files attached from Chat",
@@ -348,7 +348,7 @@
         },
         {
           "heading": "Regenerate tasks",
-          "text": "Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence, in your brand's terms, by the **Site type** in the brand settings. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance.\n\nThe AI also reads this brand's last three closed rounds of the same action. It builds on what improved results here, and doesn't hand out again a task that was done without effect. A task it writes without its URL, Change, Done when or How we check waits on **Needs review**."
+          "text": "Where AI task writing is on for your workspace, **Regenerate tasks** writes the action's tasks again from its evidence, in your brand's terms, by the **Site type** in the brand settings. Done, under-way and hand-added tasks stay. It uses your plan's monthly AI allowance, so it's for admins and managers.\n\nThe AI also reads this brand's last three closed rounds of the same action. It builds on what improved results here, and doesn't hand out again a task that was done without effect. A task it writes without its URL, Change, Done when or How we check waits on **Needs review**."
         },
         {
           "heading": "Tasks Ansvisor does itself",
@@ -1030,7 +1030,9 @@
         "fact check",
         "api key in message",
         "paste api key",
-        "remove key"
+        "remove key",
+        "where pages open",
+        "keep working in chat"
       ],
       "synonyms": [
         "assistant",
@@ -1098,12 +1100,16 @@
           "text": "Admins and Managers can also ask Chat to change a draft in the Library, send a draft to your connected CMS, publish a new page on your site, make a report, or start Site Audit on pages. Analysts can ask Chat to save new drafts only.\n\nA draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.\n\nStarting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo."
         },
         {
+          "heading": "Where a page opens",
+          "text": "When Chat writes a page, it asks **Where should we open this page?** **Open in Content Editor** opens the full editor with Brief, Rules and Quality; **Keep working in chat** keeps the page here, and you ask for changes in plain words. Tick **Don't ask again** to keep your choice. Change it anytime in **Settings › Chat › Where pages open**."
+        },
+        {
           "heading": "Send or publish a page from Chat",
           "text": "A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. A live page, or a send to your webhook, goes from the Content Editor.\n\nSending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat.\n\nTo take a published page back down to a draft in its CMS, ask Chat, or click **Take down** on its row in **Activity** for 30 days. It always waits for your click, and Managers can do it even when publishing is off for them."
         },
         {
           "heading": "Your brand facts",
-          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims a person approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact."
+          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or a manager approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact."
         },
         {
           "heading": "Open a web page",
@@ -1407,6 +1413,9 @@
       "keywords": [
         "skills",
         "skill",
+        "create a skill",
+        "skill draft",
+        "save these steps as a skill",
         "slash menu",
         "ansvisor skills",
         "used skill",
@@ -1456,7 +1465,7 @@
         },
         {
           "heading": "Save your own skill",
-          "text": "Admins and Managers can ask Chat to keep steps they repeat as a skill of their own, for example: \"Save this as a skill called /pricing-brief: open with the answer, then three short sections.\" Chat shows the skill's name, what it does and its steps on a card, and saves it when you approve, or by itself in Full auto. The skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill or a shortcut, such as **/analyze**, and your plan sets how many skills your workspace keeps."
+          "text": "Admins and Managers can keep steps they repeat as a skill of their own. Start with \"Create a skill that…\", or pick **New skill** › **Create in Chat** on the **Skills** page. Chat asks at most two questions, then shows a draft you can edit: the skill's name, title, what it does and its steps. Nothing is kept until you click **Save skill**, in every mode, Full auto too.\n\nAfter an answer that did a few things, click **Save these steps as a skill** under it. Chat drafts the skill from those steps, keeping their date range and platforms, without numbers or your brand's details.\n\nThe skill is private to you and joins your **/** menu right away. It can't take the name of an Ansvisor skill or a shortcut, such as **/analyze**. Your plan sets how many skills your workspace keeps."
         },
         {
           "heading": "Import a skill",
@@ -1947,7 +1956,7 @@
         },
         {
           "heading": "What the brief reads from cited pages",
-          "text": "Building the brief also reads a few of the pages AI cited. Their typical length shows beside **Length**, and **Cited pages have** lists what Site Audit's checks find on at least half of them, such as an FAQ schema, tables or statistics. The Content Agent then writes the page toward what its text can carry, not its schema, dates or byline, which your site sets.\n\nOnce the brief has an outline, **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent. The page you have now stays in History."
+          "text": "Building the brief also reads a few of the pages AI cited. Their typical length shows beside **Length**, and **Cited pages have** lists what Site Audit's checks find on at least half of them, such as an FAQ schema, tables or statistics. The Content Agent then writes the page toward what its text can carry, not its schema, dates or byline, which your site sets. The brief plans no more sections than your Length holds.\n\nOnce the brief has an outline, **Rewrite from brief**, for a new page, or **Suggest changes from brief**, for an existing one, hands the page to the Content Agent. The page you have now stays in History."
         },
         {
           "heading": "Sources",
@@ -2065,11 +2074,11 @@
         },
         {
           "heading": "Quick actions on a row",
-          "text": "Each row's **…** menu has the quick actions:\n\n- **Write this**, which has the Content Agent brief and write the page in one go for you to review, and **Send to Editor**; **Open draft** takes their place once a draft is being written for it;\n- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;\n- **Send to Workflow**, for a new opportunity;\n- **Open in new tab**, which opens it as a page of its own;\n- **Dismiss**, for a new one. Undo it from the message that appears.\n\nSend to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions."
+          "text": "Each row's **…** menu has the quick actions:\n\n- **Write this**, which has the Content Agent brief and write the page in one go for you to review, and **Send to Editor**; **Open draft** takes their place once a draft is being written for it;\n- **Send to Plan**, or **Open in Plan** once it's a priority there, for owned opportunities still open;\n- **Send to Workflow**, for a new opportunity;\n- **Open in new tab**, which opens it as a page of its own;\n- **Dismiss**, for a new one. Undo it from the message that appears.\n\nSend to Plan, Send to Workflow and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions."
         },
         {
           "heading": "Work on many at once",
-          "text": "Tick rows, or the box in the header for every row shown, then:\n\n- **Send All** sends each one to your workflow tool, which suits kicking off a content sprint.\n- **Done**, **Dismiss All** and **Delete** change them all at once. They're for admins and managers.\n\n**Delete** removes the opportunities for good, with any brief they have, and doesn't give back the month's opportunities or briefs. Dismissing keeps them out of your way instead."
+          "text": "Admins and managers tick rows, or the box in the header for every row shown, then:\n\n- **Send All** sends each one to your workflow tool, which suits kicking off a content sprint.\n- **Done**, **Dismiss All** and **Delete** change them all at once.\n\n**Delete** removes the opportunities for good, with any brief they have, and doesn't give back the month's opportunities or briefs. Dismissing keeps them out of your way instead."
         },
         {
           "heading": "Ask for new opportunities",
@@ -2081,15 +2090,27 @@
         },
         {
           "heading": "How many are left",
-          "text": "The dialog shows how many groups in your focus have no opportunity yet, and **How many** goes no higher. When none are left, it says so and **Generate** stays off: add prompts for new groups, or use **Another angle** on an opportunity. Groups without tracked answers from the last 30 days have nothing to write from yet."
+          "text": "The dialog shows how many groups in your focus have no opportunity yet, and how many more can get another angle. **How many** goes no higher. When none are left, it says so and **Generate** stays off: add prompts for new groups. Groups without tracked answers from the last 30 days have nothing to write from yet."
+        },
+        {
+          "heading": "Another angle when groups run out",
+          "text": "When **Let Ansvisor choose** or a **Topic** runs out of groups without an opportunity, New writes the rest as another angle on groups your brand is still barely seen for: mentioned or cited in fewer than 1 in 5 answers. Only where the existing opportunity had its chance: it's done, dismissed (not as \"The topic doesn't matter to us\"), or has been open for 30 days. The list marks these **Another angle**, the message names their groups, and they use the monthly allowance like any other."
         },
         {
           "heading": "No duplicates",
-          "text": "Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is written, the message says so and counts any duplicates it skipped.\n\nA question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.\n\nFor a second take on the same need, use **Another angle** on the opportunity."
+          "text": "Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped.\n\nA question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.\n\nFor a second take on the same need, use **Another angle** on the opportunity."
+        },
+        {
+          "heading": "When fewer come back",
+          "text": "When a run writes fewer than you asked for, or none, the message says why:\n\n- some needs were added to existing opportunities that answer the same thing;\n- some needs have no tracked answers from the last 30 days yet, so there's nothing to write from;\n- the other needs in your focus already have an opportunity. Add prompts for new needs, or use **Another angle** on an opportunity."
         },
         {
           "heading": "How many you get",
-          "text": "New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. The up to three new opportunities Ansvisor writes by itself each night come from the same allowance."
+          "text": "New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. The opportunities Ansvisor writes by itself come from the same allowance."
+        },
+        {
+          "heading": "Automatic suggestions",
+          "text": "After each day's tracking run, Ansvisor writes new opportunities by itself, on a plan with an active subscription:\n\n- **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.\n- **When no group is left, at most 1 a night** as another angle (at most 7 a week). It goes to the group with the most estimated AI volume whose opportunity has been done for 30 days, where your brand is still mentioned or cited in fewer than 1 in 5 answers. On many nights nothing qualifies, and nothing is written."
         },
         {
           "heading": "Owned and earned",
@@ -2185,7 +2206,7 @@
         },
         {
           "heading": "The Rules tab",
-          "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet."
+          "text": "In the side panel, **Instructions** opens on **Rules**. The rules come in five groups: page type rules, length and structure, fan-outs and keywords, links and sources, and style. Most rules can be turned on or off, and many have a value you can change. **Length** takes the least and the most characters, for example 4,500 to 5,500: set as one number, it's met within 20% of it either way. Each rule's status is read from the page as you write. Rules marked **AI check** are judged by the Content Agent and aren't counted yet."
         },
         {
           "heading": "Save or reset your rules",
@@ -2197,11 +2218,11 @@
         },
         {
           "heading": "Fix open rules",
-          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Running the agent uses your workspace's monthly AI usage.\n\nAn open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide: change the page yourself, or the rule."
+          "text": "**Fix open rules** sits at the top of **Rules**. It asks the Content Agent to suggest small, reviewable changes for the rules the page doesn't meet yet. Its suggestions appear in the page, each with **Accept** and **Reject**, under a bar with **Accept all** and **Reject all**.\n\nA decided suggestion can be taken back with **Undo** or **Restore**, and **Undo all** brings every one back to review. One run makes at most eight changes: run it again for the rules still open. Together they never take the page past its Length. Running the agent uses your workspace's monthly AI usage.\n\nAn open rule shows its status in amber; red is kept for what blocks. Once you've decided a run's suggestions, a rule it tried and couldn't fix gets an amber label and a note that it's yours to decide: change the page yourself, or the rule."
         },
         {
           "heading": "Rewrite the whole page",
-          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. A rewrite isn't offered once the page is ready or published. One past its Length is cut to it with one more pass; accept one still a little long, and the next rewrite starts from there.\n\nWhen the passages it keeps stop the page reaching its Length, a note offers **Raise Length to …** and **Rewrite, cited passages too**, which may stop those passages being quoted. The **Length** rule says so too."
+          "text": "The **▾** menu beside **Fix open rules** also offers **Rewrite the whole page**: one new version written to every rule, with the cited passages kept. It uses more AI usage than fixing open rules. It's marked **Recommended** when the page is far off its Length or many rules are open. Picked, the button reads **Rewrite page**.\n\nA rewrite comes back as one change: **Compare** it with your page, then **Accept** or **Reject**. Your page before it stays in History. It isn't offered once the page is ready or published.\n\nYour Length has the last word: a rewrite merges or drops the least useful sections rather than go past it, and one still long is cut once more. When the passages it keeps stop it, a note offers **Rewrite, cited passages too**, then **Raise Length to …**. The **Length** rule says so too."
         },
         {
           "heading": "Before you run it again",
@@ -3028,7 +3049,7 @@
         "volume analysis"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -3036,7 +3057,7 @@
         },
         {
           "heading": "Run a volume analysis",
-          "text": "Volumes come from an analysis you run:\n\n- **Analyze Volumes** the first time;\n- **Analyze New Prompts** for prompts added since, shown while some have no volume;\n- **Refresh Volumes** for newer Google data;\n- **Re-analyze Keywords** to analyze every prompt again, keywords included.\n\nOn plans with a monthly analysis limit, each analysis counts against it, and the toolbar shows how many are left. **Tracked Prompts** also warns when some prompts haven't been analyzed yet."
+          "text": "Volumes come from an analysis that admins and managers run:\n\n- **Analyze Volumes** the first time;\n- **Analyze New Prompts** for prompts added since, shown while some have no volume;\n- **Refresh Volumes** for newer Google data;\n- **Re-analyze Keywords** to analyze every prompt again, keywords included.\n\nOn plans with a monthly analysis limit, each analysis counts against it, and the toolbar shows how many are left. **Tracked Prompts** also warns when some prompts haven't been analyzed yet."
         },
         {
           "heading": "What the tab shows",
@@ -4040,11 +4061,11 @@
         "score changed"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
-          "text": "Each audit has its own report. It opens right after you run an audit, or from a row on the **Pages** tab. It scores the page out of 100, breaks the score down by category and lists every signal checked. The icons at the top re-run the audit on the same page or delete it; **Delete audit** can't be undone."
+          "text": "Each audit has its own report. It opens right after you run an audit, or from a row on the **Pages** tab. It scores the page out of 100, breaks the score down by category and lists every signal checked. The icons at the top re-run the audit on the same page or, for admins and managers, delete it; **Delete audit** can't be undone."
         },
         {
           "heading": "Total score",
@@ -4167,7 +4188,7 @@
         "audit priority"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -4195,7 +4216,7 @@
         },
         {
           "heading": "The Pages tab",
-          "text": "**Pages** lists every page you audited, one row per page, most recent first, with its **First score**, **Current score**, **Issues** (signals that failed or warned), **Status** and **Last audit**. Once a page has two audits, the change since the first shows beside the current score: green up, red down. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.\n\nClick a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel, first scores included; select pages to **Re-audit** them or export only those."
+          "text": "**Pages** lists every page you audited, one row per page, most recent first, with its **First score**, **Current score**, **Issues** (signals that failed or warned), **Status** and **Last audit**. Once a page has two audits, the change since the first shows beside the current score: green up, red down. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.\n\nClick a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and, for admins and managers, a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel, first scores included; select pages to **Re-audit** them or export only those."
         }
       ]
     },
@@ -4222,7 +4243,7 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-03",
       "sections": [
         {
           "heading": null,
@@ -4230,7 +4251,7 @@
         },
         {
           "heading": "The header",
-          "text": "The header shows the brand's name, when the last run finished and when the next one is due. It has these buttons:\n\n- **Formulas** explains how every number on the page is calculated.\n- **Export CSV** downloads the answers behind the page, with the current filters.\n- **Reports** opens the Reports page.\n\nA self-hosted instance also has **Test Single Prompt** and **Run All**, to start a run by hand."
+          "text": "The header shows the brand's name, when the last run finished and when the next one is due. It has these buttons:\n\n- **Formulas** explains how every number on the page is calculated.\n- **Export CSV** downloads the answers behind the page, with the current filters.\n- **Reports** opens the Reports page.\n\nA self-hosted instance also has **Test Single Prompt** and **Run All**, for admins and managers to start a run by hand."
         },
         {
           "heading": "The summary line",

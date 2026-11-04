@@ -4,8 +4,8 @@ route: /dashboard/audit
 keywords: [site score, pages audited, audit opportunities, audited pages, score over time, first score, current score, not audited, audit coverage]
 synonyms: [audit overview, audit history, which pages to audit, audit priority]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-03
+last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -56,4 +56,4 @@ Pins and exclusions hold for the whole brand, so only admins and managers see **
 
 **Pages** lists every page you audited, one row per page, most recent first, with its **First score**, **Current score**, **Issues** (signals that failed or warned), **Status** and **Last audit**. Once a page has two audits, the change since the first shows beside the current score: green up, red down. Status is **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed**. **Auto** marks an auto-audit's audit.
 
-Click a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel, first scores included; select pages to **Re-audit** them or export only those.
+Click a row to open its latest report. The arrow beside a page lists its earlier audits, each with **View report** and, for admins and managers, a delete icon. **Group by template** groups the rows under their template. **Export** downloads the list as CSV or Excel, first scores included; select pages to **Re-audit** them or export only those.

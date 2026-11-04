@@ -491,7 +491,8 @@ export function OpportunityDetail({
   const noPlan = isNoPlan(quota, isLocked);
   const quotaExhausted = quotaLimited && !noPlan && quota.remaining <= 0;
   const actionId = sd.actions?.all ?? Object.values(sd.actions ?? {})[0];
-  const canSendToWorkflow = !['dismissed', 'archived'].includes(opportunity.status);
+  // Sending to the webhook is for admins and managers, as the server allows it.
+  const canSendToWorkflow = canManage && !['dismissed', 'archived'].includes(opportunity.status);
 
   // Export (the user's spec): what Copy All Data copies, as a file.
   const handleExport = async (format: OpportunityExportFormat) => {

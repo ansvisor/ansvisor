@@ -84,6 +84,7 @@ const {
   SYSTEM_PROMPT_V2,
   briefGuard,
   buildBriefPrompt,
+  briefFit,
   mapOutline,
   outlineSchema,
   outlineSchemaV2,
@@ -246,7 +247,11 @@ describe('rebuildDraftBrief', () => {
       usage: { inputTokens: 1000, outputTokens: 500 },
     });
 
-    const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    const brief = await rebuildDraftBrief({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: sources({ length: 50_000 }),
+    });
 
     // A figure no source has goes with its sentence: nobody is left one to find.
     expect(brief.goal).toBe('');
@@ -459,7 +464,11 @@ describe('rebuildDraftBrief', () => {
       },
       usage: { inputTokens: 1000, outputTokens: 500 },
     });
-    const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    const brief = await rebuildDraftBrief({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: sources({ length: 50_000 }),
+    });
     expect(brief.goal).toHaveLength(500);
     // The empty heading went; the rest is capped at 12 sections.
     expect(brief.outline).toHaveLength(12);
@@ -519,6 +528,77 @@ describe('rebuildDraftBrief', () => {
   });
 });
 
+describe('briefFit (editor UX review 2026-11-03, decision b)', () => {
+  afterEach(() => {
+    delete process.env.CONTENT_BRIEF_RULES;
+  });
+
+  it('plans no more sections and key points than the Length holds', () => {
+    // 800 characters (up to 960): two short sections, two points each.
+    expect(briefFit(800)).toEqual({ sections: 2, keyPoints: 2 });
+    expect(briefFit(3000)).toEqual({ sections: 8, keyPoints: 3 });
+    // A range: its top.
+    expect(briefFit(5000, { min: 4500, max: 5500 })).toEqual({ sections: 12, keyPoints: 8 });
+    expect(briefFit(50_000)).toEqual({ sections: 12, keyPoints: 8 });
+    // Never none.
+    expect(briefFit(100)).toEqual({ sections: 1, keyPoints: 2 });
+  });
+
+  it('asks the model for that many, and keeps no more of what it answers', async () => {
+    // The ask is version 2's: version 1's words stay as its eval baseline has them.
+    process.env.CONTENT_BRIEF_RULES = 'true';
+    const prompt = buildBriefPrompt({
+      brand: { name: 'Acme', language: 'en' },
+      draft: { title: 'Office coffee', page_type: null, method: 'create', source_url: null },
+      prompts: [],
+      sources: sources({ length: 800 }),
+    });
+    expect(prompt).toContain(
+      "Length: about 800 characters. Fit the page to it: at most 2 H2 sections, each with up to 2 key points. Leave out what doesn't fit rather than go past it.",
+    );
+    expect(
+      buildBriefPrompt({
+        brand: { name: 'Acme', language: 'en' },
+        draft: { title: 'Office coffee', page_type: null, method: 'create', source_url: null },
+        prompts: [],
+        sources: sources({ length: 5000, lengthBand: { min: 4500, max: 5500 } }),
+      }),
+    ).toContain(
+      'Length: between 4500 and 5500 characters, about 5000. Fit the page to it: at most 12 H2 sections',
+    );
+    delete process.env.CONTENT_BRIEF_RULES;
+    expect(
+      buildBriefPrompt({
+        brand: { name: 'Acme', language: 'en' },
+        draft: { title: 'Office coffee', page_type: null, method: 'create', source_url: null },
+        prompts: [],
+        sources: sources({ length: 800 }),
+      }),
+    ).toContain('Length: about 800 characters.\n');
+    generateObject.mockResolvedValue({
+      object: {
+        goal: 'Win office searches',
+        audience: 'Office managers',
+        outline: Array.from({ length: 5 }, (_, i) => ({
+          heading: `Section ${String.fromCharCode(97 + i)}`,
+          keyPoints: ['one', 'two', 'three', 'four'],
+          fanout: null,
+          platform: null,
+        })),
+        keywords: [],
+      },
+      usage: { inputTokens: 1000, outputTokens: 500 },
+    });
+    const brief = await rebuildDraftBrief({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: sources({ length: 800 }),
+    });
+    expect(brief.outline.map((s) => s.heading)).toEqual(['Section a', 'Section b']);
+    expect(brief.outline.every((s) => s.keyPoints.length === 2)).toBe(true);
+  });
+});
+
 describe('rebuildSources', () => {
   it('cuts long text and drops empty items rather than refusing the rebuild', () => {
     const parsed = rebuildSources.parse(
@@ -537,6 +617,17 @@ describe('rebuildSources', () => {
   it('brings the length into the range a rebuild takes', () => {
     expect(rebuildSources.parse(sources({ length: 50 })).length).toBe(100);
     expect(rebuildSources.parse(sources({ length: 60_000 })).length).toBe(50_000);
+  });
+
+  it('keeps a Length range the person set, and drops one that doesn’t read (editor test 2026-11-03)', () => {
+    const band = (lengthBand) => rebuildSources.parse(sources({ length: 5000, lengthBand }));
+    expect(band({ min: 4500, max: 5500 }).lengthBand).toEqual({ min: 4500, max: 5500 });
+    expect(band(undefined).lengthBand).toBeUndefined();
+    expect(band({ min: 5500, max: 4500 }).lengthBand).toBeUndefined();
+    expect(band({ min: 0, max: 4500 }).lengthBand).toBeUndefined();
+    expect(band('4500-5500').lengthBand).toBeUndefined();
+    // The rest of the request stands.
+    expect(band({ min: 5500, max: 4500 }).length).toBe(5000);
   });
 });
 
@@ -1289,7 +1380,11 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
       },
       usage: { inputTokens: 10, outputTokens: 5 },
     });
-    const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    const brief = await rebuildDraftBrief({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: sources({ length: 50_000 }),
+    });
     expect(Buffer.byteLength(JSON.stringify(brief))).toBeLessThan(64_000);
     expect(brief.links).toBeNull();
     expect(brief.leftOut).toEqual(['home espresso grinder']);
@@ -1359,7 +1454,11 @@ describe('the brief rules (2026), behind CONTENT_BRIEF_RULES', () => {
       },
       usage: { inputTokens: 10, outputTokens: 5 },
     });
-    const brief = await rebuildDraftBrief({ draftId: DRAFT, brandId: BRAND, sources: sources() });
+    const brief = await rebuildDraftBrief({
+      draftId: DRAFT,
+      brandId: BRAND,
+      sources: sources({ length: 50_000 }),
+    });
     expect(Buffer.byteLength(JSON.stringify(brief))).toBeLessThan(64_000);
     expect(brief.outline).toHaveLength(12);
     expect(brief.outline.every((s) => s.facts.length === 0)).toBe(true);

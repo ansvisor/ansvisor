@@ -41,14 +41,14 @@ Each row's **…** menu has the quick actions:
 - **Open in new tab**, which opens it as a page of its own;
 - **Dismiss**, for a new one. Undo it from the message that appears.
 
-Send to Plan and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions.
+Send to Plan, Send to Workflow and Dismiss are for admins and managers. Click an opportunity's title to open it in a panel beside the list, with all its data and the rest of its actions.
 
 ## Work on many at once
 
-Tick rows, or the box in the header for every row shown, then:
+Admins and managers tick rows, or the box in the header for every row shown, then:
 
 - **Send All** sends each one to your workflow tool, which suits kicking off a content sprint.
-- **Done**, **Dismiss All** and **Delete** change them all at once. They're for admins and managers.
+- **Done**, **Dismiss All** and **Delete** change them all at once.
 
 **Delete** removes the opportunities for good, with any brief they have, and doesn't give back the month's opportunities or briefs. Dismissing keeps them out of your way instead.
 
@@ -68,19 +68,38 @@ Titles leave years out unless the need is about one. A year that has passed in a
 
 ## How many are left
 
-The dialog shows how many groups in your focus have no opportunity yet, and **How many** goes no higher. When none are left, it says so and **Generate** stays off: add prompts for new groups, or use **Another angle** on an opportunity. Groups without tracked answers from the last 30 days have nothing to write from yet.
+The dialog shows how many groups in your focus have no opportunity yet, and how many more can get another angle. **How many** goes no higher. When none are left, it says so and **Generate** stays off: add prompts for new groups. Groups without tracked answers from the last 30 days have nothing to write from yet.
+
+## Another angle when groups run out
+
+When **Let Ansvisor choose** or a **Topic** runs out of groups without an opportunity, New writes the rest as another angle on groups your brand is still barely seen for: mentioned or cited in fewer than 1 in 5 answers. Only where the existing opportunity had its chance: it's done, dismissed (not as "The topic doesn't matter to us"), or has been open for 30 days. The list marks these **Another angle**, the message names their groups, and they use the monthly allowance like any other.
 
 ## No duplicates
 
-Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped. If nothing new is written, the message says so and counts any duplicates it skipped.
+Ansvisor never writes the same work twice. When a new opportunity would cover the same need as one you have, because their prompts and AI searches largely overlap, it's added to that one instead and skipped.
 
 A question also gets only one open opportunity. When a new one would answer the same question as an open one, in the same words (years aside) or from the same group of prompts, it's added to the open one. That holds for automatic suggestions, **New**, a prompt's suggestion and a task sent from the Action Center. Its prompts, AI searches and sources join the open one, which keeps the stronger score and counts what was added. The task's History says where it went.
 
 For a second take on the same need, use **Another angle** on the opportunity.
 
+## When fewer come back
+
+When a run writes fewer than you asked for, or none, the message says why:
+
+- some needs were added to existing opportunities that answer the same thing;
+- some needs have no tracked answers from the last 30 days yet, so there's nothing to write from;
+- the other needs in your focus already have an opportunity. Add prompts for new needs, or use **Another angle** on an opportunity.
+
 ## How many you get
 
-New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. The up to three new opportunities Ansvisor writes by itself each night come from the same allowance.
+New opportunities come from a monthly allowance set by your plan, with a cap on how many one request asks for; on limited plans the page shows what's left. Skipped duplicates and opportunities that couldn't be written don't count; **Another angle** counts as one new opportunity. The opportunities Ansvisor writes by itself come from the same allowance.
+
+## Automatic suggestions
+
+After each day's tracking run, Ansvisor writes new opportunities by itself, on a plan with an active subscription:
+
+- **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.
+- **When no group is left, at most 1 a night** as another angle (at most 7 a week). It goes to the group with the most estimated AI volume whose opportunity has been done for 30 days, where your brand is still mentioned or cited in fewer than 1 in 5 answers. On many nights nothing qualifies, and nothing is written.
 
 ## Owned and earned
 
