@@ -30,12 +30,18 @@ vi.mock('../config/supabase.js', () => ({
     },
   },
 }));
+const queryGscSearchAnalytics = vi.hoisted(() => vi.fn());
 vi.mock('./composio.js', () => ({
   isComposioConfigured: () => true,
-  queryGscSearchAnalytics: vi.fn(),
+  queryGscSearchAnalytics,
 }));
 const activeOrgFilter = vi.hoisted(() => vi.fn());
 vi.mock('./active-subscriptions.js', () => ({ activeOrgFilter }));
+const connectedBrands = vi.hoisted(() => vi.fn());
+vi.mock('./brand-integrations.js', () => ({
+  connectedBrands,
+  composioTarget: (c) => ({ entityId: c.entityId, accountId: c.composioAccountId }),
+}));
 vi.mock('./logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 
 import {
@@ -249,31 +255,72 @@ describe('pagesSyncPlan', () => {
 });
 
 /**
- * Once an organization's plan has ended (2026-10-27), the nightly sync
- * leaves it out: nothing is read from Search Console for it.
+ * The brands whose Google sign-in is live (00470: the one each brand uses,
+ * the Account's for every brand until one picks its own). Once an
+ * organization's plan has ended (2026-10-27), the nightly sync leaves it
+ * out: nothing is read from Search Console for it.
  */
 describe('runGscSync', () => {
+  const uses = (brandId, organizationId) => ({
+    brandId,
+    organizationId,
+    entityId: `org_${organizationId}`,
+    composioAccountId: `ca_${organizationId}`,
+    connected: true,
+  });
+
   beforeEach(() => {
     calls.length = 0;
-    tables = {
-      integration_connections: [
-        { organization_id: 'paying' },
-        { organization_id: 'lapsed' },
-        { organization_id: 'paying' },
-      ],
-      brands: [],
-    };
+    tables = { brands: [] };
+    queryGscSearchAnalytics.mockReset().mockResolvedValue([]);
+    connectedBrands
+      .mockReset()
+      .mockResolvedValue([uses('b1', 'paying'), uses('b2', 'lapsed'), uses('b3', 'paying')]);
     activeOrgFilter.mockReset().mockResolvedValue((orgId) => orgId === 'paying');
   });
 
-  it('syncs only the organizations still on a plan', async () => {
+  it('syncs only the brands of organizations still on a plan', async () => {
     await runGscSync();
 
+    expect(connectedBrands).toHaveBeenCalledWith('google-search-console', {
+      organizationId: undefined,
+      brandId: undefined,
+    });
     expect(activeOrgFilter).toHaveBeenCalledWith(['paying', 'lapsed']);
     const brands = calls.find((call) => call.table === 'brands');
-    expect(brands.filters).toContainEqual(['in', 'organization_id', ['paying']]);
+    expect(brands.filters).toContainEqual(['in', 'id', ['b1', 'b3']]);
     // Never a demo brand (00380).
     expect(brands.filters).toContainEqual(['eq', 'is_demo', false]);
+  });
+
+  it('reads Search Console with the sign-in the brand uses, by its connected account', async () => {
+    tables.brands = [
+      {
+        id: 'b1',
+        organization_id: 'paying',
+        gsc_property: 'sc-domain:acme.com',
+        gsc_pages_backfilled_property: 'sc-domain:acme.com',
+        gsc_pages_backfill_from: null,
+        gsc_shopping_property: 'sc-domain:acme.com',
+      },
+    ];
+    await runGscSync({ brandId: 'b1' });
+    expect(connectedBrands).toHaveBeenCalledWith('google-search-console', {
+      organizationId: undefined,
+      brandId: 'b1',
+    });
+    expect(queryGscSearchAnalytics).toHaveBeenCalled();
+    for (const [target, args] of queryGscSearchAnalytics.mock.calls) {
+      expect(target).toEqual({ entityId: 'org_paying', accountId: 'ca_paying' });
+      expect(args.site_url).toBe('sc-domain:acme.com');
+    }
+  });
+
+  it('reads no brand when no brand’s sign-in is live', async () => {
+    connectedBrands.mockResolvedValue([]);
+
+    expect(await runGscSync()).toEqual({ synced: 0, skipped: 0, results: [] });
+    expect(calls.some((call) => call.table === 'brands')).toBe(false);
   });
 
   it('reads no brand when no connected organization is on a plan', async () => {

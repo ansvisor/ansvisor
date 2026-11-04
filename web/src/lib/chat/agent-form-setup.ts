@@ -27,7 +27,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     supabaseAdmin.from('brands').select('id, name, is_demo').eq('organization_id', org),
     supabaseAdmin
       .from('chat_agents')
-      .select('name, visibility, owner_id')
+      .select('id, name, visibility, owner_id, status')
       .eq('organization_id', org),
     resolveChatModelKey(org)
       .then((resolved) => (resolved?.source === 'own' ? resolved.config.provider : null))
@@ -71,10 +71,23 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     fullAutoDenial?.denial.code === 'plan_locked' ? fullAutoDenial.denial.needs : 'growth';
   const me = ctx.actor.userId;
   const admin = ctx.viewer.role === 'admin';
-  const seen = ((agents.data ?? []) as { name: string; visibility: string; owner_id: string }[])
+  const visible = (
+    (agents.data ?? []) as {
+      id: string;
+      name: string;
+      visibility: string;
+      owner_id: string;
+      status: string;
+    }[]
+  )
     // Admins see every agent; others theirs and the workspace's (§K item 51).
-    .filter((a) => admin || a.visibility === 'workspace' || a.owner_id === me)
-    .map((a) => a.name);
+    .filter((a) => admin || a.visibility === 'workspace' || a.owner_id === me);
+  const seen = visible.map((a) => a.name);
+  // Can call's choices: the ones on or paused (CHAT-27 item 14), by name.
+  const callable = visible
+    .filter((a) => a.status === 'active' || a.status === 'paused')
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map(({ id, name }) => ({ id, name }));
 
   return {
     role: ctx.viewer.role,
@@ -93,6 +106,8 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     takenNames: seen,
     ownKeyProvider,
     goLive,
+    callable,
+    canCallLocked: !ctx.plan.fullAuto,
   };
 }
 

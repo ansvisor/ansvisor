@@ -130,10 +130,10 @@ describe('the run models', () => {
     expect(modelId(sonnet!.pick('read'))).toBe('claude-sonnet-5-5');
     expect(sonnet?.pick('write').providerOptions).toMatchObject({ anthropic: { effort: 'max' } });
 
-    // Not tested yet (Opus 5.5): Auto, the effort kept.
+    // Not offered (not tested, or never listed): Auto, the effort kept.
     key.resolve.mockResolvedValueOnce(anthropic);
     const opus = await resolveChatModels('org', {
-      model: 'anthropic/claude-opus-5.5',
+      model: 'mistralai/mistral-large-3',
       effort: 'max',
     });
     expect(opus?.model).toBe('auto');

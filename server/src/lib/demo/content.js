@@ -446,6 +446,7 @@ export function contentRows({ brandId, now }, { actionFor = () => null } = {}) {
         relatedTopics: [],
         prompts: promptIds.map((pid) => byPrompt.get(pid).text),
         estAiVolume: metrics.demand,
+        questionVolume: metrics.representative?.volume ?? 0,
         visibilityScore: metrics.visibility,
         topCompetitorVisibility: metrics.topCompetitorVisibility,
         competitorGap: metrics.competitorGap,
