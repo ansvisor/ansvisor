@@ -1352,12 +1352,13 @@ describe('saving a skill, by role and mode (W3-06, CHAT-20 §9 row 75)', () => {
     return decideToolCall(tool, ctx!, call);
   }
 
-  it('Admins and Managers, from a card unless Full auto; Analysts and Agency partners are refused', async () => {
+  it('Admins and Managers, from its draft card in every mode (W3-08); Analysts and Agency partners are refused', async () => {
     db.tables.profiles.push({ id: AGENCY, role: 'agency_partner', organization_id: ORG });
     for (const userId of [PEOPLE.admin, PEOPLE.manager]) {
-      expect(await decide(userId, 'ask_first')).toMatchObject({ kind: 'ask' });
-      expect(await decide(userId, 'auto')).toMatchObject({ kind: 'ask' });
-      expect(await decide(userId, 'full_auto')).toEqual({ kind: 'run', via: 'full_auto' });
+      // Nothing is kept before Save: Full auto shows the card too.
+      for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
+        expect(await decide(userId, mode)).toMatchObject({ kind: 'ask' });
+      }
     }
     for (const userId of [PEOPLE.analyst, AGENCY]) {
       for (const mode of ['ask_first', 'auto', 'full_auto'] as const) {
@@ -1369,16 +1370,16 @@ describe('saving a skill, by role and mode (W3-06, CHAT-20 §9 row 75)', () => {
     }
   });
 
-  it('shows its card even in Full auto once outside text, an imported skill too, shaped it (§16a)', async () => {
+  it('shows its card in Full auto when outside text, an imported skill too, shaped it (§16a): its draft card comes first', async () => {
     expect(await decide(PEOPLE.admin, 'full_auto', true)).toMatchObject({
       kind: 'ask',
-      reason: 'tainted',
+      reason: 'always_card',
     });
   });
 
   it('is in the Activity log, and Undo deletes it while it is still private and as saved', async () => {
     const tool = chatTool('save_skill')!;
-    await runAs(PEOPLE.admin, tool, 'full_auto');
+    await runAs(PEOPLE.admin, tool, 'full_auto', { approved: true });
     const [log] = db.tables.chat_activity_log;
     const [saved] = db.tables.chat_skills;
     expect(log).toMatchObject({

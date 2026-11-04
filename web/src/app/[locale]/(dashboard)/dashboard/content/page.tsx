@@ -89,6 +89,7 @@ import { WriteThisDialog } from '@/components/content/write-this-dialog';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { bulkSendNotes } from '@/lib/content/bulk-send';
+import { newResultMessage } from '@/lib/content/new-result';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { canWriteOpportunity, opportunityStart } from '@/lib/content/opportunity-start';
 import { siteTypeOf } from '@/lib/content/page-types';
@@ -738,20 +739,25 @@ export default function ContentPage() {
               clearGenerationJob();
               setGenerating(false);
               setPendingCount(0);
-              const generated = status.result?.generated ?? 0;
-              const duplicates = status.result?.duplicates ?? 0;
-              const existingId = status.result?.existingId;
-              if (status.result?.limited) toast.error(t('newLimitReached'));
+              // How many were created and, when fewer than asked for, why.
+              const message = newResultMessage(status.result ?? { generated: 0 });
+              const existingId = message.existingId;
+              const title = t(message.title.key, message.title.values);
+              const description = message.reasons.map((r) => t(r.key, r.values)).join(' ');
+              if (message.tone === 'error') toast.error(title);
               // A request for one prompt that an open opportunity answers.
-              else if (generated === 0 && existingId)
-                toast(t('newExisting'), {
+              else if (existingId)
+                toast(title, {
                   action: {
                     label: t('openExisting'),
                     onClick: () => selectOpportunity(existingId),
                   },
                 });
-              else if (generated === 0 && duplicates === 0) toast(t('newNothing'));
-              else toast.success(t('newDone', { generated, duplicates }));
+              else
+                (message.tone === 'success' ? toast.success : toast)(
+                  title,
+                  description ? { description } : undefined,
+                );
               loadData();
               loadPromptOptions();
               setUsageVersion((v) => v + 1);
@@ -1462,21 +1468,21 @@ export default function ContentPage() {
                   {t('bulk.selected', { count: selectedIds.size })}
                 </span>
                 <div className="flex items-center gap-1 ml-auto">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-7 text-xs gap-1.5"
-                    onClick={guard(handleBulkSend, { action: tActions('sendToWorkflow') })}
-                    disabled={bulkSending}
-                  >
-                    {bulkSending ? <LoadingDots /> : <Send className="h-3 w-3" />}
-                    {t('bulk.sendAll')}
-                  </Button>
-
-                  {/* Bulk changes, dismissing and deleting are for admins and
-                      managers, as the server and the database allow them. */}
+                  {/* Sending to the webhook, bulk changes, dismissing and deleting are
+                      for admins and managers, as the server and the database allow them. */}
                   {canManage && (
                     <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1.5"
+                        onClick={guard(handleBulkSend, { action: tActions('sendToWorkflow') })}
+                        disabled={bulkSending}
+                      >
+                        {bulkSending ? <LoadingDots /> : <Send className="h-3 w-3" />}
+                        {t('bulk.sendAll')}
+                      </Button>
+
                       <Button
                         variant="outline"
                         size="sm"
@@ -1576,17 +1582,21 @@ export default function ContentPage() {
               <Table className="min-w-[720px] table-fixed">
                 <TableHeader>
                   <TableRow>
+                    {/* Every bulk action is for admins and managers, so the others
+                        get no boxes to tick; the column stays for the layout. */}
                     <TableHead className="w-10 pl-4">
-                      <Checkbox
-                        checked={filtered.length > 0 && selectedIds.size === filtered.length}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedIds(new Set(filtered.map((o) => o.id)));
-                          } else {
-                            setSelectedIds(new Set());
-                          }
-                        }}
-                      />
+                      {canManage && (
+                        <Checkbox
+                          checked={filtered.length > 0 && selectedIds.size === filtered.length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setSelectedIds(new Set(filtered.map((o) => o.id)));
+                            } else {
+                              setSelectedIds(new Set());
+                            }
+                          }}
+                        />
+                      )}
                     </TableHead>
                     {/* The other columns are sized to fit their badges and buttons;
                         the action takes what is left, so nothing spills into its
@@ -1634,15 +1644,17 @@ export default function ContentPage() {
                   {filtered.map((opp) => (
                     <TableRow key={opp.id} className="hover:bg-muted/50">
                       <TableCell className="w-10 pl-4">
-                        <Checkbox
-                          checked={selectedIds.has(opp.id)}
-                          onCheckedChange={(checked) => {
-                            const next = new Set(selectedIds);
-                            if (checked) next.add(opp.id);
-                            else next.delete(opp.id);
-                            setSelectedIds(next);
-                          }}
-                        />
+                        {canManage && (
+                          <Checkbox
+                            checked={selectedIds.has(opp.id)}
+                            onCheckedChange={(checked) => {
+                              const next = new Set(selectedIds);
+                              if (checked) next.add(opp.id);
+                              else next.delete(opp.id);
+                              setSelectedIds(next);
+                            }}
+                          />
+                        )}
                       </TableCell>
                       <TableCell className="pl-6 max-w-0">
                         <button
@@ -1780,7 +1792,7 @@ export default function ContentPage() {
                               : null
                           }
                           workflow={
-                            opp.status === 'new'
+                            canManage && opp.status === 'new'
                               ? {
                                   sending: sendingId === opp.id,
                                   onSend: guard(() => void handleSendWebhook(opp.id), {
