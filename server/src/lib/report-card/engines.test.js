@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
-const { REPORT_CARD_ENGINES, askEngines } = await import('./engines.js');
+const { PAST_DEADLINE, REPORT_CARD_ENGINES, askEngines } = await import('./engines.js');
 
 const questions = [{ text: 'q one' }, { text: 'q two' }];
 
@@ -69,6 +69,30 @@ describe('askEngines', () => {
     expect(of('google-aimode')).toEqual([null, 'failed']);
     // Submitted: all but the refused submission.
     expect(tasks).toBe(7);
+  });
+
+  it('submits nothing past the deadline, and waits no longer than it for an answer', async () => {
+    let t = 1_000;
+    const submit = vi.fn(async () => ({ taskId: 't' }));
+    const poll = vi.fn(async () => {
+      t += 600; // Each answer moves the clock on.
+      return { text: 'a', citations: [] };
+    });
+    const { tasks, answers } = await askEngines(questions, 'US', {
+      submit,
+      poll,
+      supported: new Map(),
+      inFlight: 1,
+      maxWaitMs: 5_000,
+      deadline: 2_500,
+      clock: () => t,
+    });
+    // Asked at 1000, 1600 and 2200; the rest would start past 2500.
+    expect(submit).toHaveBeenCalledTimes(3);
+    expect(poll.mock.calls.map((c) => c[2].maxWaitMs)).toEqual([1_500, 900, 300]);
+    expect(tasks).toBe(3);
+    expect(answers.filter((a) => a.missing === 'failed')).toHaveLength(5);
+    expect(PAST_DEADLINE).toMatch(/deadline/);
   });
 
   it('keeps at most the tasks in flight it is given', async () => {
