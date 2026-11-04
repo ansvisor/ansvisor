@@ -51,7 +51,6 @@ import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
 import { RunCard } from './_run-card';
-import { WorkingDots } from './_working-dots';
 import type { DraftRulesState } from './_use-draft-rules';
 import { BrandRulesBox } from './_brand-rules-box';
 
@@ -91,6 +90,8 @@ export interface AgentFix {
   blocked: string | null;
   /** Open rules no run can close here: held by what the page keeps (openRulesForAgent). */
   held?: ReadonlySet<string>;
+  /** Open rules a Fix was sent and couldn't close (tried-rules.ts): the person's to decide. */
+  tried?: ReadonlySet<string>;
 }
 
 /** Rewrite the whole page to these rules, as the editor runs it: one suggestion. */
@@ -156,8 +157,8 @@ function RunAgentButton({
         if (mode === 'rewrite') onMode('fix');
       }}
     >
-      {running && <WorkingDots className="ml-0" />}
-      {running ? t('working') : mode === 'rewrite' ? t('rewriteLabel') : t('label')}
+      {/* The agent card says it's working, alone (editor UX review 2026-11-03). */}
+      {mode === 'rewrite' ? t('rewriteLabel') : t('label')}
     </Button>
   );
   if (!split) return main;
@@ -267,6 +268,7 @@ export function RulesTab({
 
   // Rewrite the page whole when small edits can't get there.
   const held = agentFix?.held ?? NO_HELD;
+  const tried = agentFix?.tried ?? NO_HELD;
   const advice = pageRewrite ? rewriteAdvice(state.rules, pageRewrite.reach, held) : null;
   // A Length the rewrite can't reach: said with a Length it can, never recommended.
   const outOfReach = pageRewrite
@@ -464,6 +466,7 @@ export function RulesTab({
                   key={rule.key}
                   rule={rule}
                   status={status}
+                  yours={tried.has(rule.key) || held.has(rule.key)}
                   onChange={(change) => state.change(rule.key, change)}
                   agentFix={rule.key === 'aiTraces' ? agentFix : undefined}
                   onOpenSources={onOpenSources}
@@ -471,11 +474,17 @@ export function RulesTab({
                   note={
                     rule.key === 'length' && state.lengthConflict
                       ? t('lengthConflict', state.lengthConflict)
-                      : rule.key === 'sentence' && held.has('sentence') && status.state === 'bad'
-                        ? t('heldSentence')
-                        : rule.key === 'shopLinksLive'
-                          ? shoppingNote(t, status)
-                          : undefined
+                      : // Said where the Length is set, not only in Run Agent's card
+                        // (editor test 2026-11-03: a Length set lower seemed ignored).
+                        rule.key === 'length' && outOfReach
+                        ? t('lengthOutOfReachNote', { least: outOfReach.least })
+                        : rule.key === 'sentence' && held.has('sentence') && status.state === 'bad'
+                          ? t('heldSentence')
+                          : tried.has(rule.key) && status.state === 'bad'
+                            ? t('triedNote')
+                            : rule.key === 'shopLinksLive'
+                              ? shoppingNote(t, status)
+                              : undefined
                   }
                 />
               ))}
@@ -668,6 +677,7 @@ function AddTextRules({ onAdd }: { onAdd: (lines: string[]) => void }) {
 function RuleRow({
   rule,
   status,
+  yours = false,
   onChange,
   agentFix,
   onOpenSources,
@@ -676,6 +686,11 @@ function RuleRow({
 }: {
   rule: ActiveRule;
   status: RuleStatus;
+  /**
+   * Open, and the person's to decide: the agent tried it and couldn't close
+   * it, or no run can (held). Amber, not red (editor test 2026-11-03).
+   */
+  yours?: boolean;
   onChange: (change: { on?: boolean; value?: string }) => void;
   /** "Remove AI traces" offers Fix: the agent rewrites only those phrases. */
   agentFix?: AgentFix;
@@ -710,7 +725,7 @@ function RuleRow({
         >
           {name}
         </span>
-        <StatusBadge on={rule.on} status={status} onOpenSources={onOpenSources} />
+        <StatusBadge on={rule.on} status={status} yours={yours} onOpenSources={onOpenSources} />
         {agentFix && rule.on && status.state === 'bad' && (
           <button
             type="button"
@@ -824,10 +839,13 @@ export function ruleStatusDetail(
 function StatusBadge({
   on,
   status,
+  yours = false,
   onOpenSources,
 }: {
   on: boolean;
   status: RuleStatus;
+  /** Open and the person's to decide: amber, not red as the agent's still to fix. */
+  yours?: boolean;
   onOpenSources?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor.rules.status');
@@ -856,7 +874,12 @@ function StatusBadge({
       className={cn(
         'w-20 shrink-0 truncate text-right text-[11px] font-medium',
         status.state === 'ok' && 'text-emerald-600 dark:text-emerald-400',
-        status.state === 'bad' && 'text-amber-600 dark:text-amber-400',
+        // Red only for what blocks (editor UX review 2026-11-03): an open rule
+        // is amber; one the agent tried, or no run can close, a chip with its note.
+        status.state === 'bad' &&
+          (yours
+            ? 'rounded-md bg-amber-50 px-1 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+            : 'text-amber-600 dark:text-amber-400'),
         status.state === 'info' && 'font-normal text-muted-foreground',
       )}
     >
