@@ -293,8 +293,11 @@ function alsoNamed(card: ReportCardPayload): string[] {
 
 /** Page 1: the results. */
 function ResultsPage({ card, family }: PageProps) {
-  const { answers, named } = totals(card);
+  // Every engine's answers, for the questions asked; every other figure
+  // counts the headline's (the main engines').
+  const { answers: asked } = totals(card);
   const headline = mainTotals(card);
+  const { answers, named } = headline;
   const main = mainEngineRows(card);
   const growth = growthEngineRows(card);
   const leader = card.competitors[0];
@@ -325,7 +328,7 @@ function ResultsPage({ card, family }: PageProps) {
           <Text style={styles.kpiLabel}>Questions asked</Text>
           <Text style={styles.kpiValue}>{card.questionCount}</Text>
           <Text style={styles.kpiSub}>
-            in {card.engines.length} AI engines: {answers} answers
+            in {card.engines.length} AI engines: {asked} answers
           </Text>
         </View>
         <View style={styles.kpiBox}>
@@ -437,9 +440,10 @@ function ResultsPage({ card, family }: PageProps) {
           , and asked each one once in {card.engines.map((e) => engineLabel(e.engine)).join(', ')}{' '}
           in {countryName(card.country)}, in {card.language}, on {date}. AI answers change from day
           to day, so this is a snapshot. Visibility here is the share of{' '}
-          {growth.length ? `${engineList(main)}’s answers` : 'answers'} that name you; competitors
-          and sites are counted over every engine’s answers. The AI Visibility Score in Ansvisor
-          also weighs citations and how early you’re named.
+          {growth.length ? `${engineList(main)}’s answers` : 'answers'} that name you, and
+          competitors and sites are counted over the same answers
+          {growth.length ? '; Google’s engines are shown apart' : ''}. The AI Visibility Score in
+          Ansvisor also weighs citations and how early you’re named.
           {(card.questionRows?.length ?? 0) > 0
             ? ` All ${card.questionRows?.length} questions are on page 4.`
             : ''}

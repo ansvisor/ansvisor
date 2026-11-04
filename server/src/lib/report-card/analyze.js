@@ -288,12 +288,17 @@ const ownSite = (host, domains) =>
   domains.some((d) => host === d || host.endsWith(`.${d}`) || d.endsWith(`.${host}`));
 
 /**
- * The card's figures from its answers.
+ * The card's figures from its answers. Every figure but the engine rows
+ * and the question marks counts the main engines' answers (Starter's that
+ * answered; every engine when none of them did), so the card's headline,
+ * its competitors, its sites and its own citations share one base. The
+ * other engines (Growth's) count in their own rows only.
  *
  * @param {{ text: string, textEn: string|null }[]} questions
  * @param {{ question: number, engine: string, text: string|null, citations: { url: string }[] }[]} answers
  * @param {Map<string, string[]>} competitors "{question}:{engine}" → the competitors it names
- * @param {{ companyName: string, site: string, domain: string, engines: string[] }} company
+ * @param {{ companyName: string, site: string, domain: string, engines: string[], mainEngines?: string[] }} company
+ *   `mainEngines`: the engines the card's figures count (every engine when absent)
  * @param {{ others?: Map<string, { name: string, kind: 'marketplace'|'other' }[]>, siteKinds?: Map<string, string> }} [sorted]
  *   the other businesses each answer names, and each cited site's kind
  */
@@ -301,12 +306,16 @@ export function summarize(
   questions,
   answers,
   competitors,
-  { companyName, site, domain, engines },
+  { companyName, site, domain, engines, mainEngines = engines },
   { others = new Map(), siteKinds = new Map() } = {},
 ) {
   const domains = [...new Set([site, domain])];
   const brand = { brandName: companyName, domains };
   const engineRows = new Map(engines.map((engine) => [engine, { engine, answers: 0, named: 0 }]));
+  const hasText = (answer) => answer.text !== null && answer.text !== undefined;
+  const answered = new Set(answers.filter(hasText).map((answer) => answer.engine));
+  const main = engines.filter((engine) => mainEngines.includes(engine) && answered.has(engine));
+  const counted = new Set(main.length ? main : engines);
   /** brand key → answers naming it */
   const rivalCounts = new Map();
   /** brand key → each spelling and how often it was written */
@@ -320,26 +329,35 @@ export function summarize(
   let ownCitations = 0;
 
   for (const answer of answers) {
-    if (answer.text === null || answer.text === undefined) continue;
+    if (!hasText(answer)) continue;
     const row = engineRows.get(answer.engine);
     if (!row) continue;
     row.answers += 1;
-    if (countBrandMentions(answer.text, brand) > 0) {
+    const named = countBrandMentions(answer.text, brand) > 0;
+    if (named) {
       row.named += 1;
-      namedIn.add(answer.question);
       namedAnswers.add(`${answer.question}:${answer.engine}`);
     }
 
+    // Every answer's spellings, so a brand reads the same on every row.
     const rivals = competitors.get(`${answer.question}:${answer.engine}`) ?? [];
-    // One brand under its spellings, counted once an answer.
-    const keys = new Set();
     for (const name of rivals) {
       const key = brandKey(name);
       if (!key) continue;
       const spellings = spellingsOf.get(key) ?? new Map();
       spellings.set(name, (spellings.get(name) ?? 0) + 1);
       spellingsOf.set(key, spellings);
-      if (keys.has(key)) continue;
+    }
+
+    // An engine shown apart counts in its own row and marks only.
+    if (!counted.has(answer.engine)) continue;
+    if (named) namedIn.add(answer.question);
+
+    // One brand under its spellings, counted once an answer.
+    const keys = new Set();
+    for (const name of rivals) {
+      const key = brandKey(name);
+      if (!key || keys.has(key)) continue;
       keys.add(key);
       rivalCounts.set(key, (rivalCounts.get(key) ?? 0) + 1);
       const forQuestion = rivalsByQuestion.get(answer.question) ?? new Map();
@@ -389,7 +407,7 @@ export function summarize(
   const topThree = new Set(ranked.slice(0, 3).map((c) => brandKey(c.name)));
   const answeredBy = new Map();
   for (const answer of answers) {
-    if (typeof answer.text === 'string') {
+    if (typeof answer.text === 'string' && counted.has(answer.engine)) {
       answeredBy.set(answer.question, (answeredBy.get(answer.question) ?? 0) + 1);
     }
   }
@@ -439,6 +457,8 @@ export function summarize(
 
   return {
     engines: engines.map((engine) => engineRows.get(engine)),
+    /** The main engines that answered: what every figure below counts. */
+    mainEngines: main,
     competitors: ranked,
     marketplaces: listOthers('marketplace'),
     otherNames: listOthers('other'),

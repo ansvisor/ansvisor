@@ -131,7 +131,7 @@ export const SAMPLE_REPORT_CARD: ReportCardPayload = {
     },
     { text: 'how long do roasted coffee beans stay fresh', textEn: null, competitors: [] },
   ],
-  missedCount: 11,
+  missedCount: 17,
   questionRows: QUESTIONS.map((text, i) => ({
     text,
     textEn: null,

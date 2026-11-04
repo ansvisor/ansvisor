@@ -88,6 +88,22 @@ describe('ReportCardPdfDocument', () => {
     expect(results).toContain('All 25 questions are on page 4.');
   });
 
+  it('states one visibility figure on every page: the headline’s engines', () => {
+    const [results, plan, , questions] = draw(SAMPLE_REPORT_CARD);
+    // ChatGPT 7 of 25 and Microsoft Copilot 2 of 25; the competitors and
+    // sites counted over the same 50 answers.
+    expect(results).toContain('named in 9 of 50 answers');
+    expect(results).toContain('named in 41 of 50 answers');
+    expect(results).toContain('of 50 answers cite a page of yours');
+    expect(results).toContain('in 5 AI engines: 125 answers');
+    expect(results).toContain('competitors and sites are counted over the same answers');
+    expect(plan).toContain('You appear in 9 of 50 answers; Ridgeline Roasters in 41.');
+    expect(questions).toContain('Named in 9 of 50 answers');
+    for (const page of [results, plan, questions]) {
+      expect(page).not.toMatch(/\d+ of 125 answers/);
+    }
+  });
+
   it('page 2 is the action plan with a trial link', () => {
     const [, plan] = draw(SAMPLE_REPORT_CARD);
     expect(plan).toContain('What’s in Ansvisor and how you can use it');
@@ -129,7 +145,9 @@ describe('ReportCardPdfDocument', () => {
     const pages = draw(SAMPLE_REPORT_CARD);
     const questions = pages[3];
     expect(questions).toContain('The 25 questions we asked');
-    expect(questions).toContain('Named in 20 of 125 answers: 14 of the 25 questions.');
+    expect(questions).toContain(
+      'Named in 9 of 50 answers from ChatGPT and Microsoft Copilot: questions 1, 2, 3, 4, 5, 6, 7 and 14.',
+    );
     // The key above the table: a tick, a dash and n/a, each with its meaning.
     expect(questions).toContain('Named–Not namedn/aNo answer');
     expect(questions).toContain('best coffee beans for espresso at home');
