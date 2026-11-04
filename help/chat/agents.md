@@ -116,7 +116,7 @@ A **Run now** that starts as you click it follows the agent's mode, so in **Full
 
 ## When outside text makes a run ask
 
-Once a run has read text from outside your workspace, such as AI answers, citations or a web page, every change asks first, in any mode. Reading your own drafts, Action Center tasks and reports doesn't do that. If one of them holds instructions aimed at the AI, the run ignores them and asks before every change.
+Once a run has read text from outside your workspace, such as AI answers, citations or a web page, every change asks first, in any mode. Reading your own drafts and reports doesn't do that. Action Center actions and tasks can quote AI answers, so reading them does. If one of them holds instructions aimed at the AI, the run ignores them and asks before every change.
 
 ## Let an agent publish on its own
 

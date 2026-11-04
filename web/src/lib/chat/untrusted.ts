@@ -44,22 +44,24 @@ export const TRUSTED_READS: ReadonlySet<string> = new Set([
 export const isUntrustedRead = (toolName: string) => !TRUSTED_READS.has(toolName);
 
 /**
- * The reads of what the workspace itself writes: its drafts, its Action
- * Center tasks and their History, its saved reports (owner decision
- * 2026-11-03, so an agent in Full auto can work from them). Their text may
- * hold words copied from outside (a draft written from AI answers), so it
- * is still read as untrusted data in its labelled block and scanned for
- * instructions aimed at the model: one found asks first for the rest of
- * the run, as any read's does (§16a rule 3). What they don't do is taint the
- * run by themselves. AI answers, citations, fan-outs, mentions, suggestions,
- * audit findings and web pages still do.
+ * The reads of what the workspace itself writes: its drafts and its saved
+ * reports (owner decision 2026-11-03, so an agent in Full auto can work from
+ * them). Their text may hold words copied from outside (a draft written from
+ * AI answers), so it is still read as untrusted data in its labelled block
+ * and scanned for instructions aimed at the model: one found asks first for
+ * the rest of the run, as any read's does (§16a rule 3). What they don't do
+ * is taint the run by themselves. AI answers, citations, fan-outs, mentions,
+ * suggestions, audit findings and web pages still do.
+ *
+ * Action Center reads (list_action_center_tasks, get_action,
+ * get_action_history) are not here: an action's payload, its tasks and its
+ * signals carry outside text verbatim (a mention action's evidence excerpts
+ * are AI-answer text), so reading one taints the run, as a Run agent on an
+ * action already starts tainted (agent-driver.ts).
  */
 export const WORKSPACE_READS: ReadonlySet<string> = new Set([
   'list_drafts',
   'get_draft',
-  'list_action_center_tasks',
-  'get_action',
-  'get_action_history',
   'get_reports',
 ]);
 
