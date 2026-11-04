@@ -176,6 +176,8 @@ export interface RunProgress {
   nextMoves?: NextMoveInput[];
   /** The first placeholder the run's last page version leaves to fill (W4-12a), for its next move. */
   pagePlaceholder?: string | null;
+  /** The run's last page version left nothing to fill and isn't Ready yet: a Mark ready move (W4-12b). */
+  pageMayBeReady?: boolean;
   /** By the file a page version was filed as: the draft and the History version its Undo puts back (W4-12a). */
   pageUndos?: Record<string, { draftId: string; versionId: string }>;
   /**
