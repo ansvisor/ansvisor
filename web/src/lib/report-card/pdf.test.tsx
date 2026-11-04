@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 function draw(card: ReportCardPayload) {
-  act(() => root.render(<ReportCardPdfDocument card={card} />));
+  act(() => root.render(<ReportCardPdfDocument card={card} family="ReportCardInter-1" />));
   return [...container.querySelectorAll('section')].map((page) => page.textContent ?? '');
 }
 

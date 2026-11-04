@@ -277,6 +277,8 @@ Do not edit version numbers in `package.json` files manually.
 
 ## Reporting Issues
 
+**Security vulnerabilities:** don't open a public issue; report them privately as described in [SECURITY.md](SECURITY.md).
+
 When opening an issue, please include:
 
 - **Bug reports:** Steps to reproduce, expected vs. actual behavior, Node.js version, browser (if applicable)

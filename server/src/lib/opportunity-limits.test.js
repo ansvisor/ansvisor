@@ -7,6 +7,7 @@ import {
   SCORE_WEIGHTS,
   clusterMetrics,
   coveredClusterIds,
+  dismissedLongAgo,
   openOpportunityOn,
   openlyCoveredClusterIds,
   opportunityScore,
@@ -55,14 +56,15 @@ describe('clusterMetrics', () => {
     expect(m.intent).toBe('best-top');
     expect(m.keywords[0]).toBe('x software');
     expect(m.competitorsCited).toEqual(['Rival', 'Other']);
-    expect(m.representative).toEqual({ id: 'a', text: 'best tools for x' });
+    // Its question's own volume, not the cluster's sum.
+    expect(m.representative).toEqual({ id: 'a', text: 'best tools for x', volume: 3000 });
   });
 
   it('reports a cluster with no answers as untested', () => {
     const m = clusterMetrics(['c'], prompts);
     expect(m.tested).toBe(0);
     expect(m.visibility).toBe(0);
-    expect(m.representative).toEqual({ id: 'c', text: 'how to pick x' });
+    expect(m.representative).toEqual({ id: 'c', text: 'how to pick x', volume: 500 });
   });
 });
 
@@ -97,6 +99,30 @@ describe('cluster selection', () => {
       { cluster_id: 'c3', related_cluster_ids: [] },
     ]);
     expect([...covered].sort()).toEqual(['c1', 'c2', 'c3']);
+  });
+
+  it('lets a need dismissed over 90 days ago be suggested again, as the dismiss dialog says', () => {
+    const now = Date.parse('2026-11-03T12:00:00Z');
+    const daysAgo = (n) => new Date(now - n * 86_400_000).toISOString();
+    const rows = [
+      {
+        cluster_id: 'c1',
+        related_cluster_ids: ['c2'],
+        status: 'dismissed',
+        updated_at: daysAgo(91),
+      },
+      { cluster_id: 'c3', related_cluster_ids: [], status: 'dismissed', updated_at: daysAgo(89) },
+      { cluster_id: 'c4', related_cluster_ids: [], status: 'dismissed' },
+      { cluster_id: 'c5', related_cluster_ids: [], status: 'done', updated_at: daysAgo(400) },
+      { cluster_id: 'c6', related_cluster_ids: [], status: 'archived', updated_at: daysAgo(400) },
+    ];
+    expect([...coveredClusterIds(rows, now)].sort()).toEqual(['c3', 'c4', 'c5', 'c6']);
+    expect(dismissedLongAgo(rows[0], now)).toBe(true);
+    expect(dismissedLongAgo(rows[4], now)).toBe(false);
+  });
+
+  it('reads the date coverage needs with the opportunities', () => {
+    expect(source('./open-opportunities.js')).toMatch(/'id, title, status, updated_at,/);
   });
 
   it("holds a prompt's own request back only with an open opportunity (PROMPT-006)", () => {
@@ -175,6 +201,12 @@ describe('generators', () => {
     expect(code).toContain('refreshPromptClusters(');
     // It adds to the list instead of replacing it (#63).
     expect(code).not.toMatch(/\.delete\(\)/);
+  });
+
+  it("states no volume to the model: the page shows the question's estimate with its source", () => {
+    expect(source('./opportunity-generator.js')).not.toMatch(/AI volume: \$\{/);
+    expect(source('./opportunity-generator.js')).toContain('questionVolume:');
+    expect(source('../routes/content.js')).not.toMatch(/Est\. AI Volume: \$\{/);
   });
 
   it('runs at most the shared count per run', () => {
