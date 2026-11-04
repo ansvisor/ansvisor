@@ -3,7 +3,10 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import type { ChatActor } from './engine';
 import { planFactsFromOrgRow } from './plan-facts';
+import { PAGE_OPENS, pageOpenOf, type PageOpen } from './page-open';
 import { CHAT_MODES, parseTeamRole, type ChatMode } from './precedence';
+
+export { PAGE_OPENS, pageOpenOf, type PageOpen };
 
 /**
  * Chat Settings › General (CHAT-01 owner update 2026-10-26; CHAT-23
@@ -36,6 +39,8 @@ export interface ChatGeneralSettings {
   notifyVia: NotifyChannel;
   showThought: boolean;
   panelOnPages: boolean;
+  /** Where a page Chat writes opens (W4-11). */
+  pageOpen: PageOpen;
 }
 
 /** What the person may pick, and why not. */
@@ -54,6 +59,7 @@ export const DEFAULT_CHAT_GENERAL: ChatGeneralSettings = {
   notifyVia: 'inbox_email',
   showThought: true,
   panelOnPages: true,
+  pageOpen: 'ask',
 };
 
 interface PrefsRow {
@@ -62,6 +68,7 @@ interface PrefsRow {
   notify_via?: string | null;
   show_thought?: boolean | null;
   panel_on_pages?: boolean | null;
+  page_open?: string | null;
 }
 
 /** A saved row as the page shows it: anything it doesn't know is the default. */
@@ -73,6 +80,7 @@ export function generalFromRow(row: PrefsRow | null): ChatGeneralSettings {
     notifyVia: NOTIFY_CHANNELS.find((n) => n === row?.notify_via) ?? d.notifyVia,
     showThought: row?.show_thought ?? d.showThought,
     panelOnPages: row?.panel_on_pages ?? d.panelOnPages,
+    pageOpen: pageOpenOf(row?.page_open),
   };
 }
 
@@ -103,7 +111,7 @@ export async function readChatGeneral(
       .maybeSingle(),
     supabaseAdmin
       .from('chat_user_prefs')
-      .select('default_mode, answer_language, notify_via, show_thought, panel_on_pages')
+      .select('default_mode, answer_language, notify_via, show_thought, panel_on_pages, page_open')
       .eq('user_id', actor.userId)
       .maybeSingle(),
   ]);
@@ -135,6 +143,7 @@ export const generalPatch = z
     notifyVia: z.enum(NOTIFY_CHANNELS).optional(),
     showThought: z.boolean().optional(),
     panelOnPages: z.boolean().optional(),
+    pageOpen: z.enum(PAGE_OPENS).optional(),
   })
   .strict()
   .refine((patch) => Object.keys(patch).length > 0);
@@ -159,5 +168,6 @@ export function generalPatchRow(patch: GeneralPatch): Record<string, string | bo
   if (patch.notifyVia !== undefined) row.notify_via = patch.notifyVia;
   if (patch.showThought !== undefined) row.show_thought = patch.showThought;
   if (patch.panelOnPages !== undefined) row.panel_on_pages = patch.panelOnPages;
+  if (patch.pageOpen !== undefined) row.page_open = patch.pageOpen;
   return row;
 }
