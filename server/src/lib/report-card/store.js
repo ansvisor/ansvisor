@@ -129,19 +129,32 @@ export function reportCardStore(db = supabaseAdmin) {
       };
     },
 
-    /** Ends a run: ready with its figures, or failed with why; with what it cost either way. */
-    async finishCard(cardId, fields) {
+    /**
+     * Ends a run: ready with its figures, or failed with why; with what it
+     * cost either way. Only the run of `attempt` writes: one the tick took as
+     * lost and started again (or failed) matches nothing.
+     */
+    async finishCard(cardId, attempt, fields) {
       const { error } = await db
         .from('report_cards')
         .update(fields)
         .eq('id', cardId)
-        .eq('status', 'running');
+        .eq('status', 'running')
+        .eq('attempts', attempt);
       if (error) fail('finish', error);
     },
 
-    /** Puts a card a lost run left behind back in the queue, or fails it after its tries. */
-    async releaseCard(cardId, fields) {
-      const { error } = await db.from('report_cards').update(fields).eq('id', cardId);
+    /**
+     * Puts a card a lost run left behind back in the queue, or fails it after
+     * its tries; only while it is still that run's (`attempt`), running.
+     */
+    async releaseCard(cardId, attempt, fields) {
+      const { error } = await db
+        .from('report_cards')
+        .update(fields)
+        .eq('id', cardId)
+        .eq('status', 'running')
+        .eq('attempts', attempt);
       if (error) fail('release', error);
     },
 
