@@ -22,10 +22,11 @@ import type { Json } from '@/types/supabase';
  */
 
 /**
- * The reads whose results are the workspace's own numbers and settings only.
- * Any other read (AI answers, cited pages, drafts, suggestions, generated
- * tasks, a tool added later) may carry text written outside the workspace:
- * its result is untrusted, and after it the run is tainted (§16a).
+ * The reads whose results are the workspace's own numbers and settings only,
+ * or text a person in the workspace approved. Any other read (AI answers,
+ * cited pages, drafts, suggestions, generated tasks, a tool added later) may
+ * carry text written outside the workspace: its result is untrusted, and
+ * after it the run is tainted (§16a).
  */
 export const TRUSTED_READS: ReadonlySet<string> = new Set([
   'get_visibility_summary',
@@ -38,6 +39,9 @@ export const TRUSTED_READS: ReadonlySet<string> = new Set([
   'list_topics',
   'get_ai_traffic_summary',
   'get_site_audit_summary',
+  // The brand's approved facts: words from its own site, each approved by a
+  // person in the workspace (Brand settings › Brand facts) before it is read.
+  'get_brand_facts',
 ]);
 
 /** Whether a read's result may carry text written outside the workspace. */
@@ -69,8 +73,17 @@ export const WORKSPACE_READS: ReadonlySet<string> = new Set([
 export const taintsRun = (toolName: string) =>
   isUntrustedRead(toolName) && !WORKSPACE_READS.has(toolName);
 
-/** The block names the model reads data in; never left whole inside the data. */
-export const DATA_TAGS = ['untrusted_data', 'app_data', 'read_results', 'page_context'] as const;
+/**
+ * The block names the model reads data in; never left whole inside the data.
+ * saved_notes: the person's, brand's and workspace's memory (memory/rules.ts).
+ */
+export const DATA_TAGS = [
+  'untrusted_data',
+  'app_data',
+  'read_results',
+  'page_context',
+  'saved_notes',
+] as const;
 
 // Zero-width, soft hyphen, direction marks and isolates, word joiners, BOM.
 const INVISIBLE = /[­​-‏‪-‮⁠-⁤⁦-⁩﻿]/g;

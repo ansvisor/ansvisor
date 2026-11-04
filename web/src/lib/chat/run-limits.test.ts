@@ -53,6 +53,16 @@ describe('run limits', () => {
     expect(readBudget('max').dataChars).toBe(144_000);
   });
 
+  it('give an agent’s run room for its skills’ reads, scaled by effort the same way', () => {
+    expect(readBudget('normal', { agent: true })).toEqual({
+      reads: 10,
+      resultChars: 12_000,
+      dataChars: 80_000,
+      historyChars: 24_000,
+    });
+    expect(readBudget('high', { agent: true }).reads).toBe(20);
+  });
+
   it('cap writes per run', () => {
     expect(writeCap('create_draft')).toBe(10);
     expect(writeCap('add_competitors')).toBe(5);

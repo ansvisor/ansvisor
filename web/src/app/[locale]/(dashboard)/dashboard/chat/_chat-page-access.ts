@@ -8,7 +8,7 @@ import { chatRunsOnOwnKey } from '@/lib/chat/key';
 import { failingKeyFor } from '@/lib/chat/key-health';
 import { CAREFUL_SETUP, composerSetupOf, type ChatComposerSetup } from '@/lib/chat/composer-setup';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
-import { skillMenuOf } from '@/lib/chat/skills/library';
+import { skillMenuFor } from '@/lib/chat/skills/store';
 import { isChatStaff } from '@/lib/chat/staff';
 
 export { composerSetupOf, type ChatComposerSetup };
@@ -175,6 +175,9 @@ export async function chatComposerSetup(): Promise<ChatComposerSetup> {
     onOwnKey,
     // Read only where Chat runs on the own key (AGENT-OWN-KEY §5.2 item 5).
     keyFailure: onOwnKey ? await failingKeyFor(profile.organization_id) : null,
-    skills: skillsByFocus(skillMenuOf(profile.organization_id), focusOf(prefs?.focus) ?? []),
+    skills: skillsByFocus(
+      await skillMenuFor(profile.organization_id, user.id),
+      focusOf(prefs?.focus) ?? [],
+    ),
   };
 }

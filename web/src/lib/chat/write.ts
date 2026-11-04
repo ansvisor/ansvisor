@@ -158,6 +158,7 @@ async function run(req: WriteRequest): Promise<WriteOutcome> {
         chat: {
           conversationId: req.place.conversationId,
           runId: req.place.runId,
+          ...(req.place.agentRunId ? { agentRunId: req.place.agentRunId } : {}),
           approvalKey: req.approvalKey,
           executionMode: req.approval.kind === 'auto' ? 'automated' : 'assisted',
         },
