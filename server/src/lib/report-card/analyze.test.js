@@ -108,6 +108,7 @@ describe('names and sites sorted', () => {
       'https://www.jollytur.com/a',
       'https://www.tatilbudur.com/b',
       'https://www.kultur.gov.tr/c',
+      'https://www.sikayetvar.com/turadahil',
     ]),
     answer(1, 'chatgpt-web', 'Jolly and Tatilbudur; Hizmetgo too.', ['https://jollytur.com.tr/x']),
   ];
@@ -138,6 +139,7 @@ describe('names and sites sorted', () => {
 
   it('marks a competitor’s or marketplace’s site by its address, else as the call sorted it', () => {
     const siteKinds = new Map([
+      ['sikayetvar.com', 'guide'],
       ['kultur.gov.tr', 'official'],
       ['jollytur.com', 'guide'],
     ]);
@@ -147,6 +149,8 @@ describe('names and sites sorted', () => {
       'jollytur.com.tr': 'competitor',
       'tatilbudur.com': 'marketplace',
       'kultur.gov.tr': 'official',
+      // Known by name, whatever the call said.
+      'sikayetvar.com': 'reviews',
     });
   });
 
@@ -162,6 +166,7 @@ describe('names and sites sorted', () => {
       { domain: 'jollytur.com', answers: 1 },
       { domain: 'jollytur.com.tr', answers: 1 },
       { domain: 'kultur.gov.tr', answers: 1 },
+      { domain: 'sikayetvar.com', answers: 1 },
       { domain: 'tatilbudur.com', answers: 1 },
     ]);
   });

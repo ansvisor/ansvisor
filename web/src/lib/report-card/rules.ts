@@ -110,6 +110,37 @@ const TARGET_KINDS = new Set<CitedSiteKind>(['guide', 'publication', 'official',
 type CitedSite = ReportCardPayload['citedSites'][number];
 
 /**
+ * Review and complaint sites the card knows by name (server
+ * lib/report-card/analyze.js REVIEW_SITES, kept in step): on a card made
+ * before sites were sorted, these are reviews sites.
+ */
+const REVIEW_SITES = [
+  'sikayetvar.com',
+  'trustpilot.com',
+  'tripadvisor.com',
+  'tripadvisor.com.tr',
+  'tripadvisor.co.uk',
+  'g2.com',
+  'capterra.com',
+  'getapp.com',
+  'trustradius.com',
+  'yelp.com',
+  'reviews.io',
+  'sitejabber.com',
+  'productreview.com.au',
+  'glassdoor.com',
+];
+
+/** A cited site's kind: as sorted, or a known reviews site on an older card. */
+function kindOf(site: CitedSite): CitedSiteKind | null {
+  const domain = site.domain.toLowerCase().replace(/^www\./, '');
+  if (!site.own && REVIEW_SITES.some((r) => domain === r || domain.endsWith(`.${r}`))) {
+    return 'reviews';
+  }
+  return site.kind ?? null;
+}
+
+/**
  * Whether the card may suggest getting onto a cited site: a guide,
  * publication, official source or community. A card made before sites were
  * sorted suggests any site that isn't the company's and whose address
@@ -117,7 +148,8 @@ type CitedSite = ReportCardPayload['citedSites'][number];
  */
 export function isTargetSite(site: CitedSite, card: ReportCardPayload): boolean {
   if (site.own || site.competitor) return false;
-  if (site.kind) return TARGET_KINDS.has(site.kind);
+  const kind = kindOf(site);
+  if (kind) return TARGET_KINDS.has(kind);
   if (card.citedSites.some((s) => s.kind)) return false;
   const brands = new Set(
     [...card.competitors, ...(card.marketplaces ?? [])].map((c) => brandKey(c.name)),
@@ -125,11 +157,29 @@ export function isTargetSite(site: CitedSite, card: ReportCardPayload): boolean 
   return !brands.has(siteBrandKey(site.domain)) && !competitorSite(site.domain, card.competitors);
 }
 
+/**
+ * The site the card suggests working on: the guide, publication, official
+ * source or community AI cites most; else the reviews site it cites most,
+ * whose step is to answer what customers say (owner review 2026-11-04).
+ */
+export function targetSite(card: ReportCardPayload): CitedSite | null {
+  return (
+    card.citedSites.find((s) => isTargetSite(s, card)) ??
+    card.citedSites.find((s) => !s.own && kindOf(s) === 'reviews') ??
+    null
+  );
+}
+
 /** What a target site's step says, by its kind. */
 function targetWin(site: CitedSite, company: string, answers: number): QuickWin {
   const domain = clip(site.domain, NAME_MAX);
   const cited = `AI engines cite it in ${site.answers} of ${answers} answers about your market.`;
-  switch (site.kind) {
+  switch (kindOf(site)) {
+    case 'reviews':
+      return {
+        title: `Check and answer what customers say about ${company} on ${domain}`,
+        detail: `A reviews site: ${cited} Replies to reviews and complaints, and a complete profile, are what they read about you.`,
+      };
     case 'guide':
       return {
         title: `Get ${company} reviewed or listed on ${domain}`,
@@ -266,7 +316,7 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
   }
 
   // A site AI cites that the brand can get onto: never a competitor's or a marketplace's.
-  const target = card.citedSites.find((s) => isTargetSite(s, card));
+  const target = targetSite(card);
   if (target) wins.push(targetWin(target, company, answers));
 
   if (percent(card.ownCitations, answers) < 10) {

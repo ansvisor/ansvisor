@@ -11,8 +11,8 @@ import { reportCardModelId } from './questions.js';
  * The card's names and sites, sorted once for the whole card (owner
  * decision 2026-11-04): each brand the answers name is a competitor, a
  * marketplace or something else, and each site they cite is the company's
- * own, a competitor's, a marketplace, a guide, a publication, an official
- * source, a community or something else. Each answer's reading already
+ * own, a competitor's, a marketplace, a reviews site, a guide, a
+ * publication, an official source, a community or something else. Each answer's reading already
  * says which a brand is; this one call looks at every name together, so
  * "Jolly Tur" is a competitor on every row of the card, and a site the
  * card may suggest getting onto is never a competitor's or a
@@ -23,6 +23,7 @@ export const NAME_KINDS = ['competitor', 'marketplace', 'other'];
 export const SITE_KINDS = [
   'competitor',
   'marketplace',
+  'reviews',
   'guide',
   'publication',
   'official',
@@ -48,7 +49,8 @@ For each brand:
 - "other": anything else: a seller of something else, a tool, platform or service named in passing, a public body.
 For each website:
 - "competitor": a competitor's own site; "marketplace": a marketplace's;
-- "guide": a review, comparison, buying-guide or travel-guide site, or a directory of reviews;
+- "reviews": a site where customers rate, review or complain about businesses (Şikayetvar, Trustpilot, Tripadvisor, Google reviews, G2, Capterra);
+- "guide": a comparison, buying-guide or travel-guide site written by editors;
 - "publication": a news site, magazine, trade publication or independent blog;
 - "official": a government body, public agency, tourism board, trade association or standards body;
 - "community": a forum, question-and-answer site or social network;

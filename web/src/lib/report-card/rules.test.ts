@@ -18,6 +18,7 @@ import {
   quickWins,
   brandKey,
   isTargetSite,
+  targetSite,
   productLabel,
   siteBrandKey,
   questionGroups,
@@ -88,7 +89,10 @@ describe('target sites', () => {
       ],
     });
     expect(isTargetSite(old.citedSites[0], old)).toBe(false);
-    expect(isTargetSite(old.citedSites[2], old)).toBe(true);
+    // Şikayetvar is a complaints site: never "get mentioned" there.
+    expect(isTargetSite(old.citedSites[2], old)).toBe(false);
+    // Any other cited site comes before the complaints site.
+    expect(quickWins(old)[1].title).toBe('Get Brewline Coffee mentioned on businessofapps.com');
     const mmr = card({
       competitors: [{ name: 'Business of Apps', answers: 33 }],
       citedSites: [{ domain: 'www.businessofapps.com', answers: 31, own: false }],
@@ -143,6 +147,23 @@ describe('quickWins, about competitors and engines', () => {
       citedSites: [],
     });
     expect(quickWins(alike).some((w) => w.title.startsWith('Look at what'))).toBe(false);
+  });
+});
+
+describe('the reviews site', () => {
+  it('comes only when no guide, publication, official source or community is cited', () => {
+    const reviews = {
+      domain: 'www.sikayetvar.com',
+      answers: 11,
+      own: false,
+      kind: 'guide' as const,
+    };
+    const guide = { domain: 'gezirehberi.example', answers: 3, own: false, kind: 'guide' as const };
+    expect(targetSite(card({ citedSites: [reviews, guide] }))?.domain).toBe('gezirehberi.example');
+    expect(targetSite(card({ citedSites: [reviews] }))?.domain).toBe('www.sikayetvar.com');
+    expect(quickWins(card({ citedSites: [reviews] }))[1].title).toBe(
+      'Check and answer what customers say about Brewline Coffee on www.sikayetvar.com',
+    );
   });
 });
 

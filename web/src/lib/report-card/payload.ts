@@ -22,6 +22,7 @@ export const CITED_SITE_KINDS = [
   'own',
   'competitor',
   'marketplace',
+  'reviews',
   'guide',
   'publication',
   'official',
