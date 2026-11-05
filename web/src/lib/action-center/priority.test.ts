@@ -226,12 +226,28 @@ describe('priorityReasonText', () => {
         t,
       ),
     ).toBe('Lost ground on 7 high-demand prompts 2 days ago — previously visible.');
+    // Read from its play's track (AC plan P-4).
+    expect(
+      priorityReasonText(
+        reason({
+          commercial: false,
+          pastSuccess: { improved: 3, results: 4, points: 3.33, play: 'comparison' },
+        }),
+        t,
+      ),
+    ).toBe(
+      'Lost ground on 7 high-demand prompts 2 days ago — previously visible, 3 of 4 earlier actions with this play improved results here.',
+    );
   });
 
   it('reads a stored track defensively', () => {
     expect(
       parsePriorityReason({ pastSuccess: { improved: 2, results: 3, points: 1.4 } })?.pastSuccess,
     ).toEqual({ improved: 2, results: 3, points: 1.4 });
+    expect(
+      parsePriorityReason({ pastSuccess: { improved: 2, results: 3, points: 1.4, play: 'guide' } })
+        ?.pastSuccess,
+    ).toEqual({ improved: 2, results: 3, points: 1.4, play: 'guide' });
     expect(parsePriorityReason({ pastSuccess: { improved: 2 } })?.pastSuccess).toBeNull();
     expect(parsePriorityReason({})?.pastSuccess).toBeNull();
   });

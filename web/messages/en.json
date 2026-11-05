@@ -1533,8 +1533,8 @@
           "commercial": "commercial intent",
           "heldBefore": "previously visible",
           "pastSuccess": {
-            "worked": "{improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here",
-            "rarely": "only {improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here"
+            "worked": "{improved} of {results} earlier {results, plural, one {action} other {actions}} {by, select, play {with this play} other {of this kind}} improved results here",
+            "rarely": "only {improved} of {results} earlier {results, plural, one {action} other {actions}} {by, select, play {with this play} other {of this kind}} improved results here"
           },
           "sources": "confirmed by {count} sources",
           "confidence": {
@@ -3294,7 +3294,7 @@
         "readings": "Read after it closed: {list}.",
         "reading": "day {day}, {outcome}",
         "finalOn": "The final reading is on day {day}.",
-        "measuredOn": "Measured on the {entity, select, pages {{count, plural, one {page} other {# pages}}} other {{count, plural, one {prompt} other {# prompts}}}} it named.",
+        "measuredOn": "{entity, select, topics {Measured on its topic's {count, plural, one {prompt} other {# prompts}}.} pages {Measured on the {count, plural, one {page} other {# pages}} it named.} other {Measured on the {count, plural, one {prompt} other {# prompts}} it named.}}",
         "brandWide": "Brand-wide over the same days: {list}",
         "controlNet": "Net of {basis, select, topics {the {prompts} other prompts in its topics} other {the brand's {prompts} other prompts}} over the same days: {list}",
         "netPoints": "{metric} {value} pts",
@@ -3350,7 +3350,8 @@
           "results": "Results",
           "successRate": "Success rate",
           "medianChange": "Median change",
-          "dismissed": "Dismissed"
+          "dismissed": "Dismissed",
+          "play": "Play"
         },
         "tooFew": "Too few results",
         "mostly": "Mostly: {reason}",
@@ -3359,7 +3360,17 @@
           "description": "A kind of action shows here once one of its actions is completed or dismissed."
         },
         "error": "The scorecard couldn't be loaded.",
-        "retry": "Try again"
+        "retry": "Try again",
+        "noteByPlay": "What each page the Action Center picked for an action's prompts did at this brand, whichever kind of action it was for. Only actions opened with a play count here.",
+        "emptyByPlay": {
+          "title": "No plays to score in this range",
+          "description": "A play shows here once an action opened with it is completed or dismissed."
+        },
+        "by": {
+          "label": "Group the scorecard by",
+          "kind": "By kind",
+          "play": "By play"
+        }
       },
       "outcomeSoFar": "so far: day {day} of {final}",
       "outcomeHint": {

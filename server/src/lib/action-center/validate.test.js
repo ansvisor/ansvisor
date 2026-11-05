@@ -623,6 +623,53 @@ describe('validateAction', () => {
       expect(validation.brandWide.map((m) => m.metric)).toEqual(['ai_visibility', 'citations']);
     });
 
+    it("measures a topic's action on its topic's prompts, and keeps its play (AC plan P-4)", async () => {
+      const T1 = '33333333-3333-4333-8333-333333333333';
+      const writes = mockWrites({ prompts: [{ id: P1 }, { id: P2 }] });
+      answers({ cells: 10, visible: 2 }, { cells: 10, visible: 5 });
+
+      const outcome = await validateAction(
+        action({
+          kind: 'create_content_for_topics',
+          kpi_keys: ['ai_visibility', 'share_of_voice'],
+          payload: {
+            targetEntity: 'topics',
+            targetCount: 1,
+            targets: [{ id: T1, label: 'Forecasting' }],
+            play: { version: 1, id: 'comparison', assetType: 'comparison' },
+          },
+        }),
+        { now: NOW },
+      );
+
+      expect(outcome).toBe('improved');
+      const basketCall = rpc.mock.calls.find(([name]) => name === 'opportunity_basket_metrics');
+      // Opened before it kept its prompts: the topic's now.
+      expect(basketCall[1].p_prompt_ids).toEqual([P1, P2]);
+      const { validation } = writes.updated.find((w) => w.table === 'actions').patch;
+      expect(validation.scope).toEqual({ kind: 'targets', entity: 'topics', prompts: 2, pages: 0 });
+      expect(validation.primary).toBe('ai_visibility');
+      // The brand-wide figures stay as a second line, as G15's do.
+      expect(validation.brandWide.map((m) => m.metric)).toEqual([
+        'ai_visibility',
+        'share_of_voice',
+      ]);
+      expect(validation.play).toBe('comparison');
+
+      // The prompts it kept as it opened, when it has them.
+      rpc.mockClear();
+      await validateAction(
+        action({
+          kind: 'create_content_for_topics',
+          kpi_keys: ['ai_visibility'],
+          payload: { targetEntity: 'topics', targets: [{ id: T1 }], promptIds: [P2] },
+        }),
+        { now: NOW },
+      );
+      const kept = rpc.mock.calls.find(([name]) => name === 'opportunity_basket_metrics');
+      expect(kept[1].p_prompt_ids).toEqual([P2]);
+    });
+
     it("keeps the prompts it names net of the brand's others beside (learning B2)", async () => {
       const writes = mockWrites({
         prompts: [
