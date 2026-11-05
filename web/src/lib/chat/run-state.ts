@@ -1,6 +1,7 @@
 import type {
   ChatActionSent,
   ChatAsk,
+  ChatAuditCard,
   ChatConfirm,
   ChatNextMove,
   ChatDeliverable,
@@ -12,6 +13,7 @@ import type {
   ChatWhatsNewEntry,
 } from './events';
 import { isChatEventType } from './events';
+import { withAuditCard } from './audit-card';
 import type { ChatWhy } from './why/view';
 
 /**
@@ -57,6 +59,8 @@ export interface ClientRun {
   why: ChatWhy[];
   /** What's new's cards (CHAT-11 item 10). */
   whatsNew: ChatWhatsNewEntry[];
+  /** The Site Audits it read, as their cards, in the order read. */
+  audits: ChatAuditCard[];
   summary: ChatRunSummary | null;
   generatedAt: string | null;
   dataAsOf: string | null;
@@ -83,6 +87,7 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     tasks: null,
     why: [],
     whatsNew: [],
+    audits: [],
     summary: null,
     generatedAt: null,
     dataAsOf: null,
@@ -155,6 +160,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       return next;
     case 'whats_new.ready':
       next.whatsNew = event.data.entries;
+      return next;
+    case 'audit.ready':
+      next.audits = withAuditCard(run.audits, event.data);
       return next;
     case 'next_moves':
       next.nextMoves = event.data.moves;

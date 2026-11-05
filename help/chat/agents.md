@@ -1,15 +1,15 @@
 ---
 title: See and run your agents in Agent Center
 route: /dashboard/agents
-keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook, onboarding, onboarding & help, onboarding agent, help agent, setup guide, /setup, recommended agents, which agents should i use, fan-out gap filler, fan-out gaps]
-synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent, agents for me, agent recommendations, setup help, new member setup]
+keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook, what this agent did, agent impact, changes shipped by an agent, agent results, onboarding, onboarding & help, onboarding agent, help agent, setup guide, /setup, recommended agents, which agents should i use, fan-out gap filler, fan-out gaps]
+synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent, agents for me, agent recommendations, setup help, new member setup, what did my agent do, did my agent work]
 plan: all
 updated: 2026-11-05
 last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts, web/src/lib/chat/agents/catalog.ts, web/src/lib/content/page-types.ts, web/src/lib/menu-access.ts, web/src/lib/chat/agent-go-live.ts, web/src/lib/chat/go-live.ts, web/src/lib/chat/precedence.ts, web/src/lib/chat/agent-calls.ts, web/src/lib/chat/untrusted.ts, web/src/lib/chat/key.ts, skills/setup/SKILL.md, web/src/lib/mcp/ready-agents.ts]
+sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts, web/src/lib/chat/agents/catalog.ts, web/src/lib/content/page-types.ts, web/src/lib/menu-access.ts, web/src/lib/chat/agent-go-live.ts, web/src/lib/chat/go-live.ts, web/src/lib/chat/precedence.ts, web/src/lib/chat/agent-calls.ts, web/src/lib/chat/agent-impact.ts, web/src/lib/chat/untrusted.ts, web/src/lib/chat/key.ts, skills/setup/SKILL.md, web/src/lib/mcp/ready-agents.ts]
 ---
 An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
 
@@ -62,9 +62,15 @@ Usage is always shown as a share of your monthly AI limit.
 
 Click **Open** or the agent's name. The top shows its state, its owner, whether it is private or shared, and **This period**: what it used of this month's AI limit, with its monthly cap when one is set. Under it you see its skills, mode, connections and model.
 
-**Triggers** lists what starts it and when it runs next. **Run history** lists its last 50 runs: when each started, its trigger and brand, its result, its outcome and its **AI use**, for example "3.2% of 10%": what the run used and the most one run may use. Filter them with **All**, **Improved**, **Pending** and **Stopped**, and click a run to open its chat.
+**Triggers** lists what starts it and when it runs next, and **What this agent did** what its runs took live in the last 30 days. **Run history** lists its last 50 runs: when each started, its trigger and brand, its result, its outcome and its **AI use**, for example "3.2% of 10%": what the run used and the most one run may use. Filter them with **All**, **Improved**, **Pending** and **Stopped**, and click a run to open its chat.
 
 On the right, **Access**, **Scope** and **AI use** show who owns it, what it may reach and its limits.
+
+## What this agent did
+
+On an agent's page, **What this agent did** covers the last 30 days. **Changes shipped** counts the pages that went live from its runs. **Improved** says how many of those with a verdict improved, counting only Medium and High confidence verdicts, as **Reports** does. A **Pending** change gets its first verdict 14 days after it goes live.
+
+Each change shows the run it came from, its outcome and its next check, and how it went live: **on its own**, **you approved** when you sent or published it on a card in the run's chat, or **by** and the name of the teammate who did. A line counts the agent's drafts that aren't live yet: drafts aren't measured until they go live. You see only the brands you have access to. **Open in Reports** opens **What Ansvisor did for you**, where each change has its details.
 
 ## What a run's outcome means
 

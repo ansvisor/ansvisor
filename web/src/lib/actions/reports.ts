@@ -20,11 +20,9 @@ import {
 import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actions/citations';
 import { getShoppingKpis } from '@/lib/actions/shopping';
 import { type SourceCategory } from '@/lib/citations/classify';
-import {
-  AUDIT_SNAPSHOT_ROWS,
-  auditSnapshotFrom,
-  type AuditSnapshotRow,
-} from '@/lib/reports/audit-score';
+import { auditSnapshotFrom, type AuditSnapshotRow } from '@/lib/reports/audit-score';
+import { readEarlierPageAudits } from '@/lib/audit/page-trend';
+import type { ScoreRange } from '@/lib/audit/score-range';
 import { stripEntityMarkup } from '@/lib/entity-markup';
 import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { LOW_SAMPLE_VISITS } from '@/lib/traffic-change';
@@ -175,6 +173,12 @@ export interface ReportAuditScore {
   auditedAt: string;
   /** 100 on reports saved since the scores are 0–100 points. Absent on older reports. */
   scale?: 100;
+  /**
+   * The score's range ("64 ± 2"), from the page's last complete audits up to
+   * this one, as Site Audit works it out: null with fewer than 3. Absent on
+   * reports saved before it.
+   */
+  range?: ScoreRange | null;
 }
 
 /** Prompt-level Visibility Rate KPI (#492) — mirrors the Insights dashboard's headline metric. */
@@ -579,9 +583,10 @@ async function getShoppingSnapshot(
 /**
  * Latest completed Site Audit as of the period end, with the score of the
  * same page's audit before it for the change, both on the 0–100 scale the
- * audit report shows. Audits aren't period-bound like the other metrics, so
- * "as of dateTo" keeps historical reports honest. A partial audit (its
- * AI-judged signals didn't run) is never compared, so it's left out.
+ * audit report shows, and the score's range from that page's audits up to
+ * it. Audits aren't period-bound like the other metrics, so "as of dateTo"
+ * keeps historical reports honest. A partial audit (its AI-judged signals
+ * didn't run) is never compared, so it's left out.
  */
 async function getAuditSnapshot(brandId: string, dateTo: string): Promise<ReportAuditScore | null> {
   const supabase = await createClient();
@@ -593,9 +598,13 @@ async function getAuditSnapshot(brandId: string, dateTo: string): Promise<Report
     .eq('partial', false)
     .lte('created_at', dateTo)
     .order('created_at', { ascending: false })
-    .limit(AUDIT_SNAPSHOT_ROWS);
+    .limit(1);
   if (error) throw new Error(error.message);
-  return auditSnapshotFrom((data ?? []) as AuditSnapshotRow[]);
+  const latest = (data?.[0] ?? null) as AuditSnapshotRow | null;
+  if (!latest) return null;
+  // The page's own audits before it, however many of the brand's came between.
+  const earlier = await readEarlierPageAudits(supabase, brandId, latest);
+  return auditSnapshotFrom([latest, ...earlier]);
 }
 
 /**

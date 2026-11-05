@@ -52,6 +52,8 @@ describe('auditSnapshotFrom', () => {
       previousScore: 60,
       auditedAt: '2026-10-30T00:00:00Z',
       scale: 100,
+      // The page's three audits scored 20, 60 and 64.
+      range: { plusMinus: 22, low: 20, high: 64, audits: 3 },
     });
   });
 
@@ -71,6 +73,38 @@ describe('auditSnapshotFrom', () => {
     expect(snap?.previousScore).toBe(50);
   });
 
+  it('gives the score’s range from the page’s last five audits, by Site Audit’s rule', () => {
+    const snap = auditSnapshotFrom([
+      row('https://shop.com/bags', 0.64, '2026-10-30T00:00:00Z'),
+      row('https://shop.com/shoes', 0.2, '2026-10-29T00:00:00Z'),
+      row('https://shop.com/bags', 0.62, '2026-10-28T00:00:00Z'),
+      row('https://shop.com/bags', 0.66, '2026-10-21T00:00:00Z'),
+      row('https://shop.com/bags', 0.63, '2026-10-14T00:00:00Z'),
+      row('https://shop.com/bags', 0.65, '2026-10-07T00:00:00Z'),
+      // The sixth back: out of the window.
+      row('https://shop.com/bags', 0.3, '2026-10-01T00:00:00Z'),
+    ]);
+    expect(snap?.range).toEqual({ plusMinus: 2, low: 62, high: 66, audits: 5 });
+  });
+
+  it('has no range with fewer than three audits of the page, or without a score', () => {
+    expect(
+      auditSnapshotFrom([
+        row('https://shop.com/bags', 0.64, '2026-10-30T00:00:00Z'),
+        row('https://shop.com/shoes', 0.6, '2026-10-29T00:00:00Z'),
+        row('https://shop.com/bags', 0.62, '2026-10-28T00:00:00Z'),
+      ])?.range,
+    ).toBeNull();
+    expect(
+      auditSnapshotFrom([
+        row('https://shop.com/bags', null, '2026-10-30T00:00:00Z'),
+        row('https://shop.com/bags', 0.62, '2026-10-28T00:00:00Z'),
+        row('https://shop.com/bags', 0.63, '2026-10-21T00:00:00Z'),
+        row('https://shop.com/bags', 0.64, '2026-10-14T00:00:00Z'),
+      ])?.range,
+    ).toBeNull();
+  });
+
   it('skips the page’s audits without a score', () => {
     const snap = auditSnapshotFrom([
       row('https://shop.com/bags', null, '2026-10-30T00:00:00Z'),
@@ -85,27 +119,55 @@ describe('auditScoreView', () => {
   it('shows the score and the change in points', () => {
     expect(
       auditScoreView({ url: 'u', totalScore: 64, previousScore: 60, auditedAt: 'd', scale: 100 }),
-    ).toEqual({ score: '64', change: 4 });
+    ).toEqual({ score: '64', change: 4, range: null });
     expect(
       auditScoreView({ url: 'u', totalScore: 58, previousScore: 63, auditedAt: 'd', scale: 100 }),
-    ).toEqual({ score: '58', change: -5 });
+    ).toEqual({ score: '58', change: -5, range: null });
   });
 
   it('shows no change on the page’s first audit, and a dash without a score', () => {
     expect(
       auditScoreView({ url: 'u', totalScore: 64, previousScore: null, auditedAt: 'd', scale: 100 }),
-    ).toEqual({ score: '64', change: null });
+    ).toEqual({ score: '64', change: null, range: null });
     expect(
       auditScoreView({ url: 'u', totalScore: null, previousScore: 60, auditedAt: 'd', scale: 100 }),
-    ).toEqual({ score: '—', change: null });
+    ).toEqual({ score: '—', change: null, range: null });
   });
 
   it('shows a report saved on the 0–1 scale as about that many points, with no change', () => {
     expect(
       auditScoreView({ url: 'u', totalScore: 0.6, previousScore: 0.5, auditedAt: 'd' }),
-    ).toEqual({ score: '~60', change: null });
+    ).toEqual({ score: '~60', change: null, range: null });
     expect(
       auditScoreView({ url: 'u', totalScore: null, previousScore: null, auditedAt: 'd' }),
-    ).toEqual({ score: '—', change: null });
+    ).toEqual({ score: '—', change: null, range: null });
+  });
+
+  it('shows the score’s range when the report has one', () => {
+    const range = { plusMinus: 2, low: 62, high: 66, audits: 5 };
+    expect(
+      auditScoreView({
+        url: 'u',
+        totalScore: 64,
+        previousScore: 62,
+        auditedAt: 'd',
+        scale: 100,
+        range,
+      }),
+    ).toEqual({ score: '64', change: 2, range });
+    expect(
+      auditScoreView({ url: 'u', totalScore: 64, previousScore: 62, auditedAt: 'd', scale: 100 })
+        .range,
+    ).toBeNull();
+    expect(
+      auditScoreView({
+        url: 'u',
+        totalScore: 64,
+        previousScore: 62,
+        auditedAt: 'd',
+        scale: 100,
+        range: null,
+      }).range,
+    ).toBeNull();
   });
 });
