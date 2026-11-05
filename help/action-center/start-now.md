@@ -1,17 +1,8 @@
 ---
 title: Start an action's writing in one click
 route: /dashboard/action-center/actions
-keywords:
-  [
-    start now,
-    content editor,
-    start in content editor,
-    write page,
-    open draft,
-    chat,
-  ]
-synonyms:
-  [one click to editor, start writing, draft from action, work on action]
+keywords: [start now, content editor, start in content editor, write page, open draft, chat, what to do, play, also worth doing]
+synonyms: [one click to editor, start writing, draft from action, work on action, which page to write, playbook]
 plan: all
 updated: 2026-11-05
 last_checked: 2026-11-05
@@ -20,7 +11,6 @@ app_version: 0.3.0
 approved: false
 sources: [docs/guides/action-center.mdx]
 ---
-
 When an action's work is writing, a new page or a better existing one, its drawer opens with a **Start now** block at the top of **Overview**. It takes you straight to the writing, with what the action knows already filled in.
 
 ## What to do for your kind of site
