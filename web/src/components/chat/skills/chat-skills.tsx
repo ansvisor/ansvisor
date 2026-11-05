@@ -27,16 +27,19 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { connectionKindOf, skillOf } from '@/lib/chat/agent-skills';
 import { composeHref } from '@/lib/chat/compose-param';
 import { SKILL_FILTERS, type SkillFilter } from '@/lib/chat/skills/library';
+import { MARKETPLACE_COUNT } from '@/lib/chat/skills/marketplace-view';
 import type { LibrarySkillView, SkillList, WorkspaceSkillView } from '@/lib/chat/skills/store';
 import { startChatRun } from '@/lib/chat/start-chat';
 import { ImportSkillDialog, type ImportMode } from './import-skill-dialog';
+import { MarketplaceTab } from './marketplace-tab';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 
 /**
- * Skills (CHAT-13 items 8–10; Chat Wave 3 W3-07; mockup `#s-skills`, its
- * Library tab hidden until Wave 4): Ansvisor's skills and the workspace's
- * own, with search and the library's filter chips. A card shows its
+ * Skills (CHAT-13 items 8–10; Chat Wave 3 W3-07; mockup `#s-skills`):
+ * Ansvisor's skills, the Library (CHAT-17, W4-18: third-party skills to
+ * add, marketplace-tab.tsx) and the workspace's own, with search and the
+ * library's filter chips. A card shows its
  * /command, what it does and the connections it uses on the brand open
  * (green when connected, grey with Connect when not), and Run (a new chat
  * with the skill), Schedule (Chat Home's box filled with "Every Monday at
@@ -45,7 +48,15 @@ import { useBrandStore } from '@/stores/use-brand-store';
  * title: where it came from, its review, and Share or Delete.
  */
 
-type Tab = 'ansvisor' | 'mine';
+type Tab = 'ansvisor' | 'marketplace' | 'mine';
+const TABS: readonly Tab[] = ['ansvisor', 'marketplace', 'mine'];
+
+/** The tab an address names (`?tab=library`, as the Library's pages link back), or null. */
+function tabOf(search: string): Tab | null {
+  const tab = new URLSearchParams(search).get('tab');
+  if (tab === 'library') return 'marketplace';
+  return tab === 'mine' || tab === 'ansvisor' ? tab : null;
+}
 type T = ReturnType<typeof useTranslations<'chatSkills.page'>>;
 type Filter = 'all' | SkillFilter;
 
@@ -104,7 +115,12 @@ export function ChatSkills() {
   const { isLocked, openUpgrade } = useUpgradeGate();
   const [list, setList] = useState<SkillList | null | 'failed'>(null);
   const [connected, setConnected] = useState<{ brandId: string; kinds: Set<string> } | null>(null);
-  const [tab, setTab] = useState<Tab>('ansvisor');
+  // The tab the address names (Back from a Library skill). The tabs show
+  // only once the list is read in the browser, so the server's first render
+  // never differs.
+  const [tab, setTab] = useState<Tab>(
+    () => (typeof window === 'undefined' ? null : tabOf(window.location.search)) ?? 'ansvisor',
+  );
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   const [starting, setStarting] = useState<string | null>(null);
@@ -272,7 +288,7 @@ export function ChatSkills() {
       ) : (
         <>
           <div role="tablist" aria-label={t('title')} className="mb-3 flex gap-1 border-b">
-            {(['ansvisor', 'mine'] as const).map((key) => (
+            {TABS.map((key) => (
               <button
                 key={key}
                 type="button"
@@ -280,7 +296,13 @@ export function ChatSkills() {
                 aria-selected={tab === key}
                 data-action="skills.tab"
                 data-tab={key}
-                onClick={() => setTab(key)}
+                onClick={() => {
+                  setTab(key);
+                  // The Library keeps its topic and search in the address; the other tabs don't.
+                  if (key !== 'marketplace' && window.location.search) {
+                    window.history.replaceState(window.history.state, '', window.location.pathname);
+                  }
+                }}
                 className={cn(
                   '-mb-px border-b-2 px-3 py-2 text-[13px] font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
                   tab === key
@@ -290,7 +312,11 @@ export function ChatSkills() {
               >
                 {t(`tabs.${key}`)}{' '}
                 <span className="text-muted-foreground tabular-nums">
-                  {key === 'ansvisor' ? list.library.length : list.skills.length}
+                  {key === 'ansvisor'
+                    ? list.library.length
+                    : key === 'marketplace'
+                      ? MARKETPLACE_COUNT
+                      : list.skills.length}
                 </span>
               </button>
             ))}
@@ -301,81 +327,87 @@ export function ChatSkills() {
             )}
           </div>
 
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <div className="relative w-full max-w-[260px]">
-              <Search
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
-              />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t('search')}
-                aria-label={t('search')}
-                data-action="skills.search"
-                className="h-8 pl-8 text-[13px]"
-              />
-            </div>
-            {tab === 'ansvisor' &&
-              (['all', ...SKILL_FILTERS] as const).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  aria-pressed={filter === key}
-                  data-action="skills.filter"
-                  data-filter={key}
-                  onClick={() => setFilter(key)}
-                  className={cn(
-                    'h-8 rounded-full border px-3 text-xs font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                    filter === key
-                      ? 'border-foreground bg-foreground text-background'
-                      : 'bg-card text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {t(`filters.${key}`)}
-                </button>
-              ))}
-          </div>
-
-          {tab === 'ansvisor' ? (
-            library.length === 0 ? (
-              <p className="py-10 text-center text-sm text-muted-foreground">{t('empty')}</p>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {library.map((skill) => (
-                  <LibraryCard
-                    key={skill.name}
-                    skill={skill}
-                    kinds={kinds}
-                    canToggle={list.can.manageLibrary}
-                    starting={starting === skill.name}
-                    onRun={() => void run(skill.name)}
-                    onSchedule={() => schedule(skill.name)}
-                    onToggle={(enabled) => void toggleLibrary(skill, enabled)}
-                    onOpen={() => setOpen(skill)}
-                  />
-                ))}
-              </div>
-            )
-          ) : mine.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              {list.skills.length === 0 ? t('mineEmpty') : t('empty')}
-            </p>
+          {tab === 'marketplace' ? (
+            <MarketplaceTab />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {mine.map((skill) => (
-                <OwnCard
-                  key={skill.id}
-                  skill={skill}
-                  canReview={skill.mine || list.can.manageLibrary}
-                  starting={starting === skill.name}
-                  onRun={() => void run(skill.name)}
-                  onSchedule={() => schedule(skill.name)}
-                  onToggle={(enabled) => void toggleOwn(skill, enabled)}
-                  onOpen={() => setOpen(skill)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <div className="relative w-full max-w-[260px]">
+                  <Search
+                    aria-hidden
+                    className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={t('search')}
+                    aria-label={t('search')}
+                    data-action="skills.search"
+                    className="h-8 pl-8 text-[13px]"
+                  />
+                </div>
+                {tab === 'ansvisor' &&
+                  (['all', ...SKILL_FILTERS] as const).map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-pressed={filter === key}
+                      data-action="skills.filter"
+                      data-filter={key}
+                      onClick={() => setFilter(key)}
+                      className={cn(
+                        'h-8 rounded-full border px-3 text-xs font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                        filter === key
+                          ? 'border-foreground bg-foreground text-background'
+                          : 'bg-card text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {t(`filters.${key}`)}
+                    </button>
+                  ))}
+              </div>
+
+              {tab === 'ansvisor' ? (
+                library.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-muted-foreground">{t('empty')}</p>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    {library.map((skill) => (
+                      <LibraryCard
+                        key={skill.name}
+                        skill={skill}
+                        kinds={kinds}
+                        canToggle={list.can.manageLibrary}
+                        starting={starting === skill.name}
+                        onRun={() => void run(skill.name)}
+                        onSchedule={() => schedule(skill.name)}
+                        onToggle={(enabled) => void toggleLibrary(skill, enabled)}
+                        onOpen={() => setOpen(skill)}
+                      />
+                    ))}
+                  </div>
+                )
+              ) : mine.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  {list.skills.length === 0 ? t('mineEmpty') : t('empty')}
+                </p>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {mine.map((skill) => (
+                    <OwnCard
+                      key={skill.id}
+                      skill={skill}
+                      canReview={skill.mine || list.can.manageLibrary}
+                      starting={starting === skill.name}
+                      onRun={() => void run(skill.name)}
+                      onSchedule={() => schedule(skill.name)}
+                      onToggle={(enabled) => void toggleOwn(skill, enabled)}
+                      onOpen={() => setOpen(skill)}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </>
       )}
@@ -622,8 +654,8 @@ function OwnCard({
             </Button>
           </>
         )}
-        {/* An import's review: the cleaned file, the scan and its source (W3-09). */}
-        {skill.source === 'import' && skill.status !== 'approved' && canReview && (
+        {/* An import's review, or a Library skill's: the cleaned file, the scan and its source (W3-09). */}
+        {skill.source !== 'user' && skill.status !== 'approved' && canReview && (
           <Link
             href={`/dashboard/chat/skills/${skill.id}`}
             data-action="skills.review"
@@ -663,7 +695,11 @@ function OwnCard({
 
 /** Where a workspace skill came from, in words. */
 function sourceLine(t: T, skill: WorkspaceSkillView): string {
-  if (skill.source === 'import') {
+  if (skill.source === 'library') {
+    const repo = skill.sourceUrl ? repoOf(skill.sourceUrl) : null;
+    if (repo) return t('source.marketplace', { repo });
+  }
+  if (skill.source !== 'user') {
     const repo = skill.sourceUrl ? repoOf(skill.sourceUrl) : null;
     return repo ? t('source.repo', { repo }) : t('source.upload');
   }

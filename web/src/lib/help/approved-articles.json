@@ -1867,6 +1867,13 @@
         "review a skill",
         "skill update",
         "update available",
+        "library",
+        "skill library",
+        "library skills",
+        "add a skill from the library",
+        "third-party skills",
+        "mit skills",
+        "pending approval",
         "faq from fan-outs",
         "weekly report",
         "win back citations",
@@ -1879,7 +1886,9 @@
         "slash commands",
         "playbooks",
         "how-tos",
-        "templates"
+        "templates",
+        "marketplace",
+        "skills directory"
       ],
       "plan": "all",
       "updated": "2026-11-05",
@@ -1894,7 +1903,7 @@
         },
         {
           "heading": "The Skills page",
-          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Brand Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
+          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Brand Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **Library** lists skills by other people to add (below). **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
         },
         {
           "heading": "When Chat picks a skill",
@@ -1907,6 +1916,14 @@
         {
           "heading": "Import a skill",
           "text": "Admins and Managers on a paid plan can bring in a skill from outside. On the **Skills** page, click **New skill**, then **Upload a SKILL.md or .zip** (up to 5 MB), or **Import from GitHub** and paste a public github.com link. Only the skill's instructions come in: scripts, commands and allowed tools are removed, and nothing runs. A GitHub skill is read at today's commit and never updates by itself. Only MIT, Apache-2.0, BSD and ISC licenses are accepted.\n\nAn imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it."
+        },
+        {
+          "heading": "The Library",
+          "text": "The **Library** tab lists 701 skills that other people share on GitHub under the MIT license, for SEO, content, brand, analytics, social, CRO, email, paid ads, growth and go-to-market work. Pick a topic, or search by a skill's name, what it does or its repository. **Most stars** sorts by the repository's GitHub stars, **Most installs** by its installs on skills.sh. The first 30 show; **Show more** adds 30 at a time.\n\nClick a skill to read it before you add it: its SKILL.md at the version the Library lists, Ansvisor's own safety scan, what adding it leaves out, its file on GitHub and its license. **Edited by Ansvisor** says what Ansvisor took out of a few skills, such as a promotion."
+        },
+        {
+          "heading": "Add a skill from the Library",
+          "text": "Admins and Managers on a paid plan can click **Add**. The skill comes in as an imported skill does: instructions only, cleaned, scanned and kept with its license and source. It stays off until an Admin reviews it. An Admin's **Add** opens the review; a Manager's asks the Admins. The card then says **Pending approval**, then **Added** once an Admin approves it, and the skill is under **My skills**, on for whoever added it.\n\nEach skill is added once per workspace and stays at the version it was added at. Analysts and Agency partners can browse the Library but can't add. A skill the scan blocks, or whose file Ansvisor can't read, can't be added: its page says why."
         },
         {
           "heading": "Updates to an imported skill",

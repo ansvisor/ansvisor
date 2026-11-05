@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { MARKETPLACE_COUNT } from './marketplace-view';
 import {
   MARKETPLACE_CSV_COLUMNS,
   MARKETPLACE_SKILLS,
@@ -74,6 +75,8 @@ describe('marketplace.json', () => {
     expect(new Set(MARKETPLACE_SKILLS.map((skill) => skill.id)).size).toBe(701);
     expect(MARKETPLACE_SKILLS.every((skill) => skill.license === 'MIT')).toBe(true);
     expect(MARKETPLACE_SKILLS.map((skill) => skill.id)).toEqual(rows.map((row) => row[at('Id')]));
+    // The Library tab's count, which the page has without the catalog (W4-18).
+    expect(MARKETPLACE_COUNT).toBe(MARKETPLACE_SKILLS.length);
   });
 
   it("has the spec's topic counts, and 14 skills under All only", () => {

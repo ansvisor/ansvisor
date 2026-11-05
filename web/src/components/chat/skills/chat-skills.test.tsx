@@ -6,8 +6,9 @@ import messages from '../../../../messages/en.json';
 import type { SkillList, WorkspaceSkillView } from '@/lib/chat/skills/store';
 
 /**
- * Skills (mockup #s-skills; CHAT-13 items 8–10, W3-07): Ansvisor's skills
- * and the workspace's own in two tabs with their counts; search and the
+ * Skills (mockup #s-skills; CHAT-13 items 8–10, W3-07): Ansvisor's skills,
+ * the Library (W4-18, marketplace-tab.test.tsx) and the workspace's own in
+ * three tabs with their counts; search and the
  * library's filter chips; a card's connections on the brand open, Connect
  * in place of Run when a Required one is missing; Run starts a chat with
  * the skill, Schedule fills Chat Home's box, Create agent starts an agent
@@ -31,6 +32,9 @@ vi.mock('@/components/providers/upgrade-gate', () => ({
   useUpgradeGate: () => ({ openUpgrade: gate.openUpgrade, isLocked: gate.isLocked }),
 }));
 const BRAND = 'bbbbbbbb-0000-4000-8000-000000000001';
+vi.mock('./marketplace-tab', () => ({
+  MarketplaceTab: () => <div data-slot="skills-library" />,
+}));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: { activeBrandId: string }) => unknown) =>
     pick({ activeBrandId: BRAND }),
@@ -169,6 +173,7 @@ describe('ChatSkills', () => {
     await render();
     expect(all('[role="tab"]').map((tab) => tab.textContent)).toEqual([
       'Ansvisor skills 3',
+      'Library 701',
       'My skills 2',
     ]);
     expect(cards()).toEqual(['winback', 'report', 'publish']);
@@ -306,6 +311,39 @@ describe('ChatSkills', () => {
     expect(container.querySelector('[data-slot="update-available"]')).toBeNull();
     // No filter chips here: workspace skills have none.
     expect(container.querySelector('[data-action="skills.filter"]')).toBeNull();
+  });
+
+  it('says where a skill added from the Library came from, and opens its review (W4-19)', async () => {
+    const copy = list.skills.find((skill) => skill.name === 'copy-editing')!;
+    Object.assign(copy, {
+      source: 'library',
+      sourceUrl: `https://github.com/acme/skills/tree/${'c'.repeat(40)}/skills/copy-editing`,
+    });
+    await render();
+    await click(container.querySelector<HTMLElement>('[data-tab="mine"]')!);
+    expect(card('copy-editing').textContent).toContain('Added from the Library · acme/skills');
+    expect(inCard('copy-editing', 'skills.review')!.getAttribute('href')).toBe(
+      '/dashboard/chat/skills/aaaaaaaa-0000-4000-8000-000000000002',
+    );
+  });
+
+  it('opens the Library in its own tab, and on it when the address names it', async () => {
+    await render();
+    expect(container.querySelector('[data-slot="skills-library"]')).toBeNull();
+    await click(container.querySelector<HTMLElement>('[data-tab="marketplace"]')!);
+    expect(container.querySelector('[data-slot="skills-library"]')).not.toBeNull();
+    // Its own search and chips: the page's are for the other tabs.
+    expect(container.querySelector('[data-action="skills.search"]')).toBeNull();
+    act(() => root.unmount());
+    window.history.replaceState(null, '', '/dashboard/chat/skills?tab=library');
+    root = createRoot(container);
+    await render();
+    expect(container.querySelector('[data-tab="marketplace"]')!.getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    // Another tab leaves the Library's address behind.
+    await click(container.querySelector<HTMLElement>('[data-tab="mine"]')!);
+    expect(window.location.search).toBe('');
   });
 
   it('marks an import whose source has a new version, and opens its update (W4-31)', async () => {
