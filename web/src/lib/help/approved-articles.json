@@ -757,7 +757,8 @@
         "run another agent",
         "called by",
         "sub-agents",
-        "agent calls agent"
+        "agent calls agent",
+        "send to webhook"
       ],
       "synonyms": [
         "my agents",
@@ -779,7 +780,7 @@
         "helper agent"
       ],
       "plan": "all",
-      "updated": "2026-11-04",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
@@ -807,7 +808,7 @@
         },
         {
           "heading": "Run, pause and archive",
-          "text": "Admins and Managers see the buttons they may use:\n\n- **Run now** starts a run for each brand in its scope. A second click within a minute doesn't start another one.\n- **Pause** stops its triggers until you click **Resume**. **Activate** turns on a draft.\n- Under **⋯**: **Duplicate** makes a copy as a draft. **Archive** turns it off; its triggers stop and runs waiting to start are cancelled. Admins can also **Take over** an agent, so its triggered runs act as them.\n- An archived agent has **Restore**, which brings it back paused.\n\nManagers change their own agents and can run agents shared with the workspace. Admins can do this for every agent."
+          "text": "Admins and Managers see the buttons they may use:\n\n- **Run now** starts a run for each brand in its scope. A second click within a minute doesn't start another one.\n- **Pause** stops its triggers until you click **Resume**. **Activate** turns on a draft.\n- Under **⋯**: **Duplicate** makes a copy as a draft. **Archive** turns it off; its triggers stop and runs waiting to start are cancelled. Admins can also **Take over** an agent, so its triggered runs act as them.\n- An archived agent has **Restore**, which brings it back paused.\n\nManagers change their own agents and can run agents shared with the workspace. Admins can do this for every agent.\n\nThe demo brand's sample agents show their runs, but running or changing one opens the plan dialog. Other agents can't call them."
         },
         {
           "heading": "Create an agent",
@@ -851,11 +852,11 @@
         },
         {
           "heading": "Let an agent publish on its own",
-          "text": "Where your workspace has it, Admins on Growth and up can let chosen agents publish new pages on Webflow, WordPress and Wix, and send drafts to your CMS, without a click. It takes two switches: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with **Full auto** picked. Managers see the agent's switch read-only, with **Ask your Admin**.\n\n**At most a day** caps its pages in 24 hours: 1 to 20, 5 by default. A page still waits for your click, and its card says why, when the run read text that tried to instruct it, the agent reached its limit, or the page fails Quality or your approved brand facts, has hidden text or outside links, or is live already.\n\nChanging what the agent does turns this off until an Admin allows it again."
+          "text": "Where your workspace has it, Admins on Growth and up can let chosen agents publish new pages on Webflow, WordPress and Wix, and send pages to your CMS or webhook, without a click. It takes two switches: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, in **Full auto**. Managers see the agent's switch read-only, with **Ask your Admin**.\n\n**At most a day** caps its pages in 24 hours: 1 to 20, 5 by default. A page still waits for your click, and its card says why, when the run read text that tried to instruct it, the agent reached its limit, or the page fails Quality or your approved brand facts, has hidden text or outside links, or is live already.\n\nChanging what the agent does turns this off until an Admin allows it again."
         },
         {
           "heading": "When an agent sends a page on its own",
-          "text": "Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. A published page's notice also has **Take down**, for Admins and Managers. The notice leaves Needs you once you open it. A page someone took down never goes live on its own again. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.\n\nWhen an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves."
+          "text": "Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. A published page's notice also has **Take down**, for Admins and Managers; a webhook send can't be taken back. The notice leaves Needs you once you open it. A page someone took down never goes live on its own again. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.\n\nWhen an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves."
         },
         {
           "heading": "On your own AI key",
@@ -1043,7 +1044,10 @@
         "voice",
         "microphone",
         "speak",
-        "dictate"
+        "dictate",
+        "send to webhook",
+        "webhook",
+        "workflow webhook"
       ],
       "synonyms": [
         "assistant",
@@ -1108,7 +1112,7 @@
         },
         {
           "heading": "Drafts, reports and audits",
-          "text": "Admins and Managers can also ask Chat to change a draft in the Library, send a draft to your connected CMS, publish a new page on your site, make a report, or start Site Audit on pages. Analysts can ask Chat to save new drafts only.\n\nA draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.\n\nStarting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo."
+          "text": "Admins and Managers can also ask Chat to change a draft in the Library, send a draft to your connected CMS, publish a new page on your site, send a page to your webhook, make a report, or start Site Audit on pages. Analysts can ask Chat to save new drafts only.\n\nA draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.\n\nStarting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo."
         },
         {
           "heading": "Where a page opens",
@@ -1120,7 +1124,7 @@
         },
         {
           "heading": "Send or publish a page from Chat",
-          "text": "A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. A live page, or a send to your webhook, goes from the Content Editor.\n\nSending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat.\n\nTo take a published page back down to a draft in its CMS, ask Chat, or click **Take down** on its row in **Activity** for 30 days. It always waits for your click, and Managers can do it even when publishing is off for them."
+          "text": "A page sent to your CMS (Webflow, WordPress, Framer or Wix) arrives as a draft. Chat can also publish a new page live through Webflow, WordPress or Wix; Framer publishes the whole site, so you publish there. Chat can also send a page to your webhook; Ansvisor can't take that back. A live page goes from the Content Editor.\n\nSending and publishing wait for your click, even in **Full auto**, unless an Admin let an agent go live on its own, and have no Undo. If an Admin turned publishing off for Managers, Managers can't send or publish from Chat.\n\nTo take a published page back down to a draft in its CMS, ask Chat, or click **Take down** on its row in **Activity** for 30 days. It always waits for your click, and Managers can do it even when publishing is off for them."
         },
         {
           "heading": "Your brand facts",
@@ -1933,7 +1937,13 @@
         "export",
         "site audit estimate",
         "health claims",
-        "supplements"
+        "supplements",
+        "chat in the editor",
+        "chat tab",
+        "continued from your chat",
+        "from your chat",
+        "this draft",
+        "ctrl j"
       ],
       "synonyms": [
         "write an article",
@@ -1974,7 +1984,11 @@
         },
         {
           "heading": "The side panel",
-          "text": "The side panel's tabs are **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**.\n\nWhile the panel is closed, its tabs run down the editor's right edge: click one to open the panel there.\n\nBuilding the brief and running the Content Agent use your workspace's monthly AI usage."
+          "text": "The side panel's tabs are **Chat** (with Chat on, see below), **Instructions**, **Sources** and **Live page**. **Instructions** holds what the Content Agent follows: **Brief** and **Rules**, and **Quality** when it's on, switched at its top. The panel opens on **Instructions**, on **Rules**, or on **Chat** for a page Chat made.\n\nWhile the panel is closed, its tabs run down the editor's right edge: click one to open the panel there.\n\nBuilding the brief and running the Content Agent use your workspace's monthly AI usage."
+        },
+        {
+          "heading": "Chat beside the page",
+          "text": "With Chat on, **Chat** is the side panel's first tab. A page Chat made opens on it and continues that chat: \"Continued from your chat\". Otherwise it continues the chat you last had here about the page, or starts one. **Ctrl J** opens it.\n\nWhat you ask about the page doesn't change it. The Content Agent leaves suggestions in the page, labelled \"Content Agent · from your chat\", with the same guards as Fix open rules; the page changes only when you **Accept** one. Remove **This draft** from the box to talk about something else. The expand icon opens the chat on Chat's own page."
         },
         {
           "heading": "The brief",
@@ -3737,7 +3751,12 @@
         "don't ask again",
         "managers publish",
         "agents publish on their own",
-        "go live"
+        "go live",
+        "model providers",
+        "turn off openai",
+        "turn off google",
+        "deepseek",
+        "data collection"
       ],
       "synonyms": [
         "chat permissions",
@@ -3755,6 +3774,10 @@
         {
           "heading": "Run modes and tools",
           "text": "**Full auto** lets people run changes without a card. **Don't ask again** lets each person skip a card for one tool. Both need the Growth plan.\n\nUnder **Tool policy**, set each tool to **Never**, **Ask** or **Always**, within what the tool allows. **Reset to defaults** puts every tool back."
+        },
+        {
+          "heading": "Model providers",
+          "text": "**Model providers** lists the companies whose models Chat may use: Anthropic, OpenAI, Google and DeepSeek. Admins turn each on or off. A provider that is off has no model in the model menu, and agents and scheduled runs that picked one of its models run on Auto instead; the answer says so. Each change goes in the Activity log.\n\nAnthropic is always on, because Auto runs on its models. DeepSeek is off until an Admin turns it on, and its models then run only on providers hosted in the US or the EU. Calls through OpenRouter go only to providers that don't keep or train on your data."
         },
         {
           "heading": "What Managers may take live",

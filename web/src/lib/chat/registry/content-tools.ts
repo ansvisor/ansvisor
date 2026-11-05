@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { publishDraftToCms, sendDraftToCms } from '@/lib/actions/cms-send';
+import { publishDraftToCms, sendDraftToCms, sendDraftToWebhook } from '@/lib/actions/cms-send';
 import { takeDownDraft } from '@/lib/actions/cms-take-down';
 import {
   setContentDraftReady,
@@ -31,7 +31,10 @@ import { draftPage, draftTitle, pageChanges } from './targets';
  * sends them through the API's internal route as the run's person, after
  * its checks. Taking a published page down (unpublish_cms, PR 10) is always
  * the person's click: outside the go-live groups, a Manager may even while
- * publishing is off for Managers, as it only lowers what is live.
+ * publishing is off for Managers, as it only lowers what is live. Sending a
+ * page to the brand's saved webhook (trigger_content_webhook, row 61, PR 11)
+ * is an EXECUTE of the publishing group too, and an allowed agent's on its
+ * own (§4 row 5): its workflow decides what happens next, so it has no Undo.
  */
 
 const ITEM = FIXTURE_IDS.item;
@@ -192,7 +195,7 @@ export const CONTENT_TOOLS = [
     executeGroup: 'publishing',
     area: 'content',
     description:
-      "Send a Library draft to the brand's connected CMS as a draft there (Webflow, WordPress, Framer or Wix): nothing goes live. A page that is live already, or a send to the brand's webhook, goes from the Content Editor. Its slug and meta are what it kept from its last send, else the page's. Only when the person asked for this page to go to that CMS.",
+      "Send a Library draft to the brand's connected CMS as a draft there (Webflow, WordPress, Framer or Wix): nothing goes live. A page that is live already goes from the Content Editor; a send to the brand's webhook is trigger_content_webhook. Its slug and meta are what it kept from its last send, else the page's. Only when the person asked for this page to go to that CMS.",
     minRole: 'manager',
     // A connection, not a plan: the API says when the brand hasn't one (not_connected).
     planGate: null,
@@ -248,6 +251,36 @@ export const CONTENT_TOOLS = [
         .join(' ');
     },
     fixture: { input: { draft_id: ITEM, destination: 'webflow' } },
+  }),
+  defineTool({
+    name: 'trigger_content_webhook',
+    // It hands the page to the brand's own workflow (Zapier, Make, n8n), which may publish it,
+    // and Ansvisor can't take it back: an EXECUTE, only the person's click, or an agent an Admin
+    // let go live on its own (goLive). No address in its input: only the brand's saved webhook.
+    class: 'execute',
+    executeGroup: 'publishing',
+    area: 'content',
+    description:
+      "Send a Library page to the brand's saved webhook, for its workflow (Zapier, Make, n8n), as the Content Editor's Send to webhook does: the workflow decides what happens next, and Ansvisor can't take it back. Not for a page that is live already. Only when the person asked for this page to go to their webhook.",
+    minRole: 'manager',
+    // A connection, not a plan: the API says when the brand has no webhook (not_connected).
+    planGate: null,
+    brandOf: { lookup: 'content_drafts', idField: 'draft_id' },
+    costClass: 'C1',
+    labelKey: 'sendToWebhook',
+    route: '/dashboard/content/library',
+    mcpTool: null,
+    specRow: '61',
+    inputSchema: z.object({
+      draft_id: contentUuid.describe('The draft, from list_content_drafts.'),
+    }),
+    run: (_ctx, input) => sendDraftToWebhook(input.draft_id),
+    goLive: (input) => ({ kind: 'webhook', draftId: input.draft_id, target: 'webhook' }),
+    target: async (input) => {
+      const title = await draftTitle(input.draft_id);
+      return [title ? `“${title}”` : null, `→ ${CMS_NAMES.webhook}`].filter(Boolean).join(' ');
+    },
+    fixture: { input: { draft_id: ITEM } },
   }),
   defineTool({
     name: 'unpublish_cms',

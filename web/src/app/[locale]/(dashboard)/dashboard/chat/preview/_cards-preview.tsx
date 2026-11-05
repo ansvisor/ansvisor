@@ -15,6 +15,7 @@ import { ResultCard } from '@/components/agentic/result-card';
 import { DenialCard } from '@/components/agentic/denial-card';
 import { ErrorCard } from '@/components/agentic/error-card';
 import { RunsTray, RunsTrayView } from '@/components/agentic/runs-tray';
+import { NoticeRows } from '@/components/chat/inbox-notices';
 import { NextMoves } from '@/components/chat/run/next-moves';
 import { OpenPageCard } from '@/components/chat/run/open-page-card';
 import { DeliverableCard } from '@/components/chat/run/deliverable-card';
@@ -37,6 +38,8 @@ import {
   SKILL_DRAFT,
   TASKS_PLAN,
   TRAY,
+  WEBHOOK_NOTICE,
+  WEBHOOK_PAGE,
 } from './_card-samples';
 
 const noop = () => {};
@@ -69,6 +72,9 @@ function State({ caption, children }: { caption: string; children: ReactNode }) 
 export function CardsPreview() {
   const t = useTranslations('agentic.preview.cards');
   const s = (key: string) => t(`states.${key}` as never);
+  // The webhook send's card in Chat's own words (chat-thread-view builds it so).
+  const tTools = useTranslations('chatTools.sendToWebhook');
+  const tPage = useTranslations('chatPage');
   const brandId = useBrandStore((state) => state.activeBrandId);
   const stepOf = (n: number) => ({ n, total: 6 });
   const skillAssist = useFormAssist(SKILL_DRAFT);
@@ -252,6 +258,25 @@ export function CardsPreview() {
         </State>
         <State caption={s('executeDone')}>
           <ApprovalCard kind="execute" {...PUBLISH} step={stepOf(6)} status="approved" />
+        </State>
+      </Group>
+
+      <Group title={t('sections.webhook')}>
+        <State caption={s('webhookCard')}>
+          <ApprovalCard
+            kind="execute"
+            step={{ n: 3, total: 3 }}
+            title={tTools('name')}
+            items={[{ title: WEBHOOK_PAGE }]}
+            summary={WEBHOOK_PAGE}
+            actionLabel={tTools('name')}
+            note={`${tTools('note')} ${tPage('noUndo')}`}
+            onApprove={noop}
+            onSkip={noop}
+          />
+        </State>
+        <State caption={s('webhookNotice')}>
+          <NoticeRows notices={[WEBHOOK_NOTICE]} />
         </State>
       </Group>
 

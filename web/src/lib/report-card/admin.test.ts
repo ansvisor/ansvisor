@@ -30,6 +30,32 @@ const request = (patch: Partial<RequestRow>): RequestRow => ({
 });
 
 describe('summarizeReportCards', () => {
+  it('lists the cards sent with few questions, for staff to check by hand', () => {
+    const { checks } = summarizeReportCards({
+      now: NOW,
+      budgetUsd: 200,
+      dailyCap: 200,
+      cards: [
+        card({}),
+        card({
+          site: 'few.example',
+          check: {
+            reason: 'Only 8 of 40 candidate questions matched the site well enough to ask.',
+          },
+        }),
+        card({ site: 'failed.example', status: 'failed', check: { reason: 'x' } }),
+      ],
+      requests: [],
+    });
+    expect(checks).toEqual([
+      {
+        site: 'few.example',
+        at: '2026-11-03T09:09:00Z',
+        reason: 'Only 8 of 40 candidate questions matched the site well enough to ask.',
+      },
+    ]);
+  });
+
   const stats = summarizeReportCards({
     now: NOW,
     budgetUsd: 200,

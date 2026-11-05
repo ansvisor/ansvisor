@@ -59662,6 +59662,37 @@ create trigger profiles_check_time_zone
   for each row execute function public.check_profile_time_zone();
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00469_chat_model_providers.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00469: which model providers a workspace lets Chat use
+-- ============================================================================
+-- Chat Wave 4 (W4-34; owner decision 2026-11-02 evening: "a US company
+-- doing business globally"), behind CHAT_AGENTIC. An Admin turns a model
+-- provider (the company that makes the model: OpenAI, Google, DeepSeek…) on
+-- or off in Settings › Chat. A provider that is off has no model in the
+-- model menu, and the engine runs Auto in place of one of its models, for a
+-- person's chat, an agent and a scheduled run alike (checked on the
+-- server).
+--
+--   * chat_settings.model_providers: the Admin's choices, by provider, as
+--     {provider: true|false}. A provider not in it takes the default the
+--     web keeps (lib/chat/model-providers.ts): Anthropic on, and always on,
+--     since Auto runs on its models; OpenAI and Google on; DeepSeek off.
+--     A provider added later starts on its own default with no migration.
+--     Read as chat_settings is (00401); the server writes it, for an Admin.
+
+alter table public.chat_settings
+  add column if not exists model_providers jsonb not null default '{}'::jsonb check (
+    jsonb_typeof(model_providers) = 'object' and octet_length(model_providers::text) <= 2000
+  );
+
+comment on column public.chat_settings.model_providers is
+  'The model providers an Admin turned on or off for Chat (00469; W4-34), {provider: boolean}. Missing: the web''s default (Anthropic always on; OpenAI, Google on; DeepSeek off).';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00470_brand_integrations.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -60413,6 +60444,63 @@ alter table public.chat_notices
   );
 
 notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00475_chat_agents_demo_brand.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00475: the demo brand's sample agents
+-- ============================================================================
+-- An agent belongs to the workspace, not to a brand (00419), so the demo
+-- brand's sample agents (demo Agent Center: the server's lib/demo/agents.js)
+-- carry the demo brand they show. The web leaves them out of whatever runs,
+-- counts or pauses agents (the triggers, the sweep, the plan's active
+-- agents), and no change of a person reaches them (agentForAct refuses
+-- demo_brand). They go with the demo brand (on delete cascade) and when it
+-- is hidden, and a rebuild finds them by it. Null for every agent a person
+-- makes.
+--
+-- The column only ever names a demo brand of the agent's own workspace
+-- (the trigger below), so a real agent can never be marked by mistake and
+-- left out of its own workspace's runs.
+
+alter table public.chat_agents
+  add column if not exists demo_brand_id uuid references public.brands(id) on delete cascade;
+
+comment on column public.chat_agents.demo_brand_id is
+  'The demo brand whose sample agent this is (demo Agent Center); null for an agent a person made. Such an agent never runs, counts toward the plan or pauses.';
+
+create index if not exists chat_agents_demo_brand_idx
+  on public.chat_agents (demo_brand_id)
+  where demo_brand_id is not null;
+
+create or replace function public.check_chat_agent_demo_brand()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.demo_brand_id is null then
+    return new;
+  end if;
+  if not exists (
+    select 1
+    from public.brands b
+    where b.id = new.demo_brand_id
+      and b.organization_id = new.organization_id
+      and b.is_demo
+  ) then
+    raise exception 'an agent''s demo_brand_id must be a demo brand of its workspace'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists chat_agents_check_demo_brand on public.chat_agents;
+create trigger chat_agents_check_demo_brand
+  before insert or update of demo_brand_id, organization_id on public.chat_agents
+  for each row execute function public.check_chat_agent_demo_brand();
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00478_report_card_email_attempts.sql

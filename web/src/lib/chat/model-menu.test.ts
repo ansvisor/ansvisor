@@ -12,7 +12,19 @@ import {
   offeredModel,
   runChoiceOf,
 } from './models';
-import { readModelMenu } from './model-menu';
+
+const settingsRow = vi.hoisted(() => ({
+  value: { data: null, error: null } as { data: unknown; error: unknown },
+}));
+vi.mock('@/lib/supabase/admin', () => ({
+  supabaseAdmin: {
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => settingsRow.value }) }),
+    }),
+  },
+}));
+
+const { readModelMenu, readProviderChoices } = await import('./model-menu');
 
 /** The model menu for the browser (W4-01): labels from the API server, no price, a fallback. */
 
@@ -193,5 +205,41 @@ describe('readModelMenu', () => {
     fetchMock.mockReset();
     expect((await readModelMenu()).models).toHaveLength(3);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('model providers in the menu (W4-34)', () => {
+  it('leaves out the models of a provider the Admin turned off, and says a chat on one runs Auto', async () => {
+    answer({
+      models: [
+        serverModel('anthropic/claude-haiku-5.5', '0.1x', 'low'),
+        serverModel('anthropic/claude-sonnet-5.5', '2.3x', 'normal'),
+      ],
+      catalogCount: 300,
+      updatedAt: null,
+    });
+    // Anthropic can't be turned off: its models stay.
+    const menu = await readModelMenu({ providers: { anthropic: false } });
+    expect(menu.models.map((m) => m.id)).toEqual([
+      'anthropic/claude-haiku-5.5',
+      'anthropic/claude-sonnet-5.5',
+    ]);
+  });
+
+  it('reads the workspace’s choices, every provider on its default without a row or before 00469', async () => {
+    settingsRow.value = {
+      data: { model_providers: { openai: false, deepseek: true } },
+      error: null,
+    };
+    expect(await readProviderChoices('org')).toEqual({ openai: false, deepseek: true });
+    settingsRow.value = { data: null, error: null };
+    expect(await readProviderChoices('org')).toEqual({});
+    settingsRow.value = {
+      data: null,
+      error: { code: '42703', message: 'column chat_settings.model_providers does not exist' },
+    };
+    expect(await readProviderChoices('org')).toEqual({});
+    settingsRow.value = { data: null, error: { code: '500', message: 'down' } };
+    await expect(readProviderChoices('org')).rejects.toThrow('down');
   });
 });

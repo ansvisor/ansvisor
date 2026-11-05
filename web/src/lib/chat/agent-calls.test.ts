@@ -193,6 +193,28 @@ describe('callableAgentsOf', () => {
     db.tables.chat_agent_runs[0].called_by_run_id = 'eeeeeeee-0000-4000-8000-000000000009';
     expect(await calls.callableAgentsOf(CALLER_RUN)).toEqual([]);
   });
+
+  it('never names or runs the demo brand’s sample agent, even one its Can call stored before', async () => {
+    const DEMO_AGENT = 'abababab-0000-4000-8000-000000000475';
+    agent(DEMO_AGENT, 'Brewline visibility watch', {
+      demo_brand_id: '66666666-6666-4666-8666-666666666666',
+    });
+    version(DEMO_AGENT);
+    db.tables.chat_agent_versions.find((v) => v.agent_id === CALLER)!.can_call = [
+      DEMO_AGENT,
+      CALLEE,
+    ];
+    callerRun();
+    expect(await calls.callableAgentsOf(CALLER_RUN)).toEqual([{ id: CALLEE, name: 'FAQ writer' }]);
+
+    const d = deps();
+    expect(await calls.runCalledAgent(ctx, { agent: DEMO_AGENT, ask: 'x' }, d)).toMatchObject({
+      ok: false,
+      reason: 'not_found',
+    });
+    expect(calleeRuns()).toEqual([]);
+    expect(d.drive).not.toHaveBeenCalled();
+  });
 });
 
 describe('runCalledAgent', () => {

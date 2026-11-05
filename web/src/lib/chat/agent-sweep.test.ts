@@ -200,6 +200,27 @@ describe('the agents’ sweep', () => {
     expect(driver).toHaveBeenCalledWith({ id: 'fresh', organizationId: ORG, sessionUserId: null });
   });
 
+  it('leaves the demo brand’s sample agents and their runs as they are (00475)', async () => {
+    const DEMO_BRAND = '66666666-6666-4666-8666-666666666666';
+    db.tables.brands.push({ id: DEMO_BRAND, organization_id: ORG, is_demo: true });
+    db.tables.chat_agents = [
+      agent(AGENT, { fail_count: 3, demo_brand_id: DEMO_BRAND }),
+      agent(OTHER_AGENT),
+    ];
+    // Its waiting run has no Chat run state: settled as any other, it would fail.
+    run('demo-run', { brand_id: DEMO_BRAND, status: 'needs_you' });
+    // Older than a real one: the settle pass still leaves it out, and settles the real one.
+    runRow('demo-run').queued_at = new Date(NOW.getTime() - 86_400_000).toISOString();
+    run('real-run', { brand_id: null, agent_id: OTHER_AGENT });
+    chatOf('real-run', 'done');
+    const counts = await sweepAgents(NOW, driver);
+    expect(runRow('demo-run').status).toBe('needs_you');
+    expect(runRow('real-run').status).toBe('done');
+    expect(counts.settled).toBe(1);
+    expect(counts.pausedForFailures).toBe(0);
+    expect(agentRow()).toMatchObject({ status: 'active', fail_count: 3 });
+  });
+
   it('pauses an active agent with 3 failed runs in a row', async () => {
     db.tables.chat_agents = [
       agent(AGENT, { fail_count: 3 }),

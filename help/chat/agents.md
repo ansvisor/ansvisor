@@ -1,11 +1,11 @@
 ---
 title: See and run your agents in Agent Center
 route: /dashboard/agents
-keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent]
+keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent]
 plan: all
-updated: 2026-11-04
-last_checked: 2026-11-04
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -68,6 +68,8 @@ Admins and Managers see the buttons they may use:
 - An archived agent has **Restore**, which brings it back paused.
 
 Managers change their own agents and can run agents shared with the workspace. Admins can do this for every agent.
+
+The demo brand's sample agents show their runs, but running or changing one opens the plan dialog. Other agents can't call them.
 
 ## Create an agent
 
@@ -132,7 +134,7 @@ Once a run has read text from outside your workspace, such as AI answers, citati
 
 ## Let an agent publish on its own
 
-Where your workspace has it, Admins on Growth and up can let chosen agents publish new pages on Webflow, WordPress and Wix, and send drafts to your CMS, without a click. It takes two switches: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with **Full auto** picked. Managers see the agent's switch read-only, with **Ask your Admin**.
+Where your workspace has it, Admins on Growth and up can let chosen agents publish new pages on Webflow, WordPress and Wix, and send pages to your CMS or webhook, without a click. It takes two switches: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, in **Full auto**. Managers see the agent's switch read-only, with **Ask your Admin**.
 
 **At most a day** caps its pages in 24 hours: 1 to 20, 5 by default. A page still waits for your click, and its card says why, when the run read text that tried to instruct it, the agent reached its limit, or the page fails Quality or your approved brand facts, has hidden text or outside links, or is live already.
 
@@ -140,7 +142,7 @@ Changing what the agent does turns this off until an Admin allows it again.
 
 ## When an agent sends a page on its own
 
-Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. A published page's notice also has **Take down**, for Admins and Managers. The notice leaves Needs you once you open it. A page someone took down never goes live on its own again. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.
+Its owner and the people it notifies get a notice at the top of their **Inbox**'s **Needs you**, and an e-mail unless their Chat settings say Inbox only: the agent, the page and where it went, with **Open page** (the live page, once published) and **Open run**. A published page's notice also has **Take down**, for Admins and Managers; a webhook send can't be taken back. The notice leaves Needs you once you open it. A page someone took down never goes live on its own again. In the **Content Library**, the page's last send says the agent sent it on its own, and an action the page works on lists it in its History.
 
 When an edit turns it off, the Admin who allowed it and the agent's owner get a notice with **Open agent**, unless they made the edit themselves.
 

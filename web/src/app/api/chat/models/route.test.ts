@@ -21,7 +21,8 @@ vi.mock('@/lib/chat/run-api', () => ({
   runFailure: (status: number, failure: string, code: string, error: string) =>
     NextResponse.json({ ok: false, failure, code, error }, { status }),
 }));
-vi.mock('@/lib/chat/model-menu', () => ({ readModelMenu }));
+const readProviderChoices = vi.hoisted(() => vi.fn(async () => ({}) as Record<string, boolean>));
+vi.mock('@/lib/chat/model-menu', () => ({ readModelMenu, readProviderChoices }));
 vi.mock('@/lib/chat/key', () => ({ ownChatKeyProviders, ownKeyAccess }));
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
@@ -67,14 +68,23 @@ describe('GET /api/chat/models', () => {
     expect(readModelMenu).toHaveBeenCalledWith({
       selected: 'anthropic/claude-opus-5.5',
       ownKeyProviders: ['anthropic'],
+      providers: {},
     });
   });
 
   it('takes no selection that isn’t a model id, and Auto as is', async () => {
     await get('?selected=../../x');
-    expect(readModelMenu).toHaveBeenLastCalledWith({ selected: null, ownKeyProviders: [] });
+    expect(readModelMenu).toHaveBeenLastCalledWith({
+      selected: null,
+      ownKeyProviders: [],
+      providers: {},
+    });
     await get('?selected=auto');
-    expect(readModelMenu).toHaveBeenLastCalledWith({ selected: 'auto', ownKeyProviders: [] });
+    expect(readModelMenu).toHaveBeenLastCalledWith({
+      selected: 'auto',
+      ownKeyProviders: [],
+      providers: {},
+    });
   });
 
   it('answers a failure as a value', async () => {
@@ -98,5 +108,18 @@ describe('what the person may do in the menu (W4-02)', () => {
     ownKeyAccess.mockResolvedValue({ state: 'plan' });
     const body = await (await get()).json();
     expect(body.access).toMatchObject({ choiceOpen: true, ownKeys: { state: 'plan' } });
+  });
+});
+
+describe('model providers (W4-34)', () => {
+  it('passes the workspace’s provider choices to the menu, defaults when they can’t be read', async () => {
+    readProviderChoices.mockResolvedValueOnce({ openai: false });
+    await get();
+    expect(readModelMenu).toHaveBeenLastCalledWith(
+      expect.objectContaining({ providers: { openai: false } }),
+    );
+    readProviderChoices.mockRejectedValueOnce(new Error('down'));
+    expect((await get()).status).toBe(200);
+    expect(readModelMenu).toHaveBeenLastCalledWith(expect.objectContaining({ providers: {} }));
   });
 });

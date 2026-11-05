@@ -43,6 +43,8 @@ export interface ClientRun {
   question: ChatAsk | null;
   /** What could come next, once it finished (CHAT-07 §C): best first. */
   nextMoves: ChatNextMove[];
+  /** "Remember this?": the lasting preference it offers to remember (W4-33); null when none. */
+  remember: string | null;
   /** Out-of-permission answers, in order. */
   denials: ChatDenialCard[];
   /** What it made, in order (CHAT-06 item 1): the n-th is the run's file n. */
@@ -74,6 +76,7 @@ export function emptyRun(status: ClientRunStatus = 'running'): ClientRun {
     confirm: null,
     question: null,
     nextMoves: [],
+    remember: null,
     denials: [],
     deliverables: [],
     sent: [],
@@ -155,6 +158,9 @@ export function applyChatEvent(run: ClientRun, event: ChatEvent): ClientRun {
       return next;
     case 'next_moves':
       next.nextMoves = event.data.moves;
+      return next;
+    case 'remember.offered':
+      next.remember = event.data.text;
       return next;
     case 'access.denied':
       next.denials = [...run.denials, event.data];

@@ -173,13 +173,22 @@ describe('where a draft was made (00463, W4-10)', () => {
   });
 
   it('reads the chat it was made in, or none when the member can’t read it', () => {
-    expect(draftConversationOf({ id: 'c1', title: 'Pricing FAQ' })).toEqual({
+    expect(draftConversationOf({ id: 'c1', title: 'Pricing FAQ', user_id: 'u1' }, 'u1')).toEqual({
       id: 'c1',
       title: 'Pricing FAQ',
+      mine: true,
     });
-    expect(draftConversationOf([{ id: 'c1', title: null }])).toEqual({ id: 'c1', title: '' });
-    expect(draftConversationOf(null)).toBeNull();
-    expect(draftConversationOf([])).toBeNull();
+    // A teammate's chat shared with the member: not theirs.
+    expect(draftConversationOf([{ id: 'c1', title: null, user_id: 'u2' }], 'u1')).toEqual({
+      id: 'c1',
+      title: '',
+      mine: false,
+    });
+    expect(draftConversationOf({ id: 'c1', title: 'Pricing FAQ' }, null)).toMatchObject({
+      mine: false,
+    });
+    expect(draftConversationOf(null, 'u1')).toBeNull();
+    expect(draftConversationOf([], 'u1')).toBeNull();
   });
 
   it('lists the drafts made where the Made in filter says', () => {
