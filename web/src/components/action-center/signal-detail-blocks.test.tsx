@@ -398,6 +398,50 @@ describe("a technical finding with its checks' evidence", () => {
     );
   });
 
+  it('names the crawlers a CDN or firewall turned away, and leaves out the live test’s rows (SA-008)', () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'technical',
+          kind: 'crawler_blocked',
+          currentValue: 1,
+          payload: {
+            entity: 'pages',
+            targets: [
+              {
+                id: '/pricing',
+                label: '/pricing',
+                issues: [
+                  {
+                    check: 'ai-bot-access',
+                    label: 'AI bot access',
+                    evidence: {
+                      aiBotsMentioned: ['gptbot'],
+                      blocked: false,
+                      blockedBots: [],
+                      bots: [{ key: 'perplexitybot', name: 'PerplexityBot', http: 403 }],
+                      liveTest: 'done',
+                      control: 200,
+                      wafBlockedBots: ['perplexitybot'],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    const rows = [...container.querySelectorAll('dt')].map(
+      (dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`,
+    );
+    expect(rows).toContain('Affected crawlers: PerplexityBot (Perplexity)');
+    expect(rows).toContain(
+      'Failed checks: /pricingAI bot access · In robots.txt: GPTBot (OpenAI) · Blocked by CDN or firewall: PerplexityBot (Perplexity)',
+    );
+  });
+
   it('names what a check found, and leaves out the model that judged it', () => {
     render(
       <SignalWhereBlock

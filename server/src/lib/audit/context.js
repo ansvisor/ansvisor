@@ -10,6 +10,7 @@
 
 import * as cheerio from 'cheerio';
 import { fetchViaScrapeDo, fetchText } from './fetcher.js';
+import { probeBotAccess } from './bot-access.js';
 
 /**
  * Normalize user-supplied input into an absolute http(s) URL.
@@ -47,6 +48,8 @@ export function normalizeUrl(raw) {
  * @property {string|null} robotsTxt
  * @property {string|null} llmsTxt
  * @property {string|null} query     optional target buyer query (later phases)
+ * @property {Awaited<ReturnType<typeof probeBotAccess>>} [botAccess]
+ *   the live AI-bot access test (SA-008); absent for a page not fetched
  */
 
 /**
@@ -69,19 +72,24 @@ export async function buildAuditContext(rawUrl, { query = null } = {}) {
     throw Object.assign(new Error(`Failed to fetch page (status ${page.status})`), { status: 502 });
   }
 
-  const [robotsTxt, llmsTxt] = await Promise.all([
+  // The live bot test (SA-008) asks the page itself, alongside the two files.
+  const [robotsTxt, llmsTxt, botAccess] = await Promise.all([
     fetchText(`${origin}/robots.txt`),
     fetchText(`${origin}/llms.txt`),
+    probeBotAccess(url).catch(() => null),
   ]);
 
-  return auditContextOf({
-    url,
-    statusCode: page.status,
-    html: page.html,
-    robotsTxt,
-    llmsTxt,
-    query,
-  });
+  return {
+    ...auditContextOf({
+      url,
+      statusCode: page.status,
+      html: page.html,
+      robotsTxt,
+      llmsTxt,
+      query,
+    }),
+    botAccess,
+  };
 }
 
 /**

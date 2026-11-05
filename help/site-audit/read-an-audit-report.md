@@ -1,8 +1,8 @@
 ---
 title: Read a site audit report
 route: /dashboard/audit
-keywords: [audit report, audit score, signals, audit categories, grade, readability, first person, score range, evidence level, formula, llms.txt]
-synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed, plus or minus, score margin, strong evidence, likely helps, hygiene, informational, category weights, how the score is calculated, llms.txt score]
+keywords: [audit report, audit score, signals, audit categories, grade, readability, first person, score range, evidence level, formula, llms.txt, AI bot access, robots.txt, firewall]
+synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed, plus or minus, score margin, strong evidence, likely helps, hygiene, informational, category weights, how the score is calculated, llms.txt score, GPTBot blocked, ClaudeBot blocked, PerplexityBot blocked, Cloudflare blocks AI bots, CDN blocks crawlers, WAF]
 plan: all
 updated: 2026-11-05
 last_checked: 2026-11-05
@@ -25,7 +25,7 @@ The gauge shows the page's score out of 100 and a grade: **Good** (70 and above)
 - **Content** (25%): whether the page answers its question directly and completely.
 - **Authority** (20%): whether it reads as expert and sourced, such as author byline, citations, statistics and freshness.
 - **E-E-A-T** (20%): experience, expertise and trust, such as case studies and author credentials.
-- **Trust** (10%): crawl-time basics such as AI bot access in robots.txt, HTTPS, canonical URL and meta description. **llms.txt presence** is listed here for information only.
+- **Trust** (10%): crawl-time basics such as AI bot access, HTTPS, canonical URL and meta description. **llms.txt presence** is listed here for information only.
 
 ## How the score is worked out
 
@@ -70,6 +70,14 @@ The finding shows the score with its formula and language, then its parts: words
 ## First-person evidence
 
 **First-person evidence** counts the sentences told as "I" or "we": in Turkish also by their verb endings, such as "gezdik" or "düşünüyoruz". Two or more pass and one raises a warning. Quotes and stock phrases such as "Contact us" don't count. It's read in English and Turkish; pages in other languages show n/a for now.
+
+## AI bot access
+
+**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.
+
+A bot your CDN or firewall refuses, while robots.txt lets it in, fails the check, and so does a bot robots.txt keeps out, by name or with "User-agent: *". A slow or busy answer isn't counted as a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides.
+
+The bots are asked from Ansvisor's servers: a firewall that checks a crawler's own addresses can treat the real one differently.
 
 ## Authority links
 

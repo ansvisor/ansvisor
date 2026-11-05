@@ -111,9 +111,11 @@ Once a page has three audits, the gauge shows its score with a range, such as **
 | **Content** | 25% | Whether the page answers its question directly and completely | Direct answer, BLUF, sub-query coverage, in-line definitions, readability |
 | **Authority** | 20% | Whether the page reads as expert and sourced | Author byline, citations, statistics, quotations, freshness |
 | **E-E-A-T** | 20% | Experience, expertise and trust signals | First-person evidence, case studies, author credentials, your brand in Wikidata, privacy and contact pages |
-| **Trust** | 10% | Crawl-time and share-time basics | AI bot access in robots.txt, HTTPS, canonical URL, meta description (llms.txt is shown for information only) |
+| **Trust** | 10% | Crawl-time and share-time basics | AI bot access (robots.txt and a live test), HTTPS, canonical URL, meta description (llms.txt is shown for information only) |
 
 A category's score is the average of its signals, each counting the same; the total is the weighted average of the categories. A signal that couldn't be evaluated (**n/a**) is left out, so it never lowers the score. **Formula**, beside **Category breakdown**, shows the weights.
+
+**AI bot access** reads robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five (Google-Extended has no crawler of its own), to catch a CDN or firewall that turns them away. A bot refused with a 4xx while robots.txt lets it in fails the check; a slow, busy (429) or failing (5xx) answer doesn't. Ansvisor asks as itself first: if the site turns that request away too, the bots aren't asked. The requests come from Ansvisor's servers, so a firewall that checks a crawler's published IP ranges can treat the real crawler differently.
 
 **llms.txt presence** doesn't count toward the score: there's little evidence it helps (most llms.txt files are never requested by AI crawlers, and Google says it has no effect). The report still shows whether the site has one.
 
