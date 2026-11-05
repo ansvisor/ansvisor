@@ -1339,3 +1339,99 @@ describe('ChatThreadView in the Content Editor’s Chat (W4-16)', () => {
     expect(onSuggestions).toHaveBeenCalledExactlyOnceWith(2);
   });
 });
+
+describe('ChatThreadView: images (W4-08b, CHAT-15 items 18 and 22)', () => {
+  const imagesThread = (steps: object[], mine = true) =>
+    ({
+      conversationId: CHAT,
+      title: 'Cover',
+      brandId: null,
+      mine,
+      messages: [
+        { role: 'user', text: 'Create a cover', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: 'Here are four covers.',
+          generatedAt: '2026-11-05T09:14:00.000Z',
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: {
+            runId: RUN,
+            status: 'done',
+            steps,
+            fileId: null,
+            deliverables: [
+              {
+                title: 'Cover image · GEO',
+                type: 'image',
+                formats: ['jpg'],
+                status: 'draft',
+                filed: 'in_files',
+              },
+            ],
+          },
+        },
+      ],
+    }) as unknown as ChatThread;
+  const PICKED = [
+    {
+      n: 1,
+      kind: 'ask',
+      status: 'done',
+      label: 'Which image model should I use?',
+      detail: 'Nano Banana 2 Lite',
+    },
+    {
+      n: 2,
+      kind: 'write',
+      status: 'done',
+      label: 'Created images',
+      detail: '4 images · Nano Banana 2 Lite · about 0.6% of your monthly AI limit',
+    },
+  ];
+  const model = () => container.querySelector('[data-action="model.openMenu"]')!.textContent;
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+  beforeEach(() => {
+    // The set's own route: four images, the person's own chat.
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+      url.endsWith('/images')
+        ? new Response(JSON.stringify({ ok: true, count: 4, selected: 1, mine: true }))
+        : runApi(url, init),
+    );
+  });
+
+  it('names the image model on the model button after an image request', async () => {
+    await render({ thread: imagesThread(PICKED), variant: 'dock' });
+    expect(model()).toBe('Image · Nano Banana 2 Lite ▾');
+  });
+
+  it('names the chat model when the latest answer wasn’t for images', async () => {
+    await render({ thread: imagesThread([]), variant: 'dock' });
+    expect(model()).toBe('Auto · Haiku reads, Sonnet writes ▾');
+  });
+
+  it('puts a request for new images with the same model in the box on Try again', async () => {
+    await render({ thread: imagesThread(PICKED), variant: 'dock' });
+    await settle();
+    await act(async () =>
+      container.querySelector<HTMLElement>('[data-action="deliverable.tryAgain"]')!.click(),
+    );
+    expect(box().value).toBe('Try again: make 4 new images with Nano Banana 2 Lite. ');
+    // Nothing is sent: the person adds a change, then sends.
+    expect(calls.some((c) => c.url === '/api/chat/runs')).toBe(false);
+    await type('Try again: make 4 new images with Nano Banana 2 Lite. Make it blue.');
+    await enter();
+    const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+    expect(JSON.parse(String(sent.init!.body)).message).toBe(
+      'Try again: make 4 new images with Nano Banana 2 Lite. Make it blue.',
+    );
+  });
+
+  it('offers no Try again on a teammate’s shared chat', async () => {
+    await render({ thread: imagesThread(PICKED, false), variant: 'dock' });
+    await settle();
+    expect(container.querySelector('[data-slot="image-set"]')).not.toBeNull();
+    expect(container.querySelector('[data-action="deliverable.tryAgain"]')).toBeNull();
+  });
+});

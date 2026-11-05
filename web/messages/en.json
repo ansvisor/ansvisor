@@ -4211,6 +4211,7 @@
     "model": "Model",
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
+    "modelImage": "Image · {model}",
     "modelMenu": {
       "label": "Model and effort",
       "title": "Model",
@@ -4296,7 +4297,8 @@
           "name": "Find opportunities",
           "starter": "Find content opportunities for"
         },
-        "audit": { "name": "Improve with audit", "starter": "Run an audit on" }
+        "audit": { "name": "Improve with audit", "starter": "Run an audit on" },
+        "image": { "name": "Create image", "starter": "Create an image for" }
       }
     },
     "reference": {
@@ -4320,7 +4322,9 @@
       "connect": "Connect a tool",
       "connectAsk": "Ask your Admin to connect",
       "connectNote": "Admins connect · others ask an Admin",
-      "connectAsked": "Connect a tool so Chat can use it"
+      "connectAsked": "Connect a tool so Chat can use it",
+      "image": "Create an image",
+      "imageNote": "Chat asks which image model to use, then creates it"
     },
     "tab": "Tab",
     "under": {
@@ -4412,7 +4416,9 @@
     "noUndo": "This can’t be undone from Chat once it’s done.",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here.",
     "connectionLost": "Lost the connection to Chat. It keeps working: reload the page to see where it is.",
-    "untitledExport": "Chat"
+    "untitledExport": "Chat",
+    "tryAgainImages": "Try again: make {count} new images with {model}.",
+    "tryAgainImagesSame": "Try again: make {count} new images with the same image model."
   },
   "chatDebug": {
     "title": "Debug · staff only",
@@ -4520,7 +4526,9 @@
       "unreadable": "Couldn't show the images. They are in Files.",
       "pickFailed": "Couldn't pick that image. Try again.",
       "png": "PNG",
-      "downloaded": "Downloaded {name}"
+      "downloaded": "Downloaded {name}",
+      "tryAgain": "Try again",
+      "tryAgainTip": "Puts a request for 4 new images in the box: add a change, then send"
     },
     "task": {
       "line": "Task: {title}",

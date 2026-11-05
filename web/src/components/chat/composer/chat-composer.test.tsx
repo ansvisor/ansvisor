@@ -462,6 +462,7 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     '/optimizeOptimize content',
     '/opportunitiesFind opportunities',
     '/auditImprove with audit',
+    '/imageCreate image',
   ];
 
   it('lists the shortcuts on "/" first in an empty box, filters them, and fills the starter on Enter', async () => {
@@ -485,8 +486,9 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe('/analyzeAnalyze');
     await press('ArrowUp');
     await press('ArrowUp');
+    // Up from the first wraps to the last: /image (W4-08b).
     expect(container.querySelector('[aria-selected="true"]')!.textContent).toBe(
-      '/auditImprove with audit',
+      '/imageCreate image',
     );
     await press('Escape');
     expect(listbox()).toBeNull();
@@ -689,6 +691,7 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await act(async () => button('Attach, read a page or connect a tool')!.click());
     expect(options()).toEqual([
       'Attach filesUp to 5 files, 10 MB each',
+      'Create an imageChat asks which image model to use, then creates it',
       'Connect a toolAdmins connect · others ask an Admin',
     ]);
     await act(async () =>
@@ -709,7 +712,10 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
     await render({}, 'manager');
     await act(async () => button('Attach, read a page or connect a tool')!.click());
     // No Attach files without the page's upload (W1-13).
-    expect(options()).toEqual(['Ask your Admin to connectAdmins connect · others ask an Admin']);
+    expect(options()).toEqual([
+      'Create an imageChat asks which image model to use, then creates it',
+      'Ask your Admin to connectAdmins connect · others ask an Admin',
+    ]);
     await act(async () =>
       container.querySelector<HTMLButtonElement>('[data-action="plusMenu.connectTool"]')!.click(),
     );
@@ -718,6 +724,51 @@ describe('ChatComposer: the / @ ＋ menus (W1-12)', () => {
       ruleKind: 'role',
     });
     expect(toast.success).toHaveBeenCalledWith('Sent to your Admins');
+  });
+
+  it('starts the /image shortcut from ＋ Create an image, and sends with its data plan (W4-08b)', async () => {
+    await render();
+    await type('our GEO post');
+    await act(async () => button('Attach, read a page or connect a tool')!.click());
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[data-action="plusMenu.createImage"]')!.click(),
+    );
+    // The text typed stays after the shortcut's first words.
+    expect(box().value).toBe('Create an image for our GEO post');
+    expect(container.querySelector('[data-action="plusMenu.createImage"]')).toBeNull();
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('Create an image for our GEO post', {
+      context: [],
+      references: [],
+      attachments: [],
+      shortcutId: 'image',
+    });
+  });
+
+  it('lists /image with the shortcuts, filling its first words (W4-08b)', async () => {
+    await render();
+    await type('/ima');
+    expect(options()).toEqual(['/imageCreate image']);
+    await press('Enter');
+    expect(box().value).toBe('Create an image for ');
+  });
+
+  it('offers no Create an image to a role that only reads (W4-08b)', async () => {
+    await render({}, 'analyst');
+    await act(async () => button('Attach, read a page or connect a tool')!.click());
+    expect(container.querySelector('[data-action="plusMenu.createImage"]')).toBeNull();
+  });
+});
+
+describe('ChatComposer: the image model on the model button (W4-08b, CHAT-15 item 18)', () => {
+  const model = () => container.querySelector('[data-action="model.openMenu"]')!.textContent;
+
+  it('reads "Image · {model}" for an image task, and the chat model otherwise', async () => {
+    const choice = { model: 'auto', effort: 'normal' } as const;
+    await render({ modelChoice: choice, onModelChoice: vi.fn(), imageModel: 'Nano Banana 2 Lite' });
+    expect(model()).toBe('Image · Nano Banana 2 Lite ▾');
+    await render({ modelChoice: choice, onModelChoice: vi.fn(), imageModel: null });
+    expect(model()).toBe('Auto · Haiku reads, Sonnet writes ▾');
   });
 });
 

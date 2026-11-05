@@ -91,12 +91,15 @@ export function DeliverableCard({
   deliverable,
   canChange = false,
   onTasks,
+  onTryAgain,
 }: {
   runId: string;
   n: number;
   deliverable: ChatDeliverable;
   canChange?: boolean;
   onTasks?: (strip: ChatTaskStrip) => void;
+  /** A set of images' Try again (CHAT-15 item 22): the latest answer's, in the person's own chat. */
+  onTryAgain?: () => void;
 }) {
   const t = useTranslations('chatDeliverable');
   const tFormats = useTranslations('chatAnswer.formats');
@@ -225,7 +228,7 @@ export function DeliverableCard({
           )}
         </div>
       </div>
-      {images && <ImageSet runId={runId} n={n} title={deliverable.title} />}
+      {images && <ImageSet runId={runId} n={n} title={deliverable.title} onTryAgain={onTryAgain} />}
       {deliverable.version && (
         <VersionDetails version={deliverable.version} runId={runId} n={filed ? n : 0} />
       )}
