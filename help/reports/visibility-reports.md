@@ -1,8 +1,8 @@
 ---
 title: Generate visibility reports
 route: /dashboard/reports
-keywords: [reports, generate report, report templates, PDF, executive summary, snapshot]
-synonyms: [monthly report, client report, export a report, download PDF, report for my boss]
+keywords: [reports, generate report, report templates, PDF, executive summary, snapshot, site audit score]
+synonyms: [monthly report, client report, export a report, download PDF, report for my boss, score range, plus or minus]
 plan: all
 updated: 2026-11-05
 last_checked: 2026-11-05
@@ -30,7 +30,11 @@ The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts
 
 ## Read a report
 
-A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it. **Site Audit Score** is the exception: it shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards.
+A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it; **Site Audit Score** is the exception. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards.
+
+## Site Audit Score
+
+**Site Audit Score** shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. It isn't compared with the previous period. Once the page has three audits by the end date, the score shows its range, such as **64 ± 2**, worked out as in Site Audit's report: half the gap between the lowest and highest score of its last five audits. A line below gives those two scores. Reports made before the range was added don't show it.
 
 ## Download a PDF
 

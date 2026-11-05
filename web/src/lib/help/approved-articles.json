@@ -4061,14 +4061,17 @@
         "report templates",
         "PDF",
         "executive summary",
-        "snapshot"
+        "snapshot",
+        "site audit score"
       ],
       "synonyms": [
         "monthly report",
         "client report",
         "export a report",
         "download PDF",
-        "report for my boss"
+        "report for my boss",
+        "score range",
+        "plus or minus"
       ],
       "plan": "all",
       "updated": "2026-11-05",
@@ -4091,7 +4094,11 @@
         },
         {
           "heading": "Read a report",
-          "text": "A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it. **Site Audit Score** is the exception: it shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards."
+          "text": "A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it; **Site Audit Score** is the exception. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards."
+        },
+        {
+          "heading": "Site Audit Score",
+          "text": "**Site Audit Score** shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. It isn't compared with the previous period. Once the page has three audits by the end date, the score shows its range, such as **64 ± 2**, worked out as in Site Audit's report: half the gap between the lowest and highest score of its last five audits. A line below gives those two scores. Reports made before the range was added don't show it."
         },
         {
           "heading": "Download a PDF",
@@ -4853,7 +4860,7 @@
         },
         {
           "heading": "Score range",
-          "text": "Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits. A line beside it gives those two scores. Partial audits aren't counted. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five. A page that didn't change usually shows ± 0."
+          "text": "Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits. A line beside it gives those two scores. Partial audits aren't counted. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five. A page that didn't change usually shows ± 0.\n\nThe same range comes with an audit wherever else you read it: in Chat, in AI assistants connected over MCP, and in a report's **Site Audit Score**, from the page's audits up to the report's end date."
         },
         {
           "heading": "Signals",

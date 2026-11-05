@@ -2,19 +2,24 @@
 
 import type { AgentAuditSpec } from '@/components/agent/agent-chart';
 import type { AuditRecommendation, CategoryScore } from '@/lib/actions/audits';
+import { asScoreRange } from '@/lib/audit/score-range';
 import { CATEGORY_META, ScoreGauge, pct, barColor } from '@/components/audit/audit-report';
+import { useScoreRangeTip } from '@/components/audit/score-range';
 import { cn } from '@/lib/utils';
 
 export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
   // The render_audit tool schema uses z.unknown(), so narrow the types here.
   const categoryScores = audit.categoryScores as Record<string, CategoryScore>;
   const recommendations = audit.recommendations as AuditRecommendation[];
+  // The score's range as get_site_audit gave it ("64 ± 2"), as the audit report shows it.
+  const range = audit.totalScore === null ? null : asScoreRange(audit.scoreRange);
+  const rangeTip = useScoreRangeTip();
 
   return (
     <div className="my-3 space-y-5 rounded-lg border bg-card p-4">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <ScoreGauge score={audit.totalScore} />
+        <ScoreGauge score={audit.totalScore} range={range} />
 
         <div className="min-w-0 flex-1 space-y-2">
           <h3 className="text-sm font-semibold">Site Audit</h3>
@@ -24,6 +29,9 @@ export function AuditResultCard({ audit }: { audit: AgentAuditSpec }) {
           <p className="text-xs text-muted-foreground">
             {audit.signalsEvaluated ?? '—'} / {audit.signalsTotal ?? '—'} signals evaluated
           </p>
+
+          {/* What the gauge's "± 2" means, written out for touch screens and screen readers. */}
+          {range && <p className="text-xs text-muted-foreground">{rangeTip(range)}</p>}
         </div>
       </div>
 

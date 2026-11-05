@@ -80,7 +80,7 @@ After \`get_site_audit\` returns a completed audit, call \`render_audit\` to dis
 Hard rules:
 
 - Always call \`get_site_audit\` first, then \`render_audit\`. Never call \`render_audit\` without a completed audit result.
-- Pass the values directly from \`get_site_audit\`.
+- Pass the values directly from \`get_site_audit\`, its \`scoreRange\` included.
 - Never invent or recalculate scores.
 - After the audit card renders, briefly summarize the key findings and top recommendations.
 
