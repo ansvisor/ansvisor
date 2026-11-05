@@ -614,6 +614,54 @@ describe('the task plan the action is created with', () => {
     expect(action.payload).not.toHaveProperty('pages');
   });
 
+  it('opens G15 with the play its prompts pick (AC plan P-2)', async () => {
+    const a = '11111111-1111-4111-8111-111111111111';
+    const b = '22222222-2222-4222-8222-222222222222';
+    const writes = mockDb({
+      signals: [
+        signal({
+          kind: 'uncovered_demand',
+          impact: 'high',
+          payload: {
+            targets: [
+              { id: a, label: 'crm vs hubspot' },
+              { id: b, label: 'how to' },
+            ],
+          },
+        }),
+      ],
+      promptVolumes: [
+        { prompt_id: a, est_ai_volume: 900, intent: 'vs-review', fetched_at: NOW.toISOString() },
+        { prompt_id: b, est_ai_volume: 100, intent: 'how-to', fetched_at: NOW.toISOString() },
+      ],
+    });
+
+    await generateActionsForBrand(BRAND, {
+      now: NOW,
+      sources: new Set([...ALL_SOURCES, 'volumes']),
+    });
+
+    const action = writes.inserted.find((w) => w.table === 'actions').rows[0];
+    expect(action.kind).toBe('create_content_for_demand');
+    // No site type set and nothing pointing elsewhere: read as B2B.
+    expect(action.payload.play).toMatchObject({
+      id: 'comparison',
+      assetType: 'comparison',
+      siteType: 'b2b',
+      reasons: [{ kind: 'intent', prompts: 1, of: 2, share: 0.9 }],
+      supporting: [],
+    });
+  });
+
+  it('opens other kinds without a play', async () => {
+    const writes = mockDb({ signals: [promptTargets(false)] });
+
+    await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    const action = writes.inserted.find((w) => w.table === 'actions').rows[0];
+    expect(action.payload).not.toHaveProperty('play');
+  });
+
   /** Task Library acceptance test 5: no publishing integration does not block
    *  the action — a person publishes. */
   it('gives publishing to a person when no publishing tool exists', async () => {

@@ -2177,6 +2177,18 @@
         "someFailed": "Some drafts couldn't be started. Start now again writes the rest.",
         "pageNotRead": "Couldn't read a live page, so its draft starts with its title. Paste the page into the editor.",
         "chatFailed": "Couldn't start Chat. Try again."
+      },
+      "play": {
+        "title": "{siteType, select, ecommerce {What to do for an online store} b2b {What to do for a SaaS} app {What to do for an app} b2c {What to do for a travel brand} other {What to do here}}",
+        "plays": {
+          "comparison": "Write a comparison page",
+          "best_of": "Write a best-of list",
+          "guide": "Write a how-to guide",
+          "definition": "Write a definition page"
+        },
+        "reason": "{prompts, number} of {of, plural, one {# prompt} other {# prompts}} {play, select, comparison {ask to compare options} best_of {ask for the best options} guide {ask how to do something or fix a problem} definition {ask what something is} other {ask for this}}: {share, number, percent} of their estimated AI searches.",
+        "also": "Also worth doing here",
+        "alsoLine": "{name} · {share, number, percent} of the AI searches"
       }
     },
     "gettingStarted": {
