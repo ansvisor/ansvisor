@@ -279,15 +279,14 @@
       "businessTypes": [],
       "industries": [],
       "roles": [],
-      "skills": [],
+      "skills": [
+        "setup"
+      ],
       "triggers": [],
-      "mode": "auto",
+      "mode": "ask_first",
       "connections": [],
-      "status": "soon",
-      "needs": [
-        "help_articles",
-        "setup_skill"
-      ]
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "shopping-readiness",

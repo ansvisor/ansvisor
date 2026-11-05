@@ -355,6 +355,26 @@ describe('ImpactReportView', () => {
     );
   });
 
+  it('says a page taken down from the site is why it can’t be measured (taken_down)', async () => {
+    read.mockResolvedValue({
+      ok: true,
+      report: report({
+        rows: [
+          row('r1', {
+            outcome: 'not_measurable',
+            confidence: null,
+            notMeasurableReason: 'taken_down',
+          }),
+        ],
+      }),
+    });
+    await render();
+    await click($('[data-row="r1"] [data-action="impact.openEvidence"]')!);
+    expect($('[data-slot="impact-evidence"]')!.textContent).toContain(
+      'WhyThe page was taken down from your site.',
+    );
+  });
+
   it('shows no sign on a lift or a traffic change of zero', async () => {
     read.mockResolvedValue({
       ok: true,

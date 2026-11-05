@@ -967,6 +967,39 @@ export function evalReadResult(tool: string, input: Record<string, unknown>): un
       };
     case 'get_action_center_kpis':
       return { open_actions: 4, closed_this_month: 3, positive_sentiment_pct: 71 };
+    case 'list_ready_agents':
+      // As recommendedPresets gives them for an e-commerce brand and a person with no work areas.
+      return {
+        site_type: 'E-commerce',
+        site_type_set: true,
+        industry: EVAL_BRAND.industry,
+        work_areas: [],
+        agents: [
+          {
+            name: 'Product Answer Pages',
+            does: 'Finds the “best X for Y” questions buyers ask AI and drafts answer-first product copy and comparison tables.',
+            fits: 'site_type',
+            skills: ['/questions', '/answerfirst', '/compare'],
+            href: '/dashboard/agents?tab=ready#preset-product-answer-pages',
+          },
+          {
+            name: 'Visibility Watch',
+            does: 'Says what moved in AI visibility since yesterday and why, with the next moves to make.',
+            fits: 'every_brand',
+            skills: ['/report'],
+            href: '/dashboard/agents?tab=ready#preset-visibility-watch',
+          },
+          {
+            name: 'Citation Win-back',
+            does: 'When a page loses citations, finds what AI cites instead and drafts a refresh and an FAQ block.',
+            fits: 'every_brand',
+            skills: ['/winback', '/faq'],
+            href: '/dashboard/agents?tab=ready#preset-citation-winback',
+          },
+        ],
+        turn_on:
+          'The person turns an agent on themselves: Use this agent on its card, then Turn on. Never create, turn on or run one for them.',
+      };
     case 'get_onboarding_progress':
       return {
         open_steps: [

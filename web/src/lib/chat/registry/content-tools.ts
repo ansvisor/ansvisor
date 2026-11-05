@@ -13,7 +13,7 @@ import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { readPageVersion } from '../page-versions';
-import { FIXTURE_IDS, defineTool } from './define-tool';
+import { FIXTURE_IDS, defineTool, type ChatToolContext } from './define-tool';
 import { draftPage, draftTitle, pageChanges } from './targets';
 
 /**
@@ -38,6 +38,16 @@ import { draftPage, draftTitle, pageChanges } from './targets';
  */
 
 const ITEM = FIXTURE_IDS.item;
+
+/**
+ * The agent run whose card the person clicked to send or publish a page: the
+ * run the chat is (its place), else null. A row's `run` is the click here:
+ * an agent going live on its own is sent by the engine's own route (goLive),
+ * so this run is always "agent run, you approved" (00480), counted for the
+ * agent in the impact ledger and the run's outcome. A send from the Content
+ * Editor or the Library has no chat and names none.
+ */
+const viaAgentRun = (ctx: ChatToolContext) => ctx.chat?.agentRunId ?? null;
 
 /** A change update_draft made, with the History version that kept the page before it. */
 const changed = (output: unknown): output is { ok: true; beforeVersionId: string } =>
@@ -209,7 +219,7 @@ export const CONTENT_TOOLS = [
       draft_id: contentUuid.describe('The draft, from list_content_drafts.'),
       destination: z.enum(CHAT_CMS_TARGETS).describe('The CMS the brand connected.'),
     }),
-    run: (_ctx, input) => sendDraftToCms(input.draft_id, input.destination),
+    run: (ctx, input) => sendDraftToCms(input.draft_id, input.destination, viaAgentRun(ctx)),
     goLive: (input) => ({ kind: 'cms_draft', draftId: input.draft_id, target: input.destination }),
     target: async (input) => {
       const title = await draftTitle(input.draft_id);
@@ -242,7 +252,7 @@ export const CONTENT_TOOLS = [
         .enum(['webflow', 'wordpress', 'wix'])
         .describe('The CMS the brand connected: Webflow, WordPress or Wix.'),
     }),
-    run: (_ctx, input) => publishDraftToCms(input.draft_id, input.destination),
+    run: (ctx, input) => publishDraftToCms(input.draft_id, input.destination, viaAgentRun(ctx)),
     goLive: (input) => ({ kind: 'publish', draftId: input.draft_id, target: input.destination }),
     target: async (input) => {
       const title = await draftTitle(input.draft_id);
@@ -274,7 +284,7 @@ export const CONTENT_TOOLS = [
     inputSchema: z.object({
       draft_id: contentUuid.describe('The draft, from list_content_drafts.'),
     }),
-    run: (_ctx, input) => sendDraftToWebhook(input.draft_id),
+    run: (ctx, input) => sendDraftToWebhook(input.draft_id, viaAgentRun(ctx)),
     goLive: (input) => ({ kind: 'webhook', draftId: input.draft_id, target: 'webhook' }),
     target: async (input) => {
       const title = await draftTitle(input.draft_id);

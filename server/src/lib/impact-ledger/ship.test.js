@@ -258,6 +258,94 @@ describe('shipCmsPublish', () => {
     });
   });
 
+  it('names the agent, its run and the Chat run of a page a person sent from an agent run’s card, as assisted (00480)', async () => {
+    const tables = world();
+    tables.content_draft_deliveries[0].via_agent_run_id = 'ar2';
+    tables.chat_agent_runs = [
+      { id: 'ar2', organization_id: ORG, agent_id: 'ag2', status: 'running', outcome: null },
+    ];
+    tables.chat_conversations = [{ id: 'c2', agent_run_id: 'ar2' }];
+    tables.chat_runs = [
+      { id: 'cr-old', conversation_id: 'c2', created_at: '2026-10-20T10:00:00.000Z' },
+      { id: 'cr2', conversation_id: 'c2', created_at: '2026-10-20T10:30:00.000Z' },
+    ];
+    const db = useDb(tables);
+    await record(db);
+    expect(db.tables.ship_events[0]).toMatchObject({
+      // The person who clicked shipped it; the agent's run made it.
+      shipped_by: 'u1',
+      execution_mode: 'assisted',
+      run_id: 'cr2',
+      agent_id: 'ag2',
+      agent_run_id: 'ar2',
+    });
+    // A run still going says Pending as it ends (agent-driver's markShipped), not here.
+    expect(db.tables.chat_agent_runs[0].outcome).toBeNull();
+
+    // A run of another workspace names none: a person's own send.
+    const other = world();
+    other.content_draft_deliveries[0].via_agent_run_id = 'ar3';
+    other.chat_agent_runs = [{ id: 'ar3', organization_id: 'elsewhere', agent_id: 'ag3' }];
+    const elsewhere = useDb(other);
+    await record(elsewhere);
+    expect(elsewhere.tables.ship_events[0]).toMatchObject({
+      execution_mode: 'assisted',
+      run_id: null,
+      agent_id: null,
+      agent_run_id: null,
+    });
+  });
+
+  it('keeps the agent run when its chat can’t be read, leaving the Chat run out (00480)', async () => {
+    const tables = world();
+    tables.content_draft_deliveries[0].via_agent_run_id = 'ar2';
+    tables.chat_agent_runs = [{ id: 'ar2', organization_id: ORG, agent_id: 'ag2' }];
+    const db = useDb(tables);
+    db.fail = (table) => table === 'chat_conversations';
+    await record(db);
+    expect(db.tables.ship_events[0]).toMatchObject({
+      run_id: null,
+      agent_id: 'ag2',
+      agent_run_id: 'ar2',
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.anything(),
+      'agent run chat not read for the ship event',
+    );
+  });
+
+  it('says Pending for an ended run whose page went live after it, never over a verdict (00480)', async () => {
+    const tables = world();
+    tables.content_draft_deliveries[0].via_agent_run_id = 'ar2';
+    tables.chat_agent_runs = [
+      { id: 'ar2', organization_id: ORG, agent_id: 'ag2', status: 'done', outcome: null },
+    ];
+    const db = useDb(tables);
+    await record(db);
+    expect(db.tables.chat_agent_runs[0].outcome).toBe('pending');
+
+    // Its second page, published later: the run's verdict so far stays.
+    const later = world();
+    later.content_draft_deliveries[0].via_agent_run_id = 'ar2';
+    later.chat_agent_runs = [
+      { id: 'ar2', organization_id: ORG, agent_id: 'ag2', status: 'done', outcome: 'improved' },
+    ];
+    const kept = useDb(later);
+    await record(kept);
+    expect(kept.tables.chat_agent_runs[0].outcome).toBe('improved');
+
+    // An agent's own page, published once its run ended, too.
+    const own = world();
+    own.content_draft_deliveries[0].agent_run_id = 'ar1';
+    own.chat_agent_runs = [
+      { id: 'ar1', organization_id: ORG, agent_id: 'ag1', status: 'stopped', outcome: null },
+    ];
+    const ownDb = useDb(own);
+    await record(ownDb);
+    expect(ownDb.tables.chat_agent_runs[0].outcome).toBe('pending');
+    expect(ownDb.tables.ship_events[0].execution_mode).toBe('automated');
+  });
+
   it('passes the republish window to ship_cms_publish, the one place it is set', async () => {
     const db = useDb(world());
     const calls = [];

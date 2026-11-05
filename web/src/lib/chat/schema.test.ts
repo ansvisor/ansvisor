@@ -1184,6 +1184,23 @@ describe('model providers (00469)', () => {
   });
 });
 
+describe('a CMS send a person approved on an agent run’s card (00480)', () => {
+  const sql = migration('00480');
+
+  it('names the run beside agent_run_id, never both, for the server alone to write', () => {
+    expect(sql).toMatch(
+      /add column if not exists via_agent_run_id uuid\s+references public\.chat_agent_runs\(id\) on delete set null/,
+    );
+    expect(sql).toMatch(
+      /create index if not exists content_draft_deliveries_via_agent_run_idx\s+on public\.content_draft_deliveries \(via_agent_run_id\)\s+where via_agent_run_id is not null;/,
+    );
+    expect(sql).toMatch(/drop constraint if exists content_draft_deliveries_one_agent_run_check/);
+    expect(sql).toMatch(/check \(agent_run_id is null or via_agent_run_id is null\)/);
+    // Members still only read sends (00262, 00390): no grant or policy of its own.
+    expect(sql).not.toMatch(/\bgrant\b|create policy/);
+  });
+});
+
 describe('a notice when an agent needs its person (00474)', () => {
   const sql = migration('00474');
 

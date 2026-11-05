@@ -968,6 +968,62 @@ describe('agent runs', () => {
     expect(db.tables.chat_agent_runs[0].outcome).toBe('pending');
   });
 
+  it('gives a run the outcome of a page a person published from its card: Pending, then a verdict (00480)', async () => {
+    // The run ended before its CMS confirmed the page live; the confirmation's ship
+    // event was missed, so the nightly job writes it from the send.
+    const db = fakeDb(
+      world({
+        ship_events: [],
+        impact_measurements: [],
+        content_drafts: [
+          { id: 'dr1', brand_id: 'b1', title: 'Cold brew', action_id: null, prompt_ids: TARGETS },
+        ],
+        content_draft_deliveries: [
+          {
+            id: 'x1',
+            organization_id: ORG,
+            brand_id: 'b1',
+            draft_id: 'dr1',
+            sent_by: 'u1',
+            title: 'Cold brew',
+            via_agent_run_id: 'run1',
+            status: 'published',
+            published_url: 'https://acme.example/cold-brew',
+            published_at: SHIPPED,
+            created_at: '2026-10-01T15:00:00Z',
+          },
+        ],
+        chat_agent_runs: [
+          {
+            id: 'run1',
+            organization_id: ORG,
+            agent_id: 'ag1',
+            status: 'done',
+            outcome: null,
+            outcome_confidence: null,
+          },
+        ],
+      }),
+    );
+    const early = await runImpactLedger({ db, now: D7 });
+    expect(early).toMatchObject({ filled: 1, failed: 0 });
+    expect(db.tables.ship_events).toEqual([
+      expect.objectContaining({
+        agent_id: 'ag1',
+        agent_run_id: 'run1',
+        shipped_by: 'u1',
+        execution_mode: 'assisted',
+      }),
+    ]);
+    expect(db.tables.chat_agent_runs[0]).toMatchObject({ outcome: 'pending' });
+
+    await runImpactLedger({ db, now: D14 });
+    expect(db.tables.chat_agent_runs[0]).toMatchObject({
+      outcome: 'improved',
+      outcome_confidence: expect.any(String),
+    });
+  });
+
   it('makes a run’s write that failed again the next night', async () => {
     const db = fakeDb(world());
     db.fail = (table, op) => table === 'chat_agent_runs' && op === 'update';

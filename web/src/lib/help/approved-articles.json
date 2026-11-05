@@ -759,6 +759,14 @@
         "sub-agents",
         "agent calls agent",
         "send to webhook",
+        "onboarding",
+        "onboarding & help",
+        "onboarding agent",
+        "help agent",
+        "setup guide",
+        "/setup",
+        "recommended agents",
+        "which agents should i use",
         "fan-out gap filler",
         "fan-out gaps"
       ],
@@ -779,7 +787,11 @@
         "agent sends to cms",
         "agent runs an agent",
         "chain agents",
-        "helper agent"
+        "helper agent",
+        "agents for me",
+        "agent recommendations",
+        "setup help",
+        "new member setup"
       ],
       "plan": "all",
       "updated": "2026-11-05",
@@ -794,7 +806,7 @@
         },
         {
           "heading": "Ready-to-use agents",
-          "text": "**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back** and **Weekly Report**, and agents made for a kind of site or a team, such as **Product Answer Pages** for e-commerce or **CEO Brief** for founders. Each card says what the agent does, its skills, what starts it and its mode. Filter them by **Goal**, **Business type** and **For your role**.\n\nAdmins and Managers click **Use this agent**. **New agent** opens with its skills, triggers, mode and connections filled in, for the brand you have open. Change what you like, then click **Save as draft** or **Turn on**. Nothing turns on by itself.\n\nIf your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet."
+          "text": "**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back**, **Weekly Report** and **Onboarding & Help**, and agents made for a kind of site or a team, such as **Product Answer Pages** for e-commerce or **CEO Brief** for founders. Each card says what the agent does, its skills, what starts it and its mode. Filter them by **Goal**, **Business type** and **For your role**.\n\nAdmins and Managers click **Use this agent**. **New agent** opens with its skills, triggers, mode and connections filled in, for the brand you have open. Change what you like, then click **Save as draft** or **Turn on**. Nothing turns on by itself.\n\nIf your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet."
         },
         {
           "heading": "Fan-out Gap Filler",
@@ -805,12 +817,20 @@
           "text": "Agents made for the site type of the brand you have open are marked **For your site type**, and agents made for one of your work areas **For your role**. They come first among the agents you can use, and first among the **Soon** ones. A brand's site type is **E-commerce**, **B2B SaaS** or **B2C**, under **Site type** in the brand's settings; until someone sets it, Ansvisor guesses it. Change your work areas in **Settings › Account › Your work areas**. **Mobile app** agents show under **Business type** only: a brand can't be set to Mobile app yet."
         },
         {
+          "heading": "Onboarding & Help",
+          "text": "**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**), and it has no trigger: after you turn it on, click **Run now** on its page, or add a schedule if you like. Each run says how many **Getting started** steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help."
+        },
+        {
           "heading": "What each card shows",
           "text": "In **Your agents**, each agent has a card with:\n\n- A dot and its state: green for **Active**, amber for **Paused** with the reason, grey for **Draft** and **Archived**.\n- Its skills, its mode and the person who owns it.\n- **Trigger**: what starts it, for example \"Every Mon 09:00 · New Recover signal\", and **Next run**.\n- **Scope**: the brand it works on, or how many brands.\n- **Last run** with its state, and **Outcomes · 30 days**.\n- **AI use · 30 days**: its share of your monthly AI limit, with a thin bar. Hover over it to see its runs, the average share a run and its cap a run.\n\nUsage is always shown as a share of your monthly AI limit."
         },
         {
           "heading": "An agent's page",
           "text": "Click **Open** or the agent's name. The top shows its state, its owner, whether it is private or shared, and **This period**: what it used of this month's AI limit, with its monthly cap when one is set. Under it you see its skills, mode, connections and model.\n\n**Triggers** lists what starts it and when it runs next. **Run history** lists its last 50 runs: when each started, its trigger and brand, its result, its outcome and its **AI use**, for example \"3.2% of 10%\": what the run used and the most one run may use. Filter them with **All**, **Improved**, **Pending** and **Stopped**, and click a run to open its chat.\n\nOn the right, **Access**, **Scope** and **AI use** show who owns it, what it may reach and its limits."
+        },
+        {
+          "heading": "What a run's outcome means",
+          "text": "A run's **Outcome** in **Run history** shows what the pages it took live did in AI answers, measured as in **What Ansvisor did for you**. A page counts for the run once it is live, when the agent sent or published it on its own, or when you approved sending or publishing it on a card in the run's chat. A page you send or publish later from the Content Editor or the Library counts as yours, not the agent's.\n\nA run that took nothing live shows \"—\". Once the run has ended and one of its pages is live, it shows **Pending**. Day 14 gives the first verdict, such as **Improved** or **No meaningful change**, and days 30 and 90 can change it. A finished run is never **Improved** by itself."
         },
         {
           "heading": "Run, pause and archive",
@@ -1299,6 +1319,56 @@
       ]
     },
     {
+      "id": "chat/connections",
+      "title": "See and manage connections in Chat",
+      "route": "/dashboard/chat/connections",
+      "keywords": [
+        "connections",
+        "integrations",
+        "connect",
+        "disconnect",
+        "search console",
+        "google analytics",
+        "cms",
+        "webflow",
+        "wordpress",
+        "merchant center",
+        "product feed",
+        "connected tools"
+      ],
+      "synonyms": [
+        "connected apps",
+        "linked tools",
+        "data sources",
+        "plug in a tool",
+        "hook up"
+      ],
+      "plan": "all",
+      "updated": "2026-11-02",
+      "sections": [
+        {
+          "heading": null,
+          "text": "**Connections** shows what the brand open now has connected, and what it could connect: Search Console, Analytics, your CMS, your product catalog and more. Connections are per brand. Chat, its skills and your agents all read the same list, so a tool connected in Settings shows as connected here too."
+        },
+        {
+          "heading": "In the chat menu",
+          "text": "Under **Skills** in the chat menu, the **Connections** row has **Manage** and an arrow. Click the arrow to open the list under the row: connected tools first, with a green dot and ✓, then the ones you can connect, then the ones coming soon. With more than 20 tools, a **Search connections** box shows above the list. The menu remembers whether you left the list open. **Manage** opens the Connections page."
+        },
+        {
+          "heading": "The Connections page",
+          "text": "The tabs **All**, **Connected** and **Not connected** show how many tools each has. Search by name, or pick a group: **Search & analytics**, **CMS**, **E-commerce**, **CRM & revenue** or **Team & data**.\n\nEach card shows the tool, its group and its status. A connected card shows the account, who connected it and when, and what Ansvisor may do with it, such as **read-only** or **read + write drafts**. **Used by** lists the skills and agents that use it. A card not connected says what it would unlock instead. Up to two cards carry a **Suggested** tag."
+        },
+        {
+          "heading": "Connect, reconnect and disconnect",
+          "text": "Only Admins connect tools. **Connect** opens the tool's card in Settings, Integrations, where you sign in. **Sign-in failed** means the tool refused the saved sign-in: click **Reconnect**.\n\n**Disconnect** asks first and lists the agents that need the tool and would pause. For a CMS, pages stop going to that site for this brand. For Search Console or Analytics, Ansvisor stops reading it for this brand; other brands keep theirs. Catalog sources and workflow webhooks are managed in **Settings**.\n\nIf you're not an Admin, click **Ask your Admin to connect** to send them a request."
+        },
+        {
+          "heading": "Tools coming soon",
+          "text": "Cards marked **Soon**, such as HubSpot or Slack, can't be connected yet. To ask for a tool that isn't listed, click **Request a connection**."
+        }
+      ]
+    },
+    {
       "id": "chat/daily-suggestions",
       "title": "Get daily suggestions in your Chat Inbox",
       "route": "/dashboard/chat/inbox",
@@ -1443,12 +1513,349 @@
       ]
     },
     {
+      "id": "chat/follow-up-checks",
+      "title": "Follow-up checks in Chat",
+      "route": "/dashboard/chat",
+      "keywords": [
+        "follow-up check",
+        "set check",
+        "check later",
+        "re-check citations",
+        "did it work",
+        "after a change",
+        "impact"
+      ],
+      "synonyms": [
+        "check back",
+        "remind me to check",
+        "measure a change",
+        "follow up on a fix"
+      ],
+      "plan": "all",
+      "updated": "2026-11-02",
+      "sections": [
+        {
+          "heading": null,
+          "text": "A follow-up check looks again at something you changed, on a later day, and tells you what happened. Chat offers one after a change you made or approved, such as a refreshed page or a fix. It can check tracked prompts, or a page or an Action Center action once its change is shipped (published or marked as shipped)."
+        },
+        {
+          "heading": "Set a check",
+          "text": "In **Ask me first** and **Auto**, Chat shows a small card: the check's name and when it runs, such as in 7, 14, 30 or 90 days. Click **Set check**, or **Not now** to skip it. Nothing is set until you click.\n\nIn **Full auto**, Chat sets the check by itself. The steps above the answer say **Follow-up check set**, and the change is in the **Activity log** with **Undo** until the check runs.\n\nA run sets at most 3 checks. Only Admins and Managers can set them, and they don't count toward your plan's scheduled jobs."
+        },
+        {
+          "heading": "What a check reads",
+          "text": "A check reads your scheduled tracking data only, so it costs nothing extra. On its day it reads the first tracking run on or after that day and compares it with the two weeks before you set it. For a change that went live, it uses the change's own impact measurement instead.\n\nThe result is one of **Improved**, **No meaningful change**, **Declined** or **Not measurable**. A change of under 3 points is **No meaningful change**. If the tracking data isn't in yet, the check waits up to 3 days."
+        },
+        {
+          "heading": "Where the result goes",
+          "text": "The result comes to the chat that set the check, and to the top of your **Inbox** with **Open**. If you no longer have the brand, or have left the workspace, by the check's day, the check closes without a result."
+        },
+        {
+          "heading": "Agents",
+          "text": "An agent that publishes a change sets its own check. It runs after the agent's follow-up days, and its result comes to the agent's chat."
+        }
+      ]
+    },
+    {
+      "id": "chat/images",
+      "title": "Create images in Chat",
+      "route": "/dashboard/chat",
+      "keywords": [
+        "create image",
+        "make an image",
+        "generate image",
+        "cover image",
+        "image model",
+        "nano banana",
+        "gpt image",
+        "images in chat"
+      ],
+      "synonyms": [
+        "ai image",
+        "picture",
+        "illustration",
+        "hero image",
+        "blog cover",
+        "featured image",
+        "draw"
+      ],
+      "plan": "all",
+      "updated": "2026-11-03",
+      "sections": [
+        {
+          "heading": null,
+          "text": "Chat can make images for your brand, such as a cover for a blog post. Ask in your own words, for example \"Create a cover image for our GEO post\", in any language. Admins and Managers can create images."
+        },
+        {
+          "heading": "Pick an image model",
+          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model."
+        },
+        {
+          "heading": "Approve the images",
+          "text": "Before any image is made, Chat shows a card with how many images it will make, the model, and about how much of your monthly AI limit they use. Click **Approve** to make them. The card shows in every mode, Full auto too.\n\nEach request makes 4 images. When your remaining AI limit covers only some of them, Chat asks first, for example \"Your remaining AI limit covers about 1 of the 4 images.\" Pick **Create 1 image now**, **Get more AI credits** or **Cancel**. No image is made before you answer."
+        },
+        {
+          "heading": "Pick and download an image",
+          "text": "The images show on a card under the answer, the first one selected. Click another image to select it. Click **PNG** to download the selected image.\n\nThe set is saved to **Files** as one file, and it counts toward your storage. Its download there is the selected image. When Files is full, Chat says so before making any image."
+        },
+        {
+          "heading": "When no image comes",
+          "text": "Sometimes the image model doesn't make an image for a prompt, for example when the prompt asks for something it won't draw. Chat tells you why in one line and offers a reworded prompt you can send."
+        },
+        {
+          "heading": "Your own AI key",
+          "text": "When your workspace runs Chat on its own OpenRouter key, images are made on that key: the model question says **Your key**, and they don't use your monthly AI limit. With a key from another provider, images use your monthly AI limit."
+        }
+      ]
+    },
+    {
+      "id": "chat/memory",
+      "title": "Memory in Chat",
+      "route": "/dashboard/chat/memory",
+      "keywords": [
+        "memory",
+        "remember",
+        "forget",
+        "used memory",
+        "saved notes",
+        "call me",
+        "remember that",
+        "forget that",
+        "use memory",
+        "memory page",
+        "remember this"
+      ],
+      "synonyms": [
+        "preferences",
+        "saved preferences",
+        "house style",
+        "what chat remembers",
+        "notes"
+      ],
+      "plan": "all",
+      "updated": "2026-11-02",
+      "sections": [
+        {
+          "heading": null,
+          "text": "Chat can remember short notes between chats, so you don't repeat the same preferences every time, such as \"write blog posts in US English\" or \"reports as PDF\". Memory keeps one line per note. Nothing is remembered without your click."
+        },
+        {
+          "heading": "Ask Chat to remember",
+          "text": "Start a message with \"Remember that…\", in any language, for example: \"Remember that our blog uses US English.\" Chat writes the fact as one short line on a card. You can change the words, with a counter under them, and pick where it goes under **Save to**: **Me**, the chat's brand, or **Workspace**. A place your role can't change is shown but can't be picked. When the note repeats or contradicts one you have, the card says **Replaces:** with the old note; untick it to keep both.\n\nNothing is saved until you click **Save**, in every mode, Full auto too. After that, the step reads **Saved to memory** with where it went.\n\nSay \"Forget that…\" to remove a note. Chat finds the note and removes it once you approve, or by itself in Full auto. The step reads **Removed from memory**."
+        },
+        {
+          "heading": "When Chat offers to remember",
+          "text": "When you say something you want from now on without asking Chat to remember it, such as \"From now on, write blog posts in US English\", a line under the answer offers **Remember this?** with that preference. Click it to open the same card, where you can change the words and where it goes before you click **Save**. Chat offers this at most once in a chat, never while memory is off for you or your workspace, and never for a note you already have. If you don't click it, nothing is saved."
+        },
+        {
+          "heading": "Where a note goes",
+          "text": "**Me** notes are yours alone: your name and how you like to work. Every role keeps its own. **Brand** notes are facts and rules for one brand, such as its product names or words to avoid. Admins and Managers change them. **Workspace** notes are rules for every brand and member. Admins change them; when a Manager saves one, the step reads **Sent to your Admins**, and the note is added once one of them approves the request.\n\nYour first name from your profile becomes a **Call me** note, so Chat greets you by it."
+        },
+        {
+          "heading": "How Chat uses memory",
+          "text": "Each chat uses your **Me** notes, the notes of the chat's brand and the **Workspace** notes. When notes disagree, your message wins, then **Me**, then the brand's, then the workspace's. When memory was used, the steps above the answer show **Used memory**, and **Data used** shows **Memory** with how many notes.\n\nA note shapes how Chat does what you ask, such as the tone or the format. It never starts a change by itself and can't change Chat's rules, your role or what needs your approval. A change that only a note names still waits for your click, Full auto too."
+        },
+        {
+          "heading": "The Memory page",
+          "text": "Open it from the **⋯** menu at the top of a chat, under **Memory**. The tabs **Me**, **Brand: {your brand}** and **Workspace** show how many notes each holds; the Brand tab follows the brand picked in the brand switcher. Each note shows its **Source** (**Profile**, **Saved from chat** or **Memory page**) and when it was last changed.\n\nClick the pencil to change a note's words, then **Save**. Click the bin to delete it at once; **Undo** brings it back for 10 seconds. Where your role only reads a tab, both stay off.\n\nThe Brand tab also lists the brand's own rules from **Settings › Content**, read-only: change them there. They don't count toward the tab's limit."
+        },
+        {
+          "heading": "Turn memory off",
+          "text": "**Use memory**, at the top right of the Memory page, is your own switch: off, Chat doesn't use your notes or save new ones. Even when your workspace is read-only, you can still turn it off and delete your own **Me** notes. An Admin can turn memory off for the whole workspace under **Settings › Chat**; then no one's notes are used, and only Admins see the Memory page's notes."
+        },
+        {
+          "heading": "What memory doesn't keep",
+          "text": "Memory doesn't keep secrets or personal details: passwords, keys, card, bank or ID numbers, email addresses, phone numbers, home addresses or private facts about you or others. It also refuses text that tries to change Chat's rules. Chat tells you when it can't save a note.\n\nA note is at most 300 characters, and **Me**, each brand and the workspace each hold up to 4,000 characters. When one is full, delete or shorten a note first. The limits are the same on every plan."
+        }
+      ]
+    },
+    {
+      "id": "chat/models",
+      "title": "Pick the model and effort Chat uses",
+      "route": "/dashboard/chat",
+      "keywords": [
+        "model",
+        "choose model",
+        "pick model",
+        "model menu",
+        "auto",
+        "haiku",
+        "sonnet",
+        "gpt",
+        "openai",
+        "gemini",
+        "google",
+        "effort",
+        "normal effort",
+        "high effort",
+        "max effort",
+        "multiplier",
+        "2.3x",
+        "uses your limit faster",
+        "own api key",
+        "your key",
+        "your api keys",
+        "add api key",
+        "use for",
+        "images key",
+        "use ansvisor's limit"
+      ],
+      "synonyms": [
+        "ai model",
+        "llm",
+        "which model",
+        "switch model",
+        "thinking effort"
+      ],
+      "plan": "starter",
+      "updated": "2026-11-03",
+      "sections": [
+        {
+          "heading": null,
+          "text": "Chat runs on **Auto** unless you pick a model: Haiku 5.5 reads your data and Sonnet 5.5 writes the answer. The model button under the message box shows what the chat runs on. Click it to open the model menu."
+        },
+        {
+          "heading": "Pick a model",
+          "text": "The menu lists **Auto** first, marked **Default**, then the models Chat is tested with: Claude's, and models from OpenAI and Google that passed Chat's test set twice in a row. An Admin can turn a provider's models off in **Settings › Chat**. Each shows how fast it uses your monthly AI limit compared with Auto: **1x** is Auto, **2.3x** uses it a bit over twice as fast, **0.1x** a tenth as fast. Under 1x shows in green, 3x and more in amber. A model whose price changes by the hour says so.\n\nYour pick goes with every message in that chat. When you open the chat later, the menu starts on the model its last answer used. A new chat starts on Auto.\n\nThe line under the list says when the prices were last read. The menu never shows prices, only how each model compares with Auto."
+        },
+        {
+          "heading": "Effort",
+          "text": "**Effort** sets how hard Chat works on each answer: **Normal**, **High** or **Max**. High and Max read more of your data and think longer, so they use your AI limit faster. Effort goes with the chat, like the model."
+        },
+        {
+          "heading": "In the free trial",
+          "text": "In the free trial, Chat runs on Auto at Normal effort, and the other models are locked. Starting your plan lets you pick any model and effort."
+        },
+        {
+          "heading": "When a model is no longer offered",
+          "text": "If the model a chat used is no longer available, the menu says so and Chat answers on Auto instead."
+        },
+        {
+          "heading": "Your API keys",
+          "text": "On Enterprise, Admins click **Included in your plan** in the model menu to open **Your API keys**. It lists the keys saved in **Settings › AI Providers**, each with its last four characters, and marks the one **Auto** runs on.\n\n- **Use for** sets what each key is for: **Chat**, **Images**, or both. An Anthropic key is for Chat only, because Anthropic has no image models.\n- **Test** checks a key with its provider.\n- **Add API key** opens a short form: pick the provider, paste the key, choose what it is for, and click **Test & save**. The key goes straight to Settings, never into the chat, and is tested before it is kept.\n\nA model you pick runs on its provider's key first, then on your OpenRouter key, then on your plan's AI limit. \"Use my OpenAI key\" in a message opens the same form; send it again to ask Chat."
+        },
+        {
+          "heading": "When your key stops working",
+          "text": "If a key stops working during an answer, Chat stops and says why. Admins can open **AI Providers** to update the key, or click **Use Ansvisor's limit** to ask again on your plan's AI limit. Chat never switches to the limit by itself."
+        },
+        {
+          "heading": "Your own API key, usage and plan",
+          "text": "The bottom of the menu shows:\n\n- **Use your own API key**: on Enterprise, **Included in your plan** opens **Settings › AI Providers**, where an Admin saves keys. A key saved before Chat started works until the date shown. On other plans, own keys come with Enterprise. Models that run on your own key say **Your key**.\n- **Monthly AI usage**: how much of this month's AI limit your workspace has used, and when it resets.\n- **Your plan**, with **See plans**."
+        }
+      ]
+    },
+    {
+      "id": "chat/scheduled-email",
+      "title": "Get scheduled results by email",
+      "route": "/dashboard/chat",
+      "keywords": [
+        "scheduled email",
+        "email results",
+        "report by email",
+        "pdf attachment",
+        "deliver to email",
+        "didn't run email"
+      ],
+      "synonyms": [
+        "send me the report",
+        "email me every monday",
+        "scheduled report email",
+        "results in my inbox"
+      ],
+      "plan": "all",
+      "updated": "2026-11-02",
+      "sections": [
+        {
+          "heading": null,
+          "text": "A scheduled job can send its results by email as well as to Chat. On the schedule card, set **Deliver to** to **Email** or **Chat + Email** before you click **Create schedule**."
+        },
+        {
+          "heading": "Who gets the email",
+          "text": "The email goes to the person who made the job, and to teammates from your workspace the job names. It never goes to an address outside your workspace by itself.\n\nBefore each email is sent, Ansvisor checks again that each person still belongs to the workspace and can still see the job's brand. Anyone who can't is left out of that email."
+        },
+        {
+          "heading": "What the email says",
+          "text": "The email has the job's name and the first few lines of its result. **Open in Chat** opens the full result, and **Pause this job** opens the job so you can turn it off. Both ask you to sign in.\n\nWhen the result fits in a PDF of 5 MB or less, the PDF is attached. A bigger result comes as the **Open in Chat** link only. A run that finds **No change** sends no email.\n\nIf your workspace has a white label kit with a company name, the email comes from that name instead of Ansvisor."
+        },
+        {
+          "heading": "When a job didn't run",
+          "text": "If a run fails and the retry 10 minutes later fails too, the email says the job didn't run and why, with **Retry**. A job that stops by itself, such as at your monthly AI limit, sends an email that says it is paused and why."
+        }
+      ]
+    },
+    {
+      "id": "chat/scheduling",
+      "title": "Schedule work in Chat",
+      "route": "/dashboard/chat/scheduled",
+      "keywords": [
+        "schedule",
+        "scheduled job",
+        "scheduled page",
+        "every monday",
+        "recurring report",
+        "ready by",
+        "create schedule",
+        "repeat",
+        "run now",
+        "take over",
+        "no change",
+        "didn't run",
+        "paused",
+        "job time zone"
+      ],
+      "synonyms": [
+        "run later",
+        "run on repeat",
+        "weekly report automatically",
+        "remind me",
+        "automate a chat"
+      ],
+      "plan": "all",
+      "updated": "2026-11-02",
+      "sections": [
+        {
+          "heading": null,
+          "text": "Chat can do work by itself later or on repeat. Ask in any chat, such as \"Every Monday at 9:00, send me the weekly report\" or \"Have a citations check ready by Friday\". Chat never schedules anything without your click: it shows a card first, and the job is made only when you click **Create schedule**."
+        },
+        {
+          "heading": "The schedule card",
+          "text": "The card shows the job as it will be made, and you can change it before you click:\n\n- **Job**: the job's name.\n- **What Chat does each run**: what Chat is asked each time, or the skill it runs.\n- **When**: a day and time, or a repeat. The line under it says how Chat read it, with your time zone and the next run. A day with no time runs at 09:00. The time zone is the one in **Settings › Account › Time zone**, or your browser's while that is **Automatic**.\n- **Deliver to**: **Chat**, **Email** or **Chat + Email**.\n- **Notify only if the answer changed**: for jobs that repeat.\n\nUnder the fields, the card says each run uses Auto · Normal and about how much of your monthly AI usage a run takes. **Cancel** makes nothing."
+        },
+        {
+          "heading": "How Chat reads the date",
+          "text": "Chat reads phrases such as \"every Monday at 9:00\", \"every weekday\", \"1st of every month\", \"tomorrow at 3pm\", \"in 7 days\" and \"in 3 working days\". Days count as calendar days unless you say working days, which are Monday to Friday.\n\n\"Ready by Friday\" starts the work right away and shows when it is due. A job repeats at most once a day.\n\nWhen a phrase could mean two dates, such as \"next Friday\", Chat asks which one you mean instead of guessing. A time that has passed isn't scheduled."
+        },
+        {
+          "heading": "After you create it",
+          "text": "The steps above the answer show **Scheduled:** with the job's name, when it runs and where results go. Each run works in the job's own chat, as you, with your access checked again at every run.\n\nOnly Admins and Managers can schedule work. Your plan sets how many scheduled jobs can be on at once."
+        },
+        {
+          "heading": "Results and notices",
+          "text": "Each run posts its result in the job's own chat, and the chat shows up in your **Inbox** as a new result. When a job makes several things, such as drafts for three tasks, the job shows how many are ready.\n\nWith **Notify only if the answer changed**, a run that reads the same data as the last result stops before writing and says **No change**. Nothing new is sent or saved, and the writing step uses none of your AI limit. The first run always delivers.\n\nIf a run fails, Chat tries again 10 minutes later. If that fails too, the top of your **Inbox** says the job didn't run and why. A job that stops by itself, such as at your monthly AI limit or after 3 failed runs in a row, says so there too. The note goes away once the job runs again."
+        },
+        {
+          "heading": "The Scheduled page",
+          "text": "**Scheduled**, in the Chat menu with the number of your jobs that are on, lists the work Chat does on a date or on repeat. Each row shows the job, when it runs, its last run, where its result goes and its mode, with a switch to turn it on or off. A job turned back on runs from now on: missed runs aren't made up. Your agents' schedules are listed too, with **Edit** in Agent Center.\n\n**New schedule** opens a new chat with \"Every Monday at 9:00, \" ready to finish."
+        },
+        {
+          "heading": "A job's page",
+          "text": "Click a job to change its name, what Chat does each run, **When** (the next three runs show as you type), its **Time zone**, where results go and **Notify only if the answer changed**, then **Save**. A job keeps its own time zone: changing yours in Settings doesn't move it. The page also has **Run now**, **Delete** (past results stay in Files) and the last 20 runs, with the share of your monthly AI usage each one took."
+        },
+        {
+          "heading": "Who sees what",
+          "text": "You see your own jobs. Admins see every job in the workspace, and can turn any of them off or delete them; only a job's creator edits it or runs it now, because its runs act as them. When someone can no longer run their job, for example after leaving the workspace, it pauses until an Admin clicks **Take over**."
+        }
+      ]
+    },
+    {
       "id": "chat/skills",
       "title": "Skills in Chat",
       "route": "/dashboard/chat",
       "keywords": [
         "skills",
         "skill",
+        "setup guide",
+        "/setup",
         "create a skill",
         "skill draft",
         "save these steps as a skill",
@@ -1488,7 +1895,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-two Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Ready to publish**, **Weekly report**, **Buyer questions** and **Rival brief**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-three Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief** and **Setup guide**."
         },
         {
           "heading": "Use a skill",
@@ -1520,7 +1927,52 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes and Fan-out gaps.\n\n**Fan-out gaps** (**/fanout**) finds the sub-questions AI engines searched while answering your tracked prompts where no answer named your brand, and drafts an answer-first section for each. It shows which engines searched each one and which competitors were named instead, and saves the sections as a draft."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide and Fan-out gaps.\n\n**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
+        },
+        {
+          "heading": "Fan-out gaps",
+          "text": "**Fan-out gaps** (**/fanout**) finds the sub-questions AI engines searched while answering your tracked prompts where no answer named your brand, and drafts an answer-first section for each. It shows which engines searched each one and which competitors were named instead, and saves the sections as a draft."
+        }
+      ]
+    },
+    {
+      "id": "chat/whats-new",
+      "title": "See what's new in Ansvisor",
+      "route": "/dashboard/chat",
+      "keywords": [
+        "whats new",
+        "what's new",
+        "new features",
+        "updates",
+        "show me",
+        "new line",
+        "latest changes"
+      ],
+      "synonyms": [
+        "release notes",
+        "changelog",
+        "product updates",
+        "what changed",
+        "recent improvements"
+      ],
+      "plan": "all",
+      "updated": "2026-11-02",
+      "sections": [
+        {
+          "heading": null,
+          "text": "**What's new** tells you what Ansvisor added, in a few short lines: why we built it, what it does, how it helps you and what you can do with it. The Ansvisor team writes each update. You see the ones your plan includes."
+        },
+        {
+          "heading": "On Chat Home",
+          "text": "When there is an update you haven't read, a line with a **New** tag shows under the shortcuts, for up to 14 days. Click **Show me** to put \"What's new: how can {feature} help me?\" in the box. Nothing is sent until you send it.\n\nThe **What's new** shortcut asks Chat what's new. A small dot on it means you have updates you haven't read."
+        },
+        {
+          "heading": "The answer",
+          "text": "Chat shows up to three updates as cards: the one you asked about first, then the ones you haven't read, then the newest. Each card has **Try it**, which opens the feature's page for the brand open now. In the side panel, it opens the page behind the panel.\n\nAn update your plan doesn't include says which plans do, with **See plans**. Ask for **Show older updates** to see earlier ones.\n\nReading What's new reads none of your brand's data and uses no AI usage. If you write in another language, Chat gives the updates in it; that answer uses some AI usage."
+        },
+        {
+          "heading": "When an update counts as read",
+          "text": "An update counts as read once Chat shows it in an answer, or once you open its **Try it**. What you've read is yours alone, the same in the side panel and on the full page."
         }
       ]
     },
@@ -1810,6 +2262,57 @@
         {
           "heading": "Close a visibility gap",
           "text": "1. On **Gaps**, find the prompts where the competitor leads most.\n2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on the **Citations** page lists the sources AI cites with the competitor and not with you.\n3. Create content for that prompt in **Content**.\n4. Publish it, earn placements on those sources, and watch the prompt in the comparison as new answers are tracked."
+        }
+      ]
+    },
+    {
+      "id": "content/ai-images",
+      "title": "Generate images with AI in the Content Editor",
+      "route": "/dashboard/content/editor",
+      "keywords": [
+        "generate image",
+        "ai image",
+        "cover image",
+        "image with ai",
+        "nano banana",
+        "image model",
+        "alt text",
+        "ai-generated"
+      ],
+      "synonyms": [
+        "make an image",
+        "create a picture",
+        "blog cover",
+        "featured image",
+        "illustration",
+        "hero image"
+      ],
+      "plan": "all",
+      "updated": "2026-11-04",
+      "sections": [
+        {
+          "heading": null,
+          "text": "In the Content Editor you can generate an image for the page with AI, such as a cover. It goes into the page like any other image and is marked **AI-generated**."
+        },
+        {
+          "heading": "Open Generate with AI",
+          "text": "Click the image button in the editor's toolbar, then **Generate with AI**. You can also click an empty line and pick **Generate image**. The other tab, **Upload or address**, adds an image of your own."
+        },
+        {
+          "heading": "Describe the image",
+          "text": "The description starts from the page's title; change it to say what the image should show. Pick a style (**Brand style**, **Illustration** or **Photo-like**) and a shape (16:9 for a cover, 1:1 or 4:3).\n\nImages never show a product's screens, realistic people, or charts with numbers. They have no text unless your description asks for it."
+        },
+        {
+          "heading": "Pick a model and how many",
+          "text": "The first model is marked **Recommended**: it uses your AI limit most slowly. Each model shows how fast it uses your monthly AI limit compared with that one (**1x**, **2x**, **4x**) and about how much one image uses. Choose 2, 3 or 4 options. Under the generate button you see about how much of your monthly AI limit they use together. On your workspace's own OpenRouter key, models say **Your key** and don't use your limit."
+        },
+        {
+          "heading": "Pick one and add it",
+          "text": "Click **Generate 2 images** (or 3 or 4). Click the option you like, check the **Alt text** (it says what the image shows, for people who can't see it and for search), and click **Use this image**. Only that one is kept and added to the page; the other options are removed, also when you close the dialog (any still left are removed after a day). **Regenerate** makes new options and uses your AI limit again.\n\nIf what's left of your monthly AI limit doesn't cover the options you chose, none is made: choose fewer. If an image is made but can't be saved, the panel says so: it still counts toward your AI limit, and you pick from the others. The demo brand makes no images."
+        },
+        {
+          "heading": "Where AI images count",
+          "text": "In the editor, an AI image shows **AI-generated** under it. The page keeps a note that AI made it, and its alt text, in **Copy HTML**, the HTML export and what goes to a CMS that takes images. Page quality never counts it as the page's own visual proof, and you can't confirm it as your own image. Add a photo or screenshot you took for that."
         }
       ]
     },
@@ -3461,6 +3964,65 @@
       ]
     },
     {
+      "id": "reports/free-report-card",
+      "title": "Your free AI visibility report card",
+      "route": "/dashboard/insights",
+      "keywords": [
+        "report card",
+        "free report card",
+        "ai visibility report",
+        "report card pdf",
+        "value table",
+        "revenue scenario"
+      ],
+      "synonyms": [
+        "free audit from the website",
+        "the pdf you e-mailed me",
+        "visibility report card",
+        "free ai report"
+      ],
+      "plan": "all",
+      "updated": "2026-11-04",
+      "sections": [
+        {
+          "heading": null,
+          "text": "The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 25 that match what you sell best and that people search for most, asks each one once in ChatGPT, Microsoft Copilot, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once."
+        },
+        {
+          "heading": "What the card measured",
+          "text": "- **AI visibility**: the share of ChatGPT's and Microsoft Copilot's answers that name your brand or your site. These are the engines Ansvisor Starter tracks. Gemini, Google AI Overviews and Google AI Mode, which Growth adds, are shown apart in an \"In Ansvisor Growth\" band. Competitors, cited sites and your citations count the same answers.\n- The same share for each engine.\n- The competitors the answers named most, and the sites they cite, with yours, your competitors' and marketplaces marked."
+        },
+        {
+          "heading": "The four pages",
+          "text": "1. **Status**: the products the card found on your site, the four headline figures, your starting point and first step, each engine, who AI names and cites, and the five questions competitors win most. A visibility of 0% is shown as your starting point.\n2. **Questions**: every question, grouped by product, with its keyword's Google searches a month, a grid of what each engine's answer did and the competitor named instead.\n3. **Plan**: three findings, each with what you'd do in week one and where Ansvisor helps, the sites AI cites sorted by what you can do there, and how agents work: you approve each step, or, in Growth, chosen agents publish on their own.\n4. **Value and plan**: what AI visits are worth, Starter's price, and the free trial."
+        },
+        {
+          "heading": "Competitors, marketplaces and where to get mentioned",
+          "text": "Only brands a buyer could choose instead of you count as competitors. Marketplaces (booking, comparison and listing sites) and other businesses the answers name are listed apart, and the **Named instead** column on the last page names competitors only. A brand written several ways (\"Jolly Tur\", \"Jolly\", \"jollytur.com\") is counted once. When the card suggests a site to get mentioned on, it picks a guide, a publication, an official source or a community that AI cites, never a competitor's site or a marketplace. A review or complaint site such as Şikayetvar or Trustpilot comes only when none of those is cited, with a different step: check and answer what customers say about you there."
+        },
+        {
+          "heading": "Where the questions come from",
+          "text": "The card reads your home page: its title, headings and menus. It names your main products or categories from the words on the page, and writes questions only about those. A question that matches what you sell only loosely is never asked: a card asks fewer questions rather than a wrong one. Questions about your products come first, a few from each, the ones whose keyword gets the most Google searches in your country first; questions about a need your buyers also have fill the rest. Years and seasons in the questions follow the card's date: in November, a holiday question is about the coming winter or next summer, never one already past.\n\nEverything on the card is picked from your results by fixed rules: no model writes its advice."
+        },
+        {
+          "heading": "Language and currency",
+          "text": "The questions and answers are in your target country's language. The PDF and its e-mail are in Turkish for Türkiye and in English elsewhere. Amounts are in US dollars, as Ansvisor's plans are: Google Ads' costs, the value table and the prices. An average order or deal value you gave stays in its own currency."
+        },
+        {
+          "heading": "Why the app shows other numbers",
+          "text": "The card asks each question once, on one day. In Ansvisor, your tracked prompts are asked every day, so the figures move from day to day. The **AI Visibility Score** on **Brand Visibility** is a score from 0 to 100 that also weighs citations and how early you're named, not only the share of answers that name you."
+        },
+        {
+          "heading": "Measure your own questions every day",
+          "text": "The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Microsoft Copilot. **Brand Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next."
+        },
+        {
+          "heading": "The value table and the revenue scenario",
+          "text": "The last page adds up the Google searches your questions' keywords get a month in your country, and prices 2%, 5% and 10% of them as AI visits at the median Google Ads cost per click of those keywords. It does so only when at least five keywords have a cost per click and the median looks plausible (up to $100 a click). When those clicks cost less than Starter, the card says so instead of claiming a saving. A revenue line appears only if you gave an average order or deal value, and its conversion rate is an assumption. Both are scenarios, not a forecast or a guarantee. **AI Referral Traffic** measures your real visits from AI answers once it's set up."
+        }
+      ]
+    },
+    {
       "id": "reports/looker-studio",
       "title": "Connect Looker Studio",
       "route": "/dashboard/settings/api-keys",
@@ -3799,6 +4361,40 @@
       ]
     },
     {
+      "id": "settings/google-per-brand",
+      "title": "Use a different Google account for a brand",
+      "route": "/dashboard/settings/integrations",
+      "keywords": [
+        "google account per brand",
+        "use the same account",
+        "connect another google account",
+        "search console per brand",
+        "analytics per brand"
+      ],
+      "synonyms": [
+        "different gsc account for a brand",
+        "client google account",
+        "agency google login",
+        "switch google account"
+      ],
+      "plan": "all",
+      "updated": "2026-11-04",
+      "sections": [
+        {
+          "heading": null,
+          "text": "Each brand reads Search Console and Analytics from one Google account. Every brand starts with the workspace's account, the one connected in **Settings › Integrations**. A brand can instead use the same account as another brand, or a Google account of its own, for example a client's."
+        },
+        {
+          "heading": "Change a brand's Google account",
+          "text": "Open the brand's **Settings › Integrations**. Each Google card says which account the brand uses and which other brands use it too. Admins and managers who can see the brand can:\n\n- **Use the same account as…**: pick another brand's account, or the workspace's, without signing in again.\n- **Connect another Google account**: sign in with Google in the window that opens. The brand keeps its account until you finish.\n- **Disconnect**: the brand stops reading from Google. The workspace's account stays for the other brands.\n\nChanging or disconnecting the account clears the brand's property, since it was picked from the old account. Pick it again from the new account's list."
+        },
+        {
+          "heading": "See which brand uses which account",
+          "text": "In **Settings › Integrations**, **Google per brand** lists each brand with its Search Console and Analytics account. Click **Change** to open that brand's settings."
+        }
+      ]
+    },
+    {
       "id": "settings/mcp-server",
       "title": "Use Ansvisor in AI assistants with MCP",
       "route": "/dashboard/settings/api-keys",
@@ -3906,6 +4502,130 @@
         {
           "heading": "How a menu is worked out",
           "text": "A person's menu is their role's sections, changed by their own exceptions from **People**, then narrowed to the sections of their work areas, when they picked any.\n\n**Action Center** always stays, and nobody takes a section off an admin's menu; only an admin's own work areas narrow it. A section added to Ansvisor later is on everyone's menu until someone hides it."
+        }
+      ]
+    },
+    {
+      "id": "settings/roles-and-access",
+      "title": "Roles: who can do what",
+      "route": "/dashboard/settings/roles-access",
+      "keywords": [
+        "roles",
+        "who can do what",
+        "admin",
+        "manager",
+        "analyst",
+        "agency partner",
+        "permissions",
+        "roles and access"
+      ],
+      "synonyms": [
+        "user roles",
+        "team permissions",
+        "why is a button missing",
+        "read-only role",
+        "access levels"
+      ],
+      "plan": "all",
+      "updated": "2026-11-03",
+      "sections": [
+        {
+          "heading": null,
+          "text": "Everyone in your workspace has one of four roles: **Admin**, **Manager**, **Analyst** or **Agency partner**. Admins set roles in **Settings › Team**. Where Chat is on, **Roles & access** in Settings lists each person's role, with a table of what each role can do in the app and in Chat. A button your role can't use isn't shown."
+        },
+        {
+          "heading": "What everyone can do",
+          "text": "Every role reads the dashboards, prompts, citations, mentions and reports, and asks Chat. The daily work is everyone's too:\n\n- the **Action Center**: sending findings to it, and working on actions and tasks;\n- writing in the **Content Editor**;\n- running a **Site Audit**.\n\nAgency partners can do what Analysts can."
+        },
+        {
+          "heading": "What admins and managers do",
+          "text": "Admins and Managers also:\n\n- add and change prompts, topics and competitors, and the prompts' locations;\n- run tracking now, and analyze search volumes;\n- generate suggestions, opportunities, briefs, Improve and tasks, which use the plan's AI allowance;\n- send to your webhook and your CMS, and archive or delete;\n- approve brand facts, and change a brand's settings and connections.\n\nThrough Chat, they make changes to the workspace, each after a card they confirm."
+        },
+        {
+          "heading": "What only admins do",
+          "text": "Only Admins change billing and the plan, invite people, change roles and remove people, and set Chat's rules and the AI provider keys. They can let Managers change menus in **Menu access**."
+        }
+      ]
+    },
+    {
+      "id": "settings/team-brands",
+      "title": "Choose which brands each person sees",
+      "route": "/dashboard/settings/team",
+      "keywords": [
+        "brand access",
+        "selected brands",
+        "all brands",
+        "edit brands",
+        "invite to brands",
+        "agency access"
+      ],
+      "synonyms": [
+        "limit a teammate to one brand",
+        "hide a brand from someone",
+        "give a client access to their brand",
+        "per brand access"
+      ],
+      "plan": "growth",
+      "updated": "2026-11-03",
+      "sections": [
+        {
+          "heading": null,
+          "text": "When several teams or agencies work in one workspace, each person can see every brand or only the brands they work on. Admins choose it in **Settings › Team**, when they invite someone and later with **Edit brands**. The plan, billing and the AI limit stay the workspace's."
+        },
+        {
+          "heading": "All brands or Selected brands",
+          "text": "- **All brands**: every brand of the workspace, and every brand added later.\n- **Selected brands**: only the brands an admin picked. Brands added later stay hidden until an admin adds them.\n\nAdmins always have **All brands**. The sample brand stays visible to everyone. Someone with **Selected brands** sees only their brands everywhere: the brand switcher, every page and report, exports, Chat, e-mails and the people they can assign work to. A link to another brand's page says it can't be found."
+        },
+        {
+          "heading": "Invite someone to some brands",
+          "text": "In **Settings › Team**, click **Invite member**, enter their e-mail and role, then choose **All brands** or **Selected brands** and tick their brands. Pick at least one. The invitation keeps the choice until it's accepted; a brand deleted in the meantime is left out."
+        },
+        {
+          "heading": "Change someone's brands",
+          "text": "Each person's row in **Settings › Team** shows **All brands** or how many brands they see, for admins. Click it to open **Edit brands**, change the choice and click **Save**. They see the change on their next page.\n\nOnly admins change brand access, a manager's included. **Roles & access** and **Your access** show each person's brands too."
+        },
+        {
+          "heading": "See who can see a brand",
+          "text": "A brand's **Settings › People** lists everyone who can see it, with their role. Admins also see why: **All brands**, or **Shared with them**. To change it, use **Edit brands** in **Settings › Team**."
+        }
+      ]
+    },
+    {
+      "id": "settings/time-zone",
+      "title": "Set your time zone",
+      "route": "/dashboard/settings/account",
+      "keywords": [
+        "time zone",
+        "timezone",
+        "my time zone",
+        "automatic time zone",
+        "wrong time",
+        "schedule time zone"
+      ],
+      "synonyms": [
+        "change my clock",
+        "times are off",
+        "local time",
+        "set my region time"
+      ],
+      "plan": "all",
+      "updated": "2026-11-03",
+      "sections": [
+        {
+          "heading": null,
+          "text": "Each person has their own time zone. Find it in **Settings › Account › Time zone**. It starts on **Automatic**, which uses your browser's time zone and shows it beside the word, such as **Automatic (Europe/Istanbul)**."
+        },
+        {
+          "heading": "Pick a fixed time zone",
+          "text": "Click the field and type a city, a region or an offset, such as \"new york\" or \"gmt+3\", then pick one from the list. Your choice is saved as soon as you pick it. To go back to your browser's time zone, pick **Automatic**.\n\nA fixed time zone helps when you travel, or when your browser's time zone isn't the one you work in."
+        },
+        {
+          "heading": "What uses it",
+          "text": "- **New scheduled jobs**: the schedule card's **When** line shows your time zone, and the job is made on it.\n- **New agent schedules**: a **Schedule** trigger you add to an agent in **Agent Center** starts on your time zone, shown beside its time.\n- **Chat's dates and times**: when an answer was made and how old its data is, from your next message on.\n- **Daily suggestions**: they arrive in your morning, in this time zone."
+        },
+        {
+          "heading": "Jobs you already have",
+          "text": "Changing your time zone never moves a scheduled job or an agent's Schedule trigger. Each keeps the time zone it was made with. To change a job's time zone, open it from **Scheduled** and pick another under **Time zone**, then click **Save**."
         }
       ]
     },
