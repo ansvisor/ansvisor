@@ -14,7 +14,9 @@ import {
  * synced daily into chat_model_prices (00404), behind CHAT_AGENTIC.
  *
  * The catalog needs no key. A sync upserts every model it lists and removes
- * none: a failed or short read keeps the last good prices. After a sync, and
+ * none: a failed or short read keeps the last good prices. A model Ansvisor
+ * runs on some providers only (DeepSeek, LIMITED_HOSTS) is priced from its
+ * endpoints at the dearest of them, not at the catalog's price. After a sync, and
  * when the server starts, the rows are loaded into model-price-cache.js, where
  * a Chat step's cost (improve-cost.js, for chat-budget.js only) and the
  * multipliers below read them.
@@ -27,6 +29,9 @@ import {
 
 export const CATALOG_URL = 'https://openrouter.ai/api/v1/models';
 
+/** One model's providers and their prices, for a model Ansvisor runs on some providers only. */
+export const endpointsUrl = (modelId) => `${CATALOG_URL}/${modelId}/endpoints`;
+
 /** Fewer models than this in a read means a broken one: nothing is written. */
 const MIN_MODELS = 50;
 /** More models than this is a broken read too (the catalog lists a few hundred). */
@@ -38,6 +43,9 @@ const LOAD_PAGE = 1000;
 /** Rows one upsert writes. */
 const CHUNK = 200;
 const FETCH_TIMEOUT_MS = 20_000;
+/** A model's endpoints, a few at a time. */
+const ENDPOINTS_TIMEOUT_MS = 10_000;
+const ENDPOINTS_AT_ONCE = 3;
 /** Older than this at start, and the server syncs at once instead of waiting for the schedule. */
 const STALE_MS = 20 * 60 * 60 * 1000;
 
@@ -51,6 +59,113 @@ export const AUTO_MIX = Object.freeze({
   'anthropic/claude-haiku-5.5': 0.6,
   'anthropic/claude-sonnet-5.5': 0.4,
 });
+
+/**
+ * Model makers whose models Ansvisor runs on some of OpenRouter's providers
+ * only (W4-34; owner decision 2026-11-02 evening): DeepSeek's on hosts in the
+ * US or the EU, never DeepSeek's own API. The web routes each call by the
+ * same list (web/src/lib/agent/openrouter.ts; web's models.test.ts keeps the
+ * two equal). The catalog's price is its cheapest provider's, so such a
+ * model is priced at the dearest of its hosts instead (W4-36): the AI budget
+ * never counts less than a step costs.
+ */
+export const LIMITED_HOSTS = Object.freeze({
+  deepseek: Object.freeze([
+    'deepinfra',
+    'together',
+    'fireworks',
+    'parasail',
+    'crusoe',
+    'azure',
+    'nebius',
+  ]),
+});
+
+/** The providers a model may run on, by OpenRouter's slug; null when any. */
+export function hostsFor(modelId) {
+  const maker = String(modelId ?? '')
+    .split('/')[0]
+    .toLowerCase();
+  return Object.hasOwn(LIMITED_HOSTS, maker) ? LIMITED_HOSTS[maker] : null;
+}
+
+/** An endpoint's provider slug: its tag's first part ("deepinfra/fp8"), else its name's. */
+function hostOf(endpoint) {
+  const named = endpoint?.tag || endpoint?.provider_name || '';
+  return String(named).split('/')[0].toLowerCase().replace(/\s+/g, '');
+}
+
+/**
+ * A model's price at the dearest of the hosts it may run on, from its
+ * endpoints (OpenRouter's `/models/{id}/endpoints`): input, output and cache
+ * read each at their highest; a cache-read price only when every host has
+ * one (a host without one bills a cached token as input). Null when none of
+ * the hosts lists it at a price.
+ *
+ * @param {object} endpoints  the endpoints answer
+ * @param {readonly string[]} hosts
+ */
+export function hostsPrice(endpoints, hosts) {
+  const list = Array.isArray(endpoints?.data?.endpoints) ? endpoints.data.endpoints : [];
+  const prices = list
+    .filter((endpoint) => hosts.includes(hostOf(endpoint)))
+    .map((endpoint) => ({
+      input: perMillion(endpoint.pricing?.prompt),
+      output: perMillion(endpoint.pricing?.completion),
+      cacheRead: perMillion(endpoint.pricing?.input_cache_read),
+    }))
+    .filter((price) => price.input !== null && price.output !== null);
+  if (prices.length === 0) return null;
+  const highest = (field) => Math.max(...prices.map((price) => price[field]));
+  return {
+    input_per_m: highest('input'),
+    output_per_m: highest('output'),
+    cache_read_per_m: prices.every((price) => price.cacheRead !== null)
+      ? highest('cacheRead')
+      : null,
+  };
+}
+
+/**
+ * Prices each row of a model Ansvisor runs on some providers only at the
+ * dearest of them (hostsPrice), ENDPOINTS_AT_ONCE reads at a time. Its
+ * overrides go: they are the catalog provider's (DeepSeek's own off-peak
+ * prices, say). A row whose endpoints can't be read, or that none of its
+ * hosts lists, is left with no price: the model menu doesn't offer it, and a
+ * step on it is charged improve-cost.js's FALLBACK_PRICE, never the
+ * catalog's cheaper one. The next day's sync tries again.
+ *
+ * @param {object[]} rows  rowOf's rows, changed in place
+ * @returns {Promise<number>} the rows priced at their hosts
+ */
+export async function priceAtHosts(rows, { fetcher = fetch } = {}) {
+  const limited = rows.filter((row) => hostsFor(row.model_id));
+  let next = 0;
+  let priced = 0;
+  const read = async () => {
+    while (next < limited.length) {
+      const row = limited[next++];
+      let price = null;
+      try {
+        const res = await fetcher(endpointsUrl(row.model_id), {
+          signal: AbortSignal.timeout(ENDPOINTS_TIMEOUT_MS),
+        });
+        if (res.ok) price = hostsPrice(await res.json(), hostsFor(row.model_id));
+      } catch (err) {
+        logger.warn({ model: row.model_id, err: err.message }, '[model-prices] endpoints unread');
+      }
+      if (price) priced += 1;
+      else logger.warn({ model: row.model_id }, '[model-prices] no price at its hosts; unpriced');
+      Object.assign(
+        row,
+        price ?? { input_per_m: null, output_per_m: null, cache_read_per_m: null },
+        { overrides: [] },
+      );
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(ENDPOINTS_AT_ONCE, limited.length) }, read));
+  return priced;
+}
 
 /**
  * One catalog model as a chat_model_prices row; null for one without an id.
@@ -156,6 +271,7 @@ export async function syncModelPrices({
     logger.warn({ models: rows.length }, '[model-prices] catalog too long; last prices kept');
     return { ok: false, models: rows.length, error: 'too_many_models' };
   }
+  await priceAtHosts(rows, { fetcher });
   for (let i = 0; i < rows.length; i += CHUNK) {
     const { error } = await db
       .from('chat_model_prices')

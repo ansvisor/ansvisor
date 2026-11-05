@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { DEEPSEEK_US_EU_PROVIDERS, openRouterFetch, openRouterRouting } from './openrouter';
+import {
+  DEEPSEEK_US_EU_PROVIDERS,
+  openRouterFetch,
+  openRouterRouting,
+  withClaudeCache,
+} from './openrouter';
 import { buildAgentModel } from './model';
 
 /** Chat's and the Agent's OpenRouter calls (W4-34): no data kept, DeepSeek in the US or EU only. */
@@ -21,6 +26,60 @@ describe('openRouterRouting', () => {
   });
 });
 
+describe('withClaudeCache', () => {
+  const system = { role: 'system', content: 'Rules and tools' };
+  const user = { role: 'user', content: 'Hi' };
+
+  it("marks a Claude model's system prompt for the prompt cache, the rest as it is", () => {
+    expect(
+      withClaudeCache({ model: 'anthropic/claude-sonnet-5.5', messages: [system, user] }),
+    ).toEqual({
+      model: 'anthropic/claude-sonnet-5.5',
+      messages: [
+        {
+          role: 'system',
+          content: [
+            { type: 'text', text: 'Rules and tools', cache_control: { type: 'ephemeral' } },
+          ],
+        },
+        user,
+      ],
+    });
+    // A system prompt in parts: the mark on its last part.
+    const parted = withClaudeCache({
+      model: 'anthropic/claude-haiku-5.5',
+      messages: [
+        {
+          role: 'system',
+          content: [
+            { type: 'text', text: 'a' },
+            { type: 'text', text: 'b' },
+          ],
+        },
+      ],
+    });
+    expect((parted.messages as { content: unknown }[])[0].content).toEqual([
+      { type: 'text', text: 'a' },
+      { type: 'text', text: 'b', cache_control: { type: 'ephemeral' } },
+    ]);
+  });
+
+  it('leaves any other model, and a prompt already marked, as they are', () => {
+    const openai = { model: 'openai/gpt-6.1-sol', messages: [system, user] };
+    expect(withClaudeCache(openai)).toBe(openai);
+    const marked = {
+      model: 'anthropic/claude-sonnet-5.5',
+      messages: [
+        {
+          role: 'system',
+          content: [{ type: 'text', text: 'x', cache_control: { type: 'ephemeral' } }],
+        },
+      ],
+    };
+    expect(withClaudeCache(marked).messages).toEqual(marked.messages);
+  });
+});
+
 describe('openRouterFetch', () => {
   it('adds the routing to a JSON body, keeping the rest and the body’s own provider fields', async () => {
     const base = vi.fn(async () => new Response('{}'));
@@ -37,6 +96,23 @@ describe('openRouterFetch', () => {
       messages: [],
       provider: { sort: 'price', data_collection: 'deny' },
     });
+  });
+
+  it("marks a Claude model's system prompt for the prompt cache as it sends", async () => {
+    const base = vi.fn(async () => new Response('{}'));
+    const send = openRouterFetch({ data_collection: 'deny' }, base as unknown as typeof fetch);
+    await send('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: 'anthropic/claude-sonnet-5.5',
+        messages: [{ role: 'system', content: 'Rules' }],
+      }),
+    });
+    const body = JSON.parse(
+      (base.mock.calls[0] as unknown as [string, RequestInit])[1].body as string,
+    );
+    expect(body.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral' });
+    expect(body.provider).toEqual({ data_collection: 'deny' });
   });
 
   it('sends a body that isn’t JSON as it is', async () => {

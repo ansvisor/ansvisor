@@ -55,12 +55,65 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     tested: true,
   },
   // Passed the whole test set twice in a row on Anthropic's API, cache on (2026-11-03, W4-35).
+  // The test set is lib/chat/testing/model-eval.ts, run by model-eval.test.ts.
   {
     id: 'anthropic/claude-opus-5.5',
     api: 'claude-opus-5-5',
     provider: 'anthropic',
     label: 'Opus 5.5',
     tested: true,
+  },
+  // The latest of OpenAI, Google and DeepSeek, through OpenRouter (W4-35).
+  {
+    id: 'openai/gpt-6.1-sol',
+    api: 'openai/gpt-6.1-sol',
+    provider: 'openrouter',
+    label: 'GPT-6.1 Sol',
+    tested: false,
+  },
+  {
+    id: 'openai/gpt-6.1-terra',
+    api: 'openai/gpt-6.1-terra',
+    provider: 'openrouter',
+    label: 'GPT-6.1 Terra',
+    tested: false,
+  },
+  // OpenAI's smallest and cheapest (owner, 2026-11-03).
+  {
+    id: 'openai/gpt-6-luna',
+    api: 'openai/gpt-6-luna',
+    provider: 'openrouter',
+    label: 'GPT-6 Luna',
+    tested: false,
+  },
+  {
+    id: 'google/gemini-4-argon',
+    api: 'google/gemini-4-argon',
+    provider: 'openrouter',
+    label: 'Gemini 4 Argon',
+    tested: false,
+  },
+  {
+    id: 'google/gemini-3.8-flash',
+    api: 'google/gemini-3.8-flash',
+    provider: 'openrouter',
+    label: 'Gemini 3.8 Flash',
+    tested: false,
+  },
+  // Google's smallest and cheapest (owner, 2026-11-03).
+  {
+    id: 'google/gemini-3.5-flash-lite',
+    api: 'google/gemini-3.5-flash-lite',
+    provider: 'openrouter',
+    label: 'Gemini 3.5 Flash Lite',
+    tested: false,
+  },
+  {
+    id: 'deepseek/deepseek-v4.1-flash',
+    api: 'deepseek/deepseek-v4.1-flash',
+    provider: 'openrouter',
+    label: 'DeepSeek V4.1 Flash',
+    tested: false,
   },
 ];
 

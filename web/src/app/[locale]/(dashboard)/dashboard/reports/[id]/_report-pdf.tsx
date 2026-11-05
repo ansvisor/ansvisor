@@ -32,6 +32,7 @@ import {
 import type { Report, ReportPromptPerf } from '@/lib/actions/reports';
 import { formatDate } from '@/lib/format';
 import { withInter } from '@/lib/pdf-font';
+import { auditScoreView } from '@/lib/reports/audit-score';
 import { reportLook, type ReportBranding } from '@/lib/white-label/kit';
 
 // Word-splitting hyphenation looks broken in tables; wrap whole words only.
@@ -131,7 +132,16 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 7, color: MUTED },
 });
 
-function DeltaText({ value, zeroBaseCount }: { value: number | null; zeroBaseCount?: number }) {
+function DeltaText({
+  value,
+  zeroBaseCount,
+  unit = '%',
+}: {
+  value: number | null;
+  zeroBaseCount?: number;
+  /** '%' for a percentage change; '' for points, such as the Site Audit score's. */
+  unit?: '%' | '';
+}) {
   if (zeroBaseCount !== undefined) {
     return <Text style={[styles.delta, { color: GREEN }]}>+{zeroBaseCount} new</Text>;
   }
@@ -140,7 +150,8 @@ function DeltaText({ value, zeroBaseCount }: { value: number | null; zeroBaseCou
   return (
     <Text style={[styles.delta, { color: up ? GREEN : RED }]}>
       {up ? '+' : ''}
-      {value}%
+      {value}
+      {unit}
     </Text>
   );
 }
@@ -267,6 +278,8 @@ export function ReportPdfDocument({
   fontFamily: string;
 }) {
   const { payload } = report;
+  // The Site Audit score in points; older reports stored it on a 0–1 scale.
+  const auditScore = payload.auditScore ? auditScoreView(payload.auditScore) : null;
   const look = reportLook(branding);
   // Every metric field is optional — templates only gather their own
   // sections, so each block below guards on its payload field.
@@ -668,25 +681,16 @@ export function ReportPdfDocument({
         )}
 
         {/* Site audit score */}
-        {payload.auditScore && (
+        {payload.auditScore && auditScore && (
           <View style={styles.section} wrap={false}>
             <Text style={styles.sectionTitle}>Site Audit Score</Text>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-              <Text style={{ fontSize: 18, fontWeight: 700 }}>
-                {payload.auditScore.totalScore ?? '—'}
-              </Text>
-              {payload.auditScore.totalScore !== null &&
-                payload.auditScore.previousScore !== null && (
-                  <View style={{ marginBottom: 2 }}>
-                    <DeltaText
-                      value={
-                        Math.round(
-                          (payload.auditScore.totalScore - payload.auditScore.previousScore) * 10,
-                        ) / 10
-                      }
-                    />
-                  </View>
-                )}
+              <Text style={{ fontSize: 18, fontWeight: 700 }}>{auditScore.score}</Text>
+              {auditScore.change !== null && (
+                <View style={{ marginBottom: 2 }}>
+                  <DeltaText value={auditScore.change} unit="" />
+                </View>
+              )}
               <Text style={[styles.cell, { color: MUTED, marginBottom: 2 }]}>
                 {payload.auditScore.url} · audited {formatDate(payload.auditScore.auditedAt)}
               </Text>
