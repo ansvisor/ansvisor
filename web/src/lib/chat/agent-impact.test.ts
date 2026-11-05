@@ -398,9 +398,75 @@ describe('readAgentImpact: drafts that aren’t live', () => {
     // The live one went out later, from the Content Editor: no agent on its ship event.
     ship({ agent_id: null, content_draft_id: live, title: 'Published by hand' });
 
-    const impact = await readAgentImpact(await ctxOf(PEOPLE.manager), AGENT, NOW);
+    const ctx = await ctxOf(PEOPLE.manager);
+    db.log = [];
+    const impact = await readAgentImpact(ctx, AGENT, NOW);
     expect(impact?.draftsNotLive).toBe(2);
     expect(impact?.rows).toEqual([]);
+    // Its runs are read once, numbered: the ones before counted, then a page.
+    expect(db.log.filter(([table]) => table === 'chat_agent_runs')).toHaveLength(2);
+  });
+
+  it('counts the newest runs’ drafts past the runs numbered from the oldest one a change came from', async () => {
+    db.maxRows = 1000;
+    try {
+      // A change of the 30 days approved from a run long before them…
+      const oldest = run('2026-06-01T09:00:00.000Z');
+      ship({
+        title: 'From the oldest',
+        agent_run_id: oldest,
+        shipped_at: '2026-10-20T09:00:00.000Z',
+      });
+      // …and 10,000 runs since it before the 30 days, every 10 minutes: past what's numbered.
+      const start = Date.parse('2026-07-01T00:00:00.000Z');
+      const between = Array.from({ length: 10_000 }, (_, i) =>
+        run(new Date(start + i * 600_000).toISOString()),
+      );
+      draft(chat(between[between.length - 1])); // before the 30 days
+      const r1 = run('2026-10-15T09:00:00.000Z');
+      const r2 = run('2026-10-28T09:00:00.000Z');
+      draft(chat(r1)); // counted
+      const c2 = chat(r2);
+      draft(c2); // counted
+      const live = draft(c2);
+      ship({
+        title: 'From the newest',
+        agent_run_id: r2,
+        content_draft_id: live,
+        shipped_at: '2026-10-29T09:00:00.000Z',
+      });
+      draft(chat(run('2026-10-20T09:00:00.000Z', { agent_id: OTHER_AGENT }))); // another agent's
+
+      const impact = await readAgentImpact(await ctxOf(PEOPLE.manager), AGENT, NOW);
+      expect(impact?.draftsNotLive).toBe(2);
+      // Numbered from the oldest as before: past 10,000 of them, no number.
+      expect(impact?.rows.map((r) => [r.title, r.run?.number ?? null])).toEqual([
+        ['From the newest', null],
+        ['From the oldest', 1],
+      ]);
+    } finally {
+      db.maxRows = undefined;
+    }
+  });
+
+  it('counts the drafts of the newest 10,000 runs of the 30 days, past that', async () => {
+    db.maxRows = 1000;
+    try {
+      // 10,001 runs in the 30 days, about every 4 minutes from their start.
+      const start = Date.parse('2026-10-06T13:00:00.000Z');
+      const runs = Array.from({ length: 10_001 }, (_, i) =>
+        run(new Date(start + i * 250_000).toISOString()),
+      );
+      draft(chat(runs[0])); // the oldest: past the 10,000 read
+      const newest = chat(runs[runs.length - 1]);
+      draft(newest); // counted
+      draft(newest); // counted
+
+      const impact = await readAgentImpact(await ctxOf(PEOPLE.manager), AGENT, NOW);
+      expect(impact?.draftsNotLive).toBe(2);
+    } finally {
+      db.maxRows = undefined;
+    }
   });
 });
 
