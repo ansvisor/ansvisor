@@ -109,7 +109,8 @@ export type TriggerSummary =
       unit: 'absolute' | 'percent';
       period: 'day' | 'week' | 'month';
     }
-  | { kind: 'watch_rule' };
+  | { kind: 'watch_rule' }
+  | { kind: 'brand_added' };
 
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -163,6 +164,8 @@ export function triggerSummary(trigger: Pick<AgentTriggerView, 'kind' | 'config'
       };
     case 'watch_rule':
       return { kind: 'watch_rule' };
+    case 'brand_added':
+      return { kind: 'brand_added' };
   }
 }
 

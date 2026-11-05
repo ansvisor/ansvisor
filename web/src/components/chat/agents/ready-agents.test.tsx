@@ -194,12 +194,14 @@ describe('Ready to use', () => {
     );
     expect(action('agents.usePreset')).toHaveLength(19);
 
-    // Onboarding & Help: its setup skill, on Run now only, asking before every change.
+    // Onboarding & Help: its setup skill, on each brand added, asking before every change.
     const help = card('onboarding-help');
     expect(help.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
       '/setupAsk me first',
     );
-    expect(help.querySelector('[data-cell="trigger"]')?.textContent).toBe('TriggerManual only');
+    expect(help.querySelector('[data-cell="trigger"]')?.textContent).toBe(
+      'TriggerWhen a brand is added',
+    );
     expect(help.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
       '/dashboard/agents/new?preset=onboarding-help',
     );

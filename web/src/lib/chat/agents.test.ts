@@ -379,6 +379,40 @@ describe('creating an agent', () => {
     expect(result).toMatchObject({ ok: false, refusal: { status: 400, code: 'schedule_past' } });
   });
 
+  it('keeps When a brand is added to an agent on All brands, on create and on a change (00482)', async () => {
+    const added = { kind: 'brand_added', config: {} };
+    const ctx = await ctxOf(PEOPLE.manager);
+    expect(await agents.createAgent(ctx, input({ triggers: [added] }), NOW)).toMatchObject({
+      ok: false,
+      refusal: { status: 400, code: 'brand_added_scope' },
+    });
+    expect(rows('chat_agents')).toEqual([]);
+    const { id } = await create(PEOPLE.manager, {
+      scope: { all_brands: true },
+      triggers: [added],
+    });
+    expect(rows('chat_agent_triggers')).toEqual([
+      expect.objectContaining({ agent_id: id, kind: 'brand_added', config_json: {} }),
+    ]);
+    // Narrowing its scope to picked brands while it has one is refused; dropping it with them isn't.
+    expect(
+      await agents.updateAgent(
+        ctx,
+        id,
+        updateAgentInput.parse({ scope: { brand_ids: [BRAND] } }),
+        NOW,
+      ),
+    ).toMatchObject({ ok: false, refusal: { code: 'brand_added_scope' } });
+    expect(
+      await agents.updateAgent(
+        ctx,
+        id,
+        updateAgentInput.parse({ scope: { brand_ids: [BRAND] }, triggers: [] }),
+        NOW,
+      ),
+    ).toMatchObject({ ok: true });
+  });
+
   it('keeps workspace agents to Admins when Settings › Chat says so', async () => {
     db.tables.chat_settings = [
       {

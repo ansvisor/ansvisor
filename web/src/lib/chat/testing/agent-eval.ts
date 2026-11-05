@@ -66,7 +66,7 @@ export type OutputPromise =
   | 'draft_or_action';
 
 export type EvalGroup = 'agents' | 'skills';
-export type EvalTrigger = 'schedule' | 'signal' | 'kpi' | 'manual';
+export type EvalTrigger = 'schedule' | 'signal' | 'kpi' | 'brand_added' | 'manual';
 
 export interface AgentEvalScenario {
   id: string;
