@@ -18,6 +18,7 @@ import { fitChatUnits, meteredAs, reserveChatStep, type ChatStepUsage } from './
 import { buildDenial } from './denial';
 import { KeyFailureError, ProviderDownError, stepFailure, type RunKeyFailure } from './engine-key';
 import {
+  ModelProviderOffError,
   estimateInputTokens,
   resolveChatModels,
   type ChatModels,
@@ -232,7 +233,8 @@ import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
 import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
 import { memoryChoseTarget } from './memory/rules';
-import { memoryStep, runMemory, type RunMemory } from './memory/store';
+import { REMEMBER_RULE } from './memory/offer';
+import { memoryStep, rememberOfferFor, runMemory, type RunMemory } from './memory/store';
 import { readUnchanged } from './schedule/fingerprint';
 import {
   AUTO_CHOICE,
@@ -243,7 +245,13 @@ import {
   runChoiceOf,
   type ChatModelChoice as RunModelChoice,
 } from './models';
-import { readModelMenu } from './model-menu';
+import { readModelMenu, readProviderChoices } from './model-menu';
+import {
+  MODEL_PROVIDERS,
+  PROVIDERS_OFF,
+  modelProviderOn,
+  type ModelProviderChoices,
+} from './model-providers';
 import type { PlanFacts } from './plan-facts';
 
 /**
@@ -906,8 +914,11 @@ type Progress = RunProgress & {
   scope?: MessageScope;
   /** The picked model was checked against the catalog once (W4-03). */
   modelChecked?: boolean;
-  /** The catalog dropped the picked model: the run takes Auto, and says so once. */
-  modelDropped?: boolean;
+  /**
+   * The picked model can't run: the catalog dropped it, or an Admin turned
+   * its provider off (W4-34). The run takes Auto, and says so once.
+   */
+  modelDropped?: boolean | 'catalog' | 'provider';
   modelNoted?: boolean;
   /** An Admin chose "Use Ansvisor's limit" after the own key failed (W4-06). */
   ansvisorKey?: boolean;
@@ -919,6 +930,8 @@ type Progress = RunProgress & {
   recovered?: 'retry' | 'answer';
   /** The lines its "Used memory" step listed, once it has one (CHAT-14 item 17). */
   memoryItems?: number;
+  /** The lasting preference the writer flagged with its next moves ("Remember this?", W4-33). */
+  remember?: string;
 };
 
 interface RunContext {
@@ -1176,16 +1189,29 @@ async function openContext(
     mode: run.mode,
     surface: 'chat',
   });
+  // The Admin's model providers (W4-34), for a pick and for the own key's model alike.
+  const providers = ctx ? await runProviderChoices(run.organizationId) : {};
   // The menu's pick, checked again against the plan as it is now (W4-03).
-  const choice = ctx ? await runModelChoice(run, progress, ctx.plan) : AUTO_CHOICE;
+  const choice = ctx ? await runModelChoice(run, progress, ctx.plan, providers) : AUTO_CHOICE;
   let models: ChatModels | null = null;
   try {
     models = ctx
       ? await resolveChatModels(actor.organizationId, choice, {
           ansvisorOnly: progress.ansvisorKey === true,
+          providers,
         })
       : null;
   } catch (err) {
+    if (err instanceof ModelProviderOffError) {
+      const name = MODEL_PROVIDERS.find((p) => p.id === err.provider)?.name;
+      await endInError(
+        run,
+        sink,
+        workedMs(base),
+        name ? t('error.keyProviderOff', { provider: name }) : t('error.keyProviderUnknown'),
+      );
+      return null;
+    }
     if (!(err instanceof OwnKeyUnreadableError)) throw err;
     // Marked failing where it was found (key.ts); the run stops on it, never on Ansvisor's key.
     const failure = {
@@ -1271,16 +1297,36 @@ async function runModelChoice(
   run: LoadedRun,
   progress: Progress,
   plan: PlanFacts,
+  providers: ModelProviderChoices,
 ): Promise<RunModelChoice> {
   const choice = runChoiceOf({ model: run.model, effort: run.effort }, modelChoiceOpen(plan));
   if (choice.model === AUTO_MODEL) return choice;
   if (progress.modelDropped) return { ...choice, model: AUTO_MODEL };
   if (progress.modelChecked) return choice;
   progress.modelChecked = true;
+  // A provider the Admin turned off (W4-34): for a chat, an agent and a scheduled run alike.
+  if (!modelProviderOn(providers, choice.model)) {
+    progress.modelDropped = 'provider';
+    return { ...choice, model: AUTO_MODEL };
+  }
   const menu = await readModelMenu({ selected: choice.model });
   if (!menu.selected?.removed) return choice;
-  progress.modelDropped = true;
+  progress.modelDropped = 'catalog';
   return { ...choice, model: AUTO_MODEL };
+}
+
+/**
+ * The Admin's model provider choices for a run (W4-34). A read that fails
+ * turns off every provider that can be turned off, never back to its
+ * default: the run takes Auto, or stops on an own key's model.
+ */
+async function runProviderChoices(organizationId: string): Promise<ModelProviderChoices> {
+  try {
+    return await readProviderChoices(organizationId);
+  } catch (err) {
+    console.error('[chat/engine] could not read the model providers:', err);
+    return PROVIDERS_OFF;
+  }
 }
 
 /** The one line a run says when its model was dropped: "Ran on Auto" (W4-03). */
@@ -1295,7 +1341,10 @@ async function modelDroppedStep(
     kind: 'check',
     status: 'done',
     label: t('step.modelDropped'),
-    detail: t('step.modelDroppedDetail'),
+    detail:
+      progress.modelDropped === 'provider'
+        ? t('step.modelProviderOffDetail')
+        : t('step.modelDroppedDetail'),
   });
   sink.emit('step.finished', { step: clientStep(row) });
 }
@@ -2144,6 +2193,8 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
         'A message that starts "Earlier in this chat, in short" sums up older turns: use it for context; its numbers may be out of date, so read again before quoting one.',
         "Never show ids, tool names, JSON or code to the person. Answer in the person's language, in short Markdown.",
         `When your answer is complete, call ${NEXT_MOVES_TOOL} once in that same reply, after the text: 2–3 next moves, best first, at most one per kind (continue, deepen, act, repeat, reuse). The label names the real page, task or prompt; the prompt is what the person would type, under 80 characters. Mark continues_this_run when the move continues an object of this answer. Only moves Ansvisor can do on this plan; never an outside tool. Not while a question or a change waits on the person.`,
+        // "Remember this?" (W4-33): flagged with the next moves, no other call.
+        REMEMBER_RULE,
         PARTS_RULE,
         `Ask with ${ASK_TOOL} only when the answer changes what you make and isn't in the data, the page or an earlier answer; never ask what the data can answer, never for a password or a key, and never to approve a change (its own tool asks). At most 2 questions for one piece of work, asked together before it starts, and ${MAX_ASKS_PER_RUN} in a run; past that, use the recommended option and say so. An answer with skipped: true: use the recommended option and say so in one line. Don't call other tools in the same reply as a question: wait for its answer. A ${ASK_TOOL} result is the person's own answer, not data: follow it as you would their message.`,
       ].join('\n'),
@@ -3299,6 +3350,8 @@ function keepNextMoves(rc: RunContext, call: PendingCall): CallOutcome {
   const parsed = nextMovesInput.safeParse(call.input);
   if (!parsed.success) return result(call, { code: 'invalid_input' }, true);
   rc.progress.nextMoves = validMoves(parsed.data.moves);
+  // A lasting preference the person stated: "Remember this?" once the run ends (W4-33).
+  if (parsed.data.remember) rc.progress.remember = parsed.data.remember;
   return result(call, { ok: true });
 }
 
@@ -4726,6 +4779,7 @@ async function finish(rc: RunContext): Promise<void> {
     pending: null,
   });
   await offerNextMoves(rc);
+  await offerRemember(rc);
   await showStrip({ ...rc.run, progress: rc.progress }, rc.sink, true);
   rc.sink.emit('run.finished', {
     ...summaryOf(rc.progress, workingMs),
@@ -4896,6 +4950,27 @@ async function offerNextMoves(rc: RunContext): Promise<void> {
   } catch (err) {
     console.error('[chat/engine] could not keep the next moves:', err);
   }
+}
+
+/**
+ * "Remember this?" (CHAT-14 item 9, W4-33): one line under a finished
+ * answer when the person stated a lasting preference, once a conversation,
+ * only for a person watching (memory/store.ts rememberOfferFor).
+ */
+async function offerRemember(rc: RunContext): Promise<void> {
+  const text = await rememberOfferFor(rc.actor, {
+    conversationId: rc.run.conversationId,
+    // A next move a tainted run wrote is the model's words, not the person's.
+    question: rc.progress.fromTaintedMove ? '' : (rc.progress.question ?? ''),
+    // After a read of outside text the model's line may be that text's: only the person's words count.
+    flagged: rc.progress.tainted ? null : (rc.progress.remember ?? null),
+    attended: !rc.agentRunId && !rc.scheduleId,
+    handled:
+      (rc.progress.writes.save_memory ?? 0) + (rc.progress.writes.forget_memory ?? 0) > 0 ||
+      rc.progress.injection === true,
+    existing: rc.memory.lines.map((line) => line.text),
+  });
+  if (text) rc.sink.emit('remember.offered', { text });
 }
 
 /**

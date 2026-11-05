@@ -2,6 +2,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createAzure } from '@ai-sdk/azure';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
+import { openRouterFetch, openRouterRouting } from './openrouter';
 import { chatModelId, type AiProvider, type AiProviderSettings } from './providers';
 
 /** A provider SDK's language model — each of them builds the same kind. */
@@ -52,10 +53,13 @@ export function buildAgentModel({ provider, apiKey, settings }: AgentModelConfig
       return createAzure({ apiKey, baseURL: `${settings.endpoint}/openai` })(model);
     case 'openrouter':
       // OpenRouter speaks Chat Completions, not OpenAI's default Responses API.
+      // Every call routes only to providers that don't keep the request, and
+      // a DeepSeek model only to US or EU hosts (W4-34, lib/agent/openrouter.ts).
       return createOpenAI({
         apiKey,
         baseURL: 'https://openrouter.ai/api/v1',
         headers: { 'HTTP-Referer': 'https://ansvisor.com', 'X-Title': 'Ansvisor' },
+        fetch: openRouterFetch(openRouterRouting(model)),
       }).chat(model);
   }
 }

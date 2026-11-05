@@ -199,4 +199,16 @@ describe('resumeOwnKeyAgents', () => {
     expect(agent('a4').status).toBe('active');
     expect(agent('a1').status).toBe('paused');
   });
+
+  it('never resumes the demo brand’s sample agents (00475)', async () => {
+    tables.chat_agents.push({
+      id: 'a5',
+      organization_id: 'org-2',
+      status: 'paused',
+      paused_reason: 'own_key',
+      demo_brand_id: 'demo-brand',
+    });
+    expect(await resumeOwnKeyAgents('org-2', T2)).toBe(1);
+    expect(agent('a5').status).toBe('paused');
+  });
 });

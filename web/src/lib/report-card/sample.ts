@@ -34,6 +34,35 @@ const NAMED: Record<(typeof REPORT_CARD_ENGINES)[number], number[]> = {
   'google-aio': [1, 3, 9, 10, 11],
   'google-aimode': [12, 13],
 };
+/** Each question's product: 0 beans, 1 subscriptions, 2 gifts. */
+const PRODUCT = [0, 1, 0, 0, 0, 1, 2, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+const VOLUME = [
+  2900,
+  1600,
+  1300,
+  880,
+  720,
+  590,
+  1900,
+  480,
+  2400,
+  390,
+  140,
+  320,
+  260,
+  210,
+  880,
+  170,
+  90,
+  1000,
+  110,
+  590,
+  480,
+  320,
+  260,
+  210,
+  null,
+];
 const INSTEAD = ['Ridgeline Roasters', 'Copper Kettle Coffee', 'Harborline Beans', 'Sunday Grind'];
 
 /**
@@ -49,6 +78,15 @@ export const SAMPLE_REPORT_CARD: ReportCardPayload = {
   siteType: 'ecommerce',
   generatedAt: '2026-11-03T09:00:00Z',
   questionCount: 25,
+  products: [
+    { name: 'Whole bean coffee', nameEn: null, url: 'https://brewlinecoffee.example/beans' },
+    {
+      name: 'Coffee subscriptions',
+      nameEn: null,
+      url: 'https://brewlinecoffee.example/subscribe',
+    },
+    { name: 'Gift boxes', nameEn: null, url: null },
+  ],
   engines: [
     { engine: 'chatgpt-web', answers: 25, named: 7 },
     { engine: 'gemini-web', answers: 25, named: 4 },
@@ -91,6 +129,9 @@ export const SAMPLE_REPORT_CARD: ReportCardPayload = {
   questionRows: QUESTIONS.map((text, i) => ({
     text,
     textEn: null,
+    product: PRODUCT[i],
+    volume: VOLUME[i],
+    fit: i === 16 ? 'related' : 'core',
     named: Object.fromEntries(
       REPORT_CARD_ENGINES.map((engine) => [engine, NAMED[engine].includes(i) ? 'named' : 'missed']),
     ),

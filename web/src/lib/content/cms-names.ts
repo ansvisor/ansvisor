@@ -10,10 +10,10 @@ export const CMS_NAMES: Record<CmsTarget, string> = {
 };
 
 /**
- * The CMSs Chat sends a page to, as a draft there (push_cms_draft). Never the
+ * The CMSs Chat sends a page to, as a draft there (push_cms_draft). Not the
  * brand's webhook: it hands the page to the brand's own automation, which
- * may publish it, so it goes out of Ansvisor (an EXECUTE, CHAT-20 §3) and
- * only the editor's Send does it.
+ * may publish it, so it is a row of its own (trigger_content_webhook,
+ * AUTONOMOUS-GO-LIVE PR 11).
  */
 export const CHAT_CMS_TARGETS = ['webflow', 'wordpress', 'framer', 'wix'] as const;
 export type ChatCmsTarget = (typeof CHAT_CMS_TARGETS)[number];

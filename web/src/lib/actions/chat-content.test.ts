@@ -5,8 +5,8 @@ import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
 /**
  * The server actions Chat's content rows call (W2-07), as they run against
  * the member's own client: a page goes to the CMS as the Library sends it
- * (its kept slug, a page with placeholders refused), never to the webhook
- * and never over a live page, and the API's answers come back as Chat's
+ * (its kept slug, a page with placeholders refused), to the webhook only by
+ * its own send, never over a live page, and the API's answers come back as Chat's
  * codes; audits start on the API's one-page or bulk route, its quota said
  * back; a draft's change keeps the page before in History first, or isn't
  * made; each is an Admin's or a Manager's; and none throws.
@@ -29,7 +29,7 @@ const readCmsSources = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/cms-sources', () => ({ readCmsSources }));
 
 const { createFakeSupabase } = await import('@/lib/chat/testing/fake-supabase');
-const { publishDraftToCms, sendDraftToCms } = await import('./cms-send');
+const { publishDraftToCms, sendDraftToCms, sendDraftToWebhook } = await import('./cms-send');
 const { startSiteAudits } = await import('./audits');
 const { updateContentDraft } = await import('./content-drafts');
 
@@ -182,7 +182,7 @@ describe('sendDraftToCms', () => {
     expect(requests).toEqual([]);
   });
 
-  it('never sends to the webhook: it goes out of Ansvisor, so the editor sends it', async () => {
+  it('never sends to the webhook as a CMS: the webhook has its own send', async () => {
     expect(await sendDraftToCms(DRAFT, 'webhook' as never)).toMatchObject({
       ok: false,
       reason: 'invalid',
@@ -301,6 +301,52 @@ describe('publishDraftToCms (AUTONOMOUS-GO-LIVE PR 9)', () => {
       ok: false,
       reason: 'execute_off',
     });
+    expect(requests).toEqual([]);
+  });
+});
+
+describe('sendDraftToWebhook (AUTONOMOUS-GO-LIVE PR 11)', () => {
+  it('sends the page made as Send to CMS makes it to the brand’s webhook, with no address', async () => {
+    expect(await sendDraftToWebhook(DRAFT)).toEqual({
+      ok: true,
+      target: 'webhook',
+      status: 'sent',
+    });
+    expect(requests).toHaveLength(1);
+    expect(requests[0].url).toMatch(/\/api\/content-drafts\/send$/);
+    expect(requests[0].body).toEqual({
+      brandId: BRAND,
+      target: 'webhook',
+      pages: [
+        expect.objectContaining({ draftId: DRAFT, title: 'Pricing FAQ', slug: 'pricing-faq' }),
+      ],
+    });
+  });
+
+  it('says a brand without a webhook, or one that doesn’t take pages, as not connected', async () => {
+    for (const code of ['no_webhook', 'webhook_not_subscribed']) {
+      answer = { status: 409, body: { code, error: `Refused: ${code}` } };
+      expect(await sendDraftToWebhook(DRAFT)).toEqual({
+        ok: false,
+        reason: 'not_connected',
+        message: `Refused: ${code}`,
+      });
+    }
+    answer = {
+      status: 200,
+      body: { deliveries: [{ id: 'd1', draftId: DRAFT, status: 'failed', error: 'Answered 500' }] },
+    };
+    expect(await sendDraftToWebhook(DRAFT)).toMatchObject({ ok: false, reason: 'failed' });
+  });
+
+  it('sends nothing over a live page, for an Analyst, or for a Manager while publishing is off', async () => {
+    fake.db.tables.content_drafts[0].published_url = 'https://acme.example/pricing-faq';
+    expect(await sendDraftToWebhook(DRAFT)).toMatchObject({ ok: false, reason: 'live_item' });
+    fake.db.tables.content_drafts[0].published_url = null;
+    managersCantGoLive(['publishing']);
+    expect(await sendDraftToWebhook(DRAFT)).toMatchObject({ ok: false, reason: 'execute_off' });
+    asRole('analyst');
+    expect(await sendDraftToWebhook(DRAFT)).toMatchObject({ ok: false, reason: 'forbidden_role' });
     expect(requests).toEqual([]);
   });
 });

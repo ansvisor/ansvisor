@@ -168,6 +168,7 @@ const INPUTS: Record<string, unknown> = {
   set_draft_ready: { draft_id: DRAFT },
   push_cms_draft: { draft_id: DRAFT, destination: 'webflow' },
   publish_cms: { draft_id: DRAFT, destination: 'webflow' },
+  trigger_content_webhook: { draft_id: DRAFT },
   build_report: {
     brand_id: BRAND,
     template: 'weekly_visibility',
@@ -843,6 +844,48 @@ describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
     });
   });
 
+  it('sends a page to the brand’s webhook through the same route, with no address (PR 11)', async () => {
+    const webhook = () =>
+      request({
+        tool: chatTool('trigger_content_webhook')!,
+        input: INPUTS.trigger_content_webhook,
+      });
+    expect(await runLoggedWrite(webhook())).toMatchObject({
+      code: 'ok',
+      output: { ok: true, target: 'webhook', status: 'sent' },
+    });
+    const body = JSON.parse((sent.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body).toMatchObject({ kind: 'webhook', target: 'webhook', draftId: DRAFT });
+    expect(db.tables.chat_activity_log).toEqual([
+      expect.objectContaining({ tool_key: 'sendToWebhook', auto_via: 'go_live', undo_json: null }),
+    ]);
+    // A brand without a webhook: said as not connected, in words that name it.
+    sent.mockImplementationOnce(async () =>
+      Response.json(
+        { success: false, code: 'no_webhook', message: 'No workflow connected' },
+        { status: 409 },
+      ),
+    );
+    expect(await runLoggedWrite(webhook())).toMatchObject({
+      output: {
+        ok: false,
+        reason: 'not_connected',
+        message: 'Your webhook refused it: No workflow connected',
+      },
+    });
+    // Sent there already by this agent: a webhook send isn't an update, so it never goes twice.
+    sent.mockImplementationOnce(async () =>
+      Response.json({ success: false, code: 'already_sent' }, { status: 409 }),
+    );
+    expect(await runLoggedWrite(webhook())).toMatchObject({
+      output: {
+        ok: false,
+        reason: 'conflict',
+        message: 'This page went to your webhook already. An agent sends it there once.',
+      },
+    });
+  });
+
   it('frees its slot when the API has no secret to be reached with: nothing went', async () => {
     vi.stubEnv('CRON_SECRET', '');
     const finished: unknown[] = [];
@@ -1345,6 +1388,7 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     expect(CHAT_TOOLS.filter((tool) => tool.class === 'execute').map((tool) => tool.name)).toEqual([
       'push_cms_draft',
       'publish_cms',
+      'trigger_content_webhook',
       'unpublish_cms',
     ]);
     const publish = chatTool('publish_cms')!;

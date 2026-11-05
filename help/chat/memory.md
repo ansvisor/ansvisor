@@ -1,7 +1,7 @@
 ---
 title: Memory in Chat
 route: /dashboard/chat/memory
-keywords: [memory, remember, forget, used memory, saved notes, call me, remember that, forget that, use memory, memory page]
+keywords: [memory, remember, forget, used memory, saved notes, call me, remember that, forget that, use memory, memory page, remember this]
 synonyms: [preferences, saved preferences, house style, what chat remembers, notes]
 plan: all
 updated: 2026-11-02
@@ -20,6 +20,10 @@ Start a message with "Remember that…", in any language, for example: "Remember
 Nothing is saved until you click **Save**, in every mode, Full auto too. After that, the step reads **Saved to memory** with where it went.
 
 Say "Forget that…" to remove a note. Chat finds the note and removes it once you approve, or by itself in Full auto. The step reads **Removed from memory**.
+
+## When Chat offers to remember
+
+When you say something you want from now on without asking Chat to remember it, such as "From now on, write blog posts in US English", a line under the answer offers **Remember this?** with that preference. Click it to open the same card, where you can change the words and where it goes before you click **Save**. Chat offers this at most once in a chat, never while memory is off for you or your workspace, and never for a note you already have. If you don't click it, nothing is saved.
 
 ## Where a note goes
 

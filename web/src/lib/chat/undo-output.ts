@@ -166,6 +166,8 @@ export const OUTPUT_UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   publish_cms: pushCmsDraft,
   // A page taken down (PR 10): recorded the same way, its CMS from the output; publish it again to undo.
   unpublish_cms: pushCmsDraft,
+  // A page sent to the brand's webhook (PR 11): recorded the same way; its workflow's now, no Undo.
+  trigger_content_webhook: pushCmsDraft,
   // Suggestions in the editor beside the chat (W4-14): the page changes only on the person's Accept.
   suggest_draft_changes: suggestDraftChanges,
   run_site_audit: runSiteAudit,
