@@ -8,7 +8,7 @@ updated: 2026-11-04
 last_checked: 2026-11-04
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 Each brand reads Search Console and Analytics from one Google account. Every brand starts with the workspace's account, the one connected in **Settings › Integrations**. A brand can instead use the same account as another brand, or a Google account of its own, for example a client's.

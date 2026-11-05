@@ -8,7 +8,7 @@ updated: 2026-11-02
 last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, help/chat/scheduling.md]
 ---
 A follow-up check looks again at something you changed, on a later day, and tells you what happened. Chat offers one after a change you made or approved, such as a refreshed page or a fix. It can check tracked prompts, or a page or an Action Center action once its change is shipped (published or marked as shipped).
