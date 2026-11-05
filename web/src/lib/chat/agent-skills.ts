@@ -21,6 +21,10 @@
  * /listings reads the sites AI cites, not a catalog, and /audit-fix writes
  * a robots or CMS change for the person to make.
  *
+ * Then the AGENTS plan's (§7 step 3): /setup, the Onboarding & Help agent's,
+ * reads the Getting started steps and the ready-to-use agents, and uses no
+ * connection either: it says how to connect one.
+ *
  * A workspace's own skills (CHAT-13, W3-06) are instructions only: an
  * agent may name one by its /command, and it needs no connection (skillOf
  * gives none). Whether it may run now is the workspace's to say
@@ -90,6 +94,7 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'listings', uses: [] },
   { id: 'rivals', uses: [] },
   { id: 'audit-fix', uses: [] },
+  { id: 'setup', uses: [] },
 ];
 
 /** Connections any agent may add as Optional (mockup: Google Analytics). */
