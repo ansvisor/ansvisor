@@ -458,7 +458,7 @@ export async function loadAgent(organizationId: string, id: string): Promise<Loa
 }
 
 /** The agent when the person may see it; null (not found) otherwise, never "it exists". */
-async function visibleAgent(ctx: AgentContext, id: string): Promise<LoadedAgent | null> {
+export async function visibleAgent(ctx: AgentContext, id: string): Promise<LoadedAgent | null> {
   const agent = await loadAgent(ctx.actor.organizationId, id);
   return agent && canSeeAgent(factsOf(agent), ctx.viewer) ? agent : null;
 }
@@ -509,7 +509,7 @@ async function brandsOf(organizationId: string): Promise<Brand[]> {
 }
 
 /** People's names by id, in the workspace: their profile's. */
-async function namesOf(organizationId: string, ids: string[]): Promise<Map<string, string>> {
+export async function namesOf(organizationId: string, ids: string[]): Promise<Map<string, string>> {
   const names = new Map<string, string>();
   const wanted = [...new Set(ids)];
   if (wanted.length === 0) return names;

@@ -35,6 +35,7 @@ import {
   type RunFilter,
 } from '@/lib/chat/agent-view';
 import { cn } from '@/lib/utils';
+import { AgentImpactCard } from './agent-impact-card';
 import { AgentDenial, CHIP, GoLiveBadge, StatusLine, liveRunOf } from './agent-parts';
 import { readAgent, readAgentRuns } from './agent-requests';
 import { useAgentWords, type AgentWords } from './agent-words';
@@ -46,9 +47,9 @@ import { useAgentActions, type AgentButton } from './use-agent-actions';
  * server says the person may use (`can`): Activate, Pause or Resume, Restore,
  * Open run, Edit (W2-15's four steps), Run now, and under ⋯ Duplicate,
  * Take over and Archive, or Delete for an archived agent, which asks first. Then its
- * skills, mode, connections and model; its triggers with the next run; its
- * last 50 runs, each with its AI use against its cap ("3.2% of 10%"),
- * state, trigger and brand, opening the run's chat; and beside them who it
+ * skills, mode, connections and model; its triggers with the next run; what
+ * it did in the last 30 days (agent-impact-card.tsx); its last 50 runs,
+ * each with its AI use against its cap ("3.2% of 10%"), state, trigger and brand, opening the run's chat; and beside them who it
  * belongs to, what it may reach and what it may spend — all as shares of
  * the monthly AI limit, never dollars.
  */
@@ -766,6 +767,8 @@ export function AgentDetail({
               );
             })}
           </div>
+
+          <AgentImpactCard id={a.id} />
 
           <div className="mt-[22px] mb-2.5 flex flex-wrap items-center gap-2">
             <h2 className="text-[15px] font-semibold">{tDetail('runs.title')}</h2>

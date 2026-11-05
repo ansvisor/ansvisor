@@ -70,21 +70,49 @@ export interface RangedAuditRow extends PageAuditRow {
   partial?: boolean | null;
 }
 
+/** How an audit compares with the page's earlier audits, as Site Audit's report shows it. */
+export interface PageComparison {
+  /** "64 ± 2": null with fewer than SCORE_RANGE.minAudits audits. */
+  range: ScoreRange | null;
+  /**
+   * The page's audit before it, which the report's "+3 since Oct 21" counts
+   * from (GET /api/audits/:id `previousScore`): its score (0–1) and when it
+   * ran. Null for a page audited once.
+   */
+  previous: { score: number; createdAt: string } | null;
+}
+
 /**
  * An audit's score range ("64 ± 2") from its page's last complete audits up
- * to it, by the rule Site Audit's report uses (scoreRange). Null for an audit
- * that isn't compared (unfinished, unscored or partial) and with fewer than
- * SCORE_RANGE.minAudits audits.
+ * to it, by the rule Site Audit's report uses (scoreRange), and the page's
+ * audit before it, from the same read. Neither for an audit that isn't
+ * compared (unfinished, unscored or partial).
+ */
+export async function readPageComparison(
+  client: Pick<SupabaseClient, 'from'>,
+  audit: RangedAuditRow,
+): Promise<PageComparison> {
+  if (audit.status !== 'completed' || audit.total_score == null || audit.partial === true) {
+    return { range: null, previous: null };
+  }
+  const earlier = await readEarlierPageAudits(client, audit.brand_id, audit);
+  // The page's trend as scoreRange reads it: oldest first, ending with this audit.
+  const trend = [...earlier].reverse().concat(audit);
+  const before = earlier[0];
+  return {
+    range: scoreRange(trend.map((row) => Number(row.total_score))),
+    previous: before ? { score: Number(before.total_score), createdAt: before.created_at } : null,
+  };
+}
+
+/**
+ * An audit's score range ("64 ± 2"), as readPageComparison gives it. Null
+ * for an audit that isn't compared and with fewer than SCORE_RANGE.minAudits
+ * audits.
  */
 export async function readScoreRange(
   client: Pick<SupabaseClient, 'from'>,
   audit: RangedAuditRow,
 ): Promise<ScoreRange | null> {
-  if (audit.status !== 'completed' || audit.total_score == null || audit.partial === true) {
-    return null;
-  }
-  const earlier = await readEarlierPageAudits(client, audit.brand_id, audit);
-  // The page's trend as scoreRange reads it: oldest first, ending with this audit.
-  const trend = [...earlier].reverse().concat(audit);
-  return scoreRange(trend.map((row) => Number(row.total_score)));
+  return (await readPageComparison(client, audit)).range;
 }
