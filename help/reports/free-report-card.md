@@ -34,7 +34,11 @@ Only brands a buyer could choose instead of you count as competitors. Marketplac
 
 The card reads your home page: its title, headings and menus. It names your main products or categories from the words on the page, and writes questions only about those. A question that matches what you sell only loosely is never asked: a card asks fewer questions rather than a wrong one. Questions about your products come first, a few from each, the ones whose keyword gets the most Google searches in your country first; questions about a need your buyers also have fill the rest. Years and seasons in the questions follow the card's date: in November, a holiday question is about the coming winter or next summer, never one already past.
 
-The questions and answers stay in your target country's language; the PDF is in English. Everything on the card is picked from your results by fixed rules: no model writes its advice.
+Everything on the card is picked from your results by fixed rules: no model writes its advice.
+
+## Language and currency
+
+The questions and answers are in your target country's language. The PDF and its e-mail are in Turkish for Türkiye and in English elsewhere. Amounts are in US dollars, as Ansvisor's plans are: Google Ads' costs, the value table and the prices. An average order or deal value you gave stays in its own currency.
 
 ## Why the app shows other numbers
 
