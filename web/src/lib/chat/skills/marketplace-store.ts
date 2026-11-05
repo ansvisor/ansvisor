@@ -35,8 +35,11 @@ import {
  *     (decision 9): no SKILL.md is read for it.
  *   - Detail (item 9): its SKILL.md and LICENSE read through the GitHub
  *     reader at the pinned commit, cleaned (item 15, marketplace-cleanup),
- *     then cleaned and scanned as any import is: what the card shows in
- *     place of the directory's score is Ansvisor's own scan (decision 10).
+ *     then cleaned and scanned as an import is, by the Library's rules (its
+ *     front matter read as a safe YAML subset; a price, an email address or
+ *     a tracking URL worth a look, not a block: owner, 2026-11-05). What the
+ *     card shows in place of the directory's score is Ansvisor's own scan
+ *     (decision 10).
  *     A read is kept in memory by its pinned commit, which never changes.
  *   - Add (items 11–13): the import path of 00458 with the catalog row it
  *     came from (00465's library_ref). It waits off and private for an
@@ -209,7 +212,8 @@ export async function readMarketplaceSkill(
   const read = await readGithubSkill(marketplaceFolderUrl(skill), github);
   if (!read.ok) return skillRefusal(read.refusal.code, read.refusal.detail);
   const cleaned = cleanMarketplaceFiles(read.value.files, skill.cleanup);
-  const parsed = parseSkillImport(cleaned.files);
+  // A Library skill's own rules: its YAML read, and only item 16's findings block it.
+  const parsed = parseSkillImport(cleaned.files, { library: true });
   if (!parsed.ok) return skillRefusal(parsed.refusal.code, parsed.refusal.detail);
   if (parsed.value.parts.license !== 'MIT') return skillRefusal('library_license');
   const value: MarketplaceRead = {

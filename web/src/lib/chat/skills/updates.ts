@@ -18,7 +18,8 @@ import { skillRefusal, type SkillResult, type SkillViewer } from './store';
  * longer matches its checksum is switched off. A source that is gone, or
  * whose license is one we don't take, leaves the skill as it is. A Library
  * skill's new version is cleaned as its catalog row says first (CHAT-17
- * item 16), and only MIT is taken for it (decision 11).
+ * item 16), read by the Library's rules (import.ts `library`), and only MIT
+ * is taken for it (decision 11).
  */
 
 /** Days between two checks of one skill. */
@@ -82,7 +83,9 @@ export type UpdateDecision =
 export function decideUpdate(row: CheckRow, read: SourceRead): UpdateDecision {
   if (!read.ok) return { kind: 'source', code: read.refusal.code };
   if (read.value.commitSha === row.commit_sha) return { kind: 'same' };
-  const parsed = parseSkillImport(versionFiles(row, read.value.files).files);
+  const parsed = parseSkillImport(versionFiles(row, read.value.files).files, {
+    library: !!row.library_ref,
+  });
   if (!parsed.ok) return { kind: 'refused', code: parsed.refusal.code };
   if (row.library_ref && parsed.value.parts.license !== 'MIT') {
     return { kind: 'refused', code: 'license' };
@@ -232,7 +235,7 @@ async function readNewVersion(row: UpdateRow, sha: string, github?: GithubOption
   const read = await readGithubSkill(link, github);
   if (!read.ok) return skillRefusal(read.refusal.code, read.refusal.detail);
   const cleaned = versionFiles(row, read.value.files);
-  const parsed = parseSkillImport(cleaned.files);
+  const parsed = parseSkillImport(cleaned.files, { library: !!row.library_ref });
   if (!parsed.ok) return skillRefusal(parsed.refusal.code, parsed.refusal.detail);
   if (row.library_ref && parsed.value.parts.license !== 'MIT') {
     return skillRefusal('library_license');

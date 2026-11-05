@@ -57,7 +57,7 @@ Click a skill to read it before you add it: its SKILL.md at the version the Libr
 
 Admins and Managers on a paid plan can click **Add**. The skill comes in as an imported skill does: instructions only, cleaned, scanned and kept with its license and source. It stays off until an Admin reviews it. An Admin's **Add** opens the review; a Manager's asks the Admins. The card then says **Pending approval**, then **Added** once an Admin approves it, and the skill is under **My skills**, on for whoever added it.
 
-Each skill is added once per workspace and stays at the version it was added at. Analysts and Agency partners can browse the Library but can't add. A skill the scan blocks, or whose file Ansvisor can't read, can't be added: its page says why.
+Each skill is added once per workspace and stays at the version it was added at. Analysts and Agency partners can browse the Library but can't add. Its review lists a price, an email address or a tracking link in the skill as worth a look. A skill the scan blocks as unsafe, or whose file Ansvisor can't read, can't be added: its page says why.
 
 ## Updates to an imported skill
 

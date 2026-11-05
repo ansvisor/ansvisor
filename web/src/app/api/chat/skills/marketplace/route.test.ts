@@ -346,4 +346,32 @@ describe('POST /api/chat/skills/marketplace/skill', () => {
     expect((await add(PLAIN.id)).body).toMatchObject({ ok: false, code: 'library_name' });
     expect(skills()).toEqual([]);
   });
+
+  it('reads a Library skill’s YAML, and keeps a price for the review to show (owner, 2026-11-05)', async () => {
+    const yaml = `---
+name: geo-brand-mentions
+description: >
+  Finds where AI engines mention your brand:
+  and where they don't.
+allowed-tools:
+  - Read
+---
+Tools from $29 a month. Write to brand@example.com.
+`;
+    gives(CLEANED, yaml);
+    const { body } = await add(CLEANED.id);
+    expect(body.skill).toMatchObject({
+      status: 'pending_review',
+      blocks: [],
+      warnings: expect.arrayContaining([
+        'an email address',
+        'a price (a figure with a currency sign)',
+      ]),
+      removed: ['scripts/ (1 file)', 'allowed-tools'],
+    });
+    expect(skills()[0]).toMatchObject({
+      description: "Finds where AI engines mention your brand: and where they don't.",
+      scan_json: { blocks: [] },
+    });
+  });
 });

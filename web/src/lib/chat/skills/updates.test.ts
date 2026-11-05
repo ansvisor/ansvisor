@@ -166,6 +166,10 @@ describe('what the source at its default branch means (decideUpdate)', () => {
     };
     expect(updates.decideUpdate(row(), apache)).toEqual({ kind: 'update', sha: NEW });
     expect(updates.decideUpdate(library(), apache)).toEqual({ kind: 'refused', code: 'license' });
+    // Its YAML front matter and a price read by the Library's rules; an import's by the strict ones.
+    const yaml = `---\nname: copy-editing\ndescription: >\n  Tightens copy:\n  removes filler.\nlicense: MIT\n---\n\n${BODY}\nFrom $9 a month.\n`;
+    expect(updates.decideUpdate(library(), at(NEW, yaml))).toEqual({ kind: 'update', sha: NEW });
+    expect(updates.decideUpdate(row(), at(NEW, yaml))).toMatchObject({ kind: 'refused' });
   });
 });
 
