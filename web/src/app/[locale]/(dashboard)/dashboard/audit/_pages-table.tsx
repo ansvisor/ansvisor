@@ -27,6 +27,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { pct, scoreColor } from '@/components/audit/audit-report';
+import { ScoreRangeMark } from '@/components/audit/score-range';
+import { scoreRange } from '@/lib/audit/score-range';
 import { signedValue, TONE_TEXT } from '../insights/kpi-format';
 import type { AuditedPage, AuditedPageStatus, AuditRun, AuditTemplate } from '@/lib/actions/audits';
 import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
@@ -137,6 +139,13 @@ function SinceFirst({ page }: { page: AuditedPage }) {
       <span className="sr-only"> {t('pages.sinceFirst', { date })}</span>
     </span>
   );
+}
+
+/** The current score's range ("± 2") from the page's own latest audits, once it has enough. */
+function PageScoreRange({ page }: { page: AuditedPage }) {
+  const range = page.score === null ? null : scoreRange(page.trend);
+  if (!range) return null;
+  return <ScoreRangeMark range={range} className="ml-1 text-xs" />;
 }
 
 /** An earlier audit of the page; Delete only with `onDelete` (admins and managers, 2026-11-03). */
@@ -374,6 +383,7 @@ export function AuditPagesTable({
                           className={cn('font-semibold tabular-nums', scoreColor(page.score))}
                         >
                           {pct(page.score) ?? '—'}
+                          <PageScoreRange page={page} />
                           <SinceFirst page={page} />
                         </TableCell>
                         <TableCell className="text-right tabular-nums">

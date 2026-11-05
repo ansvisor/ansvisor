@@ -52,6 +52,7 @@ export function usePagesExport(brandId: string | null) {
     firstScore: t('export.firstScore'),
     firstAudit: t('export.firstAudit'),
     changeSinceFirst: t('export.changeSinceFirst'),
+    scoreRange: t('export.scoreRange'),
     statuses: {
       good: t('pages.statuses.good'),
       improving: t('pages.statuses.improving'),

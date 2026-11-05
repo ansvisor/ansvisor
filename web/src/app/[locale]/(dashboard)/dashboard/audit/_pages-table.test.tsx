@@ -34,7 +34,7 @@ const page = (over: Partial<AuditedPage> = {}): AuditedPage => ({
   firstAuditedAt: at(1),
   status: 'improving',
   lastAuditedAt: at(14),
-  trend: [0.5, 0.58, 0.63],
+  trend: [0.58, 0.63],
   issues: 14,
   runs: [
     {
@@ -192,6 +192,31 @@ describe('AuditPagesTable', () => {
     expect(rows()[0].querySelectorAll('td')[3].getAttribute('title')).toBe(
       'First audited Oct 1, 2026',
     );
+  });
+
+  it("shows the current score's range from the page's latest audits, once it has three", () => {
+    render([
+      page({ trend: [0.6, 0.66, 0.58, 0.63] }),
+      page({ key: 'acme.com/a', path: '/a', trend: [0.63, 0.63, 0.63] }),
+      page({ key: 'acme.com/b', path: '/b' }),
+      page({ key: 'acme.com/c', path: '/c', score: null, trend: [] }),
+    ]);
+    const mark = (row: Element) =>
+      row.querySelectorAll('td')[4].querySelector('[data-slot=score-range]');
+    const [spread, same, short, none] = rows().map(mark);
+    expect(spread?.firstChild?.textContent).toBe('± 4');
+    expect(spread?.getAttribute('title')).toBe(
+      "This page's last 4 audits scored 58 to 66, changes to the page included.",
+    );
+    // Beside the score, before the change since the first audit.
+    expect(cells(rows()[0])[4]).toBe(
+      "63± 4 This page's last 4 audits scored 58 to 66, changes to the page included.+5 since the first audit on Oct 1, 2026",
+    );
+    expect(same?.firstChild?.textContent).toBe('± 0');
+    expect(same?.getAttribute('title')).toBe("This page's last 3 audits all scored 63.");
+    // Two audits are too few, and a page with no score has none.
+    expect(short).toBeNull();
+    expect(none).toBeNull();
   });
 
   it("tags a page whose last audit was an auto-audit run's", () => {

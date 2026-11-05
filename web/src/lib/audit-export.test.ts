@@ -22,6 +22,7 @@ const labels: AuditExportLabels = {
   firstScore: 'First score',
   firstAudit: 'First audit',
   changeSinceFirst: 'Change since first',
+  scoreRange: 'Range (±)',
   statuses: {
     good: 'Good',
     improving: 'Improving',
@@ -43,7 +44,7 @@ const page = (over: Partial<AuditedPage> = {}): AuditedPage => ({
   firstAuditedAt: '2026-09-20T09:00:00+00:00',
   status: 'improving',
   lastAuditedAt: '2026-10-14T23:30:00+00:00',
-  trend: [0.58, 0.634],
+  trend: [0.6, 0.58, 0.634],
   issues: 14,
   runs: [],
   runCount: 3,
@@ -66,12 +67,19 @@ describe('auditPagesCsv', () => {
   it('writes a row per page, scores out of 100 with their change, and the UTC day', () => {
     expect(auditPagesCsv([page(), failed], labels).split('\n')).toEqual([
       AUDIT_PAGES_CSV_HEADERS.join(','),
-      'https://acme.com/pricing,63,58,5,Improving,14,2026-10-14,3,50,2026-09-20,13',
-      '"https://acme.com/broken,new",,,,Failed,,2026-10-14,1,,,',
+      'https://acme.com/pricing,63,58,5,Improving,14,2026-10-14,3,50,2026-09-20,13,3',
+      '"https://acme.com/broken,new",,,,Failed,,2026-10-14,1,,,,',
     ]);
   });
 
-  it("keeps today's columns in their places and adds the first score after them", () => {
+  it("leaves the score's range empty until the page has three audits", () => {
+    const csv = auditPagesCsv([page({ trend: [0.58, 0.634] })], labels);
+    expect(csv.split('\n')[1]).toBe(
+      'https://acme.com/pricing,63,58,5,Improving,14,2026-10-14,3,50,2026-09-20,13,',
+    );
+  });
+
+  it("keeps today's columns in their places and adds the first score, then the range, after them", () => {
     expect(AUDIT_PAGES_CSV_HEADERS).toEqual([
       'page_url',
       'score',
@@ -84,6 +92,7 @@ describe('auditPagesCsv', () => {
       'first_score',
       'first_audit',
       'change_since_first',
+      'score_range',
     ]);
   });
 });
@@ -109,6 +118,7 @@ describe('auditPagesWorkbook', () => {
         'First score',
         'First audit',
         'Change since first',
+        'Range (±)',
       ],
       [
         'https://acme.com/pricing',
@@ -122,6 +132,7 @@ describe('auditPagesWorkbook', () => {
         50,
         '2026-09-20',
         13,
+        3,
       ],
       [
         'https://acme.com/broken,new',
@@ -132,6 +143,7 @@ describe('auditPagesWorkbook', () => {
         null,
         '2026-10-14',
         1,
+        null,
         null,
         null,
         null,

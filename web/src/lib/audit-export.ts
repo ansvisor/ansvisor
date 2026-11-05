@@ -1,11 +1,13 @@
 import type { Sheet } from 'write-excel-file/browser';
 import type { AuditedPage, AuditedPageStatus } from '@/lib/actions/audits';
+import { scoreRange } from '@/lib/audit/score-range';
 import { toCsv } from '@/lib/csv';
 
 /**
  * Site Audit's Pages export (SA-003): a row per audited page, as CSV or Excel,
  * for all pages or the selected ones. The first score, when it ran and the
- * change since come last, so the columns before keep their places.
+ * change since come after today's first columns, so those keep their places,
+ * then the score's range (the ± of "64 ± 2", empty with too few audits).
  */
 
 export interface AuditExportLabels {
@@ -21,6 +23,7 @@ export interface AuditExportLabels {
   firstScore: string;
   firstAudit: string;
   changeSinceFirst: string;
+  scoreRange: string;
   statuses: Record<AuditedPageStatus, string>;
 }
 
@@ -36,6 +39,7 @@ export const AUDIT_PAGES_CSV_HEADERS = [
   'first_score',
   'first_audit',
   'change_since_first',
+  'score_range',
 ];
 
 const points = (score: number | null) => (score === null ? null : Math.round(score * 100));
@@ -58,6 +62,7 @@ function exportRow(page: AuditedPage, labels: AuditExportLabels) {
     first_score: first,
     first_audit: page.firstAuditedAt ? day(page.firstAuditedAt) : null,
     change_since_first: score !== null && first !== null ? score - first : null,
+    score_range: score === null ? null : (scoreRange(page.trend)?.plusMinus ?? null),
   };
 }
 
@@ -89,6 +94,7 @@ export function auditPagesWorkbook(pages: AuditedPage[], labels: AuditExportLabe
         { width: 12 },
         { width: 12 },
         { width: 18 },
+        { width: 10 },
       ],
       data: [
         [
@@ -103,6 +109,7 @@ export function auditPagesWorkbook(pages: AuditedPage[], labels: AuditExportLabe
           labels.firstScore,
           labels.firstAudit,
           labels.changeSinceFirst,
+          labels.scoreRange,
         ].map(bold),
         ...pages.map((page) => Object.values(exportRow(page, labels))),
       ],
