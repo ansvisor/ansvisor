@@ -17,6 +17,20 @@ export const REPORT_CARD_ENGINES = [
 ] as const;
 export type ReportCardEngine = (typeof REPORT_CARD_ENGINES)[number];
 
+/** What a cited site is (server lib/report-card/names.js). */
+export const CITED_SITE_KINDS = [
+  'own',
+  'competitor',
+  'marketplace',
+  'reviews',
+  'guide',
+  'publication',
+  'official',
+  'community',
+  'other',
+] as const;
+export type CitedSiteKind = (typeof CITED_SITE_KINDS)[number];
+
 const text = (max: number) => z.string().trim().min(1).max(max);
 const count = z.number().int().min(0);
 
@@ -56,14 +70,33 @@ export const reportCardPayloadSchema = z.object({
     .min(1),
   /** Competitors by the answers that name them, most first. */
   competitors: z.array(z.object({ name: text(100), answers: count })).max(10),
-  /** The sites the answers cite most, by the answers citing them, most first. */
-  /** `competitor`: a competitor's own site (cards made before it was marked have none). */
+  /**
+   * The marketplaces (booking, comparison and listing sites) and the other
+   * businesses the answers named, apart from the competitors; absent on
+   * cards made before 2026-11-04.
+   */
+  marketplaces: z
+    .array(z.object({ name: text(100), answers: count }))
+    .max(5)
+    .optional(),
+  otherNames: z
+    .array(z.object({ name: text(100), answers: count }))
+    .max(5)
+    .optional(),
+  /**
+   * The sites the answers cite most, by the answers citing them, most
+   * first, each with its kind: the company's own, a competitor's, a
+   * marketplace's, or a guide, publication, official source or community
+   * the card may suggest getting onto; null when it couldn't tell.
+   */
   citedSites: z
     .array(
       z.object({
         domain: text(253),
         answers: count,
         own: z.boolean(),
+        kind: z.enum(CITED_SITE_KINDS).nullable().optional(),
+        /** A competitor's own site (cards made before it was marked have none). */
         competitor: z.boolean().optional(),
       }),
     )

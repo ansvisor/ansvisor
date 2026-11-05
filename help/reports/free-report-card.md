@@ -17,9 +17,13 @@ The free AI visibility report card is a one-time snapshot you can ask for on the
 
 - **AI visibility**: the share of the answers that name your brand or your site.
 - The same share for each engine.
-- The competitors the answers named most, and the sites they cite, with yours marked.
+- The competitors the answers named most, and the sites they cite, with yours, your competitors' and marketplaces marked.
 - Three things to do now, and an action plan of four to six steps with the Ansvisor features that work on each. Both are picked from your results by fixed rules.
 - On the last page, every question, grouped by the product it asks about, with how many Google searches a month its keyword gets, whether each engine's answer named you, and the brand named most instead.
+
+## Competitors, marketplaces and where to get mentioned
+
+Only brands a buyer could choose instead of you count as competitors. Marketplaces (booking, comparison and listing sites) and other businesses the answers name are listed apart, and the **Named instead** column on the last page names competitors only. A brand written several ways ("Jolly Tur", "Jolly", "jollytur.com") is counted once. When the card suggests a site to get mentioned on, it picks a guide, a publication, an official source or a community that AI cites, never a competitor's site or a marketplace. A review or complaint site such as Şikayetvar or Trustpilot comes only when none of those is cited, with a different step: check and answer what customers say about you there.
 
 ## Where the questions come from
 

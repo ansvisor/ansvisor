@@ -4,7 +4,7 @@ import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { PLANS } from '@/config/plans';
 import { formatNumber } from '@/lib/format';
 import { helpLine, type HelpLine } from './help-lines';
-import type { ReportCardEngine, ReportCardPayload } from './payload';
+import type { CitedSiteKind, ReportCardEngine, ReportCardPayload } from './payload';
 
 /**
  * What a report card says, worked out from its figures by fixed rules: the
@@ -57,6 +57,156 @@ export function quotedQuestion(question: { text: string; textEn: string | null }
 }
 
 type Missed = ReportCardPayload['missedQuestions'][number];
+
+/**
+ * Words a brand's name may end with that don't tell it apart (server
+ * lib/report-card/analyze.js, kept in step): "Jolly Tur" and "Jolly".
+ */
+const GENERIC_ENDINGS = [
+  'turizm',
+  'tourism',
+  'holidays',
+  'seyahat',
+  'travel',
+  'tours',
+  'tatil',
+  'tour',
+  'tur',
+];
+
+/** One brand under its spellings, as the server counts it (analyze.js brandKey). */
+export function brandKey(name: string): string {
+  let key = name
+    .trim()
+    .toLowerCase()
+    .replace(/ı/g, 'i')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[\s,]+(inc|llc|ltd|gmbh|a\.?s|ltd\.? ?sti|co|corp|company|plc|s\.?a)\.?$/u, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+  const ending = GENERIC_ENDINGS.find((w) => key.endsWith(w) && key.length - w.length >= 4);
+  if (ending) key = key.slice(0, -ending.length);
+  return key;
+}
+
+/** The brand a site's address names: "jollytur.com.tr" is Jolly Tur's. */
+export function siteBrandKey(domain: string): string {
+  const labels = domain
+    .toLowerCase()
+    .replace(/^www\./, '')
+    .split('.')
+    .filter(Boolean);
+  if (labels.length < 2) return brandKey(labels[0] ?? '');
+  const second =
+    labels.length >= 3 &&
+    labels[labels.length - 2].length <= 3 &&
+    labels[labels.length - 1].length === 2;
+  return brandKey(labels[labels.length - (second ? 3 : 2)]);
+}
+
+/** The kinds of site a card may suggest getting onto: never a competitor's or a marketplace's. */
+const TARGET_KINDS = new Set<CitedSiteKind>(['guide', 'publication', 'official', 'community']);
+
+type CitedSite = ReportCardPayload['citedSites'][number];
+
+/**
+ * Review and complaint sites the card knows by name (server
+ * lib/report-card/analyze.js REVIEW_SITES, kept in step): on a card made
+ * before sites were sorted, these are reviews sites.
+ */
+const REVIEW_SITES = [
+  'sikayetvar.com',
+  'trustpilot.com',
+  'tripadvisor.com',
+  'tripadvisor.com.tr',
+  'tripadvisor.co.uk',
+  'g2.com',
+  'capterra.com',
+  'getapp.com',
+  'trustradius.com',
+  'yelp.com',
+  'reviews.io',
+  'sitejabber.com',
+  'productreview.com.au',
+  'glassdoor.com',
+];
+
+/** A cited site's kind: as sorted, or a known reviews site on an older card. */
+function kindOf(site: CitedSite): CitedSiteKind | null {
+  const domain = site.domain.toLowerCase().replace(/^www\./, '');
+  if (!site.own && REVIEW_SITES.some((r) => domain === r || domain.endsWith(`.${r}`))) {
+    return 'reviews';
+  }
+  return site.kind ?? null;
+}
+
+/**
+ * Whether the card may suggest getting onto a cited site: a guide,
+ * publication, official source or community. A card made before sites were
+ * sorted suggests any site that isn't the company's and whose address
+ * doesn't name a competitor or marketplace the answers named.
+ */
+export function isTargetSite(site: CitedSite, card: ReportCardPayload): boolean {
+  if (site.own || site.competitor) return false;
+  const kind = kindOf(site);
+  if (kind) return TARGET_KINDS.has(kind);
+  if (card.citedSites.some((s) => s.kind)) return false;
+  const brands = new Set(
+    [...card.competitors, ...(card.marketplaces ?? [])].map((c) => brandKey(c.name)),
+  );
+  return !brands.has(siteBrandKey(site.domain)) && !competitorSite(site.domain, card.competitors);
+}
+
+/**
+ * The site the card suggests working on: the guide, publication, official
+ * source or community AI cites most; else the reviews site it cites most,
+ * whose step is to answer what customers say (owner review 2026-11-04).
+ */
+export function targetSite(card: ReportCardPayload): CitedSite | null {
+  return (
+    card.citedSites.find((s) => isTargetSite(s, card)) ??
+    card.citedSites.find((s) => !s.own && kindOf(s) === 'reviews') ??
+    null
+  );
+}
+
+/** What a target site's step says, by its kind. */
+function targetWin(site: CitedSite, company: string, answers: number): QuickWin {
+  const domain = clip(site.domain, NAME_MAX);
+  const cited = `AI engines cite it in ${site.answers} of ${answers} answers about your market.`;
+  switch (kindOf(site)) {
+    case 'reviews':
+      return {
+        title: `Check and answer what customers say about ${company} on ${domain}`,
+        detail: `A reviews site: ${cited} Replies to reviews and complaints, and a complete profile, are what they read about you.`,
+      };
+    case 'guide':
+      return {
+        title: `Get ${company} reviewed or listed on ${domain}`,
+        detail: `A review and guide site: ${cited} A listing or a review there gives them a source that names you.`,
+      };
+    case 'publication':
+      return {
+        title: `Pitch ${domain} a story or an expert comment`,
+        detail: `A publication: ${cited} An article or a quote there is a source they trust.`,
+      };
+    case 'official':
+      return {
+        title: `Make sure ${domain} lists ${company} correctly`,
+        detail: `An official source: ${cited} Your registrations, memberships and licences listed there are facts they repeat.`,
+      };
+    case 'community':
+      return {
+        title: `Answer questions about your market on ${domain}`,
+        detail: `A community: ${cited} Helpful, open answers from your team are what gets quoted.`,
+      };
+    default:
+      return {
+        title: `Get ${company} mentioned on ${domain}`,
+        detail: `${cited} A mention or a listing there puts you in front of them.`,
+      };
+  }
+}
 
 /** A name as compared: lower case, without accents or punctuation. */
 const nameKey = (name: string) =>
@@ -129,7 +279,8 @@ function listOf(names: readonly string[]): string {
 
 /**
  * Three things to do now, the first that apply in this order: answer the
- * question competitors win, get onto the site AI cites most, make your own
+ * question competitors win, get onto the guide, publication, official source
+ * or community AI cites most, make your own
  * pages citable, close the gap on the leading competitor, and work on the
  * engine that names you least.
  */
@@ -164,16 +315,9 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
     });
   }
 
-  // Not the company's own site, nor a competitor's: a listing there helps no one.
-  const thirdParty = card.citedSites.find(
-    (s) => !s.own && !s.competitor && !competitorSite(s.domain, card.competitors),
-  );
-  if (thirdParty) {
-    wins.push({
-      title: `Get ${company} onto ${clip(thirdParty.domain, NAME_MAX)}`,
-      detail: `AI engines cite it in ${thirdParty.answers} of ${answers} answers about your market. A mention or a listing there puts you in front of them.`,
-    });
-  }
+  // A site AI cites that the brand can get onto: never a competitor's or a marketplace's.
+  const target = targetSite(card);
+  if (target) wins.push(targetWin(target, company, answers));
 
   if (percent(card.ownCitations, answers) < 10) {
     wins.push({
