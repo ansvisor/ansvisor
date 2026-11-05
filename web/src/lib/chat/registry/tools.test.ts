@@ -460,9 +460,10 @@ describe('the Chat tool registry', () => {
       ],
       ['actions/content-drafts.suggestDraftChanges', [item, 'Make answer 3 shorter']],
       ['actions/content-drafts.setContentDraftReady', [item]],
-      ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
-      ['actions/cms-send.publishDraftToCms', [item, 'wix']],
-      ['actions/cms-send.sendDraftToWebhook', [item]],
+      // Outside an agent run's chat, no run is named (00480).
+      ['actions/cms-send.sendDraftToCms', [item, 'wordpress', null]],
+      ['actions/cms-send.publishDraftToCms', [item, 'wix', null]],
+      ['actions/cms-send.sendDraftToWebhook', [item, null]],
       [
         'actions/reports.createReport',
         [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
@@ -478,6 +479,32 @@ describe('the Chat tool registry', () => {
           },
         ],
       ],
+    ]);
+  });
+
+  it('names the agent run whose card the person clicked to send or publish a page (00480)', async () => {
+    const item = FIXTURE_IDS.item;
+    const inRun = {
+      ...ctx,
+      chat: {
+        conversationId: 'conv-1',
+        runId: 'run-1',
+        agentRunId: 'agent-run-1',
+        approvalKey: 'step-1',
+        executionMode: 'assisted' as const,
+      },
+    };
+    const click = (name: string, input: unknown) => {
+      const tool = chatTool_(name);
+      return tool.run(inRun, tool.inputSchema.parse(input));
+    };
+    await click('push_cms_draft', { draft_id: item, destination: 'webflow' });
+    await click('publish_cms', { draft_id: item, destination: 'wordpress' });
+    await click('trigger_content_webhook', { draft_id: item });
+    expect(calls.map((call) => [call.from, call.args])).toEqual([
+      ['actions/cms-send.sendDraftToCms', [item, 'webflow', 'agent-run-1']],
+      ['actions/cms-send.publishDraftToCms', [item, 'wordpress', 'agent-run-1']],
+      ['actions/cms-send.sendDraftToWebhook', [item, 'agent-run-1']],
     ]);
   });
 

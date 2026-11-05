@@ -58,6 +58,12 @@ Click **Open** or the agent's name. The top shows its state, its owner, whether 
 
 On the right, **Access**, **Scope** and **AI use** show who owns it, what it may reach and its limits.
 
+## What a run's outcome means
+
+A run's **Outcome** in **Run history** shows what the pages it took live did in AI answers, measured as in **What Ansvisor did for you**. A page counts for the run once it is live, when the agent sent or published it on its own, or when you approved sending or publishing it on a card in the run's chat. A page you send or publish later from the Content Editor or the Library counts as yours, not the agent's.
+
+A run that took nothing live shows "—". Once the run has ended and one of its pages is live, it shows **Pending**. Day 14 gives the first verdict, such as **Improved** or **No meaningful change**, and days 30 and 90 can change it. A finished run is never **Improved** by itself.
+
 ## Run, pause and archive
 
 Admins and Managers see the buttons they may use:
