@@ -405,7 +405,7 @@ describe('AgentForm: new agent', () => {
   it("offers the focus areas' seven skills after the fourteen, needing no connection", async () => {
     await render();
     const skills = all('[data-skill]').map((b) => b.getAttribute('data-skill'));
-    expect(skills).toHaveLength(22);
+    expect(skills).toHaveLength(24);
     expect(skills.slice(14, 21)).toEqual([
       'questions',
       'features',
