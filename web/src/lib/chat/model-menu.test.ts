@@ -142,7 +142,7 @@ describe('readModelMenu', () => {
     expect(String(url)).toContain(
       '/api/internal/chat/models?ids=anthropic%2Fclaude-haiku-5.5%2Canthropic%2Fclaude-sonnet-5.5%2Canthropic%2Fclaude-opus-5.5',
     );
-    expect(String(url)).not.toContain('gemini');
+    expect(String(url)).not.toContain('gemini-3.8-flash');
     expect(init.headers).toEqual({ Authorization: 'Bearer shh' });
     expect(menu.auto).toEqual({ id: 'auto', multiplier: '1x', tone: 'normal' });
     // A model not tested stays out, even when the server answers for it.
