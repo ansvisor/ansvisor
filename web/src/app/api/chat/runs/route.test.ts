@@ -17,6 +17,8 @@ const state = vi.hoisted(() => ({
   reads: 0,
   /** The chat's row, as the demo check reads its brand. */
   chat: null as { brand_id: string } | null,
+  /** The run's row, as the demo check of a card reads its chat. */
+  run: null as { conversation_id: string } | null,
   /** The brand's row, as readBrandIsDemo reads it. */
   brand: { is_demo: false },
 }));
@@ -41,9 +43,11 @@ vi.mock('@/lib/supabase/admin', () => ({
           data:
             table === 'chat_conversations'
               ? state.chat
-              : table === 'brands'
-                ? state.brand
-                : { organization_id: state.org },
+              : table === 'chat_runs'
+                ? state.run
+                : table === 'brands'
+                  ? state.brand
+                  : { organization_id: state.org },
           error: null,
         }),
       };
@@ -100,6 +104,7 @@ beforeEach(() => {
   state.user = { id: 'user-1', email: 'me@example.com' };
   state.org = ORG;
   state.chat = null;
+  state.run = null;
   state.brand = { is_demo: false };
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
@@ -178,6 +183,17 @@ describe('the run routes', () => {
     });
     expect((await POST(post({ message: 'Hi', brandId: 'own-brand' }))).status).toBe(404);
     expect(engine.startChatRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("answer a card of a run on the demo brand with the server's 402 body, the run left waiting", async () => {
+    // A demo agent's run waiting on its owner (the server's lib/demo/agents.js).
+    state.run = { conversation_id: '44444444-4444-4444-8444-444444444444' };
+    state.chat = { brand_id: 'demo-brand' };
+    state.brand = { is_demo: true };
+    const res = await APPROVE(post({ n: 2, digest: 'd'.repeat(64) }), params(RUN));
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ ok: false, code: 'demo_brand' });
+    expect(engine.prepareResume).not.toHaveBeenCalled();
   });
 
   it('stream the run as Server-Sent Events, its ids in headers only', async () => {

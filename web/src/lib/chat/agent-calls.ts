@@ -136,7 +136,9 @@ async function readAgentRunRow(agentRunId: string): Promise<CallerRun | null> {
 /**
  * The agents an agent run may run now (CHAT-27 item 14): its version's Can
  * call, those still on (active) in its workspace, never its own agent, by
- * name. None for a run that was itself called (no chains).
+ * name. None for a run that was itself called (no chains). Never the demo
+ * brand's sample agents (00475), even one a Can call named before: nothing
+ * runs them, as Run agent's picker (runnableAgents) leaves them out.
  */
 export async function callableAgentsOf(
   agentRunId: string,
@@ -159,6 +161,7 @@ export async function callableAgentsOf(
     .select('id, name, status')
     .eq('organization_id', run.organization_id)
     .eq('status', 'active')
+    .is('demo_brand_id', null)
     .in('id', ids);
   if (agentsError) throw new Error(`Could not read the agents: ${agentsError.message}`);
   const found = new Map(

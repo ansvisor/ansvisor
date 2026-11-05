@@ -141,9 +141,13 @@ export function renderWentLiveEmail({
   const cms = CMS_NAMES[target] ?? target;
   const origin = appOrigin();
   const site = kind === 'publish' && url ? siteOf(url) : null;
+  // A webhook send (PR 11): the workspace's workflow takes it from there, and Ansvisor can't take it back.
+  const webhook = kind === 'webhook';
   const subject = site
     ? `${agent} published “${title}” on ${site}`
-    : `${agent} sent “${title}” to ${cms} as a draft`;
+    : webhook
+      ? `${agent} sent “${title}” to your webhook`
+      : `${agent} sent “${title}” to ${cms} as a draft`;
   const html = frame(
     escapeHtml(subject),
     site
@@ -151,10 +155,15 @@ export function renderWentLiveEmail({
           `${escapeHtml(agent)} published the ${escapeHtml(brand)} page “${escapeHtml(title)}” on ${escapeHtml(site)} through ${escapeHtml(cms)}, without a click. An Admin allowed this agent to publish and send on its own.`,
           'It passed Quality and your brand facts first. It is live now: check it, and if it shouldn’t be, use Take down on its notice in your Chat Inbox.',
         ]
-      : [
-          `${escapeHtml(agent)} sent the ${escapeHtml(brand)} page “${escapeHtml(title)}” to ${escapeHtml(cms)} as a draft, without a click. An Admin allowed this agent to publish and send on its own.`,
-          `It passed Quality and your brand facts first. Nothing is live yet: the page waits in ${escapeHtml(cms)} as a draft.`,
-        ],
+      : webhook
+        ? [
+            `${escapeHtml(agent)} sent the ${escapeHtml(brand)} page “${escapeHtml(title)}” to your webhook, without a click. An Admin allowed this agent to publish and send on its own.`,
+            'It passed Quality and your brand facts first. Ansvisor can’t take a webhook send back: your workflow decides what happens to it.',
+          ]
+        : [
+            `${escapeHtml(agent)} sent the ${escapeHtml(brand)} page “${escapeHtml(title)}” to ${escapeHtml(cms)} as a draft, without a click. An Admin allowed this agent to publish and send on its own.`,
+            `It passed Quality and your brand facts first. Nothing is live yet: the page waits in ${escapeHtml(cms)} as a draft.`,
+          ],
     [
       site
         ? `<a href="${escapeHtml(url)}" style="${BUTTON}">Open the live page</a>`

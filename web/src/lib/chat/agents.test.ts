@@ -1495,3 +1495,116 @@ describe('brand access (Selected brands)', () => {
     expect(await agents.listAgentRuns(admin, mine.id, 50)).toHaveLength(3);
   });
 });
+
+describe('the demo brand’s sample agents (00475)', () => {
+  const DEMO_AGENT = '88888888-8888-4888-8888-000000000475';
+  beforeEach(() => {
+    db.tables.chat_agents.push({
+      id: DEMO_AGENT,
+      organization_id: ORG,
+      name: 'Brewline visibility watch',
+      status: 'active',
+      paused_reason: null,
+      owner_id: PEOPLE.admin,
+      visibility: 'workspace',
+      version: 1,
+      fail_count: 0,
+      max_run_share: 0.1,
+      max_month_share: null,
+      created_by: PEOPLE.admin,
+      created_at: NOW.toISOString(),
+      updated_at: NOW.toISOString(),
+      activated_at: NOW.toISOString(),
+      archived_at: null,
+      demo_brand_id: DEMO,
+    });
+    db.tables.chat_agent_versions.push({
+      agent_id: DEMO_AGENT,
+      version: 1,
+      skill_ids: ['report'],
+      instructions: null,
+      mode: 'auto',
+      connections: [],
+      model: 'auto',
+      effort: 'normal',
+      scope: { brand_ids: [DEMO] },
+      notify_user_ids: [],
+      followup_days: 14,
+      created_at: NOW.toISOString(),
+    });
+  });
+
+  it('shows one, but never changes, runs or copies it: the plans instead', async () => {
+    const admin = await ctxOf(PEOPLE.admin);
+    for (const act of ['edit', 'pause', 'archive', 'duplicate', 'run', 'takeOver'] as const) {
+      expect(await agents.agentForAct(admin, DEMO_AGENT, act), act).toMatchObject({
+        ok: false,
+        refusal: { status: 402, code: 'demo_brand' },
+      });
+    }
+    expect(await agents.changeAgentState(admin, DEMO_AGENT, 'pause')).toMatchObject({
+      ok: false,
+      refusal: { code: 'demo_brand' },
+    });
+    expect(rows('chat_agents').find((a) => a.id === DEMO_AGENT)).toMatchObject({
+      status: 'active',
+    });
+    expect(await agents.readAgent(admin, DEMO_AGENT, NOW)).not.toBeNull();
+  });
+
+  it('leaves it out of the plan’s active agents and of what may run', async () => {
+    db.tables.organizations[0] = { ...db.tables.organizations[0], plan: 'starter' };
+    const manager = await ctxOf(PEOPLE.manager);
+    const ids: string[] = [];
+    for (let i = 0; i < 5; i++) ids.push((await create(PEOPLE.manager, { name: `Agent ${i}` })).id);
+    // Five of Starter's five, with the demo's agent active beside them.
+    for (const id of ids)
+      expect((await agents.changeAgentState(manager, id, 'activate')).ok).toBe(true);
+
+    const workspace = await agents.listAgents(manager, { view: 'workspace' }, NOW);
+    expect(workspace.agents.map((a) => a.name)).toContain('Brewline visibility watch');
+    expect(workspace).toMatchObject({ active: 5, activeInWorkspace: 5, activeLimit: 5 });
+    expect((await agents.runnableAgents(manager)).map((a) => a.row.id)).not.toContain(DEMO_AGENT);
+  });
+
+  it('never lets Can call name it, not even one stored before: the save is refused', async () => {
+    const admin = await ctxOf(PEOPLE.admin);
+    const named = await agents.createAgent(
+      admin,
+      input({ name: 'Caller', canCall: [DEMO_AGENT] }),
+      NOW,
+    );
+    expect(named).toMatchObject({
+      ok: false,
+      refusal: {
+        status: 400,
+        code: 'demo_agent',
+        message: expect.stringContaining('sample agent of the demo brand'),
+      },
+    });
+    expect(rows('chat_agents').map((a) => a.name)).not.toContain('Caller');
+
+    // One a Can call stored before (picked when nothing refused it): a change keeping it is refused.
+    const faq = (await create(PEOPLE.admin, { name: 'FAQ writer' })).id;
+    const caller = await create(PEOPLE.admin, { name: 'Weekly report' });
+    rows('chat_agent_versions').find((v) => v.agent_id === caller.id)!.can_call = [DEMO_AGENT];
+    expect(
+      await agents.updateAgent(
+        admin,
+        caller.id,
+        updateAgentInput.parse({ canCall: [DEMO_AGENT, faq], expectedVersion: 1 }),
+        NOW,
+      ),
+    ).toMatchObject({ ok: false, refusal: { code: 'demo_agent' } });
+    expect(rows('chat_agent_versions').filter((v) => v.agent_id === caller.id)).toHaveLength(1);
+    // Taking it out saves.
+    expect(
+      await agents.updateAgent(
+        admin,
+        caller.id,
+        updateAgentInput.parse({ canCall: [], expectedVersion: 1 }),
+        NOW,
+      ),
+    ).toMatchObject({ ok: true });
+  });
+});

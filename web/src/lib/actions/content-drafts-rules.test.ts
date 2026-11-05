@@ -12,6 +12,7 @@ vi.mock('@/lib/action-center/assignees', () => ({ readAssignees: vi.fn(async () 
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => ({
+    auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     from: () => {
       const call = {
         op: 'select',

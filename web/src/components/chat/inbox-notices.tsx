@@ -195,7 +195,8 @@ const TAKE_DOWN_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * An agent sent a page out on its own (AUTONOMOUS-GO-LIVE §6.4): what, to
- * which CMS, as a draft there; Open page, and Open run beside why it could.
+ * which CMS, as a draft there, or to the brand's webhook, which Ansvisor
+ * can't take back (PR 11); Open page, and Open run beside why it could.
  */
 function WentLiveRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_went_live' }> }) {
   const t = useTranslations('chatShell.inbox.notice');
@@ -211,9 +212,12 @@ function WentLiveRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_we
   const live = notice.url !== null && !takenDown;
   // Take down (PR 10): an Admin's or a Manager's click, never the agent's.
   const canTakeDown = live && recent && (role === 'admin' || role === 'manager');
+  const webhook = notice.target === 'webhook';
   const words = site
     ? t('published', { agent: notice.agent, title: notice.title, site })
-    : t('wentLive', { agent: notice.agent, title: notice.title, cms });
+    : webhook
+      ? t('sentToWebhook', { agent: notice.agent, title: notice.title })
+      : t('wentLive', { agent: notice.agent, title: notice.title, cms });
   return (
     <div
       data-slot="inbox-notice"
@@ -225,13 +229,21 @@ function WentLiveRow({ notice }: { notice: Extract<ChatNotice, { kind: 'agent_we
         <span className={cn('block truncate', !notice.read && 'font-semibold')} title={words}>
           {words}
         </span>
-        <span className="block truncate text-xs text-muted-foreground">
+        {/* A webhook send's line wraps: what can't be taken back, and Open run, stay readable. */}
+        <span
+          className={cn(
+            'block text-xs text-muted-foreground',
+            webhook ? 'text-pretty' : 'truncate',
+          )}
+        >
           {/* The headline may be cut on a long title: the site it went live on stays readable. */}
           {takenDown
             ? t('takenDown', { cms })
             : site
               ? t('publishedDetail', { site })
-              : t('wentLiveDetail')}
+              : webhook
+                ? t('sentToWebhookDetail')
+                : t('wentLiveDetail')}
           {notice.chatId && (
             <>
               {' · '}

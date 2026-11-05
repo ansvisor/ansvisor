@@ -39,6 +39,8 @@ import { AiUsageMeter } from '@/components/ai-usage/ai-usage-meter';
 import { RunsTray } from '@/components/agentic/runs-tray';
 import { StatusPill } from '@/components/agentic/status-pill';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
+import { useChatPanel } from '@/components/chat/panel/chat-panel-context';
+import { chatShortcutOf } from '@/components/chat/chat-shortcuts';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -467,6 +469,9 @@ export function DraftEditor({
   const [status, setStatus] = useState(draft.status);
   // With the new Chat on, the header speaks Chat's language: the page's pill and the runs tray.
   const chatOn = useChatAgentic();
+  // Chat beside the page, first in the side panel (CHAT-25 §5, W4-16), with the panel's setup.
+  const chatPanel = useChatPanel();
+  const chatTab = chatOn && chatPanel !== null;
   // Where the page is live (CE-013), and Mark published open.
   const [liveUrl, setLiveUrl] = useState(draft.publishedUrl);
   const [askLive, setAskLive] = useState(false);
@@ -638,6 +643,21 @@ export function DraftEditor({
       ...(source ? { source: { kind: source.kind, ref: source.ref } } : {}),
     }));
   };
+  // Ctrl J (⌘J) opens Chat beside the page, as it opens Chat's side panel on other pages (W4-16).
+  const openChatTab = useRef(() => {});
+  useEffect(() => {
+    openChatTab.current = () => openPanelTab('chat');
+  });
+  useEffect(() => {
+    if (!chatTab) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (chatShortcutOf(event) !== 'panel') return;
+      event.preventDefault();
+      openChatTab.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [chatTab]);
   const onSource = useRef<(source: SuggestionSource) => void>(() => {});
 
   const editor = useEditor({
@@ -1780,6 +1800,19 @@ export function DraftEditor({
       })
       .catch((err) => console.error('Failed to read the agent suggestions:', err));
   }, [editor, draft.id]);
+
+  // Suggestions the Content Agent left for a request in the Chat tab (W4-14, W4-16): read, as
+  // after Fix open rules.
+  const readChatSuggestions = useCallback(() => {
+    void getDraftSuggestions(draft.id)
+      .then((read) => {
+        setSuggestions(read);
+        setBarClosed(false);
+        // A new batch: History keeps the page again before its first change.
+        agentBeforeKept.current = false;
+      })
+      .catch((err) => console.error('Failed to read the agent suggestions:', err));
+  }, [draft.id]);
 
   // What the agent's open result would do to the rules (editor test
   // 2026-10-25: a fix run turned 11 of 15 met into 10, a rewrite 4 open into
@@ -4418,6 +4451,11 @@ export function DraftEditor({
             brandRules={{ rules: brandRules, brandName }}
             reads={reads}
             tabRequest={tabRequest}
+            chat={
+              chatTab
+                ? { conversation: draft.conversation, onSuggestions: readChatSuggestions }
+                : undefined
+            }
             agentFix={agentFix}
             pageRewrite={pageRewrite}
             agentRewrite={agentRewrite}
@@ -4464,7 +4502,7 @@ export function DraftEditor({
             onShoppingPathChange={shoppingCheck.reload}
           />
         ) : (
-          <EditorPanelRail onOpen={openPanelTab} />
+          <EditorPanelRail onOpen={openPanelTab} chat={chatTab} />
         )}
       </div>
 

@@ -40,8 +40,9 @@ export function nextPanelSize(
 
 /**
  * Where the person is, for the panel: on Chat's own routes `Ctrl J` goes to
- * the composer; the Content Editor has its own Chat (CHAT-15); every other
- * app page has the panel. The path is the app's, without the locale.
+ * the composer; the Content Editor has its own Chat, its side panel's Chat
+ * tab, which `Ctrl J` opens there (CHAT-15, W4-16); every other app page has
+ * the panel. The path is the app's, without the locale.
  */
 export function panelRouteOf(pathname: string): 'chat' | 'editor' | 'page' {
   if (pathname === '/dashboard/chat' || pathname.startsWith('/dashboard/chat/')) return 'chat';
