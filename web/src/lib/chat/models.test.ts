@@ -48,4 +48,12 @@ describe('CHAT_MODELS', () => {
       expect(CHAT_MODELS.find((model) => model.id === id)?.provider, id).toBe('openrouter');
     }
   });
+
+  it('offers Gemini 4 Argon, which passed the test set twice in a row (2026-11-03)', () => {
+    const offered = OFFERED_MODELS.map((model) => model.id);
+    for (const id of ['google/gemini-4-argon']) {
+      expect(offered, id).toContain(id);
+      expect(CHAT_MODELS.find((model) => model.id === id)?.provider, id).toBe('openrouter');
+    }
+  });
 });

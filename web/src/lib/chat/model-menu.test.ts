@@ -55,7 +55,7 @@ const answer = (body: unknown, status = 200) =>
   fetchMock.mockResolvedValue(new Response(JSON.stringify(body), { status }));
 
 describe('the offered models', () => {
-  it('are the tested ones only: Haiku and Sonnet 5.5 at launch, Opus 5.5 since its test run, and GPT-6.1 Sol, Terra and Luna since their test runs', () => {
+  it('are the tested ones only: Haiku and Sonnet 5.5 at launch, Opus 5.5 since its test run, and GPT-6.1 Sol, Terra, Luna and Gemini 4 Argon since their test runs', () => {
     expect(OFFERED_MODELS.map((m) => [m.id, m.api])).toEqual([
       ['anthropic/claude-haiku-5.5', 'claude-haiku-5-5'],
       ['anthropic/claude-sonnet-5.5', 'claude-sonnet-5-5'],
@@ -63,6 +63,7 @@ describe('the offered models', () => {
       ['openai/gpt-6.1-sol', 'openai/gpt-6.1-sol'],
       ['openai/gpt-6.1-terra', 'openai/gpt-6.1-terra'],
       ['openai/gpt-6-luna', 'openai/gpt-6-luna'],
+      ['google/gemini-4-argon', 'google/gemini-4-argon'],
     ]);
     expect(OFFERED_MODELS).toEqual(CHAT_MODELS.filter((m) => m.tested));
     expect(OFFERED_MODELS.every((m) => m.tested)).toBe(true);
@@ -141,7 +142,7 @@ describe('readModelMenu', () => {
     expect(String(url)).toContain(
       '/api/internal/chat/models?ids=anthropic%2Fclaude-haiku-5.5%2Canthropic%2Fclaude-sonnet-5.5%2Canthropic%2Fclaude-opus-5.5',
     );
-    expect(String(url)).not.toContain('gemini');
+    expect(String(url)).not.toContain('gemini-3.8-flash');
     expect(init.headers).toEqual({ Authorization: 'Bearer shh' });
     expect(menu.auto).toEqual({ id: 'auto', multiplier: '1x', tone: 'normal' });
     // A model not tested stays out, even when the server answers for it.
