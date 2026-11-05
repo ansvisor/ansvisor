@@ -55,6 +55,8 @@ const SETUP: AgentFormSetup = {
   runShareDefault: 0.1,
   takenNames: ['Win back lost citations'],
   ownKeyProvider: null,
+  ownKeyProviders: [],
+  modelChoiceOpen: true,
   timeZone: null,
 };
 
@@ -666,7 +668,7 @@ describe('AgentForm: new agent', () => {
   });
 
   it('says Max per run and Monthly cap apply on the workspace’s own key, measured at list prices', async () => {
-    await render({ ...SETUP, ownKeyProvider: 'anthropic' });
+    await render({ ...SETUP, ownKeyProvider: 'anthropic', ownKeyProviders: ['anthropic'] });
     await toLastStep();
     expect(one('[data-slot="agent-form-key"]')!.textContent).toBe(
       "Runs on your Anthropic key, which Anthropic bills. Max per run and the key's monthly limit still apply.",
@@ -683,6 +685,62 @@ describe('AgentForm: new agent', () => {
     expect(one('#agent-form-note-max-run')!.textContent).toBe(
       messages.chatAgents.form.agent.maxRunNote,
     );
+  });
+
+  it('says which key the chosen model runs on, as the engine picks it', async () => {
+    const keyLine = () => one('[data-slot="agent-form-key"]')!.textContent;
+    const maxRunNote = () => one('#agent-form-note-max-run')!.textContent;
+    const pick = (kind: string) => click(one(`[data-model="${kind}"]`)!);
+    const ownKey = (provider: string) =>
+      `Runs on your ${provider} key, which ${provider} bills. Max per run and the key's monthly limit still apply.`;
+    const { maxRunNote: onLimit, maxRunNoteOwnKey: onOwnKey } = messages.chatAgents.form.agent;
+
+    // Auto runs on the workspace's OpenAI key; Fast and Best writing are Claude, on the AI limit.
+    await render({ ...SETUP, ownKeyProvider: 'openai', ownKeyProviders: ['openai'] });
+    await toLastStep();
+    expect(keyLine()).toBe(ownKey('OpenAI'));
+    expect(maxRunNote()).toBe(onOwnKey);
+    await pick('fast');
+    expect(keyLine()).toBe('Uses your monthly AI limit');
+    expect(maxRunNote()).toBe(onLimit);
+    await pick('writing');
+    expect(keyLine()).toBe('Uses your monthly AI limit');
+    await pick('auto');
+    expect(keyLine()).toBe(ownKey('OpenAI'));
+
+    // An Anthropic key runs them, before an OpenRouter key.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({
+      ...SETUP,
+      ownKeyProvider: 'openai',
+      ownKeyProviders: ['openai', 'openrouter', 'anthropic'],
+    });
+    await toLastStep();
+    await pick('fast');
+    expect(keyLine()).toBe(ownKey('Anthropic'));
+    expect(maxRunNote()).toBe(onOwnKey);
+
+    // Without one, the OpenRouter key runs them.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({ ...SETUP, ownKeyProvider: 'openai', ownKeyProviders: ['openai', 'openrouter'] });
+    await toLastStep();
+    await pick('writing');
+    expect(keyLine()).toBe(ownKey('OpenRouter'));
+
+    // The free trial runs Auto, whatever is picked: on Auto's key.
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({
+      ...SETUP,
+      ownKeyProvider: 'openai',
+      ownKeyProviders: ['openai'],
+      modelChoiceOpen: false,
+    });
+    await toLastStep();
+    await pick('fast');
+    expect(keyLine()).toBe(ownKey('OpenAI'));
   });
 
   it('moves with the keyboard: arrows choose a skill, each step opens on its title, a problem takes the focus', async () => {

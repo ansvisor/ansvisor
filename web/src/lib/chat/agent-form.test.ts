@@ -6,6 +6,8 @@ import {
   firstStepWithProblems,
   formFromAgent,
   formFromPreset,
+  FAST_MODEL,
+  modelKeyProvider,
   newForm,
   newTriggerDraft,
   patchBody,
@@ -16,6 +18,7 @@ import {
   syncConnections,
   triggerError,
   triggerInputOf,
+  WRITING_MODEL,
   type AgentFormSetup,
   type AgentFormState,
   type FormContext,
@@ -51,6 +54,8 @@ const SETUP: AgentFormSetup = {
   runShareDefault: 0.1,
   takenNames: [],
   ownKeyProvider: null,
+  ownKeyProviders: [],
+  modelChoiceOpen: true,
   timeZone: null,
 };
 
@@ -560,5 +565,42 @@ describe('the server’s refusals', () => {
     expect(refusalPlace('plan_locked', 'canCall')).toEqual({ step: 3, field: 'form' });
     expect(refusalPlace('version_conflict', null)).toEqual({ step: 3, field: 'form' });
     expect(refusalPlace(null, null)).toEqual({ step: 3, field: 'form' });
+  });
+});
+
+describe('the key the chosen model runs on', () => {
+  const keyOf = (model: string, over: Partial<AgentFormSetup> = {}) =>
+    modelKeyProvider(model, { ...SETUP, ...over });
+
+  it('runs Auto on the key Auto runs on, else on the monthly AI limit', () => {
+    expect(keyOf('auto', { ownKeyProvider: 'openai', ownKeyProviders: ['openai'] })).toBe('openai');
+    expect(keyOf('auto')).toBeNull();
+  });
+
+  it('runs a picked model on the own key for its provider', () => {
+    const anthropic = { ownKeyProvider: 'openai', ownKeyProviders: ['openai', 'anthropic'] };
+    expect(keyOf(FAST_MODEL, anthropic)).toBe('anthropic');
+    expect(keyOf(WRITING_MODEL, anthropic)).toBe('anthropic');
+    // Before the OpenRouter key, when both are saved.
+    expect(keyOf(FAST_MODEL, { ownKeyProviders: ['openrouter', 'anthropic'] })).toBe('anthropic');
+  });
+
+  it('runs a picked model on the own OpenRouter key when its provider has none', () => {
+    expect(
+      keyOf(FAST_MODEL, { ownKeyProvider: 'openai', ownKeyProviders: ['openai', 'openrouter'] }),
+    ).toBe('openrouter');
+  });
+
+  it('runs a picked model on the AI limit when no own key runs it, even where Auto runs on one', () => {
+    const openai = { ownKeyProvider: 'openai', ownKeyProviders: ['openai'] };
+    expect(keyOf(FAST_MODEL, openai)).toBeNull();
+    expect(keyOf(WRITING_MODEL, openai)).toBeNull();
+    expect(keyOf('anthropic/claude-opus-5.5', openai)).toBeNull();
+  });
+
+  it('runs Auto’s key where the engine runs Auto: the free trial, and a model no longer offered', () => {
+    const openai = { ownKeyProvider: 'openai', ownKeyProviders: ['openai'] };
+    expect(keyOf(FAST_MODEL, { ...openai, modelChoiceOpen: false })).toBe('openai');
+    expect(keyOf('openai/gpt-4o', openai)).toBe('openai');
   });
 });
