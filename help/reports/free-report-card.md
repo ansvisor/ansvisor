@@ -4,14 +4,14 @@ route: /dashboard/insights
 keywords: [report card, free report card, ai visibility report, report card pdf, value table, revenue scenario]
 synonyms: [free audit from the website, the pdf you e-mailed me, visibility report card, free ai report]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-04
+last_checked: 2026-11-04
 owner: Cihan
 app_version: 0.3.0
 approved: false
 sources: [docs/api-reference/report-card.mdx]
 ---
-The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor writes 25 questions your buyers might ask from your home page, asks each one once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once.
+The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 25 that match what you sell best and that people search for most, asks each one once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once.
 
 ## What the card measured
 
@@ -19,7 +19,11 @@ The free AI visibility report card is a one-time snapshot you can ask for on the
 - The same share for each engine.
 - The competitors the answers named most, and the sites they cite, with yours marked.
 - Three things to do now, and an action plan of four to six steps with the Ansvisor features that work on each. Both are picked from your results by fixed rules.
-- On the last page, all 25 questions, whether each engine's answer named you, and the brand named most instead.
+- On the last page, every question, grouped by the product it asks about, with how many Google searches a month its keyword gets, whether each engine's answer named you, and the brand named most instead.
+
+## Where the questions come from
+
+The card reads your home page: its title, headings and menus. It names your main products or categories from the words on the page, and writes questions only about those. A question that matches what you sell only loosely is never asked: a card asks fewer questions rather than a wrong one. Questions about your products come first, a few from each, the ones whose keyword gets the most Google searches in your country first; questions about a need your buyers also have fill the rest. Years and seasons in the questions follow the card's date: in November, a holiday question is about the coming winter or next summer, never one already past.
 
 The questions and answers stay in your target country's language; the PDF is in English.
 

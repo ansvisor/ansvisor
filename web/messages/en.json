@@ -15521,6 +15521,8 @@
       "emailsFailed": "E-mails not sent"
     },
     "failures": "Latest failures",
-    "noFailures": "No card has failed."
+    "noFailures": "No card has failed.",
+    "checks": "Check by hand",
+    "noChecks": "No card needs checking: every card found enough questions that match its site."
   }
 }

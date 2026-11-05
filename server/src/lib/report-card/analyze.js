@@ -299,6 +299,8 @@ export function summarize(questions, answers, competitors, { companyName, site, 
       return {
         text: q.text,
         textEn: q.textEn,
+        product: q.product ?? null,
+        volume: q.volume ?? null,
         competitors: rivals.map(([key]) => nameOf.get(key)).slice(0, 10),
         answers: answeredBy.get(index) ?? 0,
         main: rivals.filter(([key]) => topThree.has(key)).length,
