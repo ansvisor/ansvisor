@@ -108,6 +108,7 @@ const AGENT_PROMISES: Readonly<
   'task-finisher': { must: ['task_review'], review: ['draft'] },
   'weekly-report': { must: ['report'] },
   'brand-facts-guardian': { must: ['wrong_claim', 'draft_or_action'] },
+  'fanout-gap-filler': { must: ['draft'] },
   'product-answer-pages': { must: ['draft'] },
   'feature-question-coverage': { must: ['draft'] },
   'alternatives-comparison-pages': { must: ['draft'] },
@@ -219,6 +220,11 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
   },
   rivals: { message: 'Give me a rival brief on Northbound Roasters.', must: ['report'] },
   'audit-fix': { message: 'What should we fix first from our site audit?', must: ['list'] },
+  fanout: {
+    message:
+      'Which sub-questions does AI search where we are missing? Draft answers for the top ones and save them as a draft.',
+    must: ['list', 'draft'],
+  },
 };
 
 /** Every skill of the library, called by its /name in a person's own chat, in Auto. */

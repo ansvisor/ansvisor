@@ -97,7 +97,8 @@ vi.mock('@/lib/chat/precedence-context', () => ({
 }));
 vi.mock('./product-visibility', () => ({ merchantCenterOffered: async () => false }));
 
-const { getFanoutsFor, listAiAnswersFor, getPromptInsightsFor } = await import('./prompt-reads');
+const { getFanoutGapsFor, getFanoutsFor, listAiAnswersFor, getPromptInsightsFor } =
+  await import('./prompt-reads');
 const { getOverviewSummaryFor } = await import('./overview-reads');
 const { getActionCenterKpisFor, getOnboardingProgressFor } = await import('./action-center-reads');
 const { getGaSummaryFor, getGscSummaryFor } = await import('./google-reads');
@@ -134,6 +135,7 @@ describe('a brand outside the organization', () => {
     const params = { brandId: 'other' };
     for (const read of [
       getFanoutsFor(auth(), params),
+      getFanoutGapsFor(auth(), params),
       listAiAnswersFor(auth(), { ...params, promptId: 'p1' }),
       getPromptInsightsFor(auth(), params),
       getOverviewSummaryFor(auth(), params),
@@ -189,6 +191,84 @@ describe('Prompts reads', () => {
       sub_queries_total: 1,
       data_as_of: '2026-10-29T06:00:00Z',
     });
+  });
+
+  it('reads the fan-out gaps: sub-queries no answer named the brand in, on the plan’s platforms', async () => {
+    reads.answers.prompt_results = { created_at: '2026-10-29T06:00:00Z' };
+    const sub = (query: string, timesSearched: number, brandAnswers: number, extra = {}) => ({
+      query,
+      engines: ['copilot-web'],
+      timesSearched,
+      sourcedPrompts: [
+        { id: 'p1', text: 'Best CRM for small teams?' },
+        { id: 'p2', text: 'CRM pricing' },
+        { id: 'p3', text: 'CRM for agencies' },
+        { id: 'p4', text: 'CRM with email' },
+      ],
+      tracked: false,
+      trackedPromptId: null,
+      presence: {
+        brandAnswers,
+        rivals: [
+          { name: 'Rival A', answers: 3 },
+          { name: 'Rival B', answers: 2 },
+          { name: 'Rival C', answers: 1 },
+          { name: 'Rival D', answers: 1 },
+        ],
+      },
+      ...extra,
+    });
+    mocks.getQueryFanout.mockResolvedValue({
+      totalObserved: 3,
+      truncated: false,
+      engines: [],
+      promptCoverage: [],
+      subQueries: [
+        sub('crm free trial', 5, 0),
+        sub('best crm', 4, 2),
+        sub('crm setup time', 2, 0, { tracked: true, trackedPromptId: 'p9' }),
+      ],
+    });
+    const gaps = await getFanoutGapsFor(auth(), { brandId: BRAND });
+    // Starter reads ChatGPT and Copilot, and who each answer named comes with the read.
+    expect(mocks.getQueryFanout).toHaveBeenCalledWith(BRAND, {
+      days: 30,
+      presence: true,
+      platforms: ['chatgpt-web', 'copilot-web'],
+    });
+    expect(gaps).toEqual({
+      days: 30,
+      truncated: false,
+      sub_queries_total: 3,
+      gaps_total: 2,
+      gaps: [
+        {
+          query: 'crm free trial',
+          engines: ['copilot-web'],
+          times_searched: 5,
+          tracked: false,
+          from_prompts: [
+            { prompt_id: 'p1', text: 'Best CRM for small teams?' },
+            { prompt_id: 'p2', text: 'CRM pricing' },
+            { prompt_id: 'p3', text: 'CRM for agencies' },
+          ],
+          competitors_named: [
+            { name: 'Rival A', answers: 3 },
+            { name: 'Rival B', answers: 2 },
+            { name: 'Rival C', answers: 1 },
+          ],
+        },
+        expect.objectContaining({ query: 'crm setup time', times_searched: 2, tracked: true }),
+      ],
+      data_as_of: '2026-10-29T06:00:00Z',
+    });
+    // A shorter list when asked, and the window asked for.
+    const one = await getFanoutGapsFor(auth(), { brandId: BRAND, days: 7, limit: 1 });
+    expect(one?.gaps.map((g) => g.query)).toEqual(['crm free trial']);
+    expect(mocks.getQueryFanout).toHaveBeenLastCalledWith(
+      BRAND,
+      expect.objectContaining({ days: 7 }),
+    );
   });
 
   it("gives a prompt's newest answers, shortened, on the plan's platforms", async () => {

@@ -86,6 +86,7 @@ describe('the preset files', () => {
       'task-finisher',
       'weekly-report',
       'brand-facts-guardian',
+      'fanout-gap-filler',
       'product-answer-pages',
       'feature-question-coverage',
       'alternatives-comparison-pages',
@@ -97,7 +98,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(21);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(20);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
@@ -221,6 +222,24 @@ describe('a ready preset', () => {
     expect(body).toContain('"2 of 6 tasks done; the rest go in the next run."');
     expect(body).not.toMatch(/at most four/);
     expect(chatAgents.presets['task-finisher'].description).toContain('finishes two a run');
+  });
+
+  it('fills fan-out gaps as Fan-out Gap Filler: /fanout, then /answerfirst, on Mondays', () => {
+    // AGENTS plan §3 #9: weekly, its new skill then Answer-first rewrite. Auto, as the other
+    // agents that write drafts: a draft never goes live, and saving one asks unless allowed.
+    expect(readyPreset('fanout-gap-filler')).toMatchObject({
+      goal: 'content',
+      skills: ['fanout', 'answerfirst'],
+      triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
+      mode: 'auto',
+      connections: [],
+      needs: [],
+    });
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'fanout')?.body ?? '';
+    expect(body).toContain('`get_fanout_gaps`');
+    expect(body).toContain('`create_draft`');
+    expect(body).toContain('Never say a section will get the brand named or cited');
+    expect(chatAgents.presets['fanout-gap-filler'].description).toContain('answer-first');
   });
 
   it('is found by its id; a soon one, or no id, is not', () => {

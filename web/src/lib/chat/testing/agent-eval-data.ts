@@ -324,6 +324,67 @@ const FANOUTS = {
   ],
 };
 
+/**
+ * The fan-out gaps (get_fanout_gaps): FANOUTS' sub-questions no answer named
+ * the brand in, each with the tracked prompt behind it and the competitors
+ * those answers named instead, the most searched first.
+ */
+const FANOUT_GAPS = [
+  {
+    query: 'coffee subscription reviews',
+    engines: ['Perplexity', 'ChatGPT'],
+    prompt: 0,
+    named: [
+      { name: 'Northbound Roasters', answers: 6 },
+      { name: 'Kettle & Crate', answers: 4 },
+    ],
+  },
+  { query: 'best way to store coffee beans', engines: ['ChatGPT'], prompt: 3, named: [] },
+  {
+    query: 'coffee subscription shipping cost',
+    engines: ['Copilot'],
+    prompt: 7,
+    named: [{ name: 'Daybreak Beans', answers: 3 }],
+  },
+  {
+    query: 'should you freeze coffee beans',
+    engines: ['ChatGPT', 'Perplexity'],
+    prompt: 3,
+    named: [],
+  },
+  {
+    query: 'how fresh is subscription coffee roast date',
+    engines: ['Perplexity'],
+    prompt: 2,
+    named: [{ name: 'Northbound Roasters', answers: 2 }],
+  },
+  {
+    query: 'coffee subscription cancel anytime',
+    engines: ['Gemini'],
+    prompt: 1,
+    named: [{ name: 'Kettle & Crate', answers: 2 }],
+  },
+  {
+    query: 'coffee gift box with grinder',
+    engines: ['Perplexity'],
+    prompt: 4,
+    named: [{ name: 'Morning Ritual Co.', answers: 3 }],
+  },
+  {
+    query: 'can i manage my coffee subscription in an app',
+    engines: ['ChatGPT'],
+    prompt: 1,
+    named: [{ name: 'Kettle & Crate', answers: 1 }],
+  },
+].map(({ query, engines, prompt, named }) => ({
+  query,
+  engines,
+  times_searched: FANOUTS.fanouts.find((f) => f.query === query)?.seen ?? 0,
+  tracked: false,
+  from_prompts: [{ prompt_id: PROMPTS[prompt].id, text: PROMPTS[prompt].text }],
+  competitors_named: named,
+}));
+
 const ANSWERS = {
   ...window,
   answers: [
@@ -778,6 +839,15 @@ export function evalReadResult(tool: string, input: Record<string, unknown>): un
       return { topics: TOPICS };
     case 'get_fanouts':
       return FANOUTS;
+    case 'get_fanout_gaps':
+      return {
+        ...window,
+        days: 30,
+        truncated: false,
+        sub_queries_total: FANOUTS.fanouts.length,
+        gaps_total: FANOUT_GAPS.length,
+        gaps: FANOUT_GAPS,
+      };
     case 'list_ai_answers':
       return ANSWERS;
     case 'get_mentions_summary':
