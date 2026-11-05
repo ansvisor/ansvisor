@@ -323,8 +323,16 @@ describe("step 4b's facts (AUTONOMOUS-GO-LIVE §5.2)", () => {
     const off = await readPrecedenceContext({ ...request, agent: agentRun });
     expect(off).not.toHaveProperty('autoGoLiveOn');
     expect(off).not.toHaveProperty('agent');
-    // Only the one settings read: the switch's own is made while the flag is on.
-    expect(db.reads.filter((read) => read.table === 'chat_settings')).toHaveLength(1);
+    // Only the settings and Agent work (00481) reads: the switch's own is made while the flag
+    // is on.
+    expect(
+      db.reads
+        .filter((read) => read.table === 'chat_settings')
+        .map((read) => (read as { columns?: string }).columns),
+    ).toEqual([
+      'tool_policies, full_auto_for_members, dont_ask_again, manager_execute_off, agents_full_auto',
+      'agent_work',
+    ]);
     vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
     const own = await readPrecedenceContext(request);
     expect(own).toMatchObject({ autoGoLiveOn: true, agent: null });

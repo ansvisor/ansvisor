@@ -436,6 +436,18 @@ function guardedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Res
 function seed() {
   seedWorkspace(db);
   db.unique = { ...db.unique, chat_conversations: [['agent_run_id']] };
+  // Each agent runs in its own mode, as the test set grades it: the workspace's Agent work
+  // lets it (AC-011; "I approve first", the default, would ask before every change).
+  db.tables.chat_settings = [
+    {
+      organization_id: ORG,
+      tool_policies: {},
+      full_auto_for_members: true,
+      dont_ask_again: true,
+      manager_execute_off: [],
+      agent_work: 'auto_start',
+    },
+  ];
   db.tables.brands = [
     {
       id: BRAND,

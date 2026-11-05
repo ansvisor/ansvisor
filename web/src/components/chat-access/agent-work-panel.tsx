@@ -40,7 +40,7 @@ export function AgentWorkPanel({
   return (
     <div className="grid gap-2 text-sm">
       <p className="font-medium">{t('question')}</p>
-      <div role="radiogroup" aria-label={t('question')} className="grid gap-2">
+      <fieldset aria-label={t('question')} className="grid gap-2">
         {AGENT_WORK.map((choice) => {
           const on = picked === choice;
           return (
@@ -77,7 +77,7 @@ export function AgentWorkPanel({
             </label>
           );
         })}
-      </div>
+      </fieldset>
       <p className="text-xs text-muted-foreground">{t('goLive')}</p>
       <p className="text-xs text-muted-foreground">{footer}</p>
       {view.canChange ? (
