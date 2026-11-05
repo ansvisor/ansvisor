@@ -4,12 +4,12 @@ route: /dashboard/agents
 keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent]
 plan: all
-updated: 2026-11-04
-last_checked: 2026-11-04
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts, web/src/lib/chat/agents/catalog.ts, web/src/lib/content/page-types.ts, web/src/lib/menu-access.ts, web/src/lib/chat/agent-go-live.ts, web/src/lib/chat/precedence.ts, web/src/lib/chat/agent-calls.ts, web/src/lib/chat/untrusted.ts]
+sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts, web/src/lib/chat/agents/catalog.ts, web/src/lib/content/page-types.ts, web/src/lib/menu-access.ts, web/src/lib/chat/agent-go-live.ts, web/src/lib/chat/go-live.ts, web/src/lib/chat/precedence.ts, web/src/lib/chat/agent-calls.ts, web/src/lib/chat/untrusted.ts, web/src/lib/chat/key.ts]
 ---
 An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
 
@@ -134,11 +134,11 @@ Once a run has read text from outside your workspace, such as AI answers, citati
 
 ## Let an agent publish on its own
 
-An Admin can let chosen agents publish new pages on Webflow, WordPress and Wix, and send pages to your CMS or webhook, without a click. Two switches must be on: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, with the agent in **Full auto**. Managers see it read-only.
+Where your workspace has it, Admins on Growth and up can let chosen agents publish new pages on Webflow, WordPress and Wix, and send pages to your CMS or webhook, without a click. It takes two switches: **Agents that publish on their own** in **Settings › Chat**, and **Publish and send on its own** on the agent's **Mode & approvals** step, in **Full auto**. Managers see the agent's switch read-only, with **Ask your Admin**.
 
-**At most a day** sets how many pages it may send out on its own in 24 hours, from 1 to 20. A page still waits for your click, and its card says why, when it fails Quality or your approved brand facts, the run read text that tried to instruct it, the page has hidden text or outside links, the page is live already, or the agent reached its limit.
+**At most a day** caps its pages in 24 hours: 1 to 20, 5 by default. A page still waits for your click, and its card says why, when the run read text that tried to instruct it, the agent reached its limit, or the page fails Quality or your approved brand facts, has hidden text or outside links, or is live already.
 
-Changing the agent turns this off until an Admin turns it on again.
+Changing what the agent does turns this off until an Admin allows it again.
 
 ## When an agent sends a page on its own
 
@@ -148,7 +148,7 @@ When an edit turns it off, the Admin who allowed it and the agent's owner get a 
 
 ## On your own AI key
 
-When your workspace runs Chat on its own AI key, agents run on it too. The provider bills your account, and your monthly AI limit doesn't move. **Max per run** and **Monthly cap** still apply: what a run uses is measured at the providers' list prices.
+When your workspace runs Chat on its own AI key, agents on **Auto** run on it too. An agent set to another model, such as **Fast** or **Best writing**, runs on your key for that model's provider first, then on your OpenRouter key, then on your monthly AI limit. On your own key, the provider bills your account, and your monthly AI limit doesn't move. **Max per run** and **Monthly cap** still apply: what a run uses is measured at the providers' list prices.
 
 ## Run an agent from Action Center
 
