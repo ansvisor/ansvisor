@@ -162,6 +162,59 @@ describe('ReportPdfDocument › Site Audit Score', () => {
     expect(text).not.toContain('%');
   });
 
+  it('shows the score’s range from the page’s own audits, and says what it means', async () => {
+    const pdf = await draw(
+      null,
+      withAudit({
+        url: 'https://shop.com/bags',
+        totalScore: 64,
+        previousScore: 62,
+        auditedAt: '2026-10-30T00:00:00Z',
+        scale: 100,
+        range: { plusMinus: 2, low: 62, high: 66, audits: 5 },
+      }),
+    );
+    const text = section(pdf)!.textContent!;
+    expect(text).toContain('64± 2+2');
+    expect(text).toContain(
+      "This page's last 5 audits scored 62 to 66, changes to the page included.",
+    );
+  });
+
+  it('says the audits scored the same when the range is ± 0', async () => {
+    const pdf = await draw(
+      null,
+      withAudit({
+        url: 'https://shop.com/bags',
+        totalScore: 64,
+        previousScore: null,
+        auditedAt: '2026-10-30T00:00:00Z',
+        scale: 100,
+        range: { plusMinus: 0, low: 64, high: 64, audits: 3 },
+      }),
+    );
+    const text = section(pdf)!.textContent!;
+    expect(text).toContain('64± 0');
+    expect(text).toContain("This page's last 3 audits all scored 64.");
+  });
+
+  it('shows no range on a report saved before it', async () => {
+    const pdf = await draw(
+      null,
+      withAudit({
+        url: 'https://shop.com/bags',
+        totalScore: 64,
+        previousScore: 60,
+        auditedAt: '2026-10-30T00:00:00Z',
+        scale: 100,
+      }),
+    );
+    const text = section(pdf)!.textContent!;
+    expect(text).toContain('64+4');
+    expect(text).not.toContain('±');
+    expect(text).not.toContain('audits scored');
+  });
+
   it('shows a report saved on the 0–1 scale as about that many points, with no change', async () => {
     const pdf = await draw(
       null,

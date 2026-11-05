@@ -33,3 +33,18 @@ export function scoreRange(trend: readonly number[] | null | undefined): ScoreRa
   const high = Math.max(...points);
   return { plusMinus: Math.ceil((high - low) / 2), low, high, audits: points.length };
 }
+
+/**
+ * A range handed back as data, such as the one a model passes from
+ * get_site_audit to the Agent's audit card: kept only when scoreRange could
+ * have given it, so a card never shows a range the rule doesn't.
+ */
+export function asScoreRange(value: unknown): ScoreRange | null {
+  if (!value || typeof value !== 'object') return null;
+  const { plusMinus, low, high, audits } = value as Record<string, unknown>;
+  const whole = (n: unknown): n is number => Number.isInteger(n);
+  if (!whole(plusMinus) || !whole(low) || !whole(high) || !whole(audits)) return null;
+  if (audits < SCORE_RANGE.minAudits || audits > SCORE_RANGE.audits) return null;
+  if (low < 0 || high > 100 || low > high || plusMinus !== Math.ceil((high - low) / 2)) return null;
+  return { plusMinus, low, high, audits };
+}

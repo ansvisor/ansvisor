@@ -33,6 +33,7 @@ import type { Report, ReportPromptPerf } from '@/lib/actions/reports';
 import { formatDate } from '@/lib/format';
 import { withInter } from '@/lib/pdf-font';
 import { auditScoreView } from '@/lib/reports/audit-score';
+import type { ScoreRange } from '@/lib/audit/score-range';
 import { reportLook, type ReportBranding } from '@/lib/white-label/kit';
 
 // Word-splitting hyphenation looks broken in tables; wrap whole words only.
@@ -131,6 +132,13 @@ const styles = StyleSheet.create({
   },
   footerText: { fontSize: 7, color: MUTED },
 });
+
+/** What a Site Audit score's "± 2" means, as the audit report's `audit.range` strings say it. */
+function scoreRangeSentence(range: ScoreRange): string {
+  return range.low === range.high
+    ? `This page's last ${range.audits} audits all scored ${range.low}.`
+    : `This page's last ${range.audits} audits scored ${range.low} to ${range.high}, changes to the page included.`;
+}
 
 function DeltaText({
   value,
@@ -686,6 +694,11 @@ export function ReportPdfDocument({
             <Text style={styles.sectionTitle}>Site Audit Score</Text>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
               <Text style={{ fontSize: 18, fontWeight: 700 }}>{auditScore.score}</Text>
+              {auditScore.range && (
+                <Text style={{ fontSize: 10, color: MUTED, marginBottom: 2 }}>
+                  ± {auditScore.range.plusMinus}
+                </Text>
+              )}
               {auditScore.change !== null && (
                 <View style={{ marginBottom: 2 }}>
                   <DeltaText value={auditScore.change} unit="" />
@@ -695,6 +708,11 @@ export function ReportPdfDocument({
                 {payload.auditScore.url} · audited {formatDate(payload.auditScore.auditedAt)}
               </Text>
             </View>
+            {auditScore.range && (
+              <Text style={[styles.cell, { color: MUTED, marginTop: 4 }]}>
+                {scoreRangeSentence(auditScore.range)}
+              </Text>
+            )}
           </View>
         )}
 
