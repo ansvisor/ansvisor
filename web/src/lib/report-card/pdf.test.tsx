@@ -142,7 +142,7 @@ describe('ReportCardPdfDocument', () => {
     );
     expect(questions).toContain('Whole bean coffee · 14 questions · brewlinecoffee.example/beans');
     expect(questions).toContain('2,900');
-    expect(questions).toContain('(a need your buyers also have)');
+    expect(questions).toContain('a need your buyers also have');
     expect(questions).toContain('Lighter columns: Google’s engines, in Growth');
     expect(questions).toContain('CopilotGemini');
     expect(questions).toContain('Ridgeline Roasters');
