@@ -301,7 +301,7 @@ export function buildAgentTools(auth: McpAuthContext) {
 
     get_site_audit: tool({
       description:
-        'Fetch a Site Audit by id — status, total score, per-category scores, evaluated signals, and AI fix recommendations. Use after run_site_audit to poll for the result: while status is "running" the scores are not yet populated; once "completed" (or "failed") the full result is available. Read — no credit consumed.',
+        'Fetch a Site Audit by id — status, total score, the score\'s range, per-category scores, evaluated signals, and AI fix recommendations. scoreRange is "64 ± 2" in the audit report: ± plusMinus points, from the page\'s last `audits` complete audits up to this one, which scored low to high out of 100; null with fewer than 3. Use after run_site_audit to poll for the result: while status is "running" the scores are not yet populated; once "completed" (or "failed") the full result is available. Read — no credit consumed.',
       inputSchema: z.object({
         audit_id: z.string().uuid(),
       }),
@@ -369,6 +369,19 @@ export function buildAgentTools(auth: McpAuthContext) {
         url: z.string().describe('The URL that was audited.'),
 
         totalScore: z.number().nullable().describe('The overall Site Audit score.'),
+
+        scoreRange: z
+          .object({
+            plusMinus: z.number(),
+            low: z.number(),
+            high: z.number(),
+            audits: z.number(),
+          })
+          .nullable()
+          .optional()
+          .describe(
+            "The score's range, as get_site_audit returns it (scoreRange); null when it's null.",
+          ),
 
         categoryScores: z.record(z.string(), z.unknown()).describe('Per-category audit scores.'),
 

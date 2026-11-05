@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { SCORE_RANGE, scoreRange } from './score-range';
+import { SCORE_RANGE, asScoreRange, scoreRange } from './score-range';
 
 describe('scoreRange', () => {
   it('needs the minimum number of audits: none with one or two', () => {
@@ -40,5 +40,31 @@ describe('scoreRange', () => {
     // A fix lifted the page from 45 to 70: the jump stays in the range for five audits.
     expect(scoreRange([0.45, 0.46, 0.7])).toEqual({ plusMinus: 13, low: 45, high: 70, audits: 3 });
     expect(scoreRange([0.45, 0.46, 0.7, 0.7, 0.7, 0.7, 0.7])?.plusMinus).toBe(0);
+  });
+});
+
+describe('asScoreRange', () => {
+  it('keeps a range scoreRange could have given', () => {
+    expect(asScoreRange({ plusMinus: 2, low: 62, high: 66, audits: 5 })).toEqual({
+      plusMinus: 2,
+      low: 62,
+      high: 66,
+      audits: 5,
+    });
+    expect(asScoreRange({ plusMinus: 0, low: 64, high: 64, audits: 3 })?.plusMinus).toBe(0);
+  });
+
+  it('drops one that is missing or that the rule could not give', () => {
+    expect(asScoreRange(undefined)).toBeNull();
+    expect(asScoreRange(null)).toBeNull();
+    expect(asScoreRange('± 2')).toBeNull();
+    // Not half the gap, rounded up.
+    expect(asScoreRange({ plusMinus: 4, low: 62, high: 66, audits: 5 })).toBeNull();
+    // Too few or too many audits, scores out of order or off the scale, or not whole points.
+    expect(asScoreRange({ plusMinus: 2, low: 62, high: 66, audits: 2 })).toBeNull();
+    expect(asScoreRange({ plusMinus: 2, low: 62, high: 66, audits: 6 })).toBeNull();
+    expect(asScoreRange({ plusMinus: 2, low: 66, high: 62, audits: 5 })).toBeNull();
+    expect(asScoreRange({ plusMinus: 1, low: 0.62, high: 0.64, audits: 5 })).toBeNull();
+    expect(asScoreRange({ plusMinus: 1, low: 99, high: 101, audits: 5 })).toBeNull();
   });
 });

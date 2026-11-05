@@ -608,7 +608,8 @@ export const READ_TOOLS = [
     name: 'list_site_audit_issues',
     class: 'read',
     area: 'site_audit',
-    description: 'One Site Audit in full: its score and every check, passed or failed.',
+    description:
+      'One Site Audit in full: its score and every check, passed or failed. scoreRange is the score\'s range, "64 ± 2" in the audit report: ± plusMinus points from the page\'s last complete audits, which scored low to high out of 100; null with fewer than 3.',
     minRole: 'analyst',
     planGate: null,
     brandOf: { lookup: 'site_audits', idField: 'audit_id' },
