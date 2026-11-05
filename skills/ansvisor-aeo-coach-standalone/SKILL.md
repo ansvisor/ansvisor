@@ -162,7 +162,7 @@ text. They read the stored answers; no LLM is called.
 | `GET /prompts` | `brand_id`, `topic_id`, `is_active`, `limit` (default 100, max 500) | `{ prompts: [...] }` |
 | `GET /prompt-performance` | `brand_id`, dates, `topic_id`, `sort_by` (`visibility`/`mentions`/`citations`/`appearances`), `order`, `limit`, `model`, `region` | per-prompt visibility, mentions, citations, competitor score |
 | `GET /prompt-volumes` | `brand_id`, `limit` | `{ volumes: [...] }` — Google volumes, `est_ai_volume` with its range (`est_ai_volume_low` / `_high`) and `volume_confidence`, competition |
-| `GET /prompt-usage` | `brand_id` | `{ plan: { key, name, locationLimit, cta }, brand: { active, paused, total }, account: { activePrompts, brands, locationsUsed }, updatedAt }` — the plan's prompt allowance, as on the Tracked Prompts usage cards. The limit counts prompt **locations** account-wide (one slot per location of each active prompt; paused prompts use none, and resuming one needs free slots like adding one); `locationLimit: null` = unlimited |
+| `GET /prompt-usage` | `brand_id` | `{ plan: { key, name, locationLimit, cta, ended? }, brand: { active, paused, total }, account: { activePrompts, brands, locationsUsed }, updatedAt }` — the plan's prompt allowance, as on the Tracked Prompts usage cards. The limit counts prompt **locations** account-wide (one slot per location of each active prompt; paused prompts use none, and resuming one needs free slots like adding one); `locationLimit: null` = unlimited. With `plan.ended: true` the plan has ended (`plan` is the one it was on, `cta` is `choose_plan`): 0 slots are left until a plan is chosen |
 | `GET /topic-suggestions` | `brand_id` | `{ suggestions: [...] }` pending topic ideas |
 | `POST /topic-suggestions/{id}/accept` *(write)* | — | creates one topic |
 | `POST /topic-suggestions/{id}/dismiss` *(write)* | — | hides the suggestion |
@@ -194,7 +194,7 @@ text. They read the stored answers; no LLM is called.
 | `GET /actions` | `brand_id`, `status`, `category`, `limit`, `sort` (`priority` default, or `updated`) | `{ actions: [...] }` open work, highest priority first: `priority` (`score` 0–100, `level`, `reason`; null until scored), impact, status, task progress |
 | `GET /actions/{id}` | `format`: `json` (default), `markdown` or `csv` | one action: priority, payload, signals, tasks (`mode`, `permission`, `details` with `where`, `why`, `how`, `done_when`, `type`, `effort`, `role`, `sent_to_content`, `sent_to_webhook`), events. `markdown` returns the dashboard's **Copy Data** text, `csv` its **Export CSV** file — read both as text (see below) |
 | `GET /signals` | `brand_id`, `status`, `kind`, `limit` | `{ signals: [...] }` detected changes, each with `where`, `change` (labelled figures with unit and period — prefer them over the raw values), `evidence` and `used_by_actions` |
-| `GET /action-history` | `brand_id`, `limit` | `{ actions: [...] }` closed, with `outcome` and `results` |
+| `GET /action-history` | `brand_id`, `limit` | `{ actions: [...] }` closed, with `outcome`, `results`, `reading_day` (7, 14 or 30: the day after closing of the latest reading; null before the first) and `final` (true once day 30 is read; until then the outcome is a reading so far) |
 | `PATCH /action-tasks/{id}/status` *(write)* | `{ status, skip_reason }`: `in_progress`, `completed`, `skipped` (reason required), `failed` | the updated task |
 | `POST /prompts/{id}/improve-action` *(write)* | `{ range: { preset, from, to, region }, idempotency_key, suggestions: [...] }` — see workflow 8 | `{ actionId, actionNo, created, taskCount }` |
 
@@ -398,8 +398,12 @@ or any "do I have gaps" question:
    (self-hosted, or an Enterprise account whose limit isn't set yet):
    skip the check. Otherwise, if none are left (or fewer than you'd
    suggest), say so: pausing low-value prompts frees their slots, and
-   `plan.cta` names the next step (`upgrade_growth`, `upgrade` or
-   `contact`).
+   `plan.cta` names the next step (`upgrade_growth`, `upgrade`,
+   `contact`, or `choose_plan` when `plan.ended` is true: the plan has
+   ended, and nothing can be added until an admin chooses a plan in
+   **Settings → Billing**).
+7. A prompt always sits under a topic: a brand with no topics can't add
+   prompts in Ansvisor, so suggest adding a topic first.
 
 ### 6. Prompt deep-dive
 
@@ -476,9 +480,11 @@ work:
 2. For each closed action, report the `outcome` and the before/after
    from `results` in one line. `pending_measurement` means the
    after-window is still open — say when to check back, don't judge
-   early.
+   early. Until `final` is true, say it is a reading so far ("day 14 of
+   30: improved so far") and that the final reading comes on day 30.
 3. Summarise: how many improved, how many didn't move, and what the
-   improved ones had in common.
+   improved ones had in common. Count readings so far apart from final
+   results.
 
 ### 10. Mentions & sentiment ("how is AI talking about us?")
 
