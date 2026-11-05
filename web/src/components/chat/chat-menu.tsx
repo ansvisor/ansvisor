@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { ChevronDown } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
 import { NewPill } from '@/components/agentic/new-pill';
@@ -22,15 +23,22 @@ import { MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
 
 /** The menu's sections the person folded, remembered in this browser. */
 const SECTIONS_KEY = 'ansvisor.chatMenu.sections';
-type Section = 'menu' | 'atWork' | 'chats' | 'connections';
+type Section = 'menu' | 'governance' | 'atWork' | 'chats' | 'connections';
 
-/** As the menu opens: every section shown, but Connections' list (agentic plan §6: closed by default). */
+/**
+ * As the menu opens: every section shown, but Connections' list (agentic
+ * plan §6: closed by default) and Governance, closed until opened.
+ */
 const FOLDED: Record<Section, boolean> = {
   menu: false,
+  governance: true,
   atWork: false,
   chats: false,
   connections: true,
 };
+
+/** Governance's pages in Chat: on one, Governance is open. Tool policy is in Settings. */
+const GOVERNANCE_PAGES = ['/dashboard/chat/activity', '/dashboard/chat/capabilities'];
 
 function readFolded(): Record<Section, boolean> {
   const none = FOLDED;
@@ -231,7 +239,8 @@ export interface ChatMenuViewProps {
  * whose title or messages match, in place of the days; Ctrl K opens the
  * palette under it), Pinned, then by day, and All chats and Archived at the
  * end. Items whose pages aren't built yet stay out (Skills, Integrations). Sections fold, remembered in this
- * browser.
+ * browser; Governance folds under its title with the main menu's chevron,
+ * closed until opened and open on one of its pages.
  */
 export function ChatMenuView({
   status,
@@ -252,6 +261,12 @@ export function ChatMenuView({
   const tAttention = useTranslations('agentic.attention');
   const isMac = useIsMac();
   const [folded, setFolded] = useState<Record<Section, boolean>>(FOLDED);
+  // Governance folds under its title as the main menu's groups do: open on
+  // one of its pages, without remembering that, and otherwise as the person
+  // left it, closed at first.
+  const onGovernancePage = GOVERNANCE_PAGES.includes(pathname);
+  const [governanceForPage, setGovernanceForPage] = useState(onGovernancePage);
+  const governanceOpen = governanceForPage || !folded.governance;
   const [allRuns, setAllRuns] = useState(false);
   const [query, setQuery] = useState('');
   const found = useChatSearch(query);
@@ -264,12 +279,20 @@ export function ChatMenuView({
     setFolded(readFolded());
     setAgentsNew(!readAgentsSeen());
   }, []);
-  const fold = (section: Section) =>
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (onGovernancePage) setGovernanceForPage(true);
+  }, [onGovernancePage]);
+  const fold = (section: Section, to?: boolean) =>
     setFolded((was) => {
-      const next = { ...was, [section]: !was[section] };
+      const next = { ...was, [section]: to ?? !was[section] };
       saveFolded(next);
       return next;
     });
+  const toggleGovernance = () => {
+    setGovernanceForPage(false);
+    fold('governance', governanceOpen);
+  };
 
   // Read the clock again with every list read, so a menu left open past
   // midnight moves Today's chats to Yesterday.
@@ -444,33 +467,55 @@ export function ChatMenuView({
         </div>
       )}
 
-      <SectionHead>{t('governance')}</SectionHead>
-      <div className="flex flex-col gap-0.5">
-        <MenuItem
-          href="/dashboard/chat/activity"
-          action="chatMenu.openActivity"
-          active={pathname === '/dashboard/chat/activity'}
-          onNavigate={onNavigate}
+      {/* Governance folds under its title, the chevron on the right, as the
+          main menu's groups (Execution, Analytics) do. */}
+      <SectionHead>
+        <button
+          type="button"
+          data-action="chatMenu.toggleGovernance"
+          aria-expanded={governanceOpen}
+          aria-controls={governanceOpen ? 'chat-menu-governance' : undefined}
+          onClick={toggleGovernance}
+          className="-mx-1 flex flex-1 items-center justify-between rounded-md px-1 tracking-[.4px] uppercase outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
-          {t('activity')}
-        </MenuItem>
-        <MenuItem
-          href="/dashboard/chat/capabilities"
-          action="chatMenu.openCapabilities"
-          active={pathname === '/dashboard/chat/capabilities'}
-          onNavigate={onNavigate}
-        >
-          {t('capabilities')}
-        </MenuItem>
-        <MenuItem
-          href="/dashboard/settings/chat"
-          action="chatMenu.openPolicy"
-          active={false}
-          onNavigate={onNavigate}
-        >
-          {t('policy')}
-        </MenuItem>
-      </div>
+          {t('governance')}
+          <ChevronDown
+            aria-hidden
+            className={cn(
+              'h-3.5 w-3.5 shrink-0 transition-transform',
+              !governanceOpen && '-rotate-90',
+            )}
+          />
+        </button>
+      </SectionHead>
+      {governanceOpen && (
+        <div id="chat-menu-governance" className="flex flex-col gap-0.5">
+          <MenuItem
+            href="/dashboard/chat/activity"
+            action="chatMenu.openActivity"
+            active={pathname === '/dashboard/chat/activity'}
+            onNavigate={onNavigate}
+          >
+            {t('activity')}
+          </MenuItem>
+          <MenuItem
+            href="/dashboard/chat/capabilities"
+            action="chatMenu.openCapabilities"
+            active={pathname === '/dashboard/chat/capabilities'}
+            onNavigate={onNavigate}
+          >
+            {t('capabilities')}
+          </MenuItem>
+          <MenuItem
+            href="/dashboard/settings/chat"
+            action="chatMenu.openPolicy"
+            active={false}
+            onNavigate={onNavigate}
+          >
+            {t('policy')}
+          </MenuItem>
+        </div>
+      )}
 
       {atWork.length > 0 && (
         <>
