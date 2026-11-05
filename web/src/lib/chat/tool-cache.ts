@@ -44,6 +44,7 @@ export const TRACKING_READS: ReadonlySet<string> = new Set([
   'get_prompt_performance',
   'get_prompt_insights',
   'get_fanouts',
+  'get_fanout_gaps',
   'list_ai_answers',
   'get_mentions_summary',
   'list_mentions',
