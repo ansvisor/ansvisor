@@ -637,12 +637,14 @@ function QuestionsPage({ card, t, font }: PageProps) {
           {group.lines.map((line) => (
             <View key={`${line.number}-${line.text}`} style={styles.qRow} wrap={false}>
               <Text style={[styles.qText, { width: 16, color: MUTED }]}>{line.number}</Text>
-              <Text style={[styles.qText, { flex: 1, paddingRight: 6 }]}>
-                {line.text}
+              {/* The note goes on a line of its own: run on after the question, the
+                  renderer broke "(alıcılarınızın" with a hyphen. */}
+              <View style={{ flex: 1, paddingRight: 6 }}>
+                <Text style={styles.qText}>{line.text}</Text>
                 {line.fit === 'related' ? (
-                  <Text style={{ color: MUTED }}> ({q.related})</Text>
+                  <Text style={[styles.qText, { color: MUTED, fontSize: 6.5 }]}>{q.related}</Text>
                 ) : null}
-              </Text>
+              </View>
               {withVolume && (
                 <Text style={[styles.qText, { width: 40, textAlign: 'right', paddingRight: 6 }]}>
                   {line.volume === null ? '–' : count(line.volume, t.locale)}

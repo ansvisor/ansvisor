@@ -456,7 +456,7 @@ export function productNames(card: ReportCardPayload): string[] {
 
 /** How long a question may run on page 2: two lines at most, so 25 fit with their groups. */
 export const QUESTION_ROW_MAX = 90;
-const RELATED_ROW_MAX = 60;
+const RELATED_ROW_MAX = 48;
 
 export type Mark = 'named' | 'missed' | 'none';
 
@@ -493,7 +493,7 @@ export function productLabel(product: { name: string; nameEn: string | null }): 
 export function questionLines(card: ReportCardPayload): QuestionLine[] {
   return (card.questionRows ?? []).map((row, i) => ({
     number: i + 1,
-    // A related question carries a note after it: shorter, so it keeps to two lines.
+    // A related question carries a note under it: one line, so the row keeps to two.
     text: clip(
       quotedQuestion(row) ?? row.textEn ?? row.text,
       row.fit === 'related' ? RELATED_ROW_MAX : QUESTION_ROW_MAX,
