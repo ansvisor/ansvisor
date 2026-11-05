@@ -3493,7 +3493,7 @@
     },
     "drafts": { "name": "Read the Content Library", "step": "Read Library" },
     "draft": { "name": "Read a draft", "step": "Read draft" },
-    "checkDraftRules": {
+    "pageRulesCheck": {
       "name": "Check pages against their rules",
       "step": "Checked the page against its rules"
     },

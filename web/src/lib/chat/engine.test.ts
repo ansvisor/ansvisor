@@ -679,6 +679,7 @@ describe('a turn', () => {
       'list_citations',
       'list_site_audit_issues',
       'get_draft',
+      'check_draft_rules',
       'fetch_page',
       'explain_change',
     ]);
