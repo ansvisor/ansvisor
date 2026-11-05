@@ -3503,7 +3503,7 @@
         "report for my boss"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
@@ -3523,7 +3523,7 @@
         },
         {
           "heading": "Read a report",
-          "text": "A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards."
+          "text": "A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it. **Site Audit Score** is the exception: it shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards."
         },
         {
           "heading": "Download a PDF",
