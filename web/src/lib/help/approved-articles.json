@@ -759,6 +759,10 @@
         "sub-agents",
         "agent calls agent",
         "send to webhook",
+        "what this agent did",
+        "agent impact",
+        "changes shipped by an agent",
+        "agent results",
         "onboarding",
         "onboarding & help",
         "onboarding agent",
@@ -789,7 +793,9 @@
         "agents for me",
         "agent recommendations",
         "setup help",
-        "new member setup"
+        "new member setup",
+        "what did my agent do",
+        "did my agent work"
       ],
       "plan": "all",
       "updated": "2026-11-05",
@@ -824,7 +830,7 @@
         },
         {
           "heading": "What this agent did",
-          "text": "On an agent's page, **What this agent did** covers the last 30 days. **Changes shipped** counts the pages that went live from its runs. **Improved** says how many of those with a verdict improved, counting only Medium and High confidence verdicts, as **Reports** does. A **Pending** change gets its first verdict 14 days after it goes live.\n\nEach change shows the run it came from, how it went live, its outcome and its next check. A line counts the agent's drafts that aren't live yet: drafts aren't measured until they go live. You see only the brands you have access to. **Open in Reports** opens **What Ansvisor did for you**, where each change has its details."
+          "text": "On an agent's page, **What this agent did** covers the last 30 days. **Changes shipped** counts the pages that went live from its runs. **Improved** says how many of those with a verdict improved, counting only Medium and High confidence verdicts, as **Reports** does. A **Pending** change gets its first verdict 14 days after it goes live.\n\nEach change shows the run it came from, its outcome and its next check, and how it went live: **on its own**, **you approved** when you sent or published it on a card in the run's chat, or **by** and the name of the teammate who did. A line counts the agent's drafts that aren't live yet: drafts aren't measured until they go live. You see only the brands you have access to. **Open in Reports** opens **What Ansvisor did for you**, where each change has its details."
         },
         {
           "heading": "What a run's outcome means",
