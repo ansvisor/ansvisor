@@ -109,7 +109,10 @@ const PUBLISH = { webflow: publishWebflow, wordpress: publishWordPress, wix: pub
  * (thrown as publish_refused); `failed` when the send itself failed.
  * DeliveryError for a refusal before anything went out.
  * @param {{ orgId: string, brandId: string, userId: string, page: object,
- *   target: string, agentRunId?: string|null }} input
+ *   target: string, agentRunId?: string|null, viaAgentRunId?: string|null }} input
+ *   agentRunId: an agent's own publish (00444); viaAgentRunId: a person's
+ *   publish from a card in an agent run's chat (00480), as sendContentPages
+ *   keeps them
  */
 export async function publishContentPage({
   orgId,
@@ -118,6 +121,7 @@ export async function publishContentPage({
   page,
   target,
   agentRunId = null,
+  viaAgentRunId = null,
 }) {
   if (target === 'framer') {
     throw new DeliveryError(
@@ -144,6 +148,7 @@ export async function publishContentPage({
     pages: [page],
     target,
     agentRunId,
+    viaAgentRunId,
   });
   const delivery = sent.deliveries[0] ?? null;
   if (!delivery || delivery.status === 'failed') return { delivery };

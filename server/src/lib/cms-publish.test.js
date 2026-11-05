@@ -136,6 +136,7 @@ describe('publishContentPage', () => {
       pages: [PAGE],
       target: 'webflow',
       agentRunId: 'run-1',
+      viaAgentRunId: null,
     });
     expect(mocks.publishItem).toHaveBeenCalledWith(
       { entityId: 'e', accountId: 'a' },
@@ -171,6 +172,13 @@ describe('publishContentPage', () => {
     db.tables.content_draft_deliveries[0].external_id = 'wix-1';
     expect((await publishContentPage(step('wix'))).url).toBe('https://acme.example/post/pour-over');
     expect(mocks.publishDraftPost).toHaveBeenCalledWith('wix-site', 'k', 'wix-1');
+  });
+
+  it('keeps the agent run whose card a person published it from on the send, not as its own (00480)', async () => {
+    await publishContentPage({ ...step('webflow'), viaAgentRunId: 'run-2' });
+    expect(mocks.send).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', agentRunId: null, viaAgentRunId: 'run-2' }),
+    );
   });
 
   it('refuses Framer and a page live already before anything goes out', async () => {

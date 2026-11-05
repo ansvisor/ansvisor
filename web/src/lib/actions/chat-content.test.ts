@@ -138,6 +138,14 @@ describe('sendDraftToCms', () => {
     });
   });
 
+  it('names the agent run whose card it was sent from, and none for a person’s own (00480)', async () => {
+    const RUN = '44444444-4444-4444-8444-444444444444';
+    expect(await sendDraftToCms(DRAFT, 'webflow', RUN)).toMatchObject({ ok: true });
+    expect(requests[0].body).toMatchObject({ brandId: BRAND, viaAgentRunId: RUN });
+    expect(await sendDraftToCms(DRAFT, 'webflow')).toMatchObject({ ok: true });
+    expect(requests[1].body).not.toHaveProperty('viaAgentRunId');
+  });
+
   it('says the API’s refusals as Chat’s codes', async () => {
     for (const [status, code, reason] of [
       [400, 'no_webflow', 'not_connected'],
@@ -267,6 +275,11 @@ describe('publishDraftToCms (AUTONOMOUS-GO-LIVE PR 9)', () => {
       target: 'webflow',
       page: { draftId: DRAFT, title: 'Pricing FAQ', slug: 'pricing-faq' },
     });
+    expect(requests[0].body).not.toHaveProperty('viaAgentRunId');
+    // From a card in an agent run's chat: the run goes with it (00480).
+    const RUN = '44444444-4444-4444-8444-444444444444';
+    expect(await publishDraftToCms(DRAFT, 'webflow', RUN)).toMatchObject({ ok: true });
+    expect(requests[1].body).toMatchObject({ target: 'webflow', viaAgentRunId: RUN });
   });
 
   it('says the API’s refusals as Chat’s codes, the CMS’s own words kept', async () => {
@@ -321,6 +334,10 @@ describe('sendDraftToWebhook (AUTONOMOUS-GO-LIVE PR 11)', () => {
         expect.objectContaining({ draftId: DRAFT, title: 'Pricing FAQ', slug: 'pricing-faq' }),
       ],
     });
+    // From a card in an agent run's chat: the run goes with it (00480).
+    const RUN = '44444444-4444-4444-8444-444444444444';
+    expect(await sendDraftToWebhook(DRAFT, RUN)).toMatchObject({ ok: true });
+    expect(requests[1].body).toMatchObject({ target: 'webhook', viaAgentRunId: RUN });
   });
 
   it('says a brand without a webhook, or one that doesn’t take pages, as not connected', async () => {
