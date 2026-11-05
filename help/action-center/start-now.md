@@ -1,8 +1,8 @@
 ---
 title: Start an action's writing in one click
 route: /dashboard/action-center/actions
-keywords: [start now, content editor, start in content editor, write page, open draft, chat]
-synonyms: [one click to editor, start writing, draft from action, work on action]
+keywords: [start now, content editor, start in content editor, write page, open draft, chat, what to do, play, also worth doing]
+synonyms: [one click to editor, start writing, draft from action, work on action, which page to write, playbook]
 plan: all
 updated: 2026-11-05
 last_checked: 2026-11-05
