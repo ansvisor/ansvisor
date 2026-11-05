@@ -4948,7 +4948,7 @@
         },
         {
           "heading": "When the scoring changes",
-          "text": "A change to how the score is worked out counts like a change to the page. Since llms.txt left the score, a page's next audit can move by a point or two with no change to the page. Its range and its change badge show that move until the older scores leave the last five."
+          "text": "A change to how the score is worked out counts like a change to the page. Since llms.txt left the score and **Main text without JavaScript** joined it, a page's next audit can move by a point or two with no change to the page. Its range and its change badge show that move until the older scores leave the last five."
         },
         {
           "heading": "Signals",

@@ -51,7 +51,7 @@ The same range comes with an audit wherever else you read it: in Chat, on the au
 
 ## When the scoring changes
 
-A change to how the score is worked out counts like a change to the page. Since llms.txt left the score, a page's next audit can move by a point or two with no change to the page. Its range and its change badge show that move until the older scores leave the last five.
+A change to how the score is worked out counts like a change to the page. Since llms.txt left the score and **Main text without JavaScript** joined it, a page's next audit can move by a point or two with no change to the page. Its range and its change badge show that move until the older scores leave the last five.
 
 ## Signals
 
