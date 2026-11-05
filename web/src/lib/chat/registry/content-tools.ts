@@ -12,6 +12,7 @@ import { CHAT_CMS_TARGETS, CMS_NAMES } from '@/lib/content/cms-names';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { contentUuid } from '@/lib/mcp/content-schemas';
+import { OPTIMIZE_TOOL, optimizeDraftHere, type OptimizeResult } from '../page-optimize';
 import { readPageVersion } from '../page-versions';
 import { FIXTURE_IDS, defineTool, type ChatToolContext } from './define-tool';
 import { draftPage, draftTitle, pageChanges } from './targets';
@@ -48,6 +49,16 @@ const ITEM = FIXTURE_IDS.item;
  * Editor or the Library has no chat and names none.
  */
 const viaAgentRun = (ctx: ChatToolContext) => ctx.chat?.agentRunId ?? null;
+
+/** A page Optimize here put in, with the History version that kept the page before it. */
+const optimized = (
+  output: unknown,
+): output is Extract<OptimizeResult, { ok: true }> =>
+  !!output &&
+  typeof output === 'object' &&
+  (output as { ok?: unknown }).ok === true &&
+  typeof (output as { beforeVersionId?: unknown }).beforeVersionId === 'string' &&
+  typeof (output as { body_html?: unknown }).body_html === 'string';
 
 /** A change update_draft made, with the History version that kept the page before it. */
 const changed = (output: unknown): output is { ok: true; beforeVersionId: string } =>
@@ -166,6 +177,58 @@ export const CONTENT_TOOLS = [
       return title ? `“${title}”` : null;
     },
     fixture: { input: { draft_id: ITEM, request: 'Make answer 3 shorter' } },
+  }),
+  defineTool({
+    name: OPTIMIZE_TOOL,
+    // Optimize ▾ › Optimize here, no editor (CHAT-25 §7, W4-12b part 2): the editor's Rewrite the
+    // page to these rules, put in as the next version with Undo. A WRITE (AskFA), C2, metered
+    // from the workspace's AI usage as the editor's rewrite is.
+    class: 'write',
+    area: 'content',
+    description:
+      "Optimize a Library draft in chat, without the editor (its id from list_content_drafts): the Content Agent rewrites the page to its open rules, as the Content Editor's Rewrite does, with its guards (kept quotes, known links, no invented facts), and the result is saved as the page's next version, with Undo. Waits for the agent. Only when the person asked to optimize the page here; not for the page open in the Content Editor beside this chat.",
+    defaultPolicy: 'ask_full_auto',
+    maxPolicy: 'always',
+    minRole: 'manager',
+    planGate: null,
+    brandOf: { lookup: 'content_drafts', idField: 'draft_id' },
+    costClass: 'C2',
+    labelKey: 'optimizePage',
+    route: '/dashboard/content/library',
+    mcpTool: null,
+    specRow: '55',
+    inputSchema: z.object({
+      draft_id: contentUuid.describe('The draft, from list_content_drafts.'),
+    }),
+    run: (ctx, input) => optimizeDraftHere(ctx, input.draft_id),
+    // The rewritten page is its next version in this chat (CHAT-25 §6), with what changed.
+    deliverable: (input, output) =>
+      optimized(output)
+        ? {
+            title: output.title,
+            type: 'document',
+            formats: ['html', 'md', 'docx', 'pdf'],
+            body: output.body_html,
+            mimeType: 'text/html',
+            fileName: 'page.html',
+            href: `/dashboard/content/editor/${input.draft_id}`,
+            contentDraftId: input.draft_id,
+          }
+        : null,
+    versionOf: (input, output, place) =>
+      optimized(output)
+        ? readPageVersion({
+            draftId: input.draft_id,
+            conversationId: place.conversationId,
+            beforeVersionId: output.beforeVersionId,
+            run: place.run,
+          })
+        : Promise.resolve(null),
+    target: async (input) => {
+      const title = await draftTitle(input.draft_id);
+      return title ? `“${title}”` : null;
+    },
+    fixture: { input: { draft_id: ITEM } },
   }),
   defineTool({
     name: 'set_draft_ready',

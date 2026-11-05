@@ -806,7 +806,7 @@ export const READ_TOOLS = [
     planGate: null,
     brandOf: { lookup: 'content_drafts', idField: 'draft_id' },
     costClass: 'C0',
-    labelKey: 'checkDraftRules',
+    labelKey: 'pageRulesCheck',
     route: '/dashboard/content/library',
     mcpTool: null,
     specRow: '53',

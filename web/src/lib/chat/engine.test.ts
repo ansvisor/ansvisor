@@ -248,6 +248,12 @@ vi.mock('@/lib/content/go-live-gate', () => ({
   readPageQuality: (...args: unknown[]) => pageReads.quality(...args),
   goLiveGate: vi.fn(),
 }));
+// Optimize here's rewrite, as its module would answer (page-optimize.test.ts runs it).
+const optimizeHere = vi.hoisted(() => vi.fn());
+vi.mock('./page-optimize', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./page-optimize')>()),
+  optimizeDraftHere: (...args: unknown[]) => optimizeHere(...args),
+}));
 // fetch_page as it is, opening pages through a fake of the API's internal route.
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
@@ -8224,6 +8230,87 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
     expect(pageReads.quality).toHaveBeenCalledWith(
       expect.objectContaining({ draftId: DRAFT, spend: false }),
     );
+  });
+
+  it('offers an Admin Optimize here first after a check with rules open (W4-12b part 2)', async () => {
+    pageReads.rules.mockResolvedValue({
+      title: 'Pricing FAQ',
+      met: 11,
+      total: 12,
+      textRules: [],
+      checked: [
+        {
+          rule: {
+            key: 'faq',
+            group: 'structure',
+            kind: 'number',
+            value: '5',
+            check: 'page',
+            on: true,
+            current: '5',
+            changed: false,
+          },
+          status: { state: 'bad', code: 'partOf', count: 3, of: 5 },
+        },
+      ],
+    });
+    useModels(
+      [calls(toolCall('r1', 'check_draft_rules', { draft_id: DRAFT })), READY],
+      [text('One rule is open.')],
+    );
+    const runId = await turn(ADMIN, 'Check this page against the rules');
+    const [moves] = ofType(await eventsOf(runId), 'next_moves').map((e) => e.data.moves);
+    expect(moves.slice(0, 2)).toEqual([
+      {
+        label: 'Optimize here',
+        prompt: 'Optimize this page here, without the editor',
+        ghost: true,
+      },
+      {
+        label: 'Open in Content Editor',
+        prompt: 'Open in Content Editor',
+        href: `/dashboard/content/editor/${DRAFT}`,
+      },
+    ]);
+  });
+
+  it('puts Optimize here’s rewrite in as the next version, and keeps what it couldn’t close (W4-12b part 2)', async () => {
+    db.tables.content_draft_versions.push({
+      id: BEFORE,
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1>',
+    });
+    optimizeHere.mockResolvedValue({
+      ok: true,
+      title: 'Pricing FAQ',
+      beforeVersionId: BEFORE,
+      body_html: PAGE,
+      fixed: ['FAQ block'],
+      left: ['Length'],
+      tried: ['length'],
+    });
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'optimize_draft', { draft_id: DRAFT })), text('Done.')],
+    );
+    const runId = await turn(ADMIN, 'Optimize this page here, without the editor', 'full_auto');
+    expect(runRow(runId).status).toBe('done');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const [card] = ofType(events, 'deliverable.updated').map((e) => e.data);
+    expect(card).toMatchObject({
+      title: 'Pricing FAQ',
+      href: `/dashboard/content/editor/${DRAFT}`,
+      version: { n: 2, canUndo: true },
+    });
+    expect(optimizeHere).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: ORG }),
+      DRAFT,
+    );
+    const state = db.tables.chat_run_state.find((row) => row.run_id === runId);
+    expect((state?.progress as { optimizeTried?: unknown }).optimizeTried).toEqual({
+      [DRAFT]: ['length'],
+    });
   });
 
   it('still files an untitled page when its version can’t be read, as a plain card', async () => {

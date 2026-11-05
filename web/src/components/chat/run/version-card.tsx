@@ -3,8 +3,18 @@
 import { lazy, Suspense, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Send, Undo2 } from 'lucide-react';
+import { ChevronDown, Send, Sparkles, Undo2 } from 'lucide-react';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { useRouter } from '@/i18n/navigation';
+import { requestAccess } from '@/lib/actions/chat-access-requests';
 import type { ChatPageVersion } from '@/lib/chat/events';
 import { CONTENT_EDITOR_PATH } from '@/lib/content/drafts';
 import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
@@ -245,5 +255,112 @@ export function SendPageButton({ href, className }: { href: string; className: s
         </Suspense>
       )}
     </>
+  );
+}
+
+/** The menu's head: "{n} rules open · Quality {score}", or "All rules met · Quality {score}". */
+export function useOptimizeHeading() {
+  const t = useTranslations('chatDeliverable.version.optimize');
+  return (version: ChatPageVersion) =>
+    [
+      version.rules
+        ? version.rules.met < version.rules.total
+          ? t('rulesOpen', { count: version.rules.total - version.rules.met })
+          : t('allMet')
+        : null,
+      version.quality !== undefined ? t('quality', { score: version.quality }) : null,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+}
+
+/**
+ * Optimize ▾ on a page's version card (CHAT-25 §7, mockup #e-chat; W4-12b
+ * part 2), headed by the rules still open and Quality. Two equal ways at
+ * launch, none Recommended and no cost (owner): Optimize here, no editor,
+ * which asks Chat in the person's words (optimize_draft, the editor's
+ * Rewrite, the next version card with What changed), and Optimize in
+ * Content Editor. "Optimize in the editor here" waits for Open here (W4-15).
+ * Only Admins and Managers optimize: anyone else, or a read-only workspace,
+ * gets "Ask your Admin" in its place (CHAT-25 §13).
+ */
+export function OptimizeMenu({
+  version,
+  title,
+  href,
+  canChange,
+  onAsk,
+  className,
+}: {
+  version: ChatPageVersion;
+  title: string;
+  href: string;
+  /** An Admin's or a Manager's own chat. */
+  canChange: boolean;
+  /** Sends a message in this chat as the person's own. */
+  onAsk: (prompt: string) => void;
+  className: string;
+}) {
+  const t = useTranslations('chatDeliverable.version.optimize');
+  const heading = useOptimizeHeading()(version);
+  const router = useRouter();
+  const { isLocked } = useUpgradeGate();
+  const allowed = canChange && !isLocked;
+
+  async function askAdmin() {
+    const sent = await requestAccess({
+      asked: t('asked', { title }).slice(0, 500),
+      ruleKind: isLocked ? 'plan' : 'role',
+      ruleDetail: t('noAccess'),
+    }).catch(() => null);
+    if (sent?.ok) toast(t('askSent'));
+    else toast.error(t('askFailed'));
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger data-action="version.optimize" className={className}>
+        <Sparkles className="size-3.5" aria-hidden />
+        {t('button')}
+        <ChevronDown className="size-3" aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72">
+        <DropdownMenuGroup>
+          {heading && (
+            <DropdownMenuLabel data-slot="optimize-heading" className="font-normal">
+              {heading}
+            </DropdownMenuLabel>
+          )}
+          <DropdownMenuItem
+            data-action="version.optimizeHere"
+            disabled={!allowed}
+            onClick={() => onAsk(t('prompt', { title }))}
+            className="flex-col items-start gap-0.5 text-[13px]"
+          >
+            <span className="font-medium">{t('here')}</span>
+            <span className="text-xs text-muted-foreground">
+              {allowed ? t('hereDetail', { n: version.n + 1 }) : t('noAccess')}
+            </span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            data-action="version.optimizeInEditor"
+            onClick={() => router.push(href)}
+            className="flex-col items-start gap-0.5 text-[13px]"
+          >
+            <span className="font-medium">{t('editor')}</span>
+            <span className="text-xs text-muted-foreground">{t('editorDetail')}</span>
+          </DropdownMenuItem>
+          {!allowed && (
+            <DropdownMenuItem
+              data-action="version.askAdmin"
+              onClick={() => void askAdmin()}
+              className="text-[13px] font-medium"
+            >
+              {t('askAdmin')}
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

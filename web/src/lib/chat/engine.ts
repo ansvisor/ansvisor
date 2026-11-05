@@ -133,6 +133,7 @@ import { whyView } from './why/view';
 import { WHATS_NEW_TOOL, showWhatsNew, whatsNewStepDetail } from './whats-new/run';
 import { AUDIT_TOOL, auditCard } from './audit-card';
 import { CHECK_RULES_TOOL, pageCheckOf } from './page-check';
+import { OPTIMIZE_TOOL, triedOf } from './page-optimize';
 import {
   batchSize,
   runsWithoutSession,
@@ -4138,6 +4139,11 @@ async function writeCall(
   });
   rc.sink.emit('step.finished', { step: clientStep(row) });
   const output = outcome.code === 'ok' ? outcome.output : null;
+  // The rules Optimize here couldn't close: never sent to the agent again in this chat (W4-12b part 2).
+  const tried = tool.name === OPTIMIZE_TOOL ? triedOf(input, output) : null;
+  if (tried?.keys.length) {
+    rc.progress.optimizeTried = { ...rc.progress.optimizeTried, [tried.draftId]: tried.keys };
+  }
   const fileId = await deliver(rc, tool, input, output, facts.brandId);
   showResultCard(rc, tool, input, output);
   // The Content Agent's suggestions, waiting in the editor beside the chat (W4-14).
@@ -4980,9 +4986,17 @@ async function offerNextMoves(rc: RunContext): Promise<void> {
         ...clean.filter((move) => move.kind !== 'continue' && move.kind !== 'deepen'),
       ];
     }
-    // A page checked with rules still open: open it in the Content Editor (W4-12b part 2).
+    // A page checked with rules still open: Optimize here, or open it in the Content Editor
+    // (CHAT-25 §7, W4-12b part 2). A read-only role gets the editor only (a write move).
     if (checked && checked.open > 0) {
       clean = [
+        {
+          label: t('pageMoves.optimizeHere'),
+          prompt: t('pageMoves.optimizeHerePrompt'),
+          kind: 'act',
+          class: 'write',
+          continues_this_run: true,
+        },
         {
           label: t('pageMoves.openEditor'),
           prompt: t('pageMoves.openEditor'),
@@ -4990,7 +5004,7 @@ async function offerNextMoves(rc: RunContext): Promise<void> {
           class: 'read',
           href: checked.href,
         },
-        ...clean.filter((move) => move.kind !== 'repeat'),
+        ...clean.filter((move) => move.kind !== 'repeat' && move.kind !== 'act'),
       ];
     }
     if (mayOfferSteps && (await offersSaveStepsTo(rc, ctx))) {
