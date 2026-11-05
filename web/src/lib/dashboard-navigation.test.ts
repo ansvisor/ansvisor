@@ -11,8 +11,10 @@ import {
   dashboardNavLabelKeys,
   getDashboardNavGroupLabel,
   getDashboardNavLabel,
+  isNavItemActive,
   navItemHref,
   shouldShowDashboardNavItem,
+  visibleNavChildren,
 } from '@/lib/dashboard-navigation';
 
 const translateNav = (key: string) => `nav.${key}`;
@@ -109,13 +111,73 @@ describe('shouldShowDashboardNavItem', () => {
   });
 });
 
-describe('the Mentions item', () => {
+// Brand Visibility (the owner's mockup): one page with three tabs. Mentions
+// and Citations are no longer items of their own but its submenu's, each on
+// the route its page always had.
+describe('the Brand Visibility group', () => {
   const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
-  const index = (title: string) => analytics.findIndex((item) => item.title === title);
+  const brandVisibility = analytics.find((item) => item.title === 'Brand Visibility')!;
 
-  it('sits directly above Citations', () => {
-    expect(index('Mentions')).toBe(index('Citations') - 1);
-    expect(analytics[index('Mentions')]).toMatchObject({ href: '/dashboard/mentions' });
+  it('gathers Overview, Mentions and Citations, on their old routes', () => {
+    expect(brandVisibility).toMatchObject({
+      href: '/dashboard/insights',
+      requiredFeature: 'basic_insights',
+    });
+    expect(brandVisibility.children?.map(({ title, href }) => ({ title, href }))).toEqual([
+      { title: 'Overview', href: '/dashboard/insights' },
+      { title: 'Mentions', href: '/dashboard/mentions' },
+      { title: 'Citations', href: '/dashboard/citations' },
+    ]);
+    // No separate Mentions or Citations items any more.
+    expect(analytics.map((item) => item.title)).not.toContain('Mentions');
+    expect(analytics.map((item) => item.title)).not.toContain('Citations');
+  });
+
+  it('reads its label from nav.insights, "Brand Visibility", and its tabs’ from nav', () => {
+    expect(getDashboardNavLabel('Brand Visibility', translateNav)).toBe('nav.insights');
+    expect(messages.nav.insights).toBe('Brand Visibility');
+    expect(getDashboardNavLabel('Overview', translateNav)).toBe('nav.overview');
+    expect(messages.nav.overview).toBe('Overview');
+    expect(messages.nav.mentions).toBe('Mentions');
+    expect(messages.nav.citations).toBe('Citations');
+  });
+
+  it('is the current page on each of its tabs, and its tab the current entry', () => {
+    for (const path of ['/dashboard/insights', '/dashboard/mentions', '/dashboard/citations']) {
+      expect(isNavItemActive(brandVisibility, path)).toBe(true);
+    }
+    expect(isNavItemActive(brandVisibility, '/dashboard/prompts/tracked')).toBe(false);
+    expect(activeChildHref(brandVisibility.children!, '/dashboard/mentions')).toBe(
+      '/dashboard/mentions',
+    );
+    expect(activeChildHref(brandVisibility.children!, '/dashboard/citations')).toBe(
+      '/dashboard/citations',
+    );
+    // A result's page and a cited URL's sit under their tab.
+    expect(activeChildHref(brandVisibility.children!, '/dashboard/insights/r1')).toBe(
+      '/dashboard/insights',
+    );
+    expect(activeChildHref(brandVisibility.children!, '/dashboard/citations/url')).toBe(
+      '/dashboard/citations',
+    );
+  });
+
+  it('shows the tabs the viewer’s menu keeps, and goes only when all three are off it', () => {
+    const prefs = { shoppingModeEnabled: false };
+    const titles = (hidden: string[]) =>
+      visibleNavChildren(brandVisibility, new Set(hidden)).map((child) => child.title);
+
+    expect(titles([])).toEqual(['Overview', 'Mentions', 'Citations']);
+    expect(titles(['mentions'])).toEqual(['Overview', 'Citations']);
+    expect(titles(['insights', 'mentions'])).toEqual(['Citations']);
+    expect(shouldShowDashboardNavItem(brandVisibility, prefs, new Set(['insights']))).toBe(true);
+    expect(
+      shouldShowDashboardNavItem(
+        brandVisibility,
+        prefs,
+        new Set(['insights', 'mentions', 'citations']),
+      ),
+    ).toBe(false);
   });
 });
 
@@ -140,7 +202,7 @@ describe('the Competitors item', () => {
   });
 
   it('leaves Prompts right under Brand Visibility', () => {
-    expect(index('Prompts')).toBe(index('Answer Engine Insights') + 1);
+    expect(index('Prompts')).toBe(index('Brand Visibility') + 1);
   });
 
   it('reads Competitors from the nav namespace', () => {

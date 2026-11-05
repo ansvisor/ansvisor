@@ -111,7 +111,7 @@ const relaxedUuid = z
     'Invalid UUID format',
   );
 
-/** The Mentions & Sentiment page's filters, the same on every mentions tool. */
+/** Brand Visibility's Mentions tab's filters, the same on every mentions tool. */
 const mentionFilters = {
   brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
   date_from: z
@@ -1589,10 +1589,10 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Mentions summary',
       description:
-        "The Mentions & Sentiment page's Overview for a brand: times named (`timesNamed`, the " +
-        "page's Total mentions), responses naming it, mention rate, prompts with mentions, " +
+        "Brand Visibility's Mentions tab, its Overview, for a brand: times named (`timesNamed`, the " +
+        "tab's Total mentions), responses naming it, mention rate, prompts with mentions, " +
         'average position and sentiment (counts, shares, net), now and in the window before, ' +
-        "with `changes` taken as the page's cards take them: on the prompts both windows " +
+        "with `changes` taken as the tab's cards take them: on the prompts both windows " +
         'answered (`changes.basis`), mentionsPct on times named; the platform that moved net sentiment ' +
         'most and the competitors AI names beside the brand (`headline`); each platform; and ' +
         'each day. Use it for "how is AI talking about us" / "why did sentiment drop on ' +
@@ -1680,7 +1680,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Competitors in mentions',
       description:
-        'Competitor framing from the Mentions page: how often AI names each competitor in the ' +
+        "Competitor framing from Brand Visibility's Mentions tab: how often AI names each competitor in the " +
         "brand's tracked responses (count and share of responses, change against the window " +
         'before) and how often in the same response as the brand. ' +
         MENTIONS_BASIS,

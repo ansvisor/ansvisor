@@ -116,4 +116,18 @@ describe('renderPulseEmail', () => {
     expect(html).toContain('color:#059669;">▲ 0</div>');
     expect(html).not.toContain('color:#dc2626;">▼ 0</div>');
   });
+
+  // The page is Brand Visibility (the owner's mockup); its Overview keeps /dashboard/insights.
+  it('names the page it opens Brand Visibility', () => {
+    const { html } = renderPulseEmail({
+      brandName: 'Acme',
+      metrics,
+      insightsUrl: 'https://app.example.com/dashboard/insights',
+      settingsUrl: 'https://example.com/settings',
+    });
+
+    expect(html).toContain('href="https://app.example.com/dashboard/insights"');
+    expect(html).toContain('>Open Brand Visibility</a>');
+    expect(html).not.toContain('Open Insights');
+  });
 });

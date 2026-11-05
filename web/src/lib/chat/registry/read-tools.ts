@@ -52,7 +52,7 @@ const region = z.string().optional().describe('A region code, e.g. "US" or "TR".
 const topicId = contentUuid.optional().describe('Topic id, from list_topics.');
 const rowCap = (max: number) => z.number().int().min(1).max(max).optional();
 
-/** The Mentions & Sentiment page's filters, the same on both mentions reads. */
+/** Brand Visibility's Mentions tab's filters, the same on both mentions reads. */
 const mentionFilters = {
   brand_id: brandId,
   date_from: dateFrom,

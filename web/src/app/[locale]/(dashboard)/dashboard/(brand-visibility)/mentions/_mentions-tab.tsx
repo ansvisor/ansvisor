@@ -30,9 +30,10 @@ import { MentionsTable } from './_mentions-table';
 import { ResponseDrawer } from './_response-drawer';
 import { useMentionActions } from './_use-mention-actions';
 import type { useMentionsExport } from './_use-mentions-export';
+import { scheduleRead } from './_read-delay';
+import { ReadError } from '@/components/brand-visibility/read-error';
+import { useBrandVisibilityShell } from '@/components/brand-visibility/shell-context';
 
-/** Typing in the search box reads once it pauses, not on every key. */
-const READ_DELAY_MS = 250;
 const ANY = '__any__';
 
 type Loaded =
@@ -101,10 +102,12 @@ export function MentionsListTab({
   const key =
     query && urlRead ? JSON.stringify([brandId, query, table, pager.page, version]) : null;
 
+  const { readSent } = useBrandVisibilityShell();
+  const first = useRef(true);
   useEffect(() => {
     if (!key || !query) return;
     let cancelled = false;
-    const timer = setTimeout(() => {
+    const cancelRead = scheduleRead(first, () => {
       listMentions(brandId, query, table, pager.page)
         .then((list) => {
           if (cancelled) return;
@@ -114,12 +117,13 @@ export function MentionsListTab({
         .catch(() => {
           if (!cancelled) setLoaded({ brandId, key, status: 'error' });
         });
-    }, READ_DELAY_MS);
+      readSent();
+    });
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      cancelRead();
     };
-  }, [brandId, key, query, table, pager.page]);
+  }, [brandId, key, query, table, pager.page, readSent]);
 
   const [open, setOpen] = useState<MentionRow | null>(null);
   const actions = useMentionActions(brandId);
@@ -260,7 +264,13 @@ export function MentionsListTab({
   if (!query) body = <Message>{t('pickDates')}</Message>;
   else if (!loaded || loaded.brandId !== brandId) body = <TableSkeleton />;
   else if (loaded.status === 'error')
-    body = loaded.key === key ? <Message>{t('loadError')}</Message> : <TableSkeleton />;
+    body =
+      loaded.key === key ? (
+        // Retry reads the page again: a newer key, so the skeleton shows meanwhile.
+        <ReadError title={t('loadError')} onRetry={() => setVersion((v) => v + 1)} />
+      ) : (
+        <TableSkeleton />
+      );
   else if (!loaded.list) body = <Message>{t('unavailable')}</Message>;
   else if (loaded.list.rows.length === 0) body = <Message>{t('empty')}</Message>;
   else {

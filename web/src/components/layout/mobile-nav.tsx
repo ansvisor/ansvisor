@@ -10,9 +10,13 @@ import {
   childLinkHref,
   dashboardNavBadge,
   getDashboardNavLabel,
+  isNavItemActive,
   navItemHref,
   shouldShowDashboardNavItem,
+  visibleNavChildren,
 } from '@/lib/dashboard-navigation';
+import { brandVisibilityTabOf } from '@/lib/brand-visibility';
+import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
@@ -114,11 +118,10 @@ export function MobileNav() {
                 }
 
                 const href = navItemHref(item, chatAgentic);
-                const isActive =
-                  item.href === '/dashboard'
-                    ? pathname === '/dashboard'
-                    : pathname.startsWith(href);
+                const isActive = isNavItemActive(item, pathname, href);
                 const label = getDashboardNavLabel(item.title, t);
+                // The entries this person's menu shows (menu access).
+                const children = visibleNavChildren(item, hiddenSections);
 
                 // Chat's own badge: "Set up" when the org has no provider key for
                 // it (cloud only, never with the new Chat on).
@@ -169,19 +172,16 @@ export function MobileNav() {
                     </span>
                   </Link>
                 );
-                if (!item.children?.length) return link;
-                // A submenu (Prompts, Content), always shown on mobile.
-                const currentChild = activeChildHref(item.children, pathname);
+                if (children.length === 0) return link;
+                // A submenu (Brand Visibility, Prompts, Content), always shown on mobile.
+                const currentChild = activeChildHref(children, pathname);
                 return (
                   <div key={item.href}>
                     {link}
                     <div className="ml-7 border-l pl-2">
-                      {item.children.map((child) => (
-                        <Link
-                          key={child.href}
-                          href={childLinkHref(child, pathname)}
-                          onClick={() => setOpen(false)}
-                        >
+                      {children.map((child) => {
+                        const tab = brandVisibilityTabOf(child.href);
+                        const childBody = (
                           <span
                             className={cn(
                               'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
@@ -200,8 +200,27 @@ export function MobileNav() {
                               </Badge>
                             )}
                           </span>
-                        </Link>
-                      ))}
+                        );
+                        // Brand Visibility's tabs keep the date range, engine,
+                        // country and topic, as its tab bar does.
+                        return tab ? (
+                          <BrandVisibilityTabLink
+                            key={child.href}
+                            tab={tab}
+                            onClick={() => setOpen(false)}
+                          >
+                            {childBody}
+                          </BrandVisibilityTabLink>
+                        ) : (
+                          <Link
+                            key={child.href}
+                            href={childLinkHref(child, pathname)}
+                            onClick={() => setOpen(false)}
+                          >
+                            {childBody}
+                          </Link>
+                        );
+                      })}
                     </div>
                   </div>
                 );

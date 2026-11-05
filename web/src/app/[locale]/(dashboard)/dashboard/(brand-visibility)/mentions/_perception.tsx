@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { RotateCw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ReadError } from '@/components/brand-visibility/read-error';
+import { useBrandVisibilityShell } from '@/components/brand-visibility/shell-context';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getMentionsPerception } from '@/lib/actions/mentions';
@@ -12,9 +12,8 @@ import type { MentionsPerception } from '@/lib/mentions-perception';
 import { cn } from '@/lib/utils';
 import { BrandShapeCard } from './_brand-shape';
 import { CoMentionsCard, HeatmapCard, TermsCard } from './_perception-cards';
+import { scheduleRead } from './_read-delay';
 
-/** Typing in the search box reads once it pauses, not on every key. */
-const READ_DELAY_MS = 250;
 /** A read still on its way after this says it is still reading. */
 const SLOW_MS = 4_000;
 
@@ -51,7 +50,8 @@ export function MentionsPerceptionTab({
   filters: MentionsFilters;
 }) {
   const t = useTranslations('mentions.perception');
-  const common = useTranslations('common');
+  const { readSent } = useBrandVisibilityShell();
+  const first = useRef(true);
   const query = useMemo(() => mentionsQuery(filters), [filters]);
   const key = query ? JSON.stringify([brandId, query]) : null;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -65,7 +65,7 @@ export function MentionsPerceptionTab({
     if (!key || !query) return;
     let cancelled = false;
     const read = () => getMentionsPerception(brandId, query);
-    const timer = setTimeout(() => {
+    const cancelRead = scheduleRead(first, () => {
       read()
         // Once more before saying it failed.
         .catch((err) => (cancelled ? Promise.reject(err) : read()))
@@ -75,18 +75,19 @@ export function MentionsPerceptionTab({
         .catch(() => {
           if (!cancelled) setLoaded({ brandId, key, status: 'error' });
         });
-    }, READ_DELAY_MS);
+      readSent();
+    });
     const slowTimer = setTimeout(() => {
       if (!cancelled) setSlow(`${key}#${attempt}`);
     }, SLOW_MS);
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      cancelRead();
       clearTimeout(slowTimer);
       // Back on these filters later, the read starts over: not slow yet.
       setSlow((s) => (s === `${key}#${attempt}` ? null : s));
     };
-  }, [brandId, key, query, attempt]);
+  }, [brandId, key, query, attempt, readSent]);
 
   const isSlow = slow !== null && slow === readKey;
   const skeleton = <PerceptionSkeleton slow={isSlow} />;
@@ -94,21 +95,13 @@ export function MentionsPerceptionTab({
   if (!loaded || loaded.brandId !== brandId) return skeleton;
   if (loaded.status === 'error') {
     return loaded.key === key ? (
-      <Message>
-        <p>{t('loadError')}</p>
-        <Button
-          className="mt-4 gap-2"
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            setLoaded(null);
-            setAttempt((n) => n + 1);
-          }}
-        >
-          <RotateCw className="h-4 w-4" />
-          {common('retry')}
-        </Button>
-      </Message>
+      <ReadError
+        title={t('loadError')}
+        onRetry={() => {
+          setLoaded(null);
+          setAttempt((n) => n + 1);
+        }}
+      />
     ) : (
       skeleton
     );

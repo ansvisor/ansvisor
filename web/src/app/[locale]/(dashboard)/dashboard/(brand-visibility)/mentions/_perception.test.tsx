@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import messages from '../../../../../../messages/en.json';
+import messages from '../../../../../../../messages/en.json';
 import { DEFAULT_MENTIONS_FILTERS } from '@/lib/mentions-filters';
 import type { MentionsPerception } from '@/lib/mentions-perception';
 import { BrandShapeCard } from './_brand-shape';
@@ -216,13 +216,14 @@ describe('BrandShapeCard', () => {
 });
 
 describe('MentionsPerceptionTab', () => {
-  it('reads the perception once the filters settle and shows it', async () => {
+  it('reads the perception at once on opening and shows it', async () => {
     vi.useFakeTimers();
     getMentionsPerception.mockResolvedValue(perception);
     render(
       <MentionsPerceptionTab brandId="b1" brand="Ansvisor" filters={DEFAULT_MENTIONS_FILTERS} />,
     );
-    expect(getMentionsPerception).not.toHaveBeenCalled();
+    // The tab's first read goes at once; later filter changes wait for typing to pause.
+    expect(getMentionsPerception).toHaveBeenCalledTimes(1);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(250);
     });
@@ -245,7 +246,9 @@ describe('MentionsPerceptionTab', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(250);
     });
-    expect(container.textContent).toBe("Couldn't load the perception figures.Try again");
+    expect(container.textContent).toBe(
+      "Couldn't load the perception figures.The read failed or took too long. Nothing is lost: try again.Retry",
+    );
 
     render(
       <MentionsPerceptionTab
@@ -356,7 +359,7 @@ describe('MentionsPerceptionTab', () => {
     expect(status()).toContain('Still reading');
   });
 
-  it('reads the same filters again on Try again, with the skeleton meanwhile', async () => {
+  it('reads the same filters again on Retry, with the skeleton meanwhile', async () => {
     vi.useFakeTimers();
     getMentionsPerception
       .mockRejectedValueOnce(new Error('timeout'))
@@ -368,9 +371,7 @@ describe('MentionsPerceptionTab', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(250);
     });
-    const retry = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent === 'Try again',
-    )!;
+    const retry = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Retry')!;
     await act(async () => retry.click());
     expect(container.querySelector('[aria-hidden]')).not.toBeNull();
     await act(async () => {

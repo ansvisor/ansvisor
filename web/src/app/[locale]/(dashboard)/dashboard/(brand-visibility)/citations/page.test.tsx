@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import messages from '../../../../../../messages/en.json';
+import messages from '../../../../../../../messages/en.json';
 import type { CitationDomainRow, CitationsOverview } from '@/lib/actions/citations';
 import type { SourceCategory } from '@/lib/citations/classify';
 
@@ -12,13 +12,14 @@ import type { SourceCategory } from '@/lib/citations/classify';
  * unique URLs under it do (#745).
  */
 
-const { getCitationsOverview, getBrandFilterOptions } = vi.hoisted(() => ({
+const { getCitationsOverview, getBrandFilterOptions, getCitationGaps } = vi.hoisted(() => ({
   getCitationsOverview: vi.fn(),
   getBrandFilterOptions: vi.fn(),
+  getCitationGaps: vi.fn(),
 }));
 vi.mock('@/lib/actions/citations', () => ({
   getCitationsOverview,
-  getCitationGaps: vi.fn(async () => null),
+  getCitationGaps,
   brandHasCitations: vi.fn(async () => true),
 }));
 vi.mock('@/lib/actions/topic', () => ({ getTopics: vi.fn(async () => []) }));
@@ -93,6 +94,7 @@ function card(title: string): string {
 
 beforeEach(() => {
   getCitationsOverview.mockReset();
+  getCitationGaps.mockReset();
   getBrandFilterOptions.mockReset().mockResolvedValue({
     regions: [],
     models: ['chatgpt-web', 'gpt-5-chat-latest', 'perplexity-web'],
@@ -167,5 +169,60 @@ describe('CitationsPage: a platform from an address', () => {
     expect(getCitationsOverview.mock.calls.map(([, filters]) => filters.platforms)).toEqual([
       ['perplexity-web'],
     ]);
+  });
+});
+
+/**
+ * Brand Visibility's Citations tab when a read fails (the owner's ask): a
+ * failed read says so with Retry, never "—" cards over "(0)" tabs, and
+ * Competitor Gaps never spins on "Checking…" for ever.
+ */
+describe('CitationsPage: a failed read', () => {
+  const retry = () =>
+    [...container.querySelectorAll('button')].find((b) => b.textContent === 'Retry');
+
+  it('shows the skeleton while it reads, then says it failed, with Retry, and no zeros', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let fail: (err: Error) => void = () => {};
+    getCitationsOverview.mockReturnValueOnce(new Promise((_, reject) => (fail = reject)));
+    await render('own');
+    expect(container.querySelector('[data-testid="citations-skeleton"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('No citations');
+
+    await act(async () => fail(new Error('statement timeout')));
+    expect(container.textContent).toContain("Couldn't load the citations");
+    expect(container.textContent).not.toContain('Domains (0)');
+    expect(container.textContent).not.toContain('Total Citations');
+
+    getCitationsOverview.mockResolvedValueOnce(overview(7));
+    await act(async () => retry()!.click());
+    expect(getCitationsOverview).toHaveBeenCalledTimes(2);
+    expect(card('Unique Domains')).toBe('Unique Domains27 unique URLs');
+    expect(retry()).toBeUndefined();
+    spy.mockRestore();
+  });
+
+  it('of Competitor Gaps says so with Retry, not an endless "Checking…"', async () => {
+    getCitationsOverview.mockResolvedValue(overview(7));
+    getCitationGaps.mockRejectedValueOnce(new Error('statement timeout'));
+    await render('own');
+    const gapsTab = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Competitor Gaps',
+    )!;
+    await act(async () => gapsTab.click());
+    expect(container.textContent).toContain("Couldn't load the competitor gaps");
+    expect(container.textContent).not.toContain('Checking citation data');
+
+    getCitationGaps.mockResolvedValueOnce({
+      gapDomains: [],
+      byCompetitor: {},
+      competitors: [],
+      ourAnswerCount: 0,
+      totalAnswers: 0,
+      lowVisibility: false,
+    });
+    await act(async () => retry()!.click());
+    expect(getCitationGaps).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain('No gap domains for these filters');
   });
 });

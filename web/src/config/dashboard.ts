@@ -29,6 +29,12 @@ export type BrandPrefKey = 'shoppingModeEnabled';
 export interface NavChild {
   title: string;
   href: string;
+  /**
+   * For an entry that is a menu section of its own (Brand Visibility's
+   * Mentions and Citations, named by their routes): its icon where the
+   * sections are listed (menu access). The submenu shows none.
+   */
+  icon?: React.ComponentType<{ className?: string }>;
   /** On one of its pages, it links to that page: the Editor stays on the draft open. */
   keepsPage?: boolean;
   /** A short tag after the label, e.g. "New". */
@@ -133,11 +139,21 @@ export const dashboardNav: NavGroup[] = [
   {
     title: 'Analytics',
     items: [
+      // Brand Visibility (the owner's mockup): one page with three tabs, a
+      // group like Prompts and Content. Each tab keeps its page's address
+      // (Mentions & Sentiment and Citations were items of their own), so
+      // every link to them still opens them and each stays a menu section
+      // of its own (menu access).
       {
-        title: 'Answer Engine Insights',
+        title: 'Brand Visibility',
         href: '/dashboard/insights',
         icon: BarChart3,
         requiredFeature: 'basic_insights',
+        children: [
+          { title: 'Overview', href: '/dashboard/insights' },
+          { title: 'Mentions', href: '/dashboard/mentions', icon: MessageCircleMore },
+          { title: 'Citations', href: '/dashboard/citations', icon: Quote },
+        ],
       },
       // Prompts right under Brand Visibility: adding prompts is the way in,
       // so nothing sits between them (Competitors moved under Reports).
@@ -153,17 +169,6 @@ export const dashboardNav: NavGroup[] = [
           { title: 'Query Fan-outs', href: '/dashboard/prompts/fan-outs' },
           { title: 'Prompts Insights', href: '/dashboard/prompts/insights' },
         ],
-      },
-      // Mentions & Sentiment (MS-05): beside Citations, its sibling concept.
-      {
-        title: 'Mentions',
-        href: '/dashboard/mentions',
-        icon: MessageCircleMore,
-      },
-      {
-        title: 'Citations',
-        href: '/dashboard/citations',
-        icon: Quote,
       },
       {
         // Product Visibility (ECOM-spec): new as a whole, with its Shelf,
@@ -188,8 +193,9 @@ export const dashboardNav: NavGroup[] = [
    * Site Audit and the rest from the analytics surfaces. Filing it under either
    * heading would understate what it covers.
    *
-   * It is also the only way into /dashboard/reports besides the button on
-   * Visibility — from Citations or Site Audit there was no route to it at all.
+   * It is also the only way into /dashboard/reports besides the Reports
+   * button in Brand Visibility's header, on each of its tabs — from Site
+   * Audit there is no other route to it.
    *
    * Competitors, the head-to-head with each competitor, sits right under it,
    * out of Analytics so that group stays short. Brand Visibility's

@@ -555,6 +555,37 @@
     "collapseRail": "Collapse the Ansvisor menu",
     "railTip": "Ansvisor · hover or click to expand"
   },
+  "brandVisibility": {
+    "title": "Brand Visibility",
+    "loading": "Loading…",
+    "tabs": {
+      "label": "Brand Visibility",
+      "overview": "Overview",
+      "mentions": "Mentions",
+      "citations": "Citations"
+    },
+    "pageName": {
+      "mentions": "Brand Visibility · Mentions",
+      "citations": "Brand Visibility · Citations"
+    },
+    "actions": {
+      "reports": "Reports",
+      "testSinglePrompt": "Test Single Prompt",
+      "runAll": "Run All"
+    },
+    "readError": {
+      "title": "Couldn't load this data",
+      "body": "The read failed or took too long. Nothing is lost: try again.",
+      "retry": "Retry",
+      "overview": "Couldn't load the overview",
+      "mentions": "Couldn't load the mentions",
+      "citations": "Couldn't load the citations",
+      "competitors": "Couldn't load the competitor comparison",
+      "trend": "Couldn't load the visibility trend",
+      "gaps": "Couldn't load the competitor gaps",
+      "sections": "Some sections couldn't load, so they're left out."
+    }
+  },
   "actionCenter": {
     "dismissReason": {
       "title": "Why dismiss it?",
@@ -1054,7 +1085,7 @@
           "competitors": "Open Competitors",
           "traffic": "Open Traffic",
           "audit": "Open Site Audit",
-          "insights": "Open Insights"
+          "insights": "Open Brand Visibility"
         }
       }
     },
@@ -2003,17 +2034,17 @@
             "noteFinal": "The 7 days before this action was sent, next to the 7 days ending 30 days after it was completed. A position counts as changed when it moves at least 0.5."
           }
         },
-        "noSignalsTopicGap": "This action was sent from Insights' Topics vs competitors, so it has no detection signals. Its evidence is the topic and scores on the Overview tab.",
+        "noSignalsTopicGap": "This action was sent from Brand Visibility's Topics vs competitors, so it has no detection signals. Its evidence is the topic and scores on the Overview tab.",
         "topicGap": {
           "source": "Source",
-          "sourceValue": "Insights › Topics vs competitors",
+          "sourceValue": "Brand Visibility › Topics vs competitors",
           "openTopic": "Open topic",
           "topic": "Topic",
           "scores": "Visibility when sent",
           "you": "You",
           "gap": "{gap} pts behind"
         },
-        "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
+        "noSignalsTopicOpportunity": "This action was sent from Brand Visibility's Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
         "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
         "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
         "noSignalsAuditPage": "This action was sent from a Site Audit report, so it has no detection signals. Its evidence is the page and the checks it fails on the Overview tab.",
@@ -2031,7 +2062,7 @@
         },
         "topicOpportunity": {
           "source": "Source",
-          "sourceValue": "Insights › Opportunities",
+          "sourceValue": "Brand Visibility › Opportunities",
           "topic": "Topic",
           "openTopic": "Open topic",
           "plan": "Plan",
@@ -2073,7 +2104,7 @@
         },
         "mentionReview": {
           "source": "Source",
-          "sourceValue": "Mentions & Sentiment › Mentions",
+          "sourceValue": "Brand Visibility › Mentions",
           "openMentions": "Open Mentions",
           "answers": "Answers when sent",
           "answersValue": "{count, plural, one {# answer naming your brand} other {# answers naming your brand}}",
@@ -2815,13 +2846,13 @@
       "topic_competitor_gap": {
         "title": "Close the {gap}-pt gap with {competitor} in {topic}",
         "titleGeneric": "Close a topic gap with a competitor",
-        "description": "Sent from Insights: a competitor leads one of your topics on Visibility.",
+        "description": "Sent from Brand Visibility: a competitor leads one of your topics on Visibility.",
         "goal": "Lead the topic, or close most of the gap."
       },
       "topic_opportunity": {
         "title": "Capture {demand}/mo of estimated AI demand in {topic}",
         "titleGeneric": "Capture the AI demand in a topic",
-        "description": "Sent from Insights: prompts suggested for one of your topics, with the monthly AI demand behind them.",
+        "description": "Sent from Brand Visibility: prompts suggested for one of your topics, with the monthly AI demand behind them.",
         "goal": "Get the brand into AI answers for the topic's suggested prompts."
       },
       "mention_review": {
@@ -7984,8 +8015,6 @@
       "failed": "Job failed: {reason}",
       "unknownError": "Unknown error"
     },
-    "title": "Answer Engine Insights",
-    "description": "Monitor how your brand is represented in AI-generated answers.",
     "runPrompts": "Run Prompts",
     "runPromptsNow": "Run Prompts Now",
     "promptResults": "Prompt Results",
@@ -8039,7 +8068,7 @@
       "citationsTip": "Times answers cited your pages. The change is against the previous period.",
       "vsPrevious": "vs previous period",
       "netSentiment": "Net sentiment",
-      "netSentimentTip": "Positive minus negative share of the answers that name your brand, as on the Mentions page.",
+      "netSentimentTip": "Positive minus negative share of the answers that name your brand, as on the Mentions tab.",
       "sentimentSplit": "{positive} pos · {negative} neg",
       "sampleTip": {
         "all": "{count, plural, one {Based on # answer} other {Based on # answers}} in this period.",
@@ -12711,11 +12740,9 @@
       "insteadOfUs": "Which competitors get mentioned instead of us?",
       "actions": "Turn this page into actions"
     },
-    "title": "Mentions & Sentiment",
-    "description": "Where AI mentions your brand, how it describes you, why, and what to do about it.",
     "selectBrand": "Select a brand to see its mentions.",
     "tabs": {
-      "label": "Mentions & Sentiment views",
+      "label": "Mentions views",
       "overview": "Overview",
       "mentions": "Mentions",
       "perception": "Perception"
@@ -12733,7 +12760,7 @@
     },
     "overview": {
       "sectionLabel": "Mentions overview",
-      "loadError": "Couldn't load the overview. Try again in a moment.",
+      "loadError": "Couldn't load the overview",
       "unavailable": "Mention figures aren't available yet. They appear once the mentions data has been prepared.",
       "pickDates": "Choose a start or end date to see the overview.",
       "empty": "No tracked responses in this period. Try a longer range or clear the filters.",
@@ -12753,7 +12780,7 @@
       },
       "kpi": {
         "totalMentions": "Total mentions",
-        "totalMentionsTip": "Every time the responses name {brand}: a response naming you three times counts three, as on the Insights page.",
+        "totalMentionsTip": "Every time the responses name {brand}: a response naming you three times counts three, as on the Overview tab.",
         "totalMentionsSub": "times responses named {brand}",
         "mentionRate": "Mention rate",
         "mentionRateTip": "The share of tracked responses that name {brand}.",
@@ -12844,7 +12871,7 @@
       "groupRow": "{label} · {count, plural, one {# mention} other {# mentions}}",
       "openRow": "Open the answer to “{prompt}” on {platform}",
       "empty": "No mentions match these filters. Try another sentiment or co-mention filter, or a longer range.",
-      "loadError": "Couldn't load the mentions. Try again in a moment.",
+      "loadError": "Couldn't load the mentions",
       "unavailable": "The mentions table isn't available yet. It appears once the mentions data has been prepared.",
       "pickDates": "Choose a start or end date to see the mentions."
     },
@@ -12926,7 +12953,6 @@
       "nothing": "No mentions to export for these filters.",
       "capped": "The file holds {shown} of {total} responses. Narrow the filters to export the rest.",
       "pickDates": "Choose a start or end date first.",
-      "reports": "Reports",
       "exportSelected": "Export",
       "facts": {
         "period": "Period",
@@ -12942,7 +12968,7 @@
         "exported": "Exported (UTC)"
       },
       "summary": {
-        "title": "Mentions & Sentiment · {brand}",
+        "title": "Brand Visibility · Mentions · {brand}",
         "search": "Search: “{q}”",
         "kpi": "{label}: {value}",
         "kpiChange": "{label}: {value} ({change})",
@@ -13049,7 +13075,7 @@
       "noStrengths": "No strengths found — competitor leads on all prompts.",
       "noPromptData": "No prompt-level data available. Run a tracking check first.",
       "noDataTitle": "No comparison data",
-      "noDataDescription": "Run a tracking check from the Insights page to generate comparison data for this competitor.",
+      "noDataDescription": "Run a tracking check from Brand Visibility to generate comparison data for this competitor.",
       "loadError": "Failed to load comparison data."
     },
     "timeline": {
@@ -13087,8 +13113,6 @@
     "missingCompetitorWebsite": "Add a website to this brand before asking AI to suggest competitors."
   },
   "citations": {
-    "title": "Citations",
-    "description": "Domains and URLs that AI platforms cite when mentioning you — and your competitors.",
     "kpiTotalCitations": "Total Citations",
     "kpiTotalCitationsSub": "Across {results} tracked results",
     "kpiUniqueDomains": "Unique Domains",
@@ -15356,7 +15380,7 @@
       "citations": "Citations",
       "domainsTracked": "Domains Tracked",
       "manage": "Manage",
-      "viewInsights": "View Insights",
+      "viewInsights": "View Brand Visibility",
       "addTopic": "Add Topics",
       "addPrompt": "Add Prompts"
     },
@@ -15404,7 +15428,7 @@
     "features": {
       "title": "Everything you need for AI visibility",
       "insights": {
-        "title": "Answer Engine Insights",
+        "title": "Brand Visibility",
         "description": "Track your brand mentions and citations across all major AI platforms in real time."
       },
       "content": {
