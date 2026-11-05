@@ -8,7 +8,7 @@ updated: 2026-11-04
 last_checked: 2026-11-04
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 In the Content Editor you can generate an image for the page with AI, such as a cover. It goes into the page like any other image and is marked **AI-generated**.

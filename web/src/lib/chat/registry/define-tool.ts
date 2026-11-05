@@ -97,7 +97,7 @@ export type ToolArea =
   | 'skills'
   /** What Chat remembers between chats (CHAT-14). */
   | 'memory'
-  /** An agent running another agent (CHAT-27 phase 2). */
+  /** Agents: the ready-to-use ones (AGENTS plan §8), one running another (CHAT-27 phase 2). */
   | 'agents';
 
 /**

@@ -8,7 +8,7 @@ updated: 2026-11-03
 last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, help/chat/scheduling.md, help/chat/agents.md]
 ---
 Each person has their own time zone. Find it in **Settings › Account › Time zone**. It starts on **Automatic**, which uses your browser's time zone and shows it beside the word, such as **Automatic (Europe/Istanbul)**.

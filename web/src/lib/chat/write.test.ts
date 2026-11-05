@@ -1308,7 +1308,8 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
     const { decision, outcome } = await runAs(PEOPLE.manager, tool, 'full_auto');
     expect(decision).toEqual({ kind: 'click' });
     expect(outcome).toMatchObject({ code: 'ok' });
-    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow');
+    // A person's own chat names no agent run (00480).
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow', null);
     expect(db.tables.chat_activity_log).toHaveLength(1);
     expect(db.tables.chat_activity_log[0]).toMatchObject({
       tool_key: 'sendToCms',
@@ -1319,6 +1320,31 @@ describe('content, reports and Site Audit, by role and mode (W2-07, CHAT-20 §9 
       summary_params: { cms: 'Webflow' },
       undo_json: null,
       undo_until: null,
+    });
+  });
+
+  it('a CMS send clicked on a card in an agent run’s chat names that run (00480)', async () => {
+    const AGENT_RUN = '34343434-3434-4434-8434-343434343434';
+    const tool = chatTool('push_cms_draft')!;
+    const outcome = await runLoggedWrite({
+      tool,
+      input: INPUTS.push_cms_draft,
+      ctx: toolCtx,
+      organizationId: ORG,
+      userId: PEOPLE.manager,
+      brandId: BRAND,
+      surface: 'chat',
+      mode: 'auto',
+      approval: { kind: 'click' },
+      place: { conversationId: null, runId: null, stepId: null, agentRunId: AGENT_RUN },
+      approvalKey: nextStep(),
+    });
+    expect(outcome).toMatchObject({ code: 'ok' });
+    // The person's own send, through their session: assisted, the run named beside it.
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow', AGENT_RUN);
+    expect(db.tables.chat_activity_log[0]).toMatchObject({
+      approval_kind: 'click',
+      auto_via: null,
     });
   });
 

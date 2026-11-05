@@ -67,7 +67,9 @@ async function assertSender(userId) {
 
 /**
  * POST /api/content-drafts/send
- * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }] }
+ * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }], viaAgentRunId? }
+ * viaAgentRunId: Chat's click on a card in an agent run's chat (00480), kept
+ * on the deliveries once it is the workspace's run on the brand.
  * One page is sent before this answers: { deliveries: [{ id, status, http_status, error }] };
  * more (up to 25) go on in the background: { batchId, deliveries: queued, skipped }.
  */
@@ -78,11 +80,18 @@ router.post('/send', async (req, res) => {
     const field = parsed.error.issues[0]?.path.join('.') ?? null;
     return res.status(400).json({ error: 'Invalid request', code: 'invalid', field });
   }
-  const { brandId, pages, target } = parsed.data;
+  const { brandId, pages, target, viaAgentRunId } = parsed.data;
   try {
     const { orgId } = await assertBrandAccess(brandId, req.user.id);
     await assertSender(req.user.id);
-    const sent = await sendContentPages({ orgId, brandId, userId: req.user.id, pages, target });
+    const sent = await sendContentPages({
+      orgId,
+      brandId,
+      userId: req.user.id,
+      pages,
+      target,
+      viaAgentRunId,
+    });
     return res.json(sent);
   } catch (err) {
     if (err instanceof DeliveryError) {
@@ -102,6 +111,8 @@ const publishCmsInput = z.object({
   brandId: z.guid(),
   target: z.enum(['webflow', 'wordpress', 'wix', 'framer']),
   page: deliveryPage,
+  // The agent run whose card the person published it from (Chat's click, 00480).
+  viaAgentRunId: z.guid().optional(),
 });
 
 /** Managers can't take the brand's pages live while an Admin turned publishing off for them. */
@@ -128,7 +139,7 @@ async function assertPublisher(userId, orgId) {
 
 /**
  * POST /api/content-drafts/publish-cms
- * Body: { brandId, target: 'webflow' | 'wordpress' | 'wix', page }. A person's
+ * Body: { brandId, target: 'webflow' | 'wordpress' | 'wix', page, viaAgentRunId? }. A person's
  * Publish (AUTONOMOUS-GO-LIVE PR 9, Chat's publish_cms): the page is written
  * into its CMS draft as Send to CMS writes it, then put live there, and its
  * send marked published at its address (lib/cms-publish.js). Admins and
@@ -142,7 +153,7 @@ router.post('/publish-cms', async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
   }
-  const { brandId, page, target } = parsed.data;
+  const { brandId, page, target, viaAgentRunId } = parsed.data;
   try {
     const { orgId } = await assertBrandAccess(brandId, req.user.id);
     await assertSender(req.user.id);
@@ -153,6 +164,7 @@ router.post('/publish-cms', async (req, res) => {
       userId: req.user.id,
       page,
       target,
+      viaAgentRunId,
     });
     return res.json({ delivery: published.delivery, url: published.url ?? null });
   } catch (err) {

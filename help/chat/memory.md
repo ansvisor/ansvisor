@@ -8,7 +8,7 @@ updated: 2026-11-02
 last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 Chat can remember short notes between chats, so you don't repeat the same preferences every time, such as "write blog posts in US English" or "reports as PDF". Memory keeps one line per note. Nothing is remembered without your click.

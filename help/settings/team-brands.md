@@ -8,7 +8,7 @@ updated: 2026-11-03
 last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 When several teams or agencies work in one workspace, each person can see every brand or only the brands they work on. Admins choose it in **Settings › Team**, when they invite someone and later with **Edit brands**. The plan, billing and the AI limit stay the workspace's.

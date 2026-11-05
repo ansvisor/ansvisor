@@ -95,14 +95,21 @@ const NOT_CONNECTED = new Set([
  * page's) and goes through the API's own send, as the signed-in member: its
  * connections and its daily limit. Nothing goes live: the CMS keeps it as a
  * draft (DECISIONS 1). Errors come back as values (#427).
+ *
+ * `viaAgentRunId`: the agent run whose card the person clicked (Chat's
+ * tool context, in an agent run's chat): the API keeps it on the send once
+ * it is the workspace's run on the brand (00480), so the impact ledger and
+ * the run's outcome count the page for that agent. The same for a publish
+ * and a webhook send below.
  */
 export async function sendDraftToCms(
   draftId: string,
   target: ChatCmsTarget,
+  viaAgentRunId: string | null = null,
 ): Promise<SendDraftToCmsResult> {
   try {
     await assertWritable();
-    return (await sendOne(draftId, target)) as SendDraftToCmsResult;
+    return (await sendOne(draftId, target, 'draft', viaAgentRunId)) as SendDraftToCmsResult;
   } catch (err) {
     console.error('Failed to send the page to the CMS:', err);
     return { ok: false, reason: 'failed', message: 'The page couldn’t be sent. Try again.' };
@@ -152,10 +159,11 @@ async function sendAccess(
 export async function publishDraftToCms(
   draftId: string,
   target: PublishCmsTarget,
+  viaAgentRunId: string | null = null,
 ): Promise<PublishDraftToCmsResult> {
   try {
     await assertWritable();
-    return (await sendOne(draftId, target, 'publish')) as PublishDraftToCmsResult;
+    return (await sendOne(draftId, target, 'publish', viaAgentRunId)) as PublishDraftToCmsResult;
   } catch (err) {
     console.error('Failed to publish the page:', err);
     return { ok: false, reason: 'failed', message: 'The page couldn’t be published. Try again.' };
@@ -172,10 +180,18 @@ export async function publishDraftToCms(
  * brand's own webhook, and Ansvisor can't take it back. Errors come back
  * as values.
  */
-export async function sendDraftToWebhook(draftId: string): Promise<SendDraftToWebhookResult> {
+export async function sendDraftToWebhook(
+  draftId: string,
+  viaAgentRunId: string | null = null,
+): Promise<SendDraftToWebhookResult> {
   try {
     await assertWritable();
-    return (await sendOne(draftId, 'webhook', 'webhook')) as SendDraftToWebhookResult;
+    return (await sendOne(
+      draftId,
+      'webhook',
+      'webhook',
+      viaAgentRunId,
+    )) as SendDraftToWebhookResult;
   } catch (err) {
     console.error('Failed to send the page to the webhook:', err);
     return { ok: false, reason: 'failed', message: 'The page couldn’t be sent. Try again.' };
@@ -189,6 +205,7 @@ async function sendOne(
   draftId: string,
   target: ChatCmsTarget | 'webhook',
   how: SendHow = 'draft',
+  viaAgentRunId: string | null = null,
 ): Promise<SendDraftToCmsResult | PublishDraftToCmsResult | SendDraftToWebhookResult> {
   const publish = how === 'publish';
   if (publish && target === 'framer') {
@@ -301,11 +318,13 @@ async function sendOne(
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify(
-        publish
+      body: JSON.stringify({
+        ...(publish
           ? { brandId: draft.brand_id, page: item.page, target }
-          : { brandId: draft.brand_id, pages: [item.page], target },
-      ),
+          : { brandId: draft.brand_id, pages: [item.page], target }),
+        // The click on a card in an agent run's chat: the API checks the run before it keeps it.
+        ...(viaAgentRunId ? { viaAgentRunId } : {}),
+      }),
     });
   } catch (err) {
     console.error('Failed to send the page to the CMS:', err);
