@@ -39,7 +39,11 @@ const SHIPS_MAX = 500;
 const IN_CHUNK = 100;
 /** Rows a page of runs reads: PostgREST's max_rows. */
 const RUNS_PAGE = 1000;
-/** Runs numbered at most, from the oldest one a change came from: past it, no number. */
+/**
+ * Runs a read takes at most. Numbered, from the oldest one a change came
+ * from: past it, no number. The last 30 days', for their drafts, from the
+ * newest: past it, the oldest of those runs' drafts aren't counted.
+ */
 const RUNS_MAX = 10_000;
 
 /** Who took a change live: the agent on its own, the person reading, or a teammate. */
@@ -66,7 +70,7 @@ export interface AgentImpact {
   capped: boolean;
   /** Reports' headline over the rows: Improved counts Medium and High verdicts only. */
   summary: ImpactSummary;
-  /** Drafts its runs of the last 30 days made that no ship event names. */
+  /** Drafts its runs of the last 30 days (their newest RUNS_MAX) made that no ship event names. */
   draftsNotLive: number;
 }
 
@@ -137,23 +141,17 @@ async function byIds<T>(
 }
 
 /**
- * The agent's runs the person sees, from `from` on, oldest first, each with
- * its number: the runs before `from` counted, then each one's place.
+ * The agent's runs the person sees from `from` on, RUNS_PAGE a request in
+ * queued_at then id order, oldest or newest first, up to RUNS_MAX; `whole`
+ * when that's every one of them, a page having come back short.
  */
-async function numberedRuns(
+async function pagedRuns(
   agentId: string,
   access: BrandAccess,
   from: string,
-): Promise<{ runs: RunRow[]; numbers: Map<string, number> }> {
-  const before = await onTheirBrands(
-    supabaseAdmin
-      .from('chat_agent_runs')
-      .select('id', { count: 'exact', head: true })
-      .eq('agent_id', agentId)
-      .lt('queued_at', from),
-    access,
-  );
-  if (before.error) throw new Error(`Could not count the agent's runs: ${before.error.message}`);
+  first: 'oldest' | 'newest',
+): Promise<{ runs: RunRow[]; whole: boolean }> {
+  const ascending = first === 'oldest';
   const runs: RunRow[] = [];
   for (let page = 0; page * RUNS_PAGE < RUNS_MAX; page++) {
     const { data, error } = await onTheirBrands(
@@ -164,16 +162,40 @@ async function numberedRuns(
         .gte('queued_at', from),
       access,
     )
-      .order('queued_at', { ascending: true })
-      .order('id', { ascending: true })
+      .order('queued_at', { ascending })
+      .order('id', { ascending })
       .range(page * RUNS_PAGE, (page + 1) * RUNS_PAGE - 1);
     if (error) throw new Error(`Could not read the agent's runs: ${error.message}`);
     const rows = (data ?? []) as RunRow[];
     runs.push(...rows);
-    if (rows.length < RUNS_PAGE) break;
+    if (rows.length < RUNS_PAGE) return { runs, whole: true };
   }
+  return { runs, whole: false };
+}
+
+/**
+ * The agent's runs the person sees, from `from` on, oldest first, each with
+ * its number: the runs before `from` counted, then each one's place. Not
+ * `whole` when there are more than RUNS_MAX since `from`: the newest aren't
+ * read, nor numbered.
+ */
+async function numberedRuns(
+  agentId: string,
+  access: BrandAccess,
+  from: string,
+): Promise<{ runs: RunRow[]; numbers: Map<string, number>; whole: boolean }> {
+  const before = await onTheirBrands(
+    supabaseAdmin
+      .from('chat_agent_runs')
+      .select('id', { count: 'exact', head: true })
+      .eq('agent_id', agentId)
+      .lt('queued_at', from),
+    access,
+  );
+  if (before.error) throw new Error(`Could not count the agent's runs: ${before.error.message}`);
+  const { runs, whole } = await pagedRuns(agentId, access, from, 'oldest');
   const numbers = new Map(runs.map((run, i) => [run.id, (before.count ?? 0) + i + 1] as const));
-  return { runs, numbers };
+  return { runs, numbers, whole };
 }
 
 /** What the agent did in the last 30 days, or null when the person can't see the agent. */
@@ -228,15 +250,21 @@ export async function readAgentImpact(
   const teammates = [
     ...new Set(shipRows.map((s) => s.shipped_by).filter((p): p is string => !!p && p !== viewer)),
   ];
-  const [{ runs, numbers }, names] = await Promise.all([
+  const [{ runs, numbers, whole }, names] = await Promise.all([
     numberedRuns(agent.row.id, access, from),
     namesOf(org, teammates),
   ]);
 
+  // The window's runs, for their drafts. `from` is at or before the window's start, so a
+  // numbering read that got every run since `from` has them all: the common case, read
+  // once. Cut short at RUNS_MAX, it misses the newest: the window is then read on its
+  // own, newest first.
+  const windowRuns = whole
+    ? runs.filter((run) => Date.parse(run.queued_at) >= Date.parse(since))
+    : (await pagedRuns(agent.row.id, access, since, 'newest')).runs;
+  const windowRunIds = windowRuns.map((run) => run.id);
+
   // The chats of the runs that shipped, and of the window's runs (their drafts).
-  const windowRunIds = runs
-    .filter((run) => Date.parse(run.queued_at) >= Date.parse(since))
-    .map((run) => run.id);
   const chats = await byIds<ChatRow>(
     [...new Set([...shippedRunIds, ...windowRunIds])],
     (chunk) =>
