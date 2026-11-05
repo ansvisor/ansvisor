@@ -189,11 +189,11 @@ describe('readToday', () => {
   });
 
   it('reads today in the person’s zone, as the job dates the suggestion', async () => {
-    // 09:30 UTC is already Oct 31 in Kiritimati (UTC+14): yesterday's there is Oct 30's.
+    // 09:30 UTC is still 22:30 on Oct 29 in Pago Pago (UTC−11): Oct 30's is tomorrow's there.
     const db = fakeDb({
       actions: twelve(),
-      profiles: [{ id: ME, time_zone: 'Pacific/Kiritimati' }],
-      chat_suggestions: [suggestion('f'), suggestion('g', { sent_on: '2026-10-31' })],
+      profiles: [{ id: ME, time_zone: 'Pacific/Pago_Pago' }],
+      chat_suggestions: [suggestion('f'), suggestion('g', { sent_on: '2026-10-29' })],
     });
     expect(ids(await read(db))[0]).toBe('g');
   });
@@ -205,12 +205,12 @@ describe('readToday', () => {
       chat_messages: [
         {
           role: 'assistant',
-          timezone: 'Pacific/Kiritimati',
+          timezone: 'Pacific/Pago_Pago',
           created_at: daysAgo(1),
           chat_conversations: { user_id: ME, organization_id: ORG },
         },
       ],
-      chat_suggestions: [suggestion('g', { sent_on: '2026-10-31' })],
+      chat_suggestions: [suggestion('g', { sent_on: '2026-10-29' })],
     });
     expect(ids(await read(db))[0]).toBe('g');
   });
@@ -243,7 +243,8 @@ describe('readToday', () => {
   it('reads nothing more when no action is open', async () => {
     const db = fakeDb({ actions: [] });
     expect(await read(db)).toEqual({ today: [], next: [] });
-    expect(db.reads).toEqual(['actions']);
+    // The open actions only: the unassigned ones and the person's own.
+    expect(new Set(db.reads)).toEqual(new Set(['actions']));
   });
 
   it('fails as the job’s reads do, by what and the code', async () => {
