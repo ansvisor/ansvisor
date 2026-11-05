@@ -16,6 +16,7 @@ import {
   isTimeZone,
   localClock,
   pickSuggestion,
+  rankActions,
   rankScore,
   resolveZones,
   roleFeed,
@@ -378,6 +379,47 @@ describe('pickSuggestion: ranking', () => {
     });
     expect(far.action.id).toBe('same');
     expect(far.variety).toBe(false);
+  });
+});
+
+describe('rankActions: the ranking the Inbox and the Today card share (AC-011)', () => {
+  const rank = (input) =>
+    rankActions({ userId: 'u1', startNow: new Map(), now: NOW, ...input }).map(
+      (entry) => entry.action.id,
+    );
+
+  it('ranks by score with the wait and Start now lifts, older first on a tie', () => {
+    const actions = [
+      action('plain', { priority_score: 70 }),
+      action('waiting', { priority_score: 60, created_at: daysAgo(12) }),
+      action('writing', { priority_score: 66 }),
+      action('older', { priority_score: 70, created_at: daysAgo(0.5) }),
+    ];
+    const startNow = new Map([['writing', 'create']]);
+    expect(rank({ actions, startNow })).toEqual(['waiting', 'writing', 'older', 'plain']);
+    const scores = rankActions({ actions, userId: 'u1', startNow, now: NOW }).map((e) => e.score);
+    expect(scores).toEqual([72, 66 + START_NOW_LIFT, 70, 70]);
+  });
+
+  it('keeps open actions that are unassigned or the person’s, less what `skip` names', () => {
+    const actions = [
+      action('mine', { assignee_id: 'u1' }),
+      action('theirs', { assignee_id: 'u2' }),
+      action('held', { status: 'on_hold' }),
+      action('going', { status: 'in_progress' }),
+      action('skipped'),
+    ];
+    // Same score and age: the id breaks the tie.
+    expect(rank({ actions, skip: new Set(['skipped']) })).toEqual(['going', 'mine']);
+  });
+
+  it('gives the daily suggestion its first entry when nothing blocks or varies it', () => {
+    const actions = [
+      action('a', { priority_score: 50 }),
+      action('b', { priority_score: 90, category: 'fix' }),
+      action('c', { priority_score: 70 }),
+    ];
+    expect(pick({ actions }).action.id).toBe(rank({ actions })[0]);
   });
 });
 

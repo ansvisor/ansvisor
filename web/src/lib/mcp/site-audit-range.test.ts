@@ -85,12 +85,19 @@ beforeEach(() => {
   db.historyReads = 0;
 });
 
-describe('getSiteAuditFor › scoreRange', () => {
+describe('getSiteAuditFor › scoreRange and previousScore', () => {
   it("gives the range from the page's own audits, with the audit's signals", async () => {
     const audit = await getSiteAuditFor(AUTH, 'a1');
     expect(audit?.scoreRange).toEqual({ plusMinus: 2, low: 62, high: 66, audits: 3 });
     expect(audit?.totalScore).toBe(0.64);
     expect(audit?.signals).toHaveLength(1);
+  });
+
+  it("gives the page's audit before, as the report's change counts from it", async () => {
+    const audit = await getSiteAuditFor(AUTH, 'a1');
+    expect(audit?.partial).toBe(false);
+    expect(audit?.previousScore).toBe(0.62);
+    expect(audit?.previousCreatedAt).toBe('2026-10-28T09:00:00Z');
   });
 
   it('is null with fewer than three complete audits of the page', async () => {
@@ -100,7 +107,12 @@ describe('getSiteAuditFor › scoreRange', () => {
 
   it("is null, with no history read, for an audit that isn't compared", async () => {
     db.audit = { ...db.audit, partial: true };
-    expect((await getSiteAuditFor(AUTH, 'a1'))?.scoreRange).toBeNull();
+    expect(await getSiteAuditFor(AUTH, 'a1')).toMatchObject({
+      partial: true,
+      scoreRange: null,
+      previousScore: null,
+      previousCreatedAt: null,
+    });
     db.audit = { ...db.audit, partial: false, status: 'running', total_score: null };
     expect((await getSiteAuditFor(AUTH, 'a1'))?.scoreRange).toBeNull();
     expect(db.historyReads).toBe(0);
@@ -112,6 +124,7 @@ describe('getSiteAuditFor › scoreRange', () => {
     const audit = await getSiteAuditFor(AUTH, 'a1');
     expect(audit?.id).toBe('a1');
     expect(audit?.scoreRange).toBeNull();
+    expect(audit?.previousScore).toBeNull();
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });

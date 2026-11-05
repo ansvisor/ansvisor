@@ -30,6 +30,7 @@ import {
   sendChatAction,
 } from '../lib/action-center/from-chat.js';
 import { runTaskCheck } from '../lib/action-center/task-checks.js';
+import { readToday } from '../lib/action-center/today.js';
 import { taskCheckLimiter } from '../middleware/rate-limiter.js';
 
 const router = Router();
@@ -70,6 +71,33 @@ router.post('/signals/:id/rescore', async (req, res) => {
     req.log.error({ err: error }, 'rescore actions for a signal error');
     return res.status(error.status || 500).json({
       error: error.status ? error.message : 'Failed to update the actions.',
+      code: error.status ? error.code : undefined,
+    });
+  }
+});
+
+/**
+ * The Today card's actions for the caller on a brand (AC-011), ranked as the
+ * Inbox's daily suggestion (lib/action-center/today.js). Any role that sees
+ * the brand reads it: it reads, and only what the Actions list already shows.
+ */
+export async function todayFor(brandId, userId, { now = new Date() } = {}) {
+  const { orgId } = await assertBrandAccess(brandId, userId);
+  return readToday(supabaseAdmin, { orgId, brandId, userId, now });
+}
+
+const todayQuerySchema = z.object({ brandId: z.guid() });
+
+/** GET /api/action-center/today?brandId= */
+router.get('/today', async (req, res) => {
+  const query = todayQuerySchema.safeParse(req.query ?? {});
+  if (!query.success) return res.status(400).json({ error: 'Invalid brand id' });
+  try {
+    return res.json(await todayFor(query.data.brandId, req.user.id));
+  } catch (error) {
+    if (!error.status) req.log.error({ err: error }, 'action center today error');
+    return res.status(error.status || 500).json({
+      error: error.status ? error.message : 'Failed to read today.',
       code: error.status ? error.code : undefined,
     });
   }

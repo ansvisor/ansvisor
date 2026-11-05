@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PAGE_AUDITS_SLICE,
   readEarlierPageAudits,
+  readPageComparison,
   readScoreRange,
   type PageAuditRow,
   type RangedAuditRow,
@@ -139,6 +140,36 @@ describe('readScoreRange', () => {
     expect(await readScoreRange(client, { ...AUDIT, partial: true })).toBeNull();
     expect(await readScoreRange(client, { ...AUDIT, status: 'running' })).toBeNull();
     expect(await readScoreRange(client, { ...AUDIT, total_score: null })).toBeNull();
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe('readPageComparison', () => {
+  it("gives the page's audit before this one with the range, from the same read", async () => {
+    const { client, calls } = fakeClient([
+      row('https://shop.com/shoes', 0.2, 29),
+      row('https://www.shop.com/bags/', 0.61, 21),
+      row('https://shop.com/bags', 0.66, 20),
+    ]);
+    expect(await readPageComparison(client, AUDIT)).toEqual({
+      range: { plusMinus: 3, low: 61, high: 66, audits: 3 },
+      // The report's "+3 since Oct 21" counts from it.
+      previous: { score: 0.61, createdAt: '2026-10-21T09:00:00Z' },
+    });
+    expect(calls).toHaveLength(1);
+  });
+
+  it('has no previous audit for a page audited once', async () => {
+    const { client } = fakeClient([row('https://shop.com/shoes', 0.2, 29)]);
+    expect(await readPageComparison(client, AUDIT)).toEqual({ range: null, previous: null });
+  });
+
+  it("has neither, with no read, for an audit that isn't compared", async () => {
+    const { client, calls } = fakeClient([row('https://shop.com/bags', 0.63, 28)]);
+    expect(await readPageComparison(client, { ...AUDIT, partial: true })).toEqual({
+      range: null,
+      previous: null,
+    });
     expect(calls).toHaveLength(0);
   });
 });

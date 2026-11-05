@@ -43,7 +43,7 @@ If the AI checks can't run, the page keeps the verdicts of its last audit. A pag
 
 Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits. A line beside it gives those two scores. Partial audits aren't counted. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five. A page that didn't change usually shows ± 0.
 
-The same range comes with an audit wherever else you read it: in Chat, in AI assistants connected over MCP, and in a report's **Site Audit Score**, from the page's audits up to the report's end date.
+The same range comes with an audit wherever else you read it: in Chat, on the audit's card under the answer, in AI assistants connected over MCP, and in a report's **Site Audit Score**, from the page's audits up to the report's end date.
 
 ## Signals
 
