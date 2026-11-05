@@ -142,18 +142,23 @@ describe('MarketplaceTab', () => {
   it('shows the chips with the catalog’s counts, the meta row, the sort and 30 cards', async () => {
     await render();
     expect(all('[data-action="skills.library.topic"]').map((chip) => chip.textContent)).toEqual([
-      'All701',
-      'SEO94',
-      'Content83',
-      'Brand73',
-      'Analytics32',
-      'Social94',
-      'CRO65',
-      'Email53',
-      'Paid Ads44',
-      'Growth85',
-      'GTM231',
+      'All 701',
+      'SEO 94',
+      'Content 83',
+      'Brand 73',
+      'Analytics 32',
+      'Social 94',
+      'CRO 65',
+      'Email 53',
+      'Paid Ads 44',
+      'Growth 85',
+      'GTM 231',
     ]);
+    // The label and its count centred in the 32px pill, the gap between them.
+    const seo = container.querySelector<HTMLElement>('[data-topic="seo"]')!;
+    expect(seo.className).toEqual(expect.stringContaining('inline-flex h-8 items-center'));
+    expect(seo.className).toEqual(expect.stringContaining('justify-center gap-1'));
+    expect(seo.querySelector('span')!.className).not.toContain('ml-1');
     expect(container.querySelector('[data-slot="library-meta"]')!.textContent).toBe(
       '35 skills · MIT license',
     );

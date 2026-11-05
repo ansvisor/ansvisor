@@ -304,12 +304,13 @@ export function ChatSkills() {
                   }
                 }}
                 className={cn(
-                  '-mb-px border-b-2 px-3 py-2 text-[13px] font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                  '-mb-px inline-flex items-center justify-center gap-1 border-b-2 px-3 py-2 text-[13px] leading-none font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
                   tab === key
                     ? 'border-foreground text-foreground'
                     : 'border-transparent text-muted-foreground hover:text-foreground',
                 )}
               >
+                {/* The space reads "Library 701"; in the flex row the gap spaces them. */}
                 {t(`tabs.${key}`)}{' '}
                 <span className="text-muted-foreground tabular-nums">
                   {key === 'ansvisor'

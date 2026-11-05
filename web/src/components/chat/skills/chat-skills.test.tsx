@@ -176,6 +176,8 @@ describe('ChatSkills', () => {
       'Library 701',
       'My skills 2',
     ]);
+    // The label and its count centred in the tab, the gap between them.
+    expect(all('[role="tab"]').every((tab) => tab.className.includes('items-center'))).toBe(true);
     expect(cards()).toEqual(['winback', 'report', 'publish']);
     expect(fetchMock).toHaveBeenCalledWith(
       `/api/chat/skills/connections?brand=${BRAND}`,

@@ -213,14 +213,16 @@ export function MarketplaceTab() {
               data-topic={key}
               onClick={() => setTopic(key)}
               className={cn(
-                'h-8 rounded-full border px-3 text-xs font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                // The label and its count centred in the pill, the gap between them.
+                'inline-flex h-8 items-center justify-center gap-1 rounded-full border px-3 text-xs leading-none font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
                 topic === key
                   ? 'border-foreground bg-foreground text-background'
                   : 'bg-card text-muted-foreground hover:text-foreground',
               )}
             >
-              {t(`topics.${key}`)}
-              {counts && <span className="ml-1 tabular-nums opacity-70">{counts[key]}</span>}
+              {/* The space reads "SEO 94"; in the flex row the gap spaces them. */}
+              {t(`topics.${key}`)}{' '}
+              {counts && <span className="tabular-nums opacity-70">{counts[key]}</span>}
             </button>
           ))}
         </div>
