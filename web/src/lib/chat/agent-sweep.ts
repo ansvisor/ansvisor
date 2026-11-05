@@ -40,6 +40,8 @@ import { readOwnKeyCap } from './own-key-cap';
 export const STALE_QUEUE_MS = 6 * 60 * 60_000;
 /** Most rows each part reads a sweep. */
 const SWEEP_ROWS = 500;
+/** Pages of open runs the settle pass reads past the demo brands' runs, at most. */
+const SETTLE_PAGES = 10;
 
 export interface AgentSweep {
   expired: number;
@@ -254,6 +256,46 @@ async function resumeKeyCapPausedAgents(now: Date): Promise<number> {
   return resumed;
 }
 
+/**
+ * The open runs the settle pass brings in step, oldest first: never a demo
+ * brand's sample runs (00475), which stay as built, so they can't fill the
+ * window ahead of real ones. Read a page at a time, the demo brands' left out.
+ */
+async function openRunsToSettle(): Promise<OpenRun[]> {
+  const runs: OpenRun[] = [];
+  for (let page = 0; page < SETTLE_PAGES && runs.length < SWEEP_ROWS; page += 1) {
+    const { data, error } = await supabaseAdmin
+      .from('chat_agent_runs')
+      .select('id, organization_id, status, brand_id')
+      .in('status', ['running', 'needs_you', 'paused_cap'])
+      .order('queued_at', { ascending: true })
+      .range(page * SWEEP_ROWS, (page + 1) * SWEEP_ROWS - 1);
+    if (error) throw new Error(`Could not read the agent runs: ${error.message}`);
+    const open = (data ?? []) as OpenRun[];
+    const brandIds = [...new Set(open.map((run) => run.brand_id).filter((id) => id !== null))];
+    const demo = new Set<string>();
+    if (brandIds.length > 0) {
+      const brands = await supabaseAdmin
+        .from('brands')
+        .select('id')
+        .in('id', brandIds)
+        .eq('is_demo', true);
+      if (brands.error) throw new Error(`Could not read the runs' brands: ${brands.error.message}`);
+      for (const brand of (brands.data ?? []) as { id: string }[]) demo.add(brand.id);
+    }
+    runs.push(...open.filter((run) => run.brand_id === null || !demo.has(run.brand_id)));
+    if (open.length < SWEEP_ROWS) break;
+  }
+  return runs.slice(0, SWEEP_ROWS);
+}
+
+interface OpenRun {
+  id: string;
+  organization_id: string;
+  status: string;
+  brand_id: string | null;
+}
+
 /** One sweep (above); answers what each part did, for the cron's log. */
 export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Promise<AgentSweep> {
   const counts: AgentSweep = {
@@ -285,14 +327,7 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
 
   // Agent runs follow their Chat runs; the slots they free are filled below.
   await part('settle', async () => {
-    const { data: open, error } = await supabaseAdmin
-      .from('chat_agent_runs')
-      .select('id, organization_id, status')
-      .in('status', ['running', 'needs_you', 'paused_cap'])
-      .order('queued_at', { ascending: true })
-      .limit(SWEEP_ROWS);
-    if (error) throw new Error(`Could not read the agent runs: ${error.message}`);
-    for (const run of (open ?? []) as { id: string; organization_id: string; status: string }[]) {
+    for (const run of await openRunsToSettle()) {
       if (!chatAgenticEnabled(run.organization_id)) continue;
       try {
         const after = await settleAgentRun(run.id, { now });
@@ -321,6 +356,7 @@ export async function sweepAgents(now: Date, driver: AgentRunDriver | null): Pro
       .from('chat_agents')
       .select('id, organization_id, fail_count')
       .eq('status', 'active')
+      .is('demo_brand_id', null)
       .gt('fail_count', FAILURES_TO_PAUSE - 1)
       .limit(SWEEP_ROWS);
     if (error) throw new Error(`Could not read the agents: ${error.message}`);

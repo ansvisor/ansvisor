@@ -54,6 +54,9 @@ function memoryStore({ recent = null, spent = 0, pending = 0, perDay = [], taken
       requests.push(row);
       return { id: `req-${requests.length}` };
     }),
+    askedBy: vi.fn(async (email, cardId) =>
+      requests.some((r) => r.email === email && r.report_card_id === cardId),
+    ),
   };
 }
 
@@ -179,6 +182,27 @@ describe('submitReportCardRequest', () => {
     expect(store.requests[0]).toMatchObject({ report_card_id: 'card-old', outcome: 'resent' });
   });
 
+  it('e-mails an address a card once, however often the form is sent', async () => {
+    const store = memoryStore({ recent: { id: 'card-old', status: 'ready' } });
+    const body = form({ email: 'ceo@acme.example' });
+    for (let i = 0; i < 3; i += 1) {
+      expect((await submit(body, store)).body.code).toBe('resent');
+    }
+    expect(store.requests).toHaveLength(1);
+    expect((await submit(form({ email: 'cfo@acme.example' }), store)).body.code).toBe('resent');
+    expect(store.requests).toHaveLength(2);
+  });
+
+  it('takes a first name in letters only, never a link the greeting would carry', async () => {
+    for (const firstName of ['https://evil.example', 'Ayşe <b>', 'Call 555', 'x.com/y']) {
+      const res = await submit(form({ firstName }), memoryStore());
+      expect(res.body.fields).toEqual({ firstName: FIELD_MESSAGES.firstName });
+    }
+    for (const firstName of ['Ayşe', 'Jean-Luc', 'O’Brien', 'Mary Ann', 'Zoë']) {
+      expect((await submit(form({ firstName }), memoryStore())).status).toBe(200);
+    }
+  });
+
   it('adds a request to the card still being made', async () => {
     const store = memoryStore({ recent: { id: 'card-run', status: 'running' } });
     const res = await submit(form(), store);
@@ -220,7 +244,7 @@ describe('submitReportCardRequest', () => {
   });
 
   it('keeps room in the budget for the cards still to run', async () => {
-    const store = memoryStore({ spent: 150, pending: 160 });
+    const store = memoryStore({ spent: 150, pending: 180 });
     expect((await submit(form(), store)).body.code).toBe('unavailable');
   });
 });

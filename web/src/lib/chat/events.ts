@@ -356,6 +356,8 @@ export interface ChatRunSummary {
   stepCount: number;
   /** The "Data used" chips: "Citations · 42". */
   sources: { label: string; count: number }[];
+  /** "Thought for N s" above the answer: the work before its first words; only when shown. */
+  thoughtMs?: number;
 }
 
 /**
@@ -393,6 +395,13 @@ export interface ChatEventPayloads {
   'why.ready': ChatWhy;
   'confirm.required': ChatConfirm;
   next_moves: { moves: ChatNextMove[] };
+  /**
+   * "Remember this?" under the answer (CHAT-14 item 9, W4-33): a lasting
+   * preference the person stated, as the line its click asks Chat to
+   * remember; at most once a conversation. Nothing is saved without the
+   * Remember card's Save.
+   */
+  'remember.offered': { text: string };
   'usage.updated': ChatUsage;
   /** generatedAt and dataAsOf: the answer's "Generated …" and "Data as of …" (CHAT-06 38–39). */
   'run.finished': ChatRunSummary & { generatedAt: string; dataAsOf: string | null };
@@ -457,6 +466,7 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'why.ready': true,
   'confirm.required': true,
   next_moves: true,
+  'remember.offered': true,
   'usage.updated': true,
   'run.finished': true,
   'run.error': true,

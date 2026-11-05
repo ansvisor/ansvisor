@@ -134,6 +134,8 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
     chatEvent('next_moves', 8, {
       moves: [{ label: 'Turn this into actions', prompt: 'Turn these findings into actions' }],
     }),
+  'remember.offered': () =>
+    chatEvent('remember.offered', 9, { text: 'Blog posts use US English spelling' }),
   'usage.updated': () => chatEvent('usage.updated', 9, { percentUsed: 44, runPercent: 0.3 }),
   'run.finished': () =>
     chatEvent('run.finished', 10, {

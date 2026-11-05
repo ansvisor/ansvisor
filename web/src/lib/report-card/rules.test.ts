@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { PLANS } from '@/config/plans';
 import type { ReportCardPayload } from './payload';
 import {
+  MIN_CPC_KEYWORDS,
   PLAN_STEPS_MAX,
   PLAN_STEPS_MIN,
+  QUESTION_ROW_MAX,
   actionPlan,
+  buyVsEarn,
   competitorSite,
   conversionRange,
   countryName,
@@ -13,9 +16,12 @@ import {
   money,
   planOffers,
   quickWins,
+  productLabel,
+  questionGroups,
+  questionLines,
+  questionSummary,
   quotedQuestion,
   revenueRows,
-  times,
   totals,
   valueRows,
 } from './rules';
@@ -107,18 +113,62 @@ describe('quickWins', () => {
     expect(wins[2].title).toBe('Make your own pages easy to cite');
   });
 
-  it('skips a missed question no competitor won, and never suggests the own site as a place to get onto', () => {
+  it('falls back to the question most engines answered when no main competitor wins one', () => {
     const wins = quickWins(
       card({
-        missedQuestions: [{ text: 'how long do beans stay fresh', textEn: null, competitors: [] }],
+        missedQuestions: [
+          { text: 'how long do beans stay fresh', textEn: null, competitors: [], answers: 2 },
+          {
+            text: 'is a burr grinder worth it',
+            textEn: null,
+            competitors: ['Tiny Mill'],
+            answers: 4,
+          },
+        ],
         citedSites: [{ domain: 'brewlinecoffee.example', answers: 30, own: true }],
       }),
     );
     expect(wins.map((w) => w.title)).toEqual([
+      'Answer “is a burr grinder worth it” on your site',
       'Make your own pages easy to cite',
       'Close the gap on Ridgeline Roasters',
-      'Look at what Google AI Mode says about your market',
     ]);
+    expect(wins[0].detail).toContain('AI names Tiny Mill for it, and not Brewline Coffee.');
+  });
+
+  it('says so when the question picked names no competitor', () => {
+    const wins = quickWins(
+      card({
+        missedQuestions: [
+          { text: 'how long do beans stay fresh', textEn: null, competitors: [], answers: 3 },
+        ],
+      }),
+    );
+    expect(wins[0].detail).toContain('None of the answers to it names Brewline Coffee.');
+  });
+
+  it('picks a question the main competitors win over one with more minor names', () => {
+    const wins = quickWins(
+      card({
+        missedQuestions: [
+          {
+            text: 'enterprise search platform pricing',
+            textEn: null,
+            competitors: ['Glean', 'GoSearch', 'Iternal', 'Moveworks'],
+            answers: 4,
+          },
+          {
+            text: 'best coffee subscription',
+            textEn: null,
+            competitors: ['Tiny Mill', 'Copper Kettle Coffee'],
+            answers: 4,
+          },
+        ],
+      }),
+    );
+    expect(wins[0].title).toBe('Answer “best coffee subscription” on your site');
+    // The main competitor is named first.
+    expect(wins[0].detail).toContain('AI names Copper Kettle Coffee and Tiny Mill for it');
   });
 
   it('still gives one step when the company leads everywhere, alike in every engine', () => {
@@ -257,22 +307,32 @@ describe('countryName', () => {
 });
 
 describe('valueRows', () => {
-  it('prices 100, 1,000 and 10,000 visits at the cost per click, against each plan', () => {
-    const rows = valueRows(SAMPLE_REPORT_CARD);
-    expect(rows).toEqual([
-      { visits: 100, monthly: 185, yearly: 2_220, multiple: { starter: 3.8, growth: 0.7 } },
-      { visits: 1_000, monthly: 1_850, yearly: 22_200, multiple: { starter: 37.8, growth: 7.4 } },
-      {
-        visits: 10_000,
-        monthly: 18_500,
-        yearly: 222_000,
-        multiple: { starter: 377.6, growth: 74.3 },
-      },
+  it('prices 100, 1,000 and 10,000 visits at the cost per click, a month and a year', () => {
+    expect(valueRows(SAMPLE_REPORT_CARD)).toEqual([
+      { visits: 100, monthly: 185, yearly: 2_220 },
+      { visits: 1_000, monthly: 1_850, yearly: 22_200 },
+      { visits: 10_000, monthly: 18_500, yearly: 222_000 },
     ]);
   });
 
-  it('is null without a cost per click', () => {
+  it('sets 1,000 visits bought in ads against Growth over 12 months', () => {
+    expect(buyVsEarn(SAMPLE_REPORT_CARD)).toEqual({
+      visits: 1_000,
+      adsMonthly: 1_850,
+      adsYearly: 22_200,
+      growthMonthly: PLANS.growth.pricing?.monthly,
+      growthTwelveMonths: (PLANS.growth.pricing?.monthly ?? 0) * 12,
+      growthYearly: PLANS.growth.pricing?.annual,
+    });
+    expect(buyVsEarn(card({ cpc: null }))).toBeNull();
+  });
+
+  it('is null without a cost per click, or with fewer than five keywords behind it', () => {
     expect(valueRows(card({ cpc: null }))).toBeNull();
+    expect(MIN_CPC_KEYWORDS).toBe(5);
+    expect(valueRows(card({ cpc: { usd: 28.27, keywords: 2 } }))).toBeNull();
+    expect(valueRows(card({ cpc: { usd: 28.27, keywords: 4 } }))).toBeNull();
+    expect(valueRows(card({ cpc: { usd: 1.85, keywords: 5 } }))?.[0].monthly).toBe(185);
   });
 });
 
@@ -322,12 +382,145 @@ describe('planOffers', () => {
   });
 });
 
+describe('questionLines', () => {
+  it('quotes each question as page 1 does, cut to two lines', () => {
+    const lines = questionLines(
+      card({
+        questionRows: [
+          {
+            text: 'kısa soru',
+            textEn: 'short question',
+            named: { 'chatgpt-web': 'named' },
+            instead: null,
+          },
+          {
+            text: '在哪里买咖啡豆',
+            textEn: 'Where to buy coffee beans',
+            named: {},
+            instead: 'Ridge',
+          },
+          {
+            text: 'x '.repeat(80).trim(),
+            textEn: null,
+            named: {},
+            instead: 'A very long competitor name that runs on',
+          },
+        ],
+      }),
+    );
+    expect(lines[0]).toEqual({
+      number: 1,
+      text: 'kısa soru',
+      named: { 'chatgpt-web': 'named' },
+      instead: null,
+      volume: null,
+      fit: null,
+    });
+    expect(lines[1].text).toBe('Where to buy coffee beans');
+    expect(lines[2].text.length).toBeLessThanOrEqual(QUESTION_ROW_MAX);
+    expect(lines[2].text.endsWith('…')).toBe(true);
+    expect(lines[2].instead?.length).toBeLessThanOrEqual(28);
+  });
+
+  it('has none for a card without its questions', () => {
+    expect(questionLines(card({ questionRows: undefined }))).toEqual([]);
+    expect(questionGroups(card({ questionRows: undefined }))).toEqual([]);
+  });
+});
+
+describe('questionGroups', () => {
+  it('groups the questions by product, the main one first, with its page', () => {
+    const groups = questionGroups(SAMPLE_REPORT_CARD);
+    expect(groups.map((g) => [g.product, g.page, g.lines.length])).toEqual([
+      ['Whole bean coffee', 'brewlinecoffee.example/beans', 19],
+      ['Coffee subscriptions', 'brewlinecoffee.example/subscribe', 5],
+      ['Gift boxes', null, 1],
+    ]);
+    expect(groups[0].lines[0]).toMatchObject({ number: 1, volume: 2900, fit: 'core' });
+    expect(groups[0].lines.find((l) => l.number === 17)?.fit).toBe('related');
+  });
+
+  it('keeps an older card’s questions in one group without a product', () => {
+    const rows = SAMPLE_REPORT_CARD.questionRows?.map((row) => ({ ...row, product: null }));
+    const groups = questionGroups(card({ products: undefined, questionRows: rows }));
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ product: null, page: null });
+    expect(groups[0].lines).toHaveLength(25);
+  });
+
+  it('names a product in a script Inter has no letters for by its English', () => {
+    expect(productLabel({ name: 'コーヒー豆', nameEn: 'Coffee beans' })).toBe('Coffee beans');
+    expect(productLabel({ name: 'Yurt dışı turları', nameEn: 'Tours abroad' })).toBe(
+      'Yurt dışı turları',
+    );
+  });
+});
+
+describe('questionSummary', () => {
+  it('says how many answers named the company, and in which questions', () => {
+    expect(questionSummary(SAMPLE_REPORT_CARD)).toBe(
+      'Named in 18 of 100 answers: 14 of the 25 questions.',
+    );
+    const few = card({
+      questionRows: [
+        {
+          text: 'a',
+          textEn: null,
+          named: { 'chatgpt-web': 'missed', 'gemini-web': 'none' },
+          instead: null,
+        },
+        {
+          text: 'b',
+          textEn: null,
+          named: { 'chatgpt-web': 'named', 'gemini-web': 'named' },
+          instead: null,
+        },
+        {
+          text: 'c',
+          textEn: null,
+          named: { 'chatgpt-web': 'missed', 'gemini-web': 'missed' },
+          instead: null,
+        },
+        {
+          text: 'd',
+          textEn: null,
+          named: { 'chatgpt-web': 'named', 'gemini-web': 'missed' },
+          instead: null,
+        },
+      ],
+    });
+    expect(questionSummary(few)).toBe('Named in 3 of 7 answers: questions 2 and 4.');
+  });
+
+  it('says so when no answer named the company', () => {
+    const none = card({
+      questionRows: [
+        {
+          text: 'a',
+          textEn: null,
+          named: { 'chatgpt-web': 'missed', 'google-aio': 'none' },
+          instead: null,
+        },
+        {
+          text: 'b',
+          textEn: null,
+          named: { 'chatgpt-web': 'missed', 'google-aio': 'missed' },
+          instead: null,
+        },
+      ],
+    });
+    expect(questionSummary(none)).toBe('Brewline Coffee wasn’t named in any of the 3 answers.');
+  });
+
+  it('has none for a card without its questions', () => {
+    expect(questionSummary(card({ questionRows: undefined }))).toBeNull();
+  });
+});
+
 describe('formats', () => {
-  it('writes money in whole units and multiples to one decimal under ten', () => {
+  it('writes money in whole units', () => {
     expect(money(1_850)).toBe('$1,850');
     expect(money(380, 'EUR')).toBe('€380');
     expect(money(380, 'TRY')).toBe('TRY\u00a0380');
-    expect(times(3.8)).toBe('3.8×');
-    expect(times(377.6)).toBe('378×');
   });
 });

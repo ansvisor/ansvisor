@@ -121,6 +121,7 @@ export async function resumeOwnKeyAgents(
     .eq('organization_id', organizationId)
     .eq('status', 'paused')
     .eq('paused_reason', 'own_key')
+    .is('demo_brand_id', null)
     .select('id');
   if (error) throw new Error(`Could not resume the agents: ${error.message}`);
   return (data ?? []).length;

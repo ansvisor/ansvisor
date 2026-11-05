@@ -1,0 +1,114 @@
+---
+title: "Free report card"
+description: "The public endpoint behind the free AI visibility report card form on www.ansvisor.com: request, answers and limits."
+---
+
+The free AI visibility report card is Ansvisor's own marketing: a form on www.ansvisor.com posts to the API, and the person gets a four-page PDF by e-mail a few minutes later. It runs on the Ansvisor cloud only. A self-hosted server answers the endpoint but never starts its queue.
+
+## What a card is
+
+- 25 questions a buyer (or, for a publisher, a reader) might ask, in the target country's main language, without any brand name. One model call reads the home page (title, headings, menu links), names its main products or categories with the words on the page that show them, and drafts 40 candidate questions, each tied to a product and marked by how closely it matches what the site sells. A product the page doesn't show and a weak match are dropped; so is a question naming a year already past. The candidates' keywords' Google search volume (one DataForSEO call, the same that gives the cost per click) ranks the rest: the core questions are taken in turn from each product, the most searched first, then the related ones to reach 25. A card left with fewer than 10 questions is still made and sent, and is listed under **Check by hand** on the staff's report card page with the reason. Years and seasons follow the card's date and the country's hemisphere.
+- Each question asked once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode, from the target country, through the tracking's own provider. An engine that doesn't answer from that country is left out.
+- The answers read for the company's name or site, the competitors they name, and the sites they cite.
+- The median Google Ads cost per click of the questions' keywords in that country, from the same search volume call prompt volumes use.
+- A PDF in English:
+  - the results;
+  - "What's in Ansvisor and how you can use it", whose feature descriptions are quoted from the approved Help articles;
+  - the outcomes: buying the same visits in Google Ads, every month, against earning them with Ansvisor Growth (only when at least five keywords have a cost per click), how AI answers can lead to searches for the brand, and a revenue scenario only when a deal value was given;
+  - every question, grouped by product with its keyword's Google searches a month, what each engine's answer did and the brand named most instead.
+
+## Request
+
+`POST /public/report-card`, from the form's page. JSON, or the same JSON as `text/plain`, at most 16 KB.
+
+```json
+{
+  "firstName": "Ayşe",
+  "lastName": "Yılmaz",
+  "title": "Head of Marketing",
+  "email": "ayse@acme.com",
+  "linkedinUrl": "https://www.linkedin.com/in/ayse-yilmaz",
+  "companyName": "Acme",
+  "website": "acme.com",
+  "targetCountry": "TR",
+  "companySize": "51-200",
+  "industry": "ecommerce",
+  "dealValue": { "amount": 120, "currency": "USD" },
+  "consentPrivacy": true,
+  "consentOwnSite": true,
+  "consentMarketing": false,
+  "botToken": "<Cloudflare Turnstile token>",
+  "page": "free-ai-visibility-report",
+  "utm": { "source": "linkedin", "medium": "social", "campaign": "launch" }
+}
+```
+
+| Field | Rule |
+|---|---|
+| `firstName`, `lastName` | 1–60 characters |
+| `title`, `companyName` | 1–100 characters |
+| `email` | A work e-mail. Free and throwaway providers (gmail, outlook, hotmail, yahoo, icloud, yandex, proton…) are refused under any country domain. |
+| `linkedinUrl` | A profile: `linkedin.com/in/…` |
+| `website` | The e-mail's domain or a subdomain of it, either way round (`shop.acme.com` for `acme.com`), so nobody can ask for another company's site. Its home page must open. |
+| `targetCountry` | An ISO 3166-1 alpha-2 country code. The questions are asked from there, in its main language. |
+| `companySize` | `1-10`, `11-50`, `51-200`, `201-500`, `501-1000`, `1001-5000` or `5000+` |
+| `industry` | Optional |
+| `dealValue` | Optional: an amount and a three-letter currency. Only page 3's revenue scenario uses it. |
+| `consentPrivacy`, `consentOwnSite` | Must be `true` |
+| `consentMarketing` | Optional; only people who tick it join the marketing list |
+
+## Answers
+
+Every answer is `{ "code": "…", "domain": "…" }`; `invalid` adds `fields`, one message per field, as the form shows it under the field.
+
+| `code` | HTTP | Meaning |
+|---|---|---|
+| `queued` | 200 | A card is on its way. A request while the company's card is still being made gets it too. |
+| `resent` | 200 | The company had a card in the last 30 days; it is e-mailed again, at no cost. |
+| `daily_cap` | 429 | Today's cards are spent; this one is made the next morning (06:00 UTC). |
+| `free_email` | 422 | Not a work e-mail |
+| `invalid` | 422 | A field is wrong: see `fields` |
+| `site_unreachable` | 422 | The site's home page couldn't be opened |
+| `bot_check` | 403 | The Turnstile token was refused |
+| `rate_limited` | 429 | Too many requests from one address this hour |
+| `unavailable` | 503 | The month's budget is spent, or the bot check isn't set up on this server |
+| `forbidden` | 403 | Posted from a page the endpoint doesn't answer |
+
+## Limits
+
+- Only the origins in `REPORT_CARD_ORIGINS` may post from a browser.
+- `REPORT_CARD_IP_HOURLY` requests an hour from one address. The address is used for the bot check and this limit, and never kept.
+- One card per company, the work e-mail's domain, every `REPORT_CARD_REPEAT_DAYS` days.
+- `REPORT_CARD_DAILY_CAP` cards start a day. A request past it waits for the next day with room, within a week.
+- No card starts once the month's cost would pass `REPORT_CARD_MONTHLY_BUDGET_USD`, keeping room for the cards already queued. A card costs about $0.30: model calls counted from their tokens, plus each engine answer and the keyword call at their set prices.
+
+## Delivery
+
+Every minute the cloud server starts the due cards, `REPORT_CARD_CONCURRENCY` at a time, and sends what is waiting:
+
+- a ready card's e-mail, with the PDF attached and a "Start a free trial" button;
+- a card sent again;
+- a note when a card couldn't be made.
+
+The web app draws the PDF from the card's figures (`POST /api/internal/report-card/pdf`, with `CRON_SECRET`); it isn't stored. Requests are deleted after 12 months.
+
+Ansvisor staff (`STAFF_EMAILS`) see the day's cards, the month's cost, the share that failed and the latest failures at `/dashboard/admin/report-cards`.
+
+## Environment
+
+Server, all optional (defaults in brackets):
+
+| Variable | |
+|---|---|
+| `REPORT_CARD_ORIGINS` | Origins the form may post from [`https://www.ansvisor.com,https://ansvisor.com`] |
+| `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile's secret. Without it, development skips the bot check, and a cloud or production server answers `unavailable`. |
+| `REPORT_CARD_DAILY_CAP` | Cards a day [200] |
+| `REPORT_CARD_MONTHLY_BUDGET_USD` | Dollars a month [200] |
+| `REPORT_CARD_REPEAT_DAYS` | Days before a company gets a new card [30] |
+| `REPORT_CARD_IP_HOURLY` | Requests an hour from one address [5] |
+| `REPORT_CARD_CONCURRENCY` | Cards made at once [2] |
+| `REPORT_CARD_MODEL` | The model for the questions and the competitors [`DEFAULT_SUGGESTION_MODEL`] |
+| `REPORT_CARD_ANSWER_USD`, `REPORT_CARD_VOLUME_USD` | The price of an engine answer and of the keyword call, for the caps [0.002, 0.075] |
+| `REPORT_CARD_FROM_EMAIL`, `REPORT_CARD_REPLY_TO` | The e-mail's sender [`RESEND_FROM_EMAIL`] and reply address |
+
+The web app reads `REPORT_CARD_DAILY_CAP` and `REPORT_CARD_MONTHLY_BUDGET_USD` too, for the admin view only.

@@ -67,6 +67,25 @@ export async function demoBrandRefusal(
   return NextResponse.json({ ok: false, failure: 'subscription', ...DEMO_BRAND }, { status: 402 });
 }
 
+/**
+ * The same for a run's card (Approve, Skip, an answer): the run's chat is on
+ * the demo brand, as a demo agent's run waiting on its owner is (the
+ * server's lib/demo/agents.js). Null for any other run, or one that isn't
+ * there (the engine answers for that).
+ */
+export async function demoRunRefusal(
+  actor: ChatActor,
+  runId: string,
+): Promise<NextResponse | null> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_runs')
+    .select('conversation_id')
+    .eq('id', runId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the run's chat: ${error.message}`);
+  return data ? demoBrandRefusal(actor, { conversationId: data.conversation_id }) : null;
+}
+
 /** The engine's refusal as its answer; read-only is the server's own 402 body (the upgrade dialog). */
 export function engineFailureResponse(f: EngineFailure): NextResponse {
   if (f.code === 'subscription_inactive') {

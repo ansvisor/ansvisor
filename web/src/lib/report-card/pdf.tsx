@@ -4,7 +4,9 @@ import {
   Font,
   Link,
   Page,
+  Path,
   StyleSheet,
+  Svg,
   Text,
   View,
   renderToBuffer,
@@ -16,6 +18,7 @@ import {
   OUTCOME_GOALS,
   REPORT_CARD_SIGN_UP_URL,
   actionPlan,
+  buyVsEarn,
   cents,
   clip,
   conversionRange,
@@ -24,9 +27,9 @@ import {
   firstDaySteps,
   money,
   percent,
-  times,
-  planMonthly,
   planOffers,
+  questionGroups,
+  questionSummary,
   quickWins,
   revenueRows,
   totals,
@@ -34,21 +37,29 @@ import {
 } from './rules';
 
 /**
- * The free AI visibility report card as a PDF (REPORT-CARD §1): three A4
- * pages, the results, "What's in Ansvisor and how you can use it" and the
- * outcomes. It is drawn on the server, on the Reports PDF's base: the same
+ * The free AI visibility report card as a PDF (REPORT-CARD §1): four A4
+ * pages, the results, "What's in Ansvisor and how you can use it", the
+ * outcomes and the questions asked. It is drawn on the server, on the Reports PDF's base: the same
  * renderer, Inter, Ansvisor's look without a kit (reportLook) and its
  * footer. English throughout; the questions stay in the language they were
  * asked in, and Inter carries Turkish and other Latin letters.
  */
 
 const FAMILY = 'ReportCardInter';
-const TEXT = '#111827';
-const MUTED = '#6b7280';
-const BORDER = '#e5e7eb';
-const TRACK = '#f3f4f6';
-const TINT = '#eef2ff';
-const COMPETITOR = '#94a3b8';
+/**
+ * Ansvisor's own colors (the brand style guide, owner decision 2026-11-03):
+ * ink for text, rules, the company's own bars and buttons; a warm grey for
+ * secondary text and for the competitors' bars, lighter; a cream band and a
+ * sand border. No color is used for anything but these.
+ */
+const INK = '#1C1A17';
+const TEXT = INK;
+const MUTED = '#464442';
+const BAND = '#F0EEEA';
+const BORDER = '#EBE6DE';
+const TRACK = BAND;
+const COMPETITOR = '#464442';
+const COMPETITOR_OPACITY = 0.35;
 const LINE = 1.4;
 /** A domain has no space to wrap at: what fits a bar's label. */
 const DOMAIN_MAX = 25;
@@ -92,7 +103,7 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 7, color: MUTED, textTransform: 'uppercase', letterSpacing: 0.6 },
   title: { fontSize: 16, fontWeight: 700, marginTop: 3 },
   subtitle: { fontSize: 9, color: MUTED, marginTop: 4, lineHeight: LINE },
-  rule: { height: 2, marginTop: 10, marginBottom: 14, backgroundColor: look.accent },
+  rule: { height: 2, marginTop: 10, marginBottom: 14, backgroundColor: INK },
   section: { marginBottom: 14 },
   sectionTitle: { fontSize: 11, fontWeight: 700, marginBottom: 6 },
   paragraph: { fontSize: 9, lineHeight: LINE },
@@ -131,7 +142,7 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderRadius: 8,
-    backgroundColor: look.accent,
+    backgroundColor: INK,
     color: '#ffffff',
     fontSize: 8,
     fontWeight: 700,
@@ -145,11 +156,33 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: BORDER,
   },
-  feature: { fontSize: 8, fontWeight: 700, color: look.textAccent, marginTop: 2, marginBottom: 1 },
+  feature: { fontSize: 8, fontWeight: 700, color: INK, marginTop: 2, marginBottom: 1 },
   stepText: { fontSize: 8.5, lineHeight: 1.35 },
   box: { borderWidth: 0.5, borderColor: BORDER, borderRadius: 4, padding: 9 },
-  tinted: { backgroundColor: TINT, borderColor: look.accent },
-  link: { color: look.textAccent, fontWeight: 700, textDecoration: 'none' },
+  tinted: { backgroundColor: BAND, borderColor: BORDER },
+  link: { color: INK, fontWeight: 700, textDecoration: 'underline' },
+  compact: { fontSize: 8.5, lineHeight: 1.35 },
+  tight: { marginBottom: 9 },
+  qRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 0.5,
+    borderBottomColor: BORDER,
+    paddingVertical: 2.5,
+  },
+  qText: { fontSize: 7.5, lineHeight: 1.25 },
+  legend: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'center',
+    backgroundColor: BAND,
+    borderRadius: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    marginBottom: 8,
+  },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  qCell: { width: 52, textAlign: 'center' },
   footer: {
     position: 'absolute',
     bottom: 24,
@@ -190,7 +223,11 @@ function Bar({
         <View
           style={[
             styles.barFill,
-            { width: `${Math.min(Math.max(pct, 0), 100)}%`, backgroundColor: color },
+            {
+              width: `${Math.min(Math.max(pct, 0), 100)}%`,
+              backgroundColor: color,
+              opacity: color === COMPETITOR ? COMPETITOR_OPACITY : 1,
+            },
           ]}
         />
       </View>
@@ -251,7 +288,7 @@ function ResultsPage({ card, family }: PageProps) {
       <View style={[styles.section, styles.row]} wrap={false}>
         <View style={styles.kpiBox}>
           <Text style={styles.kpiLabel}>AI visibility</Text>
-          <Text style={[styles.kpiValue, { color: look.textAccent }]}>{visibility}%</Text>
+          <Text style={styles.kpiValue}>{visibility}%</Text>
           <Text style={styles.kpiSub}>
             named in {named} of {answers} answers
           </Text>
@@ -285,7 +322,7 @@ function ResultsPage({ card, family }: PageProps) {
             label={engineLabel(e.engine)}
             pct={percent(e.named, e.answers)}
             value={`${e.named} of ${e.answers} · ${percent(e.named, e.answers)}%`}
-            color={look.accent}
+            color={INK}
           />
         ))}
       </View>
@@ -304,7 +341,7 @@ function ResultsPage({ card, family }: PageProps) {
                 label={'own' in c ? `${c.name} (you)` : c.name}
                 pct={(c.answers / most) * 100}
                 value={`${c.answers} answers`}
-                color={'own' in c ? look.accent : COMPETITOR}
+                color={'own' in c ? INK : COMPETITOR}
                 strong={'own' in c}
               />
             ))}
@@ -320,7 +357,7 @@ function ResultsPage({ card, family }: PageProps) {
               label={s.own ? `${clip(s.domain, DOMAIN_MAX)} (you)` : clip(s.domain, DOMAIN_MAX)}
               pct={(s.answers / mostCited) * 100}
               value={`${s.answers} answers`}
-              color={s.own ? look.accent : COMPETITOR}
+              color={s.own ? INK : COMPETITOR}
               strong={s.own}
             />
           ))}
@@ -342,12 +379,18 @@ function ResultsPage({ card, family }: PageProps) {
 
       <View style={[styles.box, { marginTop: 'auto' }]} wrap={false}>
         <Text style={styles.small}>
-          How we measured: we wrote {card.questionCount} questions a buyer might ask, from your
-          site, and asked each one once in{' '}
-          {card.engines.map((e) => engineLabel(e.engine)).join(', ')} in {countryName(card.country)}
-          , in {card.language}, on {date}. AI answers change from day to day, so this is a snapshot.
-          Visibility here is the share of answers that name you; the AI Visibility Score in Ansvisor
-          also weighs citations and how early you’re named.
+          How we measured: we wrote {card.questionCount} questions a{' '}
+          {card.audience === 'readers' ? 'reader' : 'buyer'} might ask
+          {card.products?.length
+            ? ' about the main products on your site, kept those that match what you sell best'
+            : ', from your site'}
+          , and asked each one once in {card.engines.map((e) => engineLabel(e.engine)).join(', ')}{' '}
+          in {countryName(card.country)}, in {card.language}, on {date}. AI answers change from day
+          to day, so this is a snapshot. Visibility here is the share of answers that name you; the
+          AI Visibility Score in Ansvisor also weighs citations and how early you’re named.
+          {(card.questionRows?.length ?? 0) > 0
+            ? ` All ${card.questionRows?.length} questions are on page 4.`
+            : ''}
         </Text>
       </View>
       <Footer />
@@ -413,16 +456,17 @@ function PlanPage({ card, family }: PageProps) {
   );
 }
 
-/** Page 3: the outcomes. */
+/** Page 3: the outcomes. Compact, so the revenue scenario fits on it too. */
 function OutcomesPage({ card, family }: PageProps) {
   const values = valueRows(card);
   const revenue = revenueRows(card);
   const offers = planOffers();
-  const growth = offers.find((o) => o.plan === 'growth');
-  const middle = values?.[1];
+  const compare = buyVsEarn(card);
   const rate = conversionRange(card.siteType);
   const pct = (r: number) => `${Math.round(r * 1000) / 10}%`;
   const currency = card.dealValue?.currency ?? 'USD';
+  const text = [styles.compact];
+  const muted = [styles.compact, styles.muted];
 
   return (
     <Page size="A4" style={pageStyle(family)}>
@@ -432,94 +476,120 @@ function OutcomesPage({ card, family }: PageProps) {
         subtitle="Three goals, the Ansvisor features that work toward each, and what AI visits would be worth to you."
       />
 
-      <View style={[styles.section, styles.row]} wrap={false}>
+      <View style={[styles.tight, styles.row]} wrap={false}>
         {OUTCOME_GOALS.map((goal) => (
-          <View key={goal.title} style={styles.kpiBox}>
-            <Text style={[styles.paragraph, styles.bold, { marginBottom: 4 }]}>{goal.title}</Text>
-            {goal.features.map((f) => (
-              <Text key={f} style={[styles.paragraph, styles.muted]}>
-                · {f}
-              </Text>
-            ))}
+          <View key={goal.title} style={[styles.kpiBox, { padding: 7 }]}>
+            <Text style={[...text, styles.bold, { marginBottom: 2 }]}>{goal.title}</Text>
+            <Text style={muted}>{goal.features.join(' · ')}</Text>
           </View>
         ))}
       </View>
 
-      <View style={styles.section} wrap={false}>
-        <Text style={styles.sectionTitle}>What the same visits would cost in Google Ads</Text>
-        {values && card.cpc ? (
+      <View style={styles.tight} wrap={false}>
+        <Text style={[styles.sectionTitle, { marginBottom: 3 }]}>
+          Buying these visits vs earning them
+        </Text>
+        {values && card.cpc && compare ? (
           <>
-            <Text style={[styles.paragraph, styles.muted, { marginBottom: 6 }]}>
-              The median Google Ads cost per click for your questions’ keywords in{' '}
-              {countryName(card.country)} is {cents(card.cpc.usd)} ({card.cpc.keywords} of{' '}
+            <Text style={[...muted, { marginBottom: 4 }]}>
+              Google Ads’ median cost per click for your questions’ keywords in{' '}
+              {countryName(card.country)}: {cents(card.cpc.usd)} ({card.cpc.keywords} of{' '}
               {card.questionCount} keywords had one).
             </Text>
             <View style={styles.tableHeader}>
-              <Text style={[styles.th, { flex: 1.2 }]}>AI visits a month</Text>
-              <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Google Ads a month</Text>
-              <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>A year</Text>
-              {offers.map((o) => (
-                <Text key={o.plan} style={[styles.th, { flex: 1.1, textAlign: 'right' }]}>
-                  vs {o.name} {money(o.monthly)}/mo
-                </Text>
-              ))}
+              <Text style={[styles.th, { flex: 1 }]}>AI visits a month</Text>
+              <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Ads a month</Text>
+              <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Ads a year</Text>
             </View>
             {values.map((row) => (
-              <View key={row.visits} style={styles.tr}>
-                <Text style={[styles.td, { flex: 1.2 }]}>{formatNumber(row.visits)}</Text>
+              <View key={row.visits} style={[styles.tr, { paddingVertical: 2.5 }]}>
+                <Text style={[styles.td, { flex: 1 }]}>{formatNumber(row.visits)}</Text>
                 <Text style={[styles.td, styles.bold, { flex: 1, textAlign: 'right' }]}>
                   {money(row.monthly)}
                 </Text>
                 <Text style={[styles.td, { flex: 1, textAlign: 'right' }]}>
                   {money(row.yearly)}
                 </Text>
-                {offers.map((o) => (
-                  <Text key={o.plan} style={[styles.td, { flex: 1.1, textAlign: 'right' }]}>
-                    {times(row.multiple[o.plan])}
-                  </Text>
-                ))}
               </View>
             ))}
-            {middle && growth && (
-              <Text style={[styles.paragraph, { marginTop: 6 }]}>
-                <Text style={styles.bold}>
-                  {formatNumber(middle.visits)} AI visits ≈ {money(middle.monthly)} a month in
-                  Google Ads
-                </Text>{' '}
-                vs {money(planMonthly('growth'))} a month for Ansvisor Growth.
-              </Text>
-            )}
+            <View style={[styles.row, { marginTop: 6 }]}>
+              <View style={[styles.box, { flex: 1, padding: 7 }]}>
+                <Text style={styles.eyebrow}>Buying them</Text>
+                <Text style={[...text, styles.bold, { marginTop: 2 }]}>
+                  {formatNumber(compare.visits)} AI visits a month ≈ {money(compare.adsMonthly)} in
+                  Google Ads, every month.
+                </Text>
+                <Text style={muted}>
+                  Ad clicks stop when the budget stops. Over 12 months: ≈ {money(compare.adsYearly)}
+                  , bought again every month.
+                </Text>
+              </View>
+              <View style={[styles.box, styles.tinted, { flex: 1, padding: 7 }]}>
+                <Text style={styles.eyebrow}>Earning them</Text>
+                <Text style={[...text, styles.bold, { marginTop: 2 }]}>
+                  Ansvisor Growth is {money(compare.growthMonthly)} a month.
+                </Text>
+                <Text style={muted}>
+                  Pages that AI engines cite can keep sending visits month after month, for as long
+                  as they’re cited. Over 12 months: {money(compare.growthTwelveMonths)}, or{' '}
+                  {money(compare.growthYearly)} paid yearly.
+                </Text>
+              </View>
+            </View>
           </>
         ) : (
-          <Text style={[styles.paragraph, styles.muted]}>
+          <Text style={muted}>
             Not enough ad data for your topics in {countryName(card.country)}.
           </Text>
         )}
       </View>
 
-      <View style={[styles.section, styles.row]} wrap={false}>
+      <View style={[styles.tight, styles.box, { padding: 7 }]} wrap={false}>
+        <Text style={[...text, styles.bold, { marginBottom: 1 }]}>
+          AI answers can lead to Google searches for your name
+        </Text>
+        <Text style={muted}>
+          Many AI answers send no click. Some people may still search for your name on Google later,
+          or type your address, so being named can show up as more searches and clicks for your
+          brand and as direct visits. In Ansvisor, AI Traffic Analytics shows the visits AI
+          assistants send and, with Search Console connected, whether AI is changing your Google
+          traffic.
+        </Text>
+      </View>
+
+      <View style={[styles.tight, styles.row]} wrap={false}>
         {offers.map((o) => (
-          <View key={o.plan} style={[styles.box, { flex: 1 }]}>
-            <Text style={[styles.paragraph, styles.bold]}>Ansvisor {o.name}</Text>
-            <Text style={[styles.kpiValueSmall, { color: look.textAccent }]}>
-              {money(o.monthly)}/month
+          <View key={o.plan} style={[styles.box, { flex: 1, padding: 7 }]}>
+            <Text style={[...text, styles.bold]}>
+              Ansvisor {o.name}: {money(o.monthly)}/month
+              <Text style={styles.muted}> · or {money(o.yearly)} a year, paid yearly</Text>
             </Text>
-            <Text style={[styles.small, { marginBottom: 4 }]}>
-              or {money(o.yearly)} a year, paid yearly
-            </Text>
-            {o.points.map((p) => (
-              <Text key={p} style={styles.paragraph}>
-                · {p}
+            {o.points.map((point) => (
+              <Text key={point} style={muted}>
+                · {point}
               </Text>
             ))}
           </View>
         ))}
       </View>
 
+      {!card.dealValue && (
+        <View style={[styles.box, styles.tight, { padding: 7 }]} wrap={false}>
+          <Text style={[...text, styles.bold, { marginBottom: 1 }]}>
+            How to get the revenue line
+          </Text>
+          <Text style={muted}>
+            Give your average order or deal value when you ask for your next report card, and this
+            page adds a revenue scenario. In Ansvisor, AI Traffic counts the signups, demo requests
+            and orders that AI visits bring, once conversions are on.
+          </Text>
+        </View>
+      )}
+
       {revenue && card.dealValue && (
-        <View style={styles.section} wrap={false}>
-          <Text style={styles.sectionTitle}>A revenue scenario</Text>
-          <Text style={[styles.paragraph, styles.muted, { marginBottom: 6 }]}>
+        <View style={styles.tight} wrap={false}>
+          <Text style={[styles.sectionTitle, { marginBottom: 3 }]}>A revenue scenario</Text>
+          <Text style={[...muted, { marginBottom: 4 }]}>
             Your average {rate.kind} value: {money(card.dealValue.amount, currency)}. Assumption:{' '}
             {pct(rate.low)} of visits {rate.kind === 'order' ? 'place an order' : 'become a deal'}{' '}
             (range {pct(rate.low)}–{pct(rate.high)}). AI visits are not assumed to convert better
@@ -538,7 +608,7 @@ function OutcomesPage({ card, family }: PageProps) {
             </Text>
           </View>
           {revenue.map((row) => (
-            <View key={row.visits} style={styles.tr}>
+            <View key={row.visits} style={[styles.tr, { paddingVertical: 2.5 }]}>
               <Text style={[styles.td, { flex: 1.2 }]}>{formatNumber(row.visits)}</Text>
               <Text style={[styles.td, styles.bold, { flex: 1, textAlign: 'right' }]}>
                 {money(row.low, currency)}
@@ -554,21 +624,139 @@ function OutcomesPage({ card, family }: PageProps) {
         </View>
       )}
 
-      <View style={[styles.box, styles.tinted, { marginTop: 'auto' }]} wrap={false}>
-        <Text style={[styles.paragraph, styles.bold]}>
-          Scenarios, not a forecast or a guarantee.
-        </Text>
-        <Text style={styles.paragraph}>
+      <View style={[styles.box, styles.tinted, { marginTop: 'auto', padding: 7 }]} wrap={false}>
+        <Text style={[...text, styles.bold]}>Scenarios, not a forecast or a guarantee.</Text>
+        <Text style={text}>
           Ansvisor’s AI Traffic measures your real visits from AI answers once it’s set up. Every
           figure on this page is labelled with the assumption it rests on.
         </Text>
-        <Link
-          src={REPORT_CARD_SIGN_UP_URL}
-          style={[styles.paragraph, styles.link, { marginTop: 6 }]}
-        >
+        <Link src={REPORT_CARD_SIGN_UP_URL} style={[...text, styles.link, { marginTop: 3 }]}>
           Start a free trial at app.ansvisor.com
         </Link>
       </View>
+      <Footer />
+    </Page>
+  );
+}
+
+/** The engines' short names, for page 4's narrow columns. */
+const SHORT_ENGINE: Record<string, string> = {
+  'chatgpt-web': 'ChatGPT',
+  'gemini-web': 'Gemini',
+  'google-aio': 'AI Overviews',
+  'google-aimode': 'AI Mode',
+};
+
+/** A check mark, drawn in ink: Inter has no glyph for one. */
+function Tick() {
+  return (
+    <Svg width={10} height={10} viewBox="0 0 12 12">
+      <Path d="M1.8 6.4 L4.9 9.5 L10.6 2.8" stroke={INK} strokeWidth={2.4} fill="none" />
+    </Svg>
+  );
+}
+
+/** A dash or "n/a": light, so the ticks stand out. */
+function Faint({ children }: { children: string }) {
+  return <Text style={[styles.qText, { color: MUTED, opacity: 0.5 }]}>{children}</Text>;
+}
+
+/** Page 4: every question asked, by product, and what each engine did with it. */
+function QuestionsPage({ card, family }: PageProps) {
+  const groups = questionGroups(card);
+  const count = groups.reduce((sum, g) => sum + g.lines.length, 0);
+  const summary = questionSummary(card);
+  const engines = card.engines.map((e) => e.engine);
+  const withProducts = groups.some((g) => g.product);
+  const withVolume = groups.some((g) => g.lines.some((l) => l.volume !== null));
+  return (
+    <Page size="A4" style={pageStyle(family)}>
+      <Header
+        eyebrow="What we measured"
+        title={`The ${count} questions we asked`}
+        subtitle={
+          withProducts
+            ? `Written from the main products on ${clip(card.domain, 60)} and kept for how closely they match what you sell and how often people search for them. As asked in ${countryName(card.country)}, in ${card.language}. “Named instead” is the brand its answers named most.`
+            : `As asked in ${countryName(card.country)}, in ${card.language}. “Named instead” is the brand its answers named most.`
+        }
+      />
+      {summary && (
+        <Text style={[styles.paragraph, styles.bold, { marginBottom: 6 }]}>{summary}</Text>
+      )}
+      <View style={styles.legend}>
+        <View style={styles.legendItem}>
+          <Tick />
+          <Text style={styles.qText}>Named</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <Faint>–</Faint>
+          <Text style={styles.qText}>Not named</Text>
+        </View>
+        <View style={styles.legendItem}>
+          <Faint>n/a</Faint>
+          <Text style={styles.qText}>No answer</Text>
+        </View>
+        {withVolume && (
+          <Text style={[styles.qText, { color: MUTED }]}>
+            Searches: Google searches a month for the question’s keyword
+          </Text>
+        )}
+      </View>
+      <View style={styles.tableHeader}>
+        <Text style={[styles.th, { width: 16 }]}>#</Text>
+        <Text style={[styles.th, { flex: 1 }]}>Question</Text>
+        {withVolume && (
+          <Text style={[styles.th, { width: 44, textAlign: 'right', paddingRight: 6 }]}>
+            Searches
+          </Text>
+        )}
+        {engines.map((engine) => (
+          <Text key={engine} style={[styles.th, styles.qCell]}>
+            {SHORT_ENGINE[engine] ?? engineLabel(engine)}
+          </Text>
+        ))}
+        <Text style={[styles.th, { width: 96 }]}>Named instead</Text>
+      </View>
+      {groups.map((group) => (
+        <View key={group.product ?? 'other'}>
+          {group.product && (
+            <Text style={[styles.qText, styles.bold, { marginTop: 5, marginBottom: 1 }]}>
+              {group.product}
+              <Text style={{ color: MUTED, fontWeight: 400 }}>
+                {' '}
+                · {group.lines.length} {group.lines.length === 1 ? 'question' : 'questions'}
+                {group.page ? ` · ${group.page}` : ''}
+              </Text>
+            </Text>
+          )}
+          {group.lines.map((line) => (
+            <View key={`${line.number}-${line.text}`} style={styles.qRow} wrap={false}>
+              <Text style={[styles.qText, { width: 16, color: MUTED }]}>{line.number}</Text>
+              <Text style={[styles.qText, { flex: 1, paddingRight: 6 }]}>
+                {line.text}
+                {line.fit === 'related' ? (
+                  <Text style={{ color: MUTED }}> (a need your buyers also have)</Text>
+                ) : null}
+              </Text>
+              {withVolume && (
+                <Text style={[styles.qText, { width: 44, textAlign: 'right', paddingRight: 6 }]}>
+                  {line.volume === null ? '–' : formatNumber(line.volume)}
+                </Text>
+              )}
+              {engines.map((engine) => (
+                <View key={engine} style={[styles.qCell, { alignItems: 'center' }]}>
+                  {line.named[engine] === 'named' ? (
+                    <Tick />
+                  ) : (
+                    <Faint>{line.named[engine] === 'missed' ? '–' : 'n/a'}</Faint>
+                  )}
+                </View>
+              ))}
+              <Text style={[styles.qText, { width: 96, color: MUTED }]}>{line.instead ?? '—'}</Text>
+            </View>
+          ))}
+        </View>
+      ))}
       <Footer />
     </Page>
   );
@@ -585,6 +773,7 @@ export function ReportCardPdfDocument({ card, family }: PageProps) {
       <ResultsPage card={card} family={family} />
       <PlanPage card={card} family={family} />
       <OutcomesPage card={card} family={family} />
+      {(card.questionRows?.length ?? 0) > 0 && <QuestionsPage card={card} family={family} />}
     </Document>
   );
 }

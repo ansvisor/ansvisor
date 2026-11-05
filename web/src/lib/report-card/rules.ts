@@ -56,6 +56,16 @@ export function quotedQuestion(question: { text: string; textEn: string | null }
   return question.textEn && interCanDraw(question.textEn) ? question.textEn : null;
 }
 
+type Missed = ReportCardPayload['missedQuestions'][number];
+
+/** A name as compared: lower case, without accents or punctuation. */
+const nameKey = (name: string) =>
+  name
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+
 /** How long a name or a question may run in the card's sentences. */
 const NAME_MAX = 40;
 const QUESTION_MAX = 110;
@@ -82,15 +92,11 @@ export function totals(card: ReportCardPayload): Totals {
 /** "two", "three", "four": how many engines a card asked. */
 const ENGINE_COUNT: Record<number, string> = { 2: 'two', 3: 'three', 4: 'four' };
 
-/** A name as compared: lower case, letters and digits only ("Acme Inc." → "acmeinc"). */
-const nameKey = (name: string): string =>
-  name
-    .toLowerCase()
-    .replace(/ı/g, 'i')
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, '')
-    .replace(/[\s,]+(inc|llc|ltd|gmbh|co|corp|company|plc)\.?$/u, '')
-    .replace(/[^\p{L}\p{N}]+/gu, '');
+/** A company's name as compared with a site's: nameKey without "Inc.", "Ltd" and the like. */
+const companyKey = (name: string): string =>
+  nameKey(
+    name.replace(/ı/g, 'i').replace(/[\s,]+(inc|llc|ltd|gmbh|co|corp|company|plc)\.?$/iu, ''),
+  );
 
 /**
  * Whether a cited site is a listed competitor's own (as the server's
@@ -98,11 +104,11 @@ const nameKey = (name: string): string =>
  * competitor's name or begins one. For cards made before the server marked it.
  */
 export function competitorSite(domain: string, competitors: readonly { name: string }[]): boolean {
-  const keys = competitors.map((c) => nameKey(c.name)).filter(Boolean);
+  const keys = competitors.map((c) => companyKey(c.name)).filter(Boolean);
   return domain
     .split('.')
     .slice(0, -1)
-    .map(nameKey)
+    .map(companyKey)
     .some(
       (label) =>
         !!label &&
@@ -132,12 +138,29 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
   const company = clip(card.companyName, NAME_MAX);
   const wins: QuickWin[] = [];
 
-  const missed = card.missedQuestions.find((q) => q.competitors.length > 0 && quotedQuestion(q));
+  // A question the main competitors (the top three) win; with none, the
+  // question the most engines answered.
+  const topThree = new Set(card.competitors.slice(0, 3).map((c) => nameKey(c.name)));
+  const main = (q: Missed) => q.competitors.filter((name) => topThree.has(nameKey(name))).length;
+  const quotable = card.missedQuestions.filter((q) => quotedQuestion(q));
+  const missed =
+    quotable
+      .filter((q) => main(q) > 0)
+      .sort((a, b) => main(b) - main(a) || b.competitors.length - a.competitors.length)[0] ??
+    [...quotable].sort((a, b) => (b.answers ?? 0) - (a.answers ?? 0))[0];
   const quoted = missed ? quotedQuestion(missed) : null;
   if (missed && quoted) {
+    const names = [...missed.competitors]
+      .sort((a, b) => Number(topThree.has(nameKey(b))) - Number(topThree.has(nameKey(a))))
+      .slice(0, 3)
+      .map((name) => clip(name, NAME_MAX));
     wins.push({
       title: `Answer “${clip(quoted, QUESTION_MAX)}” on your site`,
-      detail: `AI names ${listOf(missed.competitors.slice(0, 3).map((name) => clip(name, NAME_MAX)))} for it, and not ${company}. A page that answers it directly gives AI engines something of yours to cite.`,
+      detail: `${
+        names.length
+          ? `AI names ${listOf(names)} for it, and not ${company}.`
+          : `None of the answers to it names ${company}.`
+      } A page that answers it directly gives AI engines something of yours to cite.`,
     });
   }
 
@@ -309,6 +332,112 @@ export function firstDaySteps(card: ReportCardPayload): string[] {
   ];
 }
 
+// ─── Page 4: the questions ───────────────────────────────────────────────────
+
+/** How long a question may run on page 4: two lines at most, so 25 fit with their groups. */
+export const QUESTION_ROW_MAX = 90;
+
+export interface QuestionLine {
+  /** The question's number on the card, from 1. */
+  number: number;
+  /** The question as the card quotes it: as asked, or its English. */
+  text: string;
+  /** Each engine's answer: named the company, didn't, or gave none. */
+  named: Partial<
+    Record<ReportCardPayload['engines'][number]['engine'], 'named' | 'missed' | 'none'>
+  >;
+  /** The brand named most in its answers, if any. */
+  instead: string | null;
+  /** Its keyword's Google searches a month; null when unknown. */
+  volume: number | null;
+  /** Why it was chosen: about a main product, or a need the same buyers have. */
+  fit: 'core' | 'related' | null;
+}
+
+export interface QuestionGroup {
+  /** The product or category the questions are about; null on older cards. */
+  product: string | null;
+  /** Its page on the site, without the scheme. */
+  page: string | null;
+  lines: QuestionLine[];
+}
+
+/** A product as the card names it: as the site does, or its English. */
+export function productLabel(product: { name: string; nameEn: string | null }): string {
+  if (interCanDraw(product.name)) return product.name;
+  return product.nameEn && interCanDraw(product.nameEn) ? product.nameEn : product.name;
+}
+
+/** Page 4's rows: every question asked, quoted as page 1 quotes one. */
+export function questionLines(card: ReportCardPayload): QuestionLine[] {
+  return (card.questionRows ?? []).map((row, i) => ({
+    number: i + 1,
+    text: clip(quotedQuestion(row) ?? row.textEn ?? row.text, QUESTION_ROW_MAX),
+    named: row.named,
+    instead: row.instead ? clip(row.instead, 28) : null,
+    volume: row.volume ?? null,
+    fit: row.fit ?? null,
+  }));
+}
+
+/**
+ * Page 4's rows grouped by the product they ask about, in the products'
+ * order (the main one first); one group without a product on a card made
+ * before products were found.
+ */
+export function questionGroups(card: ReportCardPayload): QuestionGroup[] {
+  const lines = questionLines(card);
+  const products = card.products ?? [];
+  const rows = card.questionRows ?? [];
+  const groups = new Map<number, QuestionLine[]>();
+  const loose: QuestionLine[] = [];
+  lines.forEach((line, i) => {
+    const product = rows[i]?.product;
+    if (typeof product === 'number' && products[product]) {
+      groups.set(product, [...(groups.get(product) ?? []), line]);
+    } else {
+      loose.push(line);
+    }
+  });
+  const out: QuestionGroup[] = [...groups.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([index, groupLines]) => ({
+      product: clip(productLabel(products[index]), 60),
+      page: products[index].url
+        ? clip(products[index].url.replace(/^https?:\/\/(www\.)?/, ''), 60)
+        : null,
+      lines: groupLines,
+    }));
+  if (loose.length) out.push({ product: null, page: null, lines: loose });
+  return out;
+}
+
+/**
+ * Page 4's one-line summary, above the table: none named, or how many
+ * answers named the company and in which questions.
+ */
+export function questionSummary(card: ReportCardPayload): string | null {
+  const rows = card.questionRows ?? [];
+  if (!rows.length) return null;
+  let answers = 0;
+  let named = 0;
+  const questions: number[] = [];
+  rows.forEach((row, i) => {
+    const marks = Object.values(row.named);
+    answers += marks.filter((mark) => mark !== 'none').length;
+    const here = marks.filter((mark) => mark === 'named').length;
+    named += here;
+    if (here > 0) questions.push(i + 1);
+  });
+  const company = clip(card.companyName, NAME_MAX);
+  if (named === 0) return `${company} wasn’t named in any of the ${answers} answers.`;
+  const where =
+    questions.length <= 10
+      ? `${questions.length === 1 ? 'question' : 'questions'} ${listOf(questions.map(String))}`
+      : `${questions.length} of the ${rows.length} questions`;
+  return `Named in ${named} of ${answers} answers: ${where}.`;
+}
+
 // ─── Page 3: outcomes ────────────────────────────────────────────────────────
 
 export interface Goal {
@@ -344,8 +473,6 @@ export interface ValueRow {
   /** What the same visits would cost a month in Google Ads, in USD. */
   monthly: number;
   yearly: number;
-  /** The month's ad cost as a multiple of each plan's monthly price. */
-  multiple: Record<ComparedPlan, number>;
 }
 
 export function planMonthly(plan: ComparedPlan): number {
@@ -356,17 +483,39 @@ export function planYearly(plan: ComparedPlan): number {
   return PLANS[plan].pricing?.annual ?? planMonthly(plan) * 12;
 }
 
-/** The value table, or null when no keyword had a cost per click. */
+/**
+ * Keywords with a cost per click a value table needs: a median of fewer
+ * swings with one keyword (owner decision 2026-11-03, after a real card's
+ * median came from two).
+ */
+export const MIN_CPC_KEYWORDS = 5;
+
+/** The value table, or null when fewer than MIN_CPC_KEYWORDS keywords had a cost per click. */
 export function valueRows(card: ReportCardPayload): ValueRow[] | null {
-  if (!card.cpc) return null;
+  if (!card.cpc || card.cpc.keywords < MIN_CPC_KEYWORDS) return null;
   const { usd } = card.cpc;
   return VISIT_ROWS.map((visits) => {
     const monthly = Math.round(visits * usd);
-    const multiple = Object.fromEntries(
-      COMPARED_PLANS.map((plan) => [plan, Math.round((monthly / planMonthly(plan)) * 10) / 10]),
-    ) as Record<ComparedPlan, number>;
-    return { visits, monthly, yearly: monthly * 12, multiple };
+    return { visits, monthly, yearly: monthly * 12 };
   });
+}
+
+/**
+ * Buying the visits vs earning them (owner, 2026-11-03): the 1,000-visit
+ * row's ad cost, a month and over 12 months, bought again every month,
+ * against Growth's price a month, over 12 months and paid yearly.
+ */
+export function buyVsEarn(card: ReportCardPayload) {
+  const row = valueRows(card)?.find((r) => r.visits === 1_000);
+  if (!row) return null;
+  return {
+    visits: row.visits,
+    adsMonthly: row.monthly,
+    adsYearly: row.yearly,
+    growthMonthly: planMonthly('growth'),
+    growthTwelveMonths: planMonthly('growth') * 12,
+    growthYearly: planYearly('growth'),
+  };
 }
 
 /**
@@ -450,10 +599,6 @@ export function money(amount: number, currency = 'USD'): string {
     return `${formatNumber(Math.round(amount))} ${currency}`;
   }
 }
-
-/** A multiple: "3.8×" under ten, "38×" from there. */
-export const times = (multiple: number): string =>
-  `${multiple < 10 ? multiple : formatNumber(Math.round(multiple))}×`;
 
 /** "$1.85": a cost per click, to the cent. */
 export const cents = (usd: number): string =>

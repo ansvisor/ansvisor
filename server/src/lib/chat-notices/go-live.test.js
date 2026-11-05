@@ -251,6 +251,24 @@ describe('tellWentLive for a page published live (PR 9)', () => {
   });
 });
 
+describe('the e-mail for a webhook send (PR 11)', () => {
+  it('says it went to the webhook and that Ansvisor can’t take it back', () => {
+    const { subject, html } = renderWentLiveEmail({
+      kind: 'webhook',
+      agent: 'Publisher',
+      title: 'Pour-over guide',
+      target: 'webhook',
+      brand: 'Acme',
+      draftId: 'd1',
+      chatId: null,
+    });
+    expect(subject).toBe('Publisher sent “Pour-over guide” to your webhook');
+    expect(html).toContain('to your webhook, without a click');
+    expect(html).toContain('Ansvisor can’t take a webhook send back');
+    expect(html).not.toContain('as a draft');
+  });
+});
+
 describe('tellGoLiveOff', () => {
   it('tells the Admin who allowed it and the owner, not the editor, once per version', async () => {
     expect(

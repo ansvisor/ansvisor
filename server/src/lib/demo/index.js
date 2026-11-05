@@ -19,6 +19,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { actionCenter } from './action-center.js';
 import { BRAND } from './brewline.js';
+import { agents, hideDemoAgents } from './agents.js';
 import { chat, hideDemoChats } from './chat.js';
 import { content } from './content.js';
 import { core } from './core.js';
@@ -36,8 +37,9 @@ import { demoWriter } from './write.js';
  * 2: Action Center, Content, suggestions and reports (demo-workflows).
  * 3: AI Referral Traffic, Site Audit, the catalog and fan-out intents (demo-site).
  * 4: Chat's sample chats, one set per person (demo Chat).
+ * 5: Agent Center's sample agents, their runs and the runs' chats (demo Agent Center).
  */
-export const DEMO_VERSION = 4;
+export const DEMO_VERSION = 5;
 
 /** Data older than this is rebuilt, so the demo's latest run stays recent. */
 export const DEMO_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
@@ -87,6 +89,8 @@ export const DEMO_MODULES = [
   reports,
   // demo Chat: each person's sample chats, whose answers link to the actions and drafts above.
   chat,
+  // demo Agent Center: agents at work on the demo brand, after the chats (it clears their runs' chats).
+  agents,
 ];
 
 const COLUMNS = 'id, demo_version, demo_built_at, demo_hidden_at';
@@ -334,9 +338,10 @@ export function ensureDemoBrand({ organizationId, now = new Date(), modules = DE
 
 /**
  * Hides or shows the organization's demo brand: the organization's choice,
- * not one person's. Never deletes it. Hidden, its chats go (Chat's menu
- * lists a person's chats of every brand); shown again, it is rebuilt on its
- * next visit, chats included.
+ * not one person's. Never deletes it. Hidden, its chats and agents go
+ * (Chat's menu lists a person's chats of every brand, Agent Center the
+ * workspace's agents); shown again, it is rebuilt on its next visit, with
+ * them.
  *
  * @param {{ organizationId: string, hidden: boolean, now?: Date }} args
  * @returns {Promise<{ brandId: string, hidden: boolean } | null>} null without a demo brand
@@ -354,6 +359,9 @@ export async function setDemoHidden({ organizationId, hidden, now = new Date() }
     .select('id');
   if (error) throw new Error(`demo brand hide: ${error.message}`);
   const brand = data?.[0];
-  if (brand && hidden) await hideDemoChats(supabaseAdmin, brand.id);
+  if (brand && hidden) {
+    await hideDemoAgents(supabaseAdmin, brand.id);
+    await hideDemoChats(supabaseAdmin, brand.id);
+  }
   return brand ? { brandId: brand.id, hidden } : null;
 }

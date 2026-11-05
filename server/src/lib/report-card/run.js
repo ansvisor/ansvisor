@@ -2,17 +2,19 @@ import logger from '../logger.js';
 import { fetchPage } from '../safe-fetch.js';
 import { detectSiteType, pageExcerpt } from '../site-type-detect.js';
 import { competitorsIn, summarize } from './analyze.js';
-import { reportCardLimits } from './config.js';
+import { CHECK_BELOW, reportCardLimits } from './config.js';
 import { countryName, languageName } from './countries.js';
-import { medianCpc } from './cpc.js';
+import { keywordFigures, keywordKey, medianCpc } from './cpc.js';
 import { askEngines } from './engines.js';
-import { writeQuestions } from './questions.js';
+import { pickQuestions, writeQuestions } from './questions.js';
+import { siteOutline } from './site.js';
 
 /**
  * One report card, start to end (REPORT-CARD §7): the site's home page
- * read once, 25 questions written from it, each asked in the four engines
- * from the target country, the answers read, and the questions' keywords'
- * cost per click. Answers the PDF's figures (web lib/report-card/payload.ts)
+ * read once, its main products found and candidate questions written from
+ * it, their keywords' search volume and cost per click looked up in one
+ * call, the 25 that match the site best kept, each asked in the
+ * engines from the target country, and the answers read. Answers the PDF's figures (web lib/report-card/payload.ts)
  * and the questions with what each engine said, in short.
  *
  * Every cost is counted as it is spent, in `meter`, so a card that fails
@@ -58,7 +60,7 @@ export async function buildReportCard(
     write = writeQuestions,
     ask = askEngines,
     competitors = competitorsIn,
-    cpcOf = medianCpc,
+    figuresOf = keywordFigures,
     deadline = Infinity,
   } = {},
 ) {
@@ -66,6 +68,7 @@ export async function buildReportCard(
   const dealValue = card.dealValue ?? null;
   const html = await readHome(site, fetcher);
   const excerpt = html ? pageExcerpt(html) : null;
+  const outline = siteOutline(html, site);
 
   // The site's kind sets the revenue scenario's rates: read only when the
   // person gave a deal value, from the page already read.
@@ -82,13 +85,34 @@ export async function buildReportCard(
   const written = await write({
     companyName,
     site,
+    country,
     countryName: countryName(country),
     languageName: languageName(language),
     excerpt,
+    outline,
     industry: card.industry ?? null,
+    now: now(),
   });
   meter.models += written.costUsd;
-  const { questions } = written;
+
+  // The candidates' keywords' searches a month and cost per click, in one
+  // call: the questions kept are the best-matched and most searched.
+  const keywords = await figuresOf(
+    written.candidates.map((q) => q.keyword),
+    { country, language },
+  );
+  if (keywords.called) meter.keywords += limits.volumeUsd;
+  const questions = pickQuestions(written.candidates, keywords.figures);
+  if (!questions.length) throw new Error('No question matched the site');
+  const products = written.products ?? [];
+  // Few questions matched the site: the card still goes out, flagged for
+  // staff to check by hand on the admin page.
+  const checkByHand =
+    questions.length < CHECK_BELOW
+      ? {
+          reason: `Only ${questions.length} of ${written.candidates.length} candidate questions matched the site well enough to ask.`,
+        }
+      : null;
 
   const asked = await ask(questions, country, { deadline });
   meter.answers += asked.tasks * limits.answerUsd;
@@ -104,7 +128,12 @@ export async function buildReportCard(
       .map((a) => ({ index: a.question, question: questions[a.question].text, text: a.text }));
     if (!rows.length) continue;
     try {
-      const found = await competitors(rows, { companyName, site, about });
+      const found = await competitors(rows, {
+        companyName,
+        site,
+        about,
+        audience: written.audience ?? 'buyers',
+      });
       meter.models += found.costUsd;
       for (const [index, names] of found.byAnswer) named.set(`${index}:${engine}`, names);
     } catch (err) {
@@ -120,34 +149,66 @@ export async function buildReportCard(
     engines: asked.engines,
   });
 
-  const keywords = await cpcOf(
-    questions.map((q) => q.keyword),
-    { country, language },
-  );
-  if (keywords.called) meter.keywords += limits.volumeUsd;
+  // Page 4: every question, what each engine did with it, and the brand
+  // its answers named most.
+  const questionRows = questions.map((q, index) => {
+    const counts = new Map();
+    const marks = {};
+    for (const engine of asked.engines) {
+      const answer = asked.answers.find((a) => a.question === index && a.engine === engine);
+      if (!answer || typeof answer.text !== 'string') {
+        marks[engine] = 'none';
+        continue;
+      }
+      marks[engine] = figures.namedAnswers.has(`${index}:${engine}`) ? 'named' : 'missed';
+      for (const name of named.get(`${index}:${engine}`) ?? []) {
+        const merged = figures.competitorName(name);
+        counts.set(merged, (counts.get(merged) ?? 0) + 1);
+      }
+    }
+    const instead = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+    return {
+      text: q.text,
+      textEn: q.textEn,
+      product: q.product ?? null,
+      volume: q.volume ?? null,
+      fit: q.fit ?? 'core',
+      named: marks,
+      instead,
+    };
+  });
 
   const payload = {
     companyName,
     domain: site,
     country: { code: country, name: countryName(country) },
     language: languageName(language),
+    audience: written.audience ?? 'buyers',
     siteType,
     generatedAt: now().toISOString(),
     questionCount: questions.length,
+    // The main products or categories the questions were written from.
+    products: products.map((p) => ({ name: p.name, nameEn: p.nameEn, url: p.url })),
     engines: figures.engines.filter((e) => e.answers > 0),
     competitors: figures.competitors,
     citedSites: figures.citedSites,
     ownCitations: figures.ownCitations,
     missedQuestions: figures.missedQuestions,
     missedCount: figures.missedCount,
-    cpc: keywords.cpc,
+    questionRows,
+    cpc: medianCpc(
+      questions.map((q) => q.keyword),
+      keywords.figures,
+    ),
     dealValue,
+    ...(checkByHand ? { checkByHand } : {}),
   };
 
   // The questions as asked, with each engine's answer in short: named or
   // not, the competitors it named and the sites it cited.
   const kept = questions.map((q, index) => ({
     ...q,
+    volume: keywords.figures.get(keywordKey(q.keyword))?.volume ?? null,
     answers: Object.fromEntries(
       asked.answers
         .filter((a) => a.question === index)

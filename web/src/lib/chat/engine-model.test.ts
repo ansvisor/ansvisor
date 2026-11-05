@@ -59,6 +59,45 @@ describe('the run models', () => {
     expect(await resolveChatModels('org')).toBeNull();
   });
 
+  it('stop on an own key whose model’s maker an Admin turned off (W4-34)', async () => {
+    const { ModelProviderOffError } = await import('./engine-model');
+    const own = (provider: string, settings: Record<string, string>) =>
+      key.resolve.mockResolvedValueOnce({
+        source: 'own',
+        config: { provider, apiKey: 'k', settings },
+      });
+
+    // DeepSeek through OpenRouter: off by default.
+    own('openrouter', { model: 'deepseek/deepseek-v4.1-flash' });
+    await expect(resolveChatModels('org')).rejects.toThrow(ModelProviderOffError);
+    own('openrouter', { model: 'deepseek/deepseek-v4.1-flash' });
+    await expect(
+      resolveChatModels('org', undefined, { providers: { deepseek: true } }),
+    ).resolves.toMatchObject({ model: 'openrouter/deepseek/deepseek-v4.1-flash' });
+
+    // Azure runs OpenAI's models; Google's own key is Google's.
+    own('azure', { endpoint: 'https://example.invalid', deployment: 'gpt' });
+    await expect(
+      resolveChatModels('org', undefined, { providers: { openai: false } }),
+    ).rejects.toMatchObject({ provider: 'openai' });
+    own('google', {});
+    await expect(
+      resolveChatModels('org', undefined, { providers: { google: false } }),
+    ).rejects.toMatchObject({ provider: 'google' });
+    own('openai', {});
+    await expect(
+      resolveChatModels('org', undefined, { providers: { google: false } }),
+    ).resolves.toMatchObject({ provider: 'openai' });
+
+    // Anthropic is always on.
+    own('anthropic', {});
+    await expect(
+      resolveChatModels('org', undefined, {
+        providers: { openai: false, google: false, deepseek: false },
+      }),
+    ).resolves.toMatchObject({ provider: 'anthropic', phases: 'auto' });
+  });
+
   it('carry the key’s provider, and on the own key whether it was failing as the run started', async () => {
     key.failure.mockResolvedValueOnce({ provider: 'openai', class: 'no_credit' });
     key.resolve.mockResolvedValueOnce({
