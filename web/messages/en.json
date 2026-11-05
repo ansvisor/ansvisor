@@ -5906,6 +5906,7 @@
       "failed": "Something went wrong with this agent. Try again.",
       "go_live_off": "An Admin hasn’t allowed agents to publish on their own in Settings › Chat.",
       "agent_not_found": "One of the agents it can call isn’t this workspace’s, is archived, or is this agent itself.",
+      "demo_agent": "One of the agents it can call is a sample agent of the demo brand, which can’t be run. Take it out of Can call.",
       "go_live_mode": "This agent isn’t in Full auto. Pick Full auto first."
     },
     "ownKey": {

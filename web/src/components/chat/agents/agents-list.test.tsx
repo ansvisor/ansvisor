@@ -17,6 +17,13 @@ import { AGENT_ID, NOW, listItem, listResult } from '@/lib/chat/testing/agent-fi
  * answer; a failed read a plain line.
  */
 
+// The brand on screen: the demo brand when a test says.
+const brandStore = vi.hoisted(() => ({
+  state: { brands: [] as { id: string; isDemo?: boolean }[], activeBrandId: null as string | null },
+}));
+vi.mock('@/stores/use-brand-store', () => ({
+  useBrandStore: (select: (state: typeof brandStore.state) => unknown) => select(brandStore.state),
+}));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
@@ -125,6 +132,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  brandStore.state = { brands: [], activeBrandId: null };
 });
 
 describe('AgentsList (Agent Center › Your agents)', () => {
@@ -144,6 +152,13 @@ describe('AgentsList (Agent Center › Your agents)', () => {
     await click(tabs[2]);
     expect(listCalls().at(-1)).toBe('/api/chat/agents?view=paused');
     expect(action('agents.filter')[2].getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('shows no active count on the demo brand, whose sample agents never count (00475)', async () => {
+    brandStore.state = { brands: [{ id: 'demo', isDemo: true }], activeBrandId: 'demo' };
+    await render();
+    expect(cards().length).toBeGreaterThan(0);
+    expect(container.querySelector('[data-slot="agents-count"]')).toBeNull();
   });
 
   it('searches by name or skill once the typing stops, a skill with or without its slash', async () => {

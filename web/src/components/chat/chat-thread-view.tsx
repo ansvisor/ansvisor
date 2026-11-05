@@ -575,7 +575,7 @@ export function ChatThreadView({
         error?: string;
         code?: string;
       } | null;
-      if (failed?.code === 'subscription_inactive') openUpgrade();
+      if (failed?.code === 'subscription_inactive' || failed?.code === 'demo_brand') openUpgrade();
       else toast.error(failed?.error ?? t('answerFailed'));
       // The card may have changed (approval_mismatch): the run's events show it again.
       const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`, {
@@ -606,7 +606,7 @@ export function ChatThreadView({
         error?: string;
         code?: string;
       } | null;
-      if (failed?.code === 'subscription_inactive') openUpgrade();
+      if (failed?.code === 'subscription_inactive' || failed?.code === 'demo_brand') openUpgrade();
       else toast.error(failed?.error ?? t('answerFailed'));
       // Already answered elsewhere: the run's events show where it went.
       const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`, {

@@ -4,8 +4,8 @@ route: /dashboard/agents
 keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-04
+last_checked: 2026-11-04
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -68,6 +68,8 @@ Admins and Managers see the buttons they may use:
 - An archived agent has **Restore**, which brings it back paused.
 
 Managers change their own agents and can run agents shared with the workspace. Admins can do this for every agent.
+
+The demo brand's sample agents show their runs, but running or changing one opens the plan dialog. Other agents can't call them.
 
 ## Create an agent
 

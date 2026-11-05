@@ -197,6 +197,8 @@ export type AgentRefusalCode =
   | 'go_live_mode'
   /** Can call names an agent that isn't one of the workspace's, is archived, or is itself. */
   | 'agent_not_found'
+  /** Can call names one of the demo brand's sample agents (00475), which nothing runs. */
+  | 'demo_agent'
   | 'failed';
 
 export type AgentRefusal =
@@ -257,6 +259,7 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   go_live_off: 409,
   go_live_mode: 409,
   agent_not_found: 400,
+  demo_agent: 400,
   failed: 500,
 };
 
@@ -322,7 +325,7 @@ async function firstDenial(
 // ─── Rows ────────────────────────────────────────────────────────────────────
 
 const AGENT_COLUMNS =
-  'id, organization_id, name, status, paused_reason, owner_id, visibility, version, max_run_share, max_month_share, created_by, created_at, updated_at, activated_at, archived_at';
+  'id, organization_id, name, status, paused_reason, owner_id, visibility, version, max_run_share, max_month_share, created_by, created_at, updated_at, activated_at, archived_at, demo_brand_id';
 const VERSION_COLUMNS =
   'agent_id, version, skill_ids, instructions, mode, connections, model, effort, scope, notify_user_ids, followup_days, can_call, created_at';
 const TRIGGER_COLUMNS = 'id, agent_id, kind, config_json, enabled, last_fired_at, created_at';
@@ -352,6 +355,8 @@ export interface AgentRow {
   updated_at: string;
   activated_at: string | null;
   archived_at: string | null;
+  /** The demo brand whose sample agent this is (00475); null for a person's agent. */
+  demo_brand_id: string | null;
 }
 
 interface VersionRow {
@@ -410,6 +415,7 @@ function toAgentRow(row: Record<string, unknown>): AgentRow {
     visibility: AGENT_VISIBILITIES.find((v) => v === row.visibility) ?? 'private',
     max_run_share: Number(row.max_run_share),
     max_month_share: row.max_month_share === null ? null : Number(row.max_month_share),
+    demo_brand_id: typeof row.demo_brand_id === 'string' ? row.demo_brand_id : null,
   };
 }
 
@@ -464,6 +470,8 @@ export async function agentForAct(
 ): Promise<{ ok: true; agent: LoadedAgent } | Refused> {
   const agent = await visibleAgent(ctx, id);
   if (!agent) return refused('not_found');
+  // The demo brand's sample agent (00475): seen, never changed, run or copied.
+  if (agent.row.demo_brand_id) return refused('demo_brand');
   const denial = await firstDenial(ctx, [
     agentActDenial(act, ctx.viewer, factsOf(agent), ctx.settings),
   ]);
@@ -1079,8 +1087,9 @@ export async function listAgents(
     }),
     counts,
     keyFailure: key ? { class: key.class, provider: key.provider } : null,
-    active: visible.filter((a) => a.row.status === 'active').length,
-    activeInWorkspace: rows.filter((r) => r.status === 'active').length,
+    // The demo brand's sample agents never count toward the plan (00475).
+    active: visible.filter((a) => a.row.status === 'active' && !a.row.demo_brand_id).length,
+    activeInWorkspace: rows.filter((r) => r.status === 'active' && !r.demo_brand_id).length,
     activeLimit: agentPlanLimits(ctx.plan).activeAgents,
   };
 }
@@ -1097,6 +1106,8 @@ export async function runnableAgents(ctx: AgentContext): Promise<LoadedAgent[]> 
     .select(AGENT_COLUMNS)
     .eq('organization_id', ctx.actor.organizationId)
     .in('status', ['active', 'paused'])
+    // Never the demo brand's sample agents (00475): nothing runs them.
+    .is('demo_brand_id', null)
     .order('updated_at', { ascending: false })
     .limit(AGENT_LIST_MAX);
   if (error) throw new Error(`Could not read the agents: ${error.message}`);
@@ -1215,7 +1226,7 @@ export async function listAgentRuns(
  * its topics belong to its brands, and the people it tells are members.
  * Can call names agents the person saving it sees (another is as not
  * found), bar those already on the agent (`keptCallees`), which an Admin
- * may have picked.
+ * may have picked, and never one of the demo brand's sample agents (00475).
  */
 async function referencesRefusal(
   ctx: AgentContext,
@@ -1261,13 +1272,15 @@ async function referencesRefusal(
     if (agentId && callees.includes(agentId)) return refused('agent_not_found');
     const { data, error } = await supabaseAdmin
       .from('chat_agents')
-      .select('id, status')
+      .select('id, status, demo_brand_id')
       .eq('organization_id', organizationId)
       .in('id', callees);
     if (error) throw new Error(`Could not read the agents it calls: ${error.message}`);
-    const live = ((data ?? []) as { id: string; status: string }[]).filter(
-      (a) => a.status !== 'archived',
-    );
+    const found = (data ?? []) as { id: string; status: string; demo_brand_id: string | null }[];
+    // Never the demo brand's sample agents (00475), as Can call's options leave them out
+    // (runnableAgents): nothing runs them. One picked before is refused too, as an archived one is.
+    if (found.some((a) => a.demo_brand_id)) return refused('demo_agent');
+    const live = found.filter((a) => a.status !== 'archived');
     if (live.length !== callees.length) return refused('agent_not_found');
     for (const id of callees) {
       if (keptCallees.includes(id)) continue;
@@ -2038,7 +2051,9 @@ async function activeCount(organizationId: string, except: string): Promise<numb
     .from('chat_agents')
     .select('id')
     .eq('organization_id', organizationId)
-    .eq('status', 'active');
+    .eq('status', 'active')
+    // The demo brand's sample agents don't count toward the plan (00475).
+    .is('demo_brand_id', null);
   if (error) throw new Error(`Could not count the active agents: ${error.message}`);
   return ((data ?? []) as { id: string }[]).filter((a) => a.id !== except).length;
 }

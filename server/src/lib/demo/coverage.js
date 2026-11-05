@@ -58,8 +58,6 @@ export const SKIPPED = {
     'What agents published or sent on their own (00443): no agent runs for a demo brand, and nothing is ever published or sent for one.',
   chat_notices:
     "A person's notes from the system (00446): one about a brand tells of an agent going live on its own, which never happens for a demo brand.",
-  chat_agent_runs:
-    "An agent's runs (00419): no trigger fires for a demo brand, and Chat's precedence refuses every change an agent would make on one.",
   chat_why_analyses:
     "Why did it move analyses (00420): made in a person's own chat from their question, not sample data.",
   ship_events:
