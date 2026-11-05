@@ -78,6 +78,9 @@ vi.mock('@/lib/mcp/brand-facts-reads', async (importOriginal) =>
 vi.mock('@/lib/mcp/whats-new', async (importOriginal) =>
   tracked.all('mcp/whats-new', await importOriginal<Record<string, unknown>>()),
 );
+vi.mock('@/lib/mcp/ready-agents', async (importOriginal) =>
+  tracked.all('mcp/ready-agents', await importOriginal<Record<string, unknown>>()),
+);
 // No app page makes images yet: the image rows call Chat's own image functions (W4-08).
 vi.mock('@/lib/chat/images/chat-images', () => ({
   imageModelQuestion: tracked.track('chat/images.imageModelQuestion'),

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Lock } from 'lucide-react';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
@@ -10,6 +10,7 @@ import { presetTriggerDraft, triggerInputOf } from '@/lib/chat/agent-form';
 import {
   AGENT_PRESETS,
   filterPresets,
+  presetAnchor,
   presetFilterOptions,
   presetFit,
   type AgentPreset,
@@ -34,7 +35,9 @@ import type { AgentWords } from './agent-words';
  * the list gives them. Filters: the goal, and business type, industry and
  * role once a preset carries one. The agents made for the site type of the
  * brand on screen, or for one of the person's work areas, come first in
- * their group, marked For your site type or For your role.
+ * their group, marked For your site type or For your role. A link from
+ * Chat to one card (setup's recommendations, list_ready_agents) brings it
+ * into view, marked, once the brands are in: the site type may move it.
  */
 
 const FILTER_KEYS: Record<PresetFilter, string> = {
@@ -105,13 +108,14 @@ function PresetCard({
 
   return (
     <article
+      id={presetAnchor(preset.id)}
       data-slot="preset-card"
       data-preset={preset.id}
       data-status={preset.status}
       data-fit={fit ?? undefined}
       aria-label={name}
       className={cn(
-        'flex min-w-0 flex-col gap-[9px] rounded-[14px] border bg-card p-3.5 shadow-[0_1px_2px_rgba(10,10,10,.04)]',
+        'flex min-w-0 flex-col gap-[9px] rounded-[14px] border bg-card p-3.5 shadow-[0_1px_2px_rgba(10,10,10,.04)] target:border-foreground/40',
         ready &&
           'transition-[box-shadow,border-color] duration-200 hover:border-foreground/20 hover:shadow-[0_4px_14px_rgba(10,10,10,.06)] motion-reduce:transition-none',
       )}
@@ -221,11 +225,21 @@ export function ReadyAgents({
   const options = useMemo(() => presetFilterOptions(presets), [presets]);
   const [picked, setPicked] = useState<Partial<Record<PresetFilter, string | null>>>({});
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
+  const brandsLoaded = useBrandStore((s) => s.loaded);
   // The brand on screen's site type, guessed while it isn't set; none before the brands load.
   const viewer = { siteType: activeBrand ? siteTypeOf(activeBrand) : null, workAreas };
   const shown = filterPresets(presets, picked, viewer);
   const pick = (filter: PresetFilter, value: string | null) =>
     setPicked((was) => ({ ...was, [filter]: value }));
+
+  // A card the address names (#preset-…), in view once the brands set the order.
+  useEffect(() => {
+    if (!brandsLoaded) return;
+    const id = window.location.hash.slice(1);
+    if (id.startsWith(presetAnchor(''))) {
+      document.getElementById(id)?.scrollIntoView?.({ block: 'center' });
+    }
+  }, [brandsLoaded]);
 
   return (
     <div>

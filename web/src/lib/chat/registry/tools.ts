@@ -19,6 +19,7 @@ import { WRITE_TOOLS } from './write-tools';
 import { AREA_READS } from './areas';
 import { NAVIGATION_READS } from './navigation';
 import { WHATS_NEW_READS } from './whats-new';
+import { READY_AGENT_READS } from './ready-agents';
 
 /**
  * Every tool Chat may call (CHAT-20 §9). One without a row here isn't
@@ -31,6 +32,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...AREA_READS,
   ...NAVIGATION_READS,
   ...WHATS_NEW_READS,
+  ...READY_AGENT_READS,
   ...WHY_TOOLS,
   ...IMAGE_READS,
   ...WRITE_TOOLS,

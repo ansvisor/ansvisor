@@ -5,8 +5,9 @@ import { SKILL_LIBRARY, SKILL_ORDER } from './skills/library';
 
 /**
  * The skills an agent is made of (CHAT-21 §D step 1): every skill in Chat's
- * library, the fourteen then the focus areas' seven (W2-23b), in its order,
- * each titled as its SKILL.md, with the connections it uses.
+ * library, the fourteen, the focus areas' seven (W2-23b), then /setup (the
+ * Onboarding & Help agent's), in its order, each titled as its SKILL.md,
+ * with the connections it uses.
  */
 
 const FOCUS_SKILLS = [
@@ -20,9 +21,10 @@ const FOCUS_SKILLS = [
 ];
 
 describe('ANSVISOR_SKILLS', () => {
-  it("lists every library skill, in the library's order, the focus areas' seven last", () => {
+  it("lists every library skill, in the library's order, the focus areas' seven, then /setup", () => {
     expect(ANSVISOR_SKILLS.map((skill) => skill.id)).toEqual([...SKILL_ORDER]);
-    expect(ANSVISOR_SKILLS.slice(-7).map((skill) => skill.id)).toEqual(FOCUS_SKILLS);
+    expect(ANSVISOR_SKILLS.slice(14, 21).map((skill) => skill.id)).toEqual(FOCUS_SKILLS);
+    expect(ANSVISOR_SKILLS.at(-1)?.id).toBe('setup');
   });
 
   it('titles each skill as its SKILL.md does', () => {
@@ -31,6 +33,10 @@ describe('ANSVISOR_SKILLS', () => {
       expect(titles[skill.name], skill.name).toBe(skill.title);
     }
     expect(Object.keys(titles).sort()).toEqual(ANSVISOR_SKILLS.map((skill) => skill.id).sort());
+  });
+
+  it('gives /setup no connection: it says how to connect one, and reads Ansvisor’s own data', () => {
+    expect(skillOf('setup')?.uses).toEqual([]);
   });
 
   it("gives the focus areas' seven no connection: they read Ansvisor's own data", () => {
