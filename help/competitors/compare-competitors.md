@@ -4,8 +4,8 @@ route: /dashboard/competitors
 keywords: [competitors, head-to-head, competitor comparison, gaps, strengths, platform breakdown, prompt-by-prompt]
 synonyms: [benchmark competitors, how do we compare, competitor visibility, us versus them, competitor score]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -69,6 +69,6 @@ Only what Site Audit's checks found and a summary of the page's words are kept, 
 ## Close a visibility gap
 
 1. On **Gaps**, find the prompts where the competitor leads most.
-2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on the **Citations** page lists the sources AI cites with the competitor and not with you.
+2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on Brand Visibility's **Citations** tab lists the sources AI cites with the competitor and not with you.
 3. Create content for that prompt in **Content**.
 4. Publish it, earn placements on those sources, and watch the prompt in the comparison as new answers are tracked.

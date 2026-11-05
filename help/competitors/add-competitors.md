@@ -4,8 +4,8 @@ route: /dashboard/competitors
 keywords: [add competitor, track competitors, suggest competitors, remove competitor, competitor domain, competitors page]
 synonyms: [new competitor, follow a rival, competitor list, delete a competitor, where is the competitors page, find competitors]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -30,7 +30,7 @@ Only admins and managers add, suggest and remove competitors; other members see 
 Click **Add Competitor** and fill in:
 
 - **Name**: as AI answers write it, not the web address. Ansvisor looks for the name in every answer.
-- **Domain** (optional): Ansvisor also looks for the domain in answers, counts citations of the competitor's pages, and marks those pages **Competitor** on the **Citations** page. The card that follows the competitor's pages over time needs it too.
+- **Domain** (optional): Ansvisor also looks for the domain in answers, counts citations of the competitor's pages, and marks those pages **Competitor** on Brand Visibility's **Citations** tab. The card that follows the competitor's pages over time needs it too.
 
 Click **Add**.
 
@@ -42,7 +42,7 @@ All suggestions come ticked: untick the ones you don't want and click **Add N co
 
 ## Add a competitor from Citations
 
-On the **Citations** page, the **+** button (**Add as competitor**) on a cited domain that isn't yours or a tracked competitor's opens a dialog with a name taken from the domain. Edit the name and click **Add**. A cited URL's own page has **Add as competitor** too, which adds its domain.
+On Brand Visibility's **Citations** tab, the **+** button (**Add as competitor**) on a cited domain that isn't yours or a tracked competitor's opens a dialog with a name taken from the domain. Edit the name and click **Add**. A cited URL's own page has **Add as competitor** too, which adds its domain.
 
 ## When a new competitor is counted
 

@@ -4,8 +4,8 @@ route: /dashboard/insights
 keywords: [visibility score, position, mentions, citations, coverage, share of voice, citation rate, net sentiment, performance]
 synonyms: [metrics explained, what is visibility, ranking in AI answers, why is my score zero, what is coverage, what is share of voice]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -61,7 +61,7 @@ A prompt with no answers in the range, such as a new one, has no performance yet
 
 A mention is each time an AI answer names your brand or your domain; one answer can add several. The **Mentions** card counts them. Mention detection ignores upper and lower case, so name the brand exactly as it's named in the wild, not by an abbreviation.
 
-A citation is a source page that comes with an AI answer. The **Citations** card counts how often answers cited your pages, and the **Citations** page shows which domains and pages AI engines cite for your prompts.
+A citation is a source page that comes with an AI answer. The **Citations** card counts how often answers cited your pages, and Brand Visibility's **Citations** tab shows which domains and pages AI engines cite for your prompts.
 
 ## Prompts that skew your metrics
 
