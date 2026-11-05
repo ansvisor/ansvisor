@@ -4026,6 +4026,9 @@
       "usedShortcut": "Used shortcut: {title}",
       "usedMemory": "Used memory",
       "memorySubject": "Memory",
+      "editorDecisions": "Read your choices in the editor",
+      "editorAccepted": "{count} accepted",
+      "editorRejected": "{count} rejected",
       "unchanged": "No change since the last run: the data this job reads is the same, so there is nothing new to send."
     },
     "answer": {
