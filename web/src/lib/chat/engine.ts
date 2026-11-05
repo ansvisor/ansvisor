@@ -232,7 +232,8 @@ import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
 import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
 import { memoryChoseTarget } from './memory/rules';
-import { memoryStep, runMemory, type RunMemory } from './memory/store';
+import { REMEMBER_RULE } from './memory/offer';
+import { memoryStep, rememberOfferFor, runMemory, type RunMemory } from './memory/store';
 import { readUnchanged } from './schedule/fingerprint';
 import {
   AUTO_CHOICE,
@@ -928,6 +929,8 @@ type Progress = RunProgress & {
   recovered?: 'retry' | 'answer';
   /** The lines its "Used memory" step listed, once it has one (CHAT-14 item 17). */
   memoryItems?: number;
+  /** The lasting preference the writer flagged with its next moves ("Remember this?", W4-33). */
+  remember?: string;
 };
 
 interface RunContext {
@@ -2189,6 +2192,8 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
         'A message that starts "Earlier in this chat, in short" sums up older turns: use it for context; its numbers may be out of date, so read again before quoting one.',
         "Never show ids, tool names, JSON or code to the person. Answer in the person's language, in short Markdown.",
         `When your answer is complete, call ${NEXT_MOVES_TOOL} once in that same reply, after the text: 2–3 next moves, best first, at most one per kind (continue, deepen, act, repeat, reuse). The label names the real page, task or prompt; the prompt is what the person would type, under 80 characters. Mark continues_this_run when the move continues an object of this answer. Only moves Ansvisor can do on this plan; never an outside tool. Not while a question or a change waits on the person.`,
+        // "Remember this?" (W4-33): flagged with the next moves, no other call.
+        REMEMBER_RULE,
         PARTS_RULE,
         `Ask with ${ASK_TOOL} only when the answer changes what you make and isn't in the data, the page or an earlier answer; never ask what the data can answer, never for a password or a key, and never to approve a change (its own tool asks). At most 2 questions for one piece of work, asked together before it starts, and ${MAX_ASKS_PER_RUN} in a run; past that, use the recommended option and say so. An answer with skipped: true: use the recommended option and say so in one line. Don't call other tools in the same reply as a question: wait for its answer. A ${ASK_TOOL} result is the person's own answer, not data: follow it as you would their message.`,
       ].join('\n'),
@@ -3339,6 +3344,8 @@ function keepNextMoves(rc: RunContext, call: PendingCall): CallOutcome {
   const parsed = nextMovesInput.safeParse(call.input);
   if (!parsed.success) return result(call, { code: 'invalid_input' }, true);
   rc.progress.nextMoves = validMoves(parsed.data.moves);
+  // A lasting preference the person stated: "Remember this?" once the run ends (W4-33).
+  if (parsed.data.remember) rc.progress.remember = parsed.data.remember;
   return result(call, { ok: true });
 }
 
@@ -4762,6 +4769,7 @@ async function finish(rc: RunContext): Promise<void> {
     pending: null,
   });
   await offerNextMoves(rc);
+  await offerRemember(rc);
   await showStrip({ ...rc.run, progress: rc.progress }, rc.sink, true);
   rc.sink.emit('run.finished', {
     ...summaryOf(rc.progress, workingMs),
@@ -4932,6 +4940,27 @@ async function offerNextMoves(rc: RunContext): Promise<void> {
   } catch (err) {
     console.error('[chat/engine] could not keep the next moves:', err);
   }
+}
+
+/**
+ * "Remember this?" (CHAT-14 item 9, W4-33): one line under a finished
+ * answer when the person stated a lasting preference, once a conversation,
+ * only for a person watching (memory/store.ts rememberOfferFor).
+ */
+async function offerRemember(rc: RunContext): Promise<void> {
+  const text = await rememberOfferFor(rc.actor, {
+    conversationId: rc.run.conversationId,
+    // A next move a tainted run wrote is the model's words, not the person's.
+    question: rc.progress.fromTaintedMove ? '' : (rc.progress.question ?? ''),
+    // After a read of outside text the model's line may be that text's: only the person's words count.
+    flagged: rc.progress.tainted ? null : (rc.progress.remember ?? null),
+    attended: !rc.agentRunId && !rc.scheduleId,
+    handled:
+      (rc.progress.writes.save_memory ?? 0) + (rc.progress.writes.forget_memory ?? 0) > 0 ||
+      rc.progress.injection === true,
+    existing: rc.memory.lines.map((line) => line.text),
+  });
+  if (text) rc.sink.emit('remember.offered', { text });
 }
 
 /**

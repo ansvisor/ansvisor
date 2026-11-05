@@ -55,6 +55,7 @@ import { useHomeDraft } from './home-draft';
 import { useFormAssist } from './run/form-assist';
 import { NextMoves } from './run/next-moves';
 import { OpenPageCard, type OpenPageChoice } from './run/open-page-card';
+import { RememberThis } from './run/remember-this';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
 import { useChatDebug } from './chat-debug';
@@ -121,6 +122,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         sent: message.run.sent ?? [],
         tasks: message.run.tasks ?? null,
         nextMoves: message.run.nextMoves ?? [],
+        remember: message.run.remember ?? null,
         why: message.run.why ?? [],
         whatsNew: message.run.whatsNew ?? [],
         text: message.text,
@@ -320,6 +322,9 @@ export function ChatThreadView({
   // The latest answer's next moves, once it finished, in the person's own chat (CHAT-07 §C).
   const nextMoves =
     last?.run?.status === 'done' && (!thread || thread.mine) ? last.run.nextMoves : [];
+  // "Remember this?" (W4-33): under the latest answer, in the person's own chat.
+  const remember =
+    last?.run?.status === 'done' && (!thread || thread.mine) ? last.run.remember : null;
 
   useEffect(() => {
     if (!working) return;
@@ -733,6 +738,19 @@ export function ChatThreadView({
                     saving={pageSaving}
                     onChoose={(where, remember) =>
                       void choosePage(turn.runId!, lastPage, where, remember)
+                    }
+                  />
+                )}
+                {turn === last && (
+                  <RememberThis
+                    text={remember}
+                    disabled={atCap}
+                    onPick={(prompt) =>
+                      void send(prompt, {
+                        context: chips ?? [],
+                        references: [],
+                        attachments: [],
+                      })
                     }
                   />
                 )}

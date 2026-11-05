@@ -7111,6 +7111,10 @@
       "counter": "{count} of {max} characters",
       "sent": "Sent to your Admins"
     },
+    "offer": {
+      "ask": "Remember this?",
+      "prompt": "Remember this: {text}"
+    },
     "page": {
       "title": "Memory",
       "subtitle": "What Chat remembers between chats.",

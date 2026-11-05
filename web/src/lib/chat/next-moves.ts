@@ -47,7 +47,8 @@ export const nextMoveItem = z.object({
 export type NextMoveInput = z.output<typeof nextMoveItem>;
 
 /**
- * What the model suggests with: its ranked moves, best first. Loose on
+ * What the model suggests with: its ranked moves, best first, and a
+ * lasting preference to offer to remember (`remember`, W4-33). Loose on
  * purpose: the call is taken whole and each move checked against
  * nextMoveItem (validMoves), so one move too long or of an unknown kind
  * doesn't lose the others.
@@ -73,6 +74,13 @@ export const nextMovesInput = z.object({
       }),
     )
     .max(6),
+  remember: z
+    .string()
+    .max(1_000)
+    .optional()
+    .describe(
+      'A lasting preference the person stated without asking to remember it, as one short line in their words ("Blog posts use US English spelling"). Leave it out otherwise.',
+    ),
 });
 
 /** The moves that pass nextMoveItem, in order; the rest are dropped. */
