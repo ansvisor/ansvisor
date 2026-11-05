@@ -900,6 +900,11 @@
           "keys": {
             "aiBotsMentioned": "In robots.txt",
             "wafBlockedBots": "Blocked by CDN or firewall",
+            "hiddenPercent": "Main text only after JavaScript (%)",
+            "hiddenWords": "Words only after JavaScript",
+            "mainWords": "Main-text words",
+            "hiddenText": "Not in the HTML",
+            "readAs": "Read as",
             "ageDays": "Age in days",
             "newest": "Newest date",
             "dateSignals": "Date signals",
@@ -7539,7 +7544,7 @@
   },
   "audit": {
     "title": "Site Audit",
-    "description": "Score any page against the 48-signal AEO/GEO",
+    "description": "Score any page against the 49-signal AEO/GEO",
     "runAudit": "Run Audit",
     "running": "Auditing…",
     "pages": {
@@ -7916,7 +7921,9 @@
       "words": "Words: {syllables, number} syllables and {letters, number} letters on average",
       "wordsLetters": "Words: {letters, number} letters on average",
       "paragraphs": "Paragraphs: {words, number} words on average, about {lines, plural, one {# line} other {# lines}} each on a phone",
-      "firstPerson": "{count, plural, one {# sentence} other {# sentences}} of {total, number} told in the first person ({language})"
+      "firstPerson": "{count, plural, one {# sentence} other {# sentences}} of {total, number} told in the first person ({language})",
+      "noJs": "{percent, plural, =0 {All the main text is in the HTML {bot} gets, before any JavaScript runs.} other {#% of the main text ({hidden, number} of {words, number} words) appears only after JavaScript runs, so AI crawlers don't see it.}}",
+      "noJsHidden": "Not in the HTML {bot} gets:"
     },
     "why": "Why",
     "recommendedFix": "Recommended fix",
@@ -7980,7 +7987,7 @@
     "noIssues": "No issues found — every evaluated signal passed.",
     "stages": {
       "fetch": "Fetching the page…",
-      "analyze": "Analyzing 48 signals…",
+      "analyze": "Analyzing 49 signals…",
       "recommend": "Generating AI recommendations…"
     },
     "emptyTitle": "Audit any page for AI search readiness",

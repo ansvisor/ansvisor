@@ -50,6 +50,9 @@ export function normalizeUrl(raw) {
  * @property {string|null} query     optional target buyer query (later phases)
  * @property {Awaited<ReturnType<typeof probeBotAccess>>} [botAccess]
  *   the live AI-bot access test (SA-008); absent for a page not fetched
+ * @property {{ html: string, from: string } | null} [rawPage]
+ *   the page's HTML as the first AI bot let in got it, before JavaScript
+ *   (SA-009); `html` above is the page as a browser renders it
  */
 
 /**
@@ -79,6 +82,9 @@ export async function buildAuditContext(rawUrl, { query = null } = {}) {
     probeBotAccess(url).catch(() => null),
   ]);
 
+  // The HTML the first AI bot let in got, before any JavaScript ran, for the
+  // no-JS check (SA-009); the bot check keeps the answers.
+  const { page: rawPage = null, ...access } = botAccess ?? {};
   return {
     ...auditContextOf({
       url,
@@ -88,7 +94,8 @@ export async function buildAuditContext(rawUrl, { query = null } = {}) {
       llmsTxt,
       query,
     }),
-    botAccess,
+    botAccess: botAccess ? access : null,
+    rawPage,
   };
 }
 

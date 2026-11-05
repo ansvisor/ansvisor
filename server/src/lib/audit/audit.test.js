@@ -39,7 +39,7 @@ describe('scoreAudit', () => {
 
     expect(categoryScores.structure.score).toBeCloseTo(0.5, 5);
     expect(categoryScores.structure.evaluated).toBe(2);
-    expect(categoryScores.structure.total).toBe(13);
+    expect(categoryScores.structure.total).toBe(14);
     expect(categoryScores.trust.score).toBe(1);
     // (0.25*0.5 + 0.10*1) / (0.25 + 0.10) = 0.643
     expect(totalScore).toBeCloseTo(0.6428, 3);

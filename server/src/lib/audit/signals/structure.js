@@ -1,5 +1,5 @@
 /**
- * Structure-category signal evaluators (13 signals).
+ * Structure-category signal evaluators (14 signals).
  *
  * Each evaluator is `{ key, evaluate(ctx) => { status, score, evidence } }`:
  *   - status: 'pass' | 'warn' | 'fail' | 'na'
@@ -11,6 +11,8 @@
  */
 
 import { jsonLd, typesOf, classifyLinks, metaContent } from './helpers.js';
+import { pageProse } from './readability.js';
+import { NO_JS, compareNoJs } from '../no-js.js';
 
 // schema.org types that signal a specific, AI-citable content intent.
 const HIGH_VALUE_TYPES = new Set([
@@ -311,10 +313,50 @@ export const openGraph = {
   },
 };
 
+/**
+ * Main text without JavaScript (SA-009, audit/no-js.js): the share of the
+ * page's main text that isn't in the HTML an AI bot gets before JavaScript
+ * runs. Read only where the live bot test let a bot in (ctx.rawPage); a
+ * draft, the demo brand's pages, a page no bot was let into, or one with
+ * too little main text has nothing to compare (n/a).
+ */
+export const noJsContent = {
+  key: 'no-js-content',
+  evaluate(ctx) {
+    if (!ctx.rawPage) return { status: 'na', score: null, evidence: { compared: false } };
+    const { blocks } = pageProse(ctx);
+    const { words, hiddenWords, hiddenShare, hidden } = compareNoJs(blocks, ctx.rawPage.html);
+    if (words < NO_JS.minWords) {
+      return { status: 'na', score: null, evidence: { compared: false, mainWords: words } };
+    }
+    let status = 'fail';
+    let score = 0;
+    if (hiddenShare <= NO_JS.passUpTo) {
+      status = 'pass';
+      score = 1;
+    } else if (hiddenShare <= NO_JS.warnUpTo) {
+      status = 'warn';
+      score = 0.5;
+    }
+    return {
+      status,
+      score,
+      evidence: {
+        hiddenPercent: Math.round(hiddenShare * 100),
+        hiddenWords,
+        mainWords: words,
+        hiddenText: hidden,
+        readAs: ctx.rawPage.from,
+      },
+    };
+  },
+};
+
 export const structureSignals = [
   structuralDepth,
   internalLinking,
   pageWeight,
+  noJsContent,
   jsonLdPresence,
   jsonLdValidity,
   jsonLdRelevance,
