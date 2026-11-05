@@ -1,34 +1,8 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords:
-  [
-    actions,
-    today,
-    next 7,
-    done this week,
-    action status,
-    assign action,
-    dismiss action,
-    export actions,
-    top actions,
-    run agent,
-    run with chat,
-    stale actions,
-    still relevant,
-    confidence,
-  ]
-synonyms:
-  [
-    recommendations,
-    work items,
-    to-dos,
-    action list,
-    let an agent do this,
-    agent on an action,
-    what should I do today,
-    what to do first,
-  ]
+keywords: [actions, today, next 7, done this week, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence]
+synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first]
 plan: all
 updated: 2026-11-05
 last_checked: 2026-11-05
@@ -37,7 +11,6 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-
 An action is one piece of work with an outcome, built from the evidence behind it. Ansvisor groups many signals into one action: six valuable pages with no AI traffic become one "Capture AI traffic" action with six linked signals, not six rows. New actions are added after the daily tracking run, on the **Actions** tab.
 
 ## Today
