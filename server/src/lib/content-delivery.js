@@ -79,6 +79,8 @@ export const sendInput = z.object({
   brandId: z.guid(),
   pages: z.array(deliveryPage).min(1).max(PAGES_PER_SEND),
   target: z.enum(DELIVERY_TARGETS).default('webhook'),
+  // The agent run whose card the person sent it from (Chat's click, 00480); checked before it is kept.
+  viaAgentRunId: z.guid().optional(),
 });
 
 /** A send that can't go, with the code the web names to the person. */
@@ -589,6 +591,31 @@ async function myRuleSets(orgId, siteType, drafts) {
 }
 
 /**
+ * The agent run a person's send came from (Chat's click on a card in the
+ * run's chat, 00480), when it is the workspace's run on this brand: the
+ * click comes through a server action any member's session can call, so
+ * the id is checked, never taken as said. Null otherwise, and the send goes
+ * on naming none. Never throws: a read that fails is logged.
+ */
+async function viaRunOf(orgId, brandId, viaAgentRunId) {
+  if (!viaAgentRunId) return null;
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_runs')
+    .select('id')
+    .eq('id', viaAgentRunId)
+    .eq('organization_id', orgId)
+    .eq('brand_id', brandId)
+    .maybeSingle();
+  if (error) {
+    logger.warn({ err: error }, '[content-delivery] agent run of the send not read');
+    return null;
+  }
+  if (!data)
+    logger.warn('[content-delivery] a send named an agent run of another workspace or brand');
+  return data?.id ?? null;
+}
+
+/**
  * Sends pages of one brand: checks they are the brand's (not archived), that
  * a webhook takes the event (or the brand's Webflow or Framer collection is
  * ready, or its WordPress site connected, for those targets), reserves them against the day's cap (those past
@@ -598,6 +625,9 @@ async function myRuleSets(orgId, siteType, drafts) {
  *
  * `agentRunId`: the agent run that sends on its own (00444), kept on each
  * delivery; `userId` is then the person the run acts as.
+ * `viaAgentRunId`: the agent run whose card `userId` sent the pages from
+ * (Chat's click, 00480), kept on each delivery once it is the workspace's
+ * run on this brand (viaRunOf); never beside `agentRunId`.
  *
  * @returns {Promise<{ batchId: string|null, deliveries: object[], skipped: number }>}
  *   deliveries: the sent one (one page) or the queued ones (more); skipped:
@@ -610,6 +640,7 @@ export async function sendContentPages({
   pages: asked,
   target = 'webhook',
   agentRunId = null,
+  viaAgentRunId = null,
 }) {
   // A page named twice goes once.
   const byId = new Map(asked.map((p) => [p.draftId, p]));
@@ -661,12 +692,15 @@ export async function sendContentPages({
       429,
     );
   }
-  if (agentRunId) {
+  // On its own, or from a card a person clicked in the run's chat (00480): never both.
+  const via = agentRunId ? null : await viaRunOf(orgId, brandId, viaAgentRunId);
+  const run = agentRunId ? { agent_run_id: agentRunId } : via ? { via_agent_run_id: via } : null;
+  if (run) {
     // Before it goes: the Library and the ship event read who sent it from the row.
-    // Not kept, it still goes: its go-live step names the delivery too.
+    // Not kept, it still goes: an agent's go-live step names the delivery too.
     const { error: agentError } = await supabaseAdmin
       .from('content_draft_deliveries')
-      .update({ agent_run_id: agentRunId })
+      .update(run)
       .in(
         'id',
         rows.map((row) => row.id),

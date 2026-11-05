@@ -3610,7 +3610,8 @@
     "memoryForget": { "name": "Remove from memory", "step": "Removed from memory" },
     "callAgent": { "name": "Run another agent", "step": "Ran agent" },
     "followUpCheck": { "name": "Set follow-up checks", "step": "Set follow-up check" },
-    "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" }
+    "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" },
+    "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agent Center" }
   },
   "agentic": {
     "avatar": {
@@ -6282,7 +6283,8 @@
       "markets": "Who AI recommends by market",
       "listings": "Listing gaps",
       "rivals": "Rival brief",
-      "audit-fix": "Site audit fixes"
+      "audit-fix": "Site audit fixes",
+      "setup": "Setup guide"
     },
     "form": {
       "titleNew": "New agent",
@@ -6698,8 +6700,6 @@
       "needs": {
         "fanout_skill": "the /fanout skill",
         "prompts_skill": "the /prompts skill",
-        "setup_skill": "the /setup skill",
-        "help_articles": "approved Help articles",
         "catalog_trigger": "a catalog sync trigger",
         "publish_trigger": "a page-published trigger",
         "sub_agents": "sub-agents",
@@ -6767,7 +6767,7 @@
       },
       "onboarding-help": {
         "name": "Onboarding & Help",
-        "description": "Answers questions about Ansvisor from Help and walks new members through setup."
+        "description": "Walks you through the open Getting started steps, then recommends 3 to 5 agents for your site type and role. Questions about Ansvisor get answers from Help."
       },
       "shopping-readiness": {
         "name": "AI Shopping Readiness",
@@ -13807,6 +13807,7 @@
         "overlapping_change": "Another shipped change works on the same prompts.",
         "no_targets": "No tracked prompt targets this action.",
         "plan_inactive": "Measuring stopped while your plan wasn't active.",
+        "taken_down": "The page was taken down from your site.",
         "other": "It can't be measured."
       },
       "csv": {

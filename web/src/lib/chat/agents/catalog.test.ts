@@ -21,9 +21,11 @@ import {
   filterPresets,
   presetFilterOptions,
   presetFit,
+  presetCardHref,
   presetGate,
   presetSameness,
   readyPreset,
+  recommendedPresets,
   type AgentPreset,
 } from './catalog';
 
@@ -86,6 +88,7 @@ describe('the preset files', () => {
       'task-finisher',
       'weekly-report',
       'brand-facts-guardian',
+      'onboarding-help',
       'product-answer-pages',
       'feature-question-coverage',
       'alternatives-comparison-pages',
@@ -97,7 +100,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(21);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(20);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
@@ -223,9 +226,28 @@ describe('a ready preset', () => {
     expect(chatAgents.presets['task-finisher'].description).toContain('finishes two a run');
   });
 
+  it('walks Getting started as Onboarding & Help, on Run now, asking before every change', () => {
+    // AGENTS plan §3 #11: its /setup skill, Manual only (its plan triggers, a new brand or
+    // member, aren't kinds New agent offers), and Ask me first, as Get started (/start) asks.
+    const help = readyPreset('onboarding-help')!;
+    expect(help).toMatchObject({
+      goal: 'help',
+      skills: ['setup'],
+      triggers: [],
+      mode: 'ask_first',
+      connections: [],
+      needs: [],
+    });
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'setup')?.body ?? '';
+    expect(body).toContain('`get_onboarding_progress`');
+    expect(body).toContain('`list_ready_agents`');
+    expect(body).toContain('Never create, turn on or run an agent');
+    expect(chatAgents.presets['onboarding-help'].description).toContain('3 to 5 agents');
+  });
+
   it('is found by its id; a soon one, or no id, is not', () => {
     expect(readyPreset('weekly-report')?.id).toBe('weekly-report');
-    expect(readyPreset('onboarding-help')).toBeNull();
+    expect(readyPreset('fanout-gap-filler')).toBeNull();
     expect(readyPreset('nope')).toBeNull();
     expect(readyPreset(null)).toBeNull();
   });
@@ -241,7 +263,7 @@ describe('a soon preset', () => {
   });
 
   it('is refused as a file when it needs nothing, as a ready one that needs something is', () => {
-    const base = AGENT_PRESETS.find((preset) => preset.id === 'onboarding-help')!;
+    const base = AGENT_PRESETS.find((preset) => preset.id === 'fanout-gap-filler')!;
     expect(() => buildPresetCatalog([{ file: 'x.json', json: { ...base, needs: [] } }])).toThrow(
       /needs/,
     );
@@ -454,5 +476,91 @@ describe('the filters', () => {
       ['unmet-needs-miner', 'role'],
     ]);
     expect(ready[2].id).toBe('visibility-watch');
+  });
+});
+
+describe('the agents setup recommends (AGENTS plan §8)', () => {
+  const fake = (id: string, over: Partial<AgentPreset> = {}): AgentPreset => ({
+    id,
+    goal: 'content',
+    businessTypes: [],
+    industries: [],
+    roles: [],
+    skills: ['faq'],
+    triggers: [],
+    mode: 'auto',
+    connections: [],
+    status: 'ready',
+    needs: [],
+    ...over,
+  });
+  const ids = (viewer: { siteType: string | null; workAreas: string[] }, list?: AgentPreset[]) =>
+    recommendedPresets(viewer, list).map(({ preset, fit }) => [preset.id, fit]);
+
+  it('are Ready to use’s first for the person: what fits, then the launch set, 3 to 5', () => {
+    // A B2B brand and a content person: what fits, in the catalog's order, as Ready to use shows it.
+    expect(ids({ siteType: 'b2b', workAreas: ['content'] })).toEqual([
+      ['content-freshness', 'role'],
+      ['alternatives-comparison-pages', 'siteType'],
+      ['integration-questions', 'siteType'],
+    ]);
+    // A B2B brand alone: its two packs, then the launch set's first to make three.
+    expect(ids({ siteType: 'b2b', workAreas: [] })).toEqual([
+      ['alternatives-comparison-pages', 'siteType'],
+      ['integration-questions', 'siteType'],
+      ['visibility-watch', null],
+    ]);
+    // Nothing fits: three agents for every brand, in the catalog's order.
+    expect(ids({ siteType: null, workAreas: [] })).toEqual([
+      ['visibility-watch', null],
+      ['citation-winback', null],
+      ['competitor-watch', null],
+    ]);
+    // An e-commerce brand and a product person.
+    expect(ids({ siteType: 'ecommerce', workAreas: ['product'] })).toEqual([
+      ['product-answer-pages', 'siteType'],
+      ['unmet-needs-miner', 'role'],
+      ['visibility-watch', null],
+    ]);
+    // Many fits: the first five.
+    expect(ids({ siteType: 'b2b', workAreas: ['leaders', 'brand', 'bizdev', 'product'] })).toEqual([
+      ['alternatives-comparison-pages', 'siteType'],
+      ['integration-questions', 'siteType'],
+      ['narrative-sentiment-watch', 'role'],
+      ['source-outreach-list', 'role'],
+      ['ceo-brief', 'role'],
+    ]);
+  });
+
+  it('never recommends a Soon agent, nor the onboarding agent itself', () => {
+    const list = [
+      fake('onboarding-help', { goal: 'help' }),
+      fake('soon-pack', { businessTypes: ['b2b'], status: 'soon', needs: ['hubspot'] }),
+      fake('core-1'),
+      fake('pack', { businessTypes: ['b2b'] }),
+      fake('core-2'),
+    ];
+    expect(ids({ siteType: 'b2b', workAreas: [] }, list)).toEqual([
+      ['pack', 'siteType'],
+      ['core-1', null],
+      ['core-2', null],
+    ]);
+    for (const viewer of [
+      { siteType: 'ecommerce', workAreas: ['content'] },
+      { siteType: 'app', workAreas: ['aeo', 'developers'] },
+      { siteType: 'b2c', workAreas: ['growth'] },
+    ]) {
+      const picked = recommendedPresets(viewer);
+      expect(picked.length).toBeGreaterThanOrEqual(3);
+      expect(picked.length).toBeLessThanOrEqual(5);
+      for (const { preset } of picked) {
+        expect(preset.status).toBe('ready');
+        expect(preset.id).not.toBe('onboarding-help');
+      }
+    }
+  });
+
+  it('link each to its card in Agent Center › Ready to use', () => {
+    expect(presetCardHref('ceo-brief')).toBe('/dashboard/agents?tab=ready#preset-ceo-brief');
   });
 });

@@ -8,7 +8,7 @@ updated: 2026-11-02
 last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, help/chat/skills.md]
 ---
 Chat can do work by itself later or on repeat. Ask in any chat, such as "Every Monday at 9:00, send me the weekly report" or "Have a citations check ready by Friday". Chat never schedules anything without your click: it shows a card first, and the job is made only when you click **Create schedule**.

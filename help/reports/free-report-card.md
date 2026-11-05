@@ -8,7 +8,7 @@ updated: 2026-11-04
 last_checked: 2026-11-04
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/api-reference/report-card.mdx]
 ---
 The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 25 that match what you sell best and that people search for most, asks each one once in ChatGPT, Microsoft Copilot, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once.

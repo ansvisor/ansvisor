@@ -8,7 +8,7 @@ updated: 2026-11-02
 last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, docs/guides/send-to-cms.mdx]
 ---
 **Connections** shows what the brand open now has connected, and what it could connect: Search Console, Analytics, your CMS, your product catalog and more. Connections are per brand. Chat, its skills and your agents all read the same list, so a tool connected in Settings shows as connected here too.

@@ -750,7 +750,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Site audit',
       description:
-        'Fetch a Site Audit by id — its status, total score, per-category scores, evaluated signals, and AI fix recommendations. Use after run_site_audit to poll for the result: while status is "running" the scores are not yet populated; once it is "completed" (or "failed") the full result is available. This is a read — no credit is consumed.',
+        'Fetch a Site Audit by id — its status, total score, the score\'s range, per-category scores, evaluated signals, and AI fix recommendations. scoreRange is "64 ± 2" in the audit report: ± plusMinus points, from the page\'s last `audits` complete audits up to this one, which scored low to high out of 100; null with fewer than 3. Use after run_site_audit to poll for the result: while status is "running" the scores are not yet populated; once it is "completed" (or "failed") the full result is available. This is a read — no credit is consumed.',
       inputSchema: {
         audit_id: relaxedUuid.describe('Site audit UUID, from run_site_audit.'),
       },

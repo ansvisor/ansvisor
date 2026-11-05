@@ -5146,7 +5146,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     expect(admin).toMatchObject({ waits: true, cards: 1 });
     await approve(as('admin'), admin.runId);
     expect(sendDraftToCms).toHaveBeenCalledTimes(1);
-    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow');
+    // A person's own chat names no agent run (00480).
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow', null);
   });
 
   it("refuses a Manager's CMS send clicked after the Admin turned publishing off while it waited (§4)", async () => {
@@ -7629,9 +7630,11 @@ describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
     expect(runRow(runId).status).toBe('waiting');
     expect(reserved).toEqual([]);
     expect(sent).not.toHaveBeenCalled();
-    // The owner's click, in their own request: the person's own send, logged as a click.
+    // The owner's click, in their own request: the person's own send, logged as a click,
+    // naming the agent run whose card it was ("agent run, you approved", 00480).
     expect((await approve(ADMIN, runId)).ok).toBe(true);
     expect(sendDraftToCms).toHaveBeenCalledTimes(1);
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow', AGENT_RUN);
     expect(sent).not.toHaveBeenCalled();
     expect(db.tables.chat_activity_log).toEqual([
       expect.objectContaining({ approval_kind: 'click', auto_via: null }),

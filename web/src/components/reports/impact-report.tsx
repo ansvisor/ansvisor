@@ -727,4 +727,5 @@ const REASONS = new Set([
   'overlapping_change',
   'no_targets',
   'plan_inactive',
+  'taken_down',
 ]);
