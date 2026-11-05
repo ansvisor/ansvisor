@@ -745,6 +745,7 @@
         "required connection",
         "agent skills",
         "follow-on skills",
+        "library skills in an agent",
         "buyer questions",
         "rival brief",
         "listing gaps",
@@ -855,7 +856,7 @@
         },
         {
           "heading": "Skills an agent can use",
-          "text": "Step 1 lists the same skills Chat offers. Besides **Win back lost citations**, **Weekly report** and the other content and reporting skills, there are the skills for what you focus on: **Buyer questions**, **How AI compares us**, **No clear leader**, **Who AI recommends by market**, **Listing gaps**, **Rival brief** and **Site audit fixes**. Each card says which connections it uses. These seven work from your Ansvisor data and public pages, so they need no connection. An agent can run up to 2 follow-on skills after its first one, for example **Comparison page** after **How AI compares us**."
+          "text": "Step 1 lists the same skills Chat offers. Besides **Win back lost citations**, **Weekly report** and the other content and reporting skills, there are the skills for what you focus on: **Buyer questions**, **How AI compares us**, **No clear leader**, **Who AI recommends by market**, **Listing gaps**, **Rival brief** and **Site audit fixes**. Each card says which connections it uses. These seven work from your Ansvisor data and public pages, so they need no connection. An agent can run up to 2 follow-on skills after its first one, for example **Comparison page** after **How AI compares us**.\n\n**Library** lists the skills your workspace added from the Library that an Admin approved and you may run: the shared ones and your own. Pick one to start the agent on it."
         },
         {
           "heading": "Connections",

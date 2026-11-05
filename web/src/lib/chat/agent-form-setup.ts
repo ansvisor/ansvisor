@@ -16,38 +16,74 @@ import { chatActor } from './run-api';
  * the brands and topics a scope may name, the plan's engines, whether Full
  * auto is open, locked by the plan or turned off in Settings › Chat, the
  * workspace's Max per run and sharing rule, the names already taken, whose
- * key Auto and a picked model run on and the time zone they picked in
- * Settings › Account. Never a price, a dollar or a key: shares and names
- * only. Server only.
+ * key Auto and a picked model run on, the time zone they picked in
+ * Settings › Account, and the Library skills an Admin approved that they
+ * may run. Never a price, a dollar or a key: shares and names only.
+ * Server only.
  */
+
+/** owner/repo of a skill's GitHub source, or null. */
+function repoOf(url: string | null): string | null {
+  const match = url ? /^https:\/\/github\.com\/([^/]+)\/([^/#?]+)/.exec(url) : null;
+  return match ? `${match[1]}/${match[2]}` : null;
+}
+
+/**
+ * The workspace's skills added from the Library (W4-19) that the person may
+ * run now: approved by an Admin, on, and shared or theirs (as a run reads
+ * them: skills/store.ts skillUsableBy). A read that fails lists none.
+ */
+async function librarySkillsFor(
+  organizationId: string,
+  userId: string,
+): Promise<NonNullable<AgentFormSetup['librarySkills']>> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_skills')
+    .select('name, title, source_url')
+    .eq('organization_id', organizationId)
+    .eq('source', 'library')
+    .eq('status', 'approved')
+    .eq('enabled', true)
+    .or(`visibility.eq.workspace,created_by.eq.${userId}`)
+    .order('name', { ascending: true });
+  if (error) {
+    console.error('[chat/agents] could not read the Library skills:', error.message);
+    return [];
+  }
+  return ((data ?? []) as { name: string; title: string; source_url: string | null }[]).map(
+    (row) => ({ name: row.name, title: row.title, repo: repoOf(row.source_url) }),
+  );
+}
 
 /** Topics a scope lists at most. */
 const TOPICS_MAX = 500;
 
 export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSetup> {
   const org = ctx.actor.organizationId;
-  const [brands, agents, ownKeyProvider, ownKeyProviders, goLive, timeZone] = await Promise.all([
-    supabaseAdmin.from('brands').select('id, name, is_demo').eq('organization_id', org),
-    supabaseAdmin
-      .from('chat_agents')
-      .select('id, name, visibility, owner_id, status')
-      .eq('organization_id', org),
-    resolveChatModelKey(org)
-      .then((resolved) => (resolved?.source === 'own' ? resolved.config.provider : null))
-      .catch((err) => {
-        // A saved key that can't be read is still the one agents run on.
-        if (err instanceof OwnKeyUnreadableError) return err.provider;
-        console.error('[chat/agents] could not read whose key Chat runs on:', err);
-        return null;
+  const [brands, agents, ownKeyProvider, ownKeyProviders, goLive, timeZone, librarySkills] =
+    await Promise.all([
+      supabaseAdmin.from('brands').select('id, name, is_demo').eq('organization_id', org),
+      supabaseAdmin
+        .from('chat_agents')
+        .select('id, name, visibility, owner_id, status')
+        .eq('organization_id', org),
+      resolveChatModelKey(org)
+        .then((resolved) => (resolved?.source === 'own' ? resolved.config.provider : null))
+        .catch((err) => {
+          // A saved key that can't be read is still the one agents run on.
+          if (err instanceof OwnKeyUnreadableError) return err.provider;
+          console.error('[chat/agents] could not read whose key Chat runs on:', err);
+          return null;
+        }),
+      // The own keys a picked model may run on (resolvePickedModelKey's), read without decrypting one.
+      ownChatKeyProviders(org).catch((err): string[] => {
+        console.error('[chat/agents] could not read the own keys for Chat:', err);
+        return [];
       }),
-    // The own keys a picked model may run on (resolvePickedModelKey's), read without decrypting one.
-    ownChatKeyProviders(org).catch((err): string[] => {
-      console.error('[chat/agents] could not read the own keys for Chat:', err);
-      return [];
-    }),
-    readGoLiveSwitch(org),
-    readChosenTimeZone(ctx.actor.userId),
-  ]);
+      readGoLiveSwitch(org),
+      readChosenTimeZone(ctx.actor.userId),
+      librarySkillsFor(org, ctx.actor.userId),
+    ]);
   if (brands.error) throw new Error(`Could not read the brands: ${brands.error.message}`);
   if (agents.error) throw new Error(`Could not read the agents' names: ${agents.error.message}`);
 
@@ -120,6 +156,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     timeZone,
     callable,
     canCallLocked: !ctx.plan.fullAuto,
+    librarySkills,
   };
 }
 

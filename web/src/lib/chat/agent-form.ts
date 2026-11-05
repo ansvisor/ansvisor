@@ -93,6 +93,12 @@ export interface AgentFormSetup {
   callable?: { id: string; name: string }[];
   /** Running other agents is Growth and up: the row shows, locked. */
   canCallLocked?: boolean;
+  /**
+   * The skills the workspace added from the Library (CHAT-17, W4-19) that an
+   * Admin approved and the person may run (on, and shared or theirs): the
+   * form's "Library" skill source, by /command, title and repo.
+   */
+  librarySkills?: { name: string; title: string; repo: string | null }[];
 }
 
 /** How often a Schedule fires, as its token offers it (mockup: Monday, Weekday, 1st of the month). */
