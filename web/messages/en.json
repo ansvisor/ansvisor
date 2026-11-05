@@ -1342,6 +1342,36 @@
     "actionsPage": {
       "title": "Actions",
       "subtitle": "Know what changed, what matters, and what to do next.",
+      "today": {
+        "title": "Today",
+        "subtitle": "{count, plural, one {# thing} other {# things}} · ranked by Priority Score",
+        "rankHint": "Ranked as your daily suggestion in Chat: by Priority Score, plus a little for each day an action has waited and for writing you can start in the Content Editor now. Only open actions that are yours or no one's yet.",
+        "stepsSubtitle": "{count, plural, one {# step} other {# steps}} of Getting started, ready now",
+        "empty": "Nothing waits on you today: every open action is someone else's, or there are none.",
+        "firstStep": "First step: {step}",
+        "firstStepOn": "First step: {step} · {page}",
+        "noStep": "No step left to do: open it to finish or close it.",
+        "suggested": "Also today's suggestion in your Chat Inbox",
+        "who": {
+          "me": "Me",
+          "agent": "Agent",
+          "team": "Team"
+        },
+        "whoHint": {
+          "me": "Assigned to you",
+          "agent": "An agent can do the first step",
+          "team": "No one's yet: anyone on the team can take it"
+        },
+        "open": "Open",
+        "next": "Next {count}",
+        "columns": {
+          "action": "Action",
+          "category": "Category",
+          "priority": "Priority"
+        },
+        "doneThisWeek": "Done this week · {count}",
+        "doneThisWeekHint": "Actions completed since Monday. Open History to see them."
+      },
       "cards": {
         "top": "Top Actions",
         "topSub": "Highest-priority actions to work on next",
