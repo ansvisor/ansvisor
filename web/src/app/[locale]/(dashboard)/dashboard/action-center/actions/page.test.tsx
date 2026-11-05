@@ -131,6 +131,10 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
   HeaderWithAiUsage: ({ children }: { children: React.ReactNode }) => children,
 }));
 vi.mock('@/components/action-center/action-center-tabs', () => ({ ActionCenterTabs: () => null }));
+// Today's "Done this week" links to History.
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, ...props }: { href: string }) => <a href={href} {...props} />,
+}));
 vi.mock('@/components/action-center/action-table', () => ({ ActionTable: () => null }));
 vi.mock('@/components/action-center/action-drawer', () => ({ ActionDrawer: () => null }));
 vi.mock('@/components/getting-started/getting-started-table', async () => {
