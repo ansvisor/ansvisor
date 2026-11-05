@@ -4192,6 +4192,12 @@
       "tryItLabel": "Try {feature}",
       "onPlans": "On {plans}.",
       "seePlans": "See plans"
+    },
+    "audit": {
+      "title": "Site Audit",
+      "label": "Site Audit of {page}",
+      "audited": "Audited {date}",
+      "openReport": "Open report"
     }
   },
   "chatComposer": {

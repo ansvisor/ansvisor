@@ -8,10 +8,12 @@ import {
   type ChatPageVersion,
   type ChatRunSummary,
   type ChatActionSent,
+  type ChatAuditCard,
   type ChatStep,
   type ChatTaskStrip,
   type ChatWhatsNewEntry,
 } from './events';
+import { withAuditCard } from './audit-card';
 import { clientMove } from './next-moves';
 import { latestChoice, type ChatModelChoice } from './models';
 import { applyChatEvent, emptyRun } from './run-state';
@@ -63,6 +65,8 @@ export interface ThreadRun {
   why: ChatWhy[];
   /** What's new's cards (CHAT-11 item 10). */
   whatsNew: ChatWhatsNewEntry[];
+  /** The Site Audits it read, as their cards. */
+  audits: ChatAuditCard[];
 }
 
 export interface ThreadMessage {
@@ -114,6 +118,8 @@ const SENT_EVENT = 'action.sent';
 const REMEMBER_EVENT = 'remember.offered';
 /** What's new's cards (CHAT-11 item 10), read back the same way. */
 const WHATS_NEW_EVENT = 'whats_new.ready';
+/** The Site Audits a run read, as their cards. */
+const AUDIT_EVENT = 'audit.ready';
 /** A run's deliverables, read back for their page versions (W4-12a), which Files doesn't keep. */
 const DELIVERABLE_EVENTS = ['deliverable.created', 'deliverable.updated'];
 /** Where a page's card links: the editor. */
@@ -129,6 +135,7 @@ interface RunEnd {
   /** Its filed pages' versions, in order; null for a page without one (W4-12a). */
   versions: (ChatPageVersion | null)[];
   whatsNew: ChatWhatsNewEntry[];
+  audits: ChatAuditCard[];
 }
 const ENDED: readonly string[] = ['done', 'stopped', 'error', 'paused_cap'];
 
@@ -146,7 +153,14 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
     .from('chat_run_events')
     .select('run_id, seq, type, data')
     .in('run_id', runIds)
-    .in('type', [...END_EVENTS, SENT_EVENT, REMEMBER_EVENT, WHATS_NEW_EVENT, ...DELIVERABLE_EVENTS])
+    .in('type', [
+      ...END_EVENTS,
+      SENT_EVENT,
+      REMEMBER_EVENT,
+      WHATS_NEW_EVENT,
+      AUDIT_EVENT,
+      ...DELIVERABLE_EVENTS,
+    ])
     .order('seq', { ascending: true });
   if (error) {
     console.error("[chat/thread] could not read the runs' ends:", error.message);
@@ -167,6 +181,7 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
       remember: null,
       versions: [],
       whatsNew: [],
+      audits: [],
     };
     if (DELIVERABLE_EVENTS.includes(row.type)) {
       // Only a page that reached Files has a file to take its version.
@@ -183,6 +198,13 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
       ends.set(row.run_id, {
         ...kept,
         whatsNew: Array.isArray(cards) ? (cards as ChatWhatsNewEntry[]) : [],
+      });
+      continue;
+    }
+    if (row.type === AUDIT_EVENT) {
+      ends.set(row.run_id, {
+        ...kept,
+        audits: withAuditCard(kept.audits, row.data as ChatAuditCard),
       });
       continue;
     }
@@ -392,6 +414,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         tasks: strips.get(run.id) ?? null,
         why: whyByRun.get(run.id) ?? [],
         whatsNew: ends.get(run.id)?.whatsNew ?? [],
+        audits: ends.get(run.id)?.audits ?? [],
       },
     ]),
   );

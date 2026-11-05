@@ -69,7 +69,7 @@ import {
   type OpportunityVolumeForMcp,
 } from '@/lib/content/question-volume';
 import { refreshYears } from '@/lib/content/current-year';
-import { readScoreRange, type RangedAuditRow } from '@/lib/audit/page-trend';
+import { readPageComparison, type RangedAuditRow } from '@/lib/audit/page-trend';
 import type { ScoreRange } from '@/lib/audit/score-range';
 
 /**
@@ -1380,6 +1380,18 @@ export interface SiteAuditResult {
    * partial).
    */
   scoreRange: ScoreRange | null;
+  /**
+   * The AI checks couldn't run, so the score leaves them out and isn't
+   * compared with the page's other audits: no range and no previous score.
+   */
+  partial: boolean;
+  /**
+   * The page's audit before this one, as the audit report compares with it
+   * ("+3 since Oct 21"): its score (0–1, as totalScore) and when it ran.
+   * Null for a page audited once, and for an audit that isn't compared.
+   */
+  previousScore: number | null;
+  previousCreatedAt: string | null;
   recommendations: unknown[];
   signals: SiteAuditSignal[];
   error: string | null;
@@ -1391,10 +1403,10 @@ export interface SiteAuditResult {
  * Read a Site Audit by id for the caller's org. Pure DB read (no LLM, no
  * quota) — the org-ownership filter is applied in the query via the
  * `brands!inner(organization_id)` join, so a foreign or unknown id returns
- * `null`. Returns the status + scores + the score's range + signals + AI
- * recommendations. The range is read from the page's earlier audits as
- * Site Audit's report reads it; when that read fails, the audit comes back
- * without it.
+ * `null`. Returns the status + scores + the score's range and the page's
+ * previous score + signals + AI recommendations. The range and the previous
+ * score are read from the page's earlier audits as Site Audit's report reads
+ * them; when that read fails, the audit comes back without them.
  */
 export async function getSiteAuditFor(
   auth: McpAuthContext,
@@ -1410,14 +1422,14 @@ export async function getSiteAuditFor(
     .maybeSingle();
   if (!audit || !(await mayUseBrand(auth, audit.brand_id))) return null;
 
-  const [{ data: signalRows }, scoreRange] = await Promise.all([
+  const [{ data: signalRows }, compared] = await Promise.all([
     supabaseAdmin
       .from('audit_signal_results')
       .select('signal_key, category, status, score, evidence')
       .eq('audit_id', auditId),
-    readScoreRange(supabaseAdmin, audit as RangedAuditRow).catch((err: unknown) => {
+    readPageComparison(supabaseAdmin, audit as RangedAuditRow).catch((err: unknown) => {
       console.warn('[mcp] site audit range read failed:', (err as Error).message);
-      return null;
+      return { range: null, previous: null };
     }),
   ]);
 
@@ -1443,7 +1455,10 @@ export async function getSiteAuditFor(
     categoryScores: (a.category_scores as Record<string, unknown>) ?? {},
     signalsEvaluated: a.signals_evaluated == null ? null : Number(a.signals_evaluated),
     signalsTotal: a.signals_total == null ? null : Number(a.signals_total),
-    scoreRange,
+    scoreRange: compared.range,
+    partial: a.partial === true,
+    previousScore: compared.previous?.score ?? null,
+    previousCreatedAt: compared.previous?.createdAt ?? null,
     recommendations: (a.recommendations as unknown[]) ?? [],
     signals,
     error: (a.error as string | null) ?? null,
