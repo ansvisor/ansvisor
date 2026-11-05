@@ -7965,7 +7965,7 @@ describe('the model menu’s pick (W4-02)', () => {
   });
 
   it('runs Auto for a model the menu doesn’t offer: one not tested yet, or another', async () => {
-    for (const model of ['google/gemini-4-argon', 'openai/gpt-6.1-sol']) {
+    for (const model of ['google/gemini-3.5-flash-lite', 'mistralai/mistral-large-3']) {
       const started = await engine.startChatRun(ADMIN, {
         message: 'Hi',
         brandId: BRAND,

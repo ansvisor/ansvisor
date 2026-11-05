@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DEEPSEEK_US_EU_PROVIDERS, openRouterRouting } from '@/lib/agent/openrouter';
-import { CHAT_MODELS } from './models';
+import { CHAT_MODELS, OFFERED_MODELS } from './models';
 
 /** The models Chat may run once tested (W4-35), and what the AI budget prices them at (W4-36). */
 
@@ -38,6 +38,14 @@ describe('CHAT_MODELS', () => {
       expect(serverHosts(model.id.split('/')[0]), model.id).toEqual(
         openRouterRouting(model.id).only,
       );
+    }
+  });
+
+  it('offers GPT-6.1 Sol, GPT-6.1 Terra and GPT-6 Luna, which passed the test set twice in a row (2026-11-03)', () => {
+    const offered = OFFERED_MODELS.map((model) => model.id);
+    for (const id of ['openai/gpt-6.1-sol', 'openai/gpt-6.1-terra', 'openai/gpt-6-luna']) {
+      expect(offered, id).toContain(id);
+      expect(CHAT_MODELS.find((model) => model.id === id)?.provider, id).toBe('openrouter');
     }
   });
 });
