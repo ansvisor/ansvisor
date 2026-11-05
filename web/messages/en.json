@@ -3493,6 +3493,10 @@
     },
     "drafts": { "name": "Read the Content Library", "step": "Read Library" },
     "draft": { "name": "Read a draft", "step": "Read draft" },
+    "checkDraftRules": {
+      "name": "Check pages against their rules",
+      "step": "Checked the page against its rules"
+    },
     "reports": { "name": "Read reports", "step": "Read Reports" },
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
@@ -3932,7 +3936,15 @@
       "fill": "Fill the {what}",
       "markReady": "Mark ready",
       "markReadyPrompt": "Mark this page ready",
+      "checkRules": "Check it against the rules",
+      "checkRulesPrompt": "Check this page against the rules",
+      "openEditor": "Open in Content Editor",
       "untitled": "Untitled page"
+    },
+    "pageCheck": {
+      "todo": "Yours to do: the Content Editor’s Quality tab says how.",
+      "qualityNotKept": "Quality isn’t read yet for the page as it is now: the page’s card in this chat and the Content Editor show it.",
+      "qualityOff": "Content Quality isn’t on for this workspace."
     },
     "actionCard": {
       "tasks": "{count, plural, one {# task} other {# tasks}}",
@@ -4475,6 +4487,10 @@
   "chatDeliverable": {
     "version": {
       "line": "Version {n} · {parts} · {characters, number} characters",
+      "rulesPill": "Rules {met}/{total}",
+      "rulesPillLabel": "{met} of {total} rules met",
+      "qualityPill": "Quality {score}",
+      "qualityPillLabel": "Quality {score}: {band}",
       "questions": "{count, plural, one {# question} other {# questions}}",
       "sections": "{count, plural, one {# section} other {# sections}}",
       "whatChanged": "What changed",

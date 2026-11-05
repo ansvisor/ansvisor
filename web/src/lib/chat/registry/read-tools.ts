@@ -35,6 +35,7 @@ import {
   listMentionsFor,
 } from '@/lib/mcp/mentions';
 import { openPageFor } from '@/lib/mcp/pages';
+import { CHECK_RULES_TOOL, checkDraftRules } from '../page-check';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 
 /**
@@ -792,6 +793,27 @@ export const READ_TOOLS = [
     specRow: '53',
     inputSchema: z.object({ draft_id: contentUuid.describe('Draft id, from list_drafts.') }),
     run: (ctx, input) => getContentDraftFor(ctx, input.draft_id),
+    fixture: { input: { draft_id: ITEM } },
+  }),
+  defineTool({
+    name: CHECK_RULES_TOOL,
+    // "Check it against the rules" (CHAT-25 §6 item 3, W4-12b part 2): free, no AI, every role.
+    class: 'read',
+    area: 'content',
+    description:
+      "Check a draft against its rules and Quality, as the Content Editor does (its id from list_content_drafts): each rule still open with how the page reads now and its aim, and Quality's scores with the checks that would raise them, in the editor's words. No AI. Use it for 'check it against the rules' and before saying a page meets its rules; say only what it returns.",
+    minRole: 'analyst',
+    planGate: null,
+    brandOf: { lookup: 'content_drafts', idField: 'draft_id' },
+    costClass: 'C0',
+    labelKey: 'checkDraftRules',
+    route: '/dashboard/content/library',
+    mcpTool: null,
+    specRow: '53',
+    inputSchema: z.object({
+      draft_id: contentUuid.describe('Draft id, from list_content_drafts.'),
+    }),
+    run: (ctx, input) => checkDraftRules(ctx, input.draft_id),
     fixture: { input: { draft_id: ITEM } },
   }),
   defineTool({

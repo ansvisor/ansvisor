@@ -117,6 +117,27 @@ describe('the browser’s moves', () => {
     expect(ghostOf(picked.slice(1))).toBeUndefined();
     expect(ghostOf([])).toBeUndefined();
   });
+
+  it('keeps the link of a move that opens a page, never as ghost text (W4-12b part 2)', () => {
+    const href = '/dashboard/content/editor/44444444-4444-4444-8444-444444444444' as const;
+    const [open] = pickNextMoves(
+      [
+        {
+          ...move({ label: 'Open in Content Editor', prompt: 'Open in Content Editor' }),
+          kind: 'repeat',
+          class: 'read',
+          href,
+        },
+      ],
+      { role: 'analyst', writable: true },
+    ).map(clientMove);
+    expect(open).toEqual({
+      label: 'Open in Content Editor',
+      prompt: 'Open in Content Editor',
+      href,
+    });
+    expect(ghostOf([open])).toBeUndefined();
+  });
 });
 
 describe('nextMovesInput and validMoves', () => {

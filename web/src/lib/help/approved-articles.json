@@ -1080,6 +1080,12 @@
         "show all questions",
         "mark ready",
         "set ready",
+        "rules pill",
+        "quality pill",
+        "rules met",
+        "check it against the rules",
+        "check rules",
+        "open rules",
         "voice",
         "microphone",
         "speak",
@@ -1168,6 +1174,10 @@
         {
           "heading": "Versions of a page in chat",
           "text": "Each time Chat writes or changes a page, its card shows the version, such as **Version 2 · 7 questions · 905 characters**. **What changed** lists sections Chat made shorter, new questions or sections, and placeholders in [BRACKETS] for you to fill; the first next move offers to fill one. The card previews the first sections; **Show all** opens the rest. **Undo to version 1** puts the version before back, as the editor's History does. Every version is saved to the Library as a draft. Admins and Managers can **Send to CMS** from the card, as from the Library. Once nothing is left to fill, **Mark ready** is a next move: it sets the draft to Ready as the editor does, and Undo takes it back for 7 days."
+        },
+        {
+          "heading": "Rules and Quality on a page's card",
+          "text": "A page's card also shows **Rules 11/12** and **Quality 82**, as the Content Editor's header does: how many of the page's rules it meets, and the average of its E-E-A-T, Trust and Readability scores. Rules is green when every rule is met and amber when some are open. Quality is read the way the editor reads it: with its AI checks on, a read the page doesn't have yet counts toward your AI usage as part of the run. A pill that couldn't be read isn't shown, and Quality shows only where Content Quality is on. While rules are open, **Check it against the rules** is a next move: Chat lists each open rule and Quality check in the editor's words, using no AI, and offers **Open in Content Editor**."
         },
         {
           "heading": "Send or publish a page from Chat",

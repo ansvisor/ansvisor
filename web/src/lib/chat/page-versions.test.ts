@@ -13,11 +13,20 @@ const fake = vi.hoisted(() => ({
   db: null as unknown as FakeSupabase,
   restored: [] as [string, string][],
   restoreError: null as Error | null,
+  rules: vi.fn(),
+  quality: vi.fn(),
 }));
 vi.mock('@/lib/supabase/admin', () => ({
   get supabaseAdmin() {
     return fake.db;
   },
+}));
+// The page's Rules and Quality, read for its run (W4-12b part 2).
+vi.mock('@/lib/content/draft-rules-read', () => ({
+  readDraftRules: (...args: unknown[]) => fake.rules(...args),
+}));
+vi.mock('@/lib/content/go-live-gate', () => ({
+  readPageQuality: (...args: unknown[]) => fake.quality(...args),
 }));
 vi.mock('@/lib/actions/content-drafts', () => ({
   restoreDraftVersion: async (draftId: string, versionId: string) => {
@@ -26,7 +35,7 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   },
 }));
 
-const { readPageVersion, undoPageVersion } = await import('./page-versions');
+const { pillsOf, readPageVersion, undoPageVersion } = await import('./page-versions');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
@@ -47,6 +56,8 @@ beforeEach(() => {
   fake.db.tables.content_drafts = [{ id: DRAFT, title: 'FAQ: Pricing', body_html: V2 }];
   fake.db.tables.content_draft_versions = [{ id: BEFORE, draft_id: DRAFT, body_html: V1 }];
   fake.db.tables.chat_files = [];
+  fake.rules.mockReset().mockResolvedValue(null);
+  fake.quality.mockReset().mockResolvedValue(null);
 });
 
 const filed = (id: string, extra: Record<string, unknown> = {}) => ({
@@ -101,6 +112,49 @@ describe('a page version in chat (W4-12a)', () => {
   it('reads nothing for a page that is gone', async () => {
     fake.db.tables.content_drafts = [];
     expect(await readPageVersion({ draftId: DRAFT, conversationId: CHAT })).toBeNull();
+  });
+});
+
+describe('a version’s Rules and Quality pills (W4-12b part 2)', () => {
+  const run = { organizationId: ORG, runId: RUN, userId: USER, role: 'manager' };
+
+  it('reads the page’s rules and its Quality for the run, spending the run’s own reads', async () => {
+    fake.rules.mockResolvedValue({ title: 'FAQ: Pricing', checked: [], met: 11, total: 12 });
+    fake.quality.mockResolvedValue({ score: 82 });
+    const read = await readPageVersion({ draftId: DRAFT, conversationId: CHAT, run });
+    expect(read?.version).toMatchObject({ n: 1, rules: { met: 11, total: 12 }, quality: 82 });
+    expect(fake.rules).toHaveBeenCalledWith({ organizationId: ORG, draftId: DRAFT });
+    expect(fake.quality).toHaveBeenCalledWith({
+      organizationId: ORG,
+      draftId: DRAFT,
+      runId: RUN,
+      actingUserId: USER,
+      actingRole: 'manager',
+      agentRunId: null,
+      scheduleId: null,
+      spend: true,
+    });
+  });
+
+  it('leaves a pill out when its read fails or has nothing to show', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fake.rules.mockRejectedValue(new Error('down'));
+    const read = await readPageVersion({ draftId: DRAFT, conversationId: CHAT, run });
+    expect(read?.version).not.toHaveProperty('rules');
+    expect(read?.version).not.toHaveProperty('quality');
+    expect(error).toHaveBeenCalled();
+    error.mockRestore();
+    expect(pillsOf({ met: 0, total: 0 }, { score: null })).toEqual({});
+    expect(pillsOf({ met: 3, total: 5 }, { score: 64 })).toEqual({
+      rules: { met: 3, total: 5 },
+      quality: 64,
+    });
+  });
+
+  it('reads neither without its run', async () => {
+    await readPageVersion({ draftId: DRAFT, conversationId: CHAT });
+    expect(fake.rules).not.toHaveBeenCalled();
+    expect(fake.quality).not.toHaveBeenCalled();
   });
 });
 

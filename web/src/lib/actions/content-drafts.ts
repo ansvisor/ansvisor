@@ -67,14 +67,12 @@ import {
 } from '@/lib/content/rules';
 import {
   MAX_BRIEF_BYTES,
-  briefFromOpportunity,
   draftBriefSchema,
   rebuildSources,
   type DraftBrief,
   type RebuildSources,
 } from '@/lib/content/brief';
 import { jsonbBytes } from '@/lib/content/draft-inputs';
-import type { ContentBrief } from '@/types';
 import {
   CITED_DAYS,
   MAX_PASSAGES,
@@ -116,7 +114,6 @@ import {
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import {
   DRAFT_SOURCE_KINDS,
-  SOURCES_DAYS,
   normalizeQuery,
   type DraftSourceChoice,
   type DraftSourceKind,
@@ -138,6 +135,7 @@ import { assertWritable } from '@/lib/subscription-guard';
 import { isManager } from '@/lib/session-role';
 import { refreshYears } from '@/lib/content/current-year';
 import { withContentDom } from '@/lib/content/server-dom';
+import { readDraftBriefWith, readDraftSourcesWith } from '@/lib/content/draft-reads';
 
 /**
  * Content drafts (Content Editor, CE-002), read through the signed-in member's
@@ -1939,33 +1937,7 @@ export async function getDraftSources(
   id: string,
 ): Promise<{ data: DraftSourcesData; choices: DraftSourceChoice[] } | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
-  const supabase = await createClient();
-  const [sourcesRes, choicesRes, trustedRes] = await Promise.all([
-    supabase.rpc('content_draft_sources', { p_draft_id: id, p_days: SOURCES_DAYS }),
-    supabase.from('content_draft_sources').select('kind, ref, included, added').eq('draft_id', id),
-    // The sites the draft's brand trusts (00449). A database before it, or a
-    // read that fails, trusts none: Trust reads the page as before.
-    supabase.from('content_drafts').select('brands(trusted_sources)').eq('id', id).maybeSingle(),
-  ]);
-  if (sourcesRes.error) throw new Error(sourcesRes.error.message);
-  if (choicesRes.error) throw new Error(choicesRes.error.message);
-  if (!sourcesRes.data) return null;
-  const kinds: readonly string[] = DRAFT_SOURCE_KINDS;
-  const trusted = trustedRes.error ? null : trustedRes.data?.brands?.trusted_sources;
-  return {
-    data: {
-      ...(sourcesRes.data as unknown as DraftSourcesData),
-      trustedDomains: Array.isArray(trusted) ? trusted : [],
-    },
-    choices: (choicesRes.data ?? [])
-      .filter((row) => kinds.includes(row.kind))
-      .map((row) => ({
-        kind: row.kind as DraftSourceKind,
-        ref: row.ref,
-        included: row.included,
-        added: row.added,
-      })),
-  };
+  return readDraftSourcesWith(await createClient(), id);
 }
 
 const sourceChoice = z.object({
@@ -2090,31 +2062,7 @@ export async function addDraftPrompts(id: string, promptIds: string[]): Promise<
  */
 export async function getDraftBrief(id: string): Promise<{ brief: DraftBrief | null } | null> {
   if (!draftId.safeParse(id).success) throw new Error('invalid');
-  const supabase = await createClient();
-  const { data: draft, error } = await supabase
-    .from('content_drafts')
-    .select('brief, opportunity_id')
-    .eq('id', id)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!draft) return null;
-  const own = draftBriefSchema.safeParse(draft.brief);
-  if (own.success) return { brief: own.data };
-  // A brief of its own this editor can't read: said as a failed read, never
-  // as the opportunity's or none, so Edit brief can't write over it.
-  if (draft.brief != null) {
-    console.error('The draft brief can’t be read:', own.error.issues.slice(0, 3));
-    return null;
-  }
-  if (!draft.opportunity_id) return { brief: null };
-  const { data: opportunity, error: oppError } = await supabase
-    .from('content_opportunities')
-    .select('brief')
-    .eq('id', draft.opportunity_id)
-    .maybeSingle();
-  if (oppError) throw new Error(oppError.message);
-  const brief = opportunity?.brief as ContentBrief | null | undefined;
-  return { brief: brief?.outline ? briefFromOpportunity(brief) : null };
+  return readDraftBriefWith(await createClient(), id);
 }
 
 /** Edit brief (CE-007): the brief as the person wrote it. Throws 'not_found' when no row changed. */

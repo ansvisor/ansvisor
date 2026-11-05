@@ -232,13 +232,20 @@ export const PAGE_VERSIONS: ChatDeliverable[] = [
       },
       sections: FAQ_SECTIONS,
       canUndo: true,
+      // As the editor's header shows them (W4-12b part 2).
+      rules: { met: 11, total: 12 },
+      quality: 90,
     },
   },
 ];
 
-/** The next moves after a version with nothing left to fill (W4-12b): Mark ready first. */
+/**
+ * The next moves after a version with nothing left to fill and a rule still
+ * open: checking it first (W4-12b part 2), then Mark ready (W4-12b).
+ */
 export const PAGE_MOVES = [
-  { label: 'Mark ready', prompt: 'Mark this page ready', ghost: true },
+  { label: 'Check it against the rules', prompt: 'Check this page against the rules', ghost: true },
+  { label: 'Mark ready', prompt: 'Mark this page ready' },
   { label: 'Make the answers shorter', prompt: 'Make the answers shorter' },
 ];
 

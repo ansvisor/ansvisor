@@ -48,6 +48,7 @@ import {
   isChatHref,
   maskIds,
   type ChatDeliverable,
+  type ChatHref,
   type ChatDenialCard,
   type ChatEventPayloads,
   type ChatRunSummary,
@@ -86,6 +87,7 @@ import {
   nextMovesInput,
   pickNextMoves,
   validMoves,
+  type NextMoveInput,
 } from './next-moves';
 import { requestHash } from './idempotency';
 import { OwnKeyUnreadableError } from './key';
@@ -130,6 +132,7 @@ import { LANGUAGES, languageLine, rewriteLanguage, type Language } from './langu
 import { whyView } from './why/view';
 import { WHATS_NEW_TOOL, showWhatsNew, whatsNewStepDetail } from './whats-new/run';
 import { AUDIT_TOOL, auditCard } from './audit-card';
+import { CHECK_RULES_TOOL, pageCheckOf } from './page-check';
 import {
   batchSize,
   runsWithoutSession,
@@ -3587,6 +3590,7 @@ function toolContext(
     apiKeyId: 'agent-internal',
     // A schedule's date phrase reads on the person's clock (CHAT-12 item 2).
     timezone: rc.progress.timezone,
+    run: { id: rc.run.id, agentRunId: rc.agentRunId, scheduleId: rc.scheduleId },
     ...(brandAccess !== undefined ? { brandAccess } : {}),
   };
 }
@@ -3801,6 +3805,8 @@ async function readCall(
       rc.sink.emit('whats_new.ready', cards),
     );
   }
+  // A page checked against its rules (W4-12b part 2): the moves after it follow what's open.
+  if (tool.name === CHECK_RULES_TOOL) rc.progress.pageChecked = pageCheckOf(read.value);
   // A Site Audit's card, from the read's own result: never a number the model wrote.
   if (tool.name === AUDIT_TOOL) {
     const card = auditCard(read.value);
@@ -4245,7 +4251,18 @@ async function deliver(
   // so it is numbered after the versions this chat filed already.
   const paged = tool.versionOf
     ? await tool
-        .versionOf(input as never, output, { conversationId: rc.run.conversationId })
+        .versionOf(input as never, output, {
+          conversationId: rc.run.conversationId,
+          // Its Rules and Quality, read for this run (W4-12b part 2).
+          run: {
+            organizationId: rc.actor.organizationId,
+            runId: rc.run.id,
+            userId: rc.actor.userId,
+            role: rc.role,
+            agentRunId: rc.agentRunId,
+            scheduleId: rc.scheduleId,
+          },
+        })
         .catch((error: unknown) => {
           console.error('[chat] could not read a page version:', error);
           return null;
@@ -4296,6 +4313,9 @@ async function deliver(
     rc.progress.pagePlaceholder = paged.version.changes.placeholders[0] ?? null;
     // A page with nothing left to fill, not Ready yet: Mark ready is a next move (W4-12b).
     rc.progress.pageMayBeReady = !rc.progress.pagePlaceholder && !paged.done;
+    // Rules the version leaves open: "Check it against the rules" first (W4-12b part 2).
+    const rules = paged.version.rules;
+    rc.progress.pageRulesOpen = rules ? rules.total - rules.met : 0;
   }
   // Which History version the card's Undo puts back: kept on the server, by its file.
   if (paged?.undoVersionId && filed.ok && made.contentDraftId) {
@@ -4902,14 +4922,27 @@ async function offerNextMoves(rc: RunContext): Promise<void> {
   const moves = rc.progress.nextMoves ?? [];
   const placeholder = rc.progress.pagePlaceholder;
   const markReady = rc.progress.pageMayBeReady === true;
+  const rulesOpen = (rc.progress.pageRulesOpen ?? 0) > 0;
+  const checked = rc.progress.pageChecked ?? null;
   // A person's own chat only: an agent's or a job's run has no one to click it.
   const mayOfferSteps = !rc.agentRunId && !rc.scheduleId;
-  if (moves.length === 0 && !placeholder && !markReady && !mayOfferSteps) return;
+  if (
+    moves.length === 0 &&
+    !placeholder &&
+    !markReady &&
+    !rulesOpen &&
+    !checked &&
+    !mayOfferSteps
+  ) {
+    return;
+  }
   try {
     const ctx = await contextFor(rc);
     if (!ctx) return;
     // A move never names a tool (CHAT-03 item 22), even in words the model made up.
-    let clean = moves.filter((move) => !namesTool(move.label) && !namesTool(move.prompt));
+    let clean: (NextMoveInput & { href?: ChatHref })[] = moves.filter(
+      (move) => !namesTool(move.label) && !namesTool(move.prompt),
+    );
     // A page version that leaves a placeholder: filling it comes first (CHAT-25 §6, W4-12a).
     if (placeholder) {
       const fill = t('pageMoves.fill', { what: placeholderWords(placeholder) });
@@ -4931,6 +4964,33 @@ async function offerNextMoves(rc: RunContext): Promise<void> {
           continues_this_run: true,
         },
         ...clean.filter((move) => move.kind !== 'continue' && move.kind !== 'act'),
+      ];
+    }
+    // Rules the version leaves open: checking them comes before Mark ready (W4-12b part 2).
+    if (rulesOpen) {
+      clean = [
+        ...clean.filter((move) => move.kind === 'continue'),
+        {
+          label: t('pageMoves.checkRules'),
+          prompt: t('pageMoves.checkRulesPrompt'),
+          kind: 'deepen',
+          class: 'read',
+          continues_this_run: true,
+        },
+        ...clean.filter((move) => move.kind !== 'continue' && move.kind !== 'deepen'),
+      ];
+    }
+    // A page checked with rules still open: open it in the Content Editor (W4-12b part 2).
+    if (checked && checked.open > 0) {
+      clean = [
+        {
+          label: t('pageMoves.openEditor'),
+          prompt: t('pageMoves.openEditor'),
+          kind: 'repeat',
+          class: 'read',
+          href: checked.href,
+        },
+        ...clean.filter((move) => move.kind !== 'repeat'),
       ];
     }
     if (mayOfferSteps && (await offersSaveStepsTo(rc, ctx))) {
