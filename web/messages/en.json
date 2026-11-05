@@ -6939,6 +6939,43 @@
         "recentItem": "“{title}” → {target}",
         "untitled": "Untitled page",
         "takenDown": "Taken down"
+      },
+      "impact": {
+        "title": "What this agent did",
+        "period": "Last 30 days",
+        "kpi": {
+          "shipped": "Changes shipped",
+          "shippedHint": "pages that went live from its runs",
+          "improved": "Improved",
+          "improvedOf": "of {judged, number}",
+          "improvedHint": "verdict at 14 days · Medium and High only",
+          "improvedNone": "no verdict yet",
+          "pending": "Pending",
+          "pendingHint": "first verdict 14 days after it ships"
+        },
+        "listLabel": "Changes this agent shipped",
+        "kind": {
+          "cms_publish": "Published to your CMS",
+          "pr_merged": "Pull request merged",
+          "manual": "Marked as shipped",
+          "third_party_observed": "Seen in AI answers"
+        },
+        "run": "run #{number}",
+        "credit": {
+          "own": "on its own",
+          "you": "you approved",
+          "teammate": "by {name}",
+          "teammateUnnamed": "by a teammate"
+        },
+        "showAll": "Show all {count, number}",
+        "showFewer": "Show fewer",
+        "capped": "Showing the newest {count, number} changes; the counts above cover only these.",
+        "drafts": "{count, plural, one {# draft from this agent isn't live yet.} other {# drafts from this agent aren't live yet.}}",
+        "draftsNote": "Drafts aren't measured until they go live.",
+        "emptyTitle": "Nothing from this agent has gone live yet.",
+        "emptyBody": "When a page from one of its runs goes live, it shows here: an early signal 7 days later, the first verdict at 14 days.",
+        "openReports": "Open in Reports",
+        "loadFailed": "Couldn't load what this agent did."
       }
     }
   },
