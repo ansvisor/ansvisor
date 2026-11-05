@@ -51,6 +51,8 @@ export interface ChatHomeViewProps {
   /** Pages whose citations the brand lost, and drafts ready to publish; null until read. */
   lostPages: number | null;
   readyDrafts: number | null;
+  /** When the person's Weekly report job runs next (ISO), this coming week; null for none or until read. */
+  nextReport?: string | null;
   /** The person may change things: the jobs that write show, and More. */
   canChange: boolean;
   /**
@@ -326,6 +328,7 @@ export function ChatHomeView({
   dueTasks,
   lostPages,
   readyDrafts,
+  nextReport = null,
   canChange,
   onAsk,
   starting,
@@ -399,6 +402,7 @@ export function ChatHomeView({
         dueTasks={dueTasks}
         lostPages={lostPages}
         readyDrafts={readyDrafts}
+        nextReport={nextReport}
         canChange={canChange}
         starting={starting}
         onAsk={onAsk}
@@ -463,6 +467,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     dueTasks: number;
     lostPages: number;
     readyDrafts: number;
+    nextReport: string | null;
   } | null>(null);
   const [since, setSince] = useState<{ brandId: string; since: SinceYouLeft } | null>(null);
   const [words, setWords] = useState<{
@@ -490,6 +495,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
                 dueTasks: result.dueTasks,
                 lostPages: result.lostPages,
                 readyDrafts: result.readyDrafts,
+                nextReport: result.nextReport,
               }
             : null,
         );
@@ -592,6 +598,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       dueTasks={mine ? mine.dueTasks : null}
       lostPages={mine ? mine.lostPages : null}
       readyDrafts={mine ? mine.readyDrafts : null}
+      nextReport={mine ? mine.nextReport : null}
       canChange={canManage}
       onAsk={(message, shortcutId) => void startChat(message, shortcutId)}
       starting={starting}
