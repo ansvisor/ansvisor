@@ -8,7 +8,7 @@ updated: 2026-11-02
 last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, whats-new/README.md]
 ---
 **What's new** tells you what Ansvisor added, in a few short lines: why we built it, what it does, how it helps you and what you can do with it. The Ansvisor team writes each update. You see the ones your plan includes.

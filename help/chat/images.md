@@ -8,7 +8,7 @@ updated: 2026-11-03
 last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, help/chat/files.md]
 ---
 Chat can make images for your brand, such as a cover for a blog post. Ask in your own words, for example "Create a cover image for our GEO post", in any language. Admins and Managers can create images.

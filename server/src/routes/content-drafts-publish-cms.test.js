@@ -93,6 +93,20 @@ describe('POST /api/content-drafts/publish-cms', () => {
     });
   });
 
+  it('passes on the agent run whose card the person published it from (00480)', async () => {
+    const RUN = '44444444-4444-4444-8444-444444444444';
+    expect(
+      (await publish({ brandId: BRAND, target: 'wix', page, viaAgentRunId: RUN })).status,
+    ).toBe(200);
+    expect(publishContentPage).toHaveBeenCalledWith(
+      expect.objectContaining({ brandId: BRAND, target: 'wix', viaAgentRunId: RUN }),
+    );
+    expect(
+      (await publish({ brandId: BRAND, target: 'wix', page, viaAgentRunId: 'run-1' })).status,
+    ).toBe(400);
+    expect(publishContentPage).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps it to admins and managers, and to managers while publishing is on for them', async () => {
     role = 'analyst';
     const analyst = await publish({ brandId: BRAND, target: 'wix', page });

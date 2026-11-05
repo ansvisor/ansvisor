@@ -4806,6 +4806,7 @@ export type Database = {
           target: string
           target_collection: string | null
           title: string
+          via_agent_run_id: string | null
         }
         Insert: {
           agent_run_id?: string | null
@@ -4828,6 +4829,7 @@ export type Database = {
           target?: string
           target_collection?: string | null
           title: string
+          via_agent_run_id?: string | null
         }
         Update: {
           agent_run_id?: string | null
@@ -4850,6 +4852,7 @@ export type Database = {
           target?: string
           target_collection?: string | null
           title?: string
+          via_agent_run_id?: string | null
         }
         Relationships: [
           {
@@ -4885,6 +4888,13 @@ export type Database = {
             columns: ["sent_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_draft_deliveries_via_agent_run_id_fkey"
+            columns: ["via_agent_run_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agent_runs"
             referencedColumns: ["id"]
           },
         ]

@@ -115,6 +115,18 @@ describe('POST /api/content-drafts/send', () => {
     });
   });
 
+  it('passes on the agent run whose card the person sent it from, and no other value (00480)', async () => {
+    const RUN = '44444444-4444-4444-8444-444444444444';
+    const res = await send({ brandId: BRAND, pages: [page], viaAgentRunId: RUN });
+    expect(res.status).toBe(200);
+    expect(sendContentPages).toHaveBeenCalledWith(
+      expect.objectContaining({ orgId: 'o1', brandId: BRAND, viaAgentRunId: RUN }),
+    );
+    const bad = await send({ brandId: BRAND, pages: [page], viaAgentRunId: 'run-1' });
+    expect(bad.status).toBe(400);
+    expect(sendContentPages).toHaveBeenCalledTimes(1);
+  });
+
   it('leaves it to admins and managers', async () => {
     role = 'analyst';
     const res = await send({ brandId: BRAND, pages: [page] });

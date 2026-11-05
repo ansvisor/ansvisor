@@ -237,9 +237,104 @@ export function republishOf(ships, sentAt) {
 }
 
 /**
+ * The agent run a send names, and its agent and Chat run: what the ship
+ * event names it by (00447). An agent's own send (agent_run_id, 00444) takes
+ * the Chat run and agent from its go-live step (00443). A person's send from
+ * a card in an agent run's chat (via_agent_run_id, 00480) takes its agent
+ * from the run, while the run is its workspace's, and the Chat run from the
+ * run's chat, newest first, as the web's chatRunOf reads it. Nulls for a
+ * person's own send. A step or chat that can't be read leaves the Chat run
+ * out, never the agent run.
+ */
+async function agentOrigin(db, delivery) {
+  const none = { runId: null, agentId: null, agentRunId: null };
+  const agentRunId = delivery.agent_run_id ?? delivery.via_agent_run_id ?? null;
+  if (!agentRunId) return none;
+  const onItsOwn = !!delivery.agent_run_id;
+  const [step, { data: run, error: runError }] = await Promise.all([
+    onItsOwn ? goLiveStepOf(db, delivery) : chatRunOf(db, agentRunId),
+    db
+      .from('chat_agent_runs')
+      .select('agent_id, organization_id')
+      .eq('id', agentRunId)
+      .maybeSingle(),
+  ]);
+  if (runError) throw new ImpactDbError('agent run read', runError);
+  // A click's run is checked as it is sent (content-delivery viaRunOf): another workspace's names none.
+  if (!onItsOwn && run?.organization_id !== delivery.organization_id) return none;
+  return {
+    runId: step?.run_id ?? null,
+    agentId: step?.agent_id ?? run?.agent_id ?? null,
+    agentRunId,
+  };
+}
+
+/** An agent's own send's go-live step (00443): its Chat run and agent; null when it can't be read. */
+async function goLiveStepOf(db, delivery) {
+  const { data, error } = await db
+    .from('chat_agent_go_live_events')
+    .select('run_id, agent_id')
+    .eq('agent_run_id', delivery.agent_run_id)
+    .eq('content_draft_id', delivery.draft_id)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) logger.warn({ err: error }, 'go-live step not read for the ship event');
+  return data ?? null;
+}
+
+/** The Chat run of an agent run's chat, newest first; null before it has one, or unread. */
+async function chatRunOf(db, agentRunId) {
+  const { data: chat, error } = await db
+    .from('chat_conversations')
+    .select('id')
+    .eq('agent_run_id', agentRunId)
+    .maybeSingle();
+  if (error) logger.warn({ err: error }, 'agent run chat not read for the ship event');
+  if (error || !chat) return null;
+  const { data: runs, error: runsError } = await db
+    .from('chat_runs')
+    .select('id')
+    .eq('conversation_id', chat.id)
+    .order('created_at', { ascending: false })
+    .limit(1);
+  if (runsError) logger.warn({ err: runsError }, 'agent run chat not read for the ship event');
+  return runs?.[0] ? { run_id: runs[0].id } : null;
+}
+
+/** An agent run's states once it has ended (agent-driver's ENDED, bar skipped: it shipped nothing). */
+const ENDED_RUNS = ['done', 'failed', 'stopped'];
+
+/**
+ * An ended agent run that shipped a change waits for its measure: Pending
+ * (CHAT-21 §I item 43), as agent-driver's markShipped says when the run
+ * ends. A page that went live after it ended (a CMS draft published there
+ * later, a publish confirmed late) says it here; a run still going says it
+ * as it ends. Never over an outcome already read. Never throws: logged.
+ */
+async function markRunPending(db, organizationId, agentRunId) {
+  const { error } = await db
+    .from('chat_agent_runs')
+    .update({ outcome: 'pending' })
+    .eq('id', agentRunId)
+    .eq('organization_id', organizationId)
+    .in('status', ENDED_RUNS)
+    .is('outcome', null);
+  if (error) {
+    logger.warn(
+      { err: { name: 'ImpactDbError', code: error.code ?? null } },
+      '[impact-ledger] agent run not marked pending',
+    );
+  }
+}
+
+/**
  * A page the CMS confirmed live (markDeliveryPublished): a ship event
  * (cms_publish, from the Content Editor, a content change, assisted when a
  * person sent it, automated when nobody did) and its Pending measurement.
+ * It names the agent run the send came from (agentOrigin): one that sent it
+ * on its own, or one whose card a person sent it from (00480); an ended
+ * run then waits Pending for its measure (markRunPending).
  *
  *   * One per send (00425), written by ship_cms_publish (00428) in one
  *     transaction under a lock on the draft, so a confirmation read twice,
@@ -264,42 +359,15 @@ export function republishOf(ships, sentAt) {
  *   draft's first noted as published again), and whether something failed
  *   on the way (logged; the nightly job counts it)
  */
-/**
- * The agent a send was an agent run's (content_draft_deliveries.agent_run_id,
- * 00444), and the Chat run, from its go-live step (00443): what the ship
- * event names it by (00447). Nulls for a person's own send; a step that
- * can't be read leaves the run out, never the agent run.
- */
-async function agentOrigin(db, delivery) {
-  const none = { runId: null, agentId: null, agentRunId: null };
-  if (!delivery.agent_run_id) return none;
-  const [{ data: step, error: stepError }, { data: run, error: runError }] = await Promise.all([
-    db
-      .from('chat_agent_go_live_events')
-      .select('run_id, agent_id')
-      .eq('agent_run_id', delivery.agent_run_id)
-      .eq('content_draft_id', delivery.draft_id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    db.from('chat_agent_runs').select('agent_id').eq('id', delivery.agent_run_id).maybeSingle(),
-  ]);
-  if (stepError) logger.warn({ err: stepError }, 'go-live step not read for the ship event');
-  if (runError) throw new ImpactDbError('agent run read', runError);
-  return {
-    runId: step?.run_id ?? null,
-    agentId: step?.agent_id ?? run?.agent_id ?? null,
-    agentRunId: delivery.agent_run_id,
-  };
-}
-
 export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supabaseAdmin }) {
   const none = { id: null, created: false, failed: false };
   if (!chatAgenticDeployed()) return none;
   try {
     const { data: delivery, error } = await db
       .from('content_draft_deliveries')
-      .select('id, organization_id, brand_id, draft_id, sent_by, title, agent_run_id')
+      .select(
+        'id, organization_id, brand_id, draft_id, sent_by, title, agent_run_id, via_agent_run_id',
+      )
       .eq('id', deliveryId)
       .maybeSingle();
     if (error) throw new ImpactDbError('delivery read', error);
@@ -336,8 +404,9 @@ export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supaba
       p_action_id: ship.action_id,
       p_shipped_at: publishedAt,
       p_shipped_by: delivery.sent_by ?? null,
-      // An agent's own publish is automated; a person's send they then published, assisted.
-      p_execution_mode: origin.agentRunId || !delivery.sent_by ? 'automated' : 'assisted',
+      // An agent's own publish is automated; a person's send they then published, assisted,
+      // also one from a card in an agent run's chat (00480).
+      p_execution_mode: delivery.agent_run_id || !delivery.sent_by ? 'automated' : 'assisted',
       p_republish_days: REPUBLISH_DAYS,
       p_run_id: origin.runId,
       p_agent_id: origin.agentId,
@@ -347,6 +416,7 @@ export async function shipCmsPublish({ deliveryId, url, publishedAt, db = supaba
     const row = (Array.isArray(shipped) ? shipped : [shipped]).find(Boolean);
     if (!row?.created) return { id: row?.ship_event_id ?? null, created: false, failed: false };
     ship.id = row.ship_event_id;
+    if (origin.agentRunId) await markRunPending(db, delivery.organization_id, origin.agentRunId);
     // The nightly job seeds it if this fails.
     try {
       await seedMeasurements(db, [ship]);
