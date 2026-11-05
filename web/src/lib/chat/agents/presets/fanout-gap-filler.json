@@ -4,7 +4,10 @@
   "businessTypes": [],
   "industries": [],
   "roles": [],
-  "skills": [],
+  "skills": [
+    "fanout",
+    "answerfirst"
+  ],
   "triggers": [
     {
       "kind": "schedule",
@@ -14,8 +17,6 @@
   ],
   "mode": "auto",
   "connections": [],
-  "status": "soon",
-  "needs": [
-    "fanout_skill"
-  ]
+  "status": "ready",
+  "needs": []
 }

@@ -87,7 +87,6 @@ export const PRESET_ROLES = [
 
 /** What a `soon` preset waits for: chatAgents.ready.needs.{key}. */
 export const PRESET_NEEDS = [
-  'fanout_skill',
   'prompts_skill',
   'catalog_trigger',
   'publish_trigger',

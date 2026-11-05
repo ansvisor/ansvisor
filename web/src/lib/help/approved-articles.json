@@ -779,7 +779,9 @@
         "setup guide",
         "/setup",
         "recommended agents",
-        "which agents should i use"
+        "which agents should i use",
+        "fan-out gap filler",
+        "fan-out gaps"
       ],
       "synonyms": [
         "my agents",
@@ -820,6 +822,10 @@
         {
           "heading": "Ready-to-use agents",
           "text": "**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back**, **Weekly Report** and **Onboarding & Help**, and agents made for a kind of site or a team, such as **Product Answer Pages** for e-commerce or **CEO Brief** for founders. Each card says what the agent does, its skills, what starts it and its mode. Filter them by **Goal**, **Business type** and **For your role**.\n\nAdmins and Managers click **Use this agent**. **New agent** opens with its skills, triggers, mode and connections filled in, for the brand you have open. Change what you like, then click **Save as draft** or **Turn on**. Nothing turns on by itself.\n\nIf your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet."
+        },
+        {
+          "heading": "Fan-out Gap Filler",
+          "text": "**Fan-out Gap Filler** runs every Monday at 09:00 on **Auto, ask before changes**. It reads the sub-questions AI engines searched while answering your tracked prompts, finds the ones where no answer named your brand, and drafts an answer-first section for each in a Content draft, which **Answer-first rewrite** then goes over. Its answer lists each sub-question with the engines that searched it and the competitors named instead. Sending the draft to your CMS and publishing it stay yours. In Chat, the same skill is **/fanout**."
         },
         {
           "heading": "Agents for your site and your work",
@@ -1900,7 +1906,10 @@
         "ready to publish",
         "buyer questions",
         "rival brief",
-        "listing gaps"
+        "listing gaps",
+        "fan-out gaps",
+        "fanout",
+        "sub-questions ai searches"
       ],
       "synonyms": [
         "slash commands",
@@ -1913,7 +1922,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-two Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief** and **Setup guide**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-three Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief** and **Setup guide**."
         },
         {
           "heading": "Use a skill",
@@ -1945,7 +1954,11 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes and Setup guide.\n\n**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide and Fan-out gaps.\n\n**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
+        },
+        {
+          "heading": "Fan-out gaps",
+          "text": "**Fan-out gaps** (**/fanout**) finds the sub-questions AI engines searched while answering your tracked prompts where no answer named your brand, and drafts an answer-first section for each. It shows which engines searched each one and which competitors were named instead, and saves the sections as a draft."
         }
       ]
     },

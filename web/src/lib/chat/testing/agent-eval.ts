@@ -108,6 +108,7 @@ const AGENT_PROMISES: Readonly<
   'task-finisher': { must: ['task_review'], review: ['draft'] },
   'weekly-report': { must: ['report'] },
   'brand-facts-guardian': { must: ['wrong_claim', 'draft_or_action'] },
+  'fanout-gap-filler': { must: ['draft'] },
   'onboarding-help': { must: ['list'] },
   'product-answer-pages': { must: ['draft'] },
   'feature-question-coverage': { must: ['draft'] },
@@ -223,6 +224,11 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
   setup: {
     message: 'What should I set up next, and which agents should we use?',
     must: ['list'],
+  },
+  fanout: {
+    message:
+      'Which sub-questions does AI search where we are missing? Draft answers for the top ones and save them as a draft.',
+    must: ['list', 'draft'],
   },
 };
 
