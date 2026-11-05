@@ -29,21 +29,8 @@ import {
 } from '@/lib/impact/report';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { OUTCOME_PILL, PILL, outcomeLabel, signed, type ImpactWords } from './impact-parts';
 
-/** Each outcome's pill, in both themes (the Action Center's colors). */
-const OUTCOME_PILL: Record<ImpactOutcome, string> = {
-  improved:
-    'border-green-200 bg-green-50 text-green-800 dark:border-green-900 dark:bg-green-950/30 dark:text-green-300',
-  pending: 'text-muted-foreground',
-  no_meaningful_change: 'text-foreground/80',
-  declined:
-    'border-red-200 bg-red-50 text-red-800 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300',
-  not_measurable:
-    'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300',
-};
-
-const PILL =
-  'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] whitespace-nowrap';
 const CHIP = 'inline-flex items-center rounded-full border bg-muted/40 px-2 py-0.5 text-xs';
 
 /** A month the page shows: its year and month (0–11), in the browser's time. */
@@ -77,10 +64,6 @@ const dayOf = (iso: string) =>
   });
 const timeOf = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-/** A signed number as the table shows it: "+12", "−3", and "0" with no sign. */
-const signed = (value: number) =>
-  value > 0 ? `+${value}` : value < 0 ? `−${Math.abs(value)}` : '0';
 
 /**
  * Reports › "What Ansvisor did for you" (CHAT-22 feature 2 item 5, mockup
@@ -497,13 +480,7 @@ function ImpactTableRow({ row, onOpen }: { row: ImpactRow; onOpen: (row: ImpactR
   );
 }
 
-type T = ReturnType<typeof useTranslations<'reports.impact'>>;
-
-/** "Pending · early signal" once day 7 is in; else the outcome's word. */
-function outcomeLabel(row: ImpactRow, t: T): string {
-  if (row.outcome === 'pending' && row.checkpoint === 'd7') return t('outcome.pendingEarly');
-  return t(`outcome.${row.outcome}`);
-}
+type T = ImpactWords;
 
 /** "AC-1241 · Action Center · published to your CMS by you" */
 function sourceLine(row: ImpactRow, t: T): string {
@@ -727,4 +704,5 @@ const REASONS = new Set([
   'overlapping_change',
   'no_targets',
   'plan_inactive',
+  'taken_down',
 ]);

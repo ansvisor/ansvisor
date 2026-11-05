@@ -111,12 +111,14 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     label: 'GPT-6 Luna',
     tested: true,
   },
+  // Gemini 4 Argon passed the whole test set twice in a row (2026-11-03,
+  // side-checks/model-eval-r3-google_gemini-4-argon.json).
   {
     id: 'google/gemini-4-argon',
     api: 'google/gemini-4-argon',
     provider: 'openrouter',
     label: 'Gemini 4 Argon',
-    tested: false,
+    tested: true,
   },
   {
     id: 'google/gemini-3.8-flash',

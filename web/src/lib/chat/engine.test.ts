@@ -316,10 +316,13 @@ vi.mock('./registry/tools', async (importOriginal) => {
   const ownNumbers = { ...readVisibility, name: 'get_visibility_summary' };
   // A read that lists cited pages in its structured fields (CHAT-10 item 11).
   const citations = { ...readVisibility, name: 'list_citations' };
+  // One Site Audit in full, whose result shows as its card.
+  const audit = { ...readVisibility, name: 'list_site_audit_issues' };
   const tools = [
     readVisibility,
     ownNumbers,
     citations,
+    audit,
     // The same read as one of the workspace's own drafts (WORKSPACE_READS): scanned, never tainting.
     { ...readVisibility, name: 'get_draft' },
     ...real.CHAT_TOOLS.filter(
@@ -657,6 +660,7 @@ describe('a turn', () => {
       'read_visibility',
       'get_visibility_summary',
       'list_citations',
+      'list_site_audit_issues',
       'get_draft',
       'fetch_page',
       'explain_change',
@@ -3456,6 +3460,58 @@ describe('why a number changed (W2-18)', () => {
   });
 });
 
+describe("a Site Audit's card", () => {
+  const AUDIT_ID = '7d3f2c1a-9b8e-4c6d-a5f4-3e2d1c0b9a87';
+  const audit = {
+    id: AUDIT_ID,
+    brandId: BRAND,
+    url: 'https://shop.com/bags',
+    finalUrl: null,
+    status: 'completed',
+    totalScore: 0.64,
+    scoreRange: { plusMinus: 2, low: 62, high: 66, audits: 5 },
+    partial: false,
+    previousScore: 0.61,
+    previousCreatedAt: '2026-10-21T09:00:00Z',
+    signals: [{ key: 'faq-schema', status: 'fail' }],
+    createdAt: '2026-10-30T09:00:00Z',
+    completedAt: '2026-10-30T09:01:00Z',
+  };
+
+  it("shows the audit read under the answer, from the read's own numbers", async () => {
+    fakes.readRun.mockResolvedValue(audit);
+    useModels(
+      [calls(toolCall('r1', 'list_site_audit_issues', { brand_id: BRAND })), READY],
+      // The answer's own words may say anything: the card doesn't take them.
+      [text('Your page scored 99 ± 9.')],
+    );
+    const runId = await turn(ANALYST, 'How did my last audit of /bags go?');
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'audit.ready').map((e) => e.data)).toEqual([
+      {
+        page: 'https://shop.com/bags',
+        score: 0.64,
+        range: { plusMinus: 2, low: 62, high: 66, audits: 5 },
+        partial: false,
+        auditedAt: '2026-10-30T09:01:00Z',
+        change: { points: 3, since: '2026-10-21T09:00:00Z' },
+        href: `/dashboard/audit/${AUDIT_ID}`,
+      },
+    ]);
+    expectClean(events);
+  });
+
+  it('shows none for an audit still running', async () => {
+    fakes.readRun.mockResolvedValue({ ...audit, status: 'running', totalScore: null });
+    useModels(
+      [calls(toolCall('r1', 'list_site_audit_issues', { brand_id: BRAND })), READY],
+      [text('It is still running.')],
+    );
+    const runId = await turn(ANALYST, 'Is my audit done?');
+    expect(ofType(await eventsOf(runId), 'audit.ready')).toEqual([]);
+  });
+});
+
 describe('the AI budget', () => {
   it("doesn't start a step whose hold is refused, and says why", async () => {
     const { haiku, sonnet } = useModels([READY], [text('never')]);
@@ -5130,7 +5186,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     expect(admin).toMatchObject({ waits: true, cards: 1 });
     await approve(as('admin'), admin.runId);
     expect(sendDraftToCms).toHaveBeenCalledTimes(1);
-    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow');
+    // A person's own chat names no agent run (00480).
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow', null);
   });
 
   it("refuses a Manager's CMS send clicked after the Admin turned publishing off while it waited (§4)", async () => {
@@ -7613,9 +7670,11 @@ describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
     expect(runRow(runId).status).toBe('waiting');
     expect(reserved).toEqual([]);
     expect(sent).not.toHaveBeenCalled();
-    // The owner's click, in their own request: the person's own send, logged as a click.
+    // The owner's click, in their own request: the person's own send, logged as a click,
+    // naming the agent run whose card it was ("agent run, you approved", 00480).
     expect((await approve(ADMIN, runId)).ok).toBe(true);
     expect(sendDraftToCms).toHaveBeenCalledTimes(1);
+    expect(sendDraftToCms).toHaveBeenCalledWith(DRAFT, 'webflow', AGENT_RUN);
     expect(sent).not.toHaveBeenCalled();
     expect(db.tables.chat_activity_log).toEqual([
       expect.objectContaining({ approval_kind: 'click', auto_via: null }),

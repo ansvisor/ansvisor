@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { REPORT_TEMPLATES } from '@/lib/reports/templates';
 import { auditScoreView } from '@/lib/reports/audit-score';
+import { ScoreRangeMark, useScoreRangeTip } from '@/components/audit/score-range';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
@@ -137,6 +138,7 @@ export default function ReportDetailPage() {
   const id = params.id as string;
   const t = useTranslations('reports');
   const tCommon = useTranslations('common');
+  const rangeTip = useScoreRangeTip();
 
   const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
@@ -831,6 +833,13 @@ export default function ReportDetailPage() {
             <CardContent className="flex items-center gap-6">
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-bold">{auditScore.score}</span>
+                {auditScore.range && (
+                  <ScoreRangeMark
+                    range={auditScore.range}
+                    spoken={false}
+                    className="text-sm tabular-nums"
+                  />
+                )}
                 {auditScore.change !== null && <Delta value={auditScore.change} unit="" />}
               </div>
               <div className="min-w-0">
@@ -838,6 +847,10 @@ export default function ReportDetailPage() {
                 <p className="text-xs text-muted-foreground">
                   {t('auditedOn')} {formatDate(payload.auditScore.auditedAt)}
                 </p>
+                {/* What "± 2" means, written out as the audit report does. */}
+                {auditScore.range && (
+                  <p className="text-xs text-muted-foreground">{rangeTip(auditScore.range)}</p>
+                )}
               </div>
             </CardContent>
           </Card>

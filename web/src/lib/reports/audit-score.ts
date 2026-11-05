@@ -1,7 +1,5 @@
 import type { ReportAuditScore } from '@/lib/actions/reports';
-
-/** How many of the brand's latest audits are read to find the page's audit before. */
-export const AUDIT_SNAPSHOT_ROWS = 100;
+import { scoreRange, type ScoreRange } from '@/lib/audit/score-range';
 
 /** A `site_audits` row as the report's snapshot reads it, newest first. */
 export interface AuditSnapshotRow {
@@ -34,21 +32,27 @@ function toPoints(score: AuditSnapshotRow['total_score']): number | null {
 }
 
 /**
- * The report's Site Audit section from the brand's latest complete audits,
- * newest first: the latest audit's score and the score of the same page's
- * audit before it, both on the 0–100 scale. Null when there is no audit.
+ * The report's Site Audit section from the brand's latest complete audit and
+ * complete audits before it, newest first: the latest audit's score, the
+ * score of the same page's audit before it, both on the 0–100 scale, and the
+ * score's range from the page's audits up to it (scoreRange, as Site Audit
+ * shows it). Null when there is no audit.
  */
 export function auditSnapshotFrom(rows: AuditSnapshotRow[]): ReportAuditScore | null {
   const [latest, ...older] = rows;
   if (!latest) return null;
   const page = auditPageKey(latest);
-  const prior = older.find((r) => r.total_score !== null && auditPageKey(r) === page);
+  const samePage = older.filter((r) => r.total_score !== null && auditPageKey(r) === page);
+  const prior = samePage[0];
+  // The page's trend as scoreRange reads it: oldest first, ending with the latest audit.
+  const trend = [...samePage].reverse().concat(latest);
   return {
     url: latest.url,
     totalScore: toPoints(latest.total_score),
     previousScore: prior ? toPoints(prior.total_score) : null,
     auditedAt: latest.created_at,
     scale: 100,
+    range: latest.total_score === null ? null : scoreRange(trend.map((r) => Number(r.total_score))),
   };
 }
 
@@ -58,13 +62,16 @@ export interface AuditScoreView {
   score: string;
   /** Points since the same page's audit before; null when there is none to compare. */
   change: number | null;
+  /** The score's range ("64 ± 2"); null when it has none, or the report was saved before it. */
+  range: ScoreRange | null;
 }
 
 /**
  * The Site Audit section of a saved report. Reports saved before the 0–100
  * scale stored the 0–1 score rounded to one decimal, so their score is shown
  * as about that many points ("~60" for 0.6), and their previous score, which
- * could be another page's, isn't compared.
+ * could be another page's, isn't compared. Reports saved before the range
+ * show none.
  */
 export function auditScoreView(audit: ReportAuditScore): AuditScoreView {
   if (audit.scale === 100) {
@@ -74,10 +81,12 @@ export function auditScoreView(audit: ReportAuditScore): AuditScoreView {
         audit.totalScore !== null && audit.previousScore !== null
           ? audit.totalScore - audit.previousScore
           : null,
+      range: audit.totalScore === null ? null : (audit.range ?? null),
     };
   }
   return {
     score: audit.totalScore === null ? '—' : `~${Math.round(audit.totalScore * 100)}`,
     change: null,
+    range: null,
   };
 }

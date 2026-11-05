@@ -4,8 +4,10 @@ import { z } from 'zod';
 import { readAssignees } from '@/lib/action-center/assignees';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import {
+  SHIP_ROW_EMBEDS,
   impactRow,
   impactSummary,
+  measurementOf,
   pageKey,
   type ChangedPagesTraffic,
   type ImpactRow,
@@ -112,7 +114,7 @@ export async function readImpactReport(
       supabase
         .from('ship_events')
         .select(
-          'id, title, kind, source, shipped_at, shipped_by, execution_mode, url, actions!ship_events_action_id_fkey(action_no), impact_measurements!impact_measurements_ship_event_id_fkey(targets, window_json, metrics, outcome, confidence, checkpoint, checkpoints_json, not_measurable_reason, concurrent_changes, next_check_at, measured_at)',
+          `id, title, kind, source, shipped_at, shipped_by, execution_mode, url, ${SHIP_ROW_EMBEDS}`,
         )
         .eq('brand_id', parsed.data.brandId)
         .gte('shipped_at', from)
@@ -160,9 +162,7 @@ export async function readImpactReport(
           execution_mode: row.execution_mode,
           url: row.url,
           actionNo: row.actions?.action_no ?? null,
-          measurement: Array.isArray(row.impact_measurements)
-            ? (row.impact_measurements[0] ?? null)
-            : row.impact_measurements,
+          measurement: measurementOf(row.impact_measurements),
         },
         user.id,
         names,
@@ -170,9 +170,7 @@ export async function readImpactReport(
     );
     const measured = shipRows
       .map((row) => {
-        const m = Array.isArray(row.impact_measurements)
-          ? row.impact_measurements[0]
-          : row.impact_measurements;
+        const m = measurementOf(row.impact_measurements);
         return typeof m?.measured_at === 'string' ? m.measured_at : null;
       })
       .filter((at): at is string => !!at)

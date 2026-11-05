@@ -6,6 +6,9 @@
       "route": "/dashboard/action-center/actions",
       "keywords": [
         "actions",
+        "today",
+        "next 7",
+        "done this week",
         "action status",
         "assign action",
         "dismiss action",
@@ -23,14 +26,20 @@
         "to-dos",
         "action list",
         "let an agent do this",
-        "agent on an action"
+        "agent on an action",
+        "what should I do today",
+        "what to do first"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
           "text": "An action is one piece of work with an outcome, built from the evidence behind it. Ansvisor groups many signals into one action: six valuable pages with no AI traffic become one \"Capture AI traffic\" action with six linked signals, not six rows. New actions are added after the daily tracking run, on the **Actions** tab."
+        },
+        {
+          "heading": "Today",
+          "text": "The **Today** card at the top of the **Actions** tab lists up to three things to do today: open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. An action Chat's Inbox suggested to you today comes first.\n\nEach item says why it matters, its first step and page, and who does it: **Me** (assigned to you), **Agent** (an agent can do the first step) or **Team** (no one's yet). **Open** opens the action.\n\nUnder the card, **Next** lists the seven after them, and **Done this week** counts actions completed since Monday; click it for History. While Getting started runs, the card shows its next three steps instead."
         },
         {
           "heading": "Action categories",
@@ -758,7 +767,19 @@
         "called by",
         "sub-agents",
         "agent calls agent",
-        "send to webhook"
+        "send to webhook",
+        "what this agent did",
+        "agent impact",
+        "changes shipped by an agent",
+        "agent results",
+        "onboarding",
+        "onboarding & help",
+        "onboarding agent",
+        "help agent",
+        "setup guide",
+        "/setup",
+        "recommended agents",
+        "which agents should i use"
       ],
       "synonyms": [
         "my agents",
@@ -777,7 +798,13 @@
         "agent sends to cms",
         "agent runs an agent",
         "chain agents",
-        "helper agent"
+        "helper agent",
+        "agents for me",
+        "agent recommendations",
+        "setup help",
+        "new member setup",
+        "what did my agent do",
+        "did my agent work"
       ],
       "plan": "all",
       "updated": "2026-11-05",
@@ -792,11 +819,15 @@
         },
         {
           "heading": "Ready-to-use agents",
-          "text": "**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back** and **Weekly Report**, and agents made for a kind of site or a team, such as **Product Answer Pages** for e-commerce or **CEO Brief** for founders. Each card says what the agent does, its skills, what starts it and its mode. Filter them by **Goal**, **Business type** and **For your role**.\n\nAdmins and Managers click **Use this agent**. **New agent** opens with its skills, triggers, mode and connections filled in, for the brand you have open. Change what you like, then click **Save as draft** or **Turn on**. Nothing turns on by itself.\n\nIf your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet."
+          "text": "**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back**, **Weekly Report** and **Onboarding & Help**, and agents made for a kind of site or a team, such as **Product Answer Pages** for e-commerce or **CEO Brief** for founders. Each card says what the agent does, its skills, what starts it and its mode. Filter them by **Goal**, **Business type** and **For your role**.\n\nAdmins and Managers click **Use this agent**. **New agent** opens with its skills, triggers, mode and connections filled in, for the brand you have open. Change what you like, then click **Save as draft** or **Turn on**. Nothing turns on by itself.\n\nIf your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet."
         },
         {
           "heading": "Agents for your site and your work",
           "text": "Agents made for the site type of the brand you have open are marked **For your site type**, and agents made for one of your work areas **For your role**. They come first among the agents you can use, and first among the **Soon** ones. A brand's site type is **E-commerce**, **B2B SaaS** or **B2C**, under **Site type** in the brand's settings; until someone sets it, Ansvisor guesses it. Change your work areas in **Settings › Account › Your work areas**. **Mobile app** agents show under **Business type** only: a brand can't be set to Mobile app yet."
+        },
+        {
+          "heading": "Onboarding & Help",
+          "text": "**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**), and it has no trigger: after you turn it on, click **Run now** on its page, or add a schedule if you like. Each run says how many **Getting started** steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help."
         },
         {
           "heading": "What each card shows",
@@ -804,7 +835,15 @@
         },
         {
           "heading": "An agent's page",
-          "text": "Click **Open** or the agent's name. The top shows its state, its owner, whether it is private or shared, and **This period**: what it used of this month's AI limit, with its monthly cap when one is set. Under it you see its skills, mode, connections and model.\n\n**Triggers** lists what starts it and when it runs next. **Run history** lists its last 50 runs: when each started, its trigger and brand, its result, its outcome and its **AI use**, for example \"3.2% of 10%\": what the run used and the most one run may use. Filter them with **All**, **Improved**, **Pending** and **Stopped**, and click a run to open its chat.\n\nOn the right, **Access**, **Scope** and **AI use** show who owns it, what it may reach and its limits."
+          "text": "Click **Open** or the agent's name. The top shows its state, its owner, whether it is private or shared, and **This period**: what it used of this month's AI limit, with its monthly cap when one is set. Under it you see its skills, mode, connections and model.\n\n**Triggers** lists what starts it and when it runs next, and **What this agent did** what its runs took live in the last 30 days. **Run history** lists its last 50 runs: when each started, its trigger and brand, its result, its outcome and its **AI use**, for example \"3.2% of 10%\": what the run used and the most one run may use. Filter them with **All**, **Improved**, **Pending** and **Stopped**, and click a run to open its chat.\n\nOn the right, **Access**, **Scope** and **AI use** show who owns it, what it may reach and its limits."
+        },
+        {
+          "heading": "What this agent did",
+          "text": "On an agent's page, **What this agent did** covers the last 30 days. **Changes shipped** counts the pages that went live from its runs. **Improved** says how many of those with a verdict improved, counting only Medium and High confidence verdicts, as **Reports** does. A **Pending** change gets its first verdict 14 days after it goes live.\n\nEach change shows the run it came from, its outcome and its next check, and how it went live: **on its own**, **you approved** when you sent or published it on a card in the run's chat, or **by** and the name of the teammate who did. A line counts the agent's drafts that aren't live yet: drafts aren't measured until they go live. You see only the brands you have access to. **Open in Reports** opens **What Ansvisor did for you**, where each change has its details."
+        },
+        {
+          "heading": "What a run's outcome means",
+          "text": "A run's **Outcome** in **Run history** shows what the pages it took live did in AI answers, measured as in **What Ansvisor did for you**. A page counts for the run once it is live, when the agent sent or published it on its own, or when you approved sending or publishing it on a card in the run's chat. A page you send or publish later from the Content Editor or the Library counts as yours, not the agent's.\n\nA run that took nothing live shows \"—\". Once the run has ended and one of its pages is live, it shows **Pending**. Day 14 gives the first verdict, such as **Improved** or **No meaningful change**, and days 30 and 90 can change it. A finished run is never **Improved** by itself."
         },
         {
           "heading": "Run, pause and archive",
@@ -1047,7 +1086,11 @@
         "dictate",
         "send to webhook",
         "webhook",
-        "workflow webhook"
+        "workflow webhook",
+        "audit card",
+        "audit in chat",
+        "audit score in chat",
+        "open report"
       ],
       "synonyms": [
         "assistant",
@@ -1056,7 +1099,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
@@ -1113,6 +1156,10 @@
         {
           "heading": "Drafts, reports and audits",
           "text": "Admins and Managers can also ask Chat to change a draft in the Library, send a draft to your connected CMS, publish a new page on your site, send a page to your webhook, make a report, or start Site Audit on pages. Analysts can ask Chat to save new drafts only.\n\nA draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.\n\nStarting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo."
+        },
+        {
+          "heading": "A Site Audit in Chat",
+          "text": "When Chat reads one of your Site Audits, a card under the answer shows it: the page, its score on the same gauge as the audit report, and the day it ran. Once the page has three audits, the score shows its range, such as **64 ± 2**, with a line giving the lowest and highest score of its last five audits. When the page was audited before, the card shows the change since then, such as **+3 since Oct 21**. A partial audit says the AI checks couldn't run, and shows no range or change. **Open report** opens the audit's full report. The card's numbers come from the audit itself, not from Chat's answer. One answer shows up to three audits."
         },
         {
           "heading": "Where a page opens",
@@ -1828,6 +1875,8 @@
       "keywords": [
         "skills",
         "skill",
+        "setup guide",
+        "/setup",
         "create a skill",
         "skill draft",
         "save these steps as a skill",
@@ -1860,11 +1909,11 @@
         "templates"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-one Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Ready to publish**, **Weekly report**, **Buyer questions** and **Rival brief**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-two Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief** and **Setup guide**."
         },
         {
           "heading": "Use a skill",
@@ -1896,7 +1945,7 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page and Translate a page."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes and Setup guide.\n\n**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
         }
       ]
     },
@@ -4039,14 +4088,17 @@
         "report templates",
         "PDF",
         "executive summary",
-        "snapshot"
+        "snapshot",
+        "site audit score"
       ],
       "synonyms": [
         "monthly report",
         "client report",
         "export a report",
         "download PDF",
-        "report for my boss"
+        "report for my boss",
+        "score range",
+        "plus or minus"
       ],
       "plan": "all",
       "updated": "2026-11-05",
@@ -4069,7 +4121,11 @@
         },
         {
           "heading": "Read a report",
-          "text": "A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it. **Site Audit Score** is the exception: it shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards."
+          "text": "A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it; **Site Audit Score** is the exception. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards."
+        },
+        {
+          "heading": "Site Audit Score",
+          "text": "**Site Audit Score** shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. It isn't compared with the previous period. Once the page has three audits by the end date, the score shows its range, such as **64 ± 2**, worked out as in Site Audit's report: half the gap between the lowest and highest score of its last five audits. A line below gives those two scores. Reports made before the range was added don't show it."
         },
         {
           "heading": "Download a PDF",
@@ -4831,7 +4887,7 @@
         },
         {
           "heading": "Score range",
-          "text": "Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits. A line beside it gives those two scores. Partial audits aren't counted. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five. A page that didn't change usually shows ± 0."
+          "text": "Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits. A line beside it gives those two scores. Partial audits aren't counted. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five. A page that didn't change usually shows ± 0.\n\nThe same range comes with an audit wherever else you read it: in Chat, on the audit's card under the answer, in AI assistants connected over MCP, and in a report's **Site Audit Score**, from the page's audits up to the report's end date."
         },
         {
           "heading": "Signals",

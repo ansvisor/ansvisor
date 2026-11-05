@@ -1342,6 +1342,36 @@
     "actionsPage": {
       "title": "Actions",
       "subtitle": "Know what changed, what matters, and what to do next.",
+      "today": {
+        "title": "Today",
+        "subtitle": "{count, plural, one {# thing} other {# things}} · ranked by Priority Score",
+        "rankHint": "Ranked as your daily suggestion in Chat: by Priority Score, plus a little for each day an action has waited and for writing you can start in the Content Editor now. Only open actions that are yours or no one's yet.",
+        "stepsSubtitle": "{count, plural, one {# step} other {# steps}} of Getting started, ready now",
+        "empty": "Nothing waits on you today: every open action is someone else's, or there are none.",
+        "firstStep": "First step: {step}",
+        "firstStepOn": "First step: {step} · {page}",
+        "noStep": "No step left to do: open it to finish or close it.",
+        "suggested": "Also today's suggestion in your Chat Inbox",
+        "who": {
+          "me": "Me",
+          "agent": "Agent",
+          "team": "Team"
+        },
+        "whoHint": {
+          "me": "Assigned to you",
+          "agent": "An agent can do the first step",
+          "team": "No one's yet: anyone on the team can take it"
+        },
+        "open": "Open",
+        "next": "Next {count}",
+        "columns": {
+          "action": "Action",
+          "category": "Category",
+          "priority": "Priority"
+        },
+        "doneThisWeek": "Done this week · {count}",
+        "doneThisWeekHint": "Actions completed since Monday. Open History to see them."
+      },
       "cards": {
         "top": "Top Actions",
         "topSub": "Highest-priority actions to work on next",
@@ -3545,7 +3575,8 @@
     "memoryForget": { "name": "Remove from memory", "step": "Removed from memory" },
     "callAgent": { "name": "Run another agent", "step": "Ran agent" },
     "followUpCheck": { "name": "Set follow-up checks", "step": "Set follow-up check" },
-    "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" }
+    "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" },
+    "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agent Center" }
   },
   "agentic": {
     "avatar": {
@@ -4161,6 +4192,12 @@
       "tryItLabel": "Try {feature}",
       "onPlans": "On {plans}.",
       "seePlans": "See plans"
+    },
+    "audit": {
+      "title": "Site Audit",
+      "label": "Site Audit of {page}",
+      "audited": "Audited {date}",
+      "openReport": "Open report"
     }
   },
   "chatComposer": {
@@ -6217,7 +6254,8 @@
       "markets": "Who AI recommends by market",
       "listings": "Listing gaps",
       "rivals": "Rival brief",
-      "audit-fix": "Site audit fixes"
+      "audit-fix": "Site audit fixes",
+      "setup": "Setup guide"
     },
     "form": {
       "titleNew": "New agent",
@@ -6633,8 +6671,6 @@
       "needs": {
         "fanout_skill": "the /fanout skill",
         "prompts_skill": "the /prompts skill",
-        "setup_skill": "the /setup skill",
-        "help_articles": "approved Help articles",
         "catalog_trigger": "a catalog sync trigger",
         "publish_trigger": "a page-published trigger",
         "sub_agents": "sub-agents",
@@ -6702,7 +6738,7 @@
       },
       "onboarding-help": {
         "name": "Onboarding & Help",
-        "description": "Answers questions about Ansvisor from Help and walks new members through setup."
+        "description": "Walks you through the open Getting started steps, then recommends 3 to 5 agents for your site type and role. Questions about Ansvisor get answers from Help."
       },
       "shopping-readiness": {
         "name": "AI Shopping Readiness",
@@ -6909,6 +6945,43 @@
         "recentItem": "“{title}” → {target}",
         "untitled": "Untitled page",
         "takenDown": "Taken down"
+      },
+      "impact": {
+        "title": "What this agent did",
+        "period": "Last 30 days",
+        "kpi": {
+          "shipped": "Changes shipped",
+          "shippedHint": "pages that went live from its runs",
+          "improved": "Improved",
+          "improvedOf": "of {judged, number}",
+          "improvedHint": "verdict at 14 days · Medium and High only",
+          "improvedNone": "no verdict yet",
+          "pending": "Pending",
+          "pendingHint": "first verdict 14 days after it ships"
+        },
+        "listLabel": "Changes this agent shipped",
+        "kind": {
+          "cms_publish": "Published to your CMS",
+          "pr_merged": "Pull request merged",
+          "manual": "Marked as shipped",
+          "third_party_observed": "Seen in AI answers"
+        },
+        "run": "run #{number}",
+        "credit": {
+          "own": "on its own",
+          "you": "you approved",
+          "teammate": "by {name}",
+          "teammateUnnamed": "by a teammate"
+        },
+        "showAll": "Show all {count, number}",
+        "showFewer": "Show fewer",
+        "capped": "Showing the newest {count, number} changes; the counts above cover only these.",
+        "drafts": "{count, plural, one {# draft from this agent isn't live yet.} other {# drafts from this agent aren't live yet.}}",
+        "draftsNote": "Drafts aren't measured until they go live.",
+        "emptyTitle": "Nothing from this agent has gone live yet.",
+        "emptyBody": "When a page from one of its runs goes live, it shows here: an early signal 7 days later, the first verdict at 14 days.",
+        "openReports": "Open in Reports",
+        "loadFailed": "Couldn't load what this agent did."
       }
     }
   },
@@ -13742,6 +13815,7 @@
         "overlapping_change": "Another shipped change works on the same prompts.",
         "no_targets": "No tracked prompt targets this action.",
         "plan_inactive": "Measuring stopped while your plan wasn't active.",
+        "taken_down": "The page was taken down from your site.",
         "other": "It can't be measured."
       },
       "csv": {

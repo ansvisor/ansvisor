@@ -25,6 +25,7 @@
 
 import type { KeyFailureClass } from '@/lib/agent/key-errors';
 import type { AiProvider } from '@/lib/agent/providers';
+import type { ScoreRange } from '@/lib/audit/score-range';
 import type { ChatWhy } from './why/view';
 
 // ─── Steps ──────────────────────────────────────────────────────────────────
@@ -375,6 +376,27 @@ export interface ChatWhatsNewEntry {
   onPlans?: string;
 }
 
+/**
+ * A Site Audit as its card under the answer shows it: drawn from the audit
+ * read's own result (list_site_audit_issues), never from the model's words.
+ */
+export interface ChatAuditCard {
+  /** The page audited: where it ended up, else the address asked for. */
+  page: string;
+  /** Its score, 0–1, as the audit report's gauge takes it. */
+  score: number;
+  /** "64 ± 2" (customer priorities item 1); null with fewer than 3 complete audits, or partial. */
+  range: ScoreRange | null;
+  /** The AI checks couldn't run: the score leaves them out and isn't compared. */
+  partial: boolean;
+  /** When it ran (ISO). */
+  auditedAt: string;
+  /** "+3 since Oct 21": points since the page's audit before, and when that one ran; null for none. */
+  change: { points: number; since: string } | null;
+  /** Open report: the audit's report in Site Audit. */
+  href: ChatHref;
+}
+
 /** Where a page Chat writes was opened (CHAT-25 §3). */
 export type ChatPageWhere = 'chat' | 'here' | 'editor';
 
@@ -445,6 +467,8 @@ export interface ChatEventPayloads {
   'page.opened': { where: ChatPageWhere; href?: ChatHref };
   /** What's new's cards under the answer (CHAT-11 item 10). */
   'whats_new.ready': { entries: ChatWhatsNewEntry[] };
+  /** A Site Audit the run read, as its card under the answer. */
+  'audit.ready': ChatAuditCard;
 }
 
 export type ChatEventType = keyof ChatEventPayloads;
@@ -480,6 +504,7 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'suggestion.resolved': true,
   'page.opened': true,
   'whats_new.ready': true,
+  'audit.ready': true,
 };
 
 export const CHAT_EVENT_TYPES = Object.keys(EVENT_TYPES) as ChatEventType[];

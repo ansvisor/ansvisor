@@ -370,6 +370,36 @@ describe('loadChatThread', () => {
     expect(thread!.messages[1].run?.whatsNew).toEqual(entries);
   });
 
+  it('keeps the Site Audits it read as their cards, after a reload', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    const audit = {
+      page: 'https://shop.com/bags',
+      score: 0.64,
+      range: { plusMinus: 2, low: 62, high: 66, audits: 5 },
+      partial: false,
+      auditedAt: '2026-10-30T09:01:00Z',
+      change: { points: 3, since: '2026-10-21T09:00:00Z' },
+      href: '/dashboard/audit/a-1' as const,
+    };
+    const partial = {
+      ...audit,
+      page: 'https://shop.com/shoes',
+      range: null,
+      partial: true,
+      change: null,
+      href: '/dashboard/audit/a-2' as const,
+    };
+    fake.db.tables.chat_run_events = [
+      event('run-1', chatEvent('audit.ready', 1, audit)),
+      event('run-1', chatEvent('audit.ready', 2, partial)),
+      // The same audit read again keeps one card, the newer.
+      event('run-1', chatEvent('audit.ready', 3, { ...audit, score: 0.65 })),
+    ];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.audits).toEqual([{ ...audit, score: 0.65 }, partial]);
+  });
+
   it("keeps a stopped run's time and steps, its stopped step skipped with why", async () => {
     seed([{ id: 'run-1', status: 'stopped' }]);
     fake.db.tables.chat_run_steps = [

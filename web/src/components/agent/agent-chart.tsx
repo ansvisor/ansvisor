@@ -15,6 +15,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import type { ScoreRange } from '@/lib/audit/score-range';
 
 /**
  * Spec returned by the `render_chart` agent tool. The schema in
@@ -37,6 +38,8 @@ export interface AgentChartSpec {
 export interface AgentAuditSpec {
   url: string;
   totalScore: number | null;
+  /** The score's range from get_site_audit; absent on cards drawn before it. */
+  scoreRange?: ScoreRange | null;
   categoryScores: Record<string, unknown>;
   recommendations: unknown[];
   signalsEvaluated: number | null;

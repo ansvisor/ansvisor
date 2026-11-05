@@ -51,6 +51,7 @@ import { AnswerActions } from './run/answer-actions';
 import { DeliverableCard, filedNumbers } from './run/deliverable-card';
 import { WhyCard } from './run/why-card';
 import { WhatsNewCards } from './run/whats-new-cards';
+import { AuditCards } from './run/audit-card';
 import { useHomeDraft } from './home-draft';
 import { useFormAssist } from './run/form-assist';
 import { NextMoves } from './run/next-moves';
@@ -125,6 +126,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         remember: message.run.remember ?? null,
         why: message.run.why ?? [],
         whatsNew: message.run.whatsNew ?? [],
+        audits: message.run.audits ?? [],
         text: message.text,
         generatedAt: message.generatedAt,
         dataAsOf: message.dataAsOf,
@@ -978,6 +980,7 @@ function Answer({
         </ApprovalCard>
       )}
       {turn.runId && run.why.map((why) => <WhyCard key={why.n} runId={turn.runId!} why={why} />)}
+      <AuditCards cards={run.audits} timeZone={turn.timezone} />
       <WhatsNewCards entries={run.whatsNew} />
       {turn.runId &&
         run.deliverables.map((deliverable, i) => (

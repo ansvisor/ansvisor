@@ -35,13 +35,17 @@ import supabaseAdmin from '../../config/supabase.js';
 import { isCloud, isSubscriptionActive } from '../../config/plans.js';
 import { brandReaders } from '../access.js';
 import { chatAgenticDeployed, chatAgenticEnabled, chatAgenticOrgs } from '../chat-flag.js';
-import { selectInChunks } from '../chunked-in.js';
-import { DRAFT_TASK_KEYS, TASK_DONE } from '../content-published.js';
 import { logger } from '../logger.js';
 import { captureProductEvents } from '../product-events.js';
 import {
+  SuggestionsDbError,
+  loadAnswerZones,
+  loadCandidates,
+  loadStartNow,
+  readChunks,
+} from './reads.js';
+import {
   KEEP_DAYS,
-  OPEN_STATUSES,
   dueNow,
   firstSinceUse,
   idleDays,
@@ -59,20 +63,7 @@ const PAGE = 1000;
 
 /** Every hour at :07: each person's morning is caught in the hour it starts. */
 export const SCHEDULE = '7 * * * *';
-/** Open actions read per brand, highest priority first: far more than the lifts can reorder. */
-export const MAX_CANDIDATES = 500;
-/** A workspace's latest Chat answers read for its people's time zones, and over how many days. */
-export const ZONE_ANSWERS = 300;
-export const ZONE_DAYS = 30;
-
-/** A failed read or write, by what it was and the database's code: never its values. */
-class SuggestionsDbError extends Error {
-  constructor(what, error) {
-    super(`${what} failed`);
-    this.name = 'SuggestionsDbError';
-    this.code = error?.code ?? null;
-  }
-}
+export { MAX_CANDIDATES, ZONE_ANSWERS, ZONE_DAYS } from './reads.js';
 
 /** Every row a query gives, PAGE at a time; `build` makes the query afresh for each page. */
 async function readAll(what, build) {
@@ -83,13 +74,6 @@ async function readAll(what, build) {
     rows.push(...(data ?? []));
     if (!data || data.length < PAGE) return rows;
   }
-}
-
-/** A chunked read's rows, or a thrown SuggestionsDbError. */
-async function readChunks(what, ids, build) {
-  const { data, error } = await selectInChunks(ids, build);
-  if (error) throw new SuggestionsDbError(what, error);
-  return data ?? [];
 }
 
 function groupBy(rows, key) {
@@ -137,83 +121,6 @@ async function loadPeople(db, orgId) {
     db.from('profiles').select('id, role, time_zone').eq('organization_id', orgId).order('id'),
   );
   return people.filter((person) => roleFeed(person.role) !== 'never');
-}
-
-/** The workspace's latest Chat answers' time zones, newest first (resolveZones). */
-async function loadAnswerZones(db, orgId, now) {
-  const { data, error } = await db
-    .from('chat_messages')
-    .select(
-      'timezone, created_at, chat_conversations!chat_messages_conversation_id_fkey!inner(user_id, organization_id)',
-    )
-    .eq('chat_conversations.organization_id', orgId)
-    .eq('role', 'assistant')
-    .not('timezone', 'is', null)
-    .gte('created_at', new Date(now.getTime() - ZONE_DAYS * DAY_MS).toISOString())
-    .order('created_at', { ascending: false })
-    .limit(ZONE_ANSWERS);
-  if (error) throw new SuggestionsDbError('time zones read', error);
-  return (data ?? []).map((row) => ({
-    userId: row.chat_conversations?.user_id ?? null,
-    timezone: row.timezone,
-  }));
-}
-
-/**
- * The brand's open actions the people due may get, highest priority first:
- * the unassigned ones and those assigned to one of them, MAX_CANDIDATES of
- * each, so actions assigned to someone else never take the places. Their
- * payloads and reasons are read for the picked ones only (loadPicked).
- */
-async function loadCandidates(db, brandId, userIds) {
-  const open = () =>
-    db
-      .from('actions')
-      .select(
-        'id, action_no, kind, category, impact, status, priority_score, created_at, assignee_id',
-      )
-      .eq('brand_id', brandId)
-      .in('status', OPEN_STATUSES)
-      .is('deleted_at', null);
-  const ranked = (query) =>
-    query
-      .order('priority_score', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: true })
-      .limit(MAX_CANDIDATES);
-  const [unassigned, assigned] = await Promise.all([
-    ranked(open().is('assignee_id', null)),
-    readChunks('assigned actions read', userIds, (chunk) =>
-      ranked(open().in('assignee_id', chunk)),
-    ),
-  ]);
-  if (unassigned.error) throw new SuggestionsDbError('actions read', unassigned.error);
-  return [...(unassigned.data ?? []), ...assigned];
-}
-
-const WRITING_TASKS = [...DRAFT_TASK_KEYS.create, ...DRAFT_TASK_KEYS.optimize];
-
-/**
- * The actions "Start now" opens in the Content Editor: those with a writing
- * task still to do (CE-022's Create content / Optimize page), and the draft
- * it opens, a new page first.
- *
- * @returns {Promise<Map<string, 'create' | 'optimize'>>}
- */
-async function loadStartNow(db, actionIds) {
-  const tasks = await readChunks('writing tasks read', actionIds, (chunk) =>
-    db
-      .from('action_tasks')
-      .select('action_id, task_key, status')
-      .in('action_id', chunk)
-      .in('task_key', WRITING_TASKS),
-  );
-  const methods = new Map();
-  for (const task of tasks) {
-    if (TASK_DONE.includes(task.status)) continue;
-    const method = DRAFT_TASK_KEYS.create.includes(task.task_key) ? 'create' : 'optimize';
-    if (method === 'create' || !methods.has(task.action_id)) methods.set(task.action_id, method);
-  }
-  return methods;
 }
 
 /**

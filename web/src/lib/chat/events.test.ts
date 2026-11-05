@@ -210,6 +210,16 @@ const SAMPLES: { [K in ChatEventType]: () => Extract<ChatEvent, { type: K }> } =
         },
       ],
     }),
+  'audit.ready': () =>
+    chatEvent('audit.ready', 18, {
+      page: 'https://shop.com/bags',
+      score: 0.64,
+      range: { plusMinus: 2, low: 62, high: 66, audits: 5 },
+      partial: false,
+      auditedAt: '2026-10-30T09:01:00Z',
+      change: { points: 2, since: '2026-10-28T09:00:00Z' },
+      href: `/dashboard/audit/${UUID}`,
+    }),
 };
 
 /** Every key in a type, at any depth. */
