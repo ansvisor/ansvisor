@@ -1,21 +1,39 @@
 import { describe, expect, it } from 'vitest';
 import { PLANS } from '@/config/plans';
-import type { ReportCardPayload } from './payload';
+import { en } from './copy';
+import type { CitedSiteKind, ReportCardPayload } from './payload';
 import {
-  PLAN_STEPS_MAX,
-  PLAN_STEPS_MIN,
-  actionPlan,
+  MAX_CPC_USD,
+  MIN_CPC_KEYWORDS,
+  QUESTION_ROW_MAX,
+  adsVerdict,
+  alsoNamed,
+  brandKey,
+  buyVsEarn,
   competitorSite,
   conversionRange,
-  countryName,
-  firstDaySteps,
+  engineList,
+  examplePrompt,
+  growthEngineRows,
   interCanDraw,
+  isTargetSite,
+  mainEngineRows,
+  mainTotals,
   money,
-  planOffers,
+  planYearly,
+  productLabel,
+  questionDemand,
+  questionGroups,
+  questionLines,
+  questionSummary,
   quickWins,
   quotedQuestion,
   revenueRows,
-  times,
+  siteBrandKey,
+  startingPoint,
+  targetGroups,
+  targetSite,
+  topMissed,
   totals,
   valueRows,
 } from './rules';
@@ -26,24 +44,342 @@ const card = (patch: Partial<ReportCardPayload> = {}): ReportCardPayload => ({
   ...patch,
 });
 
-/** A card where the company leads and AI cites it well: little to fix. */
-const strong = card({
-  engines: SAMPLE_REPORT_CARD.engines.map((e) => ({ ...e, named: 20 })),
-  competitors: [{ name: 'Ridgeline Roasters', answers: 30 }],
-  citedSites: [{ domain: 'brewlinecoffee.example', answers: 40, own: true }],
-  ownCitations: 40,
-  missedQuestions: [],
-  missedCount: 0,
-});
-
 describe('totals', () => {
-  it('adds the engines up and takes the share of answers that name the company', () => {
-    expect(totals(SAMPLE_REPORT_CARD)).toEqual({ answers: 100, named: 18, visibility: 18 });
+  it('counts every engine’s answers, and Starter’s for the headline', () => {
+    expect(totals(SAMPLE_REPORT_CARD)).toEqual({ answers: 122, named: 19, visibility: 16 });
+    // ChatGPT 6 of 25 and Microsoft Copilot 2 of 25.
+    expect(mainTotals(SAMPLE_REPORT_CARD)).toEqual({ answers: 50, named: 8, visibility: 16 });
+    expect(mainEngineRows(SAMPLE_REPORT_CARD).map((e) => e.engine)).toEqual([
+      'chatgpt-web',
+      'copilot-web',
+    ]);
+    expect(growthEngineRows(SAMPLE_REPORT_CARD).map((e) => e.engine)).toEqual([
+      'gemini-web',
+      'google-aio',
+      'google-aimode',
+    ]);
+    expect(engineList(mainEngineRows(SAMPLE_REPORT_CARD))).toBe('ChatGPT and Microsoft Copilot');
   });
 
-  it('is 0% when no engine answered', () => {
-    const none = card({ engines: [{ engine: 'chatgpt-web', answers: 0, named: 0 }] });
-    expect(totals(none).visibility).toBe(0);
+  it('heads with every engine on a card made before the engines were split', () => {
+    const old = card({ mainEngines: undefined });
+    expect(mainTotals(old)).toEqual(totals(old));
+    expect(growthEngineRows(old)).toEqual([]);
+  });
+});
+
+describe('one card, one visibility figure', () => {
+  // Every "N of M answers" the findings and the questions page state about
+  // the company: the headline's M answers.
+  const bases = (texts: (string | null)[]) =>
+    texts.flatMap((text) => [...(text ?? '').matchAll(/(\d+) of (?:the )?(\d+) answers/g)]);
+
+  it('counts the findings and the questions page over the headline’s engines', () => {
+    const headline = mainTotals(SAMPLE_REPORT_CARD);
+    expect(headline).toEqual({ answers: 50, named: 8, visibility: 16 });
+    const wins = quickWins(SAMPLE_REPORT_CARD).map((win) => win.detail);
+    // The guide AI cites and your own citations, of the same 50 answers.
+    expect(wins.join(' ')).toContain('A guide AI cites in 11 of 50 answers about your market.');
+    expect(wins.join(' ')).toContain('Your site is cited in 2 of 50 answers.');
+    const found = bases([...wins, questionSummary(SAMPLE_REPORT_CARD)]);
+    expect(found.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(found.map((m) => Number(m[2])))).toEqual(new Set([headline.answers]));
+    expect(questionSummary(SAMPLE_REPORT_CARD)).toContain(
+      `in ${headline.named} of the ${headline.answers} answers`,
+    );
+  });
+
+  it('sets the leading competitor against the headline’s count of the company', () => {
+    const { named } = mainTotals(SAMPLE_REPORT_CARD);
+    const gap = quickWins(card({ missedQuestions: [], citedSites: [] })).find(
+      (win) => win.feature === 'competitors',
+    );
+    expect(gap?.detail).toBe(
+      `Ridgeline Roasters is named in 21 answers, Brewline Coffee in ${named}.`,
+    );
+  });
+
+  it('counts every engine on a card made before the split', () => {
+    const old = card({ mainEngines: undefined });
+    const found = bases(quickWins(old).map((win) => win.detail));
+    expect(found.length).toBeGreaterThan(0);
+    expect(new Set(found.map((m) => Number(m[2])))).toEqual(new Set([totals(old).answers]));
+  });
+});
+
+describe('quickWins', () => {
+  it('answers the question competitors win, then a guide, then own pages: each with week one', () => {
+    const wins = quickWins(SAMPLE_REPORT_CARD);
+    expect(wins.map((w) => [w.title, w.feature])).toEqual([
+      ['Answer “where to buy fresh roasted coffee beans online” on your site', 'contentEditor'],
+      ['Get Brewline Coffee reviewed or listed on coffeereview.example', 'citations'],
+      ['Make your own pages easy to cite', 'siteAudit'],
+    ]);
+    expect(wins[0].detail).toBe(
+      'AI names Ridgeline Roasters, Harborline Beans and Copper Kettle Coffee for it, and not Brewline Coffee.',
+    );
+    // The question's product page, where the new page is linked from.
+    expect(wins[0].week).toContain('link it from brewlinecoffee.example/beans');
+    expect(wins[1].week).toBe(
+      'Find the page on coffeereview.example that compares businesses like Brewline Coffee, and ask to be added or reviewed.',
+    );
+    expect(wins.every((w) => w.week.length > 20)).toBe(true);
+  });
+
+  it('starts where AI already reads a brand it never names', () => {
+    const zero = card({
+      engines: SAMPLE_REPORT_CARD.engines.map((e) => ({ ...e, named: 0 })),
+      ownCitations: 2,
+    });
+    expect(startingPoint(zero)).toEqual({ cited: 2 });
+    expect(startingPoint(SAMPLE_REPORT_CARD)).toBeNull();
+    const own = quickWins(zero).find((w) => w.feature === 'siteAudit');
+    expect(own?.title).toBe('Put your name where AI already reads you');
+    expect(own?.detail).toBe('AI cited your pages in 2 answers without naming Brewline Coffee.');
+  });
+
+  it('names the weakest of Starter’s engines, only when they differ', () => {
+    const lean = { missedQuestions: [], citedSites: [], ownCitations: 60 };
+    const wins = quickWins(card({ ...lean, competitors: [] }));
+    expect(wins[0].title).toBe('Look at what Microsoft Copilot says about your market');
+    expect(wins[0].detail).toBe(
+      'It names you in 2 of 25 answers, the fewest of ChatGPT and Microsoft Copilot.',
+    );
+    const alike = card({
+      ...lean,
+      competitors: [],
+      engines: SAMPLE_REPORT_CARD.engines.map((e) => ({ ...e, answers: 25, named: 5 })),
+    });
+    expect(quickWins(alike).map((w) => w.title)).toEqual(['Keep Brewline Coffee where it is']);
+  });
+
+  it('promises no outcome', () => {
+    const text = quickWins(SAMPLE_REPORT_CARD)
+      .map((w) => `${w.title} ${w.detail} ${w.week}`)
+      .join(' ');
+    expect(text).not.toMatch(/guarantee|will (rank|grow|increase)|double/i);
+  });
+});
+
+describe('page 1', () => {
+  it('lists the five questions competitors win most, with who is named instead', () => {
+    const missed = topMissed(SAMPLE_REPORT_CARD);
+    expect(missed).toHaveLength(5);
+    expect(missed[0]).toEqual({
+      text: 'where to buy fresh roasted coffee beans online',
+      instead: ['Ridgeline Roasters', 'Harborline Beans', 'Copper Kettle Coffee'],
+    });
+    expect(missed[4].instead).toEqual([]);
+  });
+
+  it('lists marketplaces and other businesses apart from competitors', () => {
+    expect(alsoNamed(SAMPLE_REPORT_CARD)).toEqual([
+      'Marketplaces also named: Bean Market',
+      'Other businesses named: Burr & Co Grinders',
+    ]);
+    expect(alsoNamed(card({ marketplaces: undefined, otherNames: [] }))).toEqual([]);
+  });
+});
+
+describe('page 2', () => {
+  it('sums up the main engines’ answers', () => {
+    expect(questionSummary(SAMPLE_REPORT_CARD)).toBe(
+      'Named in 6 of the 25 questions: in 8 of the 50 answers from ChatGPT and Microsoft Copilot.',
+    );
+    const none = card({
+      questionRows: SAMPLE_REPORT_CARD.questionRows?.map((row) => ({
+        ...row,
+        named: Object.fromEntries(Object.keys(row.named).map((e) => [e, 'missed'])),
+      })),
+    });
+    expect(questionSummary(none)).toBe(
+      'Brewline Coffee wasn’t named in any of the 25 questions: 50 answers from ChatGPT and Microsoft Copilot (25 questions × 2 engines).',
+    );
+  });
+
+  it('says how many got no answer instead of a questions × engines the answers fall short of', () => {
+    // ChatGPT gave no answer to the first question; then to the second too.
+    const unanswered = (count: number) =>
+      card({
+        questionRows: SAMPLE_REPORT_CARD.questionRows?.map((row, i) => ({
+          ...row,
+          named: Object.fromEntries(
+            Object.keys(row.named).map((e) => [
+              e,
+              e === 'chatgpt-web' && i < count ? 'none' : 'missed',
+            ]),
+          ),
+        })),
+      });
+    expect(questionSummary(unanswered(1))).toBe(
+      'Brewline Coffee wasn’t named in any of the 25 questions: 49 answers from ChatGPT and Microsoft Copilot (1 question got no answer from one engine).',
+    );
+    expect(questionSummary(unanswered(2))).toBe(
+      'Brewline Coffee wasn’t named in any of the 25 questions: 48 answers from ChatGPT and Microsoft Copilot (an engine gave no answer 2 times).',
+    );
+  });
+});
+
+describe('page 3', () => {
+  it('sorts the cited sites by what you can do there, and says which are left out', () => {
+    const { groups, leftOut } = targetGroups(SAMPLE_REPORT_CARD);
+    expect(groups.map((g) => [g.kind, g.sites.map((s) => s.domain)])).toEqual([
+      ['guide', ['coffeereview.example']],
+      ['publication', ['brewguide.example']],
+      ['official', ['coffeeassociation.example']],
+      ['community', ['homebarista.example']],
+      ['reviews', ['roasterreviews.example']],
+    ]);
+    expect(leftOut).toEqual(['ridgelineroasters.example', 'beanmarket.example']);
+  });
+
+  it('lists an older card’s sites it may suggest, without a competitor’s', () => {
+    const old = card({
+      competitors: [{ name: 'Jolly Tur', answers: 18 }],
+      citedSites: [
+        { domain: 'jollytur.com', answers: 13, own: false },
+        { domain: 'gezimall.com.tr', answers: 10, own: false },
+        { domain: 'sikayetvar.com', answers: 9, own: false },
+      ],
+    });
+    const { groups, leftOut } = targetGroups(old);
+    expect(groups.map((g) => [g.kind, g.sites.map((s) => s.domain)])).toEqual([
+      ['reviews', ['sikayetvar.com']],
+      ['other', ['gezimall.com.tr']],
+    ]);
+    expect(leftOut).toEqual(['jollytur.com']);
+  });
+
+  it('shows the question competitors win as a prompt Ansvisor would track', () => {
+    expect(examplePrompt(SAMPLE_REPORT_CARD)).toBe(
+      'where to buy fresh roasted coffee beans online',
+    );
+  });
+});
+
+describe('page 4: value', () => {
+  it('prices 2%, 5% and 10% of the questions’ own searches at the median cost per click', () => {
+    expect(questionDemand(SAMPLE_REPORT_CARD)).toEqual({ searches: 18580, keywords: 24 });
+    expect(valueRows(SAMPLE_REPORT_CARD)).toEqual([
+      { share: 0.02, visits: 372, monthly: 688, yearly: 8256 },
+      { share: 0.05, visits: 929, monthly: 1719, yearly: 20628 },
+      { share: 0.1, visits: 1858, monthly: 3437, yearly: 41244 },
+    ]);
+  });
+
+  it('prices the fixed rows on a card without search volumes', () => {
+    const old = card({
+      questionRows: SAMPLE_REPORT_CARD.questionRows?.map((row) => ({ ...row, volume: null })),
+    });
+    expect(valueRows(old)?.map((row) => [row.share, row.visits])).toEqual([
+      [null, 100],
+      [null, 1000],
+      [null, 10000],
+    ]);
+  });
+
+  it('prices nothing on too few keywords, or on a median too high to trust', () => {
+    expect(adsVerdict(card({ cpc: null }))).toEqual({ kind: 'none' });
+    expect(adsVerdict(card({ cpc: { usd: 2, keywords: MIN_CPC_KEYWORDS - 1 } }))).toEqual({
+      kind: 'none',
+    });
+    // A real B2B card's $47.10 from 8 keywords is priced, scaled to its own searches.
+    expect(adsVerdict(card({ cpc: { usd: 47.1, keywords: 8 } }))).toEqual({
+      kind: 'ok',
+      usd: 47.1,
+      keywords: 8,
+    });
+    expect(adsVerdict(card({ cpc: { usd: 150, keywords: 8 } }))).toMatchObject({ kind: 'odd' });
+    expect(valueRows(card({ cpc: { usd: MAX_CPC_USD + 0.01, keywords: 20 } }))).toBeNull();
+  });
+
+  it('says clicks are cheap when the ads cost less than Starter, instead of a saving', () => {
+    const compare = buyVsEarn(SAMPLE_REPORT_CARD);
+    expect(compare).toMatchObject({ visits: 929, adsMonthly: 1719, starterMonthly: 49 });
+    expect(compare?.cheap).toBe(false);
+    // A real Turkish card: $0.41 a click.
+    const cheap = buyVsEarn(card({ cpc: { usd: 0.041, keywords: 8 } }));
+    expect(cheap?.cheap).toBe(true);
+  });
+
+  it('runs the revenue scenario over the same visits', () => {
+    expect(conversionRange('ecommerce')).toEqual({ low: 0.01, high: 0.03, kind: 'order' });
+    expect(revenueRows(SAMPLE_REPORT_CARD)?.[1]).toEqual({ visits: 929, low: 353, high: 1059 });
+    expect(revenueRows(card({ dealValue: null }))).toBeNull();
+  });
+
+  it('prices yearly plans 20% off twelve months', () => {
+    for (const plan of ['starter', 'growth'] as const) {
+      const monthly = PLANS[plan].pricing?.monthly ?? 0;
+      expect(Math.abs(planYearly(plan) - monthly * 12 * 0.8)).toBeLessThan(1);
+    }
+  });
+});
+
+describe('copy', () => {
+  it('puts "the" before the countries whose name takes it', () => {
+    expect(en.country({ code: 'US', name: 'United States' })).toBe('the United States');
+    expect(en.country({ code: 'TR', name: 'Türkiye' })).toBe('Türkiye');
+  });
+
+  it('spells the headline’s base as questions × engines only when every question was answered', () => {
+    const engines = 'ChatGPT and Microsoft Copilot';
+    expect(en.status.kpiVisibilitySub(engines, 8, 50, 25, 2)).toBe(
+      'named in 8 of 50 answers: 25 questions × 2 engines (ChatGPT and Microsoft Copilot)',
+    );
+    expect(en.status.kpiVisibilitySub(engines, 8, 49, 25, 2)).toBe(
+      'named in 8 of 49 answers from ChatGPT and Microsoft Copilot (1 question got no answer from one engine)',
+    );
+    expect(en.status.kpiVisibilitySub(engines, 8, 47, 25, 2)).toBe(
+      'named in 8 of 47 answers from ChatGPT and Microsoft Copilot (an engine gave no answer 3 times)',
+    );
+    expect(en.status.kpiVisibilitySub(engines, 8, 49, 25, 2)).not.toContain('×');
+  });
+});
+
+describe('target sites', () => {
+  it('suggests guides, publications, official sources and communities, by kind', () => {
+    const site = (domain: string, kind: CitedSiteKind | null) => ({
+      domain,
+      answers: 5,
+      own: false,
+      kind,
+    });
+    const titles = (['guide', 'publication', 'official', 'community'] as const).map(
+      (kind) => quickWins(card({ citedSites: [site(`${kind}.example`, kind)] }))[1]?.title,
+    );
+    expect(titles).toEqual([
+      'Get Brewline Coffee reviewed or listed on guide.example',
+      'Pitch publication.example a story or an expert comment',
+      'Make sure official.example lists Brewline Coffee correctly',
+      'Answer questions about your market on community.example',
+    ]);
+    for (const kind of ['competitor', 'marketplace', 'other'] as const) {
+      expect(isTargetSite(site('x.example', kind), SAMPLE_REPORT_CARD)).toBe(false);
+    }
+  });
+
+  it('on an older card, never suggests a site whose address names a competitor', () => {
+    const old = card({
+      competitors: [{ name: 'Jolly Tur', answers: 18 }],
+      citedSites: [
+        { domain: 'jollytur.com', answers: 34, own: false },
+        { domain: 'businessofapps.com', answers: 20, own: false },
+        { domain: 'sikayetvar.com', answers: 11, own: false },
+      ],
+    });
+    expect(isTargetSite(old.citedSites[0], old)).toBe(false);
+    // Şikayetvar is a complaints site: never "get mentioned" there.
+    expect(isTargetSite(old.citedSites[2], old)).toBe(false);
+    // Any other cited site comes before the complaints site.
+    expect(quickWins(old)[1].title).toBe('Get Brewline Coffee mentioned on businessofapps.com');
+    const mmr = card({
+      competitors: [{ name: 'Business of Apps', answers: 33 }],
+      citedSites: [{ domain: 'www.businessofapps.com', answers: 31, own: false }],
+    });
+    expect(isTargetSite(mmr.citedSites[0], mmr)).toBe(false);
+    expect(brandKey('Jolly')).toBe(brandKey('Jolly Tur'));
+    expect(siteBrandKey('jollytur.com.tr')).toBe('jolly');
   });
 });
 
@@ -59,7 +395,9 @@ describe('quickWins, about competitors and engines', () => {
         ],
       }),
     );
-    expect(wins.map((w) => w.title)).toContain('Get Brewline Coffee onto coffeereview.example');
+    expect(wins.map((w) => w.title)).toContain(
+      'Get Brewline Coffee mentioned on coffeereview.example',
+    );
     expect(wins.map((w) => w.title).join(' ')).not.toMatch(/ridgeline|harborline/i);
   });
 
@@ -72,7 +410,9 @@ describe('quickWins, about competitors and engines', () => {
   });
 
   it('names the weakest engine by how many were asked, and only when the engines differ', () => {
+    // A card made before Starter's engines headed it: every engine counts.
     const three = card({
+      mainEngines: undefined,
       engines: [
         { engine: 'chatgpt-web', answers: 25, named: 10 },
         { engine: 'gemini-web', answers: 25, named: 2 },
@@ -92,44 +432,20 @@ describe('quickWins, about competitors and engines', () => {
   });
 });
 
-describe('quickWins', () => {
-  it('starts with the missed question competitors win, then the cited site, then own pages', () => {
-    const wins = quickWins(SAMPLE_REPORT_CARD);
-    expect(wins).toHaveLength(3);
-    expect(wins[0].title).toBe(
-      'Answer “where to buy fresh roasted coffee beans online” on your site',
-    );
-    expect(wins[0].detail).toContain(
-      'AI names Ridgeline Roasters, Harborline Beans and Copper Kettle Coffee for it, and not Brewline Coffee.',
-    );
-    expect(wins[1].title).toBe('Get Brewline Coffee onto coffeereview.example');
-    expect(wins[1].detail).toContain('23 of 100 answers');
-    expect(wins[2].title).toBe('Make your own pages easy to cite');
-  });
-
-  it('skips a missed question no competitor won, and never suggests the own site as a place to get onto', () => {
-    const wins = quickWins(
-      card({
-        missedQuestions: [{ text: 'how long do beans stay fresh', textEn: null, competitors: [] }],
-        citedSites: [{ domain: 'brewlinecoffee.example', answers: 30, own: true }],
-      }),
-    );
-    expect(wins.map((w) => w.title)).toEqual([
-      'Make your own pages easy to cite',
-      'Close the gap on Ridgeline Roasters',
-      'Look at what Google AI Mode says about your market',
-    ]);
-  });
-
-  it('still gives one step when the company leads everywhere, alike in every engine', () => {
-    expect(quickWins(strong).map((w) => w.title)).toEqual(['Keep Brewline Coffee where it is']);
-    const uneven = {
-      ...strong,
-      engines: strong.engines.map((e, i) => (i === 0 ? { ...e, named: 15 } : e)),
+describe('the reviews site', () => {
+  it('comes only when no guide, publication, official source or community is cited', () => {
+    const reviews = {
+      domain: 'www.sikayetvar.com',
+      answers: 11,
+      own: false,
+      kind: 'guide' as const,
     };
-    expect(quickWins(uneven).map((w) => w.title)).toEqual([
-      'Look at what ChatGPT says about your market',
-    ]);
+    const guide = { domain: 'gezirehberi.example', answers: 3, own: false, kind: 'guide' as const };
+    expect(targetSite(card({ citedSites: [reviews, guide] }))?.domain).toBe('gezirehberi.example');
+    expect(targetSite(card({ citedSites: [reviews] }))?.domain).toBe('www.sikayetvar.com');
+    expect(quickWins(card({ citedSites: [reviews] }))[1].title).toBe(
+      'Check and answer what customers say about Brewline Coffee on www.sikayetvar.com',
+    );
   });
 });
 
@@ -165,7 +481,9 @@ describe('quotedQuestion', () => {
         { text: '在哪里买咖啡豆', textEn: null, competitors: ['Ridgeline Roasters'] },
       ],
     };
-    expect(quickWins(card)[0].title).toBe('Get Brewline Coffee onto coffeereview.example');
+    expect(quickWins(card)[0].title).toBe(
+      'Get Brewline Coffee reviewed or listed on coffeereview.example',
+    );
   });
 
   it('puts the English in the first thing to do for a Japanese card', () => {
@@ -183,151 +501,84 @@ describe('quotedQuestion', () => {
   });
 });
 
-describe('actionPlan', () => {
-  it('has one step per finding, then the Action Center, AI Traffic and Chat, at most six', () => {
-    const steps = actionPlan(SAMPLE_REPORT_CARD);
-    expect(steps.map((s) => s.feature)).toEqual([
-      'Brand Visibility',
-      'Prompts and Content Editor',
-      'Competitors and Mentions',
-      'Citations and Site Audit',
-      'Action Center and Agent Center',
-      'AI Traffic',
-    ]);
-    expect(steps[0].finding).toBe('You appear in 18 of 100 answers; Ridgeline Roasters in 41.');
-    expect(steps[1].finding).toBe('11 of 25 questions got no answer that names you.');
-    expect(steps[2].finding).toBe('Ridgeline Roasters is named 41 times, 23 more than you.');
-    expect(steps[4].finding).toBe('That’s 4 areas to work on at once.');
-  });
-
-  it('keeps at least four steps for a card with little to fix', () => {
-    const steps = actionPlan(strong);
-    expect(steps.length).toBeGreaterThanOrEqual(PLAN_STEPS_MIN);
-    expect(steps.map((s) => s.feature)).toEqual([
-      'Brand Visibility',
-      'Competitors and Mentions',
-      'AI Traffic',
-      'Chat',
-    ]);
-    expect(steps[0].finding).toBe('You appear in 80 of 100 answers (80%).');
-    expect(steps[1].finding).toBe('You’re named in 80 answers, Ridgeline Roasters in 30.');
-  });
-
-  it('has the Action Center when no competitor is named and little is to fix', () => {
-    const alone = { ...strong, competitors: [] };
-    expect(actionPlan(alone).map((s) => s.feature)).toEqual([
-      'Brand Visibility',
-      'Action Center and Agent Center',
-      'AI Traffic',
-      'Chat',
-    ]);
-  });
-
-  it('never runs past six steps, and every step says what its features do', () => {
-    for (const c of [SAMPLE_REPORT_CARD, strong, { ...strong, competitors: [] }]) {
-      const steps = actionPlan(c);
-      expect(steps.length).toBeLessThanOrEqual(PLAN_STEPS_MAX);
-      for (const step of steps) expect(step.lines.length).toBeGreaterThan(0);
-    }
-  });
-
-  it('promises no outcome', () => {
-    const words = actionPlan(SAMPLE_REPORT_CARD)
-      .flatMap((s) => [s.finding, s.aim, ...s.lines.map((l) => l.text)])
-      .join(' ');
-    expect(words).not.toMatch(/guarantee|will (earn|grow|rank|double)|\bensure/i);
-  });
-});
-
-describe('firstDaySteps', () => {
-  it('names the site, the questions and the country', () => {
-    expect(firstDaySteps(SAMPLE_REPORT_CARD)).toEqual([
-      'Add brewlinecoffee.example as your brand: the setup wizard usually takes a few minutes.',
-      'Track this card’s 25 questions as prompts, in the United States.',
-      'Open the Action Center after the first run: what to do next, ranked.',
-    ]);
-  });
-});
-
-describe('countryName', () => {
-  it('puts "the" before the countries whose name takes it', () => {
-    expect(countryName({ code: 'US', name: 'United States' })).toBe('the United States');
-    expect(countryName({ code: 'TR', name: 'Türkiye' })).toBe('Türkiye');
-  });
-});
-
-describe('valueRows', () => {
-  it('prices 100, 1,000 and 10,000 visits at the cost per click, against each plan', () => {
-    const rows = valueRows(SAMPLE_REPORT_CARD);
-    expect(rows).toEqual([
-      { visits: 100, monthly: 185, yearly: 2_220, multiple: { starter: 3.8, growth: 0.7 } },
-      { visits: 1_000, monthly: 1_850, yearly: 22_200, multiple: { starter: 37.8, growth: 7.4 } },
-      {
-        visits: 10_000,
-        monthly: 18_500,
-        yearly: 222_000,
-        multiple: { starter: 377.6, growth: 74.3 },
-      },
-    ]);
-  });
-
-  it('is null without a cost per click', () => {
-    expect(valueRows(card({ cpc: null }))).toBeNull();
-  });
-});
-
-describe('revenueRows', () => {
-  it('uses 1% to 3% of visits for a shop', () => {
-    expect(conversionRange('ecommerce')).toEqual({ low: 0.01, high: 0.03, kind: 'order' });
-    expect(revenueRows(SAMPLE_REPORT_CARD)).toEqual([
-      { visits: 100, low: 38, high: 114 },
-      { visits: 1_000, low: 380, high: 1_140 },
-      { visits: 10_000, low: 3_800, high: 11_400 },
-    ]);
-  });
-
-  it('uses 0.5% to 1% for B2B, an app or a site of unknown kind', () => {
-    for (const siteType of ['b2b', 'app', null] as const) {
-      expect(conversionRange(siteType)).toEqual({ low: 0.005, high: 0.01, kind: 'deal' });
-    }
-    const b2b = card({ siteType: 'b2b', dealValue: { amount: 12_000, currency: 'EUR' } });
-    expect(revenueRows(b2b)?.[1]).toEqual({ visits: 1_000, low: 60_000, high: 120_000 });
-  });
-
-  it('is null without a deal value', () => {
-    expect(revenueRows(card({ dealValue: null }))).toBeNull();
-  });
-});
-
-describe('planOffers', () => {
-  it('reads Starter and Growth from the plans and the plan cards', () => {
-    const [starter, growth] = planOffers();
-    expect(starter).toMatchObject({
-      plan: 'starter',
-      name: 'Starter',
-      monthly: PLANS.starter.pricing?.monthly,
-      yearly: PLANS.starter.pricing?.annual,
+describe('questionLines', () => {
+  it('quotes each question as page 1 does, cut to two lines', () => {
+    const lines = questionLines(
+      card({
+        questionRows: [
+          {
+            text: 'kısa soru',
+            textEn: 'short question',
+            named: { 'chatgpt-web': 'named' },
+            instead: null,
+          },
+          {
+            text: '在哪里买咖啡豆',
+            textEn: 'Where to buy coffee beans',
+            named: {},
+            instead: 'Ridge',
+          },
+          {
+            text: 'x '.repeat(80).trim(),
+            textEn: null,
+            named: {},
+            instead: 'A very long competitor name that runs on',
+          },
+        ],
+      }),
+    );
+    expect(lines[0]).toEqual({
+      number: 1,
+      text: 'kısa soru',
+      named: { 'chatgpt-web': 'named' },
+      instead: null,
+      volume: null,
+      fit: null,
     });
-    expect(starter.points).toEqual([
-      '1 brand · 50 prompts tracked',
-      'ChatGPT & Microsoft Copilot tracking',
+    expect(lines[1].text).toBe('Where to buy coffee beans');
+    expect(lines[2].text.length).toBeLessThanOrEqual(QUESTION_ROW_MAX);
+    expect(lines[2].text.endsWith('…')).toBe(true);
+    expect(lines[2].instead?.length).toBeLessThanOrEqual(28);
+  });
+
+  it('has none for a card without its questions', () => {
+    expect(questionLines(card({ questionRows: undefined }))).toEqual([]);
+    expect(questionGroups(card({ questionRows: undefined }))).toEqual([]);
+  });
+});
+
+describe('questionGroups', () => {
+  it('groups the questions by product, the main one first, with its page', () => {
+    const groups = questionGroups(SAMPLE_REPORT_CARD);
+    expect(groups.map((g) => [g.product, g.page, g.lines.length])).toEqual([
+      ['Whole bean coffee', 'brewlinecoffee.example/beans', 14],
+      ['Coffee subscriptions', 'brewlinecoffee.example/subscribe', 6],
+      ['Gift boxes', null, 5],
     ]);
-    expect(growth).toMatchObject({ plan: 'growth', monthly: PLANS.growth.pricing?.monthly });
-    expect(growth.points).toEqual([
-      '4 brands · 200 prompts tracked',
-      'ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking',
-      'Multi-region tracking',
-      'Full auto, with agents that publish on their own',
-    ]);
+    expect(groups[0].lines[0]).toMatchObject({ number: 1, volume: 2900, fit: 'core' });
+    expect(groups[0].lines.find((l) => l.number === 14)?.fit).toBe('related');
+  });
+
+  it('keeps an older card’s questions in one group without a product', () => {
+    const rows = SAMPLE_REPORT_CARD.questionRows?.map((row) => ({ ...row, product: null }));
+    const groups = questionGroups(card({ products: undefined, questionRows: rows }));
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toMatchObject({ product: null, page: null });
+    expect(groups[0].lines).toHaveLength(25);
+  });
+
+  it('names a product in a script Inter has no letters for by its English', () => {
+    expect(productLabel({ name: 'コーヒー豆', nameEn: 'Coffee beans' })).toBe('Coffee beans');
+    expect(productLabel({ name: 'Yurt dışı turları', nameEn: 'Tours abroad' })).toBe(
+      'Yurt dışı turları',
+    );
   });
 });
 
 describe('formats', () => {
-  it('writes money in whole units and multiples to one decimal under ten', () => {
+  it('writes money in whole units', () => {
     expect(money(1_850)).toBe('$1,850');
     expect(money(380, 'EUR')).toBe('€380');
     expect(money(380, 'TRY')).toBe('TRY\u00a0380');
-    expect(times(3.8)).toBe('3.8×');
-    expect(times(377.6)).toBe('378×');
   });
 });

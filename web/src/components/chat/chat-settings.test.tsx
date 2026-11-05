@@ -105,10 +105,14 @@ describe('ChatSettings', () => {
     expect(action('policy.open')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
   });
 
-  it("hides the setting nothing reads yet: 'Thought for N s'", async () => {
+  it('shows "Thought for N s" as a switch, on by default, and keeps a change at once', async () => {
     await render();
-    expect(action('chatSettings.toggleThinking')).toHaveLength(0);
-    expect(host.textContent).not.toContain('Thought for');
+    const toggle = () => action('chatSettings.toggleThinking')[0];
+    expect(toggle().getAttribute('aria-checked')).toBe('true');
+    expect(host.textContent).toContain('Show “Thought for N s”');
+    await act(async () => toggle().click());
+    expect(saved.patches).toEqual([{ showThought: false }]);
+    expect(toggle().getAttribute('aria-checked')).toBe('false');
   });
 
   it('offers how to hear that an agent needs you, Slack only once it connects, and keeps a pick', async () => {

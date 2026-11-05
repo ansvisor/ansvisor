@@ -3518,6 +3518,11 @@
     },
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
     "publishToCms": { "name": "Publish pages on your site", "step": "Published page on your site" },
+    "sendToWebhook": {
+      "name": "Send pages to your webhook",
+      "step": "Sent page to your webhook",
+      "note": "It goes to your workflow (Zapier, Make, n8n), which decides what happens to it next."
+    },
     "takeDownFromCms": {
       "name": "Take pages down from your site",
       "step": "Took page down from your site"
@@ -3784,6 +3789,7 @@
           "openPage": "Where should we open this page? (W4-11)",
           "pageVersions": "A page's versions in chat (W4-12a)",
           "execute": "Click card (EXECUTE)",
+          "webhook": "Send to your webhook (go-live PR 11)",
           "result": "Result card",
           "denial": "Out-of-permission answer",
           "failed": "Failed run",
@@ -3817,6 +3823,8 @@
           "executeDisabled": "Before the draft is approved",
           "executeSaving": "Publishing",
           "executeDone": "Published",
+          "webhookCard": "In Chat, waiting for the click",
+          "webhookNotice": "In the Inbox, after an agent sent it on its own",
           "nextMoves": "Next moves under the latest answer (the first one continues it)",
           "resultDone": "Done",
           "resultNeedsClick": "Done but for a click",
@@ -3935,7 +3943,9 @@
       "notSent": "The page wasn’t sent.",
       "unreached": "{cms} couldn’t be reached.",
       "refused": "{cms} refused it: {why}",
-      "rechecked": "Its permission to go live on its own changed while it ran."
+      "rechecked": "Its permission to go live on its own changed while it ran.",
+      "yourWebhook": "Your webhook",
+      "alreadySent": "This page went to your webhook already. An agent sends it there once."
     },
     "acting": {
       "refused": "This agent couldn't make this change on its own, so nothing changed. Use Run now to make it as you.",
@@ -4056,6 +4066,7 @@
     }
   },
   "chatRun": {
+    "thoughtFor": "Thought for {seconds, plural, one {# s} other {# s}}",
     "openPage": {
       "question": "Where should we open this page?",
       "editor": "Open in Content Editor",
@@ -4177,6 +4188,12 @@
       "seePlans": "See plans"
     },
     "removeChip": "Remove {label}",
+    "voice": {
+      "start": "Speak your message",
+      "stop": "Stop listening",
+      "listening": "Listening…",
+      "denied": "Allow microphone access to use voice."
+    },
     "keyPaste": {
       "line": "This looks like an API key. Save it securely instead of sending it?",
       "remove": "Remove",
@@ -4936,6 +4953,8 @@
         "published": "{agent} published “{title}” on {site}",
         "wentLiveDetail": "On its own, after Quality and your brand facts",
         "publishedDetail": "Live on {site} · on its own, after Quality and your brand facts",
+        "sentToWebhook": "{agent} sent “{title}” to your webhook",
+        "sentToWebhookDetail": "Ansvisor can’t take a webhook send back: your workflow decides what happens to it.",
         "takenDown": "Taken down · a draft in {cms} again",
         "openPage": "Open page",
         "openRun": "Open run",
@@ -5199,7 +5218,7 @@
       },
       "thought": {
         "label": "Show “Thought for N s”",
-        "note": "A short summary of the agent’s reasoning under answers"
+        "note": "How long Chat worked before writing, above each answer"
       },
       "everyPage": {
         "label": "Open Chat on every page",
@@ -5756,6 +5775,7 @@
       "markDraftReadyUndo": "Took the draft “{title}” back from Ready",
       "sendToCms": "Sent the draft “{title}” to {cms}",
       "publishToCms": "Published the page “{title}” through {cms}",
+      "sendToWebhook": "Sent the page “{title}” to your webhook",
       "takeDownFromCms": "Took the page “{title}” down from {cms}",
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
@@ -5886,6 +5906,7 @@
       "failed": "Something went wrong with this agent. Try again.",
       "go_live_off": "An Admin hasn’t allowed agents to publish on their own in Settings › Chat.",
       "agent_not_found": "One of the agents it can call isn’t this workspace’s, is archived, or is this agent itself.",
+      "demo_agent": "One of the agents it can call is a sample agent of the demo brand, which can’t be run. Take it out of Can call.",
       "go_live_mode": "This agent isn’t in Full auto. Pick Full auto first."
     },
     "ownKey": {
@@ -7104,6 +7125,10 @@
       "counter": "{count} of {max} characters",
       "sent": "Sent to your Admins"
     },
+    "offer": {
+      "ask": "Remember this?",
+      "prompt": "Remember this: {text}"
+    },
     "page": {
       "title": "Memory",
       "subtitle": "What Chat remembers between chats.",
@@ -7618,6 +7643,7 @@
       "firstScore": "First score",
       "firstAudit": "First audit",
       "changeSinceFirst": "Change since first",
+      "scoreRange": "Range (±)",
       "failed": "Couldn't export the pages"
     },
     "loadMore": "Load more",
@@ -7766,6 +7792,11 @@
     },
     "partialNote": "The AI checks couldn't run this time, so this score leaves them out and isn't compared with your other audits.",
     "partialNoCredit": "It didn't use one of your monthly audits.",
+    "range": {
+      "plusMinus": "± {range}",
+      "tip": "This page's last {audits} audits scored {low} to {high}, changes to the page included.",
+      "tipSame": "This page's last {audits} audits all scored {low}."
+    },
     "aiRecommendations": "AI Recommendations",
     "signals": "Signals",
     "onlyIssues": "Issues only",
@@ -9310,6 +9341,14 @@
           }
         }
       },
+      "chat": {
+        "continued": "Continued from your chat “{title}”",
+        "untitled": "Untitled chat",
+        "openFull": "Open in full page",
+        "thisDraft": "This draft",
+        "placeholder": "Make the intro shorter",
+        "empty": "Ask for changes to this page. They come back here as suggestions to accept or reject."
+      },
       "panel": {
         "label": "Side panel",
         "show": "Show side panel",
@@ -9318,6 +9357,7 @@
         "openRules": "{count, plural, one {# rule open} other {# rules open}}",
         "sourcesInUse": "{count, plural, one {# source in use} other {# sources in use}}",
         "tabs": {
+          "chat": "Chat",
           "instructions": "Instructions",
           "sources": "Sources",
           "impact": "Live page"
@@ -15486,5 +15526,36 @@
       "crm": "CRM & revenue",
       "team": "Team & data"
     }
+  },
+  "reportCardAdmin": {
+    "title": "Free report cards",
+    "description": "Ansvisor staff only. Requests from the form on www.ansvisor.com, the cards made and what they cost. No names or e-mails are shown.",
+    "today": "Today (UTC)",
+    "todayValue": "{started} of {cap} cards",
+    "todaySub": "{requests, plural, one {# request} other {# requests}} · {resent} sent again · {capped} for tomorrow",
+    "month": "This month",
+    "monthValue": "{cost} of {budget}",
+    "monthSub": "{cards, plural, one {# card} other {# cards}} made",
+    "errorRate": "Failed, last 30 days",
+    "errorRateNone": "None finished yet",
+    "queued": "Waiting to start",
+    "optIns": "Marketing opt-ins, last 30 days",
+    "byDay": "By day (UTC)",
+    "columns": {
+      "date": "Day",
+      "requests": "Requests",
+      "resent": "Sent again",
+      "capped": "For tomorrow",
+      "started": "Started",
+      "ready": "Ready",
+      "failed": "Failed",
+      "cost": "Cost",
+      "emailsSent": "E-mails sent",
+      "emailsFailed": "E-mails not sent"
+    },
+    "failures": "Latest failures",
+    "noFailures": "No card has failed.",
+    "checks": "Check by hand",
+    "noChecks": "No card needs checking: every card found enough questions that match its site."
   }
 }

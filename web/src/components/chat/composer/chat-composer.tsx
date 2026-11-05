@@ -44,6 +44,7 @@ import {
 } from './composer-menus';
 import { ModeSwitch } from './mode-switch';
 import { ModelMenu, useModelLabel } from './model-menu';
+import { VoiceButton } from './voice-button';
 import { YourKeysDialog } from './your-keys-dialog';
 
 /** Where the composer sits (CHAT-02 variants): Chat home, an open chat's dock, the side panel. */
@@ -159,6 +160,9 @@ const refKey = (ref: ChatReference) => `ref:${ref.type}:${ref.id}`;
  *
  * A `draft` from the page (W1-08) puts its question in the box, or attaches
  * its object as an @ chip, and the cursor goes to the end.
+ *
+ * The microphone (W4-04) puts what is said into the box, in the browser's
+ * language, and never sends it; it shows only where the browser can listen.
  *
  * Text that holds an API key is never sent (W4-05): a line under the box
  * says so, Send waits, and Remove takes the key out. Save securely shows
@@ -282,6 +286,8 @@ export function ChatComposer({
   const [found, setFound] = useState<{ query: string; refs: ChatReference[] } | null>(null);
   const [files, setFiles] = useState<AttachedFile[]>([]);
   const [fileProblem, setFileProblem] = useState<UploadProblem | null>(null);
+  // The microphone wasn't allowed (W4-04): one line under the box.
+  const [micDenied, setMicDenied] = useState(false);
   const [modelOpen, setModelOpen] = useState(false);
   const [keysOpen, setKeysOpen] = useState(false);
   // The Add API key card above the box, with a pasted key and its provider (W4-06).
@@ -534,6 +540,17 @@ export function ChatComposer({
       if (!el) return;
       el.focus();
       el.setSelectionRange(next.length, next.length);
+    });
+  }
+
+  /** Words heard by the microphone (W4-04): after the text, never sent by themselves. */
+  function addSpoken(spoken: string) {
+    setText((before) => (before.trim() ? `${before.trimEnd()} ${spoken}` : spoken));
+    requestAnimationFrame(() => {
+      const el = box.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
     });
   }
 
@@ -933,6 +950,7 @@ export function ChatComposer({
           >
             @
           </button>
+          <VoiceButton onText={addSpoken} onDeniedChange={setMicDenied} disabled={disabled} />
           {readOnly ? (
             <Link
               data-action="access.see"
@@ -1015,6 +1033,11 @@ export function ChatComposer({
               {t('keyPaste.save')}
             </button>
           )}
+        </p>
+      )}
+      {micDenied && (
+        <p role="alert" className="mt-1.5 px-0.5 text-xs text-red-700 dark:text-red-400">
+          {t('voice.denied')}
         </p>
       )}
       {(fileProblem || failedFiles) && (

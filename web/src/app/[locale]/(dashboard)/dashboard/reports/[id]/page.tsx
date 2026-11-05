@@ -33,6 +33,7 @@ import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { REPORT_TEMPLATES } from '@/lib/reports/templates';
+import { auditScoreView } from '@/lib/reports/audit-score';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id));
@@ -40,7 +41,16 @@ const KNOWN_TEMPLATE_IDS = new Set<string>(REPORT_TEMPLATES.map((tpl) => tpl.id)
 const BRANDING_FAILED = { ok: false, failure: 'failed' } as const;
 
 /** Signed percentage delta, or an explicit raw count for a new zero-base metric. */
-function Delta({ value, zeroBaseCount }: { value: number | null; zeroBaseCount?: number }) {
+function Delta({
+  value,
+  zeroBaseCount,
+  unit = '%',
+}: {
+  value: number | null;
+  zeroBaseCount?: number;
+  /** '%' for a percentage change; '' for points, such as the Site Audit score's. */
+  unit?: '%' | '';
+}) {
   if (zeroBaseCount !== undefined) {
     return <span className="text-xs font-medium text-emerald-600">+{zeroBaseCount} new</span>;
   }
@@ -49,7 +59,8 @@ function Delta({ value, zeroBaseCount }: { value: number | null; zeroBaseCount?:
   return (
     <span className={cn('text-xs font-medium', up ? 'text-emerald-600' : 'text-red-600')}>
       {up ? '+' : ''}
-      {value}%
+      {value}
+      {unit}
     </span>
   );
 }
@@ -223,6 +234,8 @@ export default function ReportDetailPage() {
   const hasTopicVisibilityRate = Boolean(
     payload.topicPerformance?.some((tp) => typeof tp.visibilityRate === 'number'),
   );
+  // The Site Audit score in points; older reports stored it on a 0–1 scale.
+  const auditScore = payload.auditScore ? auditScoreView(payload.auditScore) : null;
 
   // Render a true vector PDF from the saved payload with @react-pdf/renderer
   // (selectable text, exact layout — no screenshot artifacts). The renderer
@@ -810,24 +823,15 @@ export default function ReportDetailPage() {
           </Card>
         )}
 
-        {payload.auditScore && (
+        {payload.auditScore && auditScore && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t('auditScore')}</CardTitle>
             </CardHeader>
             <CardContent className="flex items-center gap-6">
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-bold">{payload.auditScore.totalScore ?? '—'}</span>
-                {payload.auditScore.totalScore !== null &&
-                  payload.auditScore.previousScore !== null && (
-                    <Delta
-                      value={
-                        Math.round(
-                          (payload.auditScore.totalScore - payload.auditScore.previousScore) * 10,
-                        ) / 10
-                      }
-                    />
-                  )}
+                <span className="text-3xl font-bold">{auditScore.score}</span>
+                {auditScore.change !== null && <Delta value={auditScore.change} unit="" />}
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{payload.auditScore.url}</p>

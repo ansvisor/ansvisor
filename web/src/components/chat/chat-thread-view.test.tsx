@@ -1312,3 +1312,30 @@ describe('ChatThreadView', () => {
     expect(aiUsage.refresh).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('ChatThreadView in the Content Editor’s Chat (W4-16)', () => {
+  it('says the page’s ghost text, and hands on the suggestions a run left in the page', async () => {
+    const onSuggestions = vi.fn();
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        stream([
+          chatEvent('text.delta', 1, { text: 'Two suggestions wait in the page.' }),
+          chatEvent('suggestion.created', 2, { count: 2 }),
+          ...finished.slice(1).map((e) => ({ ...e, seq: 3 })),
+        ]),
+        { status: 200, headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN } },
+      );
+    });
+    await render({
+      variant: 'panel',
+      placeholder: 'Make the intro shorter',
+      onSuggestions,
+      pageRoute: '/dashboard/content/editor/d1',
+    });
+    expect(box().getAttribute('placeholder')).toBe('Make the intro shorter');
+    await type('Make answer 3 shorter');
+    await enter();
+    expect(onSuggestions).toHaveBeenCalledExactlyOnceWith(2);
+  });
+});

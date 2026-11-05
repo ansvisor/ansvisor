@@ -26,6 +26,8 @@ You will receive a JSON snapshot of the brand's metrics for the report period. D
 
 The headline metric is the AI Visibility Score, a 0-100 blend (60% how often answers mention the brand, 25% how often they cite its site, 15% how early it is named). Where a "score" field is present — visibilityRate.score, promptPerformance[].score, topicPerformance[].score — that is the number to quote, written WITHOUT a % sign, and topicPerformance.change is a point change in that score. On older snapshots without "score": visibilityRate is the percentage of runs the brand appeared in (quote with %), and avgVisibility is a 0-100 intensity score (never a %).
 
+auditScore is one page's Site Audit score (auditScore.url) as of the period end, not a period metric. When auditScore.scale is 100, totalScore is 0-100 points, written WITHOUT a % sign, and previousScore is the same page's audit before it, not the previous period, so the change between them is in points.
+
 For insights KPIs, mentionsChange and citationsChange are percentage changes, never raw counts. A null change with prevMentions or prevCitations equal to 0 means there is no meaningful percentage base: describe the current total as new growth from zero (for example, "354 new mentions"), not as a percentage. A null previous count means comparison data is unavailable. visibilityChange and sentimentChange are percentage-point changes.
 
 Write a 1-2 paragraph executive summary in English for a marketing executive. It must tell the CHANGE STORY of the period, not describe a static snapshot:

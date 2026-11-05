@@ -52,6 +52,7 @@ import { sweepImproveOutcomes } from './lib/action-center/improve-outcome.js';
 import { sweepBrandFacts } from './lib/brand-facts-sweep.js';
 import { purgeRemovedCatalogProducts } from './lib/catalog/purge.js';
 import { sweepExpiredChatUploads } from './lib/chat-uploads-sweep.js';
+import { sweepAiImageOptions } from './lib/ai-image-options-sweep.js';
 import { sweepIdleDemoBrands } from './lib/demo/idle-sweep.js';
 import { sweepCatalogSources } from './lib/catalog/sources.js';
 import { sweepShoppingCardMatches } from './lib/catalog/card-match.js';
@@ -383,6 +384,12 @@ async function runDailyTracking() {
   // Chat's attachments past their 90 days (00409): each file, then its row.
   sweepExpiredChatUploads().catch((err) => {
     logger.error({ err }, '[chat-uploads] daily sweep failed');
+  });
+
+  // The Content Editor's AI image options nobody kept (W4-09): a day after
+  // they were made, what is left in each organization's ai-options/ goes.
+  sweepAiImageOptions().catch((err) => {
+    logger.error({ err }, '[content-images] daily AI image options sweep failed');
   });
 
   // Demo brands nobody opened for two weeks (00380): their sample rows go,

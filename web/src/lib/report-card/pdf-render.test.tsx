@@ -8,7 +8,7 @@ import { SAMPLE_REPORT_CARD } from './sample';
 
 /**
  * The real renderer, on the server as the card is sent: the card is always
- * three pages, the sample's and one with long Turkish names, a long question
+ * four pages, the sample's and one with long Turkish names, a long question
  * and every finding, which is page 2's longest plan.
  */
 
@@ -91,19 +91,39 @@ const long: ReportCardPayload = {
     },
   ],
   missedCount: 19,
+  questionRows: Array.from({ length: 25 }, (_, i) => ({
+    text: `Kapadokya ve Ege’de ${i + 1}. soru: balon turu, mavi yolculuk ve kültür turları için en güvenilir acente hangisi, fiyatlar neye göre değişiyor ve rezervasyon ne kadar önce yapılmalı?`,
+    textEn: 'A long question in English',
+    product: i % 5,
+    volume: 1000 + i * 37,
+    fit: i % 4 === 0 ? ('related' as const) : ('core' as const),
+    named: {
+      'chatgpt-web': 'missed',
+      'copilot-web': 'missed',
+      'gemini-web': 'none',
+      'google-aio': 'missed',
+      'google-aimode': 'named',
+    },
+    instead: 'Kapadokya Balon Turları ve Seyahat Acentesi Anonim Şirketi',
+  })),
+  products: Array.from({ length: 5 }, (_, i) => ({
+    name: `Kapadokya, Ege ve Akdeniz kültür turları ve balon turu paketleri ${i + 1}`,
+    nameEn: null,
+    url: `https://kampanyalar.anadolu-seyahat-ve-turizm-organizasyon.example/turlar-${i + 1}`,
+  })),
   cpc: { usd: 0.42, keywords: 21 },
   dealValue: { amount: 18_500, currency: 'TRY' },
 };
 
 describe('reportCardPdf', () => {
-  it('draws the sample on three pages', async () => {
+  it('draws the sample on four pages', async () => {
     const pdf = await reportCardPdf(SAMPLE_REPORT_CARD);
     expect(Buffer.from(pdf.subarray(0, 5)).toString()).toBe('%PDF-');
-    expect(pages(pdf)).toBe(3);
+    expect(pages(pdf)).toBe(4);
   }, 30_000);
 
-  it('keeps long Turkish names and every finding on three pages', async () => {
-    expect(pages(await reportCardPdf(long))).toBe(3);
+  it('keeps long Turkish names, long questions and every finding on four pages', async () => {
+    expect(pages(await reportCardPdf(long))).toBe(4);
   }, 30_000);
 
   it('draws a card asked in Japanese, quoting the question in English', async () => {
@@ -111,6 +131,14 @@ describe('reportCardPdf', () => {
       ...SAMPLE_REPORT_CARD,
       country: { code: 'JP', name: 'Japan' },
       language: 'Japanese',
+      questionRows: [
+        {
+          text: 'オンラインで焙煎したてのコーヒー豆を買うならどこがいいですか',
+          textEn: 'Where is the best place to buy freshly roasted coffee beans online?',
+          named: { 'chatgpt-web': 'missed' },
+          instead: 'Ridgeline Roasters',
+        },
+      ],
       missedQuestions: [
         {
           text: 'オンラインで焙煎したてのコーヒー豆を買うならどこがいいですか',
@@ -119,12 +147,34 @@ describe('reportCardPdf', () => {
         },
       ],
     };
-    expect(pages(await reportCardPdf(japanese))).toBe(3);
+    expect(pages(await reportCardPdf(japanese))).toBe(4);
   }, 30_000);
 
-  it('keeps a card with no ad data and no deal value on three pages', async () => {
+  it('keeps the questions on one page: 25 two-line questions in five products, the key and the summary', async () => {
+    const tall: ReportCardPayload = {
+      ...long,
+      questionRows: Array.from({ length: 25 }, (_, i) => ({
+        text: `${'Çok uzun bir soru metni '.repeat(8)}${i}`,
+        textEn: null,
+        product: i % 5,
+        volume: 12_345,
+        fit: 'related' as const,
+        named: {
+          'chatgpt-web': i % 3 === 0 ? 'named' : 'missed',
+          'copilot-web': 'missed',
+          'gemini-web': 'missed',
+          'google-aio': 'none',
+          'google-aimode': 'missed',
+        },
+        instead: 'Kapadokya Balon Turları ve Seyahat Acentesi Anonim Şirketi',
+      })),
+    };
+    expect(pages(await reportCardPdf(tall))).toBe(4);
+  }, 30_000);
+
+  it('keeps a card with no ad data and no deal value on four pages', async () => {
     expect(pages(await reportCardPdf({ ...SAMPLE_REPORT_CARD, cpc: null, dealValue: null }))).toBe(
-      3,
+      4,
     );
   }, 30_000);
 });

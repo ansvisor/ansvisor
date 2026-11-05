@@ -48,6 +48,11 @@ export type PublishDraftToCmsResult =
   | Extract<SendDraftToCmsResult, { ok: false }>
   | { ok: false; reason: 'publish_refused'; message: string };
 
+/** A page sent to the brand's webhook from Chat (AUTONOMOUS-GO-LIVE PR 11): its workflow's now. */
+export type SendDraftToWebhookResult =
+  | { ok: true; target: 'webhook'; status: CmsDelivery['status'] }
+  | Extract<SendDraftToCmsResult, { ok: false }>;
+
 /** Why a page can't go as it is, in words (the editor's Send dialog says where to fix it). */
 const PROBLEM_WORDS: Record<BulkProblem, string> = {
   noTitle: 'The page needs a title before it can be sent.',
@@ -150,18 +155,42 @@ export async function publishDraftToCms(
 ): Promise<PublishDraftToCmsResult> {
   try {
     await assertWritable();
-    return (await sendOne(draftId, target, true)) as PublishDraftToCmsResult;
+    return (await sendOne(draftId, target, 'publish')) as PublishDraftToCmsResult;
   } catch (err) {
     console.error('Failed to publish the page:', err);
     return { ok: false, reason: 'failed', message: 'The page couldn’t be published. Try again.' };
   }
 }
 
+/**
+ * Send one Library page to the brand's saved webhook (AUTONOMOUS-GO-LIVE PR
+ * 11, Chat's trigger_content_webhook): what the Content Editor's Send to
+ * webhook does, for its workflow (Zapier, Make, n8n), which decides what
+ * happens next. An EXECUTE in the publishing group, checked as Send to CMS
+ * is (Admins and Managers, not Managers while publishing is off for them,
+ * not a page live already). No address comes with it: the API sends to the
+ * brand's own webhook, and Ansvisor can't take it back. Errors come back
+ * as values.
+ */
+export async function sendDraftToWebhook(draftId: string): Promise<SendDraftToWebhookResult> {
+  try {
+    await assertWritable();
+    return (await sendOne(draftId, 'webhook', 'webhook')) as SendDraftToWebhookResult;
+  } catch (err) {
+    console.error('Failed to send the page to the webhook:', err);
+    return { ok: false, reason: 'failed', message: 'The page couldn’t be sent. Try again.' };
+  }
+}
+
+/** How a page goes: a CMS draft, a page published live, or a send to the brand's webhook. */
+type SendHow = 'draft' | 'publish' | 'webhook';
+
 async function sendOne(
   draftId: string,
-  target: ChatCmsTarget,
-  publish = false,
-): Promise<SendDraftToCmsResult | PublishDraftToCmsResult> {
+  target: ChatCmsTarget | 'webhook',
+  how: SendHow = 'draft',
+): Promise<SendDraftToCmsResult | PublishDraftToCmsResult | SendDraftToWebhookResult> {
+  const publish = how === 'publish';
   if (publish && target === 'framer') {
     return {
       ok: false,
@@ -170,7 +199,8 @@ async function sendOne(
         'Framer publishes the whole site at once: send the draft, then publish it in Framer.',
     };
   }
-  if (!CHAT_CMS_TARGETS.includes(target)) {
+  // The webhook only by its own send (sendDraftToWebhook), never as a CMS.
+  if (how === 'webhook' ? target !== 'webhook' : !CHAT_CMS_TARGETS.some((t) => t === target)) {
     return {
       ok: false,
       reason: 'invalid',
@@ -324,6 +354,7 @@ async function sendOne(
       message: delivery.error || 'The CMS refused the page.',
     };
   }
+  if (target === 'webhook') return { ok: true, target, status: delivery?.status ?? 'queued' };
   return {
     ok: true,
     target,

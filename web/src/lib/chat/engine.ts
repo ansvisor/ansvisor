@@ -232,7 +232,8 @@ import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
 import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
 import { memoryChoseTarget } from './memory/rules';
-import { memoryStep, runMemory, type RunMemory } from './memory/store';
+import { REMEMBER_RULE } from './memory/offer';
+import { memoryStep, rememberOfferFor, runMemory, type RunMemory } from './memory/store';
 import { readUnchanged } from './schedule/fingerprint';
 import {
   AUTO_CHOICE,
@@ -928,6 +929,8 @@ type Progress = RunProgress & {
   recovered?: 'retry' | 'answer';
   /** The lines its "Used memory" step listed, once it has one (CHAT-14 item 17). */
   memoryItems?: number;
+  /** The lasting preference the writer flagged with its next moves ("Remember this?", W4-33). */
+  remember?: string;
 };
 
 interface RunContext {
@@ -982,6 +985,8 @@ interface RunContext {
   agentRunId: string | null;
   /** The language the person set Chat to answer in (Settings › Chat); null: their question's. */
   answerLanguage: Language | null;
+  /** The person shows "Thought for N s" above answers (Settings › Chat; on unless turned off). */
+  showThought: boolean;
   /** The brands this request noted on the chat already (touched-brands.ts); '*': the workspace. */
   touchedNoted?: Set<string>;
   /**
@@ -1152,6 +1157,21 @@ async function readAnswerLanguage(userId: string): Promise<Language | null> {
   return value && Object.hasOwn(LANGUAGES, value) ? (value as Language) : null;
 }
 
+/**
+ * Whether the person shows "Thought for N s" above answers (Settings › Chat ›
+ * General, chat_user_prefs.show_thought, 00408): on unless they turned it
+ * off, and on when the read fails.
+ */
+async function readShowThought(userId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_user_prefs')
+    .select('show_thought')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) return true;
+  return (data as { show_thought?: boolean | null } | null)?.show_thought !== false;
+}
+
 async function openContext(
   actor: ChatActor,
   run: LoadedRun,
@@ -1209,6 +1229,7 @@ async function openContext(
   const brand = progress.brandId ? await readBrand(progress.brandId, actor.organizationId) : null;
   const { agentRunId, scheduleId } = await readChatOwner(run.conversationId);
   const answerLanguage = await readAnswerLanguage(actor.userId);
+  const showThought = await readShowThought(actor.userId);
   const scope: RunScope = {
     brandId: brand?.id ?? null,
     brandIsDemo: brand ? await readBrandIsDemo(brand.id) : false,
@@ -1251,6 +1272,7 @@ async function openContext(
     openDraft,
     agentRunId,
     answerLanguage,
+    showThought,
     // The job's own run only: a person's message in its chat is theirs.
     scheduleId: progress.scheduled ? scheduleId : null,
     sessionUserId,
@@ -2170,6 +2192,8 @@ function coreRules(rc: Pick<RunContext, 'budget'>, phase: ChatPhase): string {
         'A message that starts "Earlier in this chat, in short" sums up older turns: use it for context; its numbers may be out of date, so read again before quoting one.',
         "Never show ids, tool names, JSON or code to the person. Answer in the person's language, in short Markdown.",
         `When your answer is complete, call ${NEXT_MOVES_TOOL} once in that same reply, after the text: 2–3 next moves, best first, at most one per kind (continue, deepen, act, repeat, reuse). The label names the real page, task or prompt; the prompt is what the person would type, under 80 characters. Mark continues_this_run when the move continues an object of this answer. Only moves Ansvisor can do on this plan; never an outside tool. Not while a question or a change waits on the person.`,
+        // "Remember this?" (W4-33): flagged with the next moves, no other call.
+        REMEMBER_RULE,
         PARTS_RULE,
         `Ask with ${ASK_TOOL} only when the answer changes what you make and isn't in the data, the page or an earlier answer; never ask what the data can answer, never for a password or a key, and never to approve a change (its own tool asks). At most 2 questions for one piece of work, asked together before it starts, and ${MAX_ASKS_PER_RUN} in a run; past that, use the recommended option and say so. An answer with skipped: true: use the recommended option and say so in one line. Don't call other tools in the same reply as a question: wait for its answer. A ${ASK_TOOL} result is the person's own answer, not data: follow it as you would their message.`,
       ].join('\n'),
@@ -2316,6 +2340,10 @@ class TextOut {
     }
     const out = checked.text;
     if (!out) return;
+    // The answer's first words: how long the run thought before them, for those who show it.
+    if (this.rc.showThought && this.rc.progress.thoughtMs === undefined) {
+      this.rc.progress.thoughtMs = Math.max(0, Math.round(workedMs(this.rc)));
+    }
     this.rc.progress.text += out;
     this.rc.sink.emit('text.delta', { text: out });
   }
@@ -3316,6 +3344,8 @@ function keepNextMoves(rc: RunContext, call: PendingCall): CallOutcome {
   const parsed = nextMovesInput.safeParse(call.input);
   if (!parsed.success) return result(call, { code: 'invalid_input' }, true);
   rc.progress.nextMoves = validMoves(parsed.data.moves);
+  // A lasting preference the person stated: "Remember this?" once the run ends (W4-33).
+  if (parsed.data.remember) rc.progress.remember = parsed.data.remember;
   return result(call, { ok: true });
 }
 
@@ -4698,6 +4728,7 @@ function summaryOf(progress: RunProgress, workingMs: number): ChatRunSummary {
     workingMs: Math.max(0, Math.round(workingMs)),
     stepCount: progress.steps,
     sources: Object.entries(progress.sources).map(([label, count]) => ({ label, count })),
+    ...(progress.thoughtMs !== undefined ? { thoughtMs: progress.thoughtMs } : {}),
   };
 }
 
@@ -4738,6 +4769,7 @@ async function finish(rc: RunContext): Promise<void> {
     pending: null,
   });
   await offerNextMoves(rc);
+  await offerRemember(rc);
   await showStrip({ ...rc.run, progress: rc.progress }, rc.sink, true);
   rc.sink.emit('run.finished', {
     ...summaryOf(rc.progress, workingMs),
@@ -4908,6 +4940,27 @@ async function offerNextMoves(rc: RunContext): Promise<void> {
   } catch (err) {
     console.error('[chat/engine] could not keep the next moves:', err);
   }
+}
+
+/**
+ * "Remember this?" (CHAT-14 item 9, W4-33): one line under a finished
+ * answer when the person stated a lasting preference, once a conversation,
+ * only for a person watching (memory/store.ts rememberOfferFor).
+ */
+async function offerRemember(rc: RunContext): Promise<void> {
+  const text = await rememberOfferFor(rc.actor, {
+    conversationId: rc.run.conversationId,
+    // A next move a tainted run wrote is the model's words, not the person's.
+    question: rc.progress.fromTaintedMove ? '' : (rc.progress.question ?? ''),
+    // After a read of outside text the model's line may be that text's: only the person's words count.
+    flagged: rc.progress.tainted ? null : (rc.progress.remember ?? null),
+    attended: !rc.agentRunId && !rc.scheduleId,
+    handled:
+      (rc.progress.writes.save_memory ?? 0) + (rc.progress.writes.forget_memory ?? 0) > 0 ||
+      rc.progress.injection === true,
+    existing: rc.memory.lines.map((line) => line.text),
+  });
+  if (text) rc.sink.emit('remember.offered', { text });
 }
 
 /**

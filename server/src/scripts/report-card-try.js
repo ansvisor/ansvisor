@@ -14,7 +14,12 @@
 import 'dotenv/config';
 import { writeFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
-import { estimatedCardUsd, reportCardLimits } from '../lib/report-card/config.js';
+import {
+  ENGINE_COUNT,
+  QUESTION_MAX,
+  estimatedCardUsd,
+  reportCardLimits,
+} from '../lib/report-card/config.js';
 import { countryLanguage, isCountry } from '../lib/report-card/countries.js';
 import { websiteHost } from '../lib/report-card/identity.js';
 import { buildReportCard, costMeter } from '../lib/report-card/run.js';
@@ -43,7 +48,7 @@ const dealValue = values.deal ? { amount: Number(amount), currency: currency || 
 const limits = reportCardLimits();
 console.log(
   `${values.company} (${site}), ${country}: about $${estimatedCardUsd(limits).toFixed(2)}` +
-    ` (${4 * 25} answers at $${limits.answerUsd}, the keyword call $${limits.volumeUsd}, the model calls).`,
+    ` (up to ${ENGINE_COUNT * QUESTION_MAX} answers at $${limits.answerUsd}, the keyword call $${limits.volumeUsd}, the model calls).`,
 );
 if (!values.spend) {
   console.log('Nothing run: add --spend to make it.');

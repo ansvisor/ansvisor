@@ -5,6 +5,7 @@ import {
   afterSeqOf,
   apiKeyRefusal,
   chatActor,
+  demoRunRefusal,
   engineFailureResponse,
   runFailure,
   runIdOf,
@@ -32,6 +33,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (actor instanceof NextResponse) return actor;
     const runId = runIdOf((await params).id);
     if (!runId) return runFailure(404, 'not_found', 'not_found', 'Not found');
+    // A sample card on the demo brand: the plans, never a run going on.
+    const demo = await demoRunRefusal(actor, runId);
+    if (demo) return demo;
     const body = await req.json().catch(() => null);
     if (bodyHasApiKey(body, 'other')) return apiKeyRefusal();
     const prepared = await prepareResume(actor, runId, 'answer', body);

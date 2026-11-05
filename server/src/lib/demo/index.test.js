@@ -439,15 +439,20 @@ describe('setDemoHidden', () => {
     expect(state.brands[1].demo_hidden_at).toBeNull();
   });
 
-  it('takes its chats away when hidden, and rebuilds it with them when shown again', async () => {
+  it('takes its chats and agents away when hidden, and rebuilds it with them when shown again', async () => {
     state.brands.push(demo(), demo({ id: 'demo-2', organization_id: 'org-2' }));
     state.tables.chat_conversations = [
       { id: 'c1', brand_id: 'demo-1' },
       { id: 'c2', brand_id: 'demo-2' },
       { id: 'c3', brand_id: 'real-1' },
     ];
+    state.tables.chat_agents = [
+      { id: 'a1', demo_brand_id: 'demo-1' },
+      { id: 'a2', demo_brand_id: null },
+    ];
     await setDemoHidden({ organizationId: 'org-1', hidden: true, now: NOW });
     expect(state.tables.chat_conversations.map((c) => c.id)).toEqual(['c2', 'c3']);
+    expect(state.tables.chat_agents.map((a) => a.id)).toEqual(['a2']);
 
     await setDemoHidden({ organizationId: 'org-1', hidden: false, now: NOW });
     expect(state.brands[1].demo_built_at).toBeNull();

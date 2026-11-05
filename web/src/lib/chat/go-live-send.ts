@@ -1,9 +1,14 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
 import { API_BASE_URL } from '@/config/api';
-import type { PublishDraftToCmsResult, SendDraftToCmsResult } from '@/lib/actions/cms-send';
+import type {
+  PublishCmsTarget,
+  PublishDraftToCmsResult,
+  SendDraftToCmsResult,
+  SendDraftToWebhookResult,
+} from '@/lib/actions/cms-send';
 import type { CmsDelivery } from '@/lib/content/cms-send-client';
-import { CMS_NAMES, type ChatCmsTarget } from '@/lib/content/cms-names';
+import { CMS_NAMES } from '@/lib/content/cms-names';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { GoLivePage } from './go-live-facts';
 import type { GoLiveStep } from './registry/define-tool';
@@ -79,16 +84,16 @@ const NOT_CONNECTED = /^(no_|webhook_not_subscribed$)|_not_configured$|_not_read
 /**
  * Sends the page through the API's internal route (CRON_SECRET), answered as
  * the person's own send (sendDraftToCms) is, so the run reads it the same.
- * Never throws. A CMS draft (PR 5), or a new page published live (PR 9);
- * a webhook send comes with PR 11.
+ * Never throws. A CMS draft (PR 5), a new page published live (PR 9), or a
+ * page sent to the brand's saved webhook (PR 11).
  */
 export async function sendOnItsOwn(
   send: GoLiveSend,
-): Promise<SendDraftToCmsResult | PublishDraftToCmsResult> {
-  const target = send.step.target as ChatCmsTarget;
-  const cms = CMS_NAMES[target] ?? send.step.target;
+): Promise<SendDraftToCmsResult | PublishDraftToCmsResult | SendDraftToWebhookResult> {
+  const target = send.step.target;
+  const cms = target === 'webhook' ? t('yourWebhook') : (CMS_NAMES[target] ?? target);
   const secret = process.env.CRON_SECRET;
-  if (!secret || send.step.kind === 'webhook' || send.step.target === 'webhook') {
+  if (!secret) {
     await releaseGoLive(send.reservationId, 'not sent: no internal route for it');
     return { ok: false, reason: 'failed', message: t('notSent') };
   }
@@ -134,6 +139,9 @@ export async function sendOnItsOwn(
     // A page live already stays the editor's; the CMS didn't publish it (it stays a draft there).
     if (code === 'live_item') return { ok: false, reason: 'live_item', message: why };
     if (code === 'in_progress') return { ok: false, reason: 'conflict', message: why };
+    // A webhook send the agent made already: a POST isn't an update, so it never goes twice.
+    if (code === 'already_sent')
+      return { ok: false, reason: 'conflict', message: t('alreadySent') };
     if (res.status === 404) return { ok: false, reason: 'not_found', message: why };
     if (res.status === 400 || res.status === 422)
       return { ok: false, reason: 'invalid', message: why };
@@ -144,12 +152,9 @@ export async function sendOnItsOwn(
     const why = delivery?.error || t('notSent');
     return { ok: false, reason: 'failed', message: t('refused', { cms, why }) };
   }
+  if (target === 'webhook') return { ok: true, target, status: delivery.status ?? 'queued' };
   if (send.step.kind === 'publish') {
-    return {
-      ok: true,
-      target: target as Exclude<ChatCmsTarget, 'framer'>,
-      url: delivery.published_url ?? null,
-    };
+    return { ok: true, target: target as PublishCmsTarget, url: delivery.published_url ?? null };
   }
   return {
     ok: true,

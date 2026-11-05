@@ -195,7 +195,9 @@ async function activeAgents(ids: readonly string[]): Promise<Map<string, FiringA
         'id, organization_id, owner_id, version, max_run_share, max_month_share, activated_at',
       )
       .in('id', slice)
-      .eq('status', 'active');
+      .eq('status', 'active')
+      // The demo brand's sample agents never fire (00475).
+      .is('demo_brand_id', null);
     if (error) throw new Error(`Could not read the agents: ${error.message}`);
     rows.push(...((data ?? []) as typeof rows));
   }

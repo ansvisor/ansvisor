@@ -20,6 +20,11 @@ import {
 import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actions/citations';
 import { getShoppingKpis } from '@/lib/actions/shopping';
 import { type SourceCategory } from '@/lib/citations/classify';
+import {
+  AUDIT_SNAPSHOT_ROWS,
+  auditSnapshotFrom,
+  type AuditSnapshotRow,
+} from '@/lib/reports/audit-score';
 import { stripEntityMarkup } from '@/lib/entity-markup';
 import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { LOW_SAMPLE_VISITS } from '@/lib/traffic-change';
@@ -159,10 +164,17 @@ export interface ReportShoppingVisibility {
 
 export interface ReportAuditScore {
   url: string;
+  /** 0–100 points when `scale` is 100; on older reports, the 0–1 score rounded to one decimal. */
   totalScore: number | null;
-  /** The prior completed audit's score, for the delta; null when first audit. */
+  /**
+   * The same page's audit before, for the change; null when it is the page's
+   * first. On older reports (no `scale`), the brand's audit before, which
+   * could be another page's.
+   */
   previousScore: number | null;
   auditedAt: string;
+  /** 100 on reports saved since the scores are 0–100 points. Absent on older reports. */
+  scale?: 100;
 }
 
 /** Prompt-level Visibility Rate KPI (#492) — mirrors the Insights dashboard's headline metric. */
@@ -565,8 +577,9 @@ async function getShoppingSnapshot(
 }
 
 /**
- * Latest completed Site Audit as of the period end, with the prior audit's
- * score for the delta. Audits aren't period-bound like the other metrics, so
+ * Latest completed Site Audit as of the period end, with the score of the
+ * same page's audit before it for the change, both on the 0–100 scale the
+ * audit report shows. Audits aren't period-bound like the other metrics, so
  * "as of dateTo" keeps historical reports honest. A partial audit (its
  * AI-judged signals didn't run) is never compared, so it's left out.
  */
@@ -574,23 +587,15 @@ async function getAuditSnapshot(brandId: string, dateTo: string): Promise<Report
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('site_audits')
-    .select('url, total_score, created_at')
+    .select('url, final_url, total_score, created_at')
     .eq('brand_id', brandId)
     .eq('status', 'completed')
     .eq('partial', false)
     .lte('created_at', dateTo)
     .order('created_at', { ascending: false })
-    .limit(2);
+    .limit(AUDIT_SNAPSHOT_ROWS);
   if (error) throw new Error(error.message);
-  if (!data || data.length === 0) return null;
-
-  const [latest, prior] = data;
-  return {
-    url: latest.url as string,
-    totalScore: latest.total_score === null ? null : round1(Number(latest.total_score)),
-    previousScore: prior && prior.total_score !== null ? round1(Number(prior.total_score)) : null,
-    auditedAt: latest.created_at as string,
-  };
+  return auditSnapshotFrom((data ?? []) as AuditSnapshotRow[]);
 }
 
 /**

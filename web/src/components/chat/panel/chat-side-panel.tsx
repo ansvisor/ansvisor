@@ -18,7 +18,7 @@ import {
   reopenChatId,
   type PanelSize,
 } from '@/lib/chat/panel';
-import type { ChatThread, ThreadMessage } from '@/lib/chat/thread';
+import type { ChatThread } from '@/lib/chat/thread';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -27,6 +27,7 @@ import { ChatPanelMenu, RenameField } from '../chat-menus';
 import { ChatThreadView } from '../chat-thread-view';
 import { shortcutLabel, useIsMac } from '../chat-shortcuts';
 import { useChatPanel } from './chat-panel-context';
+import { readThread } from './read-thread';
 
 /** What the panel shows under its header. */
 type PanelView =
@@ -56,29 +57,6 @@ function forget() {
   } catch {
     // Storage blocked: nothing kept.
   }
-}
-
-/**
- * One chat with its messages and runs, and its row (the ⋯ menu's), as the
- * panel opens it; null when it isn't there for them.
- */
-async function readThread(id: string): Promise<{ thread: ChatThread; row: ChatListItem } | null> {
-  const res = await fetch(`/api/chat/conversations/${id}`, { cache: 'no-store' }).catch(() => null);
-  const body = (await res?.json().catch(() => null)) as
-    | { ok: true; chat: ChatListItem; messages: ThreadMessage[] }
-    | { ok: false }
-    | null;
-  if (!res?.ok || !body?.ok) return null;
-  return {
-    thread: {
-      conversationId: body.chat.id,
-      title: body.chat.title,
-      brandId: null,
-      mine: body.chat.mine,
-      messages: body.messages,
-    },
-    row: body.chat,
-  };
 }
 
 /** A chat just started in the panel, as its row reads before Chat names it. */

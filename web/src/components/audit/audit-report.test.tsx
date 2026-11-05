@@ -33,7 +33,7 @@ const rec = (over: Partial<AuditRecommendation> = {}): AuditRecommendation => ({
 const audit = (
   recommendations: AuditRecommendation[],
   previous: Partial<
-    Pick<AuditResult, 'previousScore' | 'previousCreatedAt' | 'signals' | 'partial'>
+    Pick<AuditResult, 'previousScore' | 'previousCreatedAt' | 'signals' | 'partial' | 'pageTrend'>
   > = {},
 ): AuditResult => ({
   id: 'a1',
@@ -74,7 +74,7 @@ let root: Root;
 function render(
   recommendations: AuditRecommendation[],
   previous: Partial<
-    Pick<AuditResult, 'previousScore' | 'previousCreatedAt' | 'signals' | 'partial'>
+    Pick<AuditResult, 'previousScore' | 'previousCreatedAt' | 'signals' | 'partial' | 'pageTrend'>
   > = {},
 ) {
   act(() => {
@@ -189,6 +189,39 @@ describe('AuditReport partial audit', () => {
     render([]);
     expect(container.textContent).not.toContain(PARTIAL);
     expect(container.textContent).not.toContain(NO_CREDIT);
+  });
+});
+
+describe('AuditReport score range', () => {
+  const mark = () => container.querySelector('[data-slot=score-range]');
+
+  it("shows the range beside the score, from the page's own audits, and says what it means", () => {
+    render([], { pageTrend: [0.62, 0.66, 0.63] });
+    expect(mark()?.textContent).toBe('± 2');
+    expect(mark()?.parentElement?.textContent).toBe('63± 2');
+    const tip = "This page's last 3 audits scored 62 to 66, changes to the page included.";
+    expect(mark()?.getAttribute('title')).toBe(tip);
+    // Written out once beside the gauge, so screen readers hear it once.
+    expect(container.textContent?.split(tip)).toHaveLength(2);
+  });
+
+  it('says the audits scored the same when the range is ± 0', () => {
+    render([], { pageTrend: [0.63, 0.63, 0.63] });
+    expect(mark()?.textContent).toBe('± 0');
+    expect(container.textContent).toContain("This page's last 3 audits all scored 63.");
+  });
+
+  it('shows no range with too few audits, or on a partial audit', () => {
+    render([], { pageTrend: [0.6, 0.63] });
+    expect(mark()).toBeNull();
+    expect(container.textContent).not.toContain('±');
+
+    render([]);
+    expect(mark()).toBeNull();
+
+    render([], { partial: true, pageTrend: [0.62, 0.66, 0.63] });
+    expect(mark()).toBeNull();
+    expect(container.textContent).not.toContain("This page's last");
   });
 });
 

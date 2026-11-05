@@ -960,6 +960,26 @@ describe('getContentDraft', () => {
     await expect(getContentDraft(DRAFT)).resolves.toMatchObject({ schemaLeftOut: true });
   });
 
+  it('says whether the chat that made the draft is the member’s own (W4-16)', async () => {
+    const base = {
+      id: DRAFT,
+      brand_id: 'b1',
+      title: '',
+      page_type: 'guide',
+      method: 'create',
+      body_html: '',
+    };
+    row = { ...base, conversation: { id: 'c1', title: 'Pricing FAQ', user_id: 'u1' } };
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({
+      conversation: { id: 'c1', title: 'Pricing FAQ', mine: true },
+    });
+    expect(calls[0].columns).toContain('(id, title, user_id)');
+    row = { ...base, conversation: { id: 'c1', title: 'Pricing FAQ', user_id: 'u2' } };
+    await expect(getContentDraft(DRAFT)).resolves.toMatchObject({
+      conversation: { id: 'c1', mine: false },
+    });
+  });
+
   it('reads nothing for a malformed id', async () => {
     await expect(getContentDraft('../etc')).resolves.toBeNull();
     expect(calls).toEqual([]);

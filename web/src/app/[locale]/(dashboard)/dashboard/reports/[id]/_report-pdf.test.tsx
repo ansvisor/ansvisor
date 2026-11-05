@@ -86,9 +86,9 @@ afterEach(() => {
   container.remove();
 });
 
-async function draw(branding: ReportBranding | null) {
+async function draw(branding: ReportBranding | null, drawn: Report = report) {
   await act(async () =>
-    root.render(<ReportPdfDocument report={report} branding={branding} fontFamily="Inter-1" />),
+    root.render(<ReportPdfDocument report={drawn} branding={branding} fontFamily="Inter-1" />),
   );
   return container;
 }
@@ -133,5 +133,48 @@ describe('ReportPdfDocument', () => {
     const pdf = await draw({ ...kit, companyName: null });
     expect(pdf.firstElementChild!.getAttribute('data-author')).toBe('');
     expect(pdf.textContent).not.toMatch(/ansvisor/i);
+  });
+});
+
+describe('ReportPdfDocument › Site Audit Score', () => {
+  const withAudit = (auditScore: NonNullable<Report['payload']['auditScore']>): Report => ({
+    ...report,
+    payload: { ...report.payload, auditScore },
+  });
+  const section = (pdf: HTMLElement) =>
+    [...pdf.querySelectorAll('div')].find((d) =>
+      d.firstElementChild?.textContent?.startsWith('Site Audit Score'),
+    );
+
+  it('shows the score in points, and the change since the same page’s audit before', async () => {
+    const pdf = await draw(
+      null,
+      withAudit({
+        url: 'https://shop.com/bags',
+        totalScore: 58,
+        previousScore: 63,
+        auditedAt: '2026-10-30T00:00:00Z',
+        scale: 100,
+      }),
+    );
+    const text = section(pdf)!.textContent!;
+    expect(text).toContain('58-5');
+    expect(text).not.toContain('%');
+  });
+
+  it('shows a report saved on the 0–1 scale as about that many points, with no change', async () => {
+    const pdf = await draw(
+      null,
+      withAudit({
+        url: 'https://shop.com/bags',
+        totalScore: 0.6,
+        previousScore: 0.6,
+        auditedAt: '2026-10-30T00:00:00Z',
+      }),
+    );
+    const text = section(pdf)!.textContent!;
+    expect(text).toContain('~60');
+    expect(text).not.toContain('0.6');
+    expect(text).not.toContain('+0');
   });
 });

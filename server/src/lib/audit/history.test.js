@@ -6,6 +6,7 @@ import {
   findPreviousCompletedAudit,
   pageKey,
   pageStatus,
+  pageTrendUpTo,
   parseListPage,
   LIST_DEFAULT_LIMIT,
   LIST_MAX_LIMIT,
@@ -399,5 +400,52 @@ describe('findPreviousCompletedAudit', () => {
         'unscored',
       ),
     ).toBeNull();
+  });
+});
+
+describe('pageTrendUpTo', () => {
+  const row = (id, created_at, total_score, over = {}) => ({
+    id,
+    url: 'https://acme.com/pricing',
+    final_url: 'https://acme.com/pricing',
+    status: 'completed',
+    total_score,
+    created_at,
+    ...over,
+  });
+  const day = (d) => `2026-10-${String(d).padStart(2, '0')}T09:00:00Z`;
+
+  it("reads the page's completed scores up to the audit, oldest first, ending with it", () => {
+    const rows = [
+      row('later', day(20), '0.9'),
+      row('current', day(14), '0.64'),
+      row('other-page', day(13), '0.2', { url: 'https://acme.com/blog', final_url: null }),
+      row('failed', day(12), null, { status: 'failed' }),
+      row('partial', day(11), '0.4', { partial: true }),
+      row('b', day(10), '0.62'),
+      row('www', day(5), '0.66', { url: 'https://www.acme.com/pricing/', final_url: null }),
+    ];
+    expect(pageTrendUpTo(rows, 'current')).toEqual([0.66, 0.62, 0.64]);
+  });
+
+  it('stops at the Pages list trend length', () => {
+    const rows = Array.from({ length: PAGE_TREND_POINTS + 4 }, (_, i) =>
+      row(`a${i}`, day(25 - i), String(0.5 + i / 100)),
+    );
+    const trend = pageTrendUpTo(rows, 'a0');
+    expect(trend).toHaveLength(PAGE_TREND_POINTS);
+    expect(trend.at(-1)).toBe(0.5);
+  });
+
+  it('is empty for an audit that is never compared: partial, unfinished or not found', () => {
+    const rows = [
+      row('partial', day(14), '0.7', { partial: true }),
+      row('running', day(13), null, { status: 'running' }),
+      row('older', day(10), '0.6'),
+    ];
+    expect(pageTrendUpTo(rows, 'partial')).toEqual([]);
+    expect(pageTrendUpTo(rows, 'running')).toEqual([]);
+    expect(pageTrendUpTo(rows, 'missing')).toEqual([]);
+    expect(pageTrendUpTo(rows, 'older')).toEqual([0.6]);
   });
 });
