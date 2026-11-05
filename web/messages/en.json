@@ -3502,6 +3502,7 @@
     "reports": { "name": "Read reports", "step": "Read Reports" },
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
+    "fanoutGaps": { "name": "Read fan-out gaps", "step": "Read fan-out gaps" },
     "aiAnswers": { "name": "Read a prompt's AI answers", "step": "Read AI answers" },
     "promptInsights": { "name": "Read prompt insights", "step": "Read Prompts · Insights" },
     "overviewSummary": { "name": "Read the brand overview", "step": "Read Brand Visibility" },
@@ -3511,6 +3512,10 @@
       "step": "Read Getting started"
     },
     "gscSummary": { "name": "Read Google Search Console", "step": "Read Search Console" },
+    "gscQueries": {
+      "name": "Read Google Search Console queries",
+      "step": "Read Search Console queries"
+    },
     "gaSummary": { "name": "Read Google Analytics", "step": "Read Google Analytics" },
     "members": { "name": "Read team members", "step": "Read Team" },
     "connections": { "name": "Read connected tools", "step": "Read Integrations" },
@@ -6261,7 +6266,9 @@
       "listings": "Listing gaps",
       "rivals": "Rival brief",
       "audit-fix": "Site audit fixes",
-      "setup": "Setup guide"
+      "setup": "Setup guide",
+      "fanout": "Fan-out gaps",
+      "prompts": "Prompt portfolio"
     },
     "form": {
       "titleNew": "New agent",
@@ -6675,8 +6682,6 @@
       "soon": "Soon",
       "needsLine": "Needs {what}",
       "needs": {
-        "fanout_skill": "the /fanout skill",
-        "prompts_skill": "the /prompts skill",
         "catalog_trigger": "a catalog sync trigger",
         "publish_trigger": "a page-published trigger",
         "sub_agents": "sub-agents",

@@ -32,6 +32,7 @@ export function TodayCard({
   /** Null while it loads, or when it couldn't be read: the card then stays away. */
   read: TodayRead | null;
   loading: boolean;
+  /** The page's list, whose copy of an item's action is the latest when it holds one. */
   actions: ActionItem[];
   /** Getting started's steps while it runs; null otherwise. */
   steps: GettingStartedStep[] | null;

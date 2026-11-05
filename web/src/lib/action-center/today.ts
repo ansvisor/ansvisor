@@ -9,8 +9,9 @@ import { dayIn, startOfDayIn } from '@/lib/time-zone';
  *
  * The order is the server's (GET /api/action-center/today): the ranking of
  * the Inbox's daily suggestion (CHAT-26), with today's suggestion first.
- * Nothing here ranks; this joins the order with the list the page holds and
- * says who does each item's first step.
+ * Nothing here ranks; this says who does each item's first step. Each item
+ * carries its own action, read with the order, so the card never depends on
+ * the page's list, which holds at most 1000 actions in no order.
  */
 
 /** Getting started's steps shown on the card while it runs. */
@@ -28,8 +29,13 @@ export interface TodayStep {
   url: string | null;
 }
 
-export interface TodayItem {
+/** A ranked item: its action as the Actions list reads it, read with the order. */
+export interface TodayNextItem {
   id: string;
+  action: ActionItem;
+}
+
+export interface TodayItem extends TodayNextItem {
   /** The Inbox's daily suggestion for the person today. */
   suggested: boolean;
   firstStep: TodayStep | null;
@@ -39,7 +45,7 @@ export interface TodayItem {
 export interface TodayRead {
   today: TodayItem[];
   /** The Next 7, in order. */
-  next: { id: string }[];
+  next: TodayNextItem[];
   /** The brand's actions completed since Monday, in the person's time zone. */
   doneThisWeek: number;
 }
@@ -115,19 +121,41 @@ export function weekStart(now: Date, timeZone: string): string {
 const TODAY_STATUSES: readonly string[] = ['new', 'in_progress'];
 
 /**
- * The card's rows: each item with its action from the page's list, in the
- * server's order. One the list no longer holds, or holds closed or on hold
- * since, is left out until the order is read again.
+ * The card's rows, in the server's order: each item with its action. The
+ * page's copy is taken when its list holds one, as a change made on the page
+ * shows there at once; else the item's own, so an action the list doesn't
+ * hold still shows. One closed or on hold since is left out until the order
+ * is read again.
  */
-export function todayRows<T extends { id: string }>(
+export function todayRows<T extends TodayNextItem>(
   items: readonly T[],
   actions: readonly ActionItem[],
 ): { item: T; action: ActionItem }[] {
   const byId = new Map(actions.map((action) => [action.id, action]));
   return items.flatMap((item) => {
-    const action = byId.get(item.id);
-    return action && TODAY_STATUSES.includes(action.status) ? [{ item, action }] : [];
+    const action = byId.get(item.id) ?? item.action;
+    return TODAY_STATUSES.includes(action.status) ? [{ item, action }] : [];
   });
+}
+
+/**
+ * An item's own action, by id, or null: the drawer opens it from here when
+ * the page's list doesn't hold it.
+ */
+export function todayAction(read: TodayRead | null, id: string | null): ActionItem | null {
+  if (!read || !id) return null;
+  return [...read.today, ...read.next].find((item) => item.id === id)?.action ?? null;
+}
+
+/**
+ * The read with a change made on the page shown on that item's own action,
+ * as the page's list shows it; the same read when no item is that action.
+ */
+export function patchToday(read: TodayRead, id: string, patch: Partial<ActionItem>): TodayRead {
+  if (![...read.today, ...read.next].some((item) => item.id === id)) return read;
+  const patched = <T extends TodayNextItem>(item: T): T =>
+    item.id === id ? { ...item, action: { ...item.action, ...patch } } : item;
+  return { ...read, today: read.today.map(patched), next: read.next.map(patched) };
 }
 
 /** Getting started's next steps for the card: the ones ready now ('new'), in order. */
