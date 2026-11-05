@@ -18,7 +18,6 @@
   "connections": [],
   "status": "soon",
   "needs": [
-    "seasonal_skill",
-    "prompts_skill"
+    "seasonal_skill"
   ]
 }

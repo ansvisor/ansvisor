@@ -15,6 +15,8 @@ interface QueryState {
   range?: [number, number];
   /** The single-row lookup (lastFanoutAt): `.not(…).limit(1).maybeSingle()`. */
   single?: boolean;
+  /** What the read selects. */
+  columns?: string;
 }
 
 const SET_ID = 'set-1';
@@ -23,6 +25,10 @@ type ResultRow = {
   prompt_id: string | null;
   platform: string | null;
   search_queries: unknown;
+  /** Who the answer named, for `presence`. */
+  mention_count?: number;
+  citation_count?: number;
+  competitor_mentions?: unknown;
 };
 
 type PromptRow = { id: string; text: string; is_active: boolean };
@@ -82,7 +88,10 @@ function resolveQuery(state: QueryState): {
 function fakeQueryBuilder(table: string) {
   const state: QueryState = { table, eq: {} };
   const builder = {
-    select: () => builder,
+    select: (columns?: string) => {
+      state.columns = columns;
+      return builder;
+    },
     eq: (column: string, value: unknown) => {
       state.eq[column] = value;
       return builder;
@@ -395,5 +404,72 @@ describe('getQueryFanout — engines', () => {
       lastFanoutAt: null,
     });
     expect(calls.filter((c) => c.single)).toHaveLength(0);
+  });
+});
+
+describe('getQueryFanout — who the answers named (presence)', () => {
+  const named = (
+    queries: unknown,
+    brand: { mention_count?: number; citation_count?: number },
+    rivals: unknown = [],
+    platform = 'copilot',
+  ): ResultRow => ({
+    ...answer('p-loud', queries, platform),
+    ...brand,
+    competitor_mentions: rivals,
+  });
+  const rival = (name: string, mention_count: number, citation_count = 0) => ({
+    name,
+    mention_count,
+    citation_count,
+    visibility_score: 0,
+  });
+
+  it('reads only the fan-out columns unless presence is asked for', async () => {
+    const { getQueryFanout } = await import('./fanout');
+
+    const plain = await getQueryFanout('brand-1');
+    expect(plain.subQueries.every((s) => s.presence === undefined)).toBe(true);
+    const reads = calls.filter((c) => c.table === 'prompt_results' && !c.single);
+    expect(reads.map((c) => c.columns)).toEqual(['prompt_id, platform, search_queries']);
+
+    calls = [];
+    await getQueryFanout('brand-1', { presence: true });
+    expect(calls.find((c) => c.table === 'prompt_results')?.columns).toBe(
+      'prompt_id, platform, search_queries, mention_count, citation_count, competitor_mentions',
+    );
+  });
+
+  it('counts the answers that named or cited the brand, and each competitor, once an answer', async () => {
+    resultRows = [
+      // Named by name: present.
+      named([q('aeo tools')], { mention_count: 2 }, [rival('Rival A', 1)]),
+      // Cited only: present too.
+      named([q('aeo tools'), q('Aeo  Tools')], { citation_count: 1 }, [rival('Rival A', 0, 1)]),
+      // Absent, with two competitors named, one of them twice in the list.
+      named([q('aeo pricing')], {}, [
+        rival('Rival B', 1),
+        rival('Rival B', 2),
+        rival('Rival A', 3),
+      ]),
+      named([q('aeo pricing')], { mention_count: 0, citation_count: 0 }, [rival('Rival A', 1)]),
+      // A competitor counted with nothing named, and rows with no usable names.
+      named([q('aeo pricing')], {}, [rival('Rival C', 0), { mention_count: 4 }, null]),
+      named([q('aeo glossary')], {}, null),
+    ];
+    const { getQueryFanout } = await import('./fanout');
+
+    const { subQueries } = await getQueryFanout('brand-1', { presence: true });
+    const of = (query: string) => subQueries.find((s) => s.query === query)?.presence;
+
+    expect(of('aeo tools')).toEqual({ brandAnswers: 2, rivals: [{ name: 'Rival A', answers: 2 }] });
+    expect(of('aeo pricing')).toEqual({
+      brandAnswers: 0,
+      rivals: [
+        { name: 'Rival A', answers: 2 },
+        { name: 'Rival B', answers: 1 },
+      ],
+    });
+    expect(of('aeo glossary')).toEqual({ brandAnswers: 0, rivals: [] });
   });
 });
