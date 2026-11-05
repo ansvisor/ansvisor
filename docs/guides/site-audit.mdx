@@ -99,7 +99,7 @@ Each audit has its own report at `/dashboard/audit/[id]`. The icons at the top r
 
 The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40–69) or **Poor** (below 40). Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 48 signals were evaluated.
 
-Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits (partial ones aren't counted), rounded up. A line beside it gives those two scores. It's worked out from the page's own audits, with no AI call. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five; a page that didn't change usually shows ± 0. The Pages export has it as its last column, `score_range`.
+Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits (partial ones aren't counted), rounded up. A line beside it gives those two scores. It's worked out from the page's own audits, with no AI call. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five; a page that didn't change usually shows ± 0. The Pages export has it as its last column, `score_range`. Chat, the MCP `get_site_audit` tool (`scoreRange`) and a report's **Site Audit Score** give the same range, the report's from the page's audits up to its end date.
 
 ### Categories
 

@@ -178,6 +178,74 @@ describe('ReportDetailPage › Site Audit Score', () => {
     expect(card.textContent).toContain('https://shop.com/bags');
   });
 
+  it('shows the score’s range from the page’s own audits, and says what it means', async () => {
+    getReport.mockResolvedValue({
+      ...report,
+      payload: {
+        ...report.payload,
+        auditScore: {
+          url: 'https://shop.com/bags',
+          totalScore: 64,
+          previousScore: 62,
+          auditedAt: '2026-10-30T00:00:00Z',
+          scale: 100,
+          range: { plusMinus: 2, low: 62, high: 66, audits: 5 },
+        },
+      },
+    });
+    await render();
+    const card = auditCard()!;
+    expect(card.querySelector('[data-slot="score-range"]')?.textContent).toBe('± 2');
+    expect(card.textContent).toContain('64± 2+2');
+    expect(card.textContent).toContain(
+      "This page's last 5 audits scored 62 to 66, changes to the page included.",
+    );
+  });
+
+  it('says the audits scored the same when the range is ± 0', async () => {
+    getReport.mockResolvedValue({
+      ...report,
+      payload: {
+        ...report.payload,
+        auditScore: {
+          url: 'https://shop.com/bags',
+          totalScore: 64,
+          previousScore: 64,
+          auditedAt: '2026-10-30T00:00:00Z',
+          scale: 100,
+          range: { plusMinus: 0, low: 64, high: 64, audits: 3 },
+        },
+      },
+    });
+    await render();
+    const card = auditCard()!;
+    expect(card.querySelector('[data-slot="score-range"]')?.textContent).toBe('± 0');
+    expect(card.textContent).toContain("This page's last 3 audits all scored 64.");
+  });
+
+  it('shows no range on a report saved before it, or with too few audits', async () => {
+    for (const range of [undefined, null]) {
+      getReport.mockResolvedValue({
+        ...report,
+        payload: {
+          ...report.payload,
+          auditScore: {
+            url: 'https://shop.com/bags',
+            totalScore: 64,
+            previousScore: 60,
+            auditedAt: '2026-10-30T00:00:00Z',
+            scale: 100,
+            ...(range === undefined ? {} : { range }),
+          },
+        },
+      });
+      await render();
+      const card = auditCard()!;
+      expect(card.textContent).toContain('64+4');
+      expect(card.textContent).not.toContain('±');
+    }
+  });
+
   it('shows a report saved on the 0–1 scale as about that many points, with no change', async () => {
     getReport.mockResolvedValue({
       ...report,
@@ -196,5 +264,6 @@ describe('ReportDetailPage › Site Audit Score', () => {
     expect(card.textContent).toContain('~60');
     expect(card.textContent).not.toContain('0.6');
     expect(card.textContent).not.toMatch(/[+-]\d/);
+    expect(card.textContent).not.toContain('±');
   });
 });

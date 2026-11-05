@@ -61,4 +61,21 @@ describe('reportPdf', () => {
     expect(turkish).toContain(squash(summary));
     expect(Font.getRegisteredFontFamilies()).toHaveLength(families);
   }, 30_000);
+
+  it('prints the Site Audit score’s range, its ± included', async () => {
+    const withRange = report('October report', 'Brewline', 'Visibility rose.');
+    withRange.payload.auditScore = {
+      url: 'https://shop.com/bags',
+      totalScore: 64,
+      previousScore: 62,
+      auditedAt: '2026-10-30T00:00:00Z',
+      scale: 100,
+      range: { plusMinus: 2, low: 62, high: 66, audits: 5 },
+    };
+    const text = await shown(await reportPdf(withRange, null, FONTS));
+    expect(text).toContain('64±2+2');
+    expect(text).toContain(
+      squash("This page's last 5 audits scored 62 to 66, changes to the page included."),
+    );
+  }, 30_000);
 });
