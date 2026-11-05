@@ -296,3 +296,67 @@ describe('a signal’s finding', () => {
     expect(open()).toEqual(['']);
   });
 });
+
+describe('evidence levels (SA-010)', () => {
+  const llms = signal({
+    key: 'llms-txt-presence',
+    category: 'trust',
+    status: 'fail',
+    score: 0,
+    label: 'llms.txt presence',
+    impactTier: 'medium',
+    evidenceLevel: 'informational',
+    evidenceNote:
+      'Weak evidence: Ahrefs found 97% of llms.txt files are never requested, and Google says it has no effect.',
+  });
+  const fresh = signal({
+    key: 'freshness',
+    category: 'authority',
+    label: 'Freshness',
+    impactTier: 'standard',
+    evidenceLevel: 'strong',
+  });
+
+  it('labels each signal with its evidence level, not its impact tier', () => {
+    render([], { signals: [fresh, signal({ evidenceLevel: 'hygiene' })] });
+    const rows = [...container.querySelectorAll('button[aria-controls]')].map((b) => b.textContent);
+    // Content's card comes before Authority's.
+    expect(rows).toEqual(['ReadabilityHygiene / informational', 'FreshnessStrong evidence']);
+    expect(container.textContent).not.toContain('standard');
+  });
+
+  it('marks llms.txt as not in the score, with its evidence note', () => {
+    render([], { signals: [llms] });
+    const row = container.querySelector<HTMLButtonElement>(
+      'button[aria-controls="signal-panel-llms-txt-presence"]',
+    );
+    expect(row?.textContent).toBe('llms.txt presenceNot in the scoreHygiene / informational');
+    act(() => row?.click());
+    expect(container.querySelector('#signal-panel-llms-txt-presence')?.textContent).toContain(
+      'Evidence: Weak evidence: Ahrefs found 97% of llms.txt files are never requested, and Google says it has no effect. Not in the score.',
+    );
+  });
+
+  it('shows an older payload without evidence levels with no badge', () => {
+    render([], { signals: [signal({ evidenceLevel: undefined })] });
+    expect(container.querySelector('button[aria-controls]')?.textContent).toBe('Readability');
+  });
+
+  it('opens the Formula panel with the category weights, the levels and what is left out', () => {
+    render([], { signals: [fresh, llms] });
+    const button = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Formula',
+    );
+    act(() => button?.click());
+    const text = document.querySelector('[role="dialog"]')?.textContent ?? '';
+    expect(text).toContain('How the score is worked out');
+    for (const weight of ['Structure25%', 'Content25%', 'Authority20%', 'E-E-A-T20%', 'Trust10%']) {
+      expect(text).toContain(weight);
+    }
+    expect(text).toContain('Strong evidence: Studies tie it to AI citations or crawling.');
+    expect(text).toContain('Likely helps: ');
+    expect(text).toContain('Hygiene / informational: ');
+    expect(text).toContain("The level doesn't change its weight.");
+    expect(text).toContain('Not in the scorellms.txt presence: shown for information only.');
+  });
+});
