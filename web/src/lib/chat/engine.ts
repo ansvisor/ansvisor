@@ -18,6 +18,7 @@ import { fitChatUnits, meteredAs, reserveChatStep, type ChatStepUsage } from './
 import { buildDenial } from './denial';
 import { KeyFailureError, ProviderDownError, stepFailure, type RunKeyFailure } from './engine-key';
 import {
+  ModelProviderOffError,
   estimateInputTokens,
   resolveChatModels,
   type ChatModels,
@@ -242,7 +243,13 @@ import {
   runChoiceOf,
   type ChatModelChoice as RunModelChoice,
 } from './models';
-import { readModelMenu } from './model-menu';
+import { readModelMenu, readProviderChoices } from './model-menu';
+import {
+  MODEL_PROVIDERS,
+  PROVIDERS_OFF,
+  modelProviderOn,
+  type ModelProviderChoices,
+} from './model-providers';
 import type { PlanFacts } from './plan-facts';
 
 /**
@@ -905,8 +912,11 @@ type Progress = RunProgress & {
   scope?: MessageScope;
   /** The picked model was checked against the catalog once (W4-03). */
   modelChecked?: boolean;
-  /** The catalog dropped the picked model: the run takes Auto, and says so once. */
-  modelDropped?: boolean;
+  /**
+   * The picked model can't run: the catalog dropped it, or an Admin turned
+   * its provider off (W4-34). The run takes Auto, and says so once.
+   */
+  modelDropped?: boolean | 'catalog' | 'provider';
   modelNoted?: boolean;
   /** An Admin chose "Use Ansvisor's limit" after the own key failed (W4-06). */
   ansvisorKey?: boolean;
@@ -1175,16 +1185,29 @@ async function openContext(
     mode: run.mode,
     surface: 'chat',
   });
+  // The Admin's model providers (W4-34), for a pick and for the own key's model alike.
+  const providers = ctx ? await runProviderChoices(run.organizationId) : {};
   // The menu's pick, checked again against the plan as it is now (W4-03).
-  const choice = ctx ? await runModelChoice(run, progress, ctx.plan) : AUTO_CHOICE;
+  const choice = ctx ? await runModelChoice(run, progress, ctx.plan, providers) : AUTO_CHOICE;
   let models: ChatModels | null = null;
   try {
     models = ctx
       ? await resolveChatModels(actor.organizationId, choice, {
           ansvisorOnly: progress.ansvisorKey === true,
+          providers,
         })
       : null;
   } catch (err) {
+    if (err instanceof ModelProviderOffError) {
+      const name = MODEL_PROVIDERS.find((p) => p.id === err.provider)?.name;
+      await endInError(
+        run,
+        sink,
+        workedMs(base),
+        name ? t('error.keyProviderOff', { provider: name }) : t('error.keyProviderUnknown'),
+      );
+      return null;
+    }
     if (!(err instanceof OwnKeyUnreadableError)) throw err;
     // Marked failing where it was found (key.ts); the run stops on it, never on Ansvisor's key.
     const failure = {
@@ -1270,16 +1293,36 @@ async function runModelChoice(
   run: LoadedRun,
   progress: Progress,
   plan: PlanFacts,
+  providers: ModelProviderChoices,
 ): Promise<RunModelChoice> {
   const choice = runChoiceOf({ model: run.model, effort: run.effort }, modelChoiceOpen(plan));
   if (choice.model === AUTO_MODEL) return choice;
   if (progress.modelDropped) return { ...choice, model: AUTO_MODEL };
   if (progress.modelChecked) return choice;
   progress.modelChecked = true;
+  // A provider the Admin turned off (W4-34): for a chat, an agent and a scheduled run alike.
+  if (!modelProviderOn(providers, choice.model)) {
+    progress.modelDropped = 'provider';
+    return { ...choice, model: AUTO_MODEL };
+  }
   const menu = await readModelMenu({ selected: choice.model });
   if (!menu.selected?.removed) return choice;
-  progress.modelDropped = true;
+  progress.modelDropped = 'catalog';
   return { ...choice, model: AUTO_MODEL };
+}
+
+/**
+ * The Admin's model provider choices for a run (W4-34). A read that fails
+ * turns off every provider that can be turned off, never back to its
+ * default: the run takes Auto, or stops on an own key's model.
+ */
+async function runProviderChoices(organizationId: string): Promise<ModelProviderChoices> {
+  try {
+    return await readProviderChoices(organizationId);
+  } catch (err) {
+    console.error('[chat/engine] could not read the model providers:', err);
+    return PROVIDERS_OFF;
+  }
 }
 
 /** The one line a run says when its model was dropped: "Ran on Auto" (W4-03). */
@@ -1294,7 +1337,10 @@ async function modelDroppedStep(
     kind: 'check',
     status: 'done',
     label: t('step.modelDropped'),
-    detail: t('step.modelDroppedDetail'),
+    detail:
+      progress.modelDropped === 'provider'
+        ? t('step.modelProviderOffDetail')
+        : t('step.modelDroppedDetail'),
   });
   sink.emit('step.finished', { step: clientStep(row) });
 }

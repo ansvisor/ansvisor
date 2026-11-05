@@ -9,6 +9,7 @@ const ORG = '22222222-2222-4222-8222-222222222222';
 interface Call {
   table: string;
   op: string;
+  cols?: string;
   row?: unknown;
   opts?: unknown;
   filters: unknown[][];
@@ -20,6 +21,8 @@ let ctxThrows = false;
 /** The workspace's go-live columns (00443), and the error reading them (before it). */
 let goLiveRow: Record<string, unknown> | null = null;
 let goLiveError: { code: string; message: string } | null = null;
+/** The workspace's model provider choices (00469). */
+let providersRow: Record<string, unknown> | null = null;
 
 function from(table: string) {
   const call: Call = { table, op: 'select', filters: [] };
@@ -29,11 +32,16 @@ function from(table: string) {
       ? { data: { organization_id: ORG, full_name: 'Ada Admin' }, error: null }
       : table === 'organizations'
         ? { data: { name: 'Acme' }, error: null }
-        : table === 'chat_settings' && call.op === 'select'
-          ? { data: goLiveRow, error: goLiveError }
-          : { data: null, error: call.op === 'select' ? null : writeError };
+        : table === 'chat_settings' && call.op === 'select' && call.cols === 'model_providers'
+          ? { data: providersRow, error: null }
+          : table === 'chat_settings' && call.op === 'select'
+            ? { data: goLiveRow, error: goLiveError }
+            : { data: null, error: call.op === 'select' ? null : writeError };
   const chain: Record<string, unknown> = {
-    select: () => chain,
+    select: (cols?: string) => {
+      if (call.op === 'select') call.cols = cols;
+      return chain;
+    },
     upsert: (row: unknown, opts: unknown) =>
       Object.assign(call, { op: 'upsert', row, opts }) && chain,
     delete: () => Object.assign(call, { op: 'delete' }) && chain,
@@ -58,6 +66,8 @@ vi.mock('@/lib/supabase/admin', () => ({
     },
   },
 }));
+const logActivity = vi.hoisted(() => vi.fn(async () => 'log-1'));
+vi.mock('@/lib/chat/activity', () => ({ logActivity }));
 vi.mock('@/lib/chat/precedence-context', () => ({
   readPrecedenceContext: async () => {
     if (ctxThrows) throw new Error('db down');
@@ -72,6 +82,7 @@ const {
   setAutoGoLive,
   setChatSwitch,
   setManagerExecute,
+  setModelProvider,
   setToolPolicy,
 } = await import('./chat-settings');
 const { DEFAULT_CHAT_SETTINGS } = await import('@/lib/chat/precedence');
@@ -105,6 +116,8 @@ beforeEach(() => {
   ctx = context('growth');
   goLiveRow = null;
   goLiveError = null;
+  providersRow = null;
+  logActivity.mockClear();
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -320,5 +333,54 @@ describe('agents that publish on their own (AUTONOMOUS-GO-LIVE §7.1)', () => {
     expect(await setAutoGoLive(true, 1)).toEqual({ ok: false, failure: 'unavailable' });
     writeError = { message: 'boom' } as typeof MISSING;
     expect(await setAutoGoLive(true, 1)).toEqual({ ok: false, failure: 'failed' });
+  });
+});
+
+describe('model providers (W4-34)', () => {
+  it('shows each provider on or off, Anthropic locked on and DeepSeek off by default', async () => {
+    providersRow = { model_providers: { google: false } };
+    const result = await getChatSettingsView();
+    if (!result.ok) throw new Error('not ok');
+    expect(result.view.modelProviders).toEqual([
+      { id: 'anthropic', name: 'Anthropic', on: true, locked: true },
+      { id: 'openai', name: 'OpenAI', on: true, locked: false },
+      { id: 'google', name: 'Google', on: false, locked: false },
+      { id: 'deepseek', name: 'DeepSeek', on: false, locked: false },
+    ]);
+  });
+
+  it('turns a provider on or off for an Admin, keeping the others, and logs it', async () => {
+    providersRow = { model_providers: { google: false } };
+    expect(await setModelProvider('deepseek', true)).toEqual({ ok: true });
+    expect(upsert()?.row).toEqual({
+      organization_id: ORG,
+      model_providers: { google: false, deepseek: true },
+      updated_by: ME,
+    });
+    expect(logActivity).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: ORG,
+        userId: ME,
+        tool: { labelKey: 'modelProviders', class: 'write' },
+        approval: { kind: 'run' },
+        target: { type: 'chat_settings', id: ORG },
+        summary: { key: 'modelProviderOn', params: { provider: 'DeepSeek' } },
+      }),
+    );
+  });
+
+  it('keeps Anthropic on, refuses an unknown provider, and is an Admin’s', async () => {
+    expect(await setModelProvider('anthropic', false)).toEqual({ ok: false, failure: 'locked' });
+    expect(await setModelProvider('mistralai', true)).toEqual({ ok: false, failure: 'invalid' });
+    ctx = context('growth', 'manager');
+    expect(await setModelProvider('openai', false)).toEqual({ ok: false, failure: 'forbidden' });
+    expect(upsert()).toBeUndefined();
+    expect(logActivity).not.toHaveBeenCalled();
+  });
+
+  it('says the save failed, never throws, and logs nothing then', async () => {
+    writeError = { message: 'down' };
+    expect(await setModelProvider('openai', false)).toEqual({ ok: false, failure: 'failed' });
+    expect(logActivity).not.toHaveBeenCalled();
   });
 });

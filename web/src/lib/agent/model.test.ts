@@ -70,4 +70,14 @@ describe('buildAgentModel', () => {
     expect(headers.get('authorization')).toBe(`Bearer ${KEY}`);
     expect(headers.get('x-title')).toBe('Ansvisor');
   });
+
+  it('asks OpenRouter for providers that keep no data (W4-34)', async () => {
+    const model = buildAgentModel({
+      provider: 'openrouter',
+      apiKey: KEY,
+      settings: { model: 'openai/gpt-5.5' },
+    });
+    const { body } = await firstRequest(model);
+    expect(body.provider).toEqual({ data_collection: 'deny' });
+  });
 });

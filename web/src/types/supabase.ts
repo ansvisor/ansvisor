@@ -3465,6 +3465,7 @@ export type Database = {
           full_auto_for_members: boolean
           manager_execute_off: string[]
           memory_enabled: boolean
+          model_providers: Json
           organization_id: string
           own_key_agent_month_usd: number
           tool_policies: Json
@@ -3484,6 +3485,7 @@ export type Database = {
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
           memory_enabled?: boolean
+          model_providers?: Json
           organization_id: string
           own_key_agent_month_usd?: number
           tool_policies?: Json
@@ -3503,6 +3505,7 @@ export type Database = {
           full_auto_for_members?: boolean
           manager_execute_off?: string[]
           memory_enabled?: boolean
+          model_providers?: Json
           organization_id?: string
           own_key_agent_month_usd?: number
           tool_policies?: Json

@@ -22,6 +22,7 @@ import {
   resetToolPolicies,
   setChatSwitch,
   setAutoGoLive,
+  setModelProvider,
   setManagerExecute,
   setToolPolicy,
   type ChatSettingsView,
@@ -284,6 +285,50 @@ export function ChatSettingsSection() {
             </TableBody>
           </Table>
         </div>
+      </section>
+
+      <section className="space-y-2" data-slot="model-providers">
+        <div className="space-y-0.5">
+          <h3 className="text-sm font-semibold">{t('providers.title')}</h3>
+          <p className="text-xs text-muted-foreground">{t('providers.note')}</p>
+        </div>
+        <ul className="divide-y rounded-xl border">
+          {view.modelProviders.map((provider) => (
+            <li
+              key={provider.id}
+              data-provider={provider.id}
+              className="flex items-center gap-3 px-3.5 py-2.5 text-sm"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="font-medium">{provider.name}</span>
+                {(provider.locked || provider.id === 'deepseek') && (
+                  <span className="block text-xs text-muted-foreground">
+                    {t(provider.locked ? 'providers.lockedNote' : 'providers.deepseekNote')}
+                  </span>
+                )}
+              </span>
+              {isAdmin && !provider.locked ? (
+                <Switch
+                  checked={provider.on}
+                  label={provider.name}
+                  disabled={saving}
+                  onChange={(next) =>
+                    change(
+                      () => setModelProvider(provider.id, next),
+                      t(next ? 'providers.turnedOn' : 'providers.turnedOff', {
+                        provider: provider.name,
+                      }),
+                    )
+                  }
+                />
+              ) : (
+                <span className="text-xs font-medium">
+                  {provider.on ? t('switches.on') : t('switches.off')}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="space-y-2">

@@ -26,6 +26,14 @@ import {
 import { planCardOf, type PlanCard } from '@/lib/chat/access';
 import { qualityPhase } from '@/lib/content/quality';
 import { GO_LIVE_GROUPS, GO_LIVE_TERMS } from '@/lib/chat/go-live';
+import { logActivity } from '@/lib/chat/activity';
+import { readProviderChoices } from '@/lib/chat/model-menu';
+import {
+  MODEL_PROVIDERS,
+  isModelProvider,
+  providerOn,
+  type ModelProvider,
+} from '@/lib/chat/model-providers';
 
 /**
  * Settings › Chat (CHAT-20 §5, §8b; mockup #g-policy), behind CHAT_AGENTIC:
@@ -79,6 +87,8 @@ export interface ChatSettingsView {
   autoChoices: string[];
   /** Agents that publish on their own (AUTONOMOUS-GO-LIVE §7.1); null with its flag off or before 00443. */
   goLive: GoLiveView | null;
+  /** The model providers Chat may use (W4-34): on or off, Anthropic locked on. */
+  modelProviders: { id: ModelProvider; name: string; on: boolean; locked: boolean }[];
 }
 
 /** The workspace switch for agents going live on their own, as Settings › Chat shows it. */
@@ -164,12 +174,74 @@ export async function getChatSettingsView(): Promise<
         autoChoices: [...ctx.autoChoices].filter((key) => chatToolByKey(key)),
         // Hidden while staff haven't turned the feature on (CHAT_AUTO_GO_LIVE).
         goLive: autoGoLiveEnabled(me.organizationId) ? await readGoLive(me.organizationId) : null,
+        modelProviders: await readModelProviders(me.organizationId),
       },
     };
   } catch {
     return { ok: false, failure: 'failed' };
   }
 }
+
+/** Each model provider as the page shows it: on or off, and whether it can change. */
+async function readModelProviders(
+  organizationId: string,
+): Promise<ChatSettingsView['modelProviders']> {
+  const choices = await readProviderChoices(organizationId);
+  return MODEL_PROVIDERS.map((p) => ({
+    id: p.id,
+    name: p.name,
+    on: providerOn(choices, p.id),
+    locked: p.locked,
+  }));
+}
+
+/**
+ * Turns a model provider on or off for the workspace (W4-34): Admins only;
+ * Anthropic stays on, since Auto runs on its models. Its models leave the
+ * menu, and the engine runs Auto in place of one, from the next run. The
+ * change goes in the Activity log.
+ */
+export async function setModelProvider(provider: string, on: boolean): Promise<SettingsResult> {
+  try {
+    const admin = await asAdmin();
+    if (!admin.ok) return admin;
+    if (!isModelProvider(provider)) return { ok: false, failure: 'invalid' };
+    if (MODEL_PROVIDERS.find((p) => p.id === provider)?.locked) {
+      return { ok: false, failure: 'locked' };
+    }
+    const { me } = admin;
+    const choices = { ...(await readProviderChoices(me.organizationId)), [provider]: on === true };
+    const { error } = await supabaseAdmin
+      .from('chat_settings')
+      .upsert(
+        { organization_id: me.organizationId, model_providers: choices, updated_by: me.userId },
+        { onConflict: 'organization_id' },
+      );
+    if (error) return { ok: false, failure: 'failed' };
+    await logActivity({
+      organizationId: me.organizationId,
+      userId: me.userId,
+      brandId: null,
+      place: { conversationId: null, runId: null, stepId: null },
+      surface: 'chat',
+      tool: MODEL_PROVIDERS_LABEL,
+      mode: null,
+      approval: { kind: 'run' },
+      target: { type: 'chat_settings', id: me.organizationId },
+      summary: {
+        key: on ? 'modelProviderOn' : 'modelProviderOff',
+        params: { provider: MODEL_PROVIDERS.find((p) => p.id === provider)?.name ?? provider },
+      },
+      undo: null,
+    }).catch((err) => console.error('[chat-settings] could not log a provider change:', err));
+    return { ok: true };
+  } catch {
+    return { ok: false, failure: 'failed' };
+  }
+}
+
+/** The Activity log's label for model provider changes (chatTools.modelProviders). */
+const MODEL_PROVIDERS_LABEL = { labelKey: 'modelProviders', class: 'write' } as const;
 
 /** The workspace's go-live switch, with who turned it on; null before 00443. */
 async function readGoLive(organizationId: string): Promise<GoLiveView | null> {
