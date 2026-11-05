@@ -1067,7 +1067,12 @@
         "dictate",
         "send to webhook",
         "webhook",
-        "workflow webhook"
+        "workflow webhook",
+        "agents for you",
+        "recommended agents",
+        "new member",
+        "new teammate",
+        "hide agents for you"
       ],
       "synonyms": [
         "assistant",
@@ -1076,7 +1081,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
@@ -1085,6 +1090,10 @@
         {
           "heading": "Chat Home",
           "text": "Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**\n\n**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.\n\n**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat."
+        },
+        {
+          "heading": "Agents for you",
+          "text": "In your first 14 days in a workspace, once you've answered or skipped **What do you work on?**, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nAdmins and Managers click an agent to open its card in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide the section. It stays hidden on all your devices."
         },
         {
           "heading": "Ask Chat",
@@ -4729,7 +4738,8 @@
         "what do you work on",
         "my menu",
         "hidden sections",
-        "sections off your menu"
+        "sections off your menu",
+        "agents for you"
       ],
       "synonyms": [
         "missing menu item",
@@ -4738,7 +4748,7 @@
         "my role focus"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
@@ -4750,7 +4760,7 @@
         },
         {
           "heading": "When you're asked",
-          "text": "**What do you work on?** is asked once:\n\n- when you sign up, after your competitors and before you choose a plan;\n- when you join from an invitation, on your first sign-in;\n- on a self-hosted install, the first time the admin opens the dashboard.\n\n**Skip: show me everything** keeps every section."
+          "text": "**What do you work on?** is asked once:\n\n- when you sign up, after your competitors and before you choose a plan;\n- when you join from an invitation, on your first sign-in;\n- on a self-hosted install, the first time the admin opens the dashboard.\n\n**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas."
         },
         {
           "heading": "Change your work areas",

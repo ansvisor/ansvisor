@@ -49,10 +49,15 @@ vi.mock('@/lib/actions/chat-home', () => ({
 }));
 const analytics = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('@/lib/analytics', () => analytics);
+// Agents for you (AGENTS plan §8, #11): its read, its Hide, and Ask your Admin's request.
+const forYou = vi.hoisted(() => ({ read: vi.fn(), dismiss: vi.fn(), request: vi.fn() }));
+vi.mock('@/lib/actions/agents-for-you', () => ({ readAgentsForYou: forYou.read }));
+vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: forYou.request }));
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatFocus: vi.fn(),
   skipChatFocus: vi.fn(),
   markFocusPrompted: vi.fn(),
+  dismissAgentsForYou: forYou.dismiss,
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: { activeBrandId: string }) => unknown) =>
@@ -109,6 +114,10 @@ beforeEach(() => {
   due.answer = { ok: true, dueTasks: 3, lostPages: 0, readyDrafts: 0 };
   due.read.mockReset().mockImplementation(async () => due.answer);
   due.since = null;
+  forYou.read.mockReset().mockResolvedValue({ ok: true, agents: [], canTurnOn: true });
+  forYou.dismiss.mockReset().mockResolvedValue({ ok: true });
+  forYou.request.mockReset();
+  analytics.track.mockClear();
 });
 
 afterEach(() => {
@@ -728,5 +737,98 @@ describe('What’s new in ChatHome', () => {
       'What’s new: how can Agent Center help me?',
     );
     expect(urls.some((url) => url === '/api/chat/runs')).toBe(false);
+  });
+});
+
+describe('Agents for you (AGENTS plan §8, #11)', () => {
+  const AGENTS = [
+    { id: 'alternatives-comparison-pages', fit: 'siteType' as const },
+    { id: 'ceo-brief', fit: 'role' as const },
+    { id: 'visibility-watch', fit: null },
+  ];
+  const section = () => host.querySelector<HTMLElement>('[data-slot="agents-for-you"]');
+  const cards = () => [...host.querySelectorAll<HTMLElement>('[data-slot="agent-for-you"]')];
+
+  it('lists the agents with what each does and why it fits, each linked to its card in Ready to use', async () => {
+    const hide = vi.fn();
+    await render(view({ agentsForYou: { agents: AGENTS, canTurnOn: true }, onHideAgents: hide }));
+    expect(section()?.textContent).toContain('Agents for you');
+    expect(section()?.textContent).toContain('Nothing turns on until you do.');
+    expect(cards().map((c) => c.dataset.preset)).toEqual([
+      'alternatives-comparison-pages',
+      'ceo-brief',
+      'visibility-watch',
+    ]);
+    expect(
+      [...host.querySelectorAll('a[data-action="agentsForYou.open"]')].map((a) =>
+        a.getAttribute('href'),
+      ),
+    ).toEqual([
+      '/dashboard/agents?tab=ready#preset-alternatives-comparison-pages',
+      '/dashboard/agents?tab=ready#preset-ceo-brief',
+      '/dashboard/agents?tab=ready#preset-visibility-watch',
+    ]);
+    expect(cards()[1].textContent).toContain('CEO Brief');
+    expect(
+      cards().map((c) => c.querySelector('[data-slot="agent-for-you-fit"]')?.textContent),
+    ).toEqual(['For your site type', 'For your role', 'For every brand']);
+    expect(section()?.textContent).not.toContain('Ask your Admin');
+    expect(cards()[0].querySelector('a')?.getAttribute('aria-label')).toBe(
+      'Alternatives & Comparison Pages: see it in Agent Center',
+    );
+  });
+
+  it('gives Analysts and Agency partners the cards with Ask your Admin, and no link to turn one on', async () => {
+    await render(
+      view({ agentsForYou: { agents: AGENTS, canTurnOn: false }, onHideAgents: vi.fn() }),
+      'analyst',
+    );
+    expect(host.querySelectorAll('[data-action="agentsForYou.open"]')).toHaveLength(0);
+    expect(section()?.textContent).toContain('An Admin or Manager turns them on.');
+    expect(cards().every((c) => c.textContent?.includes('Ask your Admin'))).toBe(true);
+  });
+
+  it('hides with its ×, and shows nothing with no agents or before it is read', async () => {
+    const hide = vi.fn();
+    await render(view({ agentsForYou: { agents: AGENTS, canTurnOn: true }, onHideAgents: hide }));
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="agentsForYou.hide"]')!.click(),
+    );
+    expect(hide).toHaveBeenCalledTimes(1);
+    expect(analytics.track).toHaveBeenCalledWith('chat_agents_for_you_hidden', { count: 3 });
+    await render(view({ agentsForYou: { agents: [], canTurnOn: true }, onHideAgents: hide }));
+    expect(section()).toBeNull();
+    await render(view({ agentsForYou: null, onHideAgents: hide }));
+    expect(section()).toBeNull();
+  });
+
+  it('reads them for the open brand on Home, and Hide hides them at once and keeps it', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false })),
+    ) as unknown as typeof fetch;
+    forYou.read.mockResolvedValue({ ok: true, agents: AGENTS, canTurnOn: true });
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(forYou.read).toHaveBeenCalledWith(BRAND);
+    expect(cards()).toHaveLength(3);
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="agentsForYou.hide"]')!.click(),
+    );
+    expect(section()).toBeNull();
+    expect(forYou.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows nothing on Home when the read has no agents or fails', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false })),
+    ) as unknown as typeof fetch;
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(section()).toBeNull();
+    forYou.read.mockResolvedValue({ ok: false });
+    due.brand = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(section()).toBeNull();
   });
 });

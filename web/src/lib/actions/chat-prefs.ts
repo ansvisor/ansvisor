@@ -114,6 +114,14 @@ export async function saveHomeSeen(): Promise<ChatPrefResult> {
 }
 
 /**
+ * The person hid "Agents for you" on Chat Home (chat_user_prefs.
+ * agents_for_you_dismissed_at, 00483): it stays hidden on every device.
+ */
+export async function dismissAgentsForYou(): Promise<ChatPrefResult> {
+  return keepPref({ agents_for_you_dismissed_at: new Date().toISOString() }, 'Agents for you');
+}
+
+/**
  * What Chat focuses on for the person (CHAT-24 §3: the picker on first
  * open, Settings › General › Your focus, the Home pill), in the order
  * picked. Empty clears it: Home goes back to the default.

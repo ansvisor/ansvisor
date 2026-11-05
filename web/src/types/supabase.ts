@@ -3981,6 +3981,7 @@ export type Database = {
       }
       chat_user_prefs: {
         Row: {
+          agents_for_you_dismissed_at: string | null
           answer_language: string | null
           default_mode: string
           effort: string | null
@@ -4002,6 +4003,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          agents_for_you_dismissed_at?: string | null
           answer_language?: string | null
           default_mode?: string
           effort?: string | null
@@ -4023,6 +4025,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          agents_for_you_dismissed_at?: string | null
           answer_language?: string | null
           default_mode?: string
           effort?: string | null

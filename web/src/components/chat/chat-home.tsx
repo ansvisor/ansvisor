@@ -8,8 +8,11 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
+import { readAgentsForYou } from '@/lib/actions/agents-for-you';
 import { readFocusFill, readHomeShortcuts, readSinceYouLeft } from '@/lib/actions/chat-home';
+import { dismissAgentsForYou } from '@/lib/actions/chat-prefs';
 import { track } from '@/lib/analytics';
+import type { AgentForYou } from '@/lib/chat/agents-for-you';
 import type { FocusArea } from '@/lib/chat/focus';
 import { startChatRun } from '@/lib/chat/start-chat';
 import {
@@ -33,6 +36,7 @@ import { useFillHomeDraft } from './home-draft';
 import { useChatList } from './chat-list-provider';
 import { inboxItems, useNow } from './chat-inbox';
 import { FocusPill, useChatFocus } from './focus-picker';
+import { AgentsForYou } from './agents-for-you';
 import { ForYouNow } from './for-you-now';
 
 /** The underlined link in the greeting's line (mockup `.hlnk`). */
@@ -76,6 +80,14 @@ export interface ChatHomeViewProps {
   whatsNew?: WhatsNewHome | null;
   /** Show me: puts the update's question in the box, unsent. */
   onShowMe?: (feature: string) => void;
+  /**
+   * Agents for you (AGENTS plan §8, #11): the ready-to-use agents for a
+   * person new to the workspace, and whether they may turn one on; null
+   * while it isn't shown.
+   */
+  agentsForYou?: { agents: AgentForYou[]; canTurnOn: boolean } | null;
+  /** Hide on Agents for you: it stays hidden. */
+  onHideAgents?: () => void;
 }
 
 /** What's new as Chat Home shows it. */
@@ -315,8 +327,9 @@ function SinceBlock({
  * Alex" by the person's own clock; one line under it — what needs them, as
  * a link to the Inbox, or "All caught up."; "Since you left" (CHAT-22 §1)
  * when citations moved since the person last left Home; then "For you now"
- * (CHAT-08 v2), this week's Action Center tasks one of its chips. The
- * composer follows.
+ * (CHAT-08 v2), this week's Action Center tasks one of its chips; for a
+ * person new to the workspace, "Agents for you" (AGENTS plan §8, #11)
+ * before New for you. The composer follows.
  */
 export function ChatHomeView({
   firstName,
@@ -334,6 +347,8 @@ export function ChatHomeView({
   words = null,
   whatsNew = null,
   onShowMe,
+  agentsForYou = null,
+  onHideAgents,
 }: ChatHomeViewProps) {
   const t = useTranslations('chatShell.home');
   const areas = focus?.areas ?? [];
@@ -409,6 +424,13 @@ export function ChatHomeView({
       {areas.length > 0 && words && (
         <StartWithQuestion areas={areas} fill={words.fill} starting={starting} onAsk={onAsk} />
       )}
+      {agentsForYou && onHideAgents && (
+        <AgentsForYou
+          agents={agentsForYou.agents}
+          canTurnOn={agentsForYou.canTurnOn}
+          onHide={onHideAgents}
+        />
+      )}
       <NewForYou areas={areas} starting={starting} onAsk={onAsk} />
     </div>
   );
@@ -471,6 +493,12 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     rivalMove: RivalMove | null;
   } | null>(null);
   const [starting, setStarting] = useState(false);
+  const [forYou, setForYou] = useState<{
+    brandId: string;
+    agents: AgentForYou[];
+    canTurnOn: boolean;
+  } | null>(null);
+  const [agentsHidden, setAgentsHidden] = useState(false);
   const focusKey = focusCtx?.focus.join(',') ?? '';
   const wordsKey = `${brandId}|${focusKey}`;
   const items = useMemo(() => inboxItems(chats), [chats]);
@@ -535,6 +563,28 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
       current = false;
     };
   }, [brandId, focusKey]);
+
+  // Agents for you (AGENTS plan §8, #11): for the open brand, while it is open for the person.
+  useEffect(() => {
+    if (!brandId) return;
+    let current = true;
+    void readAgentsForYou(brandId)
+      .then((result) => {
+        if (current) {
+          setForYou(
+            result.ok && result.agents.length > 0
+              ? { brandId, agents: result.agents, canTurnOn: result.canTurnOn }
+              : null,
+          );
+        }
+      })
+      .catch(() => {
+        if (current) setForYou(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [brandId]);
 
   useHomeSeen();
 
@@ -603,6 +653,12 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
         track('chat_whats_new_show_me', { feature });
         fillBox?.(t('whatsNew.showMeMessage', { feature }));
         document.querySelector<HTMLTextAreaElement>('[data-action="composer.input"]')?.focus();
+      }}
+      agentsForYou={!agentsHidden && forYou && forYou.brandId === brandId ? forYou : null}
+      onHideAgents={() => {
+        // Hidden at once; kept for every device. One that didn't save shows again next visit.
+        setAgentsHidden(true);
+        void dismissAgentsForYou().catch(() => undefined);
       }}
     />
   );

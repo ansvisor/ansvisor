@@ -48,6 +48,7 @@ vi.mock('@/lib/chat/general-settings', async (original) => ({
 }));
 
 const {
+  dismissAgentsForYou,
   markFocusPrompted,
   saveChatFocus,
   saveChatGeneralSettings,
@@ -218,6 +219,32 @@ describe('saveHomeSeen', () => {
         options: { onConflict: 'user_id' },
       },
     ]);
+  });
+});
+
+describe('dismissAgentsForYou (00483)', () => {
+  it('keeps when the person hid Agents for you on their own row, for every device', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-05T09:00:00Z'));
+    expect(await dismissAgentsForYou()).toEqual({ ok: true });
+    vi.useRealTimers();
+    expect(db.upserts).toEqual([
+      {
+        row: { user_id: 'user-1', agents_for_you_dismissed_at: '2026-11-05T09:00:00.000Z' },
+        options: { onConflict: 'user_id' },
+      },
+    ]);
+  });
+
+  it('answers a failed save, signed out or with the new Chat off, as a value', async () => {
+    db.error = { message: 'down' };
+    expect(await dismissAgentsForYou()).toEqual({ ok: false });
+    db.error = null;
+    db.user = null;
+    expect(await dismissAgentsForYou()).toEqual({ ok: false });
+    db.user = { id: 'user-1' };
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await dismissAgentsForYou()).toEqual({ ok: false });
   });
 });
 
