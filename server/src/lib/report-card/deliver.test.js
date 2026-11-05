@@ -59,6 +59,63 @@ describe('renderReportCardEmail', () => {
     expect(html).not.toMatch(/guarantee/i);
   });
 
+  it('heads with Starter’s engines and names Growth’s apart', () => {
+    const { html } = renderReportCardEmail({
+      firstName: 'Ayşe',
+      payload: {
+        ...payload,
+        questionCount: 20,
+        mainEngines: ['chatgpt-web', 'copilot-web'],
+        engines: [
+          { engine: 'chatgpt-web', answers: 20, named: 3 },
+          { engine: 'copilot-web', answers: 20, named: 1 },
+          { engine: 'gemini-web', answers: 20, named: 9 },
+          { engine: 'google-aio', answers: 15, named: 5 },
+        ],
+      },
+      kind: 'new',
+      madeAt: '2026-11-04T10:00:00Z',
+    });
+    expect(html).toContain(
+      'We asked ChatGPT and Microsoft Copilot, the engines in Ansvisor Starter, 20 questions your buyers ask, in the United States.',
+    );
+    expect(html).toContain(
+      'We asked Gemini and Google AI Overviews too: they are in Ansvisor Growth, and the PDF shows them apart.',
+    );
+    expect(html).toContain('10%');
+    expect(html).toContain(
+      'AI visibility in ChatGPT and Microsoft Copilot: named in 4 of 40 answers',
+    );
+  });
+
+  it('states one visibility figure: every stat counts the headline’s answers', () => {
+    // As the sample card: ChatGPT 7 of 25 and Copilot 2 of 25 head it; the
+    // competitor and the citations are counted over those 50 answers.
+    const { html } = renderReportCardEmail({
+      firstName: 'Ayşe',
+      payload: {
+        ...payload,
+        mainEngines: ['chatgpt-web', 'copilot-web'],
+        engines: [
+          { engine: 'chatgpt-web', answers: 25, named: 7 },
+          { engine: 'copilot-web', answers: 25, named: 2 },
+          { engine: 'gemini-web', answers: 25, named: 4 },
+          { engine: 'google-aio', answers: 25, named: 5 },
+          { engine: 'google-aimode', answers: 25, named: 2 },
+        ],
+        competitors: [{ name: 'Ridge & Co', answers: 41 }],
+        ownCitations: 4,
+      },
+      kind: 'new',
+      madeAt: '2026-11-04T10:00:00Z',
+    });
+    expect(html).toContain('18%');
+    expect(html).toContain('named in 9 of 50 answers');
+    expect(html).toContain('Answers that cite your site, of 50');
+    // Never every engine's 125 answers, nor their 20 naming the company.
+    expect(html).not.toMatch(/\b125\b|\b16%|named in 20\b/);
+  });
+
   it('speaks of a publisher’s readers', () => {
     const { html } = renderReportCardEmail({
       firstName: 'Ayşe',

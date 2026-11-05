@@ -20,7 +20,7 @@ export const QUESTION_MAX = 25;
 export const CANDIDATE_QUESTIONS = 40;
 export const CHECK_BELOW = 10;
 /** Engines a card asks each question in (lib/report-card/engines.js). */
-export const ENGINE_COUNT = 4;
+export const ENGINE_COUNT = 5;
 /** What the caps fall back to with nothing set. */
 export const DEFAULTS = Object.freeze({
   dailyCap: 200,

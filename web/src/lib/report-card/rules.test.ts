@@ -17,7 +17,11 @@ import {
   planOffers,
   quickWins,
   brandKey,
+  engineList,
+  growthEngineRows,
   isTargetSite,
+  mainEngineRows,
+  mainTotals,
   targetSite,
   productLabel,
   siteBrandKey,
@@ -48,12 +52,72 @@ const strong = card({
 
 describe('totals', () => {
   it('adds the engines up and takes the share of answers that name the company', () => {
-    expect(totals(SAMPLE_REPORT_CARD)).toEqual({ answers: 100, named: 18, visibility: 18 });
+    expect(totals(SAMPLE_REPORT_CARD)).toEqual({ answers: 125, named: 20, visibility: 16 });
+  });
+
+  it('heads with Starter’s engines, and keeps Google’s apart in Growth’s band', () => {
+    // ChatGPT 7 of 25 and Microsoft Copilot 2 of 25.
+    expect(mainTotals(SAMPLE_REPORT_CARD)).toEqual({ answers: 50, named: 9, visibility: 18 });
+    expect(mainEngineRows(SAMPLE_REPORT_CARD).map((e) => e.engine)).toEqual([
+      'chatgpt-web',
+      'copilot-web',
+    ]);
+    expect(growthEngineRows(SAMPLE_REPORT_CARD).map((e) => e.engine)).toEqual([
+      'gemini-web',
+      'google-aio',
+      'google-aimode',
+    ]);
+    expect(engineList(mainEngineRows(SAMPLE_REPORT_CARD))).toBe('ChatGPT and Microsoft Copilot');
+  });
+
+  it('heads with every engine on a card made before the engines were split', () => {
+    const old = card({ mainEngines: undefined });
+    expect(mainTotals(old)).toEqual(totals(old));
+    expect(growthEngineRows(old)).toEqual([]);
   });
 
   it('is 0% when no engine answered', () => {
     const none = card({ engines: [{ engine: 'chatgpt-web', answers: 0, named: 0 }] });
     expect(totals(none).visibility).toBe(0);
+  });
+});
+
+describe('one card, one visibility figure', () => {
+  // Every "N of M answers" the plan, the things to do and the questions page
+  // state about the company: the headline's M answers.
+  const bases = (texts: (string | null)[]) =>
+    texts.flatMap((text) => [...(text ?? '').matchAll(/(\d+) of (\d+) answers/g)]);
+
+  it('counts the plan, the things to do and the questions page over the headline’s engines', () => {
+    const headline = mainTotals(SAMPLE_REPORT_CARD);
+    expect(headline).toEqual({ answers: 50, named: 9, visibility: 18 });
+    const plan = actionPlan(SAMPLE_REPORT_CARD).map((step) => step.finding);
+    const wins = quickWins(SAMPLE_REPORT_CARD).map((win) => win.detail);
+    const found = bases([...plan, ...wins, questionSummary(SAMPLE_REPORT_CARD)]);
+    // The plan's visibility, the cited site, your own citations (twice) and the questions.
+    expect(found.length).toBeGreaterThanOrEqual(5);
+    expect(new Set(found.map((m) => Number(m[2])))).toEqual(new Set([headline.answers]));
+    expect(plan[0]).toBe(
+      `You appear in ${headline.named} of ${headline.answers} answers; Ridgeline Roasters in 41.`,
+    );
+    // The competitor's lead is over the same answers as the company's count.
+    expect(plan[2]).toBe(
+      `Ridgeline Roasters is named 41 times, ${41 - headline.named} more than you.`,
+    );
+    expect(questionSummary(SAMPLE_REPORT_CARD)).toContain(
+      `Named in ${headline.named} of ${headline.answers} answers`,
+    );
+  });
+
+  it('keeps the plan and the things to do on every engine for a card made before the split', () => {
+    const old = card({ mainEngines: undefined });
+    const all = totals(old);
+    const found = bases([
+      ...actionPlan(old).map((step) => step.finding),
+      ...quickWins(old).map((win) => win.detail),
+    ]);
+    expect(found.length).toBeGreaterThan(0);
+    expect(new Set(found.map((m) => Number(m[2])))).toEqual(new Set([all.answers]));
   });
 });
 
@@ -130,7 +194,9 @@ describe('quickWins, about competitors and engines', () => {
   });
 
   it('names the weakest engine by how many were asked, and only when the engines differ', () => {
+    // A card made before Starter's engines headed it: every engine counts.
     const three = card({
+      mainEngines: undefined,
       engines: [
         { engine: 'chatgpt-web', answers: 25, named: 10 },
         { engine: 'gemini-web', answers: 25, named: 2 },
@@ -179,7 +245,7 @@ describe('quickWins', () => {
     );
     // Not ridgelineroasters.example, a competitor's site, though AI cites it most.
     expect(wins[1].title).toBe('Get Brewline Coffee reviewed or listed on coffeereview.example');
-    expect(wins[1].detail).toContain('23 of 100 answers');
+    expect(wins[1].detail).toContain('23 of 50 answers');
     expect(wins[2].title).toBe('Make your own pages easy to cite');
   });
 
@@ -316,9 +382,9 @@ describe('actionPlan', () => {
       'Action Center and Agent Center',
       'AI Traffic',
     ]);
-    expect(steps[0].finding).toBe('You appear in 18 of 100 answers; Ridgeline Roasters in 41.');
-    expect(steps[1].finding).toBe('11 of 25 questions got no answer that names you.');
-    expect(steps[2].finding).toBe('Ridgeline Roasters is named 41 times, 23 more than you.');
+    expect(steps[0].finding).toBe('You appear in 9 of 50 answers; Ridgeline Roasters in 41.');
+    expect(steps[1].finding).toBe('17 of 25 questions got no answer that names you.');
+    expect(steps[2].finding).toBe('Ridgeline Roasters is named 41 times, 32 more than you.');
     expect(steps[4].finding).toBe('That’s 4 areas to work on at once.');
   });
 
@@ -331,8 +397,8 @@ describe('actionPlan', () => {
       'AI Traffic',
       'Chat',
     ]);
-    expect(steps[0].finding).toBe('You appear in 80 of 100 answers (80%).');
-    expect(steps[1].finding).toBe('You’re named in 80 answers, Ridgeline Roasters in 30.');
+    expect(steps[0].finding).toBe('You appear in 40 of 50 answers (80%).');
+    expect(steps[1].finding).toBe('You’re named in 40 answers, Ridgeline Roasters in 30.');
   });
 
   it('has the Action Center when no competitor is named and little is to fix', () => {
@@ -531,9 +597,11 @@ describe('questionGroups', () => {
 describe('questionSummary', () => {
   it('says how many answers named the company, and in which questions', () => {
     expect(questionSummary(SAMPLE_REPORT_CARD)).toBe(
-      'Named in 18 of 100 answers: 14 of the 25 questions.',
+      'Named in 9 of 50 answers from ChatGPT and Microsoft Copilot: questions 1, 2, 3, 4, 5, 6, 7 and 14.',
     );
+    // A card made before Starter's engines headed it counts every engine.
     const few = card({
+      mainEngines: undefined,
       questionRows: [
         {
           text: 'a',
@@ -566,6 +634,7 @@ describe('questionSummary', () => {
 
   it('says so when no answer named the company', () => {
     const none = card({
+      mainEngines: undefined,
       questionRows: [
         {
           text: 'a',

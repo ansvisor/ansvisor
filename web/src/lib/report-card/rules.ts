@@ -224,6 +224,29 @@ const QUESTION_MAX = 110;
 export const percent = (part: number, whole: number): number =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
 
+/** Ansvisor Starter's engines: a card's main result (owner decision 2026-11-04). */
+export const STARTER_ENGINES: readonly ReportCardEngine[] = ['chatgpt-web', 'copilot-web'];
+
+type EngineRow = ReportCardPayload['engines'][number];
+
+/** The engines the card's headline counts: Starter's; every engine on an older card. */
+export function mainEngineRows(card: ReportCardPayload): EngineRow[] {
+  const main = card.mainEngines;
+  if (!main?.length) return card.engines;
+  return card.engines.filter((e) => main.includes(e.engine));
+}
+
+/** The engines shown apart, in Growth's band: none on an older card. */
+export function growthEngineRows(card: ReportCardPayload): EngineRow[] {
+  const main = card.mainEngines;
+  if (!main?.length) return [];
+  return card.engines.filter((e) => !main.includes(e.engine));
+}
+
+/** "ChatGPT and Microsoft Copilot". */
+export const engineList = (rows: readonly EngineRow[]): string =>
+  listOf(rows.map((e) => engineLabel(e.engine)));
+
 export interface Totals {
   answers: number;
   named: number;
@@ -231,10 +254,22 @@ export interface Totals {
   visibility: number;
 }
 
+/** Every engine's answers: how many answers the card got in all. */
 export function totals(card: ReportCardPayload): Totals {
   const answers = card.engines.reduce((sum, e) => sum + e.answers, 0);
   const named = card.engines.reduce((sum, e) => sum + e.named, 0);
   return { answers, named, visibility: percent(named, answers) };
+}
+
+/**
+ * The headline: the share of the main engines' answers that name the
+ * company (Starter's, ChatGPT and Microsoft Copilot). Every figure the card
+ * states beside it (the plan, the things to do, the competitors, the sites
+ * and the e-mail) counts these same answers: the server counts the
+ * competitors, sites and own citations over the main engines too.
+ */
+export function mainTotals(card: ReportCardPayload): Totals {
+  return totals({ ...card, engines: mainEngineRows(card) });
 }
 
 // ─── Page 1: three things to do now ──────────────────────────────────────────
@@ -285,7 +320,7 @@ function listOf(names: readonly string[]): string {
  * engine that names you least.
  */
 export function quickWins(card: ReportCardPayload): QuickWin[] {
-  const { answers, named } = totals(card);
+  const { answers, named } = mainTotals(card);
   const company = clip(card.companyName, NAME_MAX);
   const wins: QuickWin[] = [];
 
@@ -335,15 +370,21 @@ export function quickWins(card: ReportCardPayload): QuickWin[] {
     });
   }
 
-  // Only when the engines differ: with one engine, or all alike, none is the weakest.
-  const shares = card.engines.map((e) => percent(e.named, e.answers));
-  const weakest = [...card.engines].sort(
+  // Among Starter's engines (every engine on an older card), and only when
+  // they differ: with one engine, or all alike, none is the weakest.
+  const mainRows = mainEngineRows(card);
+  const shares = mainRows.map((e) => percent(e.named, e.answers));
+  const weakest = [...mainRows].sort(
     (a, b) => percent(a.named, a.answers) - percent(b.named, b.answers),
   )[0];
   if (weakest && Math.min(...shares) < Math.max(...shares)) {
     wins.push({
       title: `Look at what ${engineLabel(weakest.engine)} says about your market`,
-      detail: `It names you in ${weakest.named} of ${weakest.answers} answers, the fewest of the ${ENGINE_COUNT[card.engines.length] ?? card.engines.length} engines.`,
+      detail: `It names you in ${weakest.named} of ${weakest.answers} answers, the fewest of ${
+        card.mainEngines?.length
+          ? engineList(mainRows)
+          : `the ${ENGINE_COUNT[mainRows.length] ?? mainRows.length} engines`
+      }.`,
     });
   }
 
@@ -382,7 +423,7 @@ export const PLAN_STEPS_MAX = 6;
  * which fit every card: four to six steps.
  */
 export function actionPlan(card: ReportCardPayload): PlanStep[] {
-  const { answers, named, visibility } = totals(card);
+  const { answers, named, visibility } = mainTotals(card);
   const leader = card.competitors[0];
   const rival = leader ? clip(leader.name, NAME_MAX) : '';
   const steps: PlanStep[] = [];
@@ -557,17 +598,23 @@ export function questionGroups(card: ReportCardPayload): QuestionGroup[] {
 }
 
 /**
- * Page 4's one-line summary, above the table: none named, or how many
- * answers named the company and in which questions.
+ * Page 4's one-line summary, above the table: none named, or how many of
+ * the main engines' answers named the company (the headline's base) and in
+ * which questions.
  */
 export function questionSummary(card: ReportCardPayload): string | null {
   const rows = card.questionRows ?? [];
   if (!rows.length) return null;
+  const mainRows = mainEngineRows(card);
+  const main = new Set<string>(mainRows.map((e) => e.engine));
+  const from = growthEngineRows(card).length ? ` from ${engineList(mainRows)}` : '';
   let answers = 0;
   let named = 0;
   const questions: number[] = [];
   rows.forEach((row, i) => {
-    const marks = Object.values(row.named);
+    const marks = Object.entries(row.named)
+      .filter(([engine]) => main.has(engine))
+      .map(([, mark]) => mark);
     answers += marks.filter((mark) => mark !== 'none').length;
     const here = marks.filter((mark) => mark === 'named').length;
     named += here;
@@ -579,7 +626,7 @@ export function questionSummary(card: ReportCardPayload): string | null {
     questions.length <= 10
       ? `${questions.length === 1 ? 'question' : 'questions'} ${listOf(questions.map(String))}`
       : `${questions.length} of the ${rows.length} questions`;
-  return `Named in ${named} of ${answers} answers: ${where}.`;
+  return `Named in ${named} of ${answers} answers${from}: ${where}.`;
 }
 
 // ─── Page 3: outcomes ────────────────────────────────────────────────────────

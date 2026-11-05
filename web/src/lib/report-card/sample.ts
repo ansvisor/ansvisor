@@ -30,6 +30,7 @@ const QUESTIONS = [
 ];
 const NAMED: Record<(typeof REPORT_CARD_ENGINES)[number], number[]> = {
   'chatgpt-web': [0, 1, 2, 3, 4, 5, 6],
+  'copilot-web': [1, 13],
   'gemini-web': [0, 2, 7, 8],
   'google-aio': [1, 3, 9, 10, 11],
   'google-aimode': [12, 13],
@@ -89,10 +90,12 @@ export const SAMPLE_REPORT_CARD: ReportCardPayload = {
   ],
   engines: [
     { engine: 'chatgpt-web', answers: 25, named: 7 },
+    { engine: 'copilot-web', answers: 25, named: 2 },
     { engine: 'gemini-web', answers: 25, named: 4 },
     { engine: 'google-aio', answers: 25, named: 5 },
     { engine: 'google-aimode', answers: 25, named: 2 },
   ],
+  mainEngines: ['chatgpt-web', 'copilot-web'],
   competitors: [
     { name: 'Ridgeline Roasters', answers: 41 },
     { name: 'Copper Kettle Coffee', answers: 33 },
@@ -128,7 +131,7 @@ export const SAMPLE_REPORT_CARD: ReportCardPayload = {
     },
     { text: 'how long do roasted coffee beans stay fresh', textEn: null, competitors: [] },
   ],
-  missedCount: 11,
+  missedCount: 17,
   questionRows: QUESTIONS.map((text, i) => ({
     text,
     textEn: null,

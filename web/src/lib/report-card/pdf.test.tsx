@@ -71,7 +71,8 @@ describe('ReportCardPdfDocument', () => {
     const [results] = draw(SAMPLE_REPORT_CARD);
     expect(results).toContain('How visible is Brewline Coffee in AI answers?');
     expect(results).toContain('18%');
-    expect(results).toContain('named in 18 of 100 answers');
+    expect(results).toContain('in ChatGPT and Microsoft Copilot: named in 9 of 50 answers');
+    expect(results).toContain('In Ansvisor Growth: Google’s AI engines, measured too.');
     for (const engine of ['ChatGPT', 'Google Gemini', 'Google AI Overviews', 'Google AI Mode']) {
       expect(results).toContain(engine);
     }
@@ -85,6 +86,22 @@ describe('ReportCardPdfDocument', () => {
     expect(results).toContain('3 things to do now');
     expect(results).toContain('in the United States, in English');
     expect(results).toContain('All 25 questions are on page 4.');
+  });
+
+  it('states one visibility figure on every page: the headline’s engines', () => {
+    const [results, plan, , questions] = draw(SAMPLE_REPORT_CARD);
+    // ChatGPT 7 of 25 and Microsoft Copilot 2 of 25; the competitors and
+    // sites counted over the same 50 answers.
+    expect(results).toContain('named in 9 of 50 answers');
+    expect(results).toContain('named in 41 of 50 answers');
+    expect(results).toContain('of 50 answers cite a page of yours');
+    expect(results).toContain('in 5 AI engines: 125 answers');
+    expect(results).toContain('competitors and sites are counted over the same answers');
+    expect(plan).toContain('You appear in 9 of 50 answers; Ridgeline Roasters in 41.');
+    expect(questions).toContain('Named in 9 of 50 answers');
+    for (const page of [results, plan, questions]) {
+      expect(page).not.toMatch(/\d+ of 125 answers/);
+    }
   });
 
   it('page 2 is the action plan with a trial link', () => {
@@ -128,16 +145,18 @@ describe('ReportCardPdfDocument', () => {
     const pages = draw(SAMPLE_REPORT_CARD);
     const questions = pages[3];
     expect(questions).toContain('The 25 questions we asked');
-    expect(questions).toContain('Named in 18 of 100 answers: 14 of the 25 questions.');
+    expect(questions).toContain(
+      'Named in 9 of 50 answers from ChatGPT and Microsoft Copilot: questions 1, 2, 3, 4, 5, 6, 7 and 14.',
+    );
     // The key above the table: a tick, a dash and n/a, each with its meaning.
     expect(questions).toContain('Named–Not namedn/aNo answer');
     expect(questions).toContain('best coffee beans for espresso at home');
     expect(questions).toContain('best coffee beans under 20 dollars');
     expect(questions).toContain('Named instead');
     expect(questions).toContain('Ridgeline Roasters');
-    // 7 + 4 + 5 + 2 answers named Brewline: one tick each, and one in the key.
+    // 7 + 2 + 4 + 5 + 2 answers named Brewline: one tick each, and one in the key.
     const ticks = container.querySelectorAll('section')[3].querySelectorAll('[data-tick]');
-    expect(ticks).toHaveLength(19);
+    expect(ticks).toHaveLength(21);
   });
 
   it('has no page 4 for a card without its questions', () => {

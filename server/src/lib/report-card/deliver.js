@@ -25,6 +25,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const ENGINE_NAMES = {
   'chatgpt-web': 'ChatGPT',
+  'copilot-web': 'Microsoft Copilot',
   'gemini-web': 'Gemini',
   'google-aio': 'Google AI Overviews',
   'google-aimode': 'Google AI Mode',
@@ -88,17 +89,32 @@ export function renderReportCardEmail({
   repeatDays = 30,
   origin,
 }) {
-  const answers = payload.engines.reduce((sum, e) => sum + e.answers, 0);
-  const named = payload.engines.reduce((sum, e) => sum + e.named, 0);
+  // The headline is Starter's engines (ChatGPT and Microsoft Copilot); a
+  // card made before they were split counts every engine. The competitors
+  // and own citations are counted over the same answers (analyze.js
+  // summarize), so the three figures share one base.
+  const banded = Array.isArray(payload.mainEngines) && payload.mainEngines.length > 0;
+  const main = banded
+    ? payload.engines.filter((e) => payload.mainEngines.includes(e.engine))
+    : payload.engines;
+  const growth = banded
+    ? payload.engines.filter((e) => !payload.mainEngines.includes(e.engine))
+    : [];
+  const answers = main.reduce((sum, e) => sum + e.answers, 0);
+  const named = main.reduce((sum, e) => sum + e.named, 0);
   const visibility = answers ? Math.round((named / answers) * 100) : 0;
   const leader = payload.competitors[0];
   const site = escapeHtml(payload.domain);
-  const engines = listOf(payload.engines.map((e) => ENGINE_NAMES[e.engine] ?? e.engine));
+  const nameOf = (e) => ENGINE_NAMES[e.engine] ?? e.engine;
+  const engines = listOf(main.map(nameOf));
+  const growthLine = growth.length
+    ? ` We asked ${escapeHtml(listOf(growth.map(nameOf)))} too: they are in Ansvisor Growth, and the PDF shows them apart.`
+    : '';
 
   const intro =
     kind === 'resent'
       ? `<p style="font-size:14px;margin:0 0 16px 0;">Here is ${site}’s report card again: we made it on ${escapeHtml(formatDate(madeAt))}, and a new one can be made from ${escapeHtml(formatDate(new Date(new Date(madeAt).getTime() + repeatDays * DAY_MS).toISOString()))}.</p>`
-      : `<p style="font-size:14px;margin:0 0 16px 0;">We asked ${escapeHtml(engines)} ${payload.questionCount} questions your ${payload.audience === 'readers' ? 'readers' : 'buyers'} ask, in ${escapeHtml(countryInSentence(payload.country.code, payload.country.name))}. Here is what came back for ${site}.</p>`;
+      : `<p style="font-size:14px;margin:0 0 16px 0;">We asked ${escapeHtml(engines)}${banded ? ', the engines in Ansvisor Starter,' : ''} ${payload.questionCount} questions your ${payload.audience === 'readers' ? 'readers' : 'buyers'} ask, in ${escapeHtml(countryInSentence(payload.country.code, payload.country.name))}. Here is what came back for ${site}.${growthLine}</p>`;
 
   const html =
     shell(`  <h1 style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin:0 0 16px 0;">Your AI visibility report card</h1>
@@ -106,7 +122,7 @@ export function renderReportCardEmail({
   ${intro}
   <table role="presentation" cellspacing="8" style="width:100%;border-collapse:separate;margin:0 -8px 8px -8px;">
     <tr>
-    ${stat(`${visibility}%`, `AI visibility: named in ${named} of ${answers} answers`)}
+    ${stat(`${visibility}%`, `AI visibility${banded ? ` in ${escapeHtml(engines)}` : ''}: named in ${named} of ${answers} answers`)}
     ${stat(leader ? escapeHtml(leader.name) : 'None', leader ? `Top competitor: named in ${leader.answers} answers` : 'No competitor was named')}
     ${stat(String(payload.ownCitations), `Answers that cite your site, of ${answers}`)}
     </tr>
