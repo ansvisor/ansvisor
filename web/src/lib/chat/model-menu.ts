@@ -5,7 +5,7 @@ import {
   parseProviderChoices,
   type ModelProviderChoices,
 } from './model-providers';
-import { AUTO_MODEL, OFFERED_MODELS, offeredModel } from './models';
+import { AUTO_MODEL, OFFERED_MODELS, offeredModel, pickedModelOwnKey } from './models';
 
 /**
  * Chat's model menu as the browser reads it (CHAT-16 §A–B, W4-01): Auto at
@@ -91,9 +91,9 @@ async function readServerMenu(selected: string | null): Promise<ServerMenu | nul
 /**
  * The menu for a workspace. `ownKeyProviders`: the providers of the own keys
  * for Chat (ownChatKeyProviders); a model says "Your key" when one runs it,
- * in resolvePickedModelKey's order: its provider's key, else an OpenRouter
- * one. When the API server doesn't answer, the offered models still show,
- * with no multipliers.
+ * in resolvePickedModelKey's order (pickedModelOwnKey): its provider's key,
+ * else an OpenRouter one. When the API server doesn't answer, the offered
+ * models still show, with no multipliers.
  */
 export async function readModelMenu({
   selected = null,
@@ -121,7 +121,7 @@ export async function readModelMenu({
       multiplier: listed?.multiplier ?? null,
       tone: listed?.tone ?? null,
       variesByHour: listed?.variesByHour ?? false,
-      yourKey: ownKeyProviders.includes(offered.provider) || ownKeyProviders.includes('openrouter'),
+      yourKey: pickedModelOwnKey(offered.provider, ownKeyProviders) !== null,
     });
   }
   const chosen = selected && selected !== AUTO_MODEL ? selected : null;

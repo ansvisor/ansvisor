@@ -21,7 +21,12 @@ const key = vi.hoisted(() => {
       this.provider = provider;
     }
   }
-  return { own: false, unreadable: false, OwnKeyUnreadableError };
+  return {
+    own: false,
+    unreadable: false,
+    providers: [] as string[] | Error,
+    OwnKeyUnreadableError,
+  };
 });
 const keyCap = vi.hoisted(() => ({
   reached: null as { reached: boolean; renewsAt: string | null } | null,
@@ -38,6 +43,10 @@ vi.mock('./key', () => ({
     return key.own
       ? { source: 'own', config: { provider: 'openai', apiKey: 'k', settings: {} } }
       : { source: 'ansvisor', config: { provider: 'anthropic', apiKey: 'k', settings: {} } };
+  }),
+  ownChatKeyProviders: vi.fn(async () => {
+    if (key.providers instanceof Error) throw key.providers;
+    return key.providers;
   }),
 }));
 vi.mock('./agent-shares', () => ({ readAgentShares: vi.fn(async () => null) }));
@@ -60,6 +69,7 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   seedWorkspace(db);
   key.own = false;
+  key.providers = [];
   db.tables.brands = [
     { id: BRAND, organization_id: ORG, name: 'Zeta', is_demo: false },
     { id: BRAND_2, organization_id: ORG, name: 'Alpha', is_demo: false },
@@ -117,6 +127,8 @@ describe('agentFormSetupFor', () => {
       runShareDefault: 0.1,
       workspaceAgentsAdminsOnly: false,
       ownKeyProvider: null,
+      ownKeyProviders: [],
+      modelChoiceOpen: true,
     });
   });
 
@@ -199,5 +211,30 @@ describe('agentFormSetupFor', () => {
     expect((await setupOf(PEOPLE.admin)).ownKeyProvider).toBe('azure');
     key.own = false;
     key.unreadable = false;
+  });
+
+  it('carries the own keys for Chat a picked model may run on, and whether the plan runs a pick', async () => {
+    key.own = true;
+    key.providers = ['openai', 'anthropic'];
+    expect(await setupOf(PEOPLE.admin)).toMatchObject({
+      ownKeyProvider: 'openai',
+      ownKeyProviders: ['openai', 'anthropic'],
+      modelChoiceOpen: true,
+    });
+    // Unread, a picked model reads as on the AI limit: the run itself still finds its key.
+    key.providers = new Error('down');
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect((await setupOf(PEOPLE.admin)).ownKeyProviders).toEqual([]);
+    expect(logged).toHaveBeenCalledWith(
+      '[chat/agents] could not read the own keys for Chat:',
+      key.providers,
+    );
+    logged.mockRestore();
+
+    // The free trial runs Auto, whatever the agent picked.
+    db.tables.organizations = db.tables.organizations.map((row) =>
+      row.id === ORG ? { ...row, subscription_status: 'trialing' } : row,
+    );
+    expect((await setupOf(PEOPLE.admin)).modelChoiceOpen).toBe(false);
   });
 });

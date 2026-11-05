@@ -6,7 +6,8 @@ import type { AgentFormSetup } from './agent-form';
 import { readGoLiveSwitch } from './agent-go-live';
 import { AGENT_ENGINES, enginesDenial, modeDenial } from './agent-rules';
 import { readAgent, readAgentContext, type AgentContext, type AgentDetail } from './agents';
-import { OwnKeyUnreadableError, resolveChatModelKey } from './key';
+import { OwnKeyUnreadableError, ownChatKeyProviders, resolveChatModelKey } from './key';
+import { modelChoiceOpen } from './models';
 import { chatActor } from './run-api';
 
 /**
@@ -15,8 +16,9 @@ import { chatActor } from './run-api';
  * the brands and topics a scope may name, the plan's engines, whether Full
  * auto is open, locked by the plan or turned off in Settings › Chat, the
  * workspace's Max per run and sharing rule, the names already taken, whose
- * key Chat runs on and the time zone they picked in Settings › Account.
- * Never a price or a dollar: shares and names only. Server only.
+ * key Auto and a picked model run on and the time zone they picked in
+ * Settings › Account. Never a price, a dollar or a key: shares and names
+ * only. Server only.
  */
 
 /** Topics a scope lists at most. */
@@ -24,7 +26,7 @@ const TOPICS_MAX = 500;
 
 export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSetup> {
   const org = ctx.actor.organizationId;
-  const [brands, agents, ownKeyProvider, goLive, timeZone] = await Promise.all([
+  const [brands, agents, ownKeyProvider, ownKeyProviders, goLive, timeZone] = await Promise.all([
     supabaseAdmin.from('brands').select('id, name, is_demo').eq('organization_id', org),
     supabaseAdmin
       .from('chat_agents')
@@ -38,6 +40,11 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
         console.error('[chat/agents] could not read whose key Chat runs on:', err);
         return null;
       }),
+    // The own keys a picked model may run on (resolvePickedModelKey's), read without decrypting one.
+    ownChatKeyProviders(org).catch((err): string[] => {
+      console.error('[chat/agents] could not read the own keys for Chat:', err);
+      return [];
+    }),
     readGoLiveSwitch(org),
     readChosenTimeZone(ctx.actor.userId),
   ]);
@@ -107,6 +114,8 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     runShareDefault: ctx.settings.runShareDefault,
     takenNames: seen,
     ownKeyProvider,
+    ownKeyProviders,
+    modelChoiceOpen: modelChoiceOpen(ctx.plan),
     goLive,
     timeZone,
     callable,

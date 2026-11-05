@@ -25,6 +25,7 @@ import {
 import { skillConnections } from './agent-skills';
 import type { AgentDetail, AgentTriggerView } from './agents';
 import type { AgentPreset, PresetTrigger } from './agents/catalog';
+import { offeredModel, pickedModelOwnKey, runChoiceOf } from './models';
 import type { ChatMode } from './precedence';
 
 /**
@@ -61,8 +62,19 @@ export interface AgentFormSetup {
   runShareDefault: number;
   /** The names of the agents the person sees, for a new agent's default name (§O). */
   takenNames: string[];
-  /** The provider whose key Chat runs on (`anthropic`), or null: the monthly AI limit pays. */
+  /**
+   * The provider of the own key Auto runs on (`anthropic`), as
+   * resolveChatModelKey picks it, or null: the monthly AI limit pays.
+   */
   ownKeyProvider: string | null;
+  /**
+   * The providers of the workspace's own keys for Chat (ownChatKeyProviders),
+   * active or not: a picked model runs on its provider's, else the OpenRouter
+   * one (W4-06).
+   */
+  ownKeyProviders: string[];
+  /** The plan lets an agent run the model it picked (modelChoiceOpen): the free trial runs Auto. */
+  modelChoiceOpen: boolean;
   /**
    * The workspace's switch for agents that publish and send on their own
    * (AUTONOMOUS-GO-LIVE §7.1): the form's box shows unless it's hidden
@@ -173,6 +185,22 @@ export interface AgentFormState {
  */
 export const FAST_MODEL = 'anthropic/claude-haiku-5.5';
 export const WRITING_MODEL = 'anthropic/claude-sonnet-5.5';
+
+/**
+ * The provider of the own key an agent on `model` runs on, as the engine
+ * picks it (engine.ts runModelChoice, engine-model.ts resolveChatModels):
+ * the model as the plan allows it (runChoiceOf: the free trial, and a model
+ * no longer offered, run Auto); a picked model on the own key for its
+ * provider, else the OpenRouter one (pickedModelOwnKey); Auto on the key
+ * Auto runs on. Null: Ansvisor's key, on the monthly AI limit.
+ */
+export function modelKeyProvider(
+  model: string,
+  setup: Pick<AgentFormSetup, 'ownKeyProvider' | 'ownKeyProviders' | 'modelChoiceOpen'>,
+): string | null {
+  const picked = offeredModel(runChoiceOf({ model }, setup.modelChoiceOpen).model);
+  return picked ? pickedModelOwnKey(picked.provider, setup.ownKeyProviders) : setup.ownKeyProvider;
+}
 
 export const MAX_INSTRUCTIONS = 2000;
 export const MAX_NAME = 60;

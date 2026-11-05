@@ -10,6 +10,7 @@ import {
 } from '@/lib/agent/providers';
 import { chatAgenticEnabled } from './flag';
 import { markKeyFailing, ownKeyFailure, type OwnKeyFailure } from './key-health';
+import { pickedModelKeyOrder, type OfferedModelProvider } from './models';
 
 /**
  * Whose key a Chat step runs on (CHAT-16 item 22, owner decision 11 of the
@@ -194,18 +195,20 @@ export async function resolveChatModelKey(
  *   2. its own OpenRouter key for Chat, which runs the model by its catalog id;
  *   3. Ansvisor's key for the provider (ANTHROPIC_API_KEY or
  *      OPENROUTER_API_KEY), on the AI budget.
+ * Steps 1 and 2 are pickedModelKeyOrder's, which the model menu's "Your key"
+ * and an agent's Model step read too (pickedModelOwnKey).
  * A key for the step that can't be read stops it, as the active key does:
  * never Ansvisor's in its place. `ansvisorOnly`: the person chose "Use
  * Ansvisor's limit" after their key failed. Null when no key is there.
  */
 export async function resolvePickedModelKey(
   organizationId: string,
-  provider: 'anthropic' | 'openrouter',
+  provider: OfferedModelProvider,
   { ansvisorOnly = false }: { ansvisorOnly?: boolean } = {},
 ): Promise<ChatModelKey | null> {
   const access = ansvisorOnly ? null : await ownKeyAccess(organizationId);
   if (access?.state === 'plan' || access?.state === 'kept') {
-    for (const candidate of [...new Set([provider, 'openrouter' as const])]) {
+    for (const candidate of pickedModelKeyOrder(provider)) {
       const own = await readProviderKey(organizationId, candidate);
       if (own.state === 'unreadable') {
         await markKeyFailing(organizationId, own.provider, {

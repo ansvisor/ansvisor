@@ -27,6 +27,7 @@ import {
   formFromAgent,
   formFromPreset,
   hasProblems,
+  modelKeyProvider,
   newForm,
   newTriggerDraft,
   patchBody,
@@ -851,6 +852,8 @@ function AgentFormBody({
     WRITING_MODEL,
     ...([FAST_MODEL, WRITING_MODEL, 'auto'].includes(state.model) ? [] : [state.model]),
   ];
+  // The own key the chosen model runs on, as the engine picks it; null: the monthly AI limit.
+  const keyProvider = modelKeyProvider(state.model, setup);
   const workspaceLocked =
     !isAdmin && setup.workspaceAgentsAdminsOnly && base?.visibility !== 'workspace';
   // Going live on its own (AUTONOMOUS-GO-LIVE §7.2): what the box makes of publishing.
@@ -1366,11 +1369,11 @@ function AgentFormBody({
                   })}
                 </div>
                 <p data-slot="agent-form-key" className="mt-2 text-xs text-muted-foreground">
-                  {setup.ownKeyProvider
+                  {keyProvider
                     ? t('model.ownKey', {
-                        provider: tProviders.has(`${setup.ownKeyProvider}.name`)
-                          ? tProviders(`${setup.ownKeyProvider}.name`)
-                          : setup.ownKeyProvider,
+                        provider: tProviders.has(`${keyProvider}.name`)
+                          ? tProviders(`${keyProvider}.name`)
+                          : keyProvider,
                       })
                     : t('model.limit')}
                 </p>
@@ -1442,7 +1445,7 @@ function AgentFormBody({
 
                   <SettingRow
                     label={t('agent.maxRun')}
-                    note={t(setup.ownKeyProvider ? 'agent.maxRunNoteOwnKey' : 'agent.maxRunNote')}
+                    note={t(keyProvider ? 'agent.maxRunNoteOwnKey' : 'agent.maxRunNote')}
                     noteId="agent-form-note-max-run"
                     htmlFor="agent-max-run"
                   >

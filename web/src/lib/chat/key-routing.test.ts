@@ -53,6 +53,7 @@ vi.mock('./key-health', () => ({
 }));
 
 const { OwnKeyUnreadableError, resolveChatModelKey, resolvePickedModelKey } = await import('./key');
+const { pickedModelOwnKey } = await import('./models');
 
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
@@ -119,6 +120,30 @@ describe('resolvePickedModelKey', () => {
       source: 'ansvisor',
       config: { provider: 'openrouter', apiKey: 'ansvisor-or', settings: {} },
     });
+  });
+});
+
+describe('pickedModelOwnKey', () => {
+  it('names the own key resolvePickedModelKey runs a picked model on, without reading a key', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'ansvisor-or');
+    const saved = [
+      [],
+      ['anthropic'],
+      ['openrouter'],
+      ['openai'],
+      ['anthropic', 'openrouter'],
+      ['openai', 'openrouter'],
+      ['openai', 'anthropic'],
+    ];
+    for (const providers of saved) {
+      keys = Object.fromEntries(providers.map((p) => [p, { key_encrypted: p, settings: {} }]));
+      for (const provider of ['anthropic', 'openrouter'] as const) {
+        const resolved = await resolvePickedModelKey(ORG, provider);
+        expect(pickedModelOwnKey(provider, providers), `${provider} on [${providers}]`).toBe(
+          resolved?.source === 'own' ? resolved.config.provider : null,
+        );
+      }
+    }
   });
 });
 

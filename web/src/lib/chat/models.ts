@@ -23,6 +23,29 @@ export const AUTO_MODEL = 'auto';
  */
 export type OfferedModelProvider = 'anthropic' | 'openrouter';
 
+/**
+ * The workspace's own keys a picked model's steps try, in order (W4-06,
+ * CHAT-16 item 23): the key for the model's provider, then its OpenRouter
+ * key, which runs any model by its catalog id. With neither, Ansvisor's key
+ * runs it, on the monthly AI limit (key.ts resolvePickedModelKey).
+ */
+export function pickedModelKeyOrder(provider: OfferedModelProvider): OfferedModelProvider[] {
+  return provider === 'openrouter' ? ['openrouter'] : [provider, 'openrouter'];
+}
+
+/**
+ * The provider of the own key a picked model runs on, in
+ * pickedModelKeyOrder's order, from the providers of the workspace's own
+ * keys for Chat (key.ts ownChatKeyProviders); null when none runs it:
+ * Ansvisor's key, on the monthly AI limit. Reads no key.
+ */
+export function pickedModelOwnKey(
+  provider: OfferedModelProvider,
+  ownKeyProviders: readonly string[],
+): OfferedModelProvider | null {
+  return pickedModelKeyOrder(provider).find((key) => ownKeyProviders.includes(key)) ?? null;
+}
+
 export interface OfferedModel {
   /** The catalog's id ("anthropic/claude-sonnet-5.5"): what a run keeps as its model. */
   id: string;
