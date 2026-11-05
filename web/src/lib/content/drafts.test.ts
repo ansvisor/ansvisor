@@ -12,6 +12,9 @@ import {
   draftsCreatedIn,
   draftsLastSent,
   draftsMadeIn,
+  draftsOfAction,
+  startedDraftPath,
+  actionLibraryPath,
   draftsInTab,
   isPageType,
   libraryTabCounts,
@@ -200,5 +203,17 @@ describe('where a draft was made (00463, W4-10)', () => {
     expect(draftsMadeIn(made, 'all').map((d) => d.id)).toEqual(['a', 'b', 'c']);
     expect(draftsMadeIn(made, 'chat').map((d) => d.id)).toEqual(['a']);
     expect(draftsMadeIn(made, 'mcp')).toEqual([]);
+  });
+
+  it("lists one action's drafts, as Start now's several pages open them (AC plan P-3)", () => {
+    const drafts = [
+      { ...draft('a', 'draft'), action: { id: 'ac1', number: 12 } },
+      { ...draft('b', 'draft'), action: null },
+      { ...draft('c', 'ready'), action: { id: 'ac2', number: 13 } },
+    ];
+    expect(draftsOfAction(drafts, 'ac1').map((d) => d.id)).toEqual(['a']);
+    expect(draftsOfAction(drafts, null)).toBe(drafts);
+    expect(actionLibraryPath('ac1')).toBe('/dashboard/content/library?action=ac1');
+    expect(startedDraftPath('d1')).toBe('/dashboard/content/editor/d1?brief=build');
   });
 });

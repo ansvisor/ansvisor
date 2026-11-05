@@ -33,6 +33,8 @@ const drafts = vi.hoisted(() => ({ getActionDrafts: vi.fn(), startDraftFromActio
 const taskCheck = vi.hoisted(() => ({ checkActionTask: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push }),
+  // Start now's Chat opens beside the action (AC plan P-3).
+  usePathname: () => '/dashboard/action-center/actions',
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
       {children}
@@ -487,6 +489,44 @@ describe('ActionDrawer', () => {
         title: expect.any(String),
       });
       expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
+    });
+
+    it('offers Start now at the top of Overview, for an open action whose work is writing (AC plan P-3)', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [task('t1', 'optimize_content', 'Optimize the page')],
+      });
+      drafts.getActionDrafts.mockResolvedValue([]);
+      drafts.startDraftFromAction.mockResolvedValue({
+        draftId: 'd-new',
+        created: true,
+        importFailed: false,
+      });
+      await renderDrawer({ ...action, payload: { pages: [PRICING] } });
+      const block = document.querySelector('section[aria-label="Start now"]');
+      expect(block?.textContent).toContain('Opens /pricing as a draft');
+      await act(async () => button('Content Editor')!.click());
+      expect(drafts.startDraftFromAction).toHaveBeenCalledWith('b1', 'a1', 't1', {
+        page: PRICING,
+        title: expect.any(String),
+      });
+      // A new draft's brief is built as it opens.
+      expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new?brief=build');
+
+      // Not for a closed action, nor one whose work isn't writing.
+      await renderDrawer({
+        ...action,
+        id: 'a2',
+        status: 'completed',
+        payload: { pages: [PRICING] },
+      });
+      expect(document.querySelector('section[aria-label="Start now"]')).toBeNull();
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [task('t1', 'prepare_outreach', 'Prepare outreach')],
+      });
+      await renderDrawer({ ...action, id: 'a3' });
+      expect(document.querySelector('section[aria-label="Start now"]')).toBeNull();
     });
 
     it('starts no draft on a read-only workspace: Optimize page opens the upgrade dialog', async () => {

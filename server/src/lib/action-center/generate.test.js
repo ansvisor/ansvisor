@@ -594,6 +594,26 @@ describe('the task plan the action is created with', () => {
     expect(taskRows(writes)).not.toContain('optimize_content');
   });
 
+  it('opens the action with the prompts its work is about (AC plan P-3)', async () => {
+    const prompt = '11111111-1111-4111-8111-111111111111';
+    const writes = mockDb({
+      signals: [
+        signal({
+          kind: 'prompt_visibility_gap',
+          impact: 'medium',
+          payload: { targets: [{ id: prompt, label: 'a prompt', mapped: false }] },
+        }),
+      ],
+    });
+
+    await generateActionsForBrand(BRAND, { now: NOW, sources: ALL_SOURCES });
+
+    const action = writes.inserted.find((w) => w.table === 'actions').rows[0];
+    expect(action.payload.promptIds).toEqual([prompt]);
+    // No page is mapped to it in this brand: none is named.
+    expect(action.payload).not.toHaveProperty('pages');
+  });
+
   /** Task Library acceptance test 5: no publishing integration does not block
    *  the action — a person publishes. */
   it('gives publishing to a person when no publishing tool exists', async () => {
