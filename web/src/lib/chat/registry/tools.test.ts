@@ -117,6 +117,9 @@ vi.mock('@/lib/actions/audits', () => ({
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
 }));
+vi.mock('@/lib/actions/chat-follow-ups', () => ({
+  setChatFollowUp: tracked.track('actions/chat-follow-ups.setChatFollowUp'),
+}));
 vi.mock('@/lib/actions/chat-schedules', () => ({
   createChatSchedule: tracked.track('actions/chat-schedules.createChatSchedule'),
 }));
@@ -696,6 +699,9 @@ describe('approval policies', () => {
       } else if (tool.class === 'write' && (tool.flags.alwaysCard || tool.flags.costCard)) {
         // Ask your Admin, or a cost said first: a card in every mode (CHAT-20 rows 37, 80a).
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask', 'ask']);
+      } else if (tool.name === 'set_follow_up_check') {
+        // A follow-up check: by itself in Full auto only, never Always (CHAT-20 row 79, §13).
+        expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask_full_auto', 'ask_full_auto']);
       } else if (tool.class === 'write') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask_full_auto', 'always']);
       }
@@ -735,6 +741,7 @@ describe('approval policies', () => {
       run_site_audit: ['admin', 'manager'],
       // Scheduled work (CHAT-20 §4: Admins and Managers create schedules).
       create_schedule: ['admin', 'manager'],
+      set_follow_up_check: ['admin', 'manager'],
       // A skill of one's own (W3-06, CHAT-13 v2): Admins and Managers save skills.
       save_skill: ['admin', 'manager'],
       // Memory (W3-11, CHAT-14 item 25): every role has its Me; the store checks the scope.

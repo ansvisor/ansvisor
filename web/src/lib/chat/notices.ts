@@ -8,8 +8,9 @@ import type { CmsTarget } from '@/lib/content/cms-send-client';
  * reached 80% or all of their monthly limit on it (§4.2 item 4, PR 10); an
  * agent sent a page out on its own, or an edit stopped it from doing so
  * (AUTONOMOUS-GO-LIVE §6.4, §7.2); a scheduled job's run failed after its
- * retry, or the job turned itself off (CHAT-12 items 16, 26–27; 00461).
- * Pure, for the server action that reads them (lib/actions/chat-notices.ts).
+ * retry, or the job turned itself off (CHAT-12 items 16, 26–27; 00461); a
+ * follow-up check's result (W3-05). Pure, for the server action that reads
+ * them (lib/actions/chat-notices.ts).
  */
 
 interface NoticeBase {
@@ -62,10 +63,11 @@ export type ChatNotice =
  * after its retry, or the job turned itself off, with why in plain words.
  */
 export interface ScheduleNotice extends NoticeBase {
-  kind: 'schedule_failed' | 'schedule_paused';
+  /** followup_result: a follow-up check's result (W3-05), its outcome in `reason`. */
+  kind: 'schedule_failed' | 'schedule_paused' | 'followup_result';
   title: string;
   reason: string;
-  /** Where Open goes: the job's page in Scheduled. */
+  /** Where Open goes: the job's page in Scheduled, or a check's result in its chat. */
   href: `/dashboard/${string}`;
 }
 
@@ -130,18 +132,29 @@ export function noticeOf(row: NoticeRow): ChatNotice | null {
     if (typeof agent !== 'string' || typeof agentId !== 'string') return null;
     return { ...base, kind: 'agent_go_live_off', agent, agentId };
   }
-  if (row.kind === 'schedule_failed' || row.kind === 'schedule_paused') {
-    const { title, reason, scheduleId } = payload;
+  if (
+    row.kind === 'schedule_failed' ||
+    row.kind === 'schedule_paused' ||
+    row.kind === 'followup_result'
+  ) {
+    const { title, reason, scheduleId, conversationId } = payload;
     if (typeof title !== 'string' || typeof reason !== 'string') return null;
-    // Open goes to the job's page (Scheduled, W3-03): its runs, Run now, on and off.
-    const job =
-      typeof scheduleId === 'string' && /^[0-9a-f-]{36}$/i.test(scheduleId) ? scheduleId : null;
+    const id = (value: unknown) =>
+      typeof value === 'string' && /^[0-9a-f-]{36}$/i.test(value) ? value : null;
+    // Open goes to the job's page (Scheduled, W3-03): its runs, Run now, on and off; a follow-up
+    // check's result to the chat it was posted in (W3-05).
+    const job = id(scheduleId);
+    const chat = row.kind === 'followup_result' ? id(conversationId) : null;
     return {
       ...base,
       kind: row.kind,
       title: title.slice(0, 120),
       reason: reason.slice(0, 200),
-      href: job ? `/dashboard/chat/scheduled/${job}` : '/dashboard/chat/scheduled',
+      href: chat
+        ? `/dashboard/chat/${chat}`
+        : job
+          ? `/dashboard/chat/scheduled/${job}`
+          : '/dashboard/chat/scheduled',
     };
   }
   return null;

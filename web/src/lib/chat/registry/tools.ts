@@ -10,6 +10,7 @@ import { READ_TOOLS } from './read-tools';
 import { MEMORY_TOOLS } from './memory-tools';
 import { REPORT_TOOLS } from './report-tools';
 import { SCHEDULE_TOOLS } from './schedule-tools';
+import { FOLLOW_UP_TOOLS } from './followup-tools';
 import { SKILL_TOOLS } from './skill-tools';
 import { TOPIC_TOOLS } from './topic-tools';
 import { WHY_TOOLS } from './why-tools';
@@ -39,6 +40,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...REPORT_TOOLS,
   ...AUDIT_TOOLS,
   ...SCHEDULE_TOOLS,
+  ...FOLLOW_UP_TOOLS,
   ...SKILL_TOOLS,
   ...MEMORY_TOOLS,
   ...AGENT_CALL_TOOLS,

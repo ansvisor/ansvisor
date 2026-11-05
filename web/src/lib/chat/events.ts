@@ -195,9 +195,11 @@ export interface ChatFormField {
  */
 export interface ChatConfirmForm {
   /** What it makes: the browser helps with its fields as the person types (a schedule's When). */
-  kind: 'schedule' | 'skill' | 'memory';
+  kind: 'schedule' | 'skill' | 'memory' | 'followup';
   fields: ChatFormField[];
   submit: string;
+  /** Its other button's words when not "Cancel" (a follow-up check's "Not now"). */
+  cancel?: string;
   notes?: string[];
   /** The time zone its times are read in (a schedule's). */
   zone?: string;

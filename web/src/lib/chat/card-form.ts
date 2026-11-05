@@ -57,6 +57,7 @@ export async function cardFormOf(
         ...form,
         fields,
         submit: clip(form.submit, 60),
+        ...(form.cancel ? { cancel: clip(form.cancel, 60) } : {}),
         ...(form.notes ? { notes: form.notes.slice(0, 4).map((note) => clip(note, 200)) } : {}),
       },
     };

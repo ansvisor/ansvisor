@@ -27,8 +27,9 @@ import { INBOX_ROW } from './inbox-suggestions';
  * Open page and Open run, and Take down for a page it published (PR 10); or
  * an edit stopped it, with Open agent (AUTONOMOUS-GO-LIVE §6.4, §7.2,
  * 00446): its owner and the people it notifies get them, and opening one
- * closes it. A scheduled job's run failed, or the job paused (00461), with
- * Open. Shown, they are marked read.
+ * closes it. A scheduled job's run failed, or the job paused (00461), or a
+ * follow-up check has its result (W3-05), with Open. Shown, they are marked
+ * read.
  */
 export function NoticeRows({ notices }: { notices: ChatNotice[] }) {
   const unread = notices
@@ -52,6 +53,7 @@ function NoticeRow({ notice }: { notice: ChatNotice }) {
       return <GoLiveOffRow notice={notice} />;
     case 'schedule_failed':
     case 'schedule_paused':
+    case 'followup_result':
       return <ScheduleNoticeRow notice={notice} />;
     default:
       return <KeyFailedRow notice={notice} />;
@@ -77,16 +79,42 @@ const dollars = (usd: number) =>
 /** A scheduled job's notice (00461): "{Job} didn't run", or "{Job} is paused", why, and Open. */
 function ScheduleNoticeRow({ notice }: { notice: ScheduleNotice }) {
   const t = useTranslations('chatShell.inbox.notice');
+  // A follow-up check's result is news, not a problem: no amber.
+  const result = notice.kind === 'followup_result';
   return (
-    <div data-slot="inbox-notice" data-kind={notice.kind} className={NOTICE_ROW}>
-      <span aria-hidden className="size-2 rounded-full bg-amber-600 dark:bg-amber-400" />
+    <div
+      data-slot="inbox-notice"
+      data-kind={notice.kind}
+      className={cn(
+        INBOX_ROW,
+        'cursor-default hover:translate-y-0 hover:shadow-[0_1px_2px_rgba(10,10,10,.04)]',
+        !result && 'border-amber-200 bg-amber-50/40 dark:border-amber-900 dark:bg-amber-950/20',
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'size-2 rounded-full',
+          result ? 'bg-foreground/60' : 'bg-amber-600 dark:bg-amber-400',
+        )}
+      />
       <span className="min-w-0 text-[13.5px]">
         <span className={cn('block truncate', !notice.read && 'font-semibold')}>
-          {t(notice.kind === 'schedule_failed' ? 'scheduleFailed' : 'schedulePaused', {
-            title: notice.title,
-          })}
+          {t(
+            notice.kind === 'schedule_failed'
+              ? 'scheduleFailed'
+              : notice.kind === 'followup_result'
+                ? 'followUpResult'
+                : 'schedulePaused',
+            { title: notice.title },
+          )}
         </span>
-        <span className="block truncate text-xs text-amber-700 dark:text-amber-400">
+        <span
+          className={cn(
+            'block truncate text-xs',
+            result ? 'text-muted-foreground' : 'text-amber-700 dark:text-amber-400',
+          )}
+        >
           {notice.reason}
         </span>
       </span>
