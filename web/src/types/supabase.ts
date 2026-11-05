@@ -3465,6 +3465,7 @@ export type Database = {
       chat_settings: {
         Row: {
           agent_run_share_default: number
+          agent_work: string
           agents_full_auto: boolean
           auto_go_live_at: string | null
           auto_go_live_by: string | null
@@ -3485,6 +3486,7 @@ export type Database = {
         }
         Insert: {
           agent_run_share_default?: number
+          agent_work?: string
           agents_full_auto?: boolean
           auto_go_live_at?: string | null
           auto_go_live_by?: string | null
@@ -3505,6 +3507,7 @@ export type Database = {
         }
         Update: {
           agent_run_share_default?: number
+          agent_work?: string
           agents_full_auto?: boolean
           auto_go_live_at?: string | null
           auto_go_live_by?: string | null
@@ -7593,6 +7596,44 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      setting_changes: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: string
+          new_value: string
+          old_value: string | null
+          organization_id: string
+          setting_key: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_value: string
+          old_value?: string | null
+          organization_id: string
+          setting_key: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_value?: string
+          old_value?: string | null
+          organization_id?: string
+          setting_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "setting_changes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
