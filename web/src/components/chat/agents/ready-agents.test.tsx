@@ -161,11 +161,13 @@ describe('Ready to use', () => {
       'weekly-report',
       'brand-facts-guardian',
     ]);
-    // Fan-out Gap Filler and Onboarding & Help, the next core agents ready, then the packs.
+    // Fan-out Gap Filler, Prompt Portfolio Manager and Onboarding & Help, the next core
+    // agents ready, then the packs.
     expect(shown[8].getAttribute('data-preset')).toBe('fanout-gap-filler');
-    expect(shown[9].getAttribute('data-preset')).toBe('onboarding-help');
-    expect(shown.slice(8, 20).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
-    expect(shown.slice(20).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
+    expect(shown[9].getAttribute('data-preset')).toBe('prompt-portfolio');
+    expect(shown[10].getAttribute('data-preset')).toBe('onboarding-help');
+    expect(shown.slice(8, 21).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
+    expect(shown.slice(21).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
     expect(shown).toHaveLength(39);
     // No brand on screen and no work areas: nothing is marked.
     expect(all('[data-slot="preset-fit"]')).toHaveLength(0);
@@ -193,7 +195,7 @@ describe('Ready to use', () => {
     expect(card('ready-to-publish').querySelector('[data-cell="trigger"]')?.textContent).toBe(
       'TriggerManual only',
     );
-    expect(action('agents.usePreset')).toHaveLength(20);
+    expect(action('agents.usePreset')).toHaveLength(21);
 
     // Fan-out Gap Filler: its skills on Mondays, in its mode.
     const added = card('fanout-gap-filler');
@@ -212,6 +214,15 @@ describe('Ready to use', () => {
     expect(help.querySelector('[data-cell="trigger"]')?.textContent).toBe('TriggerManual only');
     expect(help.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
       '/dashboard/agents/new?preset=onboarding-help',
+    );
+
+    // Prompt Portfolio Manager: its skill on Mondays, in its mode.
+    const portfolio = card('prompt-portfolio');
+    expect(portfolio.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
+      '/promptsAsk me first',
+    );
+    expect(portfolio.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
+      '/dashboard/agents/new?preset=prompt-portfolio',
     );
   });
 

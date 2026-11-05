@@ -253,7 +253,7 @@ describe('chatComposerSetup', () => {
   it("lists the library's skills for the / menu, by name and title, and none with the new Chat off", async () => {
     facts.ctx = ctxOf('manager', true, true);
     const { skills } = await chatComposerSetup();
-    expect(skills).toHaveLength(23);
+    expect(skills).toHaveLength(24);
     expect(skills.every((skill) => Object.keys(skill).join() === 'name,title')).toBe(true);
     vi.stubEnv('CHAT_AGENTIC', 'false');
     expect((await chatComposerSetup()).skills).toEqual([]);
@@ -303,7 +303,7 @@ describe('chatComposerSetup', () => {
     expect(skills).toContainEqual({ name: 'house-tone', title: 'House tone' });
     const names = skills.map((skill) => skill.name);
     for (const name of ['faq', 'their-own', 'switched-off']) expect(names).not.toContain(name);
-    expect(skills).toHaveLength(24);
+    expect(skills).toHaveLength(25);
   });
 
   it("puts the person's focus's skills first in the / menu (CHAT-24 §1)", async () => {
@@ -315,7 +315,7 @@ describe('chatComposerSetup', () => {
       'report',
       'facts',
     ]);
-    expect(skills).toHaveLength(23);
+    expect(skills).toHaveLength(24);
   });
 
   it('passes on the period whose 80% line was seen, and whether Chat runs on its own key', async () => {

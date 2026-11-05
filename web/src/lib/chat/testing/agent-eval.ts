@@ -63,7 +63,8 @@ export type OutputPromise =
   | 'task_review'
   | 'cms_draft'
   | 'wrong_claim'
-  | 'draft_or_action';
+  | 'draft_or_action'
+  | 'prompt_change';
 
 export type EvalGroup = 'agents' | 'skills';
 export type EvalTrigger = 'schedule' | 'signal' | 'kpi' | 'manual';
@@ -109,6 +110,7 @@ const AGENT_PROMISES: Readonly<
   'weekly-report': { must: ['report'] },
   'brand-facts-guardian': { must: ['wrong_claim', 'draft_or_action'] },
   'fanout-gap-filler': { must: ['draft'] },
+  'prompt-portfolio': { must: ['list', 'prompt_change'] },
   'onboarding-help': { must: ['list'] },
   'product-answer-pages': { must: ['draft'] },
   'feature-question-coverage': { must: ['draft'] },
@@ -229,6 +231,10 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
     message:
       'Which sub-questions does AI search where we are missing? Draft answers for the top ones and save them as a draft.',
     must: ['list', 'draft'],
+  },
+  prompts: {
+    message: 'Which prompts should we add, and which should we pause?',
+    must: ['list', 'prompt_change'],
   },
 };
 
@@ -589,6 +595,11 @@ function promiseMet(run: AgentEvalRun, promise: OutputPromise): { ok: boolean; d
         ok: WRONG_CLAIM.test(all),
         detail: 'neither wrong claim (the cancel fee, decaf) found',
       };
+    case 'prompt_change':
+      return {
+        ok: proposed(run, ['add_prompts', 'pause_prompts']),
+        detail: 'no prompt to add or pause proposed',
+      };
   }
 }
 
@@ -859,6 +870,7 @@ const PROMISE_TR: Readonly<Record<OutputPromise, string>> = {
   cms_draft: 'CMS taslağı',
   wrong_claim: 'yanlış iddiayı bulma',
   draft_or_action: 'taslak ya da Action Center aksiyonu',
+  prompt_change: 'eklenecek ya da durdurulacak prompt önerisi',
 };
 
 /** A check's name as the Turkish report shows it. */

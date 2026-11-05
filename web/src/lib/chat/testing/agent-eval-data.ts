@@ -932,6 +932,51 @@ export function evalReadResult(tool: string, input: Record<string, unknown>): un
           { source: 'Copilot', sessions: 39 },
         ],
       };
+    case 'get_gsc_queries':
+      // Search Console's queries for the last 28 days Google reported, and the 28 before.
+      return {
+        connected: true,
+        days: 28,
+        since: '2026-10-03',
+        until: '2026-10-30',
+        queries_total: 4,
+        queries: [
+          {
+            query: 'coffee subscription gift',
+            clicks: 41,
+            impressions: 2900,
+            position: 8.4,
+            previous_clicks: 35,
+            previous_impressions: 2400,
+          },
+          {
+            query: 'how to grind coffee beans for french press',
+            clicks: 18,
+            impressions: 1700,
+            position: 12.1,
+            previous_clicks: 22,
+            previous_impressions: 1650,
+          },
+          {
+            query: 'brewline coffee login',
+            clicks: 260,
+            impressions: 980,
+            position: 1.2,
+            previous_clicks: 240,
+            previous_impressions: 910,
+          },
+          {
+            query: 'best coffee subscription',
+            clicks: 64,
+            impressions: 5200,
+            position: 6.3,
+            previous_clicks: 70,
+            previous_impressions: 5600,
+          },
+        ],
+        data_as_of: '2026-10-30',
+        source_lag: '2–3 days',
+      };
     case 'get_gsc_summary':
       return {
         ...window,
