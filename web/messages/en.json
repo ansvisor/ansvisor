@@ -3518,6 +3518,11 @@
     },
     "sendToCms": { "name": "Send drafts to your CMS", "step": "Sent draft to your CMS" },
     "publishToCms": { "name": "Publish pages on your site", "step": "Published page on your site" },
+    "sendToWebhook": {
+      "name": "Send pages to your webhook",
+      "step": "Sent page to your webhook",
+      "note": "It goes to your workflow (Zapier, Make, n8n), which decides what happens to it next."
+    },
     "takeDownFromCms": {
       "name": "Take pages down from your site",
       "step": "Took page down from your site"
@@ -3784,6 +3789,7 @@
           "openPage": "Where should we open this page? (W4-11)",
           "pageVersions": "A page's versions in chat (W4-12a)",
           "execute": "Click card (EXECUTE)",
+          "webhook": "Send to your webhook (go-live PR 11)",
           "result": "Result card",
           "denial": "Out-of-permission answer",
           "failed": "Failed run",
@@ -3817,6 +3823,8 @@
           "executeDisabled": "Before the draft is approved",
           "executeSaving": "Publishing",
           "executeDone": "Published",
+          "webhookCard": "In Chat, waiting for the click",
+          "webhookNotice": "In the Inbox, after an agent sent it on its own",
           "nextMoves": "Next moves under the latest answer (the first one continues it)",
           "resultDone": "Done",
           "resultNeedsClick": "Done but for a click",
@@ -3935,7 +3943,9 @@
       "notSent": "The page wasn’t sent.",
       "unreached": "{cms} couldn’t be reached.",
       "refused": "{cms} refused it: {why}",
-      "rechecked": "Its permission to go live on its own changed while it ran."
+      "rechecked": "Its permission to go live on its own changed while it ran.",
+      "yourWebhook": "Your webhook",
+      "alreadySent": "This page went to your webhook already. An agent sends it there once."
     },
     "acting": {
       "refused": "This agent couldn't make this change on its own, so nothing changed. Use Run now to make it as you.",
@@ -4943,6 +4953,8 @@
         "published": "{agent} published “{title}” on {site}",
         "wentLiveDetail": "On its own, after Quality and your brand facts",
         "publishedDetail": "Live on {site} · on its own, after Quality and your brand facts",
+        "sentToWebhook": "{agent} sent “{title}” to your webhook",
+        "sentToWebhookDetail": "Ansvisor can’t take a webhook send back: your workflow decides what happens to it.",
         "takenDown": "Taken down · a draft in {cms} again",
         "openPage": "Open page",
         "openRun": "Open run",
@@ -5763,6 +5775,7 @@
       "markDraftReadyUndo": "Took the draft “{title}” back from Ready",
       "sendToCms": "Sent the draft “{title}” to {cms}",
       "publishToCms": "Published the page “{title}” through {cms}",
+      "sendToWebhook": "Sent the page “{title}” to your webhook",
       "takeDownFromCms": "Took the page “{title}” down from {cms}",
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
