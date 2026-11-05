@@ -1,17 +1,17 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [skills, skill, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, review a skill, skill update, update available, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps]
+keywords: [skills, skill, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, review a skill, skill update, update available, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, prompt portfolio, prompts to add, prompts to pause]
 synonyms: [slash commands, playbooks, how-tos, templates]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-02
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json, skills/README.md]
 ---
-Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-one Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Ready to publish**, **Weekly report**, **Buyer questions** and **Rival brief**.
+Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-two Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions** and **Rival brief**.
 
 ## Use a skill
 
@@ -57,4 +57,6 @@ A skill shapes how Chat works, not what it may do. It gives Chat no new tools, d
 
 ## The Ansvisor skills
 
-Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page and Translate a page.
+Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes and Prompt portfolio.
+
+**Prompt portfolio** (**/prompts**) proposes prompts to track, from your prompt suggestions, the sub-questions AI engines search and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each change is a card you approve, and the **Activity** log can undo it.

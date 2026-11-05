@@ -86,6 +86,7 @@ describe('the preset files', () => {
       'task-finisher',
       'weekly-report',
       'brand-facts-guardian',
+      'prompt-portfolio',
       'product-answer-pages',
       'feature-question-coverage',
       'alternatives-comparison-pages',
@@ -97,7 +98,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(21);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(20);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
@@ -221,6 +222,30 @@ describe('a ready preset', () => {
     expect(body).toContain('"2 of 6 tasks done; the rest go in the next run."');
     expect(body).not.toMatch(/at most four/);
     expect(chatAgents.presets['task-finisher'].description).toContain('finishes two a run');
+  });
+
+  it('keeps tracking on what matters as Prompt Portfolio Manager: /prompts on Mondays, asking first', () => {
+    // AGENTS plan §3 #10: weekly, its new skill. Ask me first: adding and pausing prompts is
+    // always the person's click, even where an Admin set those tools to run without asking.
+    expect(readyPreset('prompt-portfolio')).toMatchObject({
+      goal: 'visibility',
+      roles: ['aeo'],
+      skills: ['prompts'],
+      triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
+      mode: 'ask_first',
+      connections: [{ key: 'google_search_console', required: false }],
+      needs: [],
+    });
+    expect(presetGate(readyPreset('prompt-portfolio')!)).toBeNull();
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'prompts')?.body ?? '';
+    for (const tool of ['list_prompt_suggestions', 'get_fanouts', 'get_gsc_queries']) {
+      expect(body).toContain(`\`${tool}\``);
+    }
+    expect(body).toContain('`add_prompts`');
+    expect(body).toContain('`pause_prompts`');
+    expect(body).toContain('Out of scope is the person');
+    expect(body).toContain('Never add or pause a prompt any other way than with its card');
+    expect(chatAgents.presets['prompt-portfolio'].description).toContain('to pause');
   });
 
   it('is found by its id; a soon one, or no id, is not', () => {

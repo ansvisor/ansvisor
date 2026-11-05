@@ -5,8 +5,9 @@ import { SKILL_LIBRARY, SKILL_ORDER } from './skills/library';
 
 /**
  * The skills an agent is made of (CHAT-21 §D step 1): every skill in Chat's
- * library, the fourteen then the focus areas' seven (W2-23b), in its order,
- * each titled as its SKILL.md, with the connections it uses.
+ * library, the fourteen, the focus areas' seven (W2-23b), then /prompts (the
+ * Prompt Portfolio Manager's), in its order, each titled as its SKILL.md,
+ * with the connections it uses.
  */
 
 const FOCUS_SKILLS = [
@@ -20,9 +21,10 @@ const FOCUS_SKILLS = [
 ];
 
 describe('ANSVISOR_SKILLS', () => {
-  it("lists every library skill, in the library's order, the focus areas' seven last", () => {
+  it("lists every library skill, in the library's order, the focus areas' seven, then /prompts", () => {
     expect(ANSVISOR_SKILLS.map((skill) => skill.id)).toEqual([...SKILL_ORDER]);
-    expect(ANSVISOR_SKILLS.slice(-7).map((skill) => skill.id)).toEqual(FOCUS_SKILLS);
+    expect(ANSVISOR_SKILLS.slice(14, 21).map((skill) => skill.id)).toEqual(FOCUS_SKILLS);
+    expect(ANSVISOR_SKILLS.at(-1)?.id).toBe('prompts');
   });
 
   it('titles each skill as its SKILL.md does', () => {
@@ -31,6 +33,13 @@ describe('ANSVISOR_SKILLS', () => {
       expect(titles[skill.name], skill.name).toBe(skill.title);
     }
     expect(Object.keys(titles).sort()).toEqual(ANSVISOR_SKILLS.map((skill) => skill.id).sort());
+  });
+
+  it('gives /prompts Search Console as Optional: it reads the queries when connected', () => {
+    expect(skillConnections(['prompts'])).toEqual([
+      { key: 'google_search_console', skill: 'prompts', required: false },
+    ]);
+    expect(requiredBy(['prompts'], 'google_search_console')).toBeNull();
   });
 
   it("gives the focus areas' seven no connection: they read Ansvisor's own data", () => {

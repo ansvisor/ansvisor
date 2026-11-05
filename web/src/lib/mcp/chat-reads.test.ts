@@ -18,6 +18,9 @@ const reads = vi.hoisted(() => ({
   answers: {} as Record<string, unknown>,
   /** brand_integrations' rows by brand_id, when a test gives each brand its own. */
   byBrand: null as Record<string, unknown[]> | null,
+  /** Database functions called, and what each answers. */
+  rpcs: [] as { name: string; args: unknown }[],
+  rpcAnswers: {} as Record<string, unknown>,
   org: { plan: 'starter', subscription_status: 'active', plan_overrides: null } as unknown,
 }));
 
@@ -53,7 +56,12 @@ function from(table: string) {
   return chain;
 }
 
-vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from } }));
+async function rpc(name: string, args: unknown) {
+  reads.rpcs.push({ name, args });
+  return { data: reads.rpcAnswers[name] ?? null, error: null };
+}
+
+vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from, rpc } }));
 vi.mock('@/lib/supabase/scoped', () => ({
   dbClient: vi.fn(),
   withDbClient: (_client: unknown, fn: () => Promise<unknown>) => fn(),
@@ -100,7 +108,7 @@ vi.mock('./product-visibility', () => ({ merchantCenterOffered: async () => fals
 const { getFanoutsFor, listAiAnswersFor, getPromptInsightsFor } = await import('./prompt-reads');
 const { getOverviewSummaryFor } = await import('./overview-reads');
 const { getActionCenterKpisFor, getOnboardingProgressFor } = await import('./action-center-reads');
-const { getGaSummaryFor, getGscSummaryFor } = await import('./google-reads');
+const { getGaSummaryFor, getGscQueriesFor, getGscSummaryFor } = await import('./google-reads');
 const { getChatPolicyFor, getPlanFactsFor, listConnectionsFor, listMembersFor } =
   await import('./workspace-reads');
 
@@ -118,6 +126,8 @@ beforeEach(() => {
   reads.filters = [];
   reads.answers = {};
   reads.byBrand = null;
+  reads.rpcs = [];
+  reads.rpcAnswers = {};
   reads.org = { plan: 'starter', subscription_status: 'active', plan_overrides: null };
   for (const fn of Object.values(mocks)) fn.mockReset();
   mocks.brandAllowed.mockResolvedValue(true);
@@ -140,6 +150,7 @@ describe('a brand outside the organization', () => {
       getActionCenterKpisFor(auth(), params),
       getOnboardingProgressFor(auth(), params),
       getGscSummaryFor(auth(), params),
+      getGscQueriesFor(auth(), params),
       getGaSummaryFor(auth(), params),
     ]) {
       expect(await read).toBeNull();
@@ -400,6 +411,105 @@ describe('Google reads', () => {
     });
     await getGscSummaryFor(auth(), { brandId: BRAND, days: 28 });
     expect(mocks.getTrafficGoogleTotals.mock.calls[1][2]).toMatchObject({ gscLatestDays: null });
+  });
+
+  it("reads Search Console's queries, to the last day Google reported and the span before", async () => {
+    reads.answers.brands = { gsc_property: 'sc-domain:x', ga_property_id: null };
+    reads.answers.brand_integrations = connected;
+    reads.answers.gsc_query_stats = { date: '2026-10-28' };
+    reads.rpcAnswers.ae_gsc_queries = [
+      {
+        query: 'crm for agencies',
+        cur_clicks: 12,
+        cur_impressions: 840,
+        cur_position: 7.46,
+        prev_clicks: 9,
+        prev_impressions: 610,
+      },
+      {
+        query: 'best crm',
+        cur_clicks: null,
+        cur_impressions: 300,
+        cur_position: 11,
+        prev_clicks: null,
+        prev_impressions: null,
+      },
+      // Seen only before: not one of this span's queries.
+      {
+        query: 'old query',
+        cur_clicks: null,
+        cur_impressions: null,
+        cur_position: null,
+        prev_clicks: 3,
+        prev_impressions: 90,
+      },
+    ];
+    expect(await getGscQueriesFor(auth(), { brandId: BRAND })).toEqual({
+      connected: true,
+      days: 28,
+      since: '2026-10-01',
+      until: '2026-10-28',
+      queries_total: 2,
+      queries: [
+        {
+          query: 'crm for agencies',
+          clicks: 12,
+          impressions: 840,
+          position: 7.5,
+          previous_clicks: 9,
+          previous_impressions: 610,
+        },
+        {
+          query: 'best crm',
+          clicks: 0,
+          impressions: 300,
+          position: 11,
+          previous_clicks: null,
+          previous_impressions: null,
+        },
+      ],
+      data_as_of: '2026-10-28',
+      source_lag: '2–3 days',
+    });
+    expect(reads.rpcs).toEqual([
+      {
+        name: 'ae_gsc_queries',
+        args: {
+          p_brand_id: BRAND,
+          p_cur_from: '2026-10-01',
+          p_cur_to: '2026-10-28',
+          p_prev_from: '2026-09-03',
+          p_prev_to: '2026-09-30',
+        },
+      },
+    ]);
+    // A shorter list, and a shorter span.
+    const week = await getGscQueriesFor(auth(), { brandId: BRAND, days: 7, limit: 1 });
+    expect(week).toMatchObject({ since: '2026-10-22', until: '2026-10-28', queries_total: 2 });
+    expect(week?.queries.map((q) => q.query)).toEqual(['crm for agencies']);
+    expect(reads.rpcs[1].args).toMatchObject({
+      p_prev_from: '2026-10-15',
+      p_prev_to: '2026-10-21',
+    });
+  });
+
+  it('say Search Console has no queries yet, or is not connected, without reading any', async () => {
+    reads.answers.brands = { gsc_property: 'sc-domain:x', ga_property_id: null };
+    reads.answers.brand_integrations = connected;
+    expect(await getGscQueriesFor(auth(), { brandId: BRAND })).toEqual({
+      connected: true,
+      days: 28,
+      queries_total: 0,
+      queries: [],
+      data_as_of: null,
+      source_lag: '2–3 days',
+    });
+    reads.answers.brands = { gsc_property: null, ga_property_id: null };
+    expect(await getGscQueriesFor(auth(), { brandId: BRAND })).toMatchObject({
+      connected: false,
+      queries: [],
+    });
+    expect(reads.rpcs).toEqual([]);
   });
 
   it("reads Analytics' sessions to the last day it reported", async () => {

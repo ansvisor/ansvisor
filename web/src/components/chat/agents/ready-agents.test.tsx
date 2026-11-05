@@ -161,8 +161,10 @@ describe('Ready to use', () => {
       'weekly-report',
       'brand-facts-guardian',
     ]);
-    expect(shown.slice(8, 18).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
-    expect(shown.slice(18).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
+    // Prompt Portfolio Manager, the next core agent ready, then the packs.
+    expect(shown[8].getAttribute('data-preset')).toBe('prompt-portfolio');
+    expect(shown.slice(8, 19).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
+    expect(shown.slice(19).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
     expect(shown).toHaveLength(39);
     // No brand on screen and no work areas: nothing is marked.
     expect(all('[data-slot="preset-fit"]')).toHaveLength(0);
@@ -190,7 +192,16 @@ describe('Ready to use', () => {
     expect(card('ready-to-publish').querySelector('[data-cell="trigger"]')?.textContent).toBe(
       'TriggerManual only',
     );
-    expect(action('agents.usePreset')).toHaveLength(18);
+    expect(action('agents.usePreset')).toHaveLength(19);
+
+    // Prompt Portfolio Manager: its skill on Mondays, in its mode.
+    const added = card('prompt-portfolio');
+    expect(added.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
+      '/promptsAsk me first',
+    );
+    expect(added.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
+      '/dashboard/agents/new?preset=prompt-portfolio',
+    );
   });
 
   it('says what a Soon card waits for, and opens nothing from it', async () => {

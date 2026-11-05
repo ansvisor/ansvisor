@@ -758,7 +758,10 @@
         "called by",
         "sub-agents",
         "agent calls agent",
-        "send to webhook"
+        "send to webhook",
+        "prompt portfolio manager",
+        "prompts to add",
+        "prompts to pause"
       ],
       "synonyms": [
         "my agents",
@@ -797,6 +800,10 @@
         {
           "heading": "Agents for your site and your work",
           "text": "Agents made for the site type of the brand you have open are marked **For your site type**, and agents made for one of your work areas **For your role**. They come first among the agents you can use, and first among the **Soon** ones. A brand's site type is **E-commerce**, **B2B SaaS** or **B2C**, under **Site type** in the brand's settings; until someone sets it, Ansvisor guesses it. Change your work areas in **Settings › Account › Your work areas**. **Mobile app** agents show under **Business type** only: a brand can't be set to Mobile app yet."
+        },
+        {
+          "heading": "Prompt Portfolio Manager",
+          "text": "**Prompt Portfolio Manager** runs every Monday at 09:00 on **Ask me first**. It is made for the **AEO/GEO & Audit** work area. It proposes prompts to track, from your prompt suggestions, the sub-questions AI engines searched and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each proposal shows its evidence and is a card: nothing is added or paused until you approve it, and the **Activity** log can undo each change. A prompt counts as out of scope only when you say so. Search Console is optional. In Chat, the same skill is **/prompts**."
         },
         {
           "heading": "What each card shows",
@@ -1466,7 +1473,10 @@
         "ready to publish",
         "buyer questions",
         "rival brief",
-        "listing gaps"
+        "listing gaps",
+        "prompt portfolio",
+        "prompts to add",
+        "prompts to pause"
       ],
       "synonyms": [
         "slash commands",
@@ -1475,11 +1485,11 @@
         "templates"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-one Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Ready to publish**, **Weekly report**, **Buyer questions** and **Rival brief**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-two Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions** and **Rival brief**."
         },
         {
           "heading": "Use a skill",
@@ -1511,7 +1521,7 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page and Translate a page."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes and Prompt portfolio.\n\n**Prompt portfolio** (**/prompts**) proposes prompts to track, from your prompt suggestions, the sub-questions AI engines search and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each change is a card you approve, and the **Activity** log can undo it."
         }
       ]
     },

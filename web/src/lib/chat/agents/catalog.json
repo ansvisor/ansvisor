@@ -257,7 +257,9 @@
       "roles": [
         "aeo"
       ],
-      "skills": [],
+      "skills": [
+        "prompts"
+      ],
       "triggers": [
         {
           "kind": "schedule",
@@ -265,12 +267,15 @@
           "time": "09:00"
         }
       ],
-      "mode": "auto",
-      "connections": [],
-      "status": "soon",
-      "needs": [
-        "prompts_skill"
-      ]
+      "mode": "ask_first",
+      "connections": [
+        {
+          "key": "google_search_console",
+          "required": false
+        }
+      ],
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "onboarding-help",
@@ -540,8 +545,7 @@
       "connections": [],
       "status": "soon",
       "needs": [
-        "seasonal_skill",
-        "prompts_skill"
+        "seasonal_skill"
       ]
     },
     {

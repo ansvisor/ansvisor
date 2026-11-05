@@ -3475,6 +3475,10 @@
       "step": "Read Getting started"
     },
     "gscSummary": { "name": "Read Google Search Console", "step": "Read Search Console" },
+    "gscQueries": {
+      "name": "Read Google Search Console queries",
+      "step": "Read Search Console queries"
+    },
     "gaSummary": { "name": "Read Google Analytics", "step": "Read Google Analytics" },
     "members": { "name": "Read team members", "step": "Read Team" },
     "connections": { "name": "Read connected tools", "step": "Read Integrations" },
@@ -6217,7 +6221,8 @@
       "markets": "Who AI recommends by market",
       "listings": "Listing gaps",
       "rivals": "Rival brief",
-      "audit-fix": "Site audit fixes"
+      "audit-fix": "Site audit fixes",
+      "prompts": "Prompt portfolio"
     },
     "form": {
       "titleNew": "New agent",
@@ -6632,7 +6637,6 @@
       "needsLine": "Needs {what}",
       "needs": {
         "fanout_skill": "the /fanout skill",
-        "prompts_skill": "the /prompts skill",
         "setup_skill": "the /setup skill",
         "help_articles": "approved Help articles",
         "catalog_trigger": "a catalog sync trigger",

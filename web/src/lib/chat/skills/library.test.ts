@@ -69,6 +69,8 @@ const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone']
  * seven for the focus areas (W2-23) take the mockup's "New for you" line
  * where it has one, and their table's otherwise; its /compare is
  * `features` (`compare` was taken) and its /factcheck is `wrongclaim`.
+ * The AGENTS plan's /prompts (§3 #10, §7 step 3) is the Prompt Portfolio
+ * Manager's: its line says what the agent's card does.
  */
 const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = {
   winback: {
@@ -158,6 +160,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     title: 'Site audit fixes',
     description: 'Turns site audit findings into fixes you approve.',
   },
+  prompts: {
+    title: 'Prompt portfolio',
+    description:
+      'Proposes prompts to add and to pause, with the evidence for each. Every change waits for your click.',
+  },
 };
 const LIBRARY_NAMES = Object.keys(ANSVISOR_SKILLS);
 
@@ -199,7 +206,7 @@ const folders = files.map((file) => file.folder);
 const playbookFiles = allFiles.filter(isHidden);
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's twenty-one, with the mockup's titles and descriptions", () => {
+  it("are Ansvisor's twenty-two, with the mockup's titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {

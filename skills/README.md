@@ -23,7 +23,7 @@ behaves like an AEO analyst who's been on your account for six months.
 
 ## Ansvisor skills (Chat)
 
-Chat in Ansvisor uses the twenty-one skills below. Each is one `SKILL.md` in
+Chat in Ansvisor uses the twenty-two skills below. Each is one `SKILL.md` in
 the [Agent Skills](https://agentskills.io/specification) format:
 instructions only, no scripts or reference files. Chat lists their names and
 descriptions, and loads a skill's text when it picks the skill or when you
@@ -52,6 +52,7 @@ start a message with its `/name`.
 | [`listings`](./listings) | Listing gaps |
 | [`rivals`](./rivals) | Rival brief |
 | [`audit-fix`](./audit-fix) | Site audit fixes |
+| [`prompts`](./prompts) | Prompt portfolio |
 
 ### Shortcut playbooks
 
@@ -166,7 +167,7 @@ Every folder under `skills/` other than the two AEO coach flavours is one of
 Chat's Ansvisor skills or shortcut playbooks, and CI checks it as one. So
 there are two kinds of contribution:
 
-**A skill for Chat.** Ansvisor's own skills are the twenty-one listed above.
+**A skill for Chat.** Ansvisor's own skills are the twenty-two listed above.
 Adding one (or changing one) means, in the same PR:
 
 ```

@@ -21,6 +21,11 @@
  * /listings reads the sites AI cites, not a catalog, and /audit-fix writes
  * a robots or CMS change for the person to make.
  *
+ * Then the AGENTS plan's (§7 step 3): /prompts, the Prompt Portfolio
+ * Manager's, reads the brand's prompts, suggestions and fan-outs, and its
+ * Search Console queries when Search Console is connected: Optional, as
+ * for /report. Its changes are prompts added and paused, each on a card.
+ *
  * A workspace's own skills (CHAT-13, W3-06) are instructions only: an
  * agent may name one by its /command, and it needs no connection (skillOf
  * gives none). Whether it may run now is the workspace's to say
@@ -90,6 +95,7 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'listings', uses: [] },
   { id: 'rivals', uses: [] },
   { id: 'audit-fix', uses: [] },
+  { id: 'prompts', uses: [optional('google_search_console')] },
 ];
 
 /** Connections any agent may add as Optional (mockup: Google Analytics). */
