@@ -1086,6 +1086,11 @@
         "check it against the rules",
         "check rules",
         "open rules",
+        "optimize",
+        "optimize here",
+        "optimize page",
+        "rewrite page",
+        "optimize in content editor",
         "voice",
         "microphone",
         "speak",
@@ -1178,6 +1183,10 @@
         {
           "heading": "Rules and Quality on a page's card",
           "text": "A page's card also shows **Rules 11/12** and **Quality 82**, as the Content Editor's header does: how many of the page's rules it meets, and the average of its E-E-A-T, Trust and Readability scores. Rules is green when every rule is met and amber when some are open. Quality is read the way the editor reads it: with its AI checks on, a read the page doesn't have yet counts toward your AI usage as part of the run. A pill that couldn't be read isn't shown, and Quality shows only where Content Quality is on. While rules are open, **Check it against the rules** is a next move: Chat lists each open rule and Quality check in the editor's words, using no AI, and offers **Open in Content Editor**."
+        },
+        {
+          "heading": "Optimize a page in chat",
+          "text": "**Optimize ▾** on a page's card is headed by what's left, such as **1 rule open · Quality 82**, and offers two ways. **Optimize here, no editor** asks Chat to have the Content Agent rewrite the page to its open rules, as the editor's **Rewrite the page to these rules** does, with the same guards: quoted passages kept, only known links, no invented facts. Chat waits for the agent, then the page comes back as the next version card with **What changed** and **Undo**. It's a change, so Chat asks first, and it counts toward your AI usage as the editor's rewrite does. A rule the agent tried here and couldn't close isn't sent again: Chat names it for you to decide. **Optimize in Content Editor** opens the full editor. Admins and Managers optimize; others get **Ask your Admin**."
         },
         {
           "heading": "Send or publish a page from Chat",

@@ -141,9 +141,9 @@ beforeEach(() => {
 describe('Optimize here, no editor (W4-12b part 2)', () => {
   it('rewrites the page to its rules as the editor does, and puts it in as the next version', async () => {
     // After the rewrite, the FAQ rule is met and Length is still open.
-    fake.rules.mockResolvedValueOnce(rulesRead(['faq', 'length'])).mockResolvedValueOnce(
-      rulesRead(['length']),
-    );
+    fake.rules
+      .mockResolvedValueOnce(rulesRead(['faq', 'length']))
+      .mockResolvedValueOnce(rulesRead(['length']));
     const result = await optimizeDraftHere(ctx, DRAFT, fast);
     expect(result).toEqual({
       ok: true,

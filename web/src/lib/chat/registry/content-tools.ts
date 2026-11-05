@@ -51,9 +51,7 @@ const ITEM = FIXTURE_IDS.item;
 const viaAgentRun = (ctx: ChatToolContext) => ctx.chat?.agentRunId ?? null;
 
 /** A page Optimize here put in, with the History version that kept the page before it. */
-const optimized = (
-  output: unknown,
-): output is Extract<OptimizeResult, { ok: true }> =>
+const optimized = (output: unknown): output is Extract<OptimizeResult, { ok: true }> =>
   !!output &&
   typeof output === 'object' &&
   (output as { ok?: unknown }).ok === true &&

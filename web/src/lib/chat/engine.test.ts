@@ -4279,6 +4279,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'update_draft',
     'suggest_draft_changes',
     'set_draft_ready',
+    // W4-12b part 2's Optimize here: Admins and Managers only.
+    'optimize_draft',
     'push_cms_draft',
     'publish_cms',
     'trigger_content_webhook',

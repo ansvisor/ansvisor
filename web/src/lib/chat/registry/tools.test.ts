@@ -85,6 +85,10 @@ vi.mock('@/lib/mcp/ready-agents', async (importOriginal) =>
 vi.mock('@/lib/chat/page-check', async (importOriginal) =>
   tracked.all('chat/page-check', await importOriginal<Record<string, unknown>>()),
 );
+// Optimize here (W4-12b part 2): Chat's own, over the editor's Rewrite.
+vi.mock('@/lib/chat/page-optimize', async (importOriginal) =>
+  tracked.all('chat/page-optimize', await importOriginal<Record<string, unknown>>()),
+);
 // No app page makes images yet: the image rows call Chat's own image functions (W4-08).
 vi.mock('@/lib/chat/images/chat-images', () => ({
   imageModelQuestion: tracked.track('chat/images.imageModelQuestion'),
@@ -260,7 +264,7 @@ beforeEach(() => {
 });
 
 /** The rows of a page's version in Chat that call Chat's own functions (W4-12b part 2). */
-const CHAT_PAGE_ROWS = new Set(['check_draft_rules']);
+const CHAT_PAGE_ROWS = new Set(['check_draft_rules', 'optimize_draft']);
 
 describe('the Chat tool registry', () => {
   it('has a label and a valid fixture on every row', () => {
@@ -784,6 +788,8 @@ describe('approval policies', () => {
       update_draft: ['admin', 'manager'],
       suggest_draft_changes: ['admin', 'manager'],
       set_draft_ready: ['admin', 'manager'],
+      // Optimize here (W4-12b part 2): a change to the page, as update_draft.
+      optimize_draft: ['admin', 'manager'],
       push_cms_draft: ['admin', 'manager'],
       publish_cms: ['admin', 'manager'],
       trigger_content_webhook: ['admin', 'manager'],

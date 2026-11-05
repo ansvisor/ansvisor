@@ -48,6 +48,11 @@ vi.mock('@/lib/actions/content-drafts', () => ({
   setContentDraftReady: vi.fn(),
   suggestDraftChanges: vi.fn(),
 }));
+// Optimize here (W4-12b part 2): the editor's rewrite, put in as a change (page-optimize.test.ts).
+vi.mock('@/lib/chat/page-optimize', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/chat/page-optimize')>()),
+  optimizeDraftHere: vi.fn(),
+}));
 vi.mock('@/lib/chat/actor/drafts', () => ({
   createContentDraftFor: vi.fn(),
   updateContentDraftFor: vi.fn(),
@@ -105,6 +110,7 @@ const db = supabaseAdmin as unknown as FakeSupabase;
 const { createContentDraft, setContentDraftReady, suggestDraftChanges, updateContentDraft } =
   await import('@/lib/actions/content-drafts');
 const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
+const { optimizeDraftHere } = await import('@/lib/chat/page-optimize');
 const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
 const { sendDraftToCms } = await import('@/lib/actions/cms-send');
 const { createReport } = await import('@/lib/actions/reports');
@@ -185,6 +191,7 @@ const INPUTS: Record<string, unknown> = {
   update_draft: { draft_id: DRAFT, title: 'Pricing FAQ for teams' },
   suggest_draft_changes: { draft_id: DRAFT, request: 'Make answer 3 shorter' },
   set_draft_ready: { draft_id: DRAFT },
+  optimize_draft: { draft_id: DRAFT },
   push_cms_draft: { draft_id: DRAFT, destination: 'webflow' },
   publish_cms: { draft_id: DRAFT, destination: 'webflow' },
   trigger_content_webhook: { draft_id: DRAFT },
@@ -213,6 +220,7 @@ const INPUTS: Record<string, unknown> = {
 /** The rows that change or send a Library draft find one. */
 const NEEDS_DRAFT = new Set([
   'update_draft',
+  'optimize_draft',
   'suggest_draft_changes',
   'set_draft_ready',
   'push_cms_draft',
@@ -231,6 +239,19 @@ beforeEach(() => {
   vi.mocked(setContentDraftReady).mockImplementation(fakeSetDraftReady(db) as never);
   // The Content Agent's suggestions in the editor beside the chat (W4-14): the page doesn't change.
   vi.mocked(suggestDraftChanges).mockImplementation(async () => ({ ok: true, count: 2 }));
+  vi.mocked(optimizeDraftHere).mockImplementation(async (_ctx, id) => {
+    const changed = await fakeUpdateContentDraft(db)(id, { bodyHtml: '<h1>FAQ</h1>' });
+    if (!changed.ok) return { ok: false, reason: 'not_found', message: changed.message };
+    return {
+      ok: true,
+      title: 'Pricing FAQ',
+      beforeVersionId: changed.beforeVersionId,
+      body_html: '<h1>FAQ</h1>',
+      fixed: [],
+      left: [],
+      tried: [],
+    };
+  });
   vi.mocked(createContentDraftFor).mockImplementation((_actor, brandId, start) =>
     fakeCreateDraft(db)(brandId, start),
   );

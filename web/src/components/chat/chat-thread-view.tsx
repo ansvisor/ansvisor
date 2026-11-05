@@ -747,7 +747,11 @@ export function ChatThreadView({
                   onAsk={
                     !thread || thread.mine
                       ? (prompt) =>
-                          void send(prompt, { context: chips ?? [], references: [], attachments: [] })
+                          void send(prompt, {
+                            context: chips ?? [],
+                            references: [],
+                            attachments: [],
+                          })
                       : undefined
                   }
                   onTasks={(strip) =>

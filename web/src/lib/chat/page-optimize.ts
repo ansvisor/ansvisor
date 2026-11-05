@@ -41,7 +41,11 @@ export const OPTIMIZE_WAIT_MS = 240_000;
 /** How often the run is read meanwhile. */
 const POLL_MS = 3_000;
 
-const tRules = createTranslator({ locale: 'en', messages, namespace: 'contentEditor.editor.rules' });
+const tRules = createTranslator({
+  locale: 'en',
+  messages,
+  namespace: 'contentEditor.editor.rules',
+});
 const tStatus = createTranslator({
   locale: 'en',
   messages,
@@ -254,16 +258,19 @@ export async function optimizeDraftHere(
     }
 
     const changed = await updateContentDraft(draft.id, { bodyHtml: page.after_text });
-    if (!changed.ok) return { ok: false, reason: changed.reason === 'conflict' ? 'conflict' : 'failed', message: changed.message };
+    if (!changed.ok)
+      return {
+        ok: false,
+        reason: changed.reason === 'conflict' ? 'conflict' : 'failed',
+        message: changed.message,
+      };
     // Put in place here, so the editor doesn't offer it again to compare.
     await decideDraftSuggestions([page.id], 'accepted').catch((err: unknown) =>
       console.error('[chat/optimize] the rewrite wasn’t marked accepted:', err),
     );
 
     const after = await readDraftRules({ organizationId: organizationId!, draftId });
-    const stillOpen = new Set(
-      (after ? openForAgent(after) : toFix).map(({ rule }) => rule.key),
-    );
+    const stillOpen = new Set((after ? openForAgent(after) : toFix).map(({ rule }) => rule.key));
     const leftRules = toFix.filter(({ rule }) => stillOpen.has(rule.key));
     return {
       ok: true,
@@ -281,7 +288,10 @@ export async function optimizeDraftHere(
 }
 
 /** The rule keys an Optimize here's output says it tried and couldn't close, by its draft. */
-export function triedOf(input: unknown, output: unknown): { draftId: string; keys: string[] } | null {
+export function triedOf(
+  input: unknown,
+  output: unknown,
+): { draftId: string; keys: string[] } | null {
   const draftId = (input as { draft_id?: unknown } | null)?.draft_id;
   const tried = (output as { tried?: unknown } | null)?.tried;
   if (typeof draftId !== 'string' || !Array.isArray(tried)) return null;
