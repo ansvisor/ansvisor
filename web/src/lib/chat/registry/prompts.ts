@@ -1,9 +1,18 @@
 import { z } from 'zod';
 import { contentUuid } from '@/lib/mcp/content-schemas';
-import { getFanoutsFor, getPromptInsightsFor, listAiAnswersFor } from '@/lib/mcp/prompt-reads';
+import {
+  getFanoutGapsFor,
+  getFanoutsFor,
+  getPromptInsightsFor,
+  listAiAnswersFor,
+} from '@/lib/mcp/prompt-reads';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 
-/** Chat's Prompts reads (CHAT-20 §9 rows 14, 16, 18; Chat Wave 1 W1-16). */
+/**
+ * Chat's Prompts reads (CHAT-20 §9 rows 14, 16, 18; Chat Wave 1 W1-16), and
+ * the fan-out gaps the /fanout skill works from (AGENTS plan §3 #9): row 18's
+ * read, kept to the sub-queries whose answers never named the brand.
+ */
 
 const brandId = contentUuid.describe('Brand id, from list_brands.');
 
@@ -27,6 +36,29 @@ export const PROMPTS_READS = [
       days: z.number().int().min(1).max(90).optional().describe('Days back, 30 by default.'),
     }),
     run: (ctx, input) => getFanoutsFor(ctx, { brandId: input.brand_id, days: input.days }),
+    fixture: { input: { brand_id: FIXTURE_IDS.brand } },
+  }),
+  defineTool({
+    name: 'get_fanout_gaps',
+    class: 'read',
+    area: 'prompts',
+    description:
+      'The fan-out gaps: the searches AI engines ran behind the brand\'s tracked answers where none of those answers named the brand or cited its site, the most searched first. Each with the engines that ran it, how often, whether it is tracked as a prompt, the tracked prompts whose answers ran it (their ids, to draft from) and the competitors those answers named instead. For "where are we missing" and drafting answers to those exact sub-questions.',
+    minRole: 'analyst',
+    planGate: { platforms: true },
+    brandOf: { input: 'brand_id' },
+    costClass: 'C1',
+    labelKey: 'fanoutGaps',
+    route: '/dashboard/prompts/fan-outs',
+    mcpTool: null,
+    specRow: '18',
+    inputSchema: z.object({
+      brand_id: brandId,
+      days: z.number().int().min(1).max(90).optional().describe('Days back, 30 by default.'),
+      limit: z.number().int().min(1).max(50).optional().describe('Gaps listed, 20 by default.'),
+    }),
+    run: (ctx, input) =>
+      getFanoutGapsFor(ctx, { brandId: input.brand_id, days: input.days, limit: input.limit }),
     fixture: { input: { brand_id: FIXTURE_IDS.brand } },
   }),
   defineTool({

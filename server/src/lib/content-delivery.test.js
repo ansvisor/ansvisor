@@ -27,6 +27,8 @@ const db = {
   queued: [],
   updates: [],
   rpc: [],
+  // Agent runs (00419): the run a person's send names (00480) is checked against them.
+  agentRuns: [],
 };
 
 function from(table) {
@@ -56,6 +58,13 @@ function from(table) {
       return { data: db.drafts.filter((d) => !ids || ids.includes(d.id)), error: null };
     }
     if (table === 'webhook_configs') return { data: db.configs, error: null };
+    if (table === 'chat_agent_runs') {
+      const eqs = q.filters.filter(([op]) => op === 'eq');
+      return {
+        data: db.agentRuns.filter((run) => eqs.every(([, col, value]) => run[col] === value)),
+        error: null,
+      };
+    }
     if (table === 'brand_cms_connections') {
       const provider = q.filters.find(([op, col]) => op === 'eq' && col === 'provider')?.[2];
       const connection = { wordpress: db.wordpress, framer: db.framer, wix: db.wix }[provider];
@@ -166,6 +175,7 @@ beforeEach(() => {
   db.queued = [row(page().draftId)];
   db.updates = [];
   db.rpc = [];
+  db.agentRuns = [];
   db.webflow = null;
   db.webflowConfigured = true;
   db.wordpress = null;
@@ -580,6 +590,58 @@ describe('sendContentPages to Webflow (phase 2)', () => {
     db.updates = [];
     await toWebflow();
     expect(db.updates.map((u) => u.update)).not.toContainEqual({ agent_run_id: 'ar-1' });
+  });
+
+  it('keeps the agent run whose card a person sent it from, once it is the workspace’s run on the brand (00480)', async () => {
+    db.webflow = connection;
+    sendToWebflow.mockResolvedValue({
+      taken: true,
+      externalId: 'item-1',
+      collectionId: 'c1',
+      updated: false,
+      changed: { tables: 0, images: 0 },
+    });
+    db.agentRuns = [
+      { id: 'ar-2', organization_id: 'o1', brand_id: 'b1' },
+      { id: 'ar-3', organization_id: 'o1', brand_id: 'b2' },
+      { id: 'ar-4', organization_id: 'o2', brand_id: 'b1' },
+    ];
+    const sendVia = (viaAgentRunId, over = {}) =>
+      sendContentPages({
+        orgId: 'o1',
+        brandId: 'b1',
+        userId: 'u1',
+        pages: [page()],
+        target: 'webflow',
+        viaAgentRunId,
+        ...over,
+      });
+    const runWrites = () =>
+      db.updates
+        .filter((u) => u.table === 'content_draft_deliveries')
+        .map((u) => u.update)
+        .filter((update) => 'agent_run_id' in update || 'via_agent_run_id' in update);
+
+    await sendVia('ar-2');
+    const writes = db.updates.filter((u) => u.table === 'content_draft_deliveries');
+    // Kept before it goes, beside sent_by (the person), never as the run's own send.
+    expect(writes[0].update).toEqual({ via_agent_run_id: 'ar-2' });
+    expect(writes[1].update).toMatchObject({ status: 'sent' });
+    expect(sendToWebflow).toHaveBeenCalledTimes(1);
+
+    // Another brand's run, another workspace's, or none there: the page still goes, naming none.
+    for (const id of ['ar-3', 'ar-4', 'ar-9']) {
+      db.updates = [];
+      sendToWebflow.mockClear();
+      await sendVia(id);
+      expect(runWrites(), id).toEqual([]);
+      expect(sendToWebflow, id).toHaveBeenCalledTimes(1);
+    }
+
+    // An agent's own send keeps only its own run: never both (00480's check).
+    db.updates = [];
+    await sendVia('ar-2', { agentRunId: 'ar-1' });
+    expect(runWrites()).toEqual([{ agent_run_id: 'ar-1' }]);
   });
 
   it('writes a page Webflow didn’t take as failed, with the reason', async () => {

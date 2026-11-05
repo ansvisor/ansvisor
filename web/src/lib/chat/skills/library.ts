@@ -7,8 +7,9 @@ import { parseSkillFile } from './format';
  * Chat's skills (CHAT-13 items 3–6, and its v2 "Ansvisor skills (14)"; Chat
  * Wave 2 W2-04): Ansvisor's own skills, the v2 mockup's fourteen (`SK`)
  * and CHAT-24 §5's seven for the focus areas (W2-23), then the AGENTS
- * plan's new ones (§7 step 3: /prompts, the Prompt Portfolio Manager's),
- * written as SKILL.md files in the repo's /skills folder and
+ * plan's new ones (§7 step 3: /setup, the Onboarding & Help agent's,
+ * /fanout, the Fan-out Gap Filler's, and /prompts, the Prompt Portfolio
+ * Manager's), written as SKILL.md files in the repo's /skills folder and
  * published with it (item 20). The web app's build can't read that folder,
  * so the library is kept here in library.json, and library.test.ts keeps
  * the file in step with /skills (refresh it with `yarn test -u
@@ -70,6 +71,10 @@ export const SKILL_ORDER = [
   'listings',
   'rivals',
   'audit-fix',
+  // AGENTS plan §7 step 3: the Onboarding & Help agent's.
+  'setup',
+  // AGENTS plan §7 step 3: the Fan-out Gap Filler's.
+  'fanout',
   // AGENTS plan §7 step 3: the Prompt Portfolio Manager's.
   'prompts',
 ] as const;

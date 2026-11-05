@@ -161,10 +161,13 @@ describe('Ready to use', () => {
       'weekly-report',
       'brand-facts-guardian',
     ]);
-    // Prompt Portfolio Manager, the next core agent ready, then the packs.
-    expect(shown[8].getAttribute('data-preset')).toBe('prompt-portfolio');
-    expect(shown.slice(8, 19).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
-    expect(shown.slice(19).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
+    // Fan-out Gap Filler, Prompt Portfolio Manager and Onboarding & Help, the next core
+    // agents ready, then the packs.
+    expect(shown[8].getAttribute('data-preset')).toBe('fanout-gap-filler');
+    expect(shown[9].getAttribute('data-preset')).toBe('prompt-portfolio');
+    expect(shown[10].getAttribute('data-preset')).toBe('onboarding-help');
+    expect(shown.slice(8, 21).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
+    expect(shown.slice(21).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
     expect(shown).toHaveLength(39);
     // No brand on screen and no work areas: nothing is marked.
     expect(all('[data-slot="preset-fit"]')).toHaveLength(0);
@@ -192,26 +195,45 @@ describe('Ready to use', () => {
     expect(card('ready-to-publish').querySelector('[data-cell="trigger"]')?.textContent).toBe(
       'TriggerManual only',
     );
-    expect(action('agents.usePreset')).toHaveLength(19);
+    expect(action('agents.usePreset')).toHaveLength(21);
 
-    // Prompt Portfolio Manager: its skill on Mondays, in its mode.
-    const added = card('prompt-portfolio');
+    // Fan-out Gap Filler: its skills on Mondays, in its mode.
+    const added = card('fanout-gap-filler');
     expect(added.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
-      '/promptsAsk me first',
+      '/fanout/answerfirstAuto, ask before changes',
     );
     expect(added.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
+      '/dashboard/agents/new?preset=fanout-gap-filler',
+    );
+
+    // Onboarding & Help: its setup skill, on Run now only, asking before every change.
+    const help = card('onboarding-help');
+    expect(help.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
+      '/setupAsk me first',
+    );
+    expect(help.querySelector('[data-cell="trigger"]')?.textContent).toBe('TriggerManual only');
+    expect(help.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
+      '/dashboard/agents/new?preset=onboarding-help',
+    );
+
+    // Prompt Portfolio Manager: its skill on Mondays, in its mode.
+    const portfolio = card('prompt-portfolio');
+    expect(portfolio.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
+      '/promptsAsk me first',
+    );
+    expect(portfolio.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
       '/dashboard/agents/new?preset=prompt-portfolio',
     );
   });
 
   it('says what a Soon card waits for, and opens nothing from it', async () => {
     await render();
-    const help = card('onboarding-help');
-    expect(help.querySelector('[data-slot="preset-soon"]')?.textContent).toBe(
-      'SoonNeeds approved Help articles and the /setup skill',
+    const localization = card('localization');
+    expect(localization.querySelector('[data-slot="preset-soon"]')?.textContent).toBe(
+      'SoonNeeds a page-published trigger',
     );
-    expect(help.querySelector('a')).toBeNull();
-    expect(help.querySelector('button')).toBeNull();
+    expect(localization.querySelector('a')).toBeNull();
+    expect(localization.querySelector('button')).toBeNull();
     expect(card('aeo-operator').textContent).toContain('Needs sub-agents');
     expect(card('revenue-attribution').textContent).toContain('Needs HubSpot');
     for (const soon of cards().filter((c) => c.getAttribute('data-status') === 'soon')) {
@@ -366,5 +388,38 @@ describe('Ready to use', () => {
     expect(card('product-answer-pages').getAttribute('data-fit')).toBe('siteType');
     // Mobile app isn't a site type a brand has yet: its pack is never marked.
     expect(card('feature-question-coverage').getAttribute('data-fit')).toBeNull();
+  });
+
+  it('brings the card a link from Chat names into view, once the brands set the order', async () => {
+    const scrolled: string[] = [];
+    const scrollIntoView = vi.fn(function (this: HTMLElement) {
+      scrolled.push(this.id);
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    try {
+      // Setup's recommendations link each agent to its card (list_ready_agents' href).
+      window.history.replaceState(null, '', '/dashboard/agents?tab=ready#preset-ceo-brief');
+      await render();
+      expect(card('ceo-brief').id).toBe('preset-ceo-brief');
+      // The brands aren't in yet: the site type may still move the card.
+      expect(scrollIntoView).not.toHaveBeenCalled();
+      await act(async () => onBrand('b2b'));
+      await settle();
+      expect(scrolled).toEqual(['preset-ceo-brief']);
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+
+      // No card named: nothing moves.
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      scrolled.length = 0;
+      window.history.replaceState(null, '', '/dashboard/agents#top');
+      await render();
+      expect(scrolled).toEqual([]);
+    } finally {
+      delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
   });
 });

@@ -109,7 +109,9 @@ const AGENT_PROMISES: Readonly<
   'task-finisher': { must: ['task_review'], review: ['draft'] },
   'weekly-report': { must: ['report'] },
   'brand-facts-guardian': { must: ['wrong_claim', 'draft_or_action'] },
+  'fanout-gap-filler': { must: ['draft'] },
   'prompt-portfolio': { must: ['list', 'prompt_change'] },
+  'onboarding-help': { must: ['list'] },
   'product-answer-pages': { must: ['draft'] },
   'feature-question-coverage': { must: ['draft'] },
   'alternatives-comparison-pages': { must: ['draft'] },
@@ -221,6 +223,15 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
   },
   rivals: { message: 'Give me a rival brief on Northbound Roasters.', must: ['report'] },
   'audit-fix': { message: 'What should we fix first from our site audit?', must: ['list'] },
+  setup: {
+    message: 'What should I set up next, and which agents should we use?',
+    must: ['list'],
+  },
+  fanout: {
+    message:
+      'Which sub-questions does AI search where we are missing? Draft answers for the top ones and save them as a draft.',
+    must: ['list', 'draft'],
+  },
   prompts: {
     message: 'Which prompts should we add, and which should we pause?',
     must: ['list', 'prompt_change'],

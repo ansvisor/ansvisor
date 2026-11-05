@@ -21,10 +21,15 @@
  * /listings reads the sites AI cites, not a catalog, and /audit-fix writes
  * a robots or CMS change for the person to make.
  *
- * Then the AGENTS plan's (§7 step 3): /prompts, the Prompt Portfolio
- * Manager's, reads the brand's prompts, suggestions and fan-outs, and its
- * Search Console queries when Search Console is connected: Optional, as
- * for /report. Its changes are prompts added and paused, each on a card.
+ * Then the AGENTS plan's (§7 step 3): /setup, the Onboarding & Help agent's,
+ * reads the Getting started steps and the ready-to-use agents, and uses no
+ * connection either: it says how to connect one. /fanout, the Fan-out Gap
+ * Filler's, reads the brand's own fan-outs and answers and saves its answers
+ * as drafts, so it uses none either.
+ * /prompts, the Prompt Portfolio Manager's, reads the brand's prompts,
+ * suggestions and fan-outs, and its Search Console queries when Search
+ * Console is connected: Optional, as for /report. Its changes are prompts
+ * added and paused, each on a card.
  *
  * A workspace's own skills (CHAT-13, W3-06) are instructions only: an
  * agent may name one by its /command, and it needs no connection (skillOf
@@ -95,6 +100,8 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'listings', uses: [] },
   { id: 'rivals', uses: [] },
   { id: 'audit-fix', uses: [] },
+  { id: 'setup', uses: [] },
+  { id: 'fanout', uses: [] },
   { id: 'prompts', uses: [optional('google_search_console')] },
 ];
 

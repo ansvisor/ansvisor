@@ -133,7 +133,7 @@ describe('New agent and Edit (W2-15)', () => {
       props: { preset: { id: string } | null };
     };
     expect(page.props.preset?.id).toBe('weekly-report');
-    for (const id of ['onboarding-help', 'nope']) {
+    for (const id of ['localization', 'nope']) {
       const other = (await NewAgentPage(search(undefined, id))) as { props: { preset: unknown } };
       expect(other.props.preset).toBeNull();
     }

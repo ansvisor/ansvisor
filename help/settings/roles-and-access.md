@@ -8,7 +8,7 @@ updated: 2026-11-03
 last_checked: 2026-11-03
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [CONTRIBUTING.md]
 ---
 Everyone in your workspace has one of four roles: **Admin**, **Manager**, **Analyst** or **Agency partner**. Admins set roles in **Settings › Team**. Where Chat is on, **Roles & access** in Settings lists each person's role, with a table of what each role can do in the app and in Chat. A button your role can't use isn't shown.

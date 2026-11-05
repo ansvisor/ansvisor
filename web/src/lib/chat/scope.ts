@@ -33,6 +33,7 @@ export const ROW_LIMITS: Readonly<Record<string, { default: number; max: number 
   get_prompt_performance: { default: 10, max: ROW_CAP },
   get_prompt_volumes: { default: 25, max: ROW_CAP },
   get_prompt_insights: { default: 10, max: 24 },
+  get_fanout_gaps: { default: 20, max: 49 },
   get_gsc_queries: { default: 25, max: 49 },
   list_ai_answers: { default: 5, max: 9 },
   list_citations: { default: 20, max: ROW_CAP },

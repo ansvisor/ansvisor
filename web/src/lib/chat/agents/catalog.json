@@ -234,7 +234,10 @@
       "businessTypes": [],
       "industries": [],
       "roles": [],
-      "skills": [],
+      "skills": [
+        "fanout",
+        "answerfirst"
+      ],
       "triggers": [
         {
           "kind": "schedule",
@@ -244,10 +247,8 @@
       ],
       "mode": "auto",
       "connections": [],
-      "status": "soon",
-      "needs": [
-        "fanout_skill"
-      ]
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "prompt-portfolio",
@@ -283,15 +284,14 @@
       "businessTypes": [],
       "industries": [],
       "roles": [],
-      "skills": [],
+      "skills": [
+        "setup"
+      ],
       "triggers": [],
-      "mode": "auto",
+      "mode": "ask_first",
       "connections": [],
-      "status": "soon",
-      "needs": [
-        "help_articles",
-        "setup_skill"
-      ]
+      "status": "ready",
+      "needs": []
     },
     {
       "id": "shopping-readiness",

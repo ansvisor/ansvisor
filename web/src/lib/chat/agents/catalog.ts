@@ -87,9 +87,6 @@ export const PRESET_ROLES = [
 
 /** What a `soon` preset waits for: chatAgents.ready.needs.{key}. */
 export const PRESET_NEEDS = [
-  'fanout_skill',
-  'setup_skill',
-  'help_articles',
   'catalog_trigger',
   'publish_trigger',
   'sub_agents',
@@ -351,4 +348,38 @@ export function filterPresets(
     const same = kept.filter((preset) => preset.status === status);
     return [...same.filter(fits), ...same.filter((preset) => !fits(preset))];
   });
+}
+
+/** A preset's card's id in Agent Center › Ready to use: a link from Chat opens at it. */
+export const presetAnchor = (id: string) => `preset-${id}`;
+
+/** The link to a preset's card in Agent Center › Ready to use. */
+export const presetCardHref = (id: string): `/dashboard/${string}` =>
+  `/dashboard/agents?tab=ready#${presetAnchor(id)}`;
+
+/** The preset that recommends the others at setup (AGENTS plan §3 #11): never one of them. */
+export const ONBOARDING_PRESET = 'onboarding-help';
+
+/** How many agents setup recommends (AGENTS plan §8: "3–5 agents for them on day one"). */
+export const RECOMMENDED_MIN = 3;
+export const RECOMMENDED_MAX = 5;
+
+/**
+ * The ready-to-use agents setup recommends to a person (AGENTS plan §8),
+ * in Ready to use's own order for them (filterPresets, presetFit): those
+ * made for the brand's site type or one of their work areas first, up to 5,
+ * then, while fewer than 3 fit, the launch set's agents for every brand.
+ * Ready ones only, never the onboarding agent itself; each with why it
+ * fits, null for one made for every brand. Only a list: turning one on
+ * stays the person's click in Agent Center.
+ */
+export function recommendedPresets(
+  viewer: PresetViewer,
+  presets: readonly AgentPreset[] = AGENT_PRESETS,
+): { preset: AgentPreset; fit: PresetFit | null }[] {
+  const ordered = filterPresets(presets, {}, viewer)
+    .filter((preset) => preset.status === 'ready' && preset.id !== ONBOARDING_PRESET)
+    .map((preset) => ({ preset, fit: presetFit(preset, viewer) }));
+  const fitting = ordered.filter((entry) => entry.fit !== null).length;
+  return ordered.slice(0, Math.min(Math.max(fitting, RECOMMENDED_MIN), RECOMMENDED_MAX));
 }

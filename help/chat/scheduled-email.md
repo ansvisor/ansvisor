@@ -8,7 +8,7 @@ updated: 2026-11-02
 last_checked: 2026-11-02
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json, help/chat/scheduling.md]
 ---
 A scheduled job can send its results by email as well as to Chat. On the schedule card, set **Deliver to** to **Email** or **Chat + Email** before you click **Create schedule**.
