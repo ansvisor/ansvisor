@@ -270,6 +270,42 @@ export function rankScore(action, { now, startNow }) {
 }
 
 /**
+ * The open actions a person may work on, best first: open (OPEN_STATUSES),
+ * unassigned or theirs, ranked by rankScore, older first on a tie, then by
+ * id. The one ranking behind both the Inbox's daily suggestion
+ * (pickSuggestion) and the Action Center's Today card (AC-011,
+ * action-center/today.js): `skip` leaves out what the caller can't offer.
+ *
+ * @param {object} input
+ * @param {Array<{ id: string, status?: string, priority_score: number|null,
+ *   created_at: string, assignee_id: string|null }>} input.actions
+ * @param {string} input.userId
+ * @param {Map<string, string>} input.startNow action id → the draft "Start now" opens
+ * @param {Date} input.now
+ * @param {Set<string>} [input.skip] action ids to leave out
+ * @returns {Array<{ action: object, score: number }>}
+ */
+export function rankActions({ actions, userId, startNow, now, skip = new Set() }) {
+  return actions
+    .filter(
+      (action) =>
+        OPEN_STATUSES.includes(action.status ?? 'new') &&
+        (!action.assignee_id || action.assignee_id === userId) &&
+        !skip.has(action.id),
+    )
+    .map((action) => ({
+      action,
+      score: rankScore(action, { now, startNow: startNow.has(action.id) }),
+    }))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        Date.parse(a.action.created_at ?? 0) - Date.parse(b.action.created_at ?? 0) ||
+        String(a.action.id).localeCompare(String(b.action.id)),
+    );
+}
+
+/**
  * Today's suggestion for one person and brand, or null when nothing
  * qualifies.
  *
@@ -286,25 +322,9 @@ export function rankScore(action, { now, startNow }) {
  *   startNow: string | null, variety: boolean } | null}
  */
 export function pickSuggestion({ actions, userId, rows, needsYou, startNow, now }) {
-  const blocked = new Set(rows.filter((row) => blocksAction(row, now)).map((row) => row.action_id));
-  const ranked = actions
-    .filter(
-      (action) =>
-        OPEN_STATUSES.includes(action.status ?? 'new') &&
-        (!action.assignee_id || action.assignee_id === userId) &&
-        !blocked.has(action.id) &&
-        !needsYou.has(action.id),
-    )
-    .map((action) => ({
-      action,
-      score: rankScore(action, { now, startNow: startNow.has(action.id) }),
-    }))
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        Date.parse(a.action.created_at ?? 0) - Date.parse(b.action.created_at ?? 0) ||
-        String(a.action.id).localeCompare(String(b.action.id)),
-    );
+  const skip = new Set(rows.filter((row) => blocksAction(row, now)).map((row) => row.action_id));
+  for (const id of needsYou) skip.add(id);
+  const ranked = rankActions({ actions, userId, startNow, now, skip });
   if (ranked.length === 0) return null;
 
   // Variety: yesterday's category goes behind another's close score.

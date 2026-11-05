@@ -2,6 +2,7 @@ import { API_FAILURES, apiFailure, type ApiFailure } from '@/lib/api-failure';
 import type { ChatDenialCard } from '@/lib/chat/events';
 import type { CompatibleAgents } from '@/lib/chat/agent-action';
 import type { AgentGoLiveDetail } from '@/lib/chat/agent-go-live';
+import type { AgentImpact } from '@/lib/chat/agent-impact';
 import type { AgentDetail, AgentListResult, AgentRunView } from '@/lib/chat/agents';
 import type { AgentListView } from '@/lib/chat/agent-rules';
 import type { RunNowItem } from '@/lib/chat/agent-runs';
@@ -60,6 +61,12 @@ export async function readAgent(id: string): Promise<AgentDetail | 'missing' | n
 export async function readAgentRuns(id: string): Promise<AgentRunView[] | null> {
   const body = await readJson<{ runs: AgentRunView[] }>(`/api/chat/agents/${id}/runs`);
   return body?.runs ?? null;
+}
+
+/** What an agent did in the last 30 days, or null when it couldn't be read. */
+export async function readAgentImpact(id: string): Promise<AgentImpact | null> {
+  const body = await readJson<{ impact: AgentImpact }>(`/api/chat/agents/${id}/impact`);
+  return body?.impact ?? null;
 }
 
 async function send<T>(url: string, init: RequestInit): Promise<({ ok: true } & T) | AgentRefused> {

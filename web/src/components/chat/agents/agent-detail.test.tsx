@@ -51,9 +51,20 @@ let runs: AgentRunView[];
 let answer: (url: string, init?: RequestInit) => Response;
 const fetchMock = vi.fn(async (url: string, init?: RequestInit) => answer(url, init));
 
+/** What the agent did (agent-impact-card.test.tsx has the card's own states): nothing yet. */
+const NO_IMPACT = {
+  rows: [],
+  capped: false,
+  summary: { shipped: 0, previous: null, improved: 0, judged: 0, pending: 0 },
+  draftsNotLive: 0,
+};
+
 const base = (url: string): Response | null => {
   if (url === `/api/chat/agents/${AGENT_ID}`) return Response.json({ ok: true, agent });
   if (url === `/api/chat/agents/${AGENT_ID}/runs`) return Response.json({ ok: true, runs });
+  if (url === `/api/chat/agents/${AGENT_ID}/impact`) {
+    return Response.json({ ok: true, impact: NO_IMPACT });
+  }
   return null;
 };
 
@@ -211,6 +222,18 @@ describe('AgentDetail', () => {
     expect(meta).toContain('Workspace');
     expect(one('[data-slot="agent-this-period"]')?.textContent).toBe(
       'This period: 2.1% · monthly cap 20%',
+    );
+  });
+
+  it('shows what it did in the last 30 days between Triggers and Run history', async () => {
+    await render();
+    const headings = [...container.querySelectorAll('h2')].map((h) => h.textContent);
+    const at = (title: string) => headings.indexOf(title);
+    expect(at('What this agent did')).toBeGreaterThan(at('Triggers'));
+    expect(at('Run history')).toBeGreaterThan(at('What this agent did'));
+    expect(one('[data-slot="agent-impact-empty"]')).not.toBeNull();
+    expect(fetchMock.mock.calls.map(([url]) => url)).toContain(
+      `/api/chat/agents/${AGENT_ID}/impact`,
     );
   });
 
