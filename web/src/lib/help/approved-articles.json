@@ -6,6 +6,9 @@
       "route": "/dashboard/action-center/actions",
       "keywords": [
         "actions",
+        "today",
+        "next 7",
+        "done this week",
         "action status",
         "assign action",
         "dismiss action",
@@ -23,14 +26,20 @@
         "to-dos",
         "action list",
         "let an agent do this",
-        "agent on an action"
+        "agent on an action",
+        "what should I do today",
+        "what to do first"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
           "text": "An action is one piece of work with an outcome, built from the evidence behind it. Ansvisor groups many signals into one action: six valuable pages with no AI traffic become one \"Capture AI traffic\" action with six linked signals, not six rows. New actions are added after the daily tracking run, on the **Actions** tab."
+        },
+        {
+          "heading": "Today",
+          "text": "The **Today** card at the top of the **Actions** tab lists up to three things to do today: open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. An action Chat's Inbox suggested to you today comes first.\n\nEach item says why it matters, its first step and page, and who does it: **Me** (assigned to you), **Agent** (an agent can do the first step) or **Team** (no one's yet). **Open** opens the action.\n\nUnder the card, **Next** lists the seven after them, and **Done this week** counts actions completed since Monday; click it for History. While Getting started runs, the card shows its next three steps instead."
         },
         {
           "heading": "Action categories",
