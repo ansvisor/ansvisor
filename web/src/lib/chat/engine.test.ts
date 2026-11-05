@@ -8218,20 +8218,18 @@ describe('the page open in the Content Editor beside the chat (CHAT-25 §4–§5
       await engine.driveRun(ADMIN, started.runId);
       return started.runId;
     };
-    /** The first run's suggestions, decided in the editor after it started. */
+    /** The first run's writer: the Content Agent leaves suggestions in the page. */
+    const suggesting = () => [
+      calls(
+        toolCall('w1', 'suggest_draft_changes', {
+          draft_id: DRAFT,
+          request: 'Make answer 3 shorter',
+        }),
+      ),
+      text('Two suggestions wait in the editor.'),
+    ];
+    /** The first run (its models set up first), its suggestions decided after it started. */
     async function suggestedThenDecided() {
-      useModels(
-        [READY],
-        [
-          calls(
-            toolCall('w1', 'suggest_draft_changes', {
-              draft_id: DRAFT,
-              request: 'Make answer 3 shorter',
-            }),
-          ),
-          text('Two suggestions wait in the editor.'),
-        ],
-      );
       const first = await inEditor('Make answer 3 shorter');
       // When it started, as the database keeps it.
       runRow(first).created_at = '2026-11-05T10:00:00.000Z';
@@ -8254,6 +8252,7 @@ describe('the page open in the Content Editor beside the chat (CHAT-25 §4–§5
     }
 
     it('tells the next run what went in and what didn’t, with a step and suggestion.resolved', async () => {
+      useModels([READY], suggesting());
       const first = await suggestedThenDecided();
       const { sonnet } = useModels([READY], [text('Answer 3 is shorter now. One rule is open.')]);
       const second = await next(first, 'Is the page ready?');
@@ -8275,6 +8274,7 @@ describe('the page open in the Content Editor beside the chat (CHAT-25 §4–§5
     });
 
     it('tells nothing without the page open beside the chat, or on the chat’s first message', async () => {
+      useModels([READY], suggesting());
       const first = await suggestedThenDecided();
       expect(stepsOf(first).some((s) => s.label === 'Read your choices in the editor')).toBe(false);
       const { sonnet } = useModels([READY], [text('Here is the plan.')]);
