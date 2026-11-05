@@ -1,11 +1,11 @@
 ---
 title: Read a site audit report
 route: /dashboard/audit
-keywords: [audit report, audit score, signals, audit categories, grade, readability, first person]
-synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed]
+keywords: [audit report, audit score, signals, audit categories, grade, readability, first person, score range]
+synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed, plus or minus, score margin]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -38,6 +38,10 @@ Most signals are read straight from the page, its robots.txt and its llms.txt. T
 The AI keeps its verdict on each of its thirteen signals until the part of the page that signal reads changes, so a page audited again with no changes gets the same score. A page that changed is judged again only on the signals whose part changed.
 
 If the AI checks can't run, the page keeps the verdicts of its last audit. A page with none, such as one audited for the first time, gets a partial score: the report says the AI checks couldn't run, and the score leaves them out and isn't compared with your other audits. A partial audit doesn't use one of your monthly audits.
+
+## Score range
+
+Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits. A line beside it gives those two scores. Partial audits aren't counted. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five. A page that didn't change usually shows ± 0.
 
 ## Signals
 

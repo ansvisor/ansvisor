@@ -7643,6 +7643,7 @@
       "firstScore": "First score",
       "firstAudit": "First audit",
       "changeSinceFirst": "Change since first",
+      "scoreRange": "Range (±)",
       "failed": "Couldn't export the pages"
     },
     "loadMore": "Load more",
@@ -7791,6 +7792,11 @@
     },
     "partialNote": "The AI checks couldn't run this time, so this score leaves them out and isn't compared with your other audits.",
     "partialNoCredit": "It didn't use one of your monthly audits.",
+    "range": {
+      "plusMinus": "± {range}",
+      "tip": "This page's last {audits} audits scored {low} to {high}, changes to the page included.",
+      "tipSame": "This page's last {audits} audits all scored {low}."
+    },
     "aiRecommendations": "AI Recommendations",
     "signals": "Signals",
     "onlyIssues": "Issues only",

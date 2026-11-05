@@ -59,6 +59,12 @@ export interface AuditResult {
   /** Nearest earlier completed audit of the same normalized page, for the report delta. */
   previousScore?: number | null;
   previousCreatedAt?: string | null;
+  /**
+   * The page's completed scores up to this audit, oldest first, ending with
+   * this one (as a Pages row's `trend`), for the score's range. Empty for
+   * an audit that isn't compared.
+   */
+  pageTrend?: number[];
   categoryScores: Record<string, CategoryScore>;
   signalsEvaluated: number | null;
   signalsTotal: number;
