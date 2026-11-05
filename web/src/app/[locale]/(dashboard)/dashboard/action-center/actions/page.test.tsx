@@ -139,7 +139,19 @@ vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, ...props }: { href: string }) => <a href={href} {...props} />,
 }));
 vi.mock('@/components/action-center/action-table', () => ({ ActionTable: () => null }));
-vi.mock('@/components/action-center/action-drawer', () => ({ ActionDrawer: () => null }));
+// The drawer as the page opens it: its action, and where it reports a change.
+const drawer = vi.hoisted(() => ({
+  props: null as {
+    action: ActionItem | null;
+    onPatched: (id: string, patch: Partial<ActionItem>) => void;
+  } | null,
+}));
+vi.mock('@/components/action-center/action-drawer', () => ({
+  ActionDrawer: (props: NonNullable<typeof drawer.props>) => {
+    drawer.props = props;
+    return null;
+  },
+}));
 vi.mock('@/components/getting-started/getting-started-table', async () => {
   const { needsFirstAnswers } = await import('@/lib/getting-started/steps');
   return {
@@ -198,7 +210,7 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/');
   getActions.mockReset().mockResolvedValue([action]);
   getToday.mockReset().mockResolvedValue({
-    today: [{ id: 'a1', suggested: false, firstStep: null, who: 'team' }],
+    today: [{ id: 'a1', action, suggested: false, firstStep: null, who: 'team' }],
     next: [],
     doneThisWeek: 0,
   });
@@ -237,6 +249,26 @@ describe('Today (AC-011)', () => {
     const open = [...today()!.querySelectorAll('button')].find((b) => b.textContent === 'open')!;
     await act(async () => open.click());
     expect(new URLSearchParams(window.location.search).get('action')).toBe('a1');
+  });
+
+  it('shows and opens an item the page’s list doesn’t hold, from its own action', async () => {
+    // The list holds at most 1000 actions, in no order: Today's may not be among them.
+    const far: ActionItem = { ...action, id: 'far', actionNo: 2048 };
+    getToday.mockResolvedValue({
+      today: [{ id: 'far', action: far, suggested: false, firstStep: null, who: 'team' }],
+      next: [],
+      doneThisWeek: 0,
+    });
+    await render();
+    expect(today()!.querySelectorAll('ol > li')).toHaveLength(1);
+    const open = [...today()!.querySelectorAll('button')].find((b) => b.textContent === 'open')!;
+    await act(async () => open.click());
+    expect(new URLSearchParams(window.location.search).get('action')).toBe('far');
+    expect(drawer.props?.action).toBe(far);
+    // A change made in its drawer shows on its copy at once: closed, it leaves the card.
+    await act(async () => drawer.props!.onPatched('far', { status: 'completed' }));
+    expect(drawer.props?.action).toMatchObject({ id: 'far', status: 'completed' });
+    expect(today()!.querySelectorAll('ol > li')).toHaveLength(0);
   });
 
   it('reads the order again when an action changes on the page', async () => {

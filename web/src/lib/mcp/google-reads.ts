@@ -8,7 +8,8 @@ import { asService } from './chat-facts';
 /**
  * Chat's Google reads (CHAT-20 §9 row 35): Search Console clicks and
  * Analytics sessions over a window, against the window before, as AI
- * Referral Traffic reads them (getTrafficGoogleTotals). A brand without the
+ * Referral Traffic reads them (getTrafficGoogleTotals), and Search
+ * Console's queries (the /prompts skill's). A brand without the
  * source connected (the Google sign-in it uses on, its property picked)
  * says so (`connected: false`). `data_as_of` is the last
  * day Google reported, with `source_lag` (§15a). Null for a brand outside
@@ -43,6 +44,10 @@ async function sourcesOf(brandId: string) {
     ga: on('google-analytics') && Boolean(brand.data?.ga_property_id),
   };
 }
+
+/** The day `days` before a YYYY-MM-DD day, as YYYY-MM-DD. */
+const daysBefore = (day: string, days: number) =>
+  new Date(Date.parse(`${day}T00:00:00Z`) - days * DAY_MS).toISOString().slice(0, 10);
 
 /** The last day a Google source reported for the brand; null with none. */
 async function lastReportedDay(table: 'gsc_query_stats' | 'ga_ai_traffic_stats', brandId: string) {
@@ -86,6 +91,74 @@ export async function getGscSummaryFor(
     since: totals.gsc?.since ?? null,
     until: totals.gsc?.until ?? null,
     data_as_of: lastDay,
+    source_lag: '2–3 days',
+  };
+}
+
+/** Search Console queries listed, the most seen first. */
+const GSC_QUERIES_SHOWN = 25;
+
+/** A query's row as ae_gsc_queries (00091) sums it: this span, and the span before. */
+interface GscQueryRow {
+  query: string;
+  cur_clicks: number | null;
+  cur_impressions: number | null;
+  cur_position: number | null;
+  prev_clicks: number | null;
+  prev_impressions: number | null;
+}
+
+const asCount = (value: unknown) => (value == null ? null : Number(value));
+
+/**
+ * The brand's Search Console queries (AGENTS plan §3 #10, the /prompts
+ * skill): each query's clicks, impressions and average position over the
+ * last `days` days Google reported, against the same span before, the most
+ * seen first. Summed in the database by the function Action Center's
+ * detectors read them with (ae_gsc_queries, service role only), once the
+ * brand is the caller's; at most its 500 most seen queries. A brand without
+ * Search Console connected says so.
+ */
+export async function getGscQueriesFor(
+  auth: McpAuthContext,
+  params: { brandId: string; days?: number; limit?: number },
+) {
+  if (!(await brandAllowed(auth, params.brandId))) return null;
+  const days = params.days ?? 28;
+  const none = { days, queries_total: 0, queries: [], source_lag: '2–3 days' };
+  if (!(await sourcesOf(params.brandId)).gsc) {
+    return { connected: false, ...none, data_as_of: null };
+  }
+  // Google reports two to three days late: the spans end on the last day it reported.
+  const until = await lastReportedDay('gsc_query_stats', params.brandId);
+  if (!until) return { connected: true, ...none, data_as_of: null };
+  const since = daysBefore(until, days - 1);
+  const { data, error } = await supabaseAdmin.rpc('ae_gsc_queries', {
+    p_brand_id: params.brandId,
+    p_cur_from: since,
+    p_cur_to: until,
+    p_prev_from: daysBefore(until, 2 * days - 1),
+    p_prev_to: daysBefore(until, days),
+  });
+  if (error) throw new Error(error.message);
+  const seen = ((Array.isArray(data) ? data : []) as GscQueryRow[]).filter(
+    (row) => Number(row.cur_impressions) > 0,
+  );
+  return {
+    connected: true,
+    days,
+    since,
+    until,
+    queries_total: seen.length,
+    queries: seen.slice(0, params.limit ?? GSC_QUERIES_SHOWN).map((row) => ({
+      query: row.query,
+      clicks: Number(row.cur_clicks ?? 0),
+      impressions: Number(row.cur_impressions),
+      position: row.cur_position == null ? null : Math.round(Number(row.cur_position) * 10) / 10,
+      previous_clicks: asCount(row.prev_clicks),
+      previous_impressions: asCount(row.prev_impressions),
+    })),
+    data_as_of: until,
     source_lag: '2–3 days',
   };
 }
