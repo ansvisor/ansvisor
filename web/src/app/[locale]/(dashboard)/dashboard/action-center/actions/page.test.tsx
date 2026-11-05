@@ -63,6 +63,7 @@ const action: ActionItem = {
 const {
   getActions,
   getActionsAffected,
+  getToday,
   getGettingStarted,
   startGettingStarted,
   skipGettingStarted,
@@ -73,6 +74,7 @@ const {
 } = vi.hoisted(() => ({
   getActions: vi.fn(),
   getActionsAffected: vi.fn(),
+  getToday: vi.fn(),
   getGettingStarted: vi.fn(),
   startGettingStarted: vi.fn(),
   skipGettingStarted: vi.fn(),
@@ -108,6 +110,7 @@ vi.mock('@/stores/use-brand-store', () => ({
     }),
 }));
 vi.mock('@/lib/actions/action-center', () => ({ getActions, getActionsAffected }));
+vi.mock('@/lib/actions/action-center-today', () => ({ getToday }));
 vi.mock('@/lib/actions/getting-started', () => ({
   getGettingStarted,
   startGettingStarted,
@@ -187,6 +190,11 @@ async function render(isLocked = false) {
 beforeEach(() => {
   window.history.replaceState(null, '', '/');
   getActions.mockReset().mockResolvedValue([action]);
+  getToday.mockReset().mockResolvedValue({
+    today: [{ id: 'a1', suggested: false, firstStep: null, who: 'team' }],
+    next: [],
+    doneThisWeek: 0,
+  });
   getGettingStarted.mockReset().mockResolvedValue(null);
   startGettingStarted.mockReset().mockResolvedValue(undefined);
   skipGettingStarted.mockReset().mockResolvedValue(undefined);
@@ -204,6 +212,40 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+});
+
+describe('Today (AC-011)', () => {
+  const today = () => container.querySelector('section[aria-label="title"]');
+
+  it('shows above the cards, read for the brand in the viewer’s zone, and opens its action', async () => {
+    await render();
+    expect(getToday).toHaveBeenCalledWith('brand-id', expect.any(String));
+    expect(today()).not.toBeNull();
+    expect(today()!.querySelectorAll('ol > li')).toHaveLength(1);
+    // The card comes before the summary cards.
+    const cards = [...container.querySelectorAll('p')].find((p) => p.textContent === 'cards.top')!;
+    expect(today()!.compareDocumentPosition(cards) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const open = [...today()!.querySelectorAll('button')].find((b) => b.textContent === 'open')!;
+    await act(async () => open.click());
+    expect(new URLSearchParams(window.location.search).get('action')).toBe('a1');
+  });
+
+  it('reads the order again when an action changes on the page', async () => {
+    getActions
+      .mockResolvedValueOnce([action])
+      .mockResolvedValue([{ ...action, status: 'completed' }]);
+    await render();
+    expect(getToday).toHaveBeenCalledTimes(1);
+    await act(async () => firstRun.finished.forEach((listener) => listener('brand-id')));
+    expect(getToday).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves the page as it was when Today can’t be read', async () => {
+    getToday.mockRejectedValue(new Error('down'));
+    await render();
+    expect(today()).toBeNull();
+    expect(exportButton()).toBeDefined();
+  });
 });
 
 describe('the Stale filter (00432)', () => {
