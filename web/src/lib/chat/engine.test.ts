@@ -118,6 +118,19 @@ vi.mock('@/lib/actions/chat-action-center', () => ({
   setTaskReadyForReview: vi.fn(),
   checkChatActionCover: vi.fn(),
 }));
+// Set check through the person's session (W3-05): here, as the run's person.
+vi.mock('@/lib/actions/chat-follow-ups', () => ({
+  setChatFollowUp: vi.fn(
+    async (
+      input: never,
+      place: { timezone: string; runId: string | null; via: 'card' | 'full_auto' },
+    ) => {
+      const { createFollowUpCheck } = await import('./schedule/followup');
+      const { ORG, PEOPLE } = await import('./testing/chat-fixtures');
+      return createFollowUpCheck({ userId: PEOPLE.admin, organizationId: ORG, ...place }, input);
+    },
+  ),
+}));
 // Create schedule through the person's session (W3-02): here, as the run's person.
 vi.mock('@/lib/actions/chat-schedules', () => ({
   createChatSchedule: vi.fn(
@@ -231,6 +244,18 @@ vi.mock('./budget', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./budget')>()),
   reserveChatStep: fakes.reserve,
   fitChatUnits: fakes.fit,
+}));
+// Images on the server (chat-images.test.ts reads them): what the engine and the rows call.
+const imageFakes = vi.hoisted(() => ({ fit: vi.fn(), make: vi.fn() }));
+vi.mock('./images/chat-images', () => ({
+  fitImageParts: imageFakes.fit,
+  makeChatImages: imageFakes.make,
+  imageCostLine: vi.fn(
+    async (_brand: string, _model: string, count: number) =>
+      `${count} images · Nano Banana 2 Lite · about 3.1% of your monthly AI limit`,
+  ),
+  imagePrecheck: vi.fn(async () => null),
+  imageModelQuestion: vi.fn(async () => ({ question: 'Which image model should I use?' })),
 }));
 vi.mock('./key-health', () => ({
   markKeyFailing: fakes.markFailing,
@@ -3750,6 +3775,36 @@ describe('a request bigger than the AI limit left (W2-03, CHAT-04 item 17a)', ()
     expectClean(await eventsOf(runId));
   });
 
+  it('checks images at their image model’s price, and offers "Create 1 image now" (W4-08)', async () => {
+    const lite = 'google/gemini-3.1-flash-lite-image';
+    imageFakes.fit.mockResolvedValue({ fits: 1, limit: 'month' });
+    const { sonnet } = useModels(
+      [READY],
+      [
+        calls(toolCall('p1', PARTS_TOOL, { parts: 4, unit: 'images', image_model: lite })),
+        text('One image now.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Make four cover images');
+    expect(imageFakes.fit).toHaveBeenCalledWith({
+      organizationId: ORG,
+      model: lite,
+      units: 4,
+      agentRunId: null,
+    });
+    expect(fakes.fit).not.toHaveBeenCalled();
+    const [asked] = ofType(await eventsOf(runId), 'ask.created').map((e) => e.data);
+    expect(asked.question).toBe('Your remaining AI limit covers about 1 of the 4 images.');
+    expect(asked.options.map((o) => o.label)).toEqual([
+      'Create 1 image now',
+      'Get more AI credits',
+      'Cancel',
+    ]);
+    expect(await pick(runId, { selected: [0] })).toMatchObject({ ok: true });
+    expect(lastResult(sonnet.seen[1])).toContain('"do_now":1');
+    expect(runRow(runId).status).toBe('done');
+  });
+
   it('goes on with the first parts when the card is skipped', async () => {
     fitsOnly(1);
     const { sonnet } = useModels([READY], [parts(3, 'pages'), text('One page.')]);
@@ -4150,8 +4205,12 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'unpublish_cms',
     'build_report',
     'run_site_audit',
+    // W4-08's images: Admins and Managers only.
+    'generate_image',
     // W3-02's scheduled work: Admins and Managers, a card in every mode.
     'create_schedule',
+    // W3-05's follow-up checks: Admins and Managers, by themselves in Full auto.
+    'set_follow_up_check',
     // W3-06's skill of one's own: Admins and Managers.
     'save_skill',
     // W3-11's memory: every role keeps its own Me; the store checks the scope.
@@ -7320,6 +7379,78 @@ describe('"Save these steps as a skill" (W4-32, CHAT-13 item 13)', () => {
   });
 });
 
+describe('follow-up checks (W3-05, CHAT-20 §13)', () => {
+  const setCheck = () =>
+    toolCall('w1', 'set_follow_up_check', {
+      brand_id: BRAND,
+      title: 'Citations check for /pricing',
+      days: 14,
+      target: { url: 'https://acme.example/pricing' },
+      metric: 'citations',
+    });
+
+  beforeEach(() => {
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    db.tables.chat_schedules = [];
+    // The page shipped: the check has a change to read.
+    db.tables.ship_events = [
+      { id: 's1', brand_id: BRAND, url: 'https://acme.example/pricing', action_id: null },
+    ];
+  });
+
+  it('asks with one click in Auto: Set check or Not now, and nothing before it', async () => {
+    useModels([READY], [calls(setCheck()), text('Set.')]);
+    const runId = await turn(ADMIN, 'Refresh done. Check it in two weeks', 'auto');
+    expect(runRow(runId).status).toBe('waiting');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const confirm = ofType(events, 'confirm.required')[0].data;
+    expect(confirm.form).toMatchObject({
+      kind: 'followup',
+      submit: 'Set check',
+      cancel: 'Not now',
+    });
+    expect(confirm.form!.notes).toContain('Scheduled tracking data · no extra cost');
+    expect(db.tables.chat_schedules).toEqual([]);
+
+    const prepared = await engine.prepareResume(ADMIN, runId, 'approve', {
+      n: confirm.n,
+      digest: confirm.digest,
+      form: { title: 'Citations check for /pricing', days: '30' },
+    });
+    if (!prepared.ok) throw new Error(prepared.code);
+    await engine.driveRun(ADMIN, runId, prepared.resume);
+    expect(db.tables.chat_schedules).toEqual([
+      expect.objectContaining({
+        kind: 'followup_check',
+        created_via: 'card',
+        set_by_run_id: runId,
+      }),
+    ]);
+    expect(stepsOf(runId).at(-1)).toMatchObject({
+      kind: 'schedule',
+      status: 'done',
+      label: 'Follow-up check set: Citations check for /pricing',
+    });
+  });
+
+  it('sets it by itself in Full auto, logged with its Undo', async () => {
+    useModels([READY], [calls(setCheck()), text('Set a check.')]);
+    const runId = await turn(ADMIN, 'Refresh done. Check it in two weeks', 'full_auto');
+    expect(runRow(runId).status).toBe('done');
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toEqual([]);
+    expect(db.tables.chat_schedules).toEqual([
+      expect.objectContaining({ kind: 'followup_check', created_via: 'full_auto' }),
+    ]);
+    expect(db.tables.chat_activity_log.at(-1)).toMatchObject({
+      tool_key: 'followUpCheck',
+      approval_kind: 'auto',
+      auto_via: 'full_auto',
+    });
+  });
+});
+
 describe('going live on its own (AUTONOMOUS-GO-LIVE §5.4)', () => {
   const AGENT = 'abababab-abab-4bab-8bab-abababababab';
   const AGENT_RUN = 'cdcdcdcd-cdcd-4dcd-8dcd-cdcdcdcdcdcd';
@@ -7733,6 +7864,86 @@ describe('brand access (BRAND-ACCESS PR 9)', () => {
     await engine.driveRun(ANALYST, started.runId);
     expect(fakes.readRun).not.toHaveBeenCalled();
     expect(touchedOf(started.conversationId)).toEqual([]);
+  });
+});
+
+describe('images in Chat (W4-08, CHAT-15 §E)', () => {
+  const LITE = 'google/gemini-3.1-flash-lite-image';
+  const made = {
+    ok: true,
+    file_id: 'file-images',
+    title: 'Cover image · GEO strategies',
+    format: 'jpg',
+    images: 4,
+    asked: 4,
+    model: 'Nano Banana 2 Lite',
+    prompt: 'Abstract dark cover, soft circles, no text',
+  };
+  const generate = () =>
+    calls(
+      toolCall('g1', 'generate_image', {
+        brand_id: BRAND,
+        model: LITE,
+        prompt: made.prompt,
+        aspect_ratio: '16:9',
+        title: made.title,
+      }),
+    );
+
+  it('asks on a cost card with the images’ share, in every mode, then shows the set it filed', async () => {
+    imageFakes.make.mockResolvedValue(made);
+    useModels([READY], [generate(), text('Here are four covers.')]);
+    const runId = await turn(ADMIN, 'Make a cover image for the GEO post', 'full_auto');
+    const [card] = ofType(await eventsOf(runId), 'confirm.required').map((e) => e.data);
+    expect(card.target).toContain(
+      '4 images · Nano Banana 2 Lite · about 3.1% of your monthly AI limit',
+    );
+    expect(imageFakes.make).not.toHaveBeenCalled();
+
+    expect((await approve(ADMIN, runId)).ok).toBe(true);
+    expect(imageFakes.make).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: ORG,
+        chat: expect.objectContaining({ runId, conversationId: runRow(runId).conversation_id }),
+      }),
+      expect.objectContaining({ model: LITE, count: 4, aspect_ratio: '16:9' }),
+    );
+    // The set filed itself: the engine names it, and files nothing again.
+    expect((db.tables.chat_files ?? []).filter((f) => f.run_id === runId)).toEqual([]);
+    expect(uploads).toEqual([]);
+    expect(ofType(await eventsOf(runId), 'deliverable.created').map((c) => c.data)).toEqual([
+      {
+        title: 'Cover image · GEO strategies',
+        type: 'image',
+        formats: ['jpg'],
+        status: 'draft',
+        filed: 'in_files',
+      },
+    ]);
+    expect(runRow(runId).status).toBe('done');
+    expectClean(await eventsOf(runId));
+  });
+
+  it('shows no output card when the model made none, and tells the model why', async () => {
+    imageFakes.make.mockResolvedValue({
+      ok: false,
+      reason: 'refused',
+      message: "The image model didn't make an image for this prompt: blocked",
+    });
+    const { sonnet } = useModels([READY], [generate(), text('It was turned down.')]);
+    const runId = await turn(ADMIN, 'Make a cover image');
+    await approve(ADMIN, runId);
+    expect(ofType(await eventsOf(runId), 'deliverable.created')).toEqual([]);
+    expect(JSON.stringify(sonnet.seen[1].prompt.at(-1))).toContain(
+      "didn't make an image for this prompt",
+    );
+  });
+
+  it('is an Admin’s and a Manager’s, never an Analyst’s', async () => {
+    useModels([READY], [generate(), text('No.')]);
+    const runId = await turn(ANALYST, 'Make a cover image');
+    expect(ofType(await eventsOf(runId), 'confirm.required')).toEqual([]);
+    expect(imageFakes.make).not.toHaveBeenCalled();
   });
 });
 

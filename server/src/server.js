@@ -96,6 +96,7 @@ import { startChatAgentTicks } from './lib/chat-agents.js';
 import { startModelPriceSync } from './lib/model-prices.js';
 import { startDailySuggestions } from './lib/chat-suggestions/job.js';
 import { startImpactLedger } from './lib/impact-ledger/job.js';
+import { startFollowUpChecks } from './lib/impact-ledger/follow-up.js';
 import { startReportCardQueue } from './lib/report-card/queue.js';
 
 // Before anything starts: a stray rejection is logged, not a crash.
@@ -930,6 +931,9 @@ server.listen(PORT, async () => {
     // 14, 30 and 90 days against a control set, nightly, from the Insights
     // rollups only (no engine query, no model call).
     startImpactLedger();
+    // Follow-up checks (CHAT-20 §13): hourly, from scheduled tracking data and the
+    // impact ledger only (no engine query, no model call).
+    startFollowUpChecks();
   }
 
   // The free report cards from www.ansvisor.com's form (lib/report-card):

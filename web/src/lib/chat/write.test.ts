@@ -67,6 +67,25 @@ vi.mock('@/lib/actions/competitor', () => ({
   addCompetitors: vi.fn(),
   removeBrandCompetitor: vi.fn(),
 }));
+// A follow-up check (W3-05): written as the action writes it, as its fake.
+vi.mock('@/lib/actions/chat-follow-ups', () => ({
+  setChatFollowUp: vi.fn(async (input: { brandId: string; title: string }) => {
+    const { supabaseAdmin: fake } = await import('@/lib/supabase/admin');
+    const { data } = await fake
+      .from('chat_schedules')
+      .insert({ kind: 'followup_check', brand_id: input.brandId, title: input.title })
+      .select('id')
+      .single();
+    return {
+      ok: true,
+      schedule_id: (data as { id: string }).id,
+      title: input.title,
+      date: 'Mon 16 Nov, 09:00',
+      due_at: '2026-11-16T06:00:00.000Z',
+      automatic: true,
+    };
+  }),
+}));
 vi.mock('@/lib/actions/chat-action-center', () => ({
   createChatAction: vi.fn(),
   attachToAction: vi.fn(),
@@ -176,6 +195,13 @@ const INPUTS: Record<string, unknown> = {
     date_to: '2026-10-07',
   },
   run_site_audit: { brand_id: BRAND, urls: ['https://acme.example/pricing'] },
+  // W3-05: a follow-up check on a page, 14 days on.
+  set_follow_up_check: {
+    brand_id: BRAND,
+    title: 'Citations check for /pricing',
+    days: 14,
+    target: { url: 'https://acme.example/pricing' },
+  },
   save_skill: {
     name: 'pricing-faq',
     description: 'Writes a pricing FAQ in our tone.',

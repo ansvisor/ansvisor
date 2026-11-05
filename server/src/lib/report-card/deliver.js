@@ -39,13 +39,6 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;');
 }
 
-/** "A", "A and B", "A, B and C". */
-const listOf = (items) =>
-  items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`;
-
-const formatDate = (iso) =>
-  new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-
 /** The trial's sign-up page, marked as coming from the card's e-mail. */
 export function signUpUrl(origin = webAppOrigin()) {
   return `${origin}/en/sign-up?utm_source=report-card&utm_medium=email`;
@@ -60,12 +53,89 @@ const INK = '#1C1A17';
 const GREY = '#464442';
 const SAND = '#EBE6DE';
 
+/** "A", "A and B", "A, B and C"; "A ve B" in Turkish. */
+const listIn = (items, and) =>
+  items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} ${and} ${items.at(-1)}`;
+
+/**
+ * The e-mail's words, in the card's language (owner decision 2026-11-04):
+ * Turkish for Türkiye, English elsewhere, as the PDF (web
+ * lib/report-card/copy.ts). Names and sites never take a Turkish case
+ * ending: "{site} için".
+ */
+const EMAIL_COPY = {
+  en: {
+    locale: 'en-US',
+    and: 'and',
+    footer: `You asked for this report card on ansvisor.com. AI answers change from day to day, so it is a snapshot. How we use your details: <a href="${PRIVACY_URL}" style="color:${GREY};">Privacy Notice</a>.`,
+    title: 'Your AI visibility report card',
+    hi: (name) => `Hi ${name},`,
+    resent: (site, made, next) =>
+      `Here is ${site}’s report card again: we made it on ${made}, and a new one can be made from ${next}.`,
+    intro: (engines, starter, questions, readers, country, site) =>
+      `We asked ${engines}${starter ? ', the engines in Ansvisor Starter,' : ''} ${questions} questions your ${readers ? 'readers' : 'buyers'} ask, in ${country}. Here is what came back for ${site}.`,
+    growth: (engines) =>
+      ` We asked ${engines} too: they are in Ansvisor Growth, and the PDF shows them apart.`,
+    visibility: (engines, named, answers) =>
+      `AI visibility${engines ? ` in ${engines}` : ''}: named in ${named} of ${answers} answers`,
+    leader: (answers) => `Top competitor: named in ${answers} answers`,
+    noLeader: 'None',
+    noLeaderLabel: 'No competitor was named',
+    cited: (answers) => `Answers that cite your site, of ${answers}`,
+    pages: (questions) =>
+      `Your report card is attached as a PDF, 4 pages: where you start and who AI names instead, all ${questions} questions we asked and what each engine said, what you’d do in your first week, and what AI visits are worth with the plan that matches.`,
+    button: 'Start a free trial',
+    own: 'Want to measure your own questions too? In the free trial, Ansvisor asks this card’s questions and yours every day, and ranks what to do next.',
+    subject: (domain) => `Your AI visibility report card: ${domain}`,
+    failedTitle: 'We couldn’t finish your report card',
+    failed: (site) =>
+      `We couldn’t finish the AI visibility report card for ${site}. Reply to this e-mail and we’ll look into it.`,
+    failedSubject: (site) => `We couldn’t finish your report card for ${site}`,
+  },
+  tr: {
+    locale: 'tr-TR',
+    and: 've',
+    footer: `Bu karneyi ansvisor.com üzerinden istediniz. Yapay zekâ yanıtları her gün değişir; bu bir anlık ölçümdür. Bilgilerinizi nasıl kullandığımız: <a href="${PRIVACY_URL}" style="color:${GREY};">Gizlilik Bildirimi</a>.`,
+    title: 'Yapay zekâ görünürlük karneniz',
+    hi: (name) => `Merhaba ${name},`,
+    resent: (site, made, next) =>
+      `${site} için karneniz yeniden ekte: ${made} tarihinde hazırladık; yenisi ${next} tarihinden itibaren hazırlanabilir.`,
+    intro: (engines, starter, questions, readers, country, site) =>
+      `${engines}${starter ? ' (Ansvisor Starter’ın motorları)' : ''} motorlarına ${country} konumundan, ${readers ? 'okurlarınızın' : 'alıcılarınızın'} sorduğu ${questions} soruyu sorduk. ${site} için sonuçlar aşağıda.`,
+    growth: (engines) =>
+      ` ${engines} motorlarına da sorduk: bunlar Ansvisor Growth’ta; PDF bunları ayrı gösteriyor.`,
+    visibility: (engines, named, answers) =>
+      `Yapay zekâ görünürlüğü${engines ? ` (${engines})` : ''}: ${answers} yanıtın ${named} tanesinde adınız geçiyor`,
+    leader: (answers) => `Öne çıkan rakip: ${answers} yanıtta anılıyor`,
+    noLeader: 'Yok',
+    noLeaderLabel: 'Hiçbir rakip anılmadı',
+    cited: (answers) => `${answers} yanıttan sitenizi kaynak gösteren`,
+    pages: (questions) =>
+      `Karneniz ekte, 4 sayfalık bir PDF: nereden başladığınız ve yapay zekânın sizin yerinize kimi önerdiği, sorduğumuz ${questions} sorunun tamamı ve her motorun yanıtı, ilk haftanızda yapacaklarınız ve yapay zekâ ziyaretlerinin değeriyle size uyan plan.`,
+    button: 'Ücretsiz denemeyi başlatın',
+    own: 'Kendi sorularınızı da ölçmek ister misiniz? Ücretsiz denemede Ansvisor bu karnenin sorularını ve sizinkileri her gün sorar, sıradaki işleri öncelik sırasıyla verir.',
+    subject: (domain) => `Yapay zekâ görünürlük karneniz: ${domain}`,
+    failedTitle: 'Karnenizi tamamlayamadık',
+    failed: (site) =>
+      `${site} için yapay zekâ görünürlük karnesini tamamlayamadık. Bu e-postayı yanıtlayın, inceleyelim.`,
+    failedSubject: (site) => `${site} için karnenizi tamamlayamadık`,
+  },
+};
+
+/** The e-mail's words for a card's country: Turkish for Türkiye, else English. */
+export const emailCopy = (countryCode) =>
+  String(countryCode ?? '').toUpperCase() === 'TR' ? EMAIL_COPY.tr : EMAIL_COPY.en;
+
+const formatDateIn = (iso, locale) =>
+  new Date(iso).toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+
 const shell = (
   inner,
+  t,
 ) => `<div style="font-family:Geist,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:${INK};">
 ${inner}
   <p style="font-size:12px;color:${GREY};border-top:1px solid ${SAND};padding-top:16px;margin-top:24px;">
-    You asked for this report card on ansvisor.com. AI answers change from day to day, so it is a snapshot. How we use your details: <a href="${PRIVACY_URL}" style="color:${GREY};">Privacy Notice</a>.
+    ${t.footer}
   </p>
 </div>`;
 
@@ -76,7 +146,7 @@ const stat = (value, label) =>
     </td>`;
 
 /**
- * The e-mail for a ready card: new, or sent again.
+ * The e-mail for a ready card: new, or sent again, in the card's language.
  *
  * @param {{ firstName: string, payload: object, kind: 'new'|'resent', madeAt: string, repeatDays?: number, origin?: string }} input
  * @returns {{ subject: string, html: string }}
@@ -89,6 +159,7 @@ export function renderReportCardEmail({
   repeatDays = 30,
   origin,
 }) {
+  const t = emailCopy(payload.country?.code);
   // The headline is Starter's engines (ChatGPT and Microsoft Copilot); a
   // card made before they were split counts every engine. The competitors
   // and own citations are counted over the same answers (analyze.js
@@ -106,43 +177,59 @@ export function renderReportCardEmail({
   const leader = payload.competitors[0];
   const site = escapeHtml(payload.domain);
   const nameOf = (e) => ENGINE_NAMES[e.engine] ?? e.engine;
-  const engines = listOf(main.map(nameOf));
-  const growthLine = growth.length
-    ? ` We asked ${escapeHtml(listOf(growth.map(nameOf)))} too: they are in Ansvisor Growth, and the PDF shows them apart.`
-    : '';
+  const engines = escapeHtml(listIn(main.map(nameOf), t.and));
+  const growthLine = growth.length ? t.growth(escapeHtml(listIn(growth.map(nameOf), t.and))) : '';
+  const country =
+    t === EMAIL_COPY.tr
+      ? escapeHtml(payload.country.name)
+      : escapeHtml(countryInSentence(payload.country.code, payload.country.name));
 
   const intro =
     kind === 'resent'
-      ? `<p style="font-size:14px;margin:0 0 16px 0;">Here is ${site}’s report card again: we made it on ${escapeHtml(formatDate(madeAt))}, and a new one can be made from ${escapeHtml(formatDate(new Date(new Date(madeAt).getTime() + repeatDays * DAY_MS).toISOString()))}.</p>`
-      : `<p style="font-size:14px;margin:0 0 16px 0;">We asked ${escapeHtml(engines)}${banded ? ', the engines in Ansvisor Starter,' : ''} ${payload.questionCount} questions your ${payload.audience === 'readers' ? 'readers' : 'buyers'} ask, in ${escapeHtml(countryInSentence(payload.country.code, payload.country.name))}. Here is what came back for ${site}.${growthLine}</p>`;
+      ? t.resent(
+          site,
+          escapeHtml(formatDateIn(madeAt, t.locale)),
+          escapeHtml(
+            formatDateIn(
+              new Date(new Date(madeAt).getTime() + repeatDays * DAY_MS).toISOString(),
+              t.locale,
+            ),
+          ),
+        )
+      : `${t.intro(engines, banded, payload.questionCount, payload.audience === 'readers', country, site)}${growthLine}`;
 
-  const html =
-    shell(`  <h1 style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin:0 0 16px 0;">Your AI visibility report card</h1>
-  <p style="font-size:14px;margin:0 0 12px 0;">Hi ${escapeHtml(firstName)},</p>
-  ${intro}
+  const html = shell(
+    `  <h1 style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin:0 0 16px 0;">${t.title}</h1>
+  <p style="font-size:14px;margin:0 0 12px 0;">${t.hi(escapeHtml(firstName))}</p>
+  <p style="font-size:14px;margin:0 0 16px 0;">${intro}</p>
   <table role="presentation" cellspacing="8" style="width:100%;border-collapse:separate;margin:0 -8px 8px -8px;">
     <tr>
-    ${stat(`${visibility}%`, `AI visibility${banded ? ` in ${escapeHtml(engines)}` : ''}: named in ${named} of ${answers} answers`)}
-    ${stat(leader ? escapeHtml(leader.name) : 'None', leader ? `Top competitor: named in ${leader.answers} answers` : 'No competitor was named')}
-    ${stat(String(payload.ownCitations), `Answers that cite your site, of ${answers}`)}
+    ${stat(`${visibility}%`, t.visibility(banded ? engines : null, named, answers))}
+    ${stat(leader ? escapeHtml(leader.name) : t.noLeader, leader ? t.leader(leader.answers) : t.noLeaderLabel)}
+    ${stat(String(payload.ownCitations), t.cited(answers))}
     </tr>
   </table>
-  <p style="font-size:14px;margin:8px 0 16px 0;">Your report card is attached as a PDF, 4 pages: where you start and who AI names instead, all ${payload.questionRows?.length || payload.questionCount} questions we asked and what each engine said, what you’d do in your first week, and what AI visits are worth with the plan that matches.</p>
+  <p style="font-size:14px;margin:8px 0 16px 0;">${t.pages(payload.questionRows?.length || payload.questionCount)}</p>
   <div style="margin:24px 0;">
-    <a href="${escapeHtml(signUpUrl(origin))}" style="background:${INK};color:#ffffff;text-decoration:none;padding:8px 28px;border-radius:100px;font-size:15px;font-weight:500;display:inline-block;">Start a free trial</a>
+    <a href="${escapeHtml(signUpUrl(origin))}" style="background:${INK};color:#ffffff;text-decoration:none;padding:8px 28px;border-radius:100px;font-size:15px;font-weight:500;display:inline-block;">${t.button}</a>
   </div>
-  <p style="font-size:14px;color:${GREY};margin:0;">Want to measure your own questions too? In the free trial, Ansvisor asks this card’s questions and yours every day, and ranks what to do next.</p>`);
+  <p style="font-size:14px;color:${GREY};margin:0;">${t.own}</p>`,
+    t,
+  );
 
-  return { subject: `Your AI visibility report card: ${payload.domain}`, html };
+  return { subject: t.subject(payload.domain), html };
 }
 
-/** The note for a card that couldn't be made. */
-export function renderFailedEmail({ firstName, site }) {
-  const html =
-    shell(`  <h1 style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin:0 0 16px 0;">We couldn’t finish your report card</h1>
-  <p style="font-size:14px;margin:0 0 12px 0;">Hi ${escapeHtml(firstName)},</p>
-  <p style="font-size:14px;margin:0 0 16px 0;">We couldn’t finish the AI visibility report card for ${escapeHtml(site)}. Reply to this e-mail and we’ll look into it.</p>`);
-  return { subject: `We couldn’t finish your report card for ${site}`, html };
+/** The note for a card that couldn't be made, in its country's language. */
+export function renderFailedEmail({ firstName, site, country }) {
+  const t = emailCopy(country);
+  const html = shell(
+    `  <h1 style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin:0 0 16px 0;">${t.failedTitle}</h1>
+  <p style="font-size:14px;margin:0 0 12px 0;">${t.hi(escapeHtml(firstName))}</p>
+  <p style="font-size:14px;margin:0 0 16px 0;">${t.failed(escapeHtml(site))}</p>`,
+    t,
+  );
+  return { subject: t.failedSubject(site), html };
 }
 
 /**
@@ -186,7 +273,11 @@ export async function deliverReportCards({
     const card = request.report_cards;
     let message;
     if (card.status === 'failed') {
-      message = renderFailedEmail({ firstName: request.first_name, site: card.site });
+      message = renderFailedEmail({
+        firstName: request.first_name,
+        site: card.site,
+        country: request.country,
+      });
     } else {
       if (!pdfs.has(card.id)) {
         try {

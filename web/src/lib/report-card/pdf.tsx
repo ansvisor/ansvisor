@@ -285,7 +285,7 @@ function Header({
 function Footer({ t }: { t: CardCopy }) {
   return (
     <View style={styles.footer} fixed>
-      <Text style={styles.footerText}>{look.footer ?? ''}</Text>
+      <Text style={styles.footerText}>{t.brand ?? look.footer ?? ''}</Text>
       <Text
         style={styles.footerText}
         render={({ pageNumber, totalPages }) => t.footer(pageNumber, totalPages)}

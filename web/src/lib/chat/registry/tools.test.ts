@@ -78,6 +78,13 @@ vi.mock('@/lib/mcp/brand-facts-reads', async (importOriginal) =>
 vi.mock('@/lib/mcp/whats-new', async (importOriginal) =>
   tracked.all('mcp/whats-new', await importOriginal<Record<string, unknown>>()),
 );
+// No app page makes images yet: the image rows call Chat's own image functions (W4-08).
+vi.mock('@/lib/chat/images/chat-images', () => ({
+  imageModelQuestion: tracked.track('chat/images.imageModelQuestion'),
+  makeChatImages: tracked.track('chat/images.makeChatImages'),
+  imageCostLine: tracked.track('chat/images.imageCostLine'),
+  imagePrecheck: tracked.track('chat/images.imagePrecheck'),
+}));
 vi.mock('@/lib/actions/content', () => ({
   updateOpportunityStatus: tracked.track('actions/content.updateOpportunityStatus'),
 }));
@@ -116,6 +123,9 @@ vi.mock('@/lib/actions/audits', () => ({
 }));
 vi.mock('@/lib/actions/prompt-suggestions', () => ({
   dismissSuggestion: tracked.track('actions/prompt-suggestions.dismissSuggestion'),
+}));
+vi.mock('@/lib/actions/chat-follow-ups', () => ({
+  setChatFollowUp: tracked.track('actions/chat-follow-ups.setChatFollowUp'),
 }));
 vi.mock('@/lib/actions/chat-schedules', () => ({
   createChatSchedule: tracked.track('actions/chat-schedules.createChatSchedule'),
@@ -298,7 +308,11 @@ describe('the Chat tool registry', () => {
       const result = await tool.run(ctx, tool.inputSchema.parse(tool.fixture.input));
       expect(calls).toHaveLength(1);
       expect(result).toEqual({ from: calls[0].from });
-      if (tool.class === 'read') {
+      if (tool.area === 'images') {
+        // Chat's own image functions, with the member's context.
+        expect(calls[0].from).toMatch(/^chat\/images\./);
+        expect(calls[0].args[0]).toBe(ctx);
+      } else if (tool.class === 'read') {
         // The MCP data functions, scoped to the signed-in member's organization.
         expect(calls[0].from).toMatch(/^mcp\//);
         expect(calls[0].args[0]).toBe(ctx);
@@ -696,6 +710,9 @@ describe('approval policies', () => {
       } else if (tool.class === 'write' && (tool.flags.alwaysCard || tool.flags.costCard)) {
         // Ask your Admin, or a cost said first: a card in every mode (CHAT-20 rows 37, 80a).
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask', 'ask']);
+      } else if (tool.name === 'set_follow_up_check') {
+        // A follow-up check: by itself in Full auto only, never Always (CHAT-20 row 79, §13).
+        expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask_full_auto', 'ask_full_auto']);
       } else if (tool.class === 'write') {
         expect([tool.defaultPolicy, tool.maxPolicy]).toEqual(['ask_full_auto', 'always']);
       }
@@ -733,8 +750,11 @@ describe('approval policies', () => {
       unpublish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
       run_site_audit: ['admin', 'manager'],
+      // Images (CHAT-20 §9 row 70, W4-08): Admins and Managers, as a report.
+      generate_image: ['admin', 'manager'],
       // Scheduled work (CHAT-20 §4: Admins and Managers create schedules).
       create_schedule: ['admin', 'manager'],
+      set_follow_up_check: ['admin', 'manager'],
       // A skill of one's own (W3-06, CHAT-13 v2): Admins and Managers save skills.
       save_skill: ['admin', 'manager'],
       // Memory (W3-11, CHAT-14 item 25): every role has its Me; the store checks the scope.
@@ -757,7 +777,7 @@ describe('approval policies', () => {
           '<h1>Pricing FAQ</h1><script>fetch("https://evil.example")</script><img src="https://ansvisor.com/a.png" onerror="alert(1)">',
       } as never,
       FIXTURE_IDS.brand,
-    )!;
+    ) as { body: string };
     expect(made.body).not.toMatch(/<script/i);
     expect(made.body).not.toMatch(/onerror/i);
     expect(made.body).toContain('<h1>Pricing FAQ</h1>');

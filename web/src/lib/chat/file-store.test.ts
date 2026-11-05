@@ -27,7 +27,7 @@ vi.mock('@/lib/actions/content-drafts', () => drafts);
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase & { storage: unknown };
 const store = await import('./file-store');
-const { readChatStorage } = await import('./file-output');
+const { fileChatImages, readChatStorage } = await import('./file-output');
 
 const ACTOR = { userId: PEOPLE.admin, email: null, organizationId: ORG };
 const CHAT = 'cccccccc-0000-4000-8000-000000000001';
@@ -342,5 +342,153 @@ describe('zipChatFiles', () => {
       ok: false,
       failure: 'not_found',
     });
+  });
+});
+
+describe('a set of images Chat made (W4-08, CHAT-15 items 22, 24)', () => {
+  let objects: Map<string, Uint8Array>;
+  const jpeg = (byte: number, size = 10) => ({
+    bytes: new Uint8Array(size).fill(byte),
+    mimeType: 'image/jpeg',
+  });
+  const file = (images: ReturnType<typeof jpeg>[]) =>
+    fileChatImages({
+      organizationId: ORG,
+      createdBy: PEOPLE.admin,
+      brandId: BRAND,
+      title: 'Cover image · GEO 2026',
+      images,
+      origin: 'chat',
+      conversationId: CHAT,
+      messageId: null,
+      runId: RUN,
+      generatedAt: '2026-11-03T10:00:00.000Z',
+      dataAsOf: null,
+      timezone: null,
+    });
+
+  beforeEach(() => {
+    objects = new Map();
+    db.storage = {
+      from: () => ({
+        upload: async (path: string, body: Uint8Array) => {
+          if (uploadError && path.endsWith('image-2.jpg')) return { error: uploadError };
+          objects.set(path, body);
+          return { error: null };
+        },
+        remove: async (paths: string[]) => {
+          for (const path of paths) objects.delete(path);
+          return { error: null };
+        },
+        list: async (folder: string) => ({
+          data: [...objects.keys()]
+            .filter((path) => path.startsWith(`${folder}/`))
+            .map((path) => ({ name: path.slice(folder.length + 1) })),
+          error: null,
+        }),
+        download: async (path: string) =>
+          objects.has(path)
+            ? {
+                data: new Blob([objects.get(path)! as BlobPart], { type: 'image/jpeg' }),
+                error: null,
+              }
+            : { data: null, error: { message: 'missing' } },
+      }),
+    };
+  });
+
+  it('files one row for the set, its first image selected, every image counted in storage', async () => {
+    const filed = await file([jpeg(1), jpeg(2, 20), jpeg(3), jpeg(4)]);
+    if (!filed.ok) throw new Error(filed.failure);
+    expect(db.tables.chat_files).toHaveLength(1);
+    expect(db.tables.chat_files[0]).toMatchObject({
+      id: filed.id,
+      type: 'image',
+      formats: ['jpg'],
+      mime_type: 'image/jpeg',
+      storage_path: `${ORG}/${filed.id}/image-1.jpg`,
+      size_bytes: 50,
+      run_id: RUN,
+      message_id: null,
+      origin: 'chat',
+    });
+    expect([...objects.keys()].sort()).toEqual(
+      [1, 2, 3, 4].map((n) => `${ORG}/${filed.id}/image-${n}.jpg`),
+    );
+  });
+
+  it('files nothing without room for every image, and nothing half-kept', async () => {
+    db.tables.chat_storage_usage = [{ organization_id: ORG, bytes_used: 50 * GB - 30 }];
+    expect(await file([jpeg(1), jpeg(2, 30)])).toEqual({ ok: false, failure: 'storage_full' });
+    expect(db.tables.chat_files).toEqual([]);
+
+    db.tables.chat_storage_usage = [];
+    uploadError = { message: 'boom' };
+    expect(await file([jpeg(1), jpeg(2)])).toEqual({ ok: false, failure: 'failed' });
+    expect(db.tables.chat_files).toEqual([]);
+    expect(objects.size).toBe(0);
+  });
+
+  it('lists, shows and picks the set’s images in the person’s own chat', async () => {
+    const filed = await file([jpeg(1), jpeg(2), jpeg(3)]);
+    if (!filed.ok) throw new Error(filed.failure);
+    expect(await store.readRunImages(ACTOR, RUN, 1)).toEqual({
+      count: 3,
+      selected: 1,
+      mine: true,
+    });
+    const second = await store.readRunImage(ACTOR, RUN, 1, 2);
+    expect(second?.mimeType).toBe('image/jpeg');
+    expect([...(second?.bytes ?? [])]).toEqual(new Array(10).fill(2));
+    expect(await store.readRunImage(ACTOR, RUN, 1, 4)).toBeNull();
+
+    expect(await store.selectRunImage(ACTOR, RUN, 1, 3)).toBe('ok');
+    expect(db.tables.chat_files[0].storage_path).toBe(`${ORG}/${filed.id}/image-3.jpg`);
+    expect(await store.readRunImages(ACTOR, RUN, 1)).toMatchObject({ selected: 3 });
+    // Files downloads the selected one, in its own format, named after its title.
+    const download = await store.readChatFile(ACTOR, filed.id, null);
+    const { exportChatFile } = await import('./file-export');
+    const out = await exportChatFile(download!, 'jpg');
+    expect(out).toMatchObject({
+      fileName: 'cover-image-geo-2026-2026-11-03.jpg',
+      contentType: 'image/jpeg',
+    });
+    expect([...out!.body]).toEqual(new Array(10).fill(3));
+    expect(await exportChatFile(download!, 'md')).toBeNull();
+  });
+
+  it('keeps the picked image’s own type in a set that mixes them', async () => {
+    const filed = await file([
+      jpeg(1),
+      { bytes: new Uint8Array(4).fill(9), mimeType: 'image/png' },
+    ]);
+    if (!filed.ok) throw new Error(filed.failure);
+    expect((await store.readRunImage(ACTOR, RUN, 1, 2))?.mimeType).toBe('image/png');
+    expect(await store.selectRunImage(ACTOR, RUN, 1, 2)).toBe('ok');
+    expect(db.tables.chat_files[0]).toMatchObject({
+      storage_path: `${ORG}/${filed.id}/image-2.png`,
+      mime_type: 'image/png',
+      formats: ['png'],
+    });
+  });
+
+  it('lets a teammate see a shared chat’s set but not pick, and nobody else see it', async () => {
+    const filed = await file([jpeg(1), jpeg(2)]);
+    if (!filed.ok) throw new Error(filed.failure);
+    access.chat = { id: CHAT, title: 'Citations drop', mine: false };
+    expect(await store.readRunImages(ACTOR, RUN, 1)).toMatchObject({ mine: false });
+    expect(await store.selectRunImage(ACTOR, RUN, 1, 2)).toBe('forbidden');
+    expect(db.tables.chat_files[0].storage_path).toMatch(/image-1\.jpg$/);
+    access.chat = null;
+    expect(await store.readRunImages(ACTOR, RUN, 1)).toBeNull();
+    expect(await store.readRunImage(ACTOR, RUN, 1, 1)).toBeNull();
+    expect(await store.selectRunImage(ACTOR, RUN, 1, 1)).toBe('not_found');
+  });
+
+  it('reads no set from a file that isn’t images', async () => {
+    db.tables.chat_files = [
+      fileRow('f1', { run_id: RUN, message_id: null, storage_path: 'f1.md' }),
+    ];
+    expect(await store.readRunImages(ACTOR, RUN, 1)).toBeNull();
   });
 });

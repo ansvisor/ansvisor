@@ -7,6 +7,8 @@
  * figures, so a language orders them its own way.
  */
 
+import { tr } from './copy-tr';
+
 /** "A", "A and B", "A, B and C". */
 export function listEn(items: readonly string[]): string {
   if (items.length <= 1) return items[0] ?? '';
@@ -56,6 +58,8 @@ export const en = {
   language: (english: string) => english,
   document: (company: string) => `AI visibility report card: ${company}`,
   footer: (page: number, pages: number) => `${page} / ${pages}`,
+  /** The footer's brand line; null keeps Ansvisor's own ("Generated with Ansvisor"). */
+  brand: null as string | null,
   engines: {
     count: (n: number) => plural(n, 'AI engine', 'AI engines'),
     /** "the three engines": how many a card made before Starter's headed it asked. */
@@ -326,7 +330,7 @@ export const en = {
     share: (pct: number) => `${pct}% of those searches`,
     buying: 'Buying them',
     buyingBody: (visits: string, ads: string, year: string) =>
-      `${visits} visits a month ≈ ${ads} in Google Ads, every month: ${year} a year, bought again each month.`,
+      `${visits} visits a month cost about ${ads} in Google Ads, every month: ${year} a year, bought again each month.`,
     earning: 'Earning them',
     earningBody: (plan: string, price: string) =>
       `Ansvisor ${plan} is ${price} a month. Pages AI engines cite keep sending visits for as long as they’re cited.`,
@@ -372,9 +376,13 @@ export const en = {
 
 export type CardCopy = typeof en;
 
-/** The card's words, by its country: English everywhere for now (a language is added in ./copy-*.ts). */
-const BY_COUNTRY: Record<string, CardCopy> = {};
+const BY_COUNTRY: Record<string, CardCopy> = { TR: tr };
 
+/**
+ * The card's words, by its country: Turkish for Türkiye, English
+ * elsewhere. Another language adds a ./copy-*.ts and its countries here.
+ */
 export function cardCopy(card?: { country: { code: string } }): CardCopy {
-  return (card && BY_COUNTRY[card.country.code.toUpperCase()]) ?? en;
+  const code = card?.country.code.toUpperCase() ?? '';
+  return BY_COUNTRY[code] ?? en;
 }

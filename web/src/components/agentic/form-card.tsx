@@ -228,7 +228,7 @@ export function FormCard({
         }
       >
         <Button data-action="formCard.cancel" variant="outline" disabled={busy} onClick={onCancel}>
-          {t('cancel')}
+          {form.cancel ?? t('cancel')}
         </Button>
         <Button
           data-action="formCard.submit"

@@ -89,6 +89,38 @@ describe('renderReportCardEmail', () => {
     );
   });
 
+  it('writes a Turkish card’s e-mail in Turkish', () => {
+    const { subject, html } = renderReportCardEmail({
+      firstName: 'Ayşe',
+      payload: {
+        ...payload,
+        domain: 'turadahil.com',
+        country: { code: 'TR', name: 'Türkiye' },
+        questionCount: 25,
+        mainEngines: ['chatgpt-web', 'copilot-web'],
+        engines: [
+          { engine: 'chatgpt-web', answers: 25, named: 0 },
+          { engine: 'copilot-web', answers: 25, named: 0 },
+          { engine: 'gemini-web', answers: 25, named: 0 },
+        ],
+      },
+      kind: 'new',
+      madeAt: '2026-11-04T10:00:00Z',
+    });
+    expect(subject).toBe('Yapay zekâ görünürlük karneniz: turadahil.com');
+    expect(html).toContain('Merhaba Ayşe,');
+    expect(html).toContain(
+      'ChatGPT ve Microsoft Copilot (Ansvisor Starter’ın motorları) motorlarına Türkiye konumundan, alıcılarınızın sorduğu 25 soruyu sorduk.',
+    );
+    expect(html).toContain('50 yanıtın 0 tanesinde adınız geçiyor');
+    expect(html).toContain('Ücretsiz denemeyi başlatın');
+    expect(html).toContain('Kendi sorularınızı da ölçmek ister misiniz?');
+    expect(html).toContain('Gizlilik Bildirimi');
+    expect(html).not.toContain('Hi Ayşe');
+    const failed = renderFailedEmail({ firstName: 'Ayşe', site: 'turadahil.com', country: 'TR' });
+    expect(failed.subject).toBe('turadahil.com için karnenizi tamamlayamadık');
+  });
+
   it('states one visibility figure: every stat counts the headline’s answers', () => {
     // As the sample card: ChatGPT 7 of 25 and Copilot 2 of 25 head it; the
     // competitor and the citations are counted over those 50 answers.

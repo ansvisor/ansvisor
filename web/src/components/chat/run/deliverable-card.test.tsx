@@ -331,6 +331,106 @@ describe('DeliverableCard and its task (CHAT-09 items 12–16)', () => {
   });
 });
 
+describe('DeliverableCard for a set of images (W4-08, CHAT-15 items 21–22)', () => {
+  const images: ChatDeliverable = {
+    title: 'Cover image · GEO strategies',
+    type: 'image',
+    formats: ['jpg'],
+    status: 'draft',
+    filed: 'in_files',
+  };
+  const base = `/api/chat/runs/${RUN}/files/2/images`;
+  let picked: number[];
+
+  function serve(set: { count: number; selected: number; mine: boolean } | null, pickOk = true) {
+    picked = [];
+    fetchMock.mockImplementation((async (url: string, init?: RequestInit) => {
+      if (url === base && init?.method === 'POST') {
+        picked.push(JSON.parse(String(init.body)).image);
+        return new Response(JSON.stringify({ ok: pickOk }), { status: pickOk ? 200 : 500 });
+      }
+      if (url === base) {
+        return set
+          ? new Response(JSON.stringify({ ok: true, ...set }), { status: 200 })
+          : new Response(JSON.stringify({ ok: false }), { status: 404 });
+      }
+      return new Response(new Uint8Array([1, 2]), {
+        status: 200,
+        headers: { 'Content-Type': 'image/jpeg' },
+      });
+    }) as never);
+  }
+  const shown = () =>
+    [...container.querySelectorAll('[data-slot="image-set"] [data-image]')].map((el) => ({
+      image: el.getAttribute('data-image'),
+      selected: el.getAttribute('data-selected') === 'true',
+      src: el.querySelector('img')?.getAttribute('src'),
+    }));
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+  afterEach(() => fetchMock.mockReset());
+
+  it('shows every image, the selected one marked, and PNG in place of Copy and Download', async () => {
+    serve({ count: 4, selected: 1, mine: true });
+    await render(images);
+    await settle();
+    expect(container.textContent).toContain('Cover image · GEO strategies');
+    expect(container.textContent).toContain('Image · In Files');
+    expect(shown()).toEqual(
+      [1, 2, 3, 4].map((n) => ({ image: String(n), selected: n === 1, src: `${base}/${n}` })),
+    );
+    expect(action('deliverable.copy')).toBeNull();
+    expect(action('deliverable.download')).toBeNull();
+    expect(action('deliverable.png')).not.toBeNull();
+  });
+
+  it('picks another image in the person’s own chat, and puts it back when that fails', async () => {
+    serve({ count: 4, selected: 1, mine: true });
+    await render(images);
+    await settle();
+    await click(container.querySelector('[data-image="3"]')!);
+    expect(picked).toEqual([3]);
+    expect(shown().find((s) => s.selected)?.image).toBe('3');
+
+    serve({ count: 4, selected: 3, mine: true }, false);
+    await click(container.querySelector('[data-image="2"]')!);
+    expect(picked).toEqual([2]);
+    expect(shown().find((s) => s.selected)?.image).toBe('3');
+    expect(toast.error).toHaveBeenCalledWith("Couldn't pick that image. Try again.");
+  });
+
+  it('lets a teammate of a shared chat look, never pick', async () => {
+    serve({ count: 2, selected: 2, mine: false });
+    await render(images);
+    await settle();
+    const first = container.querySelector('[data-image="1"]') as HTMLButtonElement;
+    expect(first.disabled).toBe(true);
+    await click(first);
+    expect(picked).toEqual([]);
+  });
+
+  it('downloads the selected image, named after the set', async () => {
+    serve({ count: 4, selected: 2, mine: true });
+    await render(images);
+    await settle();
+    await click(action('deliverable.png')!);
+    expect(fetchMock).toHaveBeenCalledWith(`${base}/2`);
+    // jsdom draws no canvas: the image is saved as it came. (Node's own Blob on Node 20, not
+    // jsdom's: read by its fields, not its class.)
+    const [saved, name] = download.saveBlob.mock.calls[0] as [Blob, string];
+    expect(name).toBe('cover-image-geo-strategies.jpg');
+    expect(saved.size).toBe(2);
+    expect(toast).toHaveBeenCalledWith('Downloaded cover-image-geo-strategies.jpg');
+  });
+
+  it('says the images are in Files when it can’t show them', async () => {
+    serve(null);
+    await render(images);
+    await settle();
+    expect(container.textContent).toContain("Couldn't show the images. They are in Files.");
+  });
+});
+
 describe('DeliverableCard for a page’s version (CHAT-25 §6, W4-12a)', () => {
   const version = (n: number, extra: Partial<NonNullable<ChatDeliverable['version']>> = {}) => ({
     n,

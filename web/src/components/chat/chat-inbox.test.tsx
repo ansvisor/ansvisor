@@ -595,11 +595,43 @@ describe('notices (AGENT-OWN-KEY §5.3, 00441)', () => {
       job.href,
     );
     expect(paused.textContent).toContain('Weekly report is paused');
+    expect(paused.getAttribute('data-kind')).toBe('schedule_paused');
     expect(paused.textContent).toContain('The monthly AI limit was reached.');
     expect(notices.read).toHaveBeenCalledExactlyOnceWith([
       job.id,
       '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c12',
     ]);
+  });
+});
+
+describe('a follow-up check’s result (W3-05)', () => {
+  it('shows it as news, not a problem, with its outcome and Open', async () => {
+    await render(
+      <ChatInbox
+        suggestions={ok()}
+        notices={{
+          ok: true,
+          notices: [
+            {
+              id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c20',
+              kind: 'followup_result',
+              title: 'Citations check for /pricing',
+              reason: 'Improved · Visibility 25% → 45% (+20 pts)',
+              href: '/dashboard/chat/0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c21',
+              createdAt: '2026-11-16T12:00:00Z',
+              read: false,
+            },
+          ],
+        }}
+      />,
+    );
+    const row = host.querySelector('[data-slot="inbox-notice"]')!;
+    expect(row.textContent).toContain('Citations check for /pricing · result');
+    expect(row.textContent).toContain('Improved · Visibility 25% → 45% (+20 pts)');
+    expect(row.className).not.toContain('amber');
+    expect(row.querySelector('[data-action="inbox.openSchedule"]')!.getAttribute('href')).toBe(
+      '/dashboard/chat/0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c21',
+    );
   });
 });
 

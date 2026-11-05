@@ -170,6 +170,8 @@ describe('every WRITE row is recorded, with its Undo where §9 gives one', () =>
     expect(UNDO_RULES.build_report.windowMs).toBe(30 * DAY);
     expect(UNDO_RULES.push_cms_draft.windowMs).toBe(0);
     expect(UNDO_RULES.run_site_audit.windowMs).toBe(0);
+    // §9 row 70: images, recorded with no Undo (the set is deleted in Files).
+    expect(UNDO_RULES.generate_image.windowMs).toBe(0);
     for (const tool of writes) {
       expect(undoRule(tool)).not.toBeNull();
       expect(messages.chatActivity.summary).toHaveProperty(tool.labelKey);

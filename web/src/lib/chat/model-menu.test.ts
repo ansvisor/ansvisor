@@ -55,11 +55,14 @@ const answer = (body: unknown, status = 200) =>
   fetchMock.mockResolvedValue(new Response(JSON.stringify(body), { status }));
 
 describe('the offered models', () => {
-  it('are the tested ones only: Haiku and Sonnet 5.5 at launch, Opus 5.5 since its test run, and Gemini 4 Argon since its test runs', () => {
+  it('are the tested ones only: Haiku and Sonnet 5.5 at launch, Opus 5.5 since its test run, and GPT-6.1 Sol, Terra, Luna and Gemini 4 Argon since their test runs', () => {
     expect(OFFERED_MODELS.map((m) => [m.id, m.api])).toEqual([
       ['anthropic/claude-haiku-5.5', 'claude-haiku-5-5'],
       ['anthropic/claude-sonnet-5.5', 'claude-sonnet-5-5'],
       ['anthropic/claude-opus-5.5', 'claude-opus-5-5'],
+      ['openai/gpt-6.1-sol', 'openai/gpt-6.1-sol'],
+      ['openai/gpt-6.1-terra', 'openai/gpt-6.1-terra'],
+      ['openai/gpt-6-luna', 'openai/gpt-6-luna'],
       ['google/gemini-4-argon', 'google/gemini-4-argon'],
     ]);
     expect(OFFERED_MODELS).toEqual(CHAT_MODELS.filter((m) => m.tested));
@@ -89,7 +92,7 @@ describe('a run’s model and effort (W4-02)', () => {
     expect(runChoiceOf(sonnet, true)).toEqual(sonnet);
     expect(runChoiceOf(sonnet, false)).toEqual(AUTO_CHOICE);
     // A model listed but not tested yet: Auto, the effort kept.
-    expect(runChoiceOf({ model: 'openai/gpt-6.1-sol', effort: 'high' }, true)).toEqual({
+    expect(runChoiceOf({ model: 'google/gemini-3.8-flash', effort: 'high' }, true)).toEqual({
       model: 'auto',
       effort: 'high',
     });
@@ -110,7 +113,7 @@ describe('a run’s model and effort (W4-02)', () => {
     expect(
       latestChoice([
         {
-          model: 'openai/gpt-6.1-sol',
+          model: 'google/gemini-3.8-flash',
           effort: 'normal',
           created_at: '2026-11-02T12:00:00Z',
         },
@@ -128,7 +131,7 @@ describe('readModelMenu', () => {
         serverModel('anthropic/claude-haiku-5.5', '0.1x', 'low'),
         serverModel('anthropic/claude-sonnet-5.5', '2.3x', 'normal'),
         serverModel('anthropic/claude-opus-5.5', '4.7x', 'high'),
-        serverModel('openai/gpt-6.1-sol', '2.3x', 'normal'),
+        serverModel('google/gemini-3.8-flash', '2.3x', 'normal'),
       ],
       selected: null,
       catalogCount: 312,
@@ -139,7 +142,7 @@ describe('readModelMenu', () => {
     expect(String(url)).toContain(
       '/api/internal/chat/models?ids=anthropic%2Fclaude-haiku-5.5%2Canthropic%2Fclaude-sonnet-5.5%2Canthropic%2Fclaude-opus-5.5',
     );
-    expect(String(url)).not.toContain('gpt');
+    expect(String(url)).not.toContain('gemini');
     expect(init.headers).toEqual({ Authorization: 'Bearer shh' });
     expect(menu.auto).toEqual({ id: 'auto', multiplier: '1x', tone: 'normal' });
     // A model not tested stays out, even when the server answers for it.

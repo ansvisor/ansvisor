@@ -41,8 +41,10 @@ export async function GET(_req: Request, { params }: Params) {
  * images' bytes, so the body stays small; `failed` were made (and charged)
  * but couldn't be stored. The picked one is kept, the others dropped
  * (./options). A read-only workspace is refused (402), as is the demo
- * brand's draft (403); a spent AI limit is 429; a model that made none says
- * why (422); made but none stored is 502.
+ * brand's draft (403); a spent AI limit is 429; a model whose maker an
+ * Admin turned off in Settings › Chat (W4-34) is 409, before anything is
+ * held or charged; a model that made none says why (422); made but none
+ * stored is 502.
  */
 export async function POST(req: Request, { params }: Params) {
   try {
@@ -68,7 +70,7 @@ export async function POST(req: Request, { params }: Params) {
         ? 429
         : made.code === 'refused'
           ? 422
-          : made.code === 'own_key'
+          : made.code === 'own_key' || made.code === 'provider_off'
             ? 409
             : made.code === 'not_saved'
               ? 502

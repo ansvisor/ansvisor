@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PLANS } from '@/config/plans';
-import { en } from './copy';
+import { cardCopy, en } from './copy';
+import { tr } from './copy-tr';
 import type { CitedSiteKind, ReportCardPayload } from './payload';
 import {
   MAX_CPC_USD,
@@ -580,5 +581,66 @@ describe('formats', () => {
     expect(money(1_850)).toBe('$1,850');
     expect(money(380, 'EUR')).toBe('€380');
     expect(money(380, 'TRY')).toBe('TRY\u00a0380');
+  });
+});
+
+describe('the card’s language', () => {
+  const turkish = card({
+    country: { code: 'TR', name: 'Türkiye' },
+    language: 'Turkish',
+  });
+
+  it('is Turkish for Türkiye and English elsewhere', () => {
+    expect(cardCopy(turkish)).toBe(tr);
+    expect(cardCopy(SAMPLE_REPORT_CARD)).toBe(en);
+    expect(cardCopy({ country: { code: 'GB' } })).toBe(en);
+  });
+
+  it('writes the findings in Turkish without a case ending on a name', () => {
+    const wins = quickWins(turkish, tr);
+    expect(wins[0].title).toBe(
+      'Sitenizde şu soruyu yanıtlayın: “where to buy fresh roasted coffee beans online”',
+    );
+    expect(wins[0].detail).toBe(
+      'Yapay zekâ bu soruda Ridgeline Roasters, Harborline Beans ve Copper Kettle Coffee markalarını öneriyor, Brewline Coffee markasını değil.',
+    );
+    expect(wins[1].title).toBe(
+      'coffeereview.example sitesinde Brewline Coffee markasını listeletin',
+    );
+    expect(questionSummary(turkish, tr)).toBe(
+      '25 sorunun 6 tanesinde adınız geçti: ChatGPT ve Microsoft Copilot motorlarının 50 yanıtından 8 tanesinde.',
+    );
+  });
+
+  it('prints soru × motor only when every question was answered, in Turkish too', () => {
+    const engines = 'ChatGPT ve Microsoft Copilot';
+    expect(tr.status.kpiVisibilitySub(engines, 8, 50, 25, 2)).toBe(
+      '50 yanıtın 8 tanesinde adınız geçiyor: 25 soru × 2 motor (ChatGPT ve Microsoft Copilot)',
+    );
+    expect(tr.status.kpiVisibilitySub(engines, 8, 49, 25, 2)).toBe(
+      'ChatGPT ve Microsoft Copilot motorlarının 49 yanıtından 8 tanesinde adınız geçiyor (1 soruya bir motordan yanıt gelmedi)',
+    );
+    expect(tr.status.kpiVisibilitySub(engines, 8, 47, 25, 2)).toBe(
+      'ChatGPT ve Microsoft Copilot motorlarının 47 yanıtından 8 tanesinde adınız geçiyor (3 kez yanıt gelmedi)',
+    );
+    expect(tr.questions.summaryNone('Brewline Coffee', 49, 25, engines, 2)).toBe(
+      'Brewline Coffee markası 25 sorunun hiçbirinde anılmadı: ChatGPT ve Microsoft Copilot motorlarından 49 yanıt (1 soruya bir motordan yanıt gelmedi).',
+    );
+    expect(tr.questions.summaryNone('Brewline Coffee', 50, 25, engines, 2)).toBe(
+      'Brewline Coffee markası 25 sorunun hiçbirinde anılmadı: ChatGPT ve Microsoft Copilot motorlarından 50 yanıt (25 soru × 2 motor).',
+    );
+  });
+
+  it('counts the competitor and the citations over the headline’s answers, in Turkish too', () => {
+    expect(tr.status.kpiLeaderSub(21, 50)).toBe('aynı 50 yanıtın 21 tanesinde geçiyor');
+    expect(tr.status.kpiCitedSub(50)).toBe('aynı 50 yanıttan sayfanızı kaynak gösterenler');
+    expect(tr.status.measured(25, false, 'ChatGPT', 'Türkiye', '4 Kas 2026')).toContain(
+      'rakipler ve siteler aynı yanıtlar üzerinden sayıldı',
+    );
+  });
+
+  it('writes dollar amounts the card’s language’s way', () => {
+    expect(money(2390, 'USD', 'tr-TR')).toBe('$2.390');
+    expect(money(2390)).toBe('$2,390');
   });
 });

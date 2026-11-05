@@ -60503,6 +60503,44 @@ create trigger chat_agents_check_demo_brand
   for each row execute function public.check_chat_agent_demo_brand();
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00476_chat_files_jpeg.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00476: Files takes JPEG images
+-- ============================================================================
+-- Chat files the images it makes in the private bucket chat-files (CHAT-15
+-- item 24, W4-08). Google's image models (Nano Banana) answer in JPEG, which
+-- the bucket's list (00411: PNG and WebP only) turns away. This adds
+-- image/jpeg to it. Run again, it changes nothing; any type an admin added
+-- stays. The person still downloads PNG: the result card converts in the
+-- browser.
+
+update storage.buckets
+set allowed_mime_types = array_append(allowed_mime_types, 'image/jpeg')
+where id = 'chat-files'
+  and allowed_mime_types is not null
+  and not ('image/jpeg' = any (allowed_mime_types));
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00477_chat_files_jpg_format.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00477: a file in Files may download as JPEG
+-- ============================================================================
+-- A set of images Chat made (W4-08) is filed with its images' own format:
+-- JPEG from Google's image models (00476 lets the bucket take them). The
+-- formats check (00411) knew PNG and WebP only. The same list, with 'jpg'.
+-- Run again, it ends the same.
+
+alter table public.chat_files drop constraint if exists chat_files_formats_check;
+alter table public.chat_files add constraint chat_files_formats_check check (
+  formats <@ array[
+    'md', 'html', 'docx', 'pdf', 'csv', 'xlsx', 'json', 'jsonld', 'txt', 'png', 'jpg', 'webp'
+  ]::text[]
+  and public.chat_text_array_distinct(formats)
+);
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00478_report_card_email_attempts.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- A report card's e-mail the web couldn't draw a PDF for is tried again on

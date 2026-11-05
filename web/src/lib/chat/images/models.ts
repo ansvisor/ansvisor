@@ -13,13 +13,15 @@ export interface ImageModel {
   id: string;
   /** Its product name. */
   label: string;
+  /** Its key under chatEngine.images.models in messages/en.json: what it is good at. */
+  key: string;
 }
 
 export const IMAGE_MODELS: readonly ImageModel[] = [
-  { id: 'google/gemini-3.1-flash-lite-image', label: 'Nano Banana 2 Lite' },
-  { id: 'google/gemini-3.1-flash-image', label: 'Nano Banana 2' },
-  { id: 'google/gemini-3-pro-image', label: 'Nano Banana Pro' },
-  { id: 'openai/gpt-5-image-mini', label: 'GPT-5 Image Mini' },
+  { id: 'google/gemini-3.1-flash-lite-image', label: 'Nano Banana 2 Lite', key: 'nanoBanana2Lite' },
+  { id: 'google/gemini-3.1-flash-image', label: 'Nano Banana 2', key: 'nanoBanana2' },
+  { id: 'google/gemini-3-pro-image', label: 'Nano Banana Pro', key: 'nanoBananaPro' },
+  { id: 'openai/gpt-5-image-mini', label: 'GPT-5 Image Mini', key: 'gpt5ImageMini' },
 ];
 
 /** Images one request makes in Chat (Karar 4). */

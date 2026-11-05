@@ -64,21 +64,21 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     tested: true,
   },
   // The latest of OpenAI, Google and DeepSeek, through OpenRouter (W4-35).
-  // Gemini 4 Argon passed the whole test set twice in a row (2026-11-03,
-  // side-checks/model-eval-r3-google_gemini-4-argon.json).
+  // GPT-6.1 Sol, GPT-6.1 Terra and GPT-6 Luna passed the whole test set twice in a row
+  // (2026-11-03, side-checks/model-eval-r3-openai_*.json).
   {
     id: 'openai/gpt-6.1-sol',
     api: 'openai/gpt-6.1-sol',
     provider: 'openrouter',
     label: 'GPT-6.1 Sol',
-    tested: false,
+    tested: true,
   },
   {
     id: 'openai/gpt-6.1-terra',
     api: 'openai/gpt-6.1-terra',
     provider: 'openrouter',
     label: 'GPT-6.1 Terra',
-    tested: false,
+    tested: true,
   },
   // OpenAI's smallest and cheapest (owner, 2026-11-03).
   {
@@ -86,8 +86,10 @@ export const CHAT_MODELS: readonly OfferedModel[] = [
     api: 'openai/gpt-6-luna',
     provider: 'openrouter',
     label: 'GPT-6 Luna',
-    tested: false,
+    tested: true,
   },
+  // Gemini 4 Argon passed the whole test set twice in a row (2026-11-03,
+  // side-checks/model-eval-r3-google_gemini-4-argon.json).
   {
     id: 'google/gemini-4-argon',
     api: 'google/gemini-4-argon',

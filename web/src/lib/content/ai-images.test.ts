@@ -16,12 +16,19 @@ const fakes = vi.hoisted(() => ({
   generate: vi.fn(),
   store: vi.fn(),
   order: [] as string[],
+  // Image models whose maker an Admin turned off (W4-34), or the read's error.
+  off: [] as string[],
+  offError: null as Error | null,
 }));
 
 vi.mock('@/lib/chat/images/access', () => ({
   imageKey: vi.fn(async () => {
     if (fakes.key instanceof Error) throw fakes.key;
     return fakes.key;
+  }),
+  imageModelOn: vi.fn(async (_org: string, model: string) => {
+    if (fakes.offError) throw fakes.offError;
+    return !fakes.off.includes(model);
   }),
 }));
 vi.mock('@/lib/chat/budget', () => ({ reserveDraftImages: fakes.reserve }));
@@ -35,6 +42,7 @@ const { DRAFT_IMAGE_RULES, draftImagePrompt, draftImagesInput, makeDraftImages }
 const { OwnKeyUnreadableError } = await import('@/lib/chat/key');
 
 const LITE = 'google/gemini-3.1-flash-lite-image';
+const GPT = 'openai/gpt-5-image-mini';
 const input = draftImagesInput.parse({
   prompt: 'A cover image for “GEO strategies for 2026”',
   model: LITE,
@@ -47,6 +55,8 @@ const OPTION_B = { id: 'b.jpg', url: 'https://cdn.example/content-images/org-1/a
 beforeEach(() => {
   fakes.key = { key: 'or-ansvisor', source: 'ansvisor' };
   fakes.order = [];
+  fakes.off = [];
+  fakes.offError = null;
   fakes.charge.mockReset().mockImplementation(async () => {
     fakes.order.push('charge');
   });
@@ -175,6 +185,32 @@ describe('a request for a draft', () => {
     fakes.key = new OwnKeyUnreadableError('openrouter');
     expect(await makeDraftImages(job)).toEqual({ ok: false, code: 'own_key' });
     expect(fakes.generate).not.toHaveBeenCalled();
+  });
+
+  it('refuses a model whose maker an Admin turned off, holding, charging and sending nothing (W4-34)', async () => {
+    fakes.off = [LITE];
+    expect(await makeDraftImages(job)).toEqual({
+      ok: false,
+      code: 'provider_off',
+      model: 'Nano Banana 2 Lite',
+    });
+    // Its maker's setting can't be read: refused too, as Chat refuses it.
+    fakes.off = [];
+    fakes.offError = new Error('read failed');
+    expect(await makeDraftImages(job)).toMatchObject({ ok: false, code: 'provider_off' });
+    expect(fakes.reserve).not.toHaveBeenCalled();
+    expect(fakes.charge).not.toHaveBeenCalled();
+    expect(fakes.generate).not.toHaveBeenCalled();
+    expect(fakes.store).not.toHaveBeenCalled();
+  });
+
+  it('still makes images on a model whose maker is on while another maker is off', async () => {
+    fakes.off = [LITE];
+    const made = await makeDraftImages({ ...job, input: { ...input, model: GPT } });
+    expect(made).toEqual({ ok: true, images: [OPTION_A, OPTION_B], failed: 0 });
+    expect(fakes.reserve).toHaveBeenCalledWith(expect.objectContaining({ model: GPT }));
+    expect(fakes.generate).toHaveBeenCalledWith(expect.objectContaining({ model: GPT }));
+    expect(fakes.charge).toHaveBeenCalledWith({ produced: 2, costUsd: 0.0672 });
   });
 
   it('lets the hold go when the provider call throws', async () => {
