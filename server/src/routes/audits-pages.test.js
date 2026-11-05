@@ -4,7 +4,8 @@ import express from 'express';
 /**
  * Route-level tests for GET /api/audits/pages: the brand's audits read in
  * full (past PostgREST's 1000-row page), grouped into one row per page,
- * paged, and the open issues counted for the rows returned.
+ * paged, and the open issues counted for the rows returned; and the page
+ * trend GET /api/audits/:id sends for the score's range.
  */
 
 let audits;
@@ -63,6 +64,10 @@ function query(table) {
       }
       if (table === 'site_audits' && filters.in.id) {
         data = audits.filter((a) => filters.in.id.includes(a.id));
+      } else if (table === 'site_audits' && filters.eq.id) {
+        data = audits.find((a) => a.id === filters.eq.id) ?? null;
+      } else if (table === 'audit_signal_results' && filters.eq.audit_id) {
+        data = signals.filter((s) => s.audit_id === filters.eq.audit_id);
       } else if (table === 'site_audits') {
         data = audits.filter(
           (a) =>
@@ -230,6 +235,24 @@ describe('GET /api/audits/pages', () => {
   it('needs a brand', async () => {
     const res = await fetch(`${baseUrl}/pages`);
     expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /api/audits/:id', () => {
+  it("sends the page's trend up to the audit, for the score's range", async () => {
+    // An older spelling of the same page, read last (newest first).
+    audits.push(audit('p0', 'https://www.acme.com/pricing', 1, '0.6'));
+    const res = await fetch(`${baseUrl}/p2`);
+    expect(res.status).toBe(200);
+    const { audit: body } = await res.json();
+    expect(body).toMatchObject({ id: 'p2', totalScore: 0.63, previousScore: 0.58 });
+    expect(body.pageTrend).toEqual([0.6, 0.58, 0.63]);
+  });
+
+  it('sends no trend for an audit that is never compared', async () => {
+    audits.unshift({ ...audit('pp', 'https://acme.com/pricing', 20, '0.7'), partial: true });
+    const { audit: body } = await (await fetch(`${baseUrl}/pp`)).json();
+    expect(body).toMatchObject({ partial: true, previousScore: null, pageTrend: [] });
   });
 });
 

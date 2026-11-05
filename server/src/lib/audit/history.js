@@ -182,50 +182,73 @@ export function buildAuditPages(rowsNewestFirst, now = Date.now()) {
   });
 }
 
+const comparable = (row) =>
+  row.status === 'completed' && row.total_score != null && row.partial !== true;
+
 /**
- * Find the immediately previous completed, scored audit for one audit's page.
- * This assumes the same created_at / id descending order used by readBrandAudits.
- * Strictly earlier created_at timestamps are required; a failed, running,
- * unscored or partial audit never becomes the comparison point, and a
- * partial audit has none.
+ * One audit and the completed, scored audits of its page before it, nearest
+ * first, up to `limit` in all. This assumes the same created_at / id
+ * descending order used by readBrandAudits. Strictly earlier created_at
+ * timestamps are required; a failed, running, unscored or partial audit is
+ * never one of them, and a partial audit has none (null).
  */
-export function findPreviousCompletedAudit(rowsNewestFirst, auditId) {
+function comparableAuditsUpTo(rowsNewestFirst, auditId, limit) {
   const seen = new Set();
+  const found = [];
   let currentKey = null;
   let currentCreatedAt = null;
-  let foundCurrent = false;
 
   for (const row of rowsNewestFirst ?? []) {
+    if (found.length >= limit) break;
     // A paged read can repeat the same row at a slice boundary.
     if (seen.has(row.id)) continue;
     seen.add(row.id);
 
     const { key } = pageIdentityForAudit(row);
 
-    if (!foundCurrent) {
+    if (found.length === 0) {
       if (row.id !== auditId) continue;
-      if (row.status !== 'completed' || row.total_score == null || row.partial === true) {
-        return null;
-      }
+      if (!comparable(row)) return null;
 
       currentCreatedAt = Date.parse(row.created_at);
       if (!Number.isFinite(currentCreatedAt)) return null;
       currentKey = key;
-      foundCurrent = true;
+      found.push(row);
       continue;
     }
 
     const createdAt = Date.parse(row.created_at);
     if (!Number.isFinite(createdAt) || createdAt >= currentCreatedAt) continue;
-    if (key !== currentKey) continue;
-    if (row.status !== 'completed' || row.total_score == null || row.partial === true) continue;
-
-    return {
-      auditId: row.id,
-      totalScore: Number(row.total_score),
-      createdAt: row.created_at,
-    };
+    if (key !== currentKey || !comparable(row)) continue;
+    found.push(row);
   }
 
-  return null;
+  return found.length > 0 ? found : null;
+}
+
+/**
+ * Find the immediately previous completed, scored audit for one audit's page:
+ * the report's comparison point. A partial audit has none.
+ */
+export function findPreviousCompletedAudit(rowsNewestFirst, auditId) {
+  const previous = comparableAuditsUpTo(rowsNewestFirst, auditId, 2)?.[1];
+  if (!previous) return null;
+  return {
+    auditId: previous.id,
+    totalScore: Number(previous.total_score),
+    createdAt: previous.created_at,
+  };
+}
+
+/**
+ * One audit's page trend as the Pages list draws it: the page's completed
+ * scores up to and including this audit, oldest first, at most
+ * PAGE_TREND_POINTS. The report works out the score's range from it
+ * (customer priorities item 1). Empty for an audit that isn't compared:
+ * partial, unfinished or not found.
+ */
+export function pageTrendUpTo(rowsNewestFirst, auditId) {
+  return (comparableAuditsUpTo(rowsNewestFirst, auditId, PAGE_TREND_POINTS) ?? [])
+    .map((row) => Number(row.total_score))
+    .reverse();
 }

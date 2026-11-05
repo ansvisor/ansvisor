@@ -84,7 +84,7 @@ The **Pages** tab lists every page you audited, one row per page however many ti
 
 | Column | Meaning |
 |---|---|
-| **Score** | The latest audit's score |
+| **Score** | The latest audit's score, with its range (**± 2**) once the page has three audits (see [Total score](#total-score)) |
 | **Issues** | Signals that failed or warned in that audit |
 | **Status** | **Good** (70 or more), **Improving** (below 70 but up from the previous audit), **Needs work**, **Running** or **Failed** (no audit of the page has completed) |
 | **Last audit** | When it was last audited; **Auto** marks an auto-audit run's audit |
@@ -98,6 +98,8 @@ Each audit has its own report at `/dashboard/audit/[id]`. The icons at the top r
 ### Total score
 
 The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40–69) or **Poor** (below 40). Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 48 signals were evaluated.
+
+Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits (partial ones aren't counted), rounded up. A line beside it gives those two scores. It's worked out from the page's own audits, with no AI call. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five; a page that didn't change usually shows ± 0. The Pages export has it as its last column, `score_range`.
 
 ### Categories
 
