@@ -285,27 +285,42 @@ describe('readAgentImpact: what the agent shipped', () => {
 
 describe('readAgentImpact: how each change went live', () => {
   it('says on its own, you approved, or by a teammate', async () => {
+    // Every one names the agent and its run, as ship.js's agentOrigin writes them (00480).
+    const r1 = run('2026-10-20T09:00:00.000Z');
+    const r2 = run('2026-10-22T09:00:00.000Z');
+    const from = (agentRunId: string, over: Record<string, unknown>) =>
+      ship({ agent_run_id: agentRunId, source: 'content_editor', ...over });
     // The agent's own publish: automated, sent as the person its run acts as.
-    ship({ title: 'Own', execution_mode: 'automated', shipped_by: PEOPLE.manager });
-    // A person's click on the run's card (ship-credit, 00480): assisted, sent by them.
-    ship({ title: 'Mine', execution_mode: 'assisted', shipped_by: PEOPLE.manager });
-    ship({ title: 'Sam', execution_mode: 'assisted', shipped_by: PEOPLE.otherManager });
-    // Someone who left the workspace, or has no name.
-    ship({ title: 'Gone', execution_mode: 'assisted', shipped_by: null });
-    ship({ title: 'Nameless', execution_mode: 'assisted', shipped_by: PEOPLE.admin });
+    from(r1, { title: 'Own', execution_mode: 'automated', shipped_by: PEOPLE.manager });
+    // A person's click on a card in the run's chat (00480): assisted, sent by them.
+    from(r1, { title: 'Mine', execution_mode: 'assisted', shipped_by: PEOPLE.manager });
+    from(r2, { title: 'Sam', execution_mode: 'assisted', shipped_by: PEOPLE.otherManager });
+    // Someone who left the workspace (shipped_by set null), or has no name.
+    from(r2, { title: 'Gone', execution_mode: 'assisted', shipped_by: null });
+    from(r2, { title: 'Nameless', execution_mode: 'assisted', shipped_by: PEOPLE.admin });
+    // Sent later from the Content Editor or the Library: the person's, no agent on it.
+    ship({ title: 'Later, by hand', agent_id: null, execution_mode: 'assisted' });
 
     const impact = await readAgentImpact(await ctxOf(PEOPLE.manager), AGENT, NOW);
-    const credit = Object.fromEntries((impact?.rows ?? []).map((r) => [r.title, r.credit]));
+    const credit = Object.fromEntries(
+      (impact?.rows ?? []).map((r) => [r.title, [r.credit, r.run?.number]]),
+    );
     expect(credit).toEqual({
-      Own: { who: 'own' },
-      Mine: { who: 'you' },
-      Sam: { who: 'teammate', name: 'Sam Lee' },
-      Gone: { who: 'teammate', name: null },
-      Nameless: { who: 'teammate', name: null },
+      Own: [{ who: 'own' }, 1],
+      Mine: [{ who: 'you' }, 1],
+      Sam: [{ who: 'teammate', name: 'Sam Lee' }, 2],
+      Gone: [{ who: 'teammate', name: null }, 2],
+      Nameless: [{ who: 'teammate', name: null }, 2],
     });
-    // The same change reads "you approved" to the one who clicked, "by …" to the others.
+    // The same change reads "you approved" to the one who clicked, "by …" to the others,
+    // and the agent's own one "on its own" to everyone, its owner included.
     const sams = await readAgentImpact(await ctxOf(PEOPLE.otherManager), AGENT, NOW);
-    expect(sams?.rows.find((r) => r.title === 'Sam')?.credit).toEqual({ who: 'you' });
+    const samsCredit = Object.fromEntries((sams?.rows ?? []).map((r) => [r.title, r.credit]));
+    expect(samsCredit).toMatchObject({
+      Own: { who: 'own' },
+      Mine: { who: 'teammate' },
+      Sam: { who: 'you' },
+    });
   });
 
   it('shipCredit: automated is the agent’s own, whoever it acted as', () => {

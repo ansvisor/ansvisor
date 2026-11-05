@@ -73,7 +73,11 @@ export interface AgentImpact {
 /**
  * On its own when the agent published it (execution_mode automated, as
  * ship.js writes an agent's own send); otherwise the person who sent it:
- * the reader ("you approved") or a teammate, unnamed once they've left.
+ * the reader ("you approved") or a teammate, unnamed once they've left. A
+ * person's click on a card in the run's chat names the agent and the run
+ * too, with execution_mode assisted and shipped_by the person (00480,
+ * ship.js agentOrigin); a send from the Content Editor or the Library
+ * names no agent, so it isn't the agent's.
  */
 export function shipCredit(row: Pick<ImpactRow, 'executionMode' | 'by'>): AgentShipCredit {
   if (row.executionMode === 'automated') return { who: 'own' };

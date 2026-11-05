@@ -34,13 +34,19 @@ const CHAT = 'cccccccc-0000-4000-8000-000000000031';
 
 type Entry = { checkpoint: string; outcome: string; effect?: number; direction?: string };
 
-/** A change as the API answers it, its checkpoints as Reports' strip reads them. */
+/**
+ * A change as the API answers it, its checkpoints as Reports' strip reads
+ * them. Its ship event as ship.js writes it: the agent's own send is
+ * automated; a person's click on a card in the run's chat is assisted and
+ * shipped by them (00480).
+ */
 function change(
   key: string,
   more: Partial<AgentImpactRow> & { entries?: Entry[] } = {},
 ): AgentImpactRow {
   const { entries = [], ...rest } = more;
   const shippedAt = rest.shippedAt ?? '2026-10-28T10:00:00.000Z';
+  const credit = rest.credit ?? { who: 'own' };
   return {
     key,
     title: 'Refresh of /guides/cold-brew-ratio',
@@ -48,8 +54,11 @@ function change(
     source: 'content_editor',
     shippedAt,
     actionNo: null,
-    by: { who: 'you', name: null },
-    executionMode: 'automated',
+    by:
+      credit.who === 'teammate'
+        ? { who: credit.name ? 'teammate' : 'automation', name: credit.name }
+        : { who: 'you', name: null },
+    executionMode: credit.who === 'own' ? 'automated' : 'assisted',
     targetPrompts: 6,
     pages: [],
     outcome: 'pending',
@@ -66,7 +75,7 @@ function change(
     notMeasurableReason: null,
     concurrent: [],
     checkpoints: checkpointMarks(shippedAt, entries, false),
-    credit: { who: 'own' },
+    credit,
     run: { number: 31, chatId: null },
     ...rest,
   };
@@ -260,6 +269,21 @@ describe('AgentImpactCard: with results', () => {
       'Published to your CMS · on its own · Shipped Oct 28 · 6 prompts',
     ]);
     expect(one('[data-slot="agent-impact-drafts"]')).toBeNull();
+  });
+
+  it('says why a change can’t be measured in Reports’ words, a page taken down too', async () => {
+    answer = reply({
+      ...full(),
+      rows: [
+        change('r1', { outcome: 'not_measurable', notMeasurableReason: 'taken_down' }),
+        change('r2', { outcome: 'not_measurable', notMeasurableReason: 'something_new' }),
+      ],
+    });
+    await render();
+    expect(rowTexts('agent-impact-reason')).toEqual([
+      'The page was taken down from your site.',
+      "It can't be measured.",
+    ]);
   });
 
   it('shows the newest 5, then all of them on a click', async () => {
