@@ -31,6 +31,9 @@ import {
   updateActionStatus,
   type ActionItem,
 } from '@/lib/actions/action-center';
+import { getToday } from '@/lib/actions/action-center-today';
+import type { TodayRead } from '@/lib/action-center/today';
+import { viewerTimeZone } from '@/lib/time-zone';
 import { listBrandMembers, type TeamMember } from '@/lib/actions/team';
 import {
   getGettingStarted,
@@ -67,6 +70,7 @@ import {
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { ActionTable } from '@/components/action-center/action-table';
 import { ActionDrawer } from '@/components/action-center/action-drawer';
+import { TodayCard } from '@/components/action-center/today-card';
 import {
   GettingStartedTable,
   arrivingStep,
@@ -471,6 +475,37 @@ function ActionsContent({ brand }: { brand: Brand }) {
     [actions, selectedId],
   );
 
+  // Today (AC-011): its order is read on its own, so a slow or failed read
+  // never holds the list, and again whenever an action's status, assignee
+  // or tasks change here, as the order and first steps follow them.
+  const [today, setToday] = useState<TodayRead | null>(null);
+  const [todayLoading, setTodayLoading] = useState(true);
+  const listed = actions !== null;
+  const todayKey = useMemo(
+    () =>
+      (actions ?? [])
+        .map((a) => `${a.id}:${a.status}:${a.assignee?.id ?? ''}:${a.taskCompleted}`)
+        .join('|'),
+    [actions],
+  );
+  useEffect(() => {
+    if (!listed) return;
+    let live = true;
+    setTodayLoading(true);
+    getToday(brand.id, viewerTimeZone())
+      .then((read) => {
+        if (live) setToday(read);
+      })
+      // A failed read keeps the last one: with none, the card stays away.
+      .catch(() => {})
+      .finally(() => {
+        if (live) setTodayLoading(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [brand.id, listed, todayKey]);
+
   // The card and its filter read one set, so they cannot disagree.
   const topIds = useMemo(() => topActionIds(actions ?? []), [actions]);
 
@@ -837,6 +872,17 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
   return frame(
     <div className="space-y-4">
+      <TodayCard
+        read={today}
+        loading={todayLoading}
+        actions={list}
+        steps={startedActive && gettingStarted ? gettingStarted.steps : null}
+        onOpenAction={selectAction}
+        onOpenStep={(step) => {
+          showStepsCategory();
+          openStep(step);
+        }}
+      />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {startedActive && gettingStarted && (
           <GettingStartedSummaryCard
