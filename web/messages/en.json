@@ -12705,6 +12705,13 @@
     }
   },
   "prompts": {
+    "tags": {
+      "label": "Tags",
+      "removeTag": "Remove tag {tag}",
+      "placeholder": "Add a tag and press Enter",
+      "hint": "Up to 10 tags, 50 characters each.",
+      "allTags": "All tags"
+    },
     "loadError": "Couldn't load your prompts.",
     "visibilityDegraded": "Visibility figures are temporarily unavailable — showing prompts without them.",
     "positions": {

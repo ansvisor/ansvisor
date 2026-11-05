@@ -37,6 +37,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -1034,6 +1035,7 @@ function EditPromptDialog({
 }) {
   const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
     useAllowedEngines(shoppingEnabled);
+  const tTags = useTranslations('prompts.tags');
 
   const [text, setText] = useState('');
   const [category, setCategory] = useState('');
@@ -1045,6 +1047,8 @@ function EditPromptDialog({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagDraft, setTagDraft] = useState('');
 
   const promptId = prompt?.id;
 
@@ -1057,6 +1061,8 @@ function EditPromptDialog({
     if (!prompt) return;
     setText(prompt.text);
     setCategory(prompt.category ?? '');
+    setTags(prompt.tags ?? []);
+    setTagDraft('');
     setScrapers(prompt.platforms.filter((id) => allowedScraperIds.includes(id)));
     setModels(prompt.models.filter((id) => allowedModelIds.includes(id)));
     setIsActive(prompt.isActive);
@@ -1106,6 +1112,7 @@ function EditPromptDialog({
         category: category || undefined,
         platforms: scrapers,
         models,
+        tags,
       });
       onClose();
       toast.success('Prompt updated.');
@@ -1166,6 +1173,44 @@ function EditPromptDialog({
             visibleModels={visibleModels}
             saving={busy}
           />
+
+          <div className="space-y-1.5">
+            <Label htmlFor="prompt-tags">{tTags('label')}</Label>
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="gap-1 pr-1.5">
+                    {tag}
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label={tTags('removeTag', { tag })}
+                      disabled={busy}
+                      onClick={() => setTags(tags.filter((t) => t !== tag))}
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <Input
+              id="prompt-tags"
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              maxLength={50}
+              placeholder={tTags('placeholder')}
+              disabled={busy || tags.length >= 10}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                e.preventDefault();
+                const tag = tagDraft.trim().slice(0, 50);
+                if (tag && tags.length < 10 && !tags.includes(tag)) setTags([...tags, tag]);
+                setTagDraft('');
+              }}
+            />
+            <p className="text-xs text-muted-foreground">{tTags('hint')}</p>
+          </div>
 
           <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
             <Checkbox
@@ -2964,6 +3009,7 @@ function AllPromptsTab({
   const tCommon = useTranslations('common');
   const failureToast = useFailureToast();
   const tPrompts = useTranslations('prompts');
+  const tTags = useTranslations('prompts.tags');
   // One tooltip for every prompt and topic the table cuts short.
   const fullText = useMemo(() => createClampedTextHandle(), []);
   const volumeNote = useMemo(() => createEstimateNoteHandle(), []);
@@ -3426,6 +3472,8 @@ function AllPromptsTab({
   const [workFilter, setWorkFilter] = useState<'all' | 'none' | PromptWorkStatus>('all');
   // Where the brand stands in each prompt's answers: Best, Good, Late, Missing.
   const [performanceFilter, setPerformanceFilter] = useState<PerformanceFilter>('all');
+  // Custom tags (#2151): all prompts, or only those carrying one.
+  const [tagFilter, setTagFilter] = useState<string>('all');
   // Optimistic per-row status overrides — the prompts prop belongs to the
   // parent's load cycle; a full reload for a one-column change would flash
   // the whole table.
@@ -3593,8 +3641,15 @@ function AllPromptsTab({
         workFilter === 'none' ? statusOf(p) === null : statusOf(p) === workFilter,
       );
     }
+    if (tagFilter !== 'all') {
+      list = list.filter((p) => (p.tags ?? []).includes(tagFilter));
+    }
     return list;
-  }, [prompts, search, statusFilter, workFilter, statusOf, now]);
+  }, [prompts, search, statusFilter, workFilter, tagFilter, statusOf, now]);
+  const tagOptions = useMemo(
+    () => [...new Set(prompts.flatMap((p) => p.tags ?? []))].sort(),
+    [prompts],
+  );
 
   const performanceCounts = useMemo(() => {
     const counts: Record<PerformanceFilter, number> = {
@@ -3969,6 +4024,28 @@ function AllPromptsTab({
                 <SelectItem value="none">No status</SelectItem>
               </SelectContent>
             </Select>
+            {tagOptions.length > 0 && (
+              <Select
+                value={tagFilter}
+                onValueChange={(v) => setTagFilter(v ?? 'all')}
+                items={[
+                  { value: 'all', label: tTags('allTags') },
+                  ...tagOptions.map((tag) => ({ value: tag, label: tag })),
+                ]}
+              >
+                <SelectTrigger className="h-8 w-32 text-xs" aria-label={tTags('allTags')}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{tTags('allTags')}</SelectItem>
+                  {tagOptions.map((tag) => (
+                    <SelectItem key={tag} value={tag}>
+                      {tag}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Select
               value={performanceFilter}
               onValueChange={(v) => changePerformance((v as PerformanceFilter | null) ?? 'all')}
@@ -4370,6 +4447,15 @@ function AllPromptsTab({
                           className="-mt-0.5 shrink-0"
                         />
                       </div>
+                      {(p.tags ?? []).length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {(p.tags ?? []).map((tag) => (
+                            <Badge key={tag} variant="secondary" className="text-[10px]">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                     </TableCell>
                     {columns.map((id) => {
                       const loc = parseLocationColumn(id);

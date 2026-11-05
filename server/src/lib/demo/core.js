@@ -303,6 +303,7 @@ export function coreRows({ brandId, now }) {
     platforms: platformIds,
     regions: [REGION],
     models: [],
+    tags: p.tags ?? [],
     is_active: true,
     created_at: since,
   }));

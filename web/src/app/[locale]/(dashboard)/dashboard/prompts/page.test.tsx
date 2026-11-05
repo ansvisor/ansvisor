@@ -131,6 +131,7 @@ const prompt: Prompt = {
   workStatus: null,
   targetUrlCount: 0,
   citedUrlCount: 0,
+  tags: [],
   createdAt: '2026-09-01T00:00:00.000Z',
 };
 
