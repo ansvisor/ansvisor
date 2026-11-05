@@ -345,7 +345,7 @@ The MCP never sends a page to a CMS: Ansvisor's own **Send to CMS** stays in the
 | `get_site_audit_quota` | Monthly Site Audit allowance (`used`, `running`, `limit`, `remaining`) before starting a run. Audits still running are already taken out of `remaining`. | |
 | `list_site_audits` | Recent audits for a brand (id, url, status, score) to find a past run without the id. | |
 | `run_site_audit` | Start an AEO/GEO page audit for a URL (consumes a monthly credit; poll `get_site_audit` for results). A page with an audit already running returns that audit (`alreadyRunning: true`) and uses no credit. A page audited in the last 10 minutes returns status `recently_audited` with that audit's id and starts nothing; pass `force: true` to audit it again (uses a credit). Over REST: `POST /api/mcp/site-audits` with `{ "brand_id": "…", "url": "…", "force": true }`, which answers 202 for a started or running audit and 200 for a recent one. | **yes** |
-| `get_site_audit` | Fetch one audit by id — status, scores, the score's range (`scoreRange`: `plusMinus`, `low`, `high` and `audits`, or null before the page's third complete audit), signals, and fix recommendations (read-only). | |
+| `get_site_audit` | Fetch one audit by id — status, scores, the score's range (`scoreRange`: `plusMinus`, `low`, `high` and `audits`, or null before the page's third complete audit), the page's audit before it (`previousScore` and `previousCreatedAt`, null for a page audited once), whether it is `partial`, signals, and fix recommendations (read-only). | |
 
 ### Shopping
 

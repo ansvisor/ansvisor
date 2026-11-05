@@ -172,6 +172,19 @@ export function checkpointMarks(
   });
 }
 
+/**
+ * A ship event's action number and measurement, embedded in a ship_events
+ * select, as impactRow reads them: Reports' month and an agent's page alike.
+ */
+export const SHIP_ROW_EMBEDS =
+  'actions!ship_events_action_id_fkey(action_no), impact_measurements!impact_measurements_ship_event_id_fkey(targets, window_json, metrics, outcome, confidence, checkpoint, checkpoints_json, not_measurable_reason, concurrent_changes, next_check_at, measured_at)';
+
+/** The measurement an embedded select gave: one row (one per ship event), or none. */
+export const measurementOf = (
+  embedded: Record<string, unknown> | Record<string, unknown>[] | null | undefined,
+): Record<string, unknown> | null =>
+  Array.isArray(embedded) ? (embedded[0] ?? null) : (embedded ?? null);
+
 /** What a ship event and its measurement read as, before the page names who shipped it. */
 export interface ShipRowInput {
   key: string;

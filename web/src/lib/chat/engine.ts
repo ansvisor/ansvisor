@@ -129,6 +129,7 @@ import { ANSWER_NOTE, INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } from './r
 import { LANGUAGES, languageLine, rewriteLanguage, type Language } from './language';
 import { whyView } from './why/view';
 import { WHATS_NEW_TOOL, showWhatsNew, whatsNewStepDetail } from './whats-new/run';
+import { AUDIT_TOOL, auditCard } from './audit-card';
 import {
   batchSize,
   runsWithoutSession,
@@ -3799,6 +3800,11 @@ async function readCall(
     await showWhatsNew(read.value, rc.actor.userId, (cards) =>
       rc.sink.emit('whats_new.ready', cards),
     );
+  }
+  // A Site Audit's card, from the read's own result: never a number the model wrote.
+  if (tool.name === AUDIT_TOOL) {
+    const card = auditCard(read.value);
+    if (card) rc.sink.emit('audit.ready', card);
   }
   row = await updateStep(
     row.id,

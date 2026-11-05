@@ -776,6 +776,10 @@
         "sub-agents",
         "agent calls agent",
         "send to webhook",
+        "what this agent did",
+        "agent impact",
+        "changes shipped by an agent",
+        "agent results",
         "onboarding",
         "onboarding & help",
         "onboarding agent",
@@ -809,7 +813,9 @@
         "agents for me",
         "agent recommendations",
         "setup help",
-        "new member setup"
+        "new member setup",
+        "what did my agent do",
+        "did my agent work"
       ],
       "plan": "all",
       "updated": "2026-11-05",
@@ -840,7 +846,11 @@
         },
         {
           "heading": "An agent's page",
-          "text": "Click **Open** or the agent's name. The top shows its state, its owner, whether it is private or shared, and **This period**: what it used of this month's AI limit, with its monthly cap when one is set. Under it you see its skills, mode, connections and model.\n\n**Triggers** lists what starts it and when it runs next. **Run history** lists its last 50 runs: when each started, its trigger and brand, its result, its outcome and its **AI use**, for example \"3.2% of 10%\": what the run used and the most one run may use. Filter them with **All**, **Improved**, **Pending** and **Stopped**, and click a run to open its chat.\n\nOn the right, **Access**, **Scope** and **AI use** show who owns it, what it may reach and its limits."
+          "text": "Click **Open** or the agent's name. The top shows its state, its owner, whether it is private or shared, and **This period**: what it used of this month's AI limit, with its monthly cap when one is set. Under it you see its skills, mode, connections and model.\n\n**Triggers** lists what starts it and when it runs next, and **What this agent did** what its runs took live in the last 30 days. **Run history** lists its last 50 runs: when each started, its trigger and brand, its result, its outcome and its **AI use**, for example \"3.2% of 10%\": what the run used and the most one run may use. Filter them with **All**, **Improved**, **Pending** and **Stopped**, and click a run to open its chat.\n\nOn the right, **Access**, **Scope** and **AI use** show who owns it, what it may reach and its limits."
+        },
+        {
+          "heading": "What this agent did",
+          "text": "On an agent's page, **What this agent did** covers the last 30 days. **Changes shipped** counts the pages that went live from its runs. **Improved** says how many of those with a verdict improved, counting only Medium and High confidence verdicts, as **Reports** does. A **Pending** change gets its first verdict 14 days after it goes live.\n\nEach change shows the run it came from, its outcome and its next check, and how it went live: **on its own**, **you approved** when you sent or published it on a card in the run's chat, or **by** and the name of the teammate who did. A line counts the agent's drafts that aren't live yet: drafts aren't measured until they go live. You see only the brands you have access to. **Open in Reports** opens **What Ansvisor did for you**, where each change has its details."
         },
         {
           "heading": "What a run's outcome means",
@@ -1091,7 +1101,11 @@
         "dictate",
         "send to webhook",
         "webhook",
-        "workflow webhook"
+        "workflow webhook",
+        "audit card",
+        "audit in chat",
+        "audit score in chat",
+        "open report"
       ],
       "synonyms": [
         "assistant",
@@ -1100,7 +1114,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
@@ -1157,6 +1171,10 @@
         {
           "heading": "Drafts, reports and audits",
           "text": "Admins and Managers can also ask Chat to change a draft in the Library, send a draft to your connected CMS, publish a new page on your site, send a page to your webhook, make a report, or start Site Audit on pages. Analysts can ask Chat to save new drafts only.\n\nA draft Chat changes keeps the page before in **History**; **Undo** puts it back for 30 days. A report Chat makes can be undone for 30 days too.\n\nStarting an audit always asks first and says how many of the month's audits it uses. Audits have no Undo."
+        },
+        {
+          "heading": "A Site Audit in Chat",
+          "text": "When Chat reads one of your Site Audits, a card under the answer shows it: the page, its score on the same gauge as the audit report, and the day it ran. Once the page has three audits, the score shows its range, such as **64 ± 2**, with a line giving the lowest and highest score of its last five audits. When the page was audited before, the card shows the change since then, such as **+3 since Oct 21**. A partial audit says the AI checks couldn't run, and shows no range or change. **Open report** opens the audit's full report. The card's numbers come from the audit itself, not from Chat's answer. One answer shows up to three audits."
         },
         {
           "heading": "Where a page opens",
@@ -4893,7 +4911,7 @@
         },
         {
           "heading": "Score range",
-          "text": "Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits. A line beside it gives those two scores. Partial audits aren't counted. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five. A page that didn't change usually shows ± 0.\n\nThe same range comes with an audit wherever else you read it: in Chat, in AI assistants connected over MCP, and in a report's **Site Audit Score**, from the page's audits up to the report's end date."
+          "text": "Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits. A line beside it gives those two scores. Partial audits aren't counted. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five. A page that didn't change usually shows ± 0.\n\nThe same range comes with an audit wherever else you read it: in Chat, on the audit's card under the answer, in AI assistants connected over MCP, and in a report's **Site Audit Score**, from the page's audits up to the report's end date."
         },
         {
           "heading": "Signals",
