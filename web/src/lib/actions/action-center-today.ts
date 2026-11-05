@@ -2,7 +2,12 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
+import { taskProgress } from '@/lib/action-center/registry';
+import { readAssignees } from '@/lib/action-center/assignees';
+import { readEntityCounts } from '@/lib/action-center/entity-counts';
+import { ACTION_COLUMNS, actionItemFromRow, type ActionRow } from '@/lib/action-center/rows';
 import { parseTaskDetails } from '@/lib/action-center/task-details';
+import { OPEN_SIGNAL_STATUSES, type SignalStatus } from '@/lib/signals/registry';
 import { effectiveTimeZone } from '@/lib/time-zone';
 import {
   firstOpenTask,
@@ -19,10 +24,13 @@ import {
  * The order is the server's (GET /api/action-center/today): the Inbox's
  * daily suggestion ranking, one rule for both, with today's suggestion
  * first. This reads, as the person (RLS), what the card shows beside it:
- * each item's first step and assignee, and the brand's actions completed
- * since Monday in the person's time zone (the one they picked in Settings ›
- * Account, else their browser's). Throws on a failed read: the page then
- * shows itself without the card.
+ * each item's action as the Actions list reads it, by id (ten at most), so
+ * the card and its drawer never depend on the page's list, which holds at
+ * most 1000 actions in no order; each today item's first step and who does
+ * it; and the brand's actions completed since Monday in the person's time
+ * zone (the one they picked in Settings › Account, else their browser's).
+ * An item whose action the person can't read is left out. Throws on a
+ * failed read: the page then shows itself without the card.
  */
 export async function getToday(brandId: string, browserZone: string | null): Promise<TodayRead> {
   const supabase = await createClient();
@@ -40,23 +48,43 @@ export async function getToday(brandId: string, browserZone: string | null): Pro
   );
   if (!res.ok) throw new Error(`Server error: ${res.status}`);
   const order = readOrder(await res.json().catch(() => null));
-  const ids = order.today.map((item) => item.id);
+  const ids = [...order.today, ...order.next].map((item) => item.id);
 
-  const profile = await supabase
-    .from('profiles')
-    .select('time_zone')
-    .eq('id', user.id)
-    .maybeSingle();
-  const zone = effectiveTimeZone(profile.data?.time_zone ?? null, browserZone);
-
-  const [tasks, assignees, done] = await Promise.all([
+  const [profile, rows, tasks, signals, entityCounts] = await Promise.all([
+    supabase.from('profiles').select('time_zone').eq('id', user.id).maybeSingle(),
+    ids.length
+      ? supabase.from('actions').select(ACTION_COLUMNS).eq('brand_id', brandId).in('id', ids)
+      : null,
     ids.length
       ? supabase
           .from('action_tasks')
           .select('action_id, position, task_key, title, title_params, status, mode, details')
           .in('action_id', ids)
       : null,
-    ids.length ? supabase.from('actions').select('id, assignee_id').in('id', ids) : null,
+    // Their open signals, counted as the list counts them (AC-007).
+    ids.length
+      ? supabase
+          .from('signals')
+          .select('action_id')
+          .eq('brand_id', brandId)
+          .in('status', OPEN_SIGNAL_STATUSES as SignalStatus[])
+          .in('action_id', ids)
+      : null,
+    readEntityCounts(supabase, ids),
+  ]);
+  if (rows?.error) throw new Error(rows.error.message);
+  if (tasks?.error) throw new Error(tasks.error.message);
+  if (signals?.error) throw new Error(signals.error.message);
+  const actionRows = (rows?.data ?? []) as ActionRow[];
+  const zone = effectiveTimeZone(profile.data?.time_zone ?? null, browserZone);
+
+  const [assignees, done] = await Promise.all([
+    // Other members' profiles are hidden from the person (RLS): read as the list reads them.
+    readAssignees(
+      supabase,
+      brandId,
+      actionRows.flatMap((row) => (row.assignee_id ? [row.assignee_id] : [])),
+    ),
     supabase
       .from('actions')
       .select('id', { count: 'exact', head: true })
@@ -65,8 +93,6 @@ export async function getToday(brandId: string, browserZone: string | null): Pro
       .is('deleted_at', null)
       .gte('completed_at', weekStart(new Date(), zone)),
   ]);
-  if (tasks?.error) throw new Error(tasks.error.message);
-  if (assignees?.error) throw new Error(assignees.error.message);
   if (done.error) throw new Error(done.error.message);
 
   const tasksOf = new Map<string, TodayTaskRow[]>();
@@ -84,21 +110,42 @@ export async function getToday(brandId: string, browserZone: string | null): Pro
     });
     tasksOf.set(row.action_id, list);
   }
-  const assigneeOf = new Map(
-    (assignees?.data ?? []).map((row) => [row.id, row.assignee_id as string | null]),
-  );
+  const signalCounts = new Map<string, number>();
+  for (const signal of signals?.data ?? []) {
+    if (!signal.action_id) continue;
+    signalCounts.set(signal.action_id, (signalCounts.get(signal.action_id) ?? 0) + 1);
+  }
+  const rowOf = new Map(actionRows.map((row) => [row.id, row]));
+  const actionOf = (row: ActionRow) => {
+    const progress = taskProgress((tasksOf.get(row.id) ?? []).map((task) => task.status));
+    return actionItemFromRow(row, {
+      assignee: row.assignee_id ? (assignees.get(row.assignee_id) ?? null) : null,
+      taskTotal: progress.total,
+      taskCompleted: progress.completed,
+      signalCount: signalCounts.get(row.id) ?? 0,
+      entityCounts: entityCounts.get(row.id),
+    });
+  };
 
   return {
-    today: order.today.map(({ id, suggested }) => {
+    today: order.today.flatMap(({ id, suggested }) => {
+      const row = rowOf.get(id);
+      if (!row) return [];
       const first = firstOpenTask(tasksOf.get(id) ?? []);
-      return {
-        id,
-        suggested,
-        firstStep: todayStep(first),
-        who: whoDoesIt(first, assigneeOf.get(id) ?? null, user.id),
-      };
+      return [
+        {
+          id,
+          action: actionOf(row),
+          suggested,
+          firstStep: todayStep(first),
+          who: whoDoesIt(first, row.assignee_id, user.id),
+        },
+      ];
     }),
-    next: order.next,
+    next: order.next.flatMap(({ id }) => {
+      const row = rowOf.get(id);
+      return row ? [{ id, action: actionOf(row) }] : [];
+    }),
     doneThisWeek: done.count ?? 0,
   };
 }

@@ -1,7 +1,7 @@
 ---
 title: See and run your agents in Agent Center
 route: /dashboard/agents
-keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook, what this agent did, agent impact, changes shipped by an agent, agent results, onboarding, onboarding & help, onboarding agent, help agent, setup guide, /setup, recommended agents, which agents should i use, when a brand is added, brand added, new brand trigger]
+keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook, what this agent did, agent impact, changes shipped by an agent, agent results, onboarding, onboarding & help, onboarding agent, help agent, setup guide, /setup, recommended agents, which agents should i use, fan-out gap filler, fan-out gaps, prompt portfolio manager, prompts to add, prompts to pause, when a brand is added, brand added, new brand trigger]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent, agents for me, agent recommendations, setup help, new member setup, what did my agent do, did my agent work, run an agent on a new brand, agent for new brands]
 plan: all
 updated: 2026-11-05
@@ -33,6 +33,10 @@ Admins and Managers click **Use this agent**. **New agent** opens with its skill
 
 If your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet.
 
+## Fan-out Gap Filler
+
+**Fan-out Gap Filler** runs every Monday at 09:00 on **Auto, ask before changes**. It reads the sub-questions AI engines searched while answering your tracked prompts, finds the ones where no answer named your brand, and drafts an answer-first section for each in a Content draft, which **Answer-first rewrite** then goes over. Its answer lists each sub-question with the engines that searched it and the competitors named instead. Sending the draft to your CMS and publishing it stay yours. In Chat, the same skill is **/fanout**.
+
 ## Agents for your site and your work
 
 Agents made for the site type of the brand you have open are marked **For your site type**, and agents made for one of your work areas **For your role**. They come first among the agents you can use, and first among the **Soon** ones. A brand's site type is **E-commerce**, **B2B SaaS** or **B2C**, under **Site type** in the brand's settings; until someone sets it, Ansvisor guesses it. Change your work areas in **Settings › Account › Your work areas**. **Mobile app** agents show under **Business type** only: a brand can't be set to Mobile app yet.
@@ -40,6 +44,10 @@ Agents made for the site type of the brand you have open are marked **For your s
 ## Onboarding & Help
 
 **Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**). It starts on **All brands** with **When a brand is added**: once it's on, each brand someone adds gets one run, which acts as the agent's owner and shows in their Inbox. You can also click **Run now** on its page. Each run says how many **Getting started** steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help.
+
+## Prompt Portfolio Manager
+
+**Prompt Portfolio Manager** runs every Monday at 09:00 on **Ask me first**. It is made for the **AEO/GEO & Audit** work area. It proposes prompts to track, from your prompt suggestions, the sub-questions AI engines searched and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each proposal shows its evidence and is a card: nothing is added or paused until you approve it, and the **Activity** log can undo each change. A prompt counts as out of scope only when you say so. Search Console is optional. In Chat, the same skill is **/prompts**.
 
 ## What each card shows
 

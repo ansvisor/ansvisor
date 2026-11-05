@@ -161,10 +161,13 @@ describe('Ready to use', () => {
       'weekly-report',
       'brand-facts-guardian',
     ]);
-    // Onboarding & Help, the next core agent ready, then the packs.
-    expect(shown[8].getAttribute('data-preset')).toBe('onboarding-help');
-    expect(shown.slice(8, 19).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
-    expect(shown.slice(19).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
+    // Fan-out Gap Filler, Prompt Portfolio Manager and Onboarding & Help, the next core
+    // agents ready, then the packs.
+    expect(shown[8].getAttribute('data-preset')).toBe('fanout-gap-filler');
+    expect(shown[9].getAttribute('data-preset')).toBe('prompt-portfolio');
+    expect(shown[10].getAttribute('data-preset')).toBe('onboarding-help');
+    expect(shown.slice(8, 21).every((c) => c.getAttribute('data-status') === 'ready')).toBe(true);
+    expect(shown.slice(21).every((c) => c.getAttribute('data-status') === 'soon')).toBe(true);
     expect(shown).toHaveLength(39);
     // No brand on screen and no work areas: nothing is marked.
     expect(all('[data-slot="preset-fit"]')).toHaveLength(0);
@@ -192,7 +195,16 @@ describe('Ready to use', () => {
     expect(card('ready-to-publish').querySelector('[data-cell="trigger"]')?.textContent).toBe(
       'TriggerManual only',
     );
-    expect(action('agents.usePreset')).toHaveLength(19);
+    expect(action('agents.usePreset')).toHaveLength(21);
+
+    // Fan-out Gap Filler: its skills on Mondays, in its mode.
+    const added = card('fanout-gap-filler');
+    expect(added.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
+      '/fanout/answerfirstAuto, ask before changes',
+    );
+    expect(added.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
+      '/dashboard/agents/new?preset=fanout-gap-filler',
+    );
 
     // Onboarding & Help: its setup skill, on each brand added, asking before every change.
     const help = card('onboarding-help');
@@ -205,16 +217,25 @@ describe('Ready to use', () => {
     expect(help.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
       '/dashboard/agents/new?preset=onboarding-help',
     );
+
+    // Prompt Portfolio Manager: its skill on Mondays, in its mode.
+    const portfolio = card('prompt-portfolio');
+    expect(portfolio.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
+      '/promptsAsk me first',
+    );
+    expect(portfolio.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
+      '/dashboard/agents/new?preset=prompt-portfolio',
+    );
   });
 
   it('says what a Soon card waits for, and opens nothing from it', async () => {
     await render();
-    const fanout = card('fanout-gap-filler');
-    expect(fanout.querySelector('[data-slot="preset-soon"]')?.textContent).toBe(
-      'SoonNeeds the /fanout skill',
+    const localization = card('localization');
+    expect(localization.querySelector('[data-slot="preset-soon"]')?.textContent).toBe(
+      'SoonNeeds a page-published trigger',
     );
-    expect(fanout.querySelector('a')).toBeNull();
-    expect(fanout.querySelector('button')).toBeNull();
+    expect(localization.querySelector('a')).toBeNull();
+    expect(localization.querySelector('button')).toBeNull();
     expect(card('aeo-operator').textContent).toContain('Needs sub-agents');
     expect(card('revenue-attribution').textContent).toContain('Needs HubSpot');
     for (const soon of cards().filter((c) => c.getAttribute('data-status') === 'soon')) {

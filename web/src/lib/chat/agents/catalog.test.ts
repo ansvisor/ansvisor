@@ -88,6 +88,8 @@ describe('the preset files', () => {
       'task-finisher',
       'weekly-report',
       'brand-facts-guardian',
+      'fanout-gap-filler',
+      'prompt-portfolio',
       'onboarding-help',
       'product-answer-pages',
       'feature-question-coverage',
@@ -100,7 +102,7 @@ describe('the preset files', () => {
       'unmet-needs-miner',
       'market-source-finder',
     ]);
-    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(20);
+    expect(AGENT_PRESETS.filter((preset) => preset.status === 'soon')).toHaveLength(18);
   });
 
   it('have the business-type packs: three agents for each type, in the plan’s order', () => {
@@ -226,6 +228,48 @@ describe('a ready preset', () => {
     expect(chatAgents.presets['task-finisher'].description).toContain('finishes two a run');
   });
 
+  it('fills fan-out gaps as Fan-out Gap Filler: /fanout, then /answerfirst, on Mondays', () => {
+    // AGENTS plan §3 #9: weekly, its new skill then Answer-first rewrite. Auto, as the other
+    // agents that write drafts: a draft never goes live, and saving one asks unless allowed.
+    expect(readyPreset('fanout-gap-filler')).toMatchObject({
+      goal: 'content',
+      skills: ['fanout', 'answerfirst'],
+      triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
+      mode: 'auto',
+      connections: [],
+      needs: [],
+    });
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'fanout')?.body ?? '';
+    expect(body).toContain('`get_fanout_gaps`');
+    expect(body).toContain('`create_draft`');
+    expect(body).toContain('Never say a section will get the brand named or cited');
+    expect(chatAgents.presets['fanout-gap-filler'].description).toContain('answer-first');
+  });
+
+  it('keeps tracking on what matters as Prompt Portfolio Manager: /prompts on Mondays, asking first', () => {
+    // AGENTS plan §3 #10: weekly, its new skill. Ask me first: adding and pausing prompts is
+    // always the person's click, even where an Admin set those tools to run without asking.
+    expect(readyPreset('prompt-portfolio')).toMatchObject({
+      goal: 'visibility',
+      roles: ['aeo'],
+      skills: ['prompts'],
+      triggers: [{ kind: 'schedule', repeat: 'MO', time: '09:00' }],
+      mode: 'ask_first',
+      connections: [{ key: 'google_search_console', required: false }],
+      needs: [],
+    });
+    expect(presetGate(readyPreset('prompt-portfolio')!)).toBeNull();
+    const body = SKILL_LIBRARY.find((skill) => skill.name === 'prompts')?.body ?? '';
+    for (const tool of ['list_prompt_suggestions', 'get_fanouts', 'get_gsc_queries']) {
+      expect(body).toContain(`\`${tool}\``);
+    }
+    expect(body).toContain('`add_prompts`');
+    expect(body).toContain('`pause_prompts`');
+    expect(body).toContain('Out of scope is the person');
+    expect(body).toContain('Never add or pause a prompt any other way than with its card');
+    expect(chatAgents.presets['prompt-portfolio'].description).toContain('to pause');
+  });
+
   it('walks Getting started as Onboarding & Help, on a brand added, asking before every change', () => {
     // AGENTS plan §3 #11: its /setup skill, When a brand is added (00482), and Ask me first,
     // as Get started (/start) asks: every change is the person's click.
@@ -247,7 +291,7 @@ describe('a ready preset', () => {
 
   it('is found by its id; a soon one, or no id, is not', () => {
     expect(readyPreset('weekly-report')?.id).toBe('weekly-report');
-    expect(readyPreset('fanout-gap-filler')).toBeNull();
+    expect(readyPreset('localization')).toBeNull();
     expect(readyPreset('nope')).toBeNull();
     expect(readyPreset(null)).toBeNull();
   });
@@ -263,7 +307,7 @@ describe('a soon preset', () => {
   });
 
   it('is refused as a file when it needs nothing, as a ready one that needs something is', () => {
-    const base = AGENT_PRESETS.find((preset) => preset.id === 'fanout-gap-filler')!;
+    const base = AGENT_PRESETS.find((preset) => preset.id === 'localization')!;
     expect(() => buildPresetCatalog([{ file: 'x.json', json: { ...base, needs: [] } }])).toThrow(
       /needs/,
     );
