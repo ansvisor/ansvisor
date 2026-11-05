@@ -4,8 +4,8 @@ route: /dashboard/reports
 keywords: [reports, generate report, report templates, PDF, executive summary, snapshot]
 synonyms: [monthly report, client report, export a report, download PDF, report for my boss]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -30,7 +30,7 @@ The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts
 
 ## Read a report
 
-A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards.
+A report opens with its **Executive Summary**: a short account of what changed versus the previous period, such as the headline visibility movement, mention and citation growth, and sentiment and competitor shifts. One card per selected section follows, in a fixed order. Each metric is compared with the previous period of equal length, so a 30-day report is compared with the 30 days before it. **Site Audit Score** is the exception: it shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. Percentage changes read +X%, and point changes for visibility and sentiment +X pts. Because the snapshot is frozen, a report's numbers can differ from the live dashboards.
 
 ## Download a PDF
 
