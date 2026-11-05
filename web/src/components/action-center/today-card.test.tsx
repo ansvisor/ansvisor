@@ -67,10 +67,13 @@ const actions = [
   action('a5', { category: 'protect', priorityScore: 71 }),
 ];
 
+const own = (id: string) => actions.find((a) => a.id === id)!;
+
 const read: TodayRead = {
   today: [
     {
       id: 'a1',
+      action: own('a1'),
       suggested: true,
       firstStep: {
         taskKey: null,
@@ -80,15 +83,19 @@ const read: TodayRead = {
       },
       who: 'me',
     },
-    { id: 'a2', suggested: false, firstStep: null, who: 'agent' },
+    { id: 'a2', action: own('a2'), suggested: false, firstStep: null, who: 'agent' },
     {
       id: 'a3',
+      action: own('a3'),
       suggested: false,
       firstStep: { taskKey: null, title: 'Update robots.txt', titleParams: {}, url: null },
       who: 'team',
     },
   ],
-  next: [{ id: 'a4' }, { id: 'a5' }],
+  next: [
+    { id: 'a4', action: own('a4') },
+    { id: 'a5', action: own('a5') },
+  ],
   doneThisWeek: 5,
 };
 
@@ -175,6 +182,21 @@ describe('TodayCard', () => {
     expect(next[0].textContent).toContain('Compete');
     await act(async () => next[0].click());
     expect(onOpenAction).toHaveBeenCalledWith('a4');
+  });
+
+  it('shows and opens the items the page’s list doesn’t hold, from their own actions', async () => {
+    // The page's list holds at most 1000 actions, in no order: here, none of Today's.
+    await render({ actions: [action('elsewhere')] });
+    expect(rows()).toHaveLength(3);
+    expect(rows()[0].textContent).toContain('13 prompts');
+    expect(text()).toContain('Next 2');
+    const next = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('74'),
+    )!;
+    expect(next.textContent).toContain('Compete');
+    await act(async () => rows()[0].querySelector('button')!.click());
+    await act(async () => next.click());
+    expect(onOpenAction.mock.calls).toEqual([['a1'], ['a4']]);
   });
 
   it('leaves out an item whose action closed since the order was read', async () => {

@@ -6,10 +6,11 @@ import { asService, latestAnswerAt, newestOf, planPlatforms } from './chat-facts
 
 /**
  * Chat's Prompts reads (CHAT-20 §9 rows 14, 16, 18): the Query Fan-outs
- * tab, a prompt's AI answers and the Insights tab, read by the pages' own
- * loaders with the service role once the brand is the caller's. Each
- * answers `data_as_of` (§15a); the engines and answers are the plan's
- * platforms only. Null for a brand outside the organization.
+ * tab and its gaps (where the brand is absent), a prompt's AI answers and
+ * the Insights tab, read by the pages' own loaders with the service role
+ * once the brand is the caller's. Each answers `data_as_of` (§15a); the
+ * engines and answers are the plan's platforms only. Null for a brand
+ * outside the organization.
  */
 
 /** Sub-queries listed, the most searched first. */
@@ -49,6 +50,57 @@ export async function getFanoutsFor(
       tracked: q.tracked,
     })),
     sub_queries_total: fanout.subQueries.length,
+    data_as_of: asOf,
+  };
+}
+
+/** Fan-out gaps listed, the most searched first. */
+const GAPS_SHOWN = 20;
+/** Tracked prompts named behind each gap, and competitors named in its answers. */
+const GAP_PROMPTS_SHOWN = 3;
+const GAP_RIVALS_SHOWN = 3;
+
+/**
+ * The fan-out gaps (AGENTS plan §3 #9, the /fanout skill): the sub-queries
+ * engines searched behind the brand's tracked answers where none of those
+ * answers named the brand or cited its site. Each with the engines that
+ * searched it, how often, the tracked prompts whose answers ran it (to draft
+ * from) and the competitors those answers named instead. The Query Fan-outs
+ * tab's own read, on the plan's platforms, with who each answer named.
+ */
+export async function getFanoutGapsFor(
+  auth: McpAuthContext,
+  params: { brandId: string; days?: number; limit?: number },
+) {
+  if (!(await brandAllowed(auth, params.brandId))) return null;
+  const days = params.days ?? 30;
+  const platforms = await planPlatforms(auth.organizationId!);
+  const [fanout, asOf] = await Promise.all([
+    asService(() =>
+      getQueryFanout(params.brandId, {
+        days,
+        presence: true,
+        ...(platforms ? { platforms } : {}),
+      }),
+    ),
+    latestAnswerAt(params.brandId, platforms),
+  ]);
+  const gaps = fanout.subQueries.filter((q) => q.presence?.brandAnswers === 0);
+  return {
+    days,
+    truncated: fanout.truncated,
+    sub_queries_total: fanout.subQueries.length,
+    gaps_total: gaps.length,
+    gaps: gaps.slice(0, params.limit ?? GAPS_SHOWN).map((q) => ({
+      query: q.query,
+      engines: q.engines,
+      times_searched: q.timesSearched,
+      tracked: q.tracked,
+      from_prompts: q.sourcedPrompts
+        .slice(0, GAP_PROMPTS_SHOWN)
+        .map((p) => ({ prompt_id: p.id, text: p.text })),
+      competitors_named: (q.presence?.rivals ?? []).slice(0, GAP_RIVALS_SHOWN),
+    })),
     data_as_of: asOf,
   };
 }
