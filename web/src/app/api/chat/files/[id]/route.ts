@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { exportChatFile, type ChatFileFormat } from '@/lib/chat/file-export';
+import { CHAT_IMAGE_FORMATS } from '@/lib/chat/files';
 import { readChatFile } from '@/lib/chat/file-store';
 import { chatActor, runFailure, runIdOf } from '@/lib/chat/run-api';
 
@@ -7,7 +8,16 @@ type Params = { params: Promise<{ id: string }> };
 
 export const runtime = 'nodejs';
 
-const FORMATS: readonly ChatFileFormat[] = ['md', 'html', 'docx', 'pdf', 'csv', 'xlsx'];
+const FORMATS: readonly ChatFileFormat[] = [
+  'md',
+  'html',
+  'docx',
+  'pdf',
+  'csv',
+  'xlsx',
+  // An image, in its own format (W4-08).
+  ...CHAT_IMAGE_FORMATS,
+];
 
 /**
  * GET /api/chat/files/{id}?format=

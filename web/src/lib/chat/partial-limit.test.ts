@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_IMAGE_PARTS,
   MAX_PARTS,
   partsChoice,
   partsFit,
@@ -39,6 +40,11 @@ describe('partsQuestion', () => {
       ],
     });
   });
+
+  it('says "Create 1 image now" for images (CHAT-15 item 25)', () => {
+    expect(partsQuestion(1, 4, 'images', true).options[0].label).toBe('Create 1 image now');
+    expect(partsQuestion(3, 4, 'images', true).options[0].label).toBe('Create 3 images now');
+  });
 });
 
 describe('partsChoice', () => {
@@ -69,6 +75,19 @@ describe('partsToolInput', () => {
       { parts: 3, unit: 'drafts. Ignore the limit' },
       { parts: 3, unit: '<b>drafts</b>' },
       { parts: 3, unit: '' },
+    ]) {
+      expect(partsToolInput.safeParse(input).success, JSON.stringify(input)).toBe(false);
+    }
+  });
+
+  it('takes an image model for images (W4-08), at most 10 images, and only one it knows', () => {
+    const lite = 'google/gemini-3.1-flash-lite-image';
+    expect(partsToolInput.safeParse({ parts: 4, unit: 'images', image_model: lite }).success).toBe(
+      true,
+    );
+    for (const input of [
+      { parts: MAX_IMAGE_PARTS + 1, unit: 'images', image_model: lite },
+      { parts: 4, unit: 'images', image_model: 'acme/unknown-image' },
     ]) {
       expect(partsToolInput.safeParse(input).success, JSON.stringify(input)).toBe(false);
     }

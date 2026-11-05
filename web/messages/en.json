@@ -3529,6 +3529,8 @@
     },
     "makeReport": { "name": "Make reports", "step": "Made report" },
     "startAudit": { "name": "Start Site Audits", "step": "Started Site Audit" },
+    "imageModels": { "name": "Read image models", "step": "Read image models" },
+    "makeImages": { "name": "Create images", "step": "Created images" },
     "webPage": { "name": "Open web pages", "step": "Open page" },
     "whyChange": { "name": "Explain why a number changed", "step": "Read why it changed" },
     "agents": { "name": "Create and run agents", "step": "Changed an agent" },
@@ -4001,6 +4003,7 @@
     "partial": {
       "question": "Your remaining AI limit covers about {fits} of the {parts} {unit}.",
       "doFirst": "Do the first {fits} now",
+      "createImages": "Create {fits, plural, one {# image} other {# images}} now",
       "doFirstDetail": "The rest waits until there is more AI limit",
       "credits": "Get more AI credits",
       "creditsDetail": "Chat stops here, where you can add AI credits",
@@ -4009,14 +4012,6 @@
     "saveSteps": {
       "label": "Save these steps as a skill",
       "prompt": "Save these steps as a skill"
-    },
-    "partial": {
-      "question": "Your remaining AI limit covers about {fits} of the {parts} {unit}.",
-      "doFirst": "Do the first {fits} now",
-      "doFirstDetail": "The rest waits until there is more AI limit",
-      "credits": "Get more AI credits",
-      "creditsDetail": "Chat stops here, where you can add AI credits",
-      "cancel": "Cancel"
     },
     "pageRefused": {
       "no_access": "No workspace to open pages for",
@@ -4036,7 +4031,31 @@
     "costs": {
       "siteAudit": "{count, plural, one {Uses # audit} other {Uses # audits}} of {left} left this month",
       "siteAuditOver": "{count, plural, one {Needs # audit} other {Needs # audits}}, {left} left this month: it won't start",
-      "siteAuditUnknown": "{count, plural, one {Uses # of this month's audits} other {Uses # of this month's audits}}"
+      "siteAuditUnknown": "{count, plural, one {Uses # of this month's audits} other {Uses # of this month's audits}}",
+      "images": "{count, plural, one {# image} other {# images}} · {model}",
+      "imagesShare": "{count, plural, one {# image} other {# images}} · {model} · about {percent}% of your monthly AI limit",
+      "imagesOwnKey": "{count, plural, one {# image} other {# images}} · {model} · on your own key"
+    },
+    "images": {
+      "question": "Which image model should I use?",
+      "share": "{multiplier} · about {percent}% of your monthly AI limit per image",
+      "ownKey": "{multiplier} · Your key",
+      "plain": "{multiplier}",
+      "models": {
+        "nanoBanana2Lite": "Fast and light",
+        "nanoBanana2": "Sharper text in images",
+        "nanoBananaPro": "Highest detail",
+        "gpt5ImageMini": "OpenAI's image model"
+      },
+      "title": "{count, plural, one {Image} other {Images}} · {model}",
+      "unavailable": "Image making isn't set up in this workspace yet.",
+      "ownKeyUnreadable": "The workspace's own OpenRouter key can't be read. An Admin can replace it in Settings › AI Providers.",
+      "limit": "Your remaining AI limit doesn't cover these images.",
+      "storageFull": "Files is full, so the images would have nowhere to go. Make room or get more storage first.",
+      "refused": "The image model didn't make an image for this prompt: {why}",
+      "notFiled": "The images were made but couldn't be saved to Files.",
+      "providerOff": "{model}'s maker is turned off for this workspace in Settings › Chat. Pick another image model.",
+      "providersOff": "Every image model's maker is turned off for this workspace in Settings › Chat, so Chat can't make images here. An Admin can turn one on."
     },
     "error": {
       "noKey": "Chat has no AI key to run on. An Admin can add one in Settings › AI Providers.",
@@ -4401,7 +4420,10 @@
       "docx": "Word .docx",
       "pdf": "PDF .pdf",
       "csv": "CSV .csv",
-      "xlsx": "Excel .xlsx"
+      "xlsx": "Excel .xlsx",
+      "png": "PNG .png",
+      "jpg": "JPEG .jpg",
+      "webp": "WebP .webp"
     },
     "save": "Save to Files",
     "saved": "Saved to Files",
@@ -4453,6 +4475,16 @@
     "downloaded": "Downloaded {name}",
     "downloadFailed": "Couldn't download that. Try again.",
     "openEditor": "Open in Content Editor",
+    "images": {
+      "label": "Images made",
+      "pick": "Image {n} of {count}",
+      "selected": "Selected",
+      "loading": "Loading the images…",
+      "unreadable": "Couldn't show the images. They are in Files.",
+      "pickFailed": "Couldn't pick that image. Try again.",
+      "png": "PNG",
+      "downloaded": "Downloaded {name}"
+    },
     "task": {
       "line": "Task: {title}",
       "untitled": "An Action Center task",
@@ -4543,6 +4575,7 @@
       "jsonld": "JSON-LD",
       "txt": "TXT",
       "png": "PNG",
+      "jpg": "JPEG",
       "webp": "WebP"
     }
   },
@@ -5731,6 +5764,7 @@
         "action_center": "Action Center",
         "content": "Content",
         "reports": "Reports",
+        "images": "Images",
         "navigation": "Navigation",
         "web": "Web",
         "scheduling": "Scheduling",
@@ -5782,6 +5816,7 @@
       "makeReport": "Made the report “{title}”",
       "makeReportUndo": "Removed the report “{title}” from Reports",
       "startAudit": "Started Site Audit on {pages}",
+      "makeImages": "Created images “{title}” with {model}",
       "scheduleJob": "Scheduled “{title}” · {when}",
       "followUpCheck": "Set the follow-up check “{title}” for {date}",
       "followUpCheckUndo": "Cancelled the follow-up check “{title}”",
@@ -9361,6 +9396,7 @@
           "failed": {
             "unavailable": "Image generation isn't available in this workspace right now.",
             "own_key": "Your workspace's own OpenRouter key can't be read. An Admin can replace it in Settings › AI Providers.",
+            "provider_off": "{model}'s maker is turned off for this workspace in Settings › Chat. Pick another image model.",
             "ai_limit": "What's left of your monthly AI limit doesn't cover {count} images, so none was made.",
             "refused": "The image model didn't make an image for this description: {why} Try describing it another way.",
             "demo": "The demo brand makes no images. Switch to your brand to generate one.",

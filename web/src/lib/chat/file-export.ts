@@ -10,6 +10,7 @@ import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { withContentDom } from '@/lib/content/server-dom';
 import { answerFileName, type AnswerExportFormat, type ExportAnswer } from './export';
 import { ANSWER_CONTENT_TYPES, exportAnswer, type AnswerFile } from './export-file';
+import { CHAT_IMAGE_FORMATS, type ChatImageFormat } from './files';
 
 /**
  * A file in Files, downloaded (CHAT-06 items 2, 35): its canonical content
@@ -20,7 +21,10 @@ import { ANSWER_CONTENT_TYPES, exportAnswer, type AnswerFile } from './export-fi
  * and the day it was made.
  */
 
-export type ChatFileFormat = AnswerExportFormat | 'html';
+export type ChatFileFormat = AnswerExportFormat | 'html' | ChatImageFormat;
+
+const isImageFormat = (format: ChatFileFormat): format is ChatImageFormat =>
+  (CHAT_IMAGE_FORMATS as readonly string[]).includes(format);
 
 /** A file as stored: its row's facts and its content, read from chat-files. */
 export interface StoredChatFile {
@@ -32,8 +36,20 @@ export interface StoredChatFile {
   /** "Generated … · Data as of …", worded by the caller. */
   stamp: string;
   content: string;
+  /** An image's bytes (its content is empty). */
+  bytes?: Uint8Array;
   appOrigin?: string | null;
 }
+
+/** What an image's file name reads besides its title and day: nothing. */
+const IMAGE_ANSWER: ExportAnswer = {
+  markdown: '',
+  question: '',
+  chatTitle: null,
+  generatedAt: '',
+  timezone: null,
+  stamp: '',
+};
 
 /** The page's Markdown without its first heading when that heading is its title: the file's title says it. */
 function withoutTitle(markdown: string, title: string): string {
@@ -49,6 +65,24 @@ export async function exportChatFile(
   format: ChatFileFormat,
 ): Promise<AnswerFile | null> {
   if (!file.formats.includes(format)) return null;
+  // An image (W4-08): its own bytes, in its own format, named after its title.
+  if (file.mimeType.startsWith('image/')) {
+    if (!file.bytes || !isImageFormat(format)) return null;
+    return {
+      fileName: answerFileName(
+        {
+          ...IMAGE_ANSWER,
+          question: file.title,
+          generatedAt: file.generatedAt,
+          timezone: file.timezone,
+        },
+        format,
+      ),
+      contentType: file.mimeType,
+      body: file.bytes,
+    };
+  }
+  if (isImageFormat(format)) return null;
   const page = file.mimeType === 'text/html';
   // The editor's HTML helpers read with a DOM: the server's is jsdom's.
   if (page && typeof window === 'undefined') await withContentDom();

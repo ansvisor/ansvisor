@@ -41,7 +41,7 @@ import { DELIVERABLE_ICONS } from './run/deliverable-card';
  */
 
 /** The formats a row downloads in, in Download's order (as the output card). */
-const FORMAT_ORDER = ['html', 'md', 'docx', 'pdf', 'csv', 'xlsx'] as const;
+const FORMAT_ORDER = ['html', 'md', 'docx', 'pdf', 'csv', 'xlsx', 'png', 'jpg', 'webp'] as const;
 /** "Filter by name…" asks once the typing stops. */
 const SEARCH_DELAY_MS = 250;
 

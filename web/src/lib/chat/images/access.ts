@@ -1,3 +1,4 @@
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readImageShares } from '../budget';
 import { chatAgenticEnabled } from '../flag';
 import {
@@ -6,6 +7,13 @@ import {
   resolveChatModelKey,
   type ChatKeySource,
 } from '../key';
+import {
+  PROVIDERS_OFF,
+  parseProviderChoices,
+  providerOfModel,
+  providerOn,
+  type ModelProviderChoices,
+} from '../model-providers';
 import { IMAGE_MODELS, defaultImageModel, type ImageModel } from './models';
 
 /**
@@ -16,7 +24,33 @@ import { IMAGE_MODELS, defaultImageModel, type ImageModel } from './models';
  * (OPENROUTER_API_KEY), on the AI limit. An own key of another provider
  * can't make these images, so they run on Ansvisor's (CHAT-16 item 25).
  * No dollar leaves the server: a model shows a multiplier and a share.
+ * An image model whose maker an Admin turned off in Settings › Chat (W4-34)
+ * is never offered or run.
  */
+
+/**
+ * The workspace's model provider choices (chat_settings.model_providers,
+ * 00469), as Chat's model menu reads them: none before that migration or
+ * without a row (each provider on its default), and every provider that
+ * can be turned off as off when they can't be read.
+ */
+export async function imageProviderChoices(organizationId: string): Promise<ModelProviderChoices> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_settings')
+    .select('model_providers')
+    .eq('organization_id', organizationId)
+    .maybeSingle();
+  if (error) {
+    if (error.code === '42703' || (error.message ?? '').includes('model_providers')) return {};
+    return PROVIDERS_OFF;
+  }
+  return parseProviderChoices((data as { model_providers?: unknown } | null)?.model_providers);
+}
+
+/** Whether an image model's maker is on for the workspace. */
+export async function imageModelOn(organizationId: string, modelId: string): Promise<boolean> {
+  return providerOn(await imageProviderChoices(organizationId), providerOfModel(modelId));
+}
 
 /** The key images run on, and whose it is. */
 export interface ImageKey {
@@ -81,24 +115,32 @@ export interface ImageModelOption {
 }
 
 /**
- * Every image model, the default first (the cheapest by the price data),
- * each with its multiplier against it and, on Ansvisor's key, one image's
- * share of the monthly AI limit (CHAT-16 items 11 and 25). `ownKey`: the
- * images run on the workspace's own key.
+ * Every image model whose maker is on for the workspace (W4-34), the
+ * default first (the cheapest by the price data), each with its multiplier
+ * against it and, on Ansvisor's key, one image's share of the monthly AI
+ * limit (CHAT-16 items 11 and 25); none when every maker is off. `ownKey`:
+ * the images run on the workspace's own key.
  */
 export async function imageModelOptions(
   organizationId: string,
 ): Promise<{ models: ImageModelOption[]; ownKey: boolean }> {
-  const source = await imageKeySource(organizationId);
+  const [source, choices] = await Promise.all([
+    imageKeySource(organizationId),
+    imageProviderChoices(organizationId),
+  ]);
+  // Only the models whose maker the Admin left on (W4-34).
+  const on = IMAGE_MODELS.filter((model) => providerOn(choices, providerOfModel(model.id)));
+  if (on.length === 0) return { models: [], ownKey: source === 'own' };
   const shares = await readImageShares(
     organizationId,
-    IMAGE_MODELS.map((model) => model.id),
+    on.map((model) => model.id),
   );
-  const pick = defaultImageModel(shares);
+  const pick = defaultImageModel(shares.filter((share) => on.some((m) => m.id === share.model)));
+  const first = on.some((model) => model.id === pick.id) ? pick : on[0];
   const shareOf = (model: ImageModel) =>
     shares.find((share) => share.model === model.id)?.percent ?? null;
-  const base = shareOf(pick);
-  const ordered = [pick, ...IMAGE_MODELS.filter((model) => model.id !== pick.id)];
+  const base = shareOf(first);
+  const ordered = [first, ...on.filter((model) => model.id !== first.id)];
   return {
     models: ordered.map((model) => {
       const percent = shareOf(model);
@@ -107,7 +149,7 @@ export async function imageModelOptions(
         label: model.label,
         multiplier: base && percent !== null ? multiplierOf(percent / base) : null,
         sharePercent: source === 'own' ? null : percent,
-        recommended: model.id === pick.id,
+        recommended: model.id === first.id,
       };
     }),
     ownKey: source === 'own',

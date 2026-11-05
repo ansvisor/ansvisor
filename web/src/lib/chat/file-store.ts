@@ -256,7 +256,10 @@ async function storedFile(row: StoredRow, appOrigin: string | null): Promise<Sto
       row.data_as_of,
       row.timezone,
     ),
-    content: await blob.text(),
+    // An image is its bytes (W4-08); every other file is text.
+    ...(isImageMime(row.mime_type)
+      ? { content: '', bytes: new Uint8Array(await blob.arrayBuffer()) }
+      : { content: await blob.text() }),
     appOrigin,
   };
 }
@@ -280,17 +283,132 @@ export async function readRunFile(
   if (error) throw new Error(`Could not read the run: ${error.message}`);
   if (!run?.conversation_id) return null;
   if (!(await readChat(await createClient(), actor, run.conversation_id))) return null;
+  const file = await runFileRow(actor, runId, n);
+  return file ? storedFile(file, appOrigin) : null;
+}
 
-  const { data: files, error: filesError } = await supabaseAdmin
+/** A run's n-th deliverable's row (its place among the run's filed ones), or null. */
+async function runFileRow(actor: ChatActor, runId: string, n: number): Promise<StoredRow | null> {
+  const { data: files, error } = await supabaseAdmin
     .from('chat_files')
     .select(STORED_COLUMNS)
     .eq('organization_id', actor.organizationId)
     .eq('run_id', runId)
     .is('message_id', null)
     .order('created_at', { ascending: true });
-  if (filesError) throw new Error(`Could not read Files: ${filesError.message}`);
-  const file = ((files ?? []) as unknown as StoredRow[])[n - 1];
-  return file ? storedFile(file, appOrigin) : null;
+  if (error) throw new Error(`Could not read Files: ${error.message}`);
+  return ((files ?? []) as unknown as StoredRow[])[n - 1] ?? null;
+}
+
+const isImageMime = (mimeType: string) => mimeType.startsWith('image/');
+
+/** A set of images in Files (W4-08): its row, its folder and its images' names, in order. */
+interface ImageSet {
+  row: StoredRow;
+  folder: string;
+  names: string[];
+  /** The one its row keeps as its file: the selected image. */
+  selected: number;
+}
+
+const IMAGE_NAME = /^image-(\d{1,2})\.(png|jpg|webp)$/;
+
+/** An image's type by its name's extension. */
+const mimeOfName = (name: string) => {
+  const ext = IMAGE_NAME.exec(name)?.[2];
+  return ext === 'jpg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png';
+};
+
+/**
+ * A run's n-th deliverable as a set of images (CHAT-15 items 22, 24): the
+ * person's own chat or one shared with them, and an image file. Null for
+ * anything else.
+ */
+async function runImageSet(
+  actor: ChatActor,
+  runId: string,
+  n: number,
+): Promise<(ImageSet & { mine: boolean }) | null> {
+  const { data: run, error } = await supabaseAdmin
+    .from('chat_runs')
+    .select('conversation_id')
+    .eq('id', runId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the run: ${error.message}`);
+  if (!run?.conversation_id) return null;
+  const chat = await readChat(await createClient(), actor, run.conversation_id);
+  if (!chat) return null;
+  const row = await runFileRow(actor, runId, n);
+  if (!row || !isImageMime(row.mime_type)) return null;
+  const cut = row.storage_path.lastIndexOf('/');
+  const folder = row.storage_path.slice(0, cut);
+  const { data: objects, error: listError } = await supabaseAdmin.storage
+    .from(CHAT_FILES_BUCKET)
+    .list(folder, { limit: 20 });
+  if (listError) throw new Error(`Could not read the images: ${listError.message}`);
+  const names = (objects ?? [])
+    .map((object) => object.name)
+    .filter((name) => IMAGE_NAME.test(name))
+    .sort((a, b) => Number(IMAGE_NAME.exec(a)![1]) - Number(IMAGE_NAME.exec(b)![1]));
+  const selected = names.indexOf(row.storage_path.slice(cut + 1));
+  if (selected < 0) return null;
+  return { row, folder, names, selected, mine: chat.mine };
+}
+
+/** A set's images as its card lists them: how many, and which is selected (from 1). */
+export async function readRunImages(
+  actor: ChatActor,
+  runId: string,
+  n: number,
+): Promise<{ count: number; selected: number; mine: boolean } | null> {
+  const set = await runImageSet(actor, runId, n);
+  return set ? { count: set.names.length, selected: set.selected + 1, mine: set.mine } : null;
+}
+
+/** One image of a run's set (from 1), its bytes and type. Null when there is no such image. */
+export async function readRunImage(
+  actor: ChatActor,
+  runId: string,
+  n: number,
+  image: number,
+): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
+  const set = await runImageSet(actor, runId, n);
+  const name = set?.names[image - 1];
+  if (!set || !name) return null;
+  const { data: blob, error } = await supabaseAdmin.storage
+    .from(CHAT_FILES_BUCKET)
+    .download(`${set.folder}/${name}`);
+  if (error || !blob) throw new Error(`Could not read the image: ${error?.message ?? 'missing'}`);
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), mimeType: mimeOfName(name) };
+}
+
+/**
+ * The person picks another image of a set (CHAT-15 item 22): its file in
+ * Files becomes that one (its preview and download). Their own chat only;
+ * a teammate's shared chat they only read.
+ */
+export async function selectRunImage(
+  actor: ChatActor,
+  runId: string,
+  n: number,
+  image: number,
+): Promise<'ok' | 'not_found' | 'forbidden'> {
+  const set = await runImageSet(actor, runId, n);
+  const name = set?.names[image - 1];
+  if (!set || !name) return 'not_found';
+  if (!set.mine) return 'forbidden';
+  // Its type and format follow the image picked: a set may mix them.
+  const { error } = await supabaseAdmin
+    .from('chat_files')
+    .update({
+      storage_path: `${set.folder}/${name}`,
+      mime_type: mimeOfName(name),
+      formats: [IMAGE_NAME.exec(name)![2]],
+    })
+    .eq('id', set.row.id)
+    .eq('organization_id', actor.organizationId);
+  if (error) throw new Error(`Could not pick the image: ${error.message}`);
+  return 'ok';
 }
 
 /**

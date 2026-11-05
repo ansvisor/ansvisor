@@ -208,6 +208,15 @@ describe('AiImagePanel', () => {
     expect($('[role="alert"]').textContent).toBe(
       "What's left of your monthly AI limit doesn't cover 3 images, so none was made.",
     );
+    // Its maker turned off since the models were listed (W4-34).
+    generateAnswer = {
+      status: 409,
+      body: { ok: false, code: 'provider_off', model: 'Nano Banana 2 Lite' },
+    };
+    await click('[data-action="ai-image.generate"]');
+    expect($('[role="alert"]').textContent).toBe(
+      "Nano Banana 2 Lite's maker is turned off for this workspace in Settings › Chat. Pick another image model.",
+    );
     generateAnswer = { status: 422, body: { ok: false, code: 'refused', why: 'Blocked.' } };
     await click('[data-action="ai-image.generate"]');
     expect($('[role="alert"]').textContent).toContain('Blocked.');

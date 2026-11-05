@@ -2,6 +2,7 @@ import { createTranslator } from 'next-intl';
 import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import type { AskAnswer } from './asks';
+import { IMAGE_MODELS } from './images/models';
 
 /**
  * A request bigger than what is left of the AI limit (CHAT-04 item 17a;
@@ -31,21 +32,35 @@ export const PARTS_TOOL = 'plan_parts';
 
 /** The most parts one check takes: past it the job is checked as this many. */
 export const MAX_PARTS = 50;
+/** The most images one check takes (one request makes at most 10, 00462). */
+export const MAX_IMAGE_PARTS = 10;
 
-export const partsToolInput = z.object({
-  parts: z
-    .number()
-    .int()
-    .min(2)
-    .max(MAX_PARTS)
-    .describe('How many like parts the work has: 5 drafts is 5.'),
-  // Shown on the card: a plural noun, no more.
-  unit: z
-    .string()
-    .trim()
-    .regex(/^\p{L}[\p{L} -]{0,39}$/u)
-    .describe('What the parts are, plural, in the person’s language: "drafts", "tasks", "pages".'),
-});
+export const partsToolInput = z
+  .object({
+    parts: z
+      .number()
+      .int()
+      .min(2)
+      .max(MAX_PARTS)
+      .describe('How many like parts the work has: 5 drafts is 5.'),
+    // Shown on the card: a plural noun, no more.
+    unit: z
+      .string()
+      .trim()
+      .regex(/^\p{L}[\p{L} -]{0,39}$/u)
+      .describe(
+        'What the parts are, plural, in the person’s language: "drafts", "tasks", "pages".',
+      ),
+    // Images are checked at their model's image price (W4-08), not as writing.
+    image_model: z
+      .enum(IMAGE_MODELS.map((model) => model.id) as [string, ...string[]])
+      .optional()
+      .describe('For images: the image model picked, its id.'),
+  })
+  .refine((input) => !input.image_model || input.parts <= MAX_IMAGE_PARTS, {
+    message: `At most ${MAX_IMAGE_PARTS} images in one check.`,
+    path: ['parts'],
+  });
 export type PartsInput = z.infer<typeof partsToolInput>;
 
 export const PARTS_TOOL_DESCRIPTION =
@@ -76,12 +91,19 @@ export function partsFit(fits: number, parts: number): PartsFit {
   return { kind: 'some', fits };
 }
 
-/** A question card's words (asks.ts's shape): the first option the recommended one. */
-export function partsQuestion(fits: number, parts: number, unit: string) {
+/**
+ * A question card's words (asks.ts's shape): the first option the
+ * recommended one. For images (CHAT-15 item 25): "Create 1 image now".
+ */
+export function partsQuestion(fits: number, parts: number, unit: string, images = false) {
   return {
     question: t('question', { fits, parts, unit }),
     options: [
-      { label: t('doFirst', { fits }), detail: t('doFirstDetail'), recommended: true },
+      {
+        label: images ? t('createImages', { fits }) : t('doFirst', { fits }),
+        detail: t('doFirstDetail'),
+        recommended: true,
+      },
       { label: t('credits'), detail: t('creditsDetail') },
       { label: t('cancel') },
     ],

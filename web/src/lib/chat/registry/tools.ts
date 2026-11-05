@@ -5,6 +5,7 @@ import { AGENT_CALL_TOOLS } from './agent-call-tools';
 import { AUDIT_TOOLS } from './audit-tools';
 import { COMPETITOR_TOOLS } from './competitor-tools';
 import { CONTENT_TOOLS } from './content-tools';
+import { IMAGE_READS, IMAGE_WRITES } from './image-tools';
 import { PROMPT_TOOLS } from './prompt-tools';
 import { READ_TOOLS } from './read-tools';
 import { MEMORY_TOOLS } from './memory-tools';
@@ -31,6 +32,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...NAVIGATION_READS,
   ...WHATS_NEW_READS,
   ...WHY_TOOLS,
+  ...IMAGE_READS,
   ...WRITE_TOOLS,
   ...PROMPT_TOOLS,
   ...TOPIC_TOOLS,
@@ -39,6 +41,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...CONTENT_TOOLS,
   ...REPORT_TOOLS,
   ...AUDIT_TOOLS,
+  ...IMAGE_WRITES,
   ...SCHEDULE_TOOLS,
   ...FOLLOW_UP_TOOLS,
   ...SKILL_TOOLS,
