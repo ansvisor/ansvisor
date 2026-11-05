@@ -32,6 +32,20 @@ export interface FanoutSubQuery {
   tracked: boolean;
   /** The tracked prompt's id when `tracked` (for linking), else null. */
   trackedPromptId: string | null;
+  /** Who the answers that ran it named: only when the caller asks for `presence`. */
+  presence?: FanoutPresence;
+}
+
+/**
+ * Who the answers that ran a sub-query named (Chat's fan-out gaps, AGENTS
+ * plan #9): the brand, by its name or a citation of its site, and the
+ * competitors, the same way, each counted once an answer.
+ */
+export interface FanoutPresence {
+  /** Of the answers that ran it, the ones that named the brand or cited its site. */
+  brandAnswers: number;
+  /** The competitors those answers named or cited, with how many answers each, most first. */
+  rivals: { name: string; answers: number }[];
 }
 
 export interface FanoutPromptCoverage {
@@ -134,7 +148,15 @@ interface FanoutResultRow {
   prompt_id: string | null;
   platform: string | null;
   search_queries: unknown;
+  /** Read only for `presence`: the brand's mentions and citations in the answer. */
+  mention_count?: number | null;
+  citation_count?: number | null;
+  competitor_mentions?: unknown;
 }
+
+/** The columns a fan-out read takes; who each answer named too, for `presence`. */
+const FANOUT_COLUMNS = 'prompt_id, platform, search_queries';
+const PRESENCE_COLUMNS = `${FANOUT_COLUMNS}, mention_count, citation_count, competitor_mentions`;
 
 async function fetchFanoutRows(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -144,12 +166,14 @@ async function fetchFanoutRows(
   until?: string,
   /** Only these platforms' answers (Chat's read keeps the plan's); all when absent. */
   platforms?: readonly string[],
+  /** Also who each answer named (getQueryFanout's `presence`). */
+  presence = false,
 ): Promise<{ rows: FanoutResultRow[]; truncated: boolean }> {
   const rows: FanoutResultRow[] = [];
   for (let from = 0; from < FANOUT_MAX_ROWS; from += FANOUT_PAGE_SIZE) {
     let query = supabase
       .from('prompt_results')
-      .select('prompt_id, platform, search_queries')
+      .select(presence ? PRESENCE_COLUMNS : FANOUT_COLUMNS)
       .eq('brand_id', brandId)
       .gte('created_at', since)
       // Deterministic order so .range() pages don't shuffle between requests.
@@ -163,7 +187,7 @@ async function fetchFanoutRows(
     const { data, error } = await query;
     if (error) throw new Error(error.message);
 
-    const batch = (data ?? []) as FanoutResultRow[];
+    const batch = (data ?? []) as unknown as FanoutResultRow[];
     rows.push(...batch);
     // A short page means we reached the end of the window — the only exit that
     // guarantees a complete read.
@@ -228,6 +252,34 @@ function normalizeQuery(raw: string): string {
 }
 
 /**
+ * Who an answer named, as tracking counted it: the brand when its name or
+ * domain is in the text or its site is cited, and each competitor the same
+ * way (prompt_results' mention and citation counts).
+ */
+function namedIn(row: FanoutResultRow): { brand: boolean; rivals: string[] } {
+  const rivals = Array.isArray(row.competitor_mentions)
+    ? (
+        row.competitor_mentions as {
+          name?: unknown;
+          mention_count?: unknown;
+          citation_count?: unknown;
+        }[]
+      )
+        .filter(
+          (c) =>
+            typeof c?.name === 'string' &&
+            c.name.trim() !== '' &&
+            (Number(c.mention_count) > 0 || Number(c.citation_count) > 0),
+        )
+        .map((c) => (c.name as string).trim())
+    : [];
+  return {
+    brand: Number(row.mention_count) > 0 || Number(row.citation_count) > 0,
+    rivals: [...new Set(rivals)],
+  };
+}
+
+/**
  * Aggregate the brand's observed query fan-out over a rolling window.
  *
  * `timesSearched` counts DISTINCT answers (prompt_results rows) whose
@@ -238,7 +290,14 @@ function normalizeQuery(raw: string): string {
  */
 export async function getQueryFanout(
   brandId: string,
-  opts?: { days?: number; from?: string; to?: string; platforms?: readonly string[] },
+  opts?: {
+    days?: number;
+    from?: string;
+    to?: string;
+    platforms?: readonly string[];
+    /** Also who the answers that ran each sub-query named (FanoutSubQuery.presence). */
+    presence?: boolean;
+  },
 ): Promise<QueryFanoutData> {
   const supabase = await dbClient();
   // Clamp the window to a sane range so a crafted call can't force an
@@ -263,6 +322,7 @@ export async function getQueryFanout(
     undefined,
     opts?.to,
     opts?.platforms,
+    opts?.presence === true,
   );
 
   interface Acc {
@@ -270,6 +330,9 @@ export async function getQueryFanout(
     engines: Set<string>;
     promptIds: Set<string>;
     answerCount: number;
+    /** With `presence`: the answers that named the brand, and each competitor's. */
+    brandAnswers: number;
+    rivals: Map<string, number>;
   }
   const byQuery = new Map<string, Acc>();
 
@@ -318,6 +381,7 @@ export async function getQueryFanout(
     const items = Array.isArray(row.search_queries)
       ? (row.search_queries as RawSearchQueryItem[])
       : [];
+    const named = opts?.presence ? namedIn(row) : null;
     // Dedup within a single answer so one answer counts once per sub-query,
     // even if the engine listed it twice.
     const seenInRow = new Set<string>();
@@ -328,7 +392,14 @@ export async function getQueryFanout(
 
       let acc = byQuery.get(key);
       if (!acc) {
-        acc = { display: q, engines: new Set(), promptIds: new Set(), answerCount: 0 };
+        acc = {
+          display: q,
+          engines: new Set(),
+          promptIds: new Set(),
+          answerCount: 0,
+          brandAnswers: 0,
+          rivals: new Map(),
+        };
         byQuery.set(key, acc);
       }
 
@@ -342,6 +413,10 @@ export async function getQueryFanout(
       if (!seenInRow.has(key)) {
         acc.answerCount += 1;
         seenInRow.add(key);
+        if (named) {
+          if (named.brand) acc.brandAnswers += 1;
+          for (const name of named.rivals) acc.rivals.set(name, (acc.rivals.get(name) ?? 0) + 1);
+        }
       }
     }
     // `seenInRow` is only written to past the validity guard above, so a
@@ -408,6 +483,16 @@ export async function getQueryFanout(
         sourcedPrompts,
         tracked: trackedPromptId !== null,
         trackedPromptId,
+        ...(opts?.presence
+          ? {
+              presence: {
+                brandAnswers: acc.brandAnswers,
+                rivals: [...acc.rivals.entries()]
+                  .map(([name, answers]) => ({ name, answers }))
+                  .sort((a, b) => b.answers - a.answers || a.name.localeCompare(b.name)),
+              },
+            }
+          : {}),
       };
     })
     .sort((a, b) => b.timesSearched - a.timesSearched || a.query.localeCompare(b.query));
