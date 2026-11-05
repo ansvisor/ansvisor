@@ -21,7 +21,11 @@ import {
  * `yarn test -u src/lib/chat/skills`).
  *
  * Attribution: each skill's name and description belong to its authors,
- * under the MIT license of the repository its row names. When a workspace
+ * under the MIT license of the repository its row names. The Library shows
+ * a cleaned one-line summary: where the directory's line was broken (a
+ * phrase twice, a stub such as "Provides content strategist."), the row
+ * holds the skill's own SKILL.md description at the pinned commit, cut to
+ * one line (owner, 2026-11-05). When a workspace
  * adds a skill, that license's text is read from the pinned commit and kept
  * with the skill, as for any import (00458).
  *

@@ -16,6 +16,21 @@ import {
   type MarketplaceSkill,
 } from './marketplace';
 
+/** The same two or more words twice in a row ("guidance for guidance for"). */
+const REPEATED = /\b([\p{L}\p{N}'’-]+(?:\s+[\p{L}\p{N}'’-]+)+)\s+\1\b/iu;
+/** The import's "Provides <role>" rewrite of "You are a <role>": a role, not what the skill does. */
+const ROLE_STUB =
+  /^Provides (?:(?:expert|senior-level) guidance for )?(?:an? )?[\p{L}\p{N}\s/-]*?\b(?:strategist|expert|specialist|analyst|writer|editor|researcher|builder|advisor|engineer|storyteller|director|marketer|psychologist|scientist|creator|manager|consultant)s?\b/iu;
+
+/** What is wrong with a catalog line, or null. */
+function descriptionProblem(text: string): string | null {
+  const repeated = REPEATED.exec(text);
+  if (repeated) return `repeats "${repeated[1]}"`;
+  if (text.split(/\s+/).filter(Boolean).length < 6) return 'under 6 words';
+  if (ROLE_STUB.test(text)) return 'a "Provides <role>" stub';
+  return null;
+}
+
 /**
  * The Library's catalog (CHAT-17; Chat Wave 4, W4-17): marketplace.json is
  * marketplace.csv, the import's 701 MIT skills, meta data only (refresh:
@@ -147,6 +162,28 @@ describe('marketplace.json', () => {
       expect(skill.description.length, skill.id).toBeLessThanOrEqual(200);
       expect(skill.description, skill.id).not.toMatch(/ It gives the agent\b[^.]*$/);
     }
+  });
+
+  it('has no broken line: no phrase twice in a row, none under 6 words, no "Provides <role>" stub', () => {
+    // The import's own breakage (owner, 2026-11-05), as the checks find it.
+    expect(descriptionProblem('Provides expert guidance for guidance for SaaS pricing.')).toBe(
+      'repeats "guidance for"',
+    );
+    expect(descriptionProblem('Provides content strategist.')).toBe('under 6 words');
+    expect(
+      descriptionProblem(
+        'Provides expert guidance for copy editor specializing in marketing copy.',
+      ),
+    ).toBe('a "Provides <role>" stub');
+    expect(
+      descriptionProblem('Plan and execute a new brand launch, from rollout to debut.'),
+    ).toBeNull();
+    // Every line of the catalog.
+    const broken = MARKETPLACE_SKILLS.flatMap((skill) => {
+      const problem = descriptionProblem(skill.description);
+      return problem ? [`${skill.id}: ${problem}`] : [];
+    });
+    expect(broken).toEqual([]);
   });
 });
 
