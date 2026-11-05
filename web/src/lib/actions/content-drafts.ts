@@ -265,7 +265,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
       archivedAt: row.archived_at,
       shopping: draftShopping(row.shopping_built, checks.get(row.id) ?? null),
       origin: draftOriginOf(row.origin),
-      conversation: draftConversationOf(row.conversation),
+      conversation: draftConversationOf(row.conversation, me),
     }),
   );
   // Under the cap the rows are every draft; at it, each tab is counted on its own.
@@ -296,11 +296,11 @@ const DRAFT_COLUMNS = `${DRAFT_COLUMNS_BEFORE_00448}, schema_left_out` as const;
 export async function getContentDraft(id: string): Promise<ContentDraft | null> {
   if (!draftId.safeParse(id).success) return null;
   const supabase = await createClient();
-  const read = await supabase
-    .from('content_drafts')
-    .select(DRAFT_COLUMNS)
-    .eq('id', id)
-    .maybeSingle();
+  // Who reads it: whether the chat that made it is theirs (W4-16).
+  const [userRes, read] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from('content_drafts').select(DRAFT_COLUMNS).eq('id', id).maybeSingle(),
+  ]);
   // The web ahead of 00448: the draft without it, as not left out.
   const { data, error } = missingSchemaLeftOut(read.error)
     ? await supabase
@@ -333,7 +333,7 @@ export async function getContentDraft(id: string): Promise<ContentDraft | null> 
       data.action_id && data.actions
         ? { id: data.action_id, number: data.actions.action_no }
         : null,
-    conversation: draftConversationOf(data.conversation),
+    conversation: draftConversationOf(data.conversation, userRes.data.user?.id ?? null),
     agentState: agentStateOf(data.agent_state, data.agent_state_at),
     agentSince: data.agent_state_at,
     agentRun: agentRunOf(data.agent_run),

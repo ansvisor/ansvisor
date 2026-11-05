@@ -344,6 +344,16 @@ describe('loadChatThread', () => {
     });
   });
 
+  it('keeps "Remember this?" after a reload, in the author\'s own chat only (W4-33)', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [
+      event('run-1', chatEvent('remember.offered', 1, { text: 'Blog posts use US English' })),
+    ];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run?.remember).toBe('Blog posts use US English');
+  });
+
   it("keeps What's new's cards, after a reload (CHAT-11 item 10)", async () => {
     seed([{ id: 'run-1', status: 'done' }]);
     fake.db.tables.chat_run_steps = [];

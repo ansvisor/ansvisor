@@ -1746,7 +1746,7 @@ describe('the Library’s Made in column and filter (00463, W4-10)', () => {
         id: 'd1',
         title: 'From chat',
         origin: 'chat',
-        conversation: { id: CHAT, title: 'Pricing FAQ' },
+        conversation: { id: CHAT, title: 'Pricing FAQ', mine: true },
       }),
       row({ id: 'd2', title: 'From a task', origin: 'action_center' }),
       // Another's chat: its title isn't readable, so no link.
@@ -1772,7 +1772,7 @@ describe('the Library’s Made in column and filter (00463, W4-10)', () => {
 
   it('has no Open chat with the new Chat off', async () => {
     getContentDrafts.mockResolvedValue([
-      row({ origin: 'chat', conversation: { id: CHAT, title: 'Pricing FAQ' } }),
+      row({ origin: 'chat', conversation: { id: CHAT, title: 'Pricing FAQ', mine: true } }),
     ]);
     await renderPage();
     expect(madeIn()).toEqual(['Chat']);

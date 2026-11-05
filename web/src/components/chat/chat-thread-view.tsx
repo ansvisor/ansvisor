@@ -55,6 +55,7 @@ import { useHomeDraft } from './home-draft';
 import { useFormAssist } from './run/form-assist';
 import { NextMoves } from './run/next-moves';
 import { OpenPageCard, type OpenPageChoice } from './run/open-page-card';
+import { RememberThis } from './run/remember-this';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
 import { useChatDebug } from './chat-debug';
@@ -121,6 +122,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         sent: message.run.sent ?? [],
         tasks: message.run.tasks ?? null,
         nextMoves: message.run.nextMoves ?? [],
+        remember: message.run.remember ?? null,
         why: message.run.why ?? [],
         whatsNew: message.run.whatsNew ?? [],
         text: message.text,
@@ -193,6 +195,8 @@ export function ChatThreadView({
   keyFailure = null,
   skills,
   pageOpen = 'ask',
+  placeholder,
+  onSuggestions,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
@@ -222,6 +226,10 @@ export function ChatThreadView({
   skills?: ChatSkillItem[];
   /** Where a page Chat writes opens (W4-11, Settings › Chat). */
   pageOpen?: PageOpen;
+  /** The box's ghost text, where the page has its own (the Content Editor's Chat, W4-16). */
+  placeholder?: string;
+  /** The Content Agent left suggestions in the editor beside the chat (W4-14): how many. */
+  onSuggestions?: (count: number) => void;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
@@ -248,6 +256,11 @@ export function ChatThreadView({
   const lostWords = useRef(t('connectionLost'));
   const tSent = useTranslations('chatRun.actionSent');
   const sentWords = useRef({ created: tSent('toastCreated'), added: tSent('toastAdded') });
+  // The latest callback, for the stream's loop, which outlives a render.
+  const suggested = useRef(onSuggestions);
+  useEffect(() => {
+    suggested.current = onSuggestions;
+  });
   const { canManage, canAdmin } = useUserRole();
   // The run under way when the page opened, which it picks up again.
   const [resumable] = useState(() => {
@@ -320,6 +333,9 @@ export function ChatThreadView({
   // The latest answer's next moves, once it finished, in the person's own chat (CHAT-07 §C).
   const nextMoves =
     last?.run?.status === 'done' && (!thread || thread.mine) ? last.run.nextMoves : [];
+  // "Remember this?" (W4-33): under the latest answer, in the person's own chat.
+  const remember =
+    last?.run?.status === 'done' && (!thread || thread.mine) ? last.run.remember : null;
 
   useEffect(() => {
     if (!working) return;
@@ -382,6 +398,12 @@ export function ChatThreadView({
                 run: applyChatEvent(anew || !turn.run ? emptyRun() : turn.run, event as ChatEvent),
                 startedAt: turn.startedAt ?? Date.now(),
               }));
+              // Suggestions just left in the editor beside the chat: it reads them (W4-14).
+              if (event.type === 'suggestion.created' && !rebuild) {
+                suggested.current?.(
+                  (event as Extract<ChatEvent, { type: 'suggestion.created' }>).data.count,
+                );
+              }
               // Said as it happens, not again when a run is rebuilt from its events (item 19).
               if (event.type === 'action.sent' && !rebuild) {
                 const sent = (event as Extract<ChatEvent, { type: 'action.sent' }>).data;
@@ -553,7 +575,7 @@ export function ChatThreadView({
         error?: string;
         code?: string;
       } | null;
-      if (failed?.code === 'subscription_inactive') openUpgrade();
+      if (failed?.code === 'subscription_inactive' || failed?.code === 'demo_brand') openUpgrade();
       else toast.error(failed?.error ?? t('answerFailed'));
       // The card may have changed (approval_mismatch): the run's events show it again.
       const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`, {
@@ -584,7 +606,7 @@ export function ChatThreadView({
         error?: string;
         code?: string;
       } | null;
-      if (failed?.code === 'subscription_inactive') openUpgrade();
+      if (failed?.code === 'subscription_inactive' || failed?.code === 'demo_brand') openUpgrade();
       else toast.error(failed?.error ?? t('answerFailed'));
       // Already answered elsewhere: the run's events show where it went.
       const events = await fetch(`/api/chat/runs/${runId}/events?after=${run.lastSeq}`, {
@@ -737,6 +759,19 @@ export function ChatThreadView({
                   />
                 )}
                 {turn === last && (
+                  <RememberThis
+                    text={remember}
+                    disabled={atCap}
+                    onPick={(prompt) =>
+                      void send(prompt, {
+                        context: chips ?? [],
+                        references: [],
+                        attachments: [],
+                      })
+                    }
+                  />
+                )}
+                {turn === last && (
                   <NextMoves
                     moves={nextMoves}
                     narrow={variant === 'panel'}
@@ -782,7 +817,7 @@ export function ChatThreadView({
           ghost={asking ? recommendedLabel(asking) : ghostOf(nextMoves)}
           sharedReadOnly={!!thread && !thread.mine}
           disabled={atCap}
-          placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : undefined}
+          placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : placeholder}
           usage={<ComposerUsageMeter />}
           modelChoice={modelChoice}
           onModelChoice={setModelChoice}

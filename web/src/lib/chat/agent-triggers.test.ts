@@ -361,6 +361,16 @@ describe('firing schedules', () => {
     expect(driver).not.toHaveBeenCalled();
   });
 
+  it('never fires the demo brand’s sample agents (00475), whatever their scope says', async () => {
+    // Its scope names a real brand here: the mark alone keeps it out.
+    seedAgent({ demo_brand_id: BRAND }, { brand_ids: [BRAND] });
+    seedTrigger('schedule', WEEKLY_ISTANBUL);
+    expect(await triggers.fireDueSchedules(AT, driver)).toMatchObject({ fired: 0, queued: 0 });
+    expect(runs()).toEqual([]);
+    expect(db.tables.chat_agent_triggers[0].last_fired_at).toBeNull();
+    expect(driver).not.toHaveBeenCalled();
+  });
+
   it('pauses an agent whose monthly cap is used instead of queuing', async () => {
     seedAgent({ max_month_share: 0.2 });
     seedTrigger('schedule', WEEKLY_ISTANBUL);

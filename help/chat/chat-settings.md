@@ -1,7 +1,7 @@
 ---
 title: Change your Chat settings
 route: /dashboard/chat/settings
-keywords: [chat settings, default mode, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, ask chat on every page, full auto]
+keywords: [chat settings, default mode, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, thought for, thinking time, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
 updated: 2026-11-03
@@ -28,6 +28,10 @@ sources: [web/messages/en.json]
 ## Notify me when an agent needs me
 
 When one of your agents stops to ask you something or to wait for your OK on a change, its chat moves to **Needs you** in your Inbox. **Notify me when an agent needs me** sets whether you also get an email: **Inbox + email**, the default, sends one email per run, with a link to open it; **Inbox only** sends none. **Inbox + Slack** comes once Slack can be connected.
+
+## Thought for N s
+
+**Show “Thought for N s”** puts a short line above each answer, such as "Thought for 12 s": how long Chat worked, reading your data, before it started writing. It is on by default; turn it off to hide the line on new answers.
 
 ## Chat on every page
 

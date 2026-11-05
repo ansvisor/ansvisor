@@ -102,6 +102,7 @@ vi.mock('@/lib/chat/actor/action-center', () => ({
 vi.mock('@/lib/actions/cms-send', () => ({
   sendDraftToCms: tracked.track('actions/cms-send.sendDraftToCms'),
   publishDraftToCms: tracked.track('actions/cms-send.publishDraftToCms'),
+  sendDraftToWebhook: tracked.track('actions/cms-send.sendDraftToWebhook'),
 }));
 vi.mock('@/lib/actions/cms-take-down', () => ({
   takeDownDraft: tracked.track('actions/cms-take-down.takeDownDraft'),
@@ -369,6 +370,7 @@ describe('the Chat tool registry', () => {
     await run('set_draft_ready', { draft_id: item });
     await run('push_cms_draft', { draft_id: item, destination: 'wordpress' });
     await run('publish_cms', { draft_id: item, destination: 'wix' });
+    await run('trigger_content_webhook', { draft_id: item });
     await run('build_report', {
       brand_id: brand,
       template: 'competitor_benchmark',
@@ -446,6 +448,7 @@ describe('the Chat tool registry', () => {
       ['actions/content-drafts.setContentDraftReady', [item]],
       ['actions/cms-send.sendDraftToCms', [item, 'wordpress']],
       ['actions/cms-send.publishDraftToCms', [item, 'wix']],
+      ['actions/cms-send.sendDraftToWebhook', [item]],
       [
         'actions/reports.createReport',
         [brand, { dateFrom: '2026-10-01', dateTo: '2026-10-31', template: 'competitor_benchmark' }],
@@ -725,6 +728,7 @@ describe('approval policies', () => {
       set_draft_ready: ['admin', 'manager'],
       push_cms_draft: ['admin', 'manager'],
       publish_cms: ['admin', 'manager'],
+      trigger_content_webhook: ['admin', 'manager'],
       // Take down (AUTONOMOUS-GO-LIVE PR 10): as the API's route, a Manager even while publishing is off.
       unpublish_cms: ['admin', 'manager'],
       build_report: ['admin', 'manager'],
@@ -927,9 +931,9 @@ describe('approval policies', () => {
     expect(() =>
       defineTool({ ...readRow, class: 'write', defaultPolicy: 'ask', maxPolicy: 'ask', goLive }),
     ).toThrow(/only an execute/);
-    // The registry: Send to CMS may, every other row may not.
+    // The registry: Send to CMS, Publish and the webhook send (PR 11) may, every other row may not.
     const onItsOwn = CHAT_TOOLS.filter((tool) => tool.flags.goLiveOnOwn).map((tool) => tool.name);
-    expect(onItsOwn).toEqual(['push_cms_draft', 'publish_cms']);
+    expect(onItsOwn).toEqual(['push_cms_draft', 'publish_cms', 'trigger_content_webhook']);
     // Take down (PR 10): an EXECUTE outside the go-live groups, which never goes live itself.
     expect(chatTool('unpublish_cms')).toMatchObject({ class: 'execute', executeGroup: null });
     expect(() => defineTool({ ...execute, executeGroup: null, goLive } as never)).toThrow(
@@ -944,6 +948,15 @@ describe('approval policies', () => {
       kind: 'cms_draft',
       draftId: 'd',
       target: 'wix',
+    });
+    // The webhook send takes the draft only: its target is the brand's saved webhook.
+    const webhook = chatTool('trigger_content_webhook')!;
+    expect(Object.keys(webhook.inputSchema.shape)).toEqual(['draft_id']);
+    expect(webhook).toMatchObject({ class: 'execute', executeGroup: 'publishing' });
+    expect(webhook.goLive?.({ draft_id: 'd' })).toEqual({
+      kind: 'webhook',
+      draftId: 'd',
+      target: 'webhook',
     });
   });
 
@@ -1063,7 +1076,7 @@ describe("the model's tool list on the registry's rows", () => {
     ).map((tool) => tool.name);
 
   const reads = CHAT_TOOLS.filter((tool) => tool.class === 'read').map((tool) => tool.name);
-  // The WRITEs and the EXECUTEs (push_cms_draft, publish_cms), in the registry's order.
+  // The WRITEs and the EXECUTEs (push_cms_draft, publish_cms, trigger_content_webhook), in the registry's order.
   const writes = CHAT_TOOLS.filter((tool) => tool.class !== 'read').map((tool) => tool.name);
   const starter = facts({ plan: 'starter', subscription_status: 'active' });
   const growth = facts({ plan: 'growth', subscription_status: 'active' });

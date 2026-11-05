@@ -156,6 +156,14 @@ export function countryName(code) {
   return regionNames.of(code) ?? code;
 }
 
+/** Countries whose English name takes "the" in a sentence: "in the United States". */
+const WITH_THE = new Set(['US', 'GB', 'NL', 'AE', 'PH', 'CZ', 'DO', 'BS', 'GM', 'CF', 'KM', 'MV']);
+
+/** The country as a sentence names it, from its code and name: "the United States", "Türkiye". */
+export function countryInSentence(code, name = countryName(code)) {
+  return WITH_THE.has(String(code).toUpperCase()) ? `the ${name}` : name;
+}
+
 /** The language a country's questions are asked in (ISO 639-1). */
 export function countryLanguage(code) {
   return MAIN_LANGUAGE[code] ?? 'en';

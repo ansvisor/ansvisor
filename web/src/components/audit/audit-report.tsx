@@ -22,7 +22,9 @@ import {
   readingEvidence,
   type ReadingEvidence,
 } from '@/lib/audit/reading-evidence';
+import { scoreRange, type ScoreRange } from '@/lib/audit/score-range';
 import { AUTHORITY_SIGNAL, AuthoritySources } from './authority-sources';
+import { ScoreRangeMark, useScoreRangeTip } from './score-range';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -75,7 +77,14 @@ function gradeKey(score: number | null): 'good' | 'needsWork' | 'poor' | null {
   return 'poor';
 }
 
-export function ScoreGauge({ score }: { score: number | null }) {
+/** The score out of 100 on a ring, with its range ("64 ± 2") when it has one. */
+export function ScoreGauge({
+  score,
+  range = null,
+}: {
+  score: number | null;
+  range?: ScoreRange | null;
+}) {
   const p = pct(score) ?? 0;
   const radius = 52;
   const circ = 2 * Math.PI * radius;
@@ -104,8 +113,13 @@ export function ScoreGauge({ score }: { score: number | null }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className={cn('text-4xl font-bold tabular-nums', scoreColor(score))}>
-          {pct(score) ?? '—'}
+        <span className="flex items-baseline gap-1">
+          <span className={cn('text-4xl font-bold tabular-nums', scoreColor(score))}>
+            {pct(score) ?? '—'}
+          </span>
+          {range && score !== null && (
+            <ScoreRangeMark range={range} spoken={false} className="text-sm tabular-nums" />
+          )}
         </span>
         <span className="text-[11px] text-muted-foreground">/ 100</span>
       </div>
@@ -356,6 +370,8 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
   );
   const hasIssues = counts.fail + counts.warn > 0;
   const grade = gradeKey(audit.totalScore);
+  const range = audit.partial ? null : scoreRange(audit.pageTrend);
+  const rangeTip = useScoreRangeTip();
   const scoreDelta =
     audit.totalScore !== null && audit.previousScore != null
       ? Math.round(audit.totalScore * 100) - Math.round(audit.previousScore * 100)
@@ -375,7 +391,7 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
       {/* Headline: gauge + grade + pass/warn/fail summary */}
       <Card>
         <CardContent className="flex flex-col items-center gap-6 py-6 sm:flex-row sm:items-center">
-          <ScoreGauge score={audit.totalScore} />
+          <ScoreGauge score={audit.totalScore} range={range} />
           <div className="flex-1 space-y-2 text-center sm:text-left">
             <div className="text-sm font-medium break-all">{audit.finalUrl || audit.url}</div>
             {grade && (
@@ -416,6 +432,10 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
             <div className="text-xs text-muted-foreground">
               {audit.signalsEvaluated}/{audit.signalsTotal} {t('signalsEvaluated')}
             </div>
+            {/* What the gauge's "± 2" means, written out for touch screens and screen readers. */}
+            {range && audit.totalScore !== null && (
+              <p className="text-xs text-muted-foreground">{rangeTip(range)}</p>
+            )}
             {audit.partial && (
               <p className="flex items-start justify-center gap-1.5 text-xs text-amber-700 sm:justify-start dark:text-amber-400">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />

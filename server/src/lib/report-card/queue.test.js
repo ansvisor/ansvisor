@@ -30,6 +30,8 @@ function store({ running = [], today = 0, spent = 0, queued = [] } = {}) {
   };
 }
 
+const deliver = vi.fn(async () => 0);
+
 const card = (id) => ({
   id,
   domain: 'acme.example',
@@ -49,9 +51,23 @@ describe('tickReportCards', () => {
       limits: reportCardLimits({}),
       now: NOW,
       run,
+      deliver,
     });
     expect(started).toEqual(['a', 'b']);
     expect(run).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends the e-mails waiting on every tick, even when nothing starts', async () => {
+    deliver.mockClear();
+    const s = store({ today: 200 });
+    await tickReportCards({
+      store: s,
+      limits: reportCardLimits({}),
+      now: NOW,
+      run: vi.fn(),
+      deliver,
+    });
+    expect(deliver).toHaveBeenCalledWith({ store: s });
   });
 
   it('counts the cards running toward the concurrency', async () => {
@@ -64,6 +80,7 @@ describe('tickReportCards', () => {
       limits: reportCardLimits({}),
       now: NOW,
       run: vi.fn(async () => {}),
+      deliver,
     });
     expect(started).toEqual(['a']);
   });
@@ -72,11 +89,17 @@ describe('tickReportCards', () => {
     const run = vi.fn();
     const capped = store({ today: 200, queued: [card('a')] });
     expect(
-      await tickReportCards({ store: capped, limits: reportCardLimits({}), now: NOW, run }),
+      await tickReportCards({
+        store: capped,
+        limits: reportCardLimits({}),
+        now: NOW,
+        run,
+        deliver,
+      }),
     ).toEqual([]);
     const spent = store({ spent: 199.9, queued: [card('a')] });
     expect(
-      await tickReportCards({ store: spent, limits: reportCardLimits({}), now: NOW, run }),
+      await tickReportCards({ store: spent, limits: reportCardLimits({}), now: NOW, run, deliver }),
     ).toEqual([]);
     expect(run).not.toHaveBeenCalled();
     expect(capped.claimNext).not.toHaveBeenCalled();
@@ -89,7 +112,13 @@ describe('tickReportCards', () => {
         { id: 'twice', started_at: '2026-11-03T08:00:00Z', attempts: MAX_ATTEMPTS },
       ],
     });
-    await tickReportCards({ store: s, limits: reportCardLimits({}), now: NOW, run: vi.fn() });
+    await tickReportCards({
+      store: s,
+      limits: reportCardLimits({}),
+      now: NOW,
+      run: vi.fn(),
+      deliver,
+    });
     expect(s.releaseCard).toHaveBeenCalledWith('once', 1, { status: 'queued', started_at: null });
     expect(s.releaseCard).toHaveBeenCalledWith(
       'twice',

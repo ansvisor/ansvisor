@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { rulesForBrief, useRuleDescriber } from '@/lib/content/agent-write';
-import { isPageType, type ContentDraft } from '@/lib/content/drafts';
+import { isPageType, type ContentDraft, type DraftConversation } from '@/lib/content/drafts';
 import type { SiteType } from '@/lib/content/page-types';
 import { inputsGiven } from '@/lib/content/draft-inputs';
 import { shoppingPathFits } from '@/lib/content/shopping-path';
@@ -27,6 +27,7 @@ import type { DraftReads } from './_use-draft-reads';
 import type { DraftRulesState } from './_use-draft-rules';
 import { YourInput, type InputPrompt } from './_your-input';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { EditorChat } from '@/components/chat/panel/editor-chat';
 
 /** Remembers whether the panel is open, across drafts and visits. */
 const PANEL_OPEN_KEY = 'aeo:content-editor-panel';
@@ -61,9 +62,12 @@ export function useSidePanelOpen(): [boolean, () => void] {
 }
 
 // Instructions first (Content Editor v1.1, CE-028): Brief and Rules, what
-// the agent follows, in one tab, which the panel opens on (on Rules).
-const PANEL_TABS = ['instructions', 'sources', 'impact'] as const;
+// the agent follows, in one tab, which the panel opens on (on Rules). Chat
+// before them while the new Chat is on (CHAT-25 §5, W4-16).
+const PANEL_TABS = ['chat', 'instructions', 'sources', 'impact'] as const;
 export type PanelTab = (typeof PANEL_TABS)[number];
+/** The panel's tabs: Chat only while it is on. */
+const tabsOf = (chat: boolean) => PANEL_TABS.filter((value) => value !== 'chat' || chat);
 /**
  * Instructions' segments: what to write (Brief), how to write it (Rules), and
  * how well it reads (Quality, Quality spec §3, once its first phase is live).
@@ -80,14 +84,21 @@ const isSegment = (target: PanelTarget): target is InstructionSegment =>
  * panel is never out of sight (it starts closed on a narrow window). A tab
  * opens the panel on it.
  */
-export function EditorPanelRail({ onOpen }: { onOpen: (tab: PanelTab) => void }) {
+export function EditorPanelRail({
+  onOpen,
+  chat = false,
+}: {
+  onOpen: (tab: PanelTab) => void;
+  /** Chat is a tab (W4-16). */
+  chat?: boolean;
+}) {
   const t = useTranslations('contentEditor.editor.panel');
   return (
     <nav
       aria-label={t('label')}
       className="flex w-9 shrink-0 flex-col items-center gap-1 border-l bg-card py-2"
     >
-      {PANEL_TABS.map((value) => (
+      {tabsOf(chat).map((value) => (
         <button
           key={value}
           type="button"
@@ -154,6 +165,7 @@ export function EditorSidePanel({
   handOff = null,
   auditEstimate = null,
   onShoppingPathChange,
+  chat,
 }: {
   draft: ContentDraft;
   /**
@@ -250,12 +262,23 @@ export function EditorSidePanel({
   auditEstimate?: ReactNode;
   /** Brief › Shopping path changed: the Shopping rules read it again (shopping path, part 6). */
   onShoppingPathChange?: () => void;
+  /**
+   * Chat, the panel's first tab while the new Chat is on (CHAT-25 §5, W4-16):
+   * the chat that made the draft, and what to do once the Content Agent left
+   * suggestions in the page.
+   */
+  chat?: { conversation: DraftConversation | null; onSuggestions: (count: number) => void };
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
-  const [tab, setTab] = useState<PanelTab>('instructions');
+  // A draft the member's own chat made opens on that chat, continued (CHAT-25 §5, W4-16); a
+  // teammate's shared chat doesn't.
+  const ownChat = !!chat?.conversation?.mine;
+  const [tab, setTab] = useState<PanelTab>(ownChat ? 'chat' : 'instructions');
   const [segment, setSegment] = useState<InstructionSegment>('rules');
-  const [opened, setOpened] = useState<Set<PanelTarget>>(() => new Set(['instructions', 'rules']));
+  const [opened, setOpened] = useState<Set<PanelTarget>>(
+    () => new Set(['instructions', 'rules', ...(ownChat ? (['chat'] as const) : [])]),
+  );
   const describeRule = useRuleDescriber();
   // A read-only workspace (plan not active): Your input's changes open the
   // upgrade dialog instead (the tabs gate their own actions).
@@ -379,7 +402,7 @@ export function EditorSidePanel({
         className="border-b px-3 pt-1.5"
       >
         <TabsList variant="line">
-          {PANEL_TABS.map((value) => (
+          {tabsOf(!!chat).map((value) => (
             <TabsTrigger key={value} value={value}>
               {t(`tabs.${value}`)}
               {/* The rules still open, on the tab that holds them. */}
@@ -411,8 +434,22 @@ export function EditorSidePanel({
           ))}
         </TabsList>
       </Tabs>
+      {/* Chat keeps its own scroll, its box at the bottom (W4-16); mounted once opened. */}
+      {chat && opened.has('chat') && (
+        <div hidden={tab !== 'chat'} className="min-h-0 flex-1 px-3 py-3">
+          <EditorChat
+            draftId={draft.id}
+            conversation={chat.conversation}
+            onSuggestions={chat.onSuggestions}
+          />
+        </div>
+      )}
       {/* The panel's own scroll: a part shown in it scrolls here, never the page (scrollInPanel). */}
-      <div data-panel-scroll className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+      <div
+        data-panel-scroll
+        hidden={tab === 'chat'}
+        className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+      >
         <div hidden={tab !== 'instructions'} className="space-y-4">
           <DataNote />
           <div

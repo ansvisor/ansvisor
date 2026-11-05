@@ -11,6 +11,10 @@ const { setSyncedPrices, syncedCount } = await import('./model-price-cache.js');
 const {
   AUTO_MIX,
   CATALOG_URL,
+  LIMITED_HOSTS,
+  endpointsUrl,
+  hostsFor,
+  hostsPrice,
   menuEntry,
   multiplierFor,
   multiplierLabel,
@@ -227,6 +231,103 @@ describe('syncModelPrices', () => {
     });
     expect(result).toMatchObject({ ok: false, error: 'db down' });
     expect(syncedCount()).toBe(1);
+  });
+});
+
+describe('a model run on some providers only (W4-36)', () => {
+  const DEEPSEEK = 'deepseek/deepseek-v4.1-flash';
+  /** An endpoint as OpenRouter lists it: its tag, and its prices per token. */
+  const endpoint = (tag, prompt, completion, cacheRead) => ({
+    tag,
+    provider_name: tag,
+    pricing: {
+      prompt,
+      completion,
+      ...(cacheRead === undefined ? {} : { input_cache_read: cacheRead }),
+    },
+  });
+  const endpoints = (...list) => ({ data: { id: DEEPSEEK, endpoints: list } });
+  // As listed on 2026-11-03: Baidu (China) is the cheapest, Fireworks' US endpoint the dearest.
+  const LISTED = endpoints(
+    endpoint('baidu/fp8', '0.0000000348', '0.0000001392', '0.000000000696'),
+    endpoint('deepinfra/fp8', '0.00000014', '0.00000042', '0.000000028'),
+    endpoint('fireworks/us', '0.00000045', '0.0000018', '0.00000009'),
+    endpoint('nebius/fp8', '0.0000003', '0.0000012'),
+  );
+
+  it('limits DeepSeek to its US and EU hosts, and no other maker', () => {
+    expect(hostsFor(DEEPSEEK)).toBe(LIMITED_HOSTS.deepseek);
+    expect(hostsFor('DeepSeek/deepseek-chat')).toBe(LIMITED_HOSTS.deepseek);
+    expect(hostsFor('openai/gpt-6.1-sol')).toBeNull();
+    expect(hostsFor('constructor/x')).toBeNull();
+    expect(hostsFor(undefined)).toBeNull();
+    expect(Object.isFrozen(LIMITED_HOSTS.deepseek)).toBe(true);
+  });
+
+  it('prices it at the dearest of its hosts, a cache read only when every host has one', () => {
+    expect(hostsPrice(LISTED, LIMITED_HOSTS.deepseek)).toEqual({
+      input_per_m: expect.closeTo(0.45, 9),
+      output_per_m: expect.closeTo(1.8, 9),
+      // Nebius lists no cache-read price: a cached token may cost a full input token there.
+      cache_read_per_m: null,
+    });
+    const cached = endpoints(
+      endpoint('deepinfra/fp8', '0.00000014', '0.00000042', '0.000000028'),
+      endpoint('together', '0.0000003', '0.0000012', '0.00000006'),
+    );
+    expect(hostsPrice(cached, LIMITED_HOSTS.deepseek)).toEqual({
+      input_per_m: expect.closeTo(0.3, 9),
+      output_per_m: expect.closeTo(1.2, 9),
+      cache_read_per_m: expect.closeTo(0.06, 9),
+    });
+  });
+
+  it('has no price when none of its hosts lists it, or lists it at a price', () => {
+    const elsewhere = endpoints(endpoint('baidu/fp8', '0.0000000348', '0.0000001392'));
+    expect(hostsPrice(elsewhere, LIMITED_HOSTS.deepseek)).toBeNull();
+    const variable = endpoints(endpoint('deepinfra/fp8', '-1', '-1'));
+    expect(hostsPrice(variable, LIMITED_HOSTS.deepseek)).toBeNull();
+    expect(hostsPrice({}, LIMITED_HOSTS.deepseek)).toBeNull();
+  });
+
+  it("syncs it at its hosts' price without the catalog's overrides, and leaves unpriced one it can't read", async () => {
+    const db = fakeDb();
+    const base = catalog(60);
+    base.data.push(
+      // The catalog's price is Baidu's, with DeepSeek's own off-peak discount.
+      model(DEEPSEEK, '0.000000045', '0.0000005', {
+        overrides: [{ utc_start: 1630, utc_end: 30, prompt: '0.00000002' }],
+      }),
+      model('deepseek/deepseek-chat', '0.0000002', '0.0000008'),
+    );
+    const fetcher = vi.fn(async (url) => {
+      if (url === CATALOG_URL) return new Response(JSON.stringify(base));
+      if (url === endpointsUrl(DEEPSEEK)) return new Response(JSON.stringify(LISTED));
+      return new Response('', { status: 502 });
+    });
+
+    const result = await syncModelPrices({ fetcher, db, now: NOW });
+    expect(result).toMatchObject({ ok: true, models: 62 });
+    expect(fetcher.mock.calls.map(([url]) => url).sort()).toEqual(
+      [CATALOG_URL, endpointsUrl(DEEPSEEK), endpointsUrl('deepseek/deepseek-chat')].sort(),
+    );
+    expect(db.table.get(DEEPSEEK)).toMatchObject({
+      input_per_m: expect.closeTo(0.45, 9),
+      output_per_m: expect.closeTo(1.8, 9),
+      cache_read_per_m: null,
+      overrides: [],
+    });
+    // Unread: no price, so no menu entry, and a step on it pays the fallback price.
+    expect(db.table.get('deepseek/deepseek-chat')).toMatchObject({
+      input_per_m: null,
+      output_per_m: null,
+      overrides: [],
+    });
+    // Every other model as the catalog lists it.
+    expect(db.table.get('p/model-7')).toMatchObject({
+      input_per_m: expect.closeTo(1, 9),
+      output_per_m: expect.closeTo(2, 9),
+    });
   });
 });
 
