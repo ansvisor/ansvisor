@@ -4,8 +4,8 @@ route: /dashboard/chat/settings
 keywords: [chat settings, default mode, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, thought for, thinking time, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -19,7 +19,7 @@ sources: [web/messages/en.json]
 
 ## Your focus
 
-**Your focus** lists the eight areas Chat can focus on for you, such as **Competitors** or **Content**. Tick the ones you work on: Chat Home and its suggestions follow them. Your focus doesn't change what you can do; your role decides that.
+**Your focus** starts with **Default view**, which keeps Chat Home to a greeting, one line and the chat box. Under it are the eight areas Chat can focus on for you, such as **Competitors** or **Content**. Tick the ones you work on: Chat Home and its suggestions follow them. Clearing every area goes back to the Default view. Your focus doesn't change what you can do; your role decides that.
 
 ## Answer language
 

@@ -78,6 +78,7 @@ const OPEN_ACTIONS: Record<string, string> = {
     "the person's own record of hiding Agents for you on Chat Home, nothing that costs",
   'chat-prefs.ts:saveChatFocus':
     "the person's own Chat focus: it only shapes suggestions, nothing that costs",
+  'chat-prefs.ts:saveDefaultHome': "the person's own Chat Home view, nothing that costs",
   'chat-prefs.ts:skipChatFocus': "the person's own Chat focus left empty, nothing that costs",
   'chat-prefs.ts:markFocusPrompted':
     "the person's own record of being asked their focus, nothing that costs",
