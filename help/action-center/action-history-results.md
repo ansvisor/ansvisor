@@ -1,11 +1,11 @@
 ---
 title: Action history and results
 route: /dashboard/action-center/history
-keywords: [history, action results, scorecard, success rate, measured outcome]
+keywords: [history, action results, scorecard, success rate, measured outcome, by play]
 synonyms: [what worked, past actions, completed actions, did it work]
 plan: all
-updated: 2026-10-29
-last_checked: 2026-10-31
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -23,7 +23,7 @@ Click an action to see **What was the goal?**, **What happened?** (the signals i
 
 Only a completed action is measured. Its metrics are read three times, over the week ending 7, 14 and 30 days after it closed, each against the 7 days before it was raised. Until the final reading on day 30, the result reads *so far*, and the drawer lists each reading.
 
-An action that names its prompts or pages is measured on them, with the brand-wide figures beside. Its prompts' change is also shown net of the brand's prompts it didn't touch, so a change that hit every prompt, such as an engine's update, is told apart from its own. A Site Audit fix is judged by its pages audited again since it closed.
+An action that names its prompts or pages is measured on them, with the brand-wide figures beside. An action about a topic is measured on that topic's prompts. Its prompts' change is also shown net of the brand's prompts it didn't touch, so a change that hit every prompt, such as an engine's update, is told apart from its own. A Site Audit fix is judged by its pages audited again since it closed.
 
 ## What a result means
 
@@ -40,6 +40,10 @@ An action sent from a prompt's Improve tab reports on how many platforms its pos
 ## The Scorecard
 
 Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand over the range, 90 days unless you pick another. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only.
+
+## The Scorecard by play
+
+When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. On the **Scorecard**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result.
 
 ## When a problem comes back
 
