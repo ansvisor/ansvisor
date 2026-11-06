@@ -1,23 +1,29 @@
 ---
 title: Choose what Chat focuses on
 route: /dashboard/chat
-keywords: [focus, chat focus, focus areas, your focus, choose focus, suggestions for me, start with a question, starter questions]
-synonyms: [interests, what I work on, tailor chat, personalize chat home]
+keywords: [focus, chat focus, focus areas, your focus, choose focus, suggestions for me, start with a question, starter questions, default view, simple start]
+synonyms: [interests, what I work on, tailor chat, personalize chat home, clean chat home, simpler chat home]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json]
 ---
-You can tell Chat what to focus on for you: one or more areas, such as **Competitors**, **Content** or **Product and buyer needs**. Focus changes only what Chat suggests. What you can do still comes from your role.
+Chat Home starts on the **Default view**: a greeting, one line on what changed and the chat box, nothing else. You can also tell Chat what to focus on for you: one or more areas, such as **Competitors**, **Content** or **Product and buyer needs**. Home then adds suggestions for them. Focus changes only what Chat suggests. What you can do still comes from your role.
 
 ## Pick your focus
 
-The first time you open Chat, it asks **What should Chat focus on for you?** Pick one or more of the eight areas and select **Continue**. The areas that match what you work on, from your menu settings, start out picked.
+The first time you open Chat, it asks **What should Chat focus on for you?** **Default: simple start** is picked at the top. Select **Continue** to keep it, or pick one or more of the eight areas under it and select **Continue**. Picking an area turns Default off; selecting **Default** again clears your areas.
 
-**Skip for now** keeps the default Home. Chat asks only once, whichever you choose.
+**Skip for now** also keeps the Default view. Chat asks only once, whichever you choose.
+
+## The Default view
+
+On the Default view, Chat Home shows your greeting, one line and the chat box in the middle of the page. The line says how many chats need you, or, when none do, how a competitor's mention rate moved this week. **For you now**, **What's new**, **Start with a question** and **New for you** don't show.
+
+When the Default view arrived, everyone started on it, people who had picked areas before too. Your areas are kept: select **Edit** under the greeting and the picker opens with them ticked, so **Continue** brings your focused Home back.
 
 ## What changes on Chat Home
 
@@ -31,9 +37,9 @@ With **Competitors** picked, the line under the greeting can say when a competit
 
 ## Change it later
 
-Under the greeting on Chat Home, a line shows your focus, such as **Focused on Product and Markets and sources**. Select **Edit** to open the picker with your picks on; **Cancel** leaves your focus as it was. With no focus, the line says **Get suggestions for what you work on**; select **Choose focus**.
+Under the greeting on Chat Home, a line shows your focus, such as **Focused on Product and Markets and sources**, or **Default view**. Select **Edit** to open the picker with your areas ticked; **Cancel** leaves everything as it was.
 
-You can also change it in **Settings** in the chat menu, under **Your focus**. Each change is kept at once and follows you to every device. Clear every box to go back to the default Home.
+You can also change it in **Settings** in the chat menu, under **Your focus**. Tick **Default view**, or tick the areas you work on. Each change is kept at once and follows you to every device. Clearing every area goes back to the Default view.
 
 ## What focus doesn't change
 
