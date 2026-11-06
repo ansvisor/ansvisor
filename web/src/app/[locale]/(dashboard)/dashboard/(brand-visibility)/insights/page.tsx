@@ -955,28 +955,30 @@ export default function InsightsPage() {
               />
 
               {/* KPI cards (VIS-003): today's five, then the new rates. */}
-              <KpiRows
-                summary={summary!}
-                trend={rateTrend}
-                trackedPrompts={trackedPrompts}
-                coverage={coverage}
-                sov={sovData}
-                competitors={competitorData}
-                comparison={comparison}
-                series={kpiSeries}
-                onBreakdown={(metric) => {
-                  setBreakdownTab(undefined);
-                  setBreakdownMetric(metric);
-                }}
-                onNavigate={(path) => router.push(path)}
-                mentionsHref={mentionsHref({
-                  range: filters.datePreset,
-                  from: filters.dateFrom,
-                  to: filters.dateTo,
-                  region: filters.region,
-                  topic: filters.topic,
-                })}
-              />
+              <div data-tour="visibility">
+                <KpiRows
+                  summary={summary!}
+                  trend={rateTrend}
+                  trackedPrompts={trackedPrompts}
+                  coverage={coverage}
+                  sov={sovData}
+                  competitors={competitorData}
+                  comparison={comparison}
+                  series={kpiSeries}
+                  onBreakdown={(metric) => {
+                    setBreakdownTab(undefined);
+                    setBreakdownMetric(metric);
+                  }}
+                  onNavigate={(path) => router.push(path)}
+                  mentionsHref={mentionsHref({
+                    range: filters.datePreset,
+                    from: filters.dateFrom,
+                    to: filters.dateTo,
+                    region: filters.region,
+                    topic: filters.topic,
+                  })}
+                />
+              </div>
 
               {/* Competitor Comparison. A failed read of it is not "no competitors". */}
               {competitorsFailed ? (

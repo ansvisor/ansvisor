@@ -38,7 +38,7 @@ The panel says where you are, such as **Ansvisor tour · 2 of 5**. Under each ex
 
 ## The panel on every page
 
-While the tour is on, every page you open, from the menu too, opens with Chat beside it on the tour. On a page the tour explained, the panel brings that page's explanation into view and marks it for a moment, with the tour's chips under it. On a topic's page it hasn't explained yet, **Show me this page** explains it. On other pages the panel stays on the latest explanation.
+While the tour is on, every page you open, from the menu too, opens with Chat beside it on the tour. On a page the tour explained, the panel brings that page's explanation into view and marks it for a moment, with the tour's chips under it. On the page itself, the part it explains, such as Visibility's score cards or the Search Console card, is outlined in amber for a few seconds. On a topic's page it hasn't explained yet, **Show me this page** explains it. On other pages the panel stays on the latest explanation.
 
 If you close the panel, it stays closed on the next pages until you open Chat again or click one of the tour's chips.
 
