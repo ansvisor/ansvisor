@@ -39,6 +39,9 @@ import { ForYouNow } from './for-you-now';
 const LINK =
   'text-foreground underline decoration-foreground/20 underline-offset-2 hover:decoration-foreground';
 
+/** What the Default view's line reads (00485): a rival's move, as Competitors' does. */
+const DEFAULT_LINE: FocusArea[] = ['comp'];
+
 export interface ChatHomeViewProps {
   firstName: string | null;
   /** The person's local time; null until it is known (no greeting yet, no shift). */
@@ -337,8 +340,12 @@ export function ChatHomeView({
 }: ChatHomeViewProps) {
   const t = useTranslations('chatShell.home');
   const areas = focus?.areas ?? [];
-  // The focus's line (CHAT-24 §4) when nothing needs the person: what needs them comes first.
-  const focusLine = needsYou === 0 && words ? focusGreeting(areas, words) : null;
+  // The Default view (00485): the greeting, one line, the pill and the box, in the middle.
+  const plain = focus !== null && areas.length === 0;
+  // The focus's line (CHAT-24 §4) when nothing needs the person: what needs them comes
+  // first. The Default view says how a rival moved, as Competitors does.
+  const focusLine =
+    needsYou === 0 && words ? focusGreeting(plain ? DEFAULT_LINE : areas, words) : null;
   const part = now ? dayPartOf(now.getHours()) : null;
   // The first block says "Since you left"; a win beside a drop is "One win".
   const blocks = since
@@ -351,8 +358,13 @@ export function ChatHomeView({
     : [];
   return (
     <div className="mx-auto w-full max-w-[720px] px-5">
-      <div className="mt-[34px] mb-[18px] text-center">
-        <h1 className="min-h-8 text-2xl font-bold tracking-[-.6px]">
+      <div className={cn('mb-[18px] text-center', plain ? 'mt-[20vh]' : 'mt-[34px]')}>
+        <h1
+          className={cn(
+            'font-bold',
+            plain ? 'min-h-10 text-[34px] tracking-[-.9px]' : 'min-h-8 text-2xl tracking-[-.6px]',
+          )}
+        >
           {part &&
             (firstName ? t(`greeting.${part}`, { name: firstName }) : t(`greetingNoName.${part}`))}
         </h1>
@@ -375,7 +387,7 @@ export function ChatHomeView({
         </p>
         {focus && <FocusPill areas={focus.areas} onEdit={focus.onEdit} />}
       </div>
-      {since && blocks.length > 0 && (
+      {!plain && since && blocks.length > 0 && (
         <div
           className={cn(
             'mb-3 grid gap-2',
@@ -395,21 +407,25 @@ export function ChatHomeView({
           ))}
         </div>
       )}
-      <ForYouNow
-        dueTasks={dueTasks}
-        lostPages={lostPages}
-        readyDrafts={readyDrafts}
-        canChange={canChange}
-        starting={starting}
-        onAsk={onAsk}
-        focus={areas}
-        whatsNew={whatsNew ? { unread: whatsNew.unread } : null}
-      />
-      {whatsNew?.line && onShowMe && <WhatsNewLine line={whatsNew.line} onShowMe={onShowMe} />}
-      {areas.length > 0 && words && (
-        <StartWithQuestion areas={areas} fill={words.fill} starting={starting} onAsk={onAsk} />
+      {!plain && (
+        <>
+          <ForYouNow
+            dueTasks={dueTasks}
+            lostPages={lostPages}
+            readyDrafts={readyDrafts}
+            canChange={canChange}
+            starting={starting}
+            onAsk={onAsk}
+            focus={areas}
+            whatsNew={whatsNew ? { unread: whatsNew.unread } : null}
+          />
+          {whatsNew?.line && onShowMe && <WhatsNewLine line={whatsNew.line} onShowMe={onShowMe} />}
+          {areas.length > 0 && words && (
+            <StartWithQuestion areas={areas} fill={words.fill} starting={starting} onAsk={onAsk} />
+          )}
+          <NewForYou areas={areas} starting={starting} onAsk={onAsk} />
+        </>
       )}
-      <NewForYou areas={areas} starting={starting} onAsk={onAsk} />
     </div>
   );
 }
@@ -471,14 +487,16 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     rivalMove: RivalMove | null;
   } | null>(null);
   const [starting, setStarting] = useState(false);
-  const focusKey = focusCtx?.focus.join(',') ?? '';
+  // The Default view (00485) reads only its line, from the Competitors area.
+  const plain = focusCtx !== null && focusCtx.focus.length === 0;
+  const focusKey = plain ? DEFAULT_LINE.join(',') : (focusCtx?.focus.join(',') ?? '');
   const wordsKey = `${brandId}|${focusKey}`;
   const items = useMemo(() => inboxItems(chats), [chats]);
   const needsYou = items.filter((c) => c.state === 'needsYou').length;
   const weekEnd = now ? endOfWeek(now) : null;
 
   useEffect(() => {
-    if (!brandId || !weekEnd) return;
+    if (plain || !brandId || !weekEnd) return;
     let current = true;
     void readHomeShortcuts(brandId, weekEnd)
       .then((result) => {
@@ -500,10 +518,10 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     return () => {
       current = false;
     };
-  }, [brandId, weekEnd]);
+  }, [plain, brandId, weekEnd]);
 
   useEffect(() => {
-    if (!brandId) return;
+    if (plain || !brandId) return;
     let current = true;
     void readSinceYouLeft(brandId)
       .then((result) => {
@@ -515,7 +533,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     return () => {
       current = false;
     };
-  }, [brandId]);
+  }, [plain, brandId]);
 
   useEffect(() => {
     if (!brandId || !focusKey) return;
@@ -538,10 +556,12 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
 
   useHomeSeen();
 
-  // What's new for the person's plan: the New line and the chip's dot (CHAT-11 §B, item 19).
+  // What's new for the person's plan: the New line and the chip's dot (CHAT-11 §B,
+  // item 19). The Default view shows neither.
   const [whatsNew, setWhatsNew] = useState<WhatsNewHome | null>(null);
   const fillBox = useFillHomeDraft();
   useEffect(() => {
+    if (plain) return;
     let current = true;
     void fetch('/api/chat/whats-new?unread=true&limit=1&days=14')
       .then((res) => res.json())
@@ -558,7 +578,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     return () => {
       current = false;
     };
-  }, []);
+  }, [plain]);
 
   async function startChat(message: string, shortcutId?: ShortcutId) {
     if (starting) return;

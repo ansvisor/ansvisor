@@ -3990,6 +3990,7 @@ export type Database = {
           focus: string[] | null
           focus_prompted_at: string | null
           home_seen_at: string | null
+          home_view: string
           legacy_imported_at: string | null
           memory_enabled: boolean
           menu_open: boolean
@@ -4011,6 +4012,7 @@ export type Database = {
           focus?: string[] | null
           focus_prompted_at?: string | null
           home_seen_at?: string | null
+          home_view?: string
           legacy_imported_at?: string | null
           memory_enabled?: boolean
           menu_open?: boolean
@@ -4032,6 +4034,7 @@ export type Database = {
           focus?: string[] | null
           focus_prompted_at?: string | null
           home_seen_at?: string | null
+          home_view?: string
           legacy_imported_at?: string | null
           memory_enabled?: boolean
           menu_open?: boolean
