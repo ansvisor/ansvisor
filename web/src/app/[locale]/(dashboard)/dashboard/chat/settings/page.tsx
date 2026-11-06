@@ -43,6 +43,7 @@ export default async function ChatSettingsPage() {
       initial={general?.settings ?? DEFAULT_CHAT_GENERAL}
       access={general?.access ?? CAREFUL_ACCESS}
       focus={focus.focus ?? []}
+      view={focus.view}
     />
   );
 }
