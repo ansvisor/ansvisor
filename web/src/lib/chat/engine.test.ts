@@ -5869,7 +5869,7 @@ describe('files attached to a message (00409; owner bug report 2026-11-06)', () 
   });
 
   /** The person's file, up and ready in a draft, as the composer leaves it. */
-  function attach(...files: (typeof FILES)[keyof typeof FILES][]) {
+  function attach(...files: { id: string; name: string; type: string; bytes: Uint8Array }[]) {
     for (const [i, file] of files.entries()) {
       db.tables.chat_uploads.push({
         id: file.id,
@@ -5926,6 +5926,63 @@ describe('files attached to a message (00409; owner bug report 2026-11-06)', () 
     // Files are outside text: the run's changes show a card (§16a).
     const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
     expect(state.progress).toMatchObject({ tainted: true, attachments: 3 });
+  });
+
+  it('gives the model a Word file and an Excel workbook as text, in their untrusted blocks', async () => {
+    const docx = await import('docx');
+    const word = new Uint8Array(
+      await docx.Packer.toBuffer(
+        new docx.Document({
+          sections: [
+            {
+              children: [
+                new docx.Paragraph({ text: 'Launch brief', heading: docx.HeadingLevel.HEADING_1 }),
+                new docx.Paragraph('Target 4321 citations.'),
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    const { default: writeXlsxFile } = await import('write-excel-file/node');
+    const sheet = new Uint8Array(
+      await writeXlsxFile(
+        [
+          [{ value: 'prompt' }, { value: 'volume' }],
+          [{ value: 'best crm' }, { value: 880 }],
+        ],
+        {
+          sheet: 'Prompts',
+        },
+      ).toBuffer(),
+    );
+    const { haiku } = useModels([READY], [text('Read both.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Use these',
+      brandId: BRAND,
+      attachmentIds: attach(
+        {
+          id: '11111111-2222-4333-8444-000000000004',
+          name: 'brief.docx',
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          bytes: word,
+        },
+        {
+          id: '11111111-2222-4333-8444-000000000005',
+          name: 'prompts.xlsx',
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          bytes: sheet,
+        },
+      ),
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    const said = textOf(userParts(haiku.seen[0]));
+    expect(said).toContain('<untrusted_data source="attachment brief.docx">');
+    expect(said).toContain('# Launch brief\\n\\nTarget 4321 citations.');
+    expect(said).toContain('<untrusted_data source="attachment prompts.xlsx">');
+    expect(said).toContain('# Prompts\\nprompt,volume\\nbest crm,880');
+    expect(filesOf(userParts(haiku.seen[0]))).toEqual([]);
   });
 
   it('sends a model that reads no images none, and tells it to say so', async () => {

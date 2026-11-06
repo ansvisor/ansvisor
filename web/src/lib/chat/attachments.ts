@@ -12,8 +12,9 @@ import type { ChatUploadType } from './uploads';
  *   - an image (PNG, JPEG, WebP) as an image, a PDF as a file, each where
  *     the step's model reads them (modelReads);
  *   - a text, CSV, Markdown, JSON or HTML file, and a Word or Excel file
- *     read as text on the server (attachment-store.ts), inside an
- *     `<untrusted_data>` block (untrusted.ts), hidden text stripped;
+ *     turned into text on the server (office-text.ts), inside an
+ *     `<untrusted_data>` block (untrusted.ts), hidden text stripped, within
+ *     FILE_TEXT_CHARS each;
  *   - a line for any file the model doesn't get, and why, so it tells the
  *     person rather than answering as if there were none.
  *
@@ -112,8 +113,16 @@ export const MAX_IMAGE_BYTES = (5 * 1024 * 1024 * 3) / 4;
 export const MAX_FILE_BYTES = 12 * 1024 * 1024;
 /** The most pages of a PDF Claude reads in one request. */
 export const MAX_PDF_PAGES = 100;
-/** What the question's text files give the model together, at most: as much as its reads (run-limits.ts). */
-export const ATTACHMENT_TEXT_CHARS = 48_000;
+/**
+ * What one text file gives the model, at most (a Word or Excel file as its
+ * text), and the question's text files together: about 20,000 and 40,000
+ * tokens, sent again with each model step (Claude's prompt cache reads them
+ * back after the first).
+ */
+export const FILE_TEXT_CHARS = 60_000;
+export const ATTACHMENT_TEXT_CHARS = 120_000;
+/** Where a cut text stops, in the text itself. */
+export const CUT_MARK = '\n(cut here)';
 
 /**
  * A step's hold assumes the most a file costs (engine-model.ts
@@ -163,17 +172,20 @@ export function attachmentTokens(files: readonly RunAttachment[], reads: ModelRe
 }
 
 /**
- * The question's text files within ATTACHMENT_TEXT_CHARS together, in the
- * order they were attached: each takes what is left, and one cut says how
- * long it was.
+ * The question's text files within FILE_TEXT_CHARS each and
+ * ATTACHMENT_TEXT_CHARS together, in the order they were attached: each
+ * takes what is left, and one cut ends with CUT_MARK and says how long it
+ * was.
  */
 export function fitTexts(files: readonly RunAttachment[]): RunAttachment[] {
   let left = ATTACHMENT_TEXT_CHARS;
   return files.map((file) => {
     if (file.text === undefined) return file;
-    const text = cutText(file.text, Math.max(0, left));
+    const text = cutText(file.text, Math.max(0, Math.min(FILE_TEXT_CHARS, left)));
     left -= text.length;
-    return text.length < file.text.length ? { ...file, text, fullChars: file.text.length } : file;
+    return text.length < file.text.length
+      ? { ...file, text: `${text}${CUT_MARK}`, fullChars: file.text.length }
+      : file;
   });
 }
 
@@ -229,9 +241,10 @@ export function attachmentParts(
     if (missing) {
       parts.push({ type: 'text', text: missingLine({ ...file, missing }) });
     } else if (kind === 'text' && file.text !== undefined) {
+      const kept = file.text.length - (file.fullChars !== undefined ? CUT_MARK.length : 0);
       const cut =
         file.fullChars !== undefined
-          ? `\nOnly the first ${file.text.length.toLocaleString('en-US')} of its ${file.fullChars.toLocaleString('en-US')} characters fit here: say so when the answer needs the rest.`
+          ? `\nOnly the first ${kept.toLocaleString('en-US')} of its ${file.fullChars.toLocaleString('en-US')} characters fit here: say so when the answer needs the rest.`
           : '';
       // Data, never instructions: in its labelled block, as a read's (untrusted.ts).
       parts.push({

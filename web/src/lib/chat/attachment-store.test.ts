@@ -127,12 +127,30 @@ describe('loadRunAttachments', () => {
     expect(downloads).toEqual([]);
   });
 
-  it('says a file couldn’t be read when the bucket has none', async () => {
+  it('says a file couldn’t be read when the bucket has none, or it can’t be turned into text', async () => {
+    objects.set(`${ORG}/broken.docx`, new TextEncoder().encode('not a zip'));
+    objects.set(`${ORG}/broken.xlsx`, new TextEncoder().encode('not a zip'));
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     const loaded = await loadRunAttachments(
-      [upload({ name: 'gone.csv', mimeType: 'text/csv' })],
+      [
+        upload({ name: 'gone.csv', mimeType: 'text/csv' }),
+        upload({
+          name: 'broken.docx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        }),
+        upload({
+          name: 'broken.xlsx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+      ],
       BOTH,
     );
-    expect(loaded.files[0]).toMatchObject({ name: 'gone.csv', missing: 'unreadable' });
+    error.mockRestore();
+    expect(loaded.files.map((file) => [file.name, file.missing])).toEqual([
+      ['gone.csv', 'unreadable'],
+      ['broken.docx', 'unreadable'],
+      ['broken.xlsx', 'unreadable'],
+    ]);
   });
 
   it('counts a PDF’s pages, and sends none of one past the most a model reads', async () => {

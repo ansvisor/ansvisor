@@ -7,6 +7,8 @@ vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 const {
   ATTACHMENTS_NOTE,
   ATTACHMENT_TEXT_CHARS,
+  CUT_MARK,
+  FILE_TEXT_CHARS,
   IMAGE_TOKENS,
   PDF_PAGE_TOKENS,
   attachmentParts,
@@ -126,19 +128,26 @@ describe('attachmentParts', () => {
 });
 
 describe('fitTexts', () => {
-  it('cuts the text files to their share together, and says how long one was', () => {
-    const long = 'x'.repeat(ATTACHMENT_TEXT_CHARS - 10);
-    const [first, second] = fitTexts([
-      { ...csv, text: long },
-      { ...csv, name: 'more.csv', text: 'y'.repeat(100) },
+  it('cuts a text file to its share and the files to theirs together, marking the cut', () => {
+    const files = fitTexts([
+      { ...csv, name: 'a.csv', text: 'a'.repeat(FILE_TEXT_CHARS + 5) },
+      { ...csv, name: 'b.csv', text: 'b'.repeat(FILE_TEXT_CHARS - 10) },
+      { ...csv, name: 'c.csv', text: 'c'.repeat(100) },
+      { ...csv, name: 'd.csv', text: 'd' },
     ]);
-    expect(first.text).toBe(long);
-    expect(first.fullChars).toBeUndefined();
-    expect(second.text).toBe('y'.repeat(10));
-    expect(second.fullChars).toBe(100);
-    const said = attachmentParts([second], BOTH)
+    expect(FILE_TEXT_CHARS * 2).toBe(ATTACHMENT_TEXT_CHARS);
+    // Over its own share: cut there, with the mark.
+    expect(files[0].text).toBe(`${'a'.repeat(FILE_TEXT_CHARS)}${CUT_MARK}`);
+    expect(files[0].fullChars).toBe(FILE_TEXT_CHARS + 5);
+    expect(files[1].text).toBe('b'.repeat(FILE_TEXT_CHARS - 10));
+    expect(files[1].fullChars).toBeUndefined();
+    // What is left of the files' share together.
+    expect(files[2].text).toBe(`${'c'.repeat(10)}${CUT_MARK}`);
+    expect(files[3].text).toBe(CUT_MARK);
+    const said = attachmentParts([files[2]], BOTH)
       .map((part) => (part.type === 'text' ? part.text : ''))
       .join('\n');
+    expect(said).toContain('(cut here)');
     expect(said).toContain('Only the first 10 of its 100 characters fit here');
   });
 });

@@ -10,6 +10,7 @@ import {
   type ModelReads,
   type RunAttachment,
 } from './attachments';
+import { wordText, workbookText } from './office-text';
 import { guardData } from './untrusted';
 import { CHAT_UPLOAD_BUCKET, isUploadType, type ChatUploadType } from './uploads';
 
@@ -90,32 +91,16 @@ function decodeText(bytes: Uint8Array): string {
   return new TextDecoder('utf-8').decode(bytes);
 }
 
-/** A spreadsheet cell as CSV writes it. */
-function csvCell(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  const text = value instanceof Date ? value.toISOString().slice(0, 10) : String(value);
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
-}
-
 /**
- * A file's words for the model: a text type as it is; a Word file's text
- * (mammoth) and an Excel file's sheets as CSV (read-excel-file), the
- * libraries the Content Editor already reads them with.
+ * A file's words for the model: a text type as it is; a Word file as
+ * Markdown and an Excel workbook's first sheets as CSV (office-text.ts).
  */
 export async function textOfFile(type: ChatUploadType, bytes: Uint8Array): Promise<string> {
   if (type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    const { default: mammoth } = await import('mammoth');
-    return (await mammoth.extractRawText({ buffer: Buffer.from(bytes) })).value;
+    return wordText(bytes);
   }
   if (type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
-    const { default: readXlsxFile } = await import('read-excel-file/node');
-    const sheets = await readXlsxFile(Buffer.from(bytes));
-    return sheets
-      .map(
-        ({ sheet, data }) =>
-          `# ${sheet}\n${data.map((row) => row.map((cell) => csvCell(cell)).join(',')).join('\n')}`,
-      )
-      .join('\n\n');
+    return workbookText(bytes);
   }
   return decodeText(bytes);
 }
