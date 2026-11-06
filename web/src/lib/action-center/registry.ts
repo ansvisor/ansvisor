@@ -60,6 +60,8 @@ export type ActionKind =
   | 'optimize_content_for_ai'
   | 'earn_third_party_presence'
   | 'earn_third_party_citations'
+  // An online store's product pages AI asks about, in groups of 3, 5 or 10 (G21, AC plan P-6).
+  | 'product_pages_optimize'
   | 'protect_visibility'
   | 'protect_valuable_citations'
   | 'protect_ai_traffic_pages'
@@ -248,6 +250,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'optimize_content_for_ai',
   'earn_third_party_presence',
   'earn_third_party_citations',
+  'product_pages_optimize',
   'protect_visibility',
   'protect_valuable_citations',
   'protect_ai_traffic_pages',

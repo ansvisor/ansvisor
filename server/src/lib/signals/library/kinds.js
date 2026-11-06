@@ -95,6 +95,9 @@ export const LIBRARY_KINDS = Object.freeze({
   // the pages AI visitors landed on that don't exist (AT-012), and the cited
   // pages no AI search bot read in 30 days (AT-011).
   ai_visits_weekly_drop: meta('traffic', 'high', ['ai_referral_traffic']),
+  // An online store's product pages worth optimizing, best first (AC plan
+  // P-6, spec §6.1).
+  product_pages_to_optimize: meta('visibility', 'medium', ['ai_visibility']),
   broken_citation_target: meta('technical', 'high', ['ai_referral_traffic', 'citations']),
   cited_page_uncrawled: meta('technical', 'medium', ['citations']),
 

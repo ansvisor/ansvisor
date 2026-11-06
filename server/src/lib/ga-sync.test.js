@@ -7,8 +7,10 @@ const deletes = [];
 const calls = [];
 let deleteError = null;
 let tables = {};
+const rpc = vi.hoisted(() => vi.fn());
 vi.mock('../config/supabase.js', () => ({
   default: {
+    rpc: (...args) => rpc(...args),
     from: (table) => {
       const call = { table, filters: [] };
       calls.push(call);
@@ -658,6 +660,34 @@ describe('runGaSync', () => {
       organizationId: undefined,
       brandId: 'b1',
     });
+  });
+
+  it('matches the items to the catalog again after reading some, and goes on when it can’t (AC plan P-6)', async () => {
+    tables.brands = [{ id: 'b1', organization_id: 'paying', ga_property_id: '123' }];
+    const items = report({
+      dims: ['date', 'itemName', 'itemId', 'itemCategory'],
+      metrics: ['itemsViewed', 'itemsAddedToCart', 'itemsPurchased', 'itemRevenue'],
+      rows: [['20260721', 'Blue Shirt', 'SKU-1', 'Apparel', '40', '7', '3', '89.7']],
+    });
+    runGaReport.mockImplementation(async (_target, _property, request) =>
+      request.dimensions.some((d) => d.name === 'itemName') ? items : { rows: [], rowCount: 0 },
+    );
+    rpc.mockReset().mockResolvedValue({ data: 1, error: null });
+    await runGaSync({ brandId: 'b1' });
+    expect(rpc).toHaveBeenCalledWith('refresh_catalog_item_matches', { p_brand_id: 'b1' });
+
+    // No items read: nothing to match.
+    rpc.mockClear();
+    runGaReport.mockResolvedValue({ rows: [], rowCount: 0 });
+    await runGaSync({ brandId: 'b1' });
+    expect(rpc).not.toHaveBeenCalled();
+
+    // A failed match is logged; the sync goes on.
+    runGaReport.mockImplementation(async (_target, _property, request) =>
+      request.dimensions.some((d) => d.name === 'itemName') ? items : { rows: [], rowCount: 0 },
+    );
+    rpc.mockRejectedValue(new Error('down'));
+    await expect(runGaSync({ brandId: 'b1' })).resolves.not.toThrow();
   });
 
   it('reads Analytics with the sign-in the brand uses, by its connected account', async () => {

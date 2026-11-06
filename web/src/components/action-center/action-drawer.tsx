@@ -84,6 +84,7 @@ import { MentionReviewContext } from './mention-review-context';
 import { TrafficPagesContext } from './traffic-pages-context';
 import { ContentDraftContext } from './content-draft-context';
 import { ShoppingLinksContext } from './shopping-links-context';
+import { ProductPagesContext } from './product-pages-context';
 import { AuditPageContext } from './audit-page-context';
 import { ChatFindingContext } from './chat-finding-context';
 import {
@@ -789,6 +790,20 @@ export function ActionDrawer({
                 <>
                   <Separator />
                   <ShoppingLinksContext payload={action.payload ?? {}} />
+                </>
+              ) : action.kind === 'product_pages_optimize' ? (
+                <>
+                  <Separator />
+                  <ProductPagesContext
+                    payload={action.payload ?? {}}
+                    brandId={brandId}
+                    actionId={action.id}
+                    editable={action.status !== 'completed' && action.status !== 'dismissed'}
+                    onChanged={async () => {
+                      await load();
+                      onChanged();
+                    }}
+                  />
                 </>
               ) : action.kind === 'audit_page' ? (
                 <>

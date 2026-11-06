@@ -1305,6 +1305,10 @@
         "title": "Strong AI conversions on {targets}",
         "description": "These pages turn AI traffic into key events well above your site’s rate."
       },
+      "product_pages_to_optimize": {
+        "title": "Product pages AI asks about: {targets}",
+        "description": "AI shopping answers show these products, or they sell, and their pages can answer more of what people ask."
+      },
       "ai_landing_underperforming": {
         "title": "Weak engagement on {targets}",
         "description": "AI visitors engage on these pages well below your site’s rate."
@@ -1872,6 +1876,7 @@
           "status_changed": "Status changed to {to}",
           "assigned": "Assignee changed",
           "due_date_set": "Due date updated",
+          "group_size_set": "Product pages per group changed",
           "task_status": "Task updated",
           "task_added": "Task added: “{title}”",
           "task_renamed": "Task renamed to “{title}”",
@@ -2151,6 +2156,19 @@
           "newPage": "A new page",
           "prompts": "Prompts it should answer",
           "promptsValue": "{count, plural, one {# prompt} other {# prompts}}"
+        },
+        "productPages": {
+          "why": "The products AI shopping answers show for your prompts, or that sell, best first. Work on a few pages at a time.",
+          "groupSize": "Pages at a time",
+          "groupSizeLabel": "{size} pages",
+          "groupSizeSaved": "Working on {size} product pages",
+          "groupSizeFailed": "Couldn’t change the group. Try again.",
+          "inGroup": "In this group",
+          "next": "Next",
+          "figures": "{prompts, plural, =0 {Not on AI shopping cards} one {On AI shopping cards for # prompt} other {On AI shopping cards for # prompts}}",
+          "sales": "{orders, plural, =0 {No orders} one {# order} other {# orders}} · {aiVisits, plural, one {# AI visit} other {# AI visits}} in 30 days",
+          "revenue": "{revenue} in 30 days",
+          "startNow": "Start now opens each page of the group in the Content Editor."
         },
         "shoppingLinks": {
           "source": "Source",
@@ -2694,6 +2712,12 @@
         "titleGeneric": "Earn third-party citations",
         "description": "These sources are cited when answers discuss your brand, and could reference your own pages.",
         "goal": "Turn third-party mentions into references to your assets."
+      },
+      "product_pages_optimize": {
+        "title": "Optimize {targets} AI asks about",
+        "titleGeneric": "Optimize the product pages AI asks about",
+        "description": "AI shopping answers show these products, or they sell. Their pages can answer more of what people ask before they buy.",
+        "goal": "Get these products picked more often in AI shopping answers."
       },
       "protect_valuable_citations": {
         "title": "Protect citations on {targets}",
