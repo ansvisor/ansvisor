@@ -1,27 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { WORK_AREA_IDS } from '@/lib/menu-access';
-import { FOCUS_AREAS, focusFromWorkAreas, focusOf, focusPicks, WORK_AREA_FOCUS } from './focus';
+import { FOCUS_AREAS, focusOf, focusPicks, homeViewOf } from './focus';
 
 /**
- * What Chat focuses on (CHAT-24 §2–3): the eight areas, the picks a
- * person's work areas start the picker with, and a saved focus read back.
+ * What Chat focuses on (CHAT-24 §2–3): the eight areas, a saved focus read
+ * back, and Home's view (00485).
  */
 
-describe('focusFromWorkAreas', () => {
-  it('gives every work area an area, and starts the picker with them in their order', () => {
-    expect(Object.keys(WORK_AREA_FOCUS).sort()).toEqual([...WORK_AREA_IDS].sort());
-    expect(focusFromWorkAreas(['leaders', 'product', 'bizdev'])).toEqual(['lead', 'pd', 'bd']);
-    // Developers and AEO/GEO & Audit both point to Prompts and citations: once.
-    expect(focusFromWorkAreas(['developers', 'aeo', 'analytics', 'growth'])).toEqual([
-      'seo',
-      'growth',
-    ]);
-  });
-
-  it('starts with nothing for no work areas or unknown ones', () => {
-    expect(focusFromWorkAreas(null)).toEqual([]);
-    expect(focusFromWorkAreas([])).toEqual([]);
-    expect(focusFromWorkAreas(['agency'])).toEqual([]);
+describe('homeViewOf', () => {
+  it('reads only focus as the focus view: anything else is the Default view', () => {
+    expect(homeViewOf('focus')).toBe('focus');
+    expect(homeViewOf('default')).toBe('default');
+    expect(homeViewOf(null)).toBe('default');
+    expect(homeViewOf(undefined)).toBe('default');
+    expect(homeViewOf('board')).toBe('default');
   });
 });
 
