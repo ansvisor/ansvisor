@@ -338,7 +338,7 @@
         "task checks"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -354,7 +354,7 @@
         },
         {
           "heading": "What an automatic check looks for",
-          "text": "- **A broken page**: the page answers again.\n- **Publishing**: the page answers where it wasn't before.\n- **Structured data**: the audit checks that raised the action now pass on the page.\n- **Crawler access**: robots.txt lets the AI crawlers in, and the page isn't noindex.\n- **Optimizing or refreshing**: the page changed by more than a date, a price or a rotating quote. Blocks that change by themselves, such as the latest posts, don't count.\n- **New text**: the task's new text is on the page, and the text it replaces is gone.\n\nA task you reopen after it passed stays open: the call is yours."
+          "text": "- **A broken page**: the page answers again.\n- **Publishing**: the page answers where it wasn't before.\n- **Structured data**: the audit checks that raised the action now pass on the page.\n- **Crawler access**: robots.txt lets the AI crawlers in, and the page isn't noindex. When the audit saw a CDN or firewall turn AI bots away, the page is asked as those bots again, and the task stays open while they're still turned away.\n- **Optimizing or refreshing**: the page changed by more than a date, a price or a rotating quote. Blocks that change by themselves, such as the latest posts, don't count.\n- **New text**: the task's new text is on the page, and the text it replaces is gone.\n\nA task you reopen after it passed stays open: the call is yours."
         },
         {
           "heading": "Task status",
@@ -5029,7 +5029,7 @@
         "WAF"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -5077,7 +5077,7 @@
         },
         {
           "heading": "AI bot access",
-          "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot your CDN or firewall refuses, while robots.txt lets it in, fails the check, and so does a bot robots.txt keeps out, by name or with \"User-agent: *\". A slow or busy answer isn't counted as a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides.\n\nThe bots are asked from Ansvisor's servers: a firewall that checks a crawler's own addresses can treat the real one differently."
+          "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot robots.txt keeps out, by name or with \"User-agent: *\", fails the check. A bot your CDN or firewall refuses while robots.txt lets it in only warns: the bots are asked from Ansvisor's servers, and a firewall that checks a crawler's own addresses can still let the real one in. A slow or busy answer isn't a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides."
         },
         {
           "heading": "Authority links",

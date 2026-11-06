@@ -355,6 +355,52 @@ describe('checkPage', () => {
     expect(options.types.test('')).toBe(true);
   });
 
+  it('asks the bots a CDN or firewall refused again, and stays open while they are refused', async () => {
+    // The page as AnsvisorBot and robots.txt as fetchOf answers them; asked
+    // as a bot named in `answers` (its user-agent token), that bot's status.
+    const fetchAs = (pages, answers = {}) => {
+      const read = fetchOf(pages);
+      return vi.fn(async (url, opts = {}) => {
+        const token = Object.keys(answers).find((t) => opts.userAgent?.includes(`${t}/`));
+        const status = token ? answers[token] : null;
+        if (url === PAGE && status && status !== 200) {
+          throw Object.assign(new Error('http'), { code: 'http_error', status });
+        }
+        return read(url, opts);
+      });
+    };
+    const pages = { [PAGE]: html('x'), [ROBOTS]: 'User-agent: *\nAllow: /' };
+    const check = (fetch, wafBlockedBots = ['perplexitybot']) =>
+      checkPage('crawlers', PAGE, { fetch, wafBlockedBots });
+
+    // robots.txt lets every bot in, but the firewall still refuses PerplexityBot: open.
+    expect(await check(fetchAs(pages, { PerplexityBot: 403 }))).toEqual({
+      passed: false,
+      missing: ['crawlers_firewall'],
+    });
+    // The block lifted: passed.
+    const lifted = fetchAs(pages, { PerplexityBot: 200 });
+    expect(await check(lifted)).toEqual({ passed: true, missing: [] });
+    // The control and each of the five bots were asked, after the page and robots.txt.
+    expect(lifted.mock.calls.slice(2).map(([url]) => url)).toEqual(Array(6).fill(PAGE));
+    expect(lifted.mock.calls[3][1].userAgent).toContain('GPTBot/');
+    // A bot refused that the task wasn't raised for doesn't hold it.
+    expect(await check(fetchAs(pages, { ClaudeBot: 403 }))).toEqual({ passed: true, missing: [] });
+    // No answer either way (the server failing, asked to wait): nothing concluded…
+    expect(await check(fetchAs(pages, { PerplexityBot: 503 }))).toBeNull();
+    expect(await check(fetchAs(pages, { PerplexityBot: 429 }))).toBeNull();
+    // …unless something else is missing anyway.
+    expect(
+      await check(
+        fetchAs({ ...pages, [ROBOTS]: 'User-agent: GPTBot\nDisallow: /' }, { PerplexityBot: 503 }),
+      ),
+    ).toEqual({ passed: false, missing: ['crawlers_blocked'] });
+    // Raised for robots.txt alone: no bot is asked.
+    const robotsOnly = fetchAs(pages);
+    expect(await check(robotsOnly, [])).toEqual({ passed: true, missing: [] });
+    expect(robotsOnly).toHaveBeenCalledTimes(2);
+  });
+
   it('keeps the first look, passes a page rewritten, never one that changed by itself', async () => {
     const look = (body, previous = null, head = '') =>
       checkPage('changed', PAGE, { previous, fetch: fetchOf({ [PAGE]: html(body, head) }) });
@@ -780,6 +826,40 @@ describe('runTaskCheck', () => {
         })
       ).autoCheck.passed,
     ).toBe(true);
+  });
+
+  it('keeps a crawler task raised for a firewall block open while the bot is still refused', async () => {
+    db.actions = {
+      targets: [
+        {
+          id: PAGE,
+          checks: ['ai-bot-access'],
+          issues: [
+            {
+              check: 'ai-bot-access',
+              evidence: { blockedBots: ['gptbot'], wafBlockedBots: ['perplexitybot'] },
+            },
+          ],
+        },
+      ],
+    };
+    const crawl = task({ task_key: 'fix_crawler_access' });
+    // robots.txt fixed, the firewall not: still open, the firewall named.
+    const refused = vi.fn(async (url, opts = {}) => {
+      if (url === ROBOTS) return { url, status: 200, html: 'User-agent: *\nAllow: /' };
+      if (opts.userAgent?.includes('PerplexityBot/')) {
+        throw Object.assign(new Error('http'), { code: 'http_error', status: 403 });
+      }
+      return { url, status: 200, html: html('x') };
+    });
+    const result = await runTaskCheck(crawl, action, { fetch: refused, now });
+    expect(result.autoCheck).toMatchObject({ passed: false, missing: ['crawlers_firewall'] });
+    expect(lastWrite().payload.status).toBeUndefined();
+    // The bot let in: completed.
+    const open = fetchOf({ [PAGE]: html('x'), [ROBOTS]: 'User-agent: *\nAllow: /' });
+    const fixed = await runTaskCheck(crawl, action, { fetch: open, now });
+    expect(fixed.autoCheck.passed).toBe(true);
+    expect(lastWrite().payload.status).toBe('completed');
   });
 
   it('keeps what is missing on a task that fails, and its first look through a 404', async () => {

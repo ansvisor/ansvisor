@@ -116,7 +116,8 @@ export const aiBotAccess = {
 
     // The live test (SA-008): a bot the CDN or firewall refused while
     // robots.txt lets it in. A page read without the test (the demo brand,
-    // a draft's estimate, a task's re-check) is judged on robots.txt alone.
+    // a draft's estimate) is judged on robots.txt alone; a crawler task's
+    // re-check asks the bots itself (action-center/task-checks.js).
     const live = ctx.botAccess ?? null;
     const liveByKey = new Map((live?.bots ?? []).map((b) => [b.key, b]));
     const wafBlockedBots = live?.tested
@@ -132,12 +133,16 @@ export const aiBotAccess = {
       live: liveByKey.get(key)?.live ?? null,
     }));
 
+    // A refusal seen only in the live test can't tell: a CDN that checks a
+    // crawler's published addresses turns away a request that only names the
+    // bot, as ours does, and may still let the real crawler in. It warns,
+    // never fails or scores 0; robots.txt's own block still fails.
     let status = 'warn';
     let score = 0.5;
-    if (blocked || wafBlockedBots.length > 0) {
+    if (blocked) {
       status = 'fail';
       score = 0;
-    } else if (mentioned.length > 0) {
+    } else if (mentioned.length > 0 && wafBlockedBots.length === 0) {
       status = 'pass';
       score = 1;
     }
