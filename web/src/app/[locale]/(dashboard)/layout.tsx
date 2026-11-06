@@ -12,6 +12,7 @@ import { MenuAccessProvider } from '@/components/providers/menu-access-provider'
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { isTourTopic } from '@/lib/chat/tour';
+import { readTourPrefs } from '@/lib/chat/tour-prefs';
 import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
 import { pageOpenOf } from '@/lib/chat/page-open';
@@ -107,13 +108,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     chatOn ? chatRunsOnOwnKey(profile.organization_id).catch(() => false) : false,
     // Where the person's product tour stands (00486), read on its own: a
     // database without those columns yet keeps the panel's choices above.
-    chatOn
-      ? supabase
-          .from('chat_user_prefs')
-          .select('tour_chat_id, tour_topic, tour_finished_at')
-          .eq('user_id', user.id)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
+    chatOn ? readTourPrefs(supabase, user.id) : Promise.resolve(null),
   ]);
   const chatPrefs = chatPrefsRead.data;
   // The side panel is Chat too: the person's Agent Chat conversations come
@@ -219,7 +214,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // Where a page Chat writes opens (W4-11), as Chat's pages read it.
     pageOpen: pageOpenOf(chatPrefs?.page_open),
   };
-  const tour = tourRead.error ? null : tourRead.data;
+  const tour = tourRead;
   const tourTopic = tour?.tour_topic;
 
   return (
