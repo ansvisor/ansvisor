@@ -23,6 +23,10 @@ let goLiveRow: Record<string, unknown> | null = null;
 let goLiveError: { code: string; message: string } | null = null;
 /** The workspace's model provider choices (00469). */
 let providersRow: Record<string, unknown> | null = null;
+/** Agent work's last change (setting_changes, 00481), the error reading it, and logging one. */
+let changeRow: Record<string, unknown> | null = null;
+let changeError: { code: string; message: string } | null = null;
+let logError: { code?: string; message: string } | null = null;
 
 function from(table: string) {
   const call: Call = { table, op: 'select', filters: [] };
@@ -32,11 +36,15 @@ function from(table: string) {
       ? { data: { organization_id: ORG, full_name: 'Ada Admin' }, error: null }
       : table === 'organizations'
         ? { data: { name: 'Acme' }, error: null }
-        : table === 'chat_settings' && call.op === 'select' && call.cols === 'model_providers'
-          ? { data: providersRow, error: null }
-          : table === 'chat_settings' && call.op === 'select'
-            ? { data: goLiveRow, error: goLiveError }
-            : { data: null, error: call.op === 'select' ? null : writeError };
+        : table === 'setting_changes'
+          ? call.op === 'select'
+            ? { data: changeRow, error: changeError }
+            : { data: null, error: logError }
+          : table === 'chat_settings' && call.op === 'select' && call.cols === 'model_providers'
+            ? { data: providersRow, error: null }
+            : table === 'chat_settings' && call.op === 'select'
+              ? { data: goLiveRow, error: goLiveError }
+              : { data: null, error: call.op === 'select' ? null : writeError };
   const chain: Record<string, unknown> = {
     select: (cols?: string) => {
       if (call.op === 'select') call.cols = cols;
@@ -44,6 +52,9 @@ function from(table: string) {
     },
     upsert: (row: unknown, opts: unknown) =>
       Object.assign(call, { op: 'upsert', row, opts }) && chain,
+    insert: (row: unknown) => Object.assign(call, { op: 'insert', row }) && chain,
+    order: () => chain,
+    limit: () => chain,
     delete: () => Object.assign(call, { op: 'delete' }) && chain,
     eq: (...args: unknown[]) => {
       call.filters.push(['eq', ...args]);
@@ -76,9 +87,11 @@ vi.mock('@/lib/chat/precedence-context', () => ({
 }));
 
 const {
+  getAgentWorkView,
   getChatSettingsView,
   removeAutoChoice,
   resetToolPolicies,
+  setAgentWork,
   setAutoGoLive,
   setChatSwitch,
   setManagerExecute,
@@ -117,6 +130,9 @@ beforeEach(() => {
   goLiveRow = null;
   goLiveError = null;
   providersRow = null;
+  changeRow = null;
+  changeError = null;
+  logError = null;
   logActivity.mockClear();
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -333,6 +349,133 @@ describe('agents that publish on their own (AUTONOMOUS-GO-LIVE §7.1)', () => {
     expect(await setAutoGoLive(true, 1)).toEqual({ ok: false, failure: 'unavailable' });
     writeError = { message: 'boom' } as typeof MISSING;
     expect(await setAutoGoLive(true, 1)).toEqual({ ok: false, failure: 'failed' });
+  });
+});
+
+describe('Agent work (AC-011)', () => {
+  const upserts = () => calls.filter((c) => c.op === 'upsert');
+  const logged = () => calls.find((c) => c.table === 'setting_changes' && c.op === 'insert');
+
+  it('starts on I approve first, with no change yet, for every member to read', async () => {
+    ctx = context('growth', 'analyst');
+    expect(await getAgentWorkView()).toEqual({
+      ok: true,
+      view: { value: 'approve_first', canChange: false, lastChange: null },
+    });
+    ctx = context('growth', 'admin', { agentWork: 'auto_start' });
+    const result = await getChatSettingsView();
+    expect(result.ok && result.view.agentWork).toEqual({
+      value: 'auto_start',
+      canChange: true,
+      lastChange: null,
+    });
+  });
+
+  it('says who changed it last and when, by name, else by e-mail', async () => {
+    changeRow = {
+      old_value: null,
+      new_value: 'auto_start',
+      changed_by: ME,
+      changed_at: '2026-10-22T10:14:00Z',
+    };
+    expect(await getAgentWorkView()).toMatchObject({
+      ok: true,
+      view: {
+        lastChange: {
+          byName: 'Ada Admin',
+          at: '2026-10-22T10:14:00Z',
+          from: null,
+          to: 'auto_start',
+        },
+      },
+    });
+    const read = calls.find((c) => c.table === 'setting_changes');
+    expect(read?.filters).toEqual([
+      ['eq', 'organization_id', ORG],
+      ['eq', 'setting_key', 'agent_work'],
+    ]);
+    // Someone who left: no name.
+    changeRow = { ...changeRow, changed_by: null };
+    expect(await getAgentWorkView()).toMatchObject({ view: { lastChange: { byName: null } } });
+  });
+
+  it('reads no change before 00481, and never throws', async () => {
+    changeError = { code: '42P01', message: 'relation "setting_changes" does not exist' };
+    expect(await getAgentWorkView()).toMatchObject({ ok: true, view: { lastChange: null } });
+    changeError = { code: '57014', message: 'timeout' };
+    expect(await getAgentWorkView()).toEqual({ ok: false, failure: 'failed' });
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await getAgentWorkView()).toEqual({ ok: false, failure: 'chat_off' });
+  });
+
+  it('saves an Admin’s choice and keeps the change: key, before, after, who', async () => {
+    expect(await setAgentWork('auto_start')).toEqual({ ok: true });
+    expect(upserts()).toHaveLength(1);
+    expect(upserts()[0]).toMatchObject({
+      table: 'chat_settings',
+      row: { organization_id: ORG, agent_work: 'auto_start', updated_by: ME },
+      opts: { onConflict: 'organization_id' },
+    });
+    // Only its own column: the other settings stay as they are.
+    expect(Object.keys(upserts()[0].row as object).sort()).toEqual([
+      'agent_work',
+      'organization_id',
+      'updated_by',
+    ]);
+    // Never set before (no row): the default applied, kept as null.
+    expect(logged()?.row).toEqual({
+      organization_id: ORG,
+      setting_key: 'agent_work',
+      old_value: null,
+      new_value: 'auto_start',
+      changed_by: ME,
+    });
+
+    calls = [];
+    ctx = context('growth', 'admin', { agentWork: 'auto_start' });
+    expect(await setAgentWork('approve_first')).toEqual({ ok: true });
+    expect(logged()?.row).toMatchObject({ old_value: 'auto_start', new_value: 'approve_first' });
+  });
+
+  it('writes nothing when the choice is the one in place', async () => {
+    expect(await setAgentWork('approve_first')).toEqual({ ok: true });
+    ctx = context('growth', 'admin', { agentWork: 'auto_start' });
+    expect(await setAgentWork('auto_start')).toEqual({ ok: true });
+    expect(upserts()).toHaveLength(0);
+    expect(logged()).toBeUndefined();
+  });
+
+  it('is an Admin’s, on an active plan, and only one of its two choices', async () => {
+    for (const role of ['manager', 'analyst', 'agency_partner'] as const) {
+      ctx = context('growth', role);
+      expect(await setAgentWork('auto_start'), role).toEqual({ ok: false, failure: 'forbidden' });
+    }
+    ctx = { ...context('growth'), plan: { ...context('growth').plan, writable: false } };
+    expect(await setAgentWork('auto_start')).toEqual({ ok: false, failure: 'read_only' });
+    ctx = context('growth');
+    expect(await setAgentWork('full_auto')).toEqual({ ok: false, failure: 'invalid' });
+    expect(upserts()).toHaveLength(0);
+    expect(logged()).toBeUndefined();
+  });
+
+  it('puts the value back when its change can’t be kept, so it never moves unrecorded', async () => {
+    ctx = context('growth', 'admin', { agentWork: 'approve_first' });
+    logError = { message: 'timeout' };
+    expect(await setAgentWork('auto_start')).toEqual({ ok: false, failure: 'failed' });
+    expect(upserts().map((c) => (c.row as { agent_work: string }).agent_work)).toEqual([
+      'auto_start',
+      'approve_first',
+    ]);
+    logError = { code: '42P01', message: 'relation "setting_changes" does not exist' };
+    expect(await setAgentWork('auto_start')).toEqual({ ok: false, failure: 'unavailable' });
+  });
+
+  it('says the save failed, or unavailable before 00481, and logs nothing then', async () => {
+    writeError = { message: 'timeout' };
+    expect(await setAgentWork('auto_start')).toEqual({ ok: false, failure: 'failed' });
+    writeError = { code: '42703', message: 'column agent_work does not exist' } as never;
+    expect(await setAgentWork('auto_start')).toEqual({ ok: false, failure: 'unavailable' });
+    expect(logged()).toBeUndefined();
   });
 });
 

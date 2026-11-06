@@ -2127,6 +2127,52 @@ export type Database = {
           },
         ]
       }
+      chat_agent_trigger_claims: {
+        Row: {
+          agent_id: string
+          brand_id: string
+          claimed_at: string
+          kind: string
+          trigger_id: string | null
+        }
+        Insert: {
+          agent_id: string
+          brand_id: string
+          claimed_at?: string
+          kind: string
+          trigger_id?: string | null
+        }
+        Update: {
+          agent_id?: string
+          brand_id?: string
+          claimed_at?: string
+          kind?: string
+          trigger_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_agent_trigger_claims_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_trigger_claims_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_trigger_claims_trigger_id_fkey"
+            columns: ["trigger_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agent_triggers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_agent_triggers: {
         Row: {
           agent_id: string
@@ -3465,6 +3511,7 @@ export type Database = {
       chat_settings: {
         Row: {
           agent_run_share_default: number
+          agent_work: string
           agents_full_auto: boolean
           auto_go_live_at: string | null
           auto_go_live_by: string | null
@@ -3485,6 +3532,7 @@ export type Database = {
         }
         Insert: {
           agent_run_share_default?: number
+          agent_work?: string
           agents_full_auto?: boolean
           auto_go_live_at?: string | null
           auto_go_live_by?: string | null
@@ -3505,6 +3553,7 @@ export type Database = {
         }
         Update: {
           agent_run_share_default?: number
+          agent_work?: string
           agents_full_auto?: boolean
           auto_go_live_at?: string | null
           auto_go_live_by?: string | null
@@ -7603,6 +7652,44 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      setting_changes: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          id: string
+          new_value: string
+          old_value: string | null
+          organization_id: string
+          setting_key: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_value: string
+          old_value?: string | null
+          organization_id: string
+          setting_key: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          id?: string
+          new_value?: string
+          old_value?: string | null
+          organization_id?: string
+          setting_key?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "setting_changes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]

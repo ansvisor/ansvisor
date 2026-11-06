@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import { getOrgPlan } from '@/lib/guards/plan-guard';
 import { isWithinLimit } from '@/config/plans';
 import { slugify } from '@/lib/slug';
@@ -101,6 +102,23 @@ interface CreateBrandInput {
 export type CreateBrandResult = { brand: Brand } | { error: string; code: 'plan_limit' };
 
 /**
+ * Fires the agents' When a brand is added triggers for a new brand once the
+ * answer has gone (00482; agent-triggers.ts fireBrandAdded): the page
+ * doesn't wait for them. Their runs wait queued and start on the agents'
+ * minute tick. Best effort: a failure is logged, and the brand stays.
+ */
+function fireBrandAddedLater(brandId: string) {
+  after(async () => {
+    try {
+      const { fireBrandAdded } = await import('@/lib/chat/agent-triggers');
+      await fireBrandAdded(brandId, new Date(), null);
+    } catch (err) {
+      console.error('[brand] the brand-added triggers failed', err);
+    }
+  });
+}
+
+/**
  * The plan limit comes back as a VALUE: production masks every error thrown
  * from a server action, so a thrown PlanLimitError reached users as the
  * meaningless digest message (same as #427 for prompts).
@@ -173,6 +191,7 @@ export async function createBrand(input: CreateBrandInput): Promise<CreateBrandR
     insertedDomains = (domains as Record<string, unknown>[]) ?? [];
   }
 
+  fireBrandAddedLater(brandId);
   revalidatePath('/dashboard/brands');
   return { brand: mapBrandRow(brand as Record<string, unknown>, insertedDomains) };
 }

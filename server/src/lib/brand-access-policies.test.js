@@ -90,6 +90,8 @@ const NOT_BRAND_DATA = {
   organization_menu_roles: "The Account's menu access by role (00374).",
   organizations: 'The Account itself: its plan, billing and members (D1).',
   profiles: "A person's own profile.",
+  setting_changes:
+    "The Account's settings changes (00481): which setting, its value before and after, who and when; no brand's data.",
   site_audit_auto_runs:
     "The Account's monthly auto-audit runs: slots and audit ids; each audit's rows are its brand's.",
   site_audit_settings: "The Account's auto-audit switch.",
