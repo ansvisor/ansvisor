@@ -169,8 +169,10 @@ export type ChatToolContext = McpAuthContext & {
   /**
    * The Chat run the call is made in, and the agent run or scheduled job it
    * is: what a page's Quality read is held on (check_draft_rules, W4-12b part 2).
+   * `endsAt`: when the request working the run reaches its limit (RUN_REQUEST_MS),
+   * by which a call that waits (Optimize here) has written what it makes.
    */
-  run?: { id: string; agentRunId: string | null; scheduleId: string | null };
+  run?: { id: string; agentRunId: string | null; scheduleId: string | null; endsAt?: number };
 };
 
 /**

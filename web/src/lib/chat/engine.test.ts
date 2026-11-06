@@ -248,6 +248,12 @@ vi.mock('@/lib/content/go-live-gate', () => ({
   readPageQuality: (...args: unknown[]) => pageReads.quality(...args),
   goLiveGate: vi.fn(),
 }));
+// Optimize here's rewrite, as its module would answer (page-optimize.test.ts runs it).
+const optimizeHere = vi.hoisted(() => vi.fn());
+vi.mock('./page-optimize', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./page-optimize')>()),
+  optimizeDraftHere: (...args: unknown[]) => optimizeHere(...args),
+}));
 // fetch_page as it is, opening pages through a fake of the API's internal route.
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
@@ -357,7 +363,7 @@ vi.mock('./registry/tools', async (importOriginal) => {
 
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
-const { createContentDraft, suggestDraftChanges, updateContentDraft } =
+const { createContentDraft, setContentDraftReady, suggestDraftChanges, updateContentDraft } =
   await import('@/lib/actions/content-drafts');
 const { createContentDraftFor, updateContentDraftFor } = await import('@/lib/chat/actor/drafts');
 const { updateOpportunityStatusFor } = await import('@/lib/chat/actor/api-writes');
@@ -4273,6 +4279,8 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
     'update_draft',
     'suggest_draft_changes',
     'set_draft_ready',
+    // W4-12b part 2's Optimize here: Admins and Managers only.
+    'optimize_draft',
     'push_cms_draft',
     'publish_cms',
     'trigger_content_webhook',
@@ -8241,6 +8249,170 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
     expect(pageReads.quality).toHaveBeenCalledWith(
       expect.objectContaining({ draftId: DRAFT, spend: false }),
     );
+  });
+
+  it('offers an Admin Optimize here first after a check with rules open (W4-12b part 2)', async () => {
+    pageReads.rules.mockResolvedValue({
+      title: 'Pricing FAQ',
+      met: 11,
+      total: 12,
+      textRules: [],
+      checked: [
+        {
+          rule: {
+            key: 'faq',
+            group: 'structure',
+            kind: 'number',
+            value: '5',
+            check: 'page',
+            on: true,
+            current: '5',
+            changed: false,
+          },
+          status: { state: 'bad', code: 'partOf', count: 3, of: 5 },
+        },
+      ],
+    });
+    useModels(
+      [calls(toolCall('r1', 'check_draft_rules', { draft_id: DRAFT })), READY],
+      [text('One rule is open.')],
+    );
+    const runId = await turn(ADMIN, 'Check this page against the rules');
+    const [moves] = ofType(await eventsOf(runId), 'next_moves').map((e) => e.data.moves);
+    expect(moves.slice(0, 2)).toEqual([
+      {
+        label: 'Optimize here',
+        prompt: 'Optimize this page here, without the editor',
+        ghost: true,
+      },
+      {
+        label: 'Open in Content Editor',
+        prompt: 'Open in Content Editor',
+        href: `/dashboard/content/editor/${DRAFT}`,
+      },
+    ]);
+  });
+
+  it('puts Optimize here’s rewrite in as the next version, and keeps what it couldn’t close (W4-12b part 2)', async () => {
+    db.tables.content_draft_versions.push({
+      id: BEFORE,
+      draft_id: DRAFT,
+      body_html: '<h1>Pricing FAQ</h1>',
+    });
+    optimizeHere.mockResolvedValue({
+      ok: true,
+      title: 'Pricing FAQ',
+      beforeVersionId: BEFORE,
+      body_html: PAGE,
+      fixed: ['FAQ block'],
+      left: ['Length'],
+      tried: ['length'],
+    });
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'optimize_draft', { draft_id: DRAFT })), text('Done.')],
+    );
+    const runId = await turn(ADMIN, 'Optimize this page here, without the editor', 'full_auto');
+    expect(runRow(runId).status).toBe('done');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const [card] = ofType(events, 'deliverable.updated').map((e) => e.data);
+    expect(card).toMatchObject({
+      title: 'Pricing FAQ',
+      href: `/dashboard/content/editor/${DRAFT}`,
+      version: { n: 2, canUndo: true },
+    });
+    expect(optimizeHere).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: ORG }),
+      DRAFT,
+    );
+    const state = db.tables.chat_run_state.find((row) => row.run_id === runId);
+    expect((state?.progress as { optimizeTried?: unknown }).optimizeTried).toEqual({
+      [DRAFT]: ['length'],
+    });
+  });
+
+  it('keeps Optimize here’s page, its Undo and its version card together, before anything after them', async () => {
+    // Optimize here as it saves: History keeps the page before, then the rewrite goes in.
+    optimizeHere.mockImplementation(async (_ctx, draftId: string) => {
+      // The fake keeps the run's progress by reference: from here on the server's copy is its
+      // own, as in the database, changed only by what the engine saves.
+      const state = db.tables.chat_run_state.at(-1)!;
+      state.progress = structuredClone(state.progress);
+      const changed = await updateContentDraft(draftId, { bodyHtml: PAGE });
+      if (!changed.ok) throw new Error('not saved');
+      return {
+        ok: true,
+        title: 'Pricing FAQ',
+        beforeVersionId: changed.beforeVersionId,
+        body_html: PAGE,
+        fixed: ['FAQ block'],
+        left: [],
+        tried: [],
+      };
+    });
+    // The next call of the step stands for a request cut off right after Optimize here: what's
+    // kept on the server by then.
+    let kept: Record<string, unknown> | null = null;
+    vi.mocked(setContentDraftReady).mockImplementationOnce(async () => {
+      const state = db.tables.chat_run_state.at(-1)!;
+      kept = {
+        page: db.tables.content_drafts.find((d) => d.id === DRAFT)!.body_html,
+        undo: (db.tables.chat_activity_log ?? []).find((r) => r.tool_key === 'optimizePage')
+          ?.undo_json,
+        files: db.tables.chat_files.filter((f) => f.content_draft_id === DRAFT).length,
+        pageUndos: (state.progress as { pageUndos?: unknown }).pageUndos,
+      };
+      return { ok: true, status: 'ready', tasksDone: 0 };
+    });
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w1', 'optimize_draft', { draft_id: DRAFT }),
+          toolCall('w2', 'set_draft_ready', { draft_id: DRAFT }),
+        ),
+        text('Done.'),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Optimize this page here, then mark it ready', 'full_auto');
+    expect(runRow(runId).status).toBe('done');
+    const file = db.tables.chat_files.find((f) => f.run_id === runId)!;
+    expect(kept).toEqual({
+      page: PAGE,
+      undo: expect.objectContaining({ versionId: BEFORE }),
+      files: 1,
+      pageUndos: { [file.id as string]: { draftId: DRAFT, versionId: BEFORE } },
+    });
+  });
+
+  it('changes nothing when the rewrite outlasts the wait, and says where it waits', async () => {
+    const STILL =
+      'The Content Agent is still rewriting the page. Its rewrite will wait in the Content Editor to compare.';
+    optimizeHere.mockResolvedValue({ ok: false, reason: 'still_writing', message: STILL });
+    const { sonnet } = useModels(
+      [READY],
+      [calls(toolCall('w1', 'optimize_draft', { draft_id: DRAFT })), text('It waits there.')],
+    );
+    const runId = await turn(ADMIN, 'Optimize this page here, without the editor', 'full_auto');
+    expect(runRow(runId).status).toBe('done');
+    expect(stepsOf(runId).find((s) => s.tool === 'optimize_draft')).toMatchObject({
+      status: 'error',
+      detail: STILL,
+    });
+    // The page, its History, the log, Files and the run's Undo are as they were.
+    expect(db.tables.content_drafts.find((d) => d.id === DRAFT)!.body_html).toBe(
+      '<h1>Pricing FAQ</h1>',
+    );
+    expect(db.tables.content_draft_versions).toEqual([]);
+    expect((db.tables.chat_activity_log ?? []).filter((r) => r.run_id === runId)).toEqual([]);
+    expect((db.tables.chat_files ?? []).filter((f) => f.run_id === runId)).toEqual([]);
+    const state = db.tables.chat_run_state.find((row) => row.run_id === runId)!;
+    expect((state.progress as { pageUndos?: unknown }).pageUndos).toBeUndefined();
+    expect(ofType(await eventsOf(runId), 'deliverable.updated')).toEqual([]);
+    // The model is told why, in those words, not that it failed.
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('timeout');
+    expect(JSON.stringify(sonnet.seen[1].prompt)).toContain('wait in the Content Editor');
   });
 
   it('still files an untitled page when its version can’t be read, as a plain card', async () => {

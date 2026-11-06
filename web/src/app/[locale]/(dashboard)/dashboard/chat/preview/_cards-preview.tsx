@@ -225,7 +225,13 @@ export function CardsPreview() {
           <DeliverableCard runId="preview" n={1} deliverable={PAGE_VERSIONS[0]} />
         </State>
         <State caption={s('pageVersion2')}>
-          <DeliverableCard runId="preview" n={2} deliverable={PAGE_VERSIONS[1]} canChange />
+          <DeliverableCard
+            runId="preview"
+            n={2}
+            deliverable={PAGE_VERSIONS[1]}
+            canChange
+            onAsk={noop}
+          />
         </State>
         <State caption={s('pageMarkReady')}>
           <NextMoves moves={PAGE_MOVES} onPick={noop} />
