@@ -137,7 +137,7 @@ describe('planCardOf', () => {
     expect(growth.next).toMatchObject({
       planId: 'enterprise',
       priceDiff: null,
-      // Enterprise tracks Growth's engines, so no "more AI platforms" line.
+      // Enterprise's fifth platform is Claude, on its own line: no "1 more AI platform".
       benefits: [{ key: 'claude' }, { key: 'ownKeys' }, { key: 'contract' }],
     });
   });
@@ -145,6 +145,8 @@ describe('planCardOf', () => {
   it('upsells nothing on Enterprise and shows no lock there', () => {
     const enterprise = card('enterprise');
     expect(enterprise.next).toBeNull();
+    // Growth's four engines plus Claude.
+    expect(chip(enterprise, 'platforms')).toEqual({ key: 'platforms', count: 5, locked: null });
     expect(enterprise.chips.every((c) => c.locked === null)).toBe(true);
     expect(chip(enterprise, 'ownKeys')).toEqual({ key: 'ownKeys', locked: null });
     expect(chip(enterprise, 'claude')).toBeUndefined();

@@ -150,8 +150,8 @@ export const PLANS = {
     limits: {
       maxBrands: -1,
       maxPrompts: -1,
-      // Growth's four engines; Claude, set per contract, is a line of its own.
-      maxPlatforms: 4,
+      // Growth's four engines plus Claude, set per contract.
+      maxPlatforms: 5,
       maxTeamMembers: -1,
       maxDomainsPerBrand: -1,
       maxVolumeAnalyses: -1,
