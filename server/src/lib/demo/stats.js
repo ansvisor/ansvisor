@@ -73,7 +73,7 @@ export function afterRun(starts, run, hours = 1) {
   return new Date(starts[run].getTime() + hours * HOUR_MS);
 }
 
-/** The answers of the given runs (core writes 72 a run, in run order). */
+/** The answers of the given runs (core writes 48 a run, in run order). */
 export function runResults(results, runs) {
   const perRun = results.length / RUNS;
   return runs.flatMap((run) => results.slice(run * perRun, (run + 1) * perRun));

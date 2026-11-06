@@ -4,7 +4,12 @@
  */
 
 import { runPrompt, analyzeSentimentAI } from '../lib/ai-tracker.js';
-import { isLegacyChatgptTask, pollScraperResult, submitPromptTask } from '../lib/cloro-scraper.js';
+import {
+  isLegacyChatgptTask,
+  pollScraperResult,
+  submitPromptTask,
+  UNAVAILABLE_PLATFORMS,
+} from '../lib/cloro-scraper.js';
 import { chatgptFanoutDue, chatgptFanoutMode } from '../lib/chatgpt-fanout.js';
 import { parseResponse, countBrandMentions } from '../lib/response-parser.js';
 import supabaseAdmin from '../config/supabase.js';
@@ -30,30 +35,6 @@ function resolveModelPlatform(model) {
   if (model.startsWith('gemini-')) return 'gemini';
   return 'chatgpt';
 }
-
-/**
- * Platforms Cloro cannot currently deliver, dropped before anything is
- * submitted.
- *
- * Grok started answering every task with a 500 on 2026-08-18. Leaving it in
- * the run would submit a paid task per prompt per region, hold the drain open
- * waiting for results that never arrive, and record nothing — so the platform
- * is removed up front rather than failing task by task.
- *
- * Deliberately a run-time filter and nothing else. Dropping Grok from the
- * engine picker would also drop it from `ALL_SCRAPERS`, which
- * `filterByPlan` and `alignPromptsToPlanForOrg` use as the allow-set when
- * writing prompts — so every prompt edit and every plan change would quietly
- * strip the stored id, and restoring Grok would need a data repair rather
- * than a revert. Empty this list when Cloro reports Grok healthy again and
- * every prompt that still lists it resumes on the next run.
- *
- * Copilot and Perplexity are no longer offered: both block logged-out
- * sessions, and Cloro rejects their tasks (400 MODEL_UNAVAILABLE). Prompts
- * saved with them keep the ids, so they are skipped here, and the prompt's
- * other engines still run.
- */
-export const UNAVAILABLE_PLATFORMS = ['grok-web', 'copilot-web', 'perplexity-web'];
 
 /**
  * The platforms a prompt should actually be run against.

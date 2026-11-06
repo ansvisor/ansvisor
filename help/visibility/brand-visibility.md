@@ -1,25 +1,27 @@
 ---
-title: Brand Visibility page overview
+title: Visibility and its Overview tab
 route: /dashboard/insights
-keywords: [brand visibility, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, topics vs competitors, opportunities, filters]
-synonyms: [AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
+keywords: [brand visibility, overview tab, mentions tab, citations tab, product visibility tab, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, topics vs competitors, opportunities, filters]
+synonyms: [visibility page, AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/answer-engine-insights.mdx, docs/guides/competitors.mdx, docs/guides/prompts.mdx]
 ---
-**Brand Visibility** in the sidebar opens **Answer Engine Insights**, the main analytics page for a brand. It's your daily view of how AI answers treat your brand across your tracked prompts, and where to act next.
+**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next.
+
+## The tabs and how to reach them
+
+The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** opens and closes a group with the same entries, **Overview**, **Mentions**, **Citations** and, for an online shop on a plan with it, **Products**; it is open whenever one of them is showing.
+
+Each tab loads its own data when you open it, and shows a placeholder while it loads. The date range, AI platform, country and topic you picked stay set when you switch tabs; Mentions has no **All** range, so it opens on its 30 days instead. Product Visibility keeps its own filters. A tab whose data can't be read says so, with **Retry**, and the other tabs keep working.
 
 ## The header
 
-The header shows the brand's name, when the last run finished and when the next one is due. It has these buttons:
-
-- **Formulas** explains how every number on the page is calculated.
-- **Export CSV** downloads the answers behind the page, with the current filters.
-- **Reports** opens the Reports page.
+The header is the same on every tab. It shows the brand's name, when the last run finished and when the next one is due. **Reports** opens the Reports page. On the Overview, **Formulas** explains how every number is calculated, and **Export CSV** downloads the answers behind the tab, with its filters.
 
 A self-hosted instance also has **Test Single Prompt** and **Run All**, for admins and managers to start a run by hand.
 
@@ -33,8 +35,8 @@ Nine cards follow. Most show their change **vs previous period** and a small dai
 
 - **Visibility**: your score from 0 to 100, and your rank among the tracked brands, or, before you track competitors, how many prompts you appeared in. Click it to open the **Visibility Breakdown** panel.
 - **Tracked prompts**: the prompts answered in the period. On plans with a limit, a bar shows how many prompt locations your workspace uses. Click it to open Prompts.
-- **Mentions** and **Citations**: how often answers named your brand and cited your pages. They open the Mentions and Citations pages.
-- **Net sentiment**: the positive minus the negative share of the answers that name you. It opens Mentions.
+- **Mentions** and **Citations**: how often answers named your brand and cited your pages. They open the **Mentions** and **Citations** tabs.
+- **Net sentiment**: the positive minus the negative share of the answers that name you. It opens the **Mentions** tab.
 - **Coverage**, **Share of voice**, **Avg. position** and **Citation rate**.
 
 A rate based on fewer than 20 answers says **Low sample** and shows no change.
@@ -82,14 +84,14 @@ The volumes shown with these suggestions are an AI's guess, since no keyword beh
 
 ## Filters and date range
 
-Under the header:
+Under the tabs:
 
 - **Date Range**: **24h** (the default, the latest completed run), **7d**, **30d**, **90d**, **All** or **Custom**.
 - **Topic**: one topic, shown when the brand has topics.
 - **Region**: one region your prompts run in.
 - **AI Model**: one AI platform; versions of the same engine count as one.
 
-The filters apply to everything on the page except **Opportunities**, which lists your stored suggestions. They're kept in the page's address, so a link you share opens with the same filters.
+The filters apply to everything on the tab except **Opportunities**, which lists your stored suggestions. They're kept in the page's address, so a link you share opens with the same filters, and the date range, AI model, region and topic carry over to the other tabs.
 
 ## A weekly review
 

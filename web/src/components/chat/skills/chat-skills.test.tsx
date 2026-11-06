@@ -197,11 +197,12 @@ describe('ChatSkills', () => {
 
   it('narrows the list by search and by filter chip', async () => {
     await render();
-    // The owner's names (2026-11-02): Brand Visibility beside Product Visibility, and Technical.
+    // The owner's names (2026-11-02; Brand Visibility became Visibility on 2026-11-06): Visibility
+    // beside Product Visibility, and Technical.
     expect(all('[data-action="skills.filter"]').map((chip) => chip.textContent)).toEqual([
       'All',
       'Content',
-      'Brand Visibility',
+      'Visibility',
       'Product Visibility',
       'Technical',
       'Reports',

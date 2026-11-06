@@ -14,7 +14,7 @@ import {
 } from '@/lib/actions/shopping';
 import type { ProductAiSays } from '@/lib/shopping/ai-says';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { ProductDetailView } from '../../_product-detail';
+import { ProductDetailView } from '../../../(brand-visibility)/shopping/_product-detail';
 
 /**
  * A product's page in Product Visibility (ECOM-011): where it stands on the

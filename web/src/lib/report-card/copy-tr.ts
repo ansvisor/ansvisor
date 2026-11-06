@@ -234,7 +234,7 @@ export const tr: CardCopy = {
       citations: 'Kaynaklar',
       siteAudit: 'Site Denetimi',
       competitors: 'Rakipler',
-      brandVisibility: 'Marka Görünürlüğü',
+      brandVisibility: 'Görünürlük',
     },
     targetsTitle: 'Yapay zekâ nereye bakıyor: yer alabileceğiniz siteler',
     targetsSub: 'Yanıtlarınızda kaynak gösterilen siteler, orada ne yapabileceğinize göre.',

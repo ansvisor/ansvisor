@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { useGetMore } from '@/components/ai-usage/get-more-context';
 import { Button } from '@/components/ui/button';
 import { IMAGE_UPLOAD_ACCEPT, uploadContentImage } from '@/lib/content/image-upload';
 import { cn } from '@/lib/utils';
@@ -11,8 +12,9 @@ import { cn } from '@/lib/utils';
 /**
  * Upload from your computer (00272): picks an image, uploads it, and hands
  * back its public address for the field beside it. Says why a file can't
- * go up (its type, its size, the plan, the day's uploads made, or the
- * upload failing).
+ * go up (its type, its size, the plan, the workspace's storage full, the
+ * day's uploads made, or the upload failing); a full storage offers Get
+ * more storage where the window is.
  */
 export function ImageUploadButton({
   onUploaded,
@@ -22,6 +24,7 @@ export function ImageUploadButton({
   className?: string;
 }) {
   const t = useTranslations('content.imageUpload');
+  const openGetMore = useGetMore();
   const input = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -33,7 +36,13 @@ export function ImageUploadButton({
     // The same file can be picked again after a failure.
     if (input.current) input.current.value = '';
     if ('error' in result) {
-      toast.error(t(`errors.${result.error}`));
+      if (result.error === 'storage' && openGetMore) {
+        toast.error(t('errors.storage'), {
+          action: { label: t('getMoreStorage'), onClick: () => openGetMore('storage') },
+        });
+      } else {
+        toast.error(t(`errors.${result.error}`));
+      }
       return;
     }
     onUploaded(result.url);

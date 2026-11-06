@@ -97,12 +97,7 @@ export function DashboardPreview({
               <div className="space-y-0.5">
                 {group.items
                   .filter((item) =>
-                    shouldShowDashboardNavItem(
-                      item,
-                      { shoppingModeEnabled: false },
-                      new Set(),
-                      chatAgentic,
-                    ),
+                    shouldShowDashboardNavItem(item, { ecommerce: false }, new Set(), chatAgentic),
                   )
                   .map((item) => (
                     <div

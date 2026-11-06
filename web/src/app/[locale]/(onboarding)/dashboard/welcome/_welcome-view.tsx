@@ -2,7 +2,6 @@
 
 import { useTranslations } from 'next-intl';
 import { WorkAreasStep } from '@/components/onboarding/work-areas-step';
-import { DASHBOARD_HOME } from '@/config/home';
 import type { TeamRole } from '@/components/providers/role-provider';
 
 /**
@@ -37,8 +36,9 @@ export function WelcomeView({
       title={title}
       lede={lede}
       hiddenByAdmin={hiddenByAdmin}
-      // A full load, so the dashboard reads the answer and doesn't send them back.
-      onDone={() => window.location.assign(DASHBOARD_HOME)}
+      // A full load, so the dashboard reads the answer and doesn't send them back; it
+      // opens on the person's start (Chat Home in the free trial and the demo).
+      onDone={() => window.location.assign('/dashboard')}
     />
   );
 }

@@ -25,7 +25,7 @@ import {
 } from '@/lib/mcp/mentions';
 import { MENTION_SENTIMENTS, MENTION_SORTS } from '@/lib/mentions-list';
 
-/** The Mentions & Sentiment page's filters, the same on every mentions tool. */
+/** Brand Visibility's Mentions tab's filters, the same on every mentions tool. */
 const mentionFilters = {
   brand_id: z.string().uuid(),
   date_from: z.string().optional(),
@@ -239,7 +239,7 @@ export function buildAgentTools(auth: McpAuthContext) {
 
     get_mentions_summary: tool({
       description:
-        'Mentions & Sentiment overview for a brand: times named (timesNamed, the page\'s Total mentions), responses naming it, mention rate, prompts with mentions, average position and sentiment (counts, shares, net −100…+100), now and in the window before, with changes taken on the prompts both windows answered (changes.basis), as the page\'s cards; the platform that moved net sentiment most; each platform; each day. Use for "how is AI talking about us?" / "why did sentiment drop on Gemini?". Platform ids look like "chatgpt-web", "gemini-web". 30 days when date_from is left out.',
+        'Visibility\'s Mentions overview for a brand: times named (timesNamed, the tab\'s Total mentions), responses naming it, mention rate, prompts with mentions, average position and sentiment (counts, shares, net −100…+100), now and in the window before, with changes taken on the prompts both windows answered (changes.basis), as the tab\'s cards; the platform that moved net sentiment most; each platform; each day. Use for "how is AI talking about us?" / "why did sentiment drop on Gemini?". Platform ids look like "chatgpt-web", "gemini-web". 30 days when date_from is left out.',
       inputSchema: z.object(mentionFilters),
       execute: async (args) => getMentionsSummaryFor(auth, mentionParams(args)),
     }),

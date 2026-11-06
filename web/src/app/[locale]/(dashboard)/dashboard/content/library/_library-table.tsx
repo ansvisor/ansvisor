@@ -55,6 +55,7 @@ import {
   type LibraryTab,
 } from '@/lib/content/drafts';
 import type { CmsStatus } from '@/lib/content/cms-send-client';
+import { crawlDelay } from '@/lib/content/first-ai-crawl';
 import type { DraftShopping } from '@/lib/content/shopping-check';
 import { DRAFT_EXPORT_FORMATS, type DraftExportFormat } from '@/lib/content/draft-export';
 import { formatDate, formatMonthDay } from '@/lib/format';
@@ -431,6 +432,25 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
   const t = useTranslations('contentEditor.library.cms');
   const tShort = useTranslations('contentEditor.editor.sentChip');
   const format = useFormatter();
+  // Time to first AI crawl (#2142): when an AI bot first came after it went live.
+  const firstCrawlLine = (
+    liveAt: string,
+    { logs, crawl }: NonNullable<CmsStatus['firstAiCrawl']>,
+  ) => {
+    if (!logs) return t('firstCrawl.noLogs');
+    if (!crawl) return t('firstCrawl.none');
+    if (crawl.dayOnly) {
+      return t('firstCrawl.onDay', {
+        bot: crawl.bot,
+        date: format.dateTime(new Date(`${crawl.at}T00:00:00Z`), {
+          dateStyle: 'medium',
+          timeZone: 'UTC',
+        }),
+      });
+    }
+    const delay = crawlDelay(liveAt, crawl.at);
+    return t(`firstCrawl.${delay.unit}`, { bot: crawl.bot, count: delay.count });
+  };
   const when = format.dateTime(new Date(status.at), { dateStyle: 'medium', timeStyle: 'short' });
   const live = status.status === 'published' ? status.publishedUrl : null;
   // A send to a CMS (#1331, phase 2) says so: sent, it's a draft item or post there.
@@ -493,6 +513,11 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
           </p>
         )}
         {live && <p className="opacity-80 [overflow-wrap:anywhere]">{live}</p>}
+        {live && status.firstAiCrawl && (
+          <p data-slot="first-ai-crawl" className="opacity-80">
+            {firstCrawlLine(status.at, status.firstAiCrawl)}
+          </p>
+        )}
         {status.status === 'failed' && (status.httpStatus || status.error) && (
           <p className="opacity-80 [overflow-wrap:anywhere]">
             {/* What the webhook answered when it refused the page; else the
