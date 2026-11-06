@@ -16,6 +16,7 @@ import {
 import { withAuditCard } from './audit-card';
 import { clientMove } from './next-moves';
 import { latestChoice, type ChatModelChoice } from './models';
+import { isTourTopic, type TourTopic } from './tour';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
 import { readDeliverableTasks, readStrips, weekEndIn, type DeliverableTask } from './task-strip';
@@ -82,6 +83,12 @@ export interface ThreadMessage {
    * and @ references stay on the server). Questions only.
    */
   resendable?: boolean;
+  /**
+   * The product tour's topic a line of the tour is about (its context_json,
+   * 00486), so the side panel finds the turn about the page on screen.
+   * Questions only.
+   */
+  tour?: TourTopic;
 }
 
 export interface ChatThread {
@@ -435,6 +442,9 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       ...(message.role === 'user'
         ? { resendable: !message.context_json && !withFiles.has(message.id) }
         : {}),
+      ...(message.role === 'user' && tourTopicOf(message.context_json)
+        ? { tour: tourTopicOf(message.context_json)! }
+        : {}),
     })),
   };
 }
@@ -479,4 +489,11 @@ async function readFileTasks(
     console.error("[chat/thread] could not read the deliverables' tasks:", err);
     return new Map();
   }
+}
+
+/** The tour topic a message's scope names (the product tour's lines); null for any other. */
+function tourTopicOf(context: unknown): TourTopic | null {
+  const topic =
+    context && typeof context === 'object' ? (context as { tour?: unknown }).tour : null;
+  return isTourTopic(topic) ? topic : null;
 }

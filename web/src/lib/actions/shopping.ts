@@ -1385,16 +1385,15 @@ export async function getShoppingProducts(
   filters: ShoppingFilters,
 ): Promise<ShoppingProducts | null> {
   const supabase = await dbClient();
-  const { count: total, error: countErr } = await supabase
-    .from('catalog_products')
-    .select('id', { count: 'exact', head: true })
-    .eq('brand_id', brandId)
-    .is('removed_at', null);
-  if (countErr) throw new Error(countErr.message);
-  if (!total) return null;
-
   const { from } = resolveDateRange(filters);
-  const [cards, stats] = await Promise.all([
+  // The count beside the cards and the stats, not before them: one round
+  // trip fewer. With no catalog they come back empty and aren't used.
+  const [{ count: total, error: countErr }, cards, stats] = await Promise.all([
+    supabase
+      .from('catalog_products')
+      .select('id', { count: 'exact', head: true })
+      .eq('brand_id', brandId)
+      .is('removed_at', null),
     fetchAllCards<{
       catalog_product_id: string;
       position: number;
@@ -1416,6 +1415,8 @@ export async function getShoppingProducts(
     // All time reads the last 90 days of visits and orders.
     readProductAiStats(supabase, brandId, from ?? daysAgoIso(90)),
   ]);
+  if (countErr) throw new Error(countErr.message);
+  if (!total) return null;
 
   const shelfCards: ProductCardRow[] = cards.map((card) => ({
     productId: card.catalog_product_id,

@@ -187,7 +187,7 @@ export default function CitationUrlDetailPage() {
       <div className="space-y-4">
         <BackLink />
         <p className="text-sm text-muted-foreground">
-          No URL provided. Open this page from a citation row on the Citations page.
+          No URL provided. Open this page from a citation row on Visibility&apos;s Citations tab.
         </p>
       </div>
     );

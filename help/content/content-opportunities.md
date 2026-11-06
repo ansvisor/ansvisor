@@ -4,8 +4,8 @@ route: /dashboard/content
 keywords: [content opportunities, opportunity score, impact, visibility gap, content ideas, export csv, filter opportunities, bulk actions]
 synonyms: [content optimization, content gaps, what to write, content suggestions]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -100,6 +100,10 @@ After each day's tracking run, Ansvisor writes new opportunities by itself, on a
 
 - **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.
 - **When no group is left, at most 1 a night** as another angle (at most 7 a week). It goes to the group with the most estimated AI volume whose opportunity has been done for 30 days, where your brand is still mentioned or cited in fewer than 1 in 5 answers. On many nights nothing qualifies, and nothing is written.
+
+## While the first tracking runs
+
+While a new brand's first tracking run is still going, an empty list says your first answers are arriving, how many are in and about how long is left, in place of **No content opportunities yet**.
 
 ## Owned and earned
 

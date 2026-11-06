@@ -47,6 +47,12 @@ export interface ChatPanelState {
   size: PanelSize;
   toggle: () => void;
   close: () => void;
+  /**
+   * How many times the person closed the panel on this visit (✕, ←, Ctrl J):
+   * the product tour leaves it closed after one (it opens by itself only
+   * until then).
+   */
+  closes: number;
   /** A header size button: the size clicked, Full screen again back to the size before. */
   resize: (clicked: PanelSize) => void;
   /** What the page on screen says it shows (CHAT-01 item 20); null when it says nothing. */

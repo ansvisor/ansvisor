@@ -64,6 +64,12 @@ const refreshWixPublished = vi.hoisted(() => vi.fn());
 const publishPage = vi.hoisted(() => vi.fn());
 const readPublishAddress = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/content/publish-client', () => ({ publishPage, readPublishAddress }));
+// Time to first AI crawl (#2142): what the brand's bot logs say, as the test sets it.
+const readFirstAiCrawls = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/content/first-ai-crawl', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/content/first-ai-crawl')>()),
+  readFirstAiCrawls,
+}));
 vi.mock('@/lib/content/cms-send-client', () => ({
   readCmsStatuses,
   refreshWebflowPublished,
@@ -223,6 +229,7 @@ beforeEach(() => {
   }));
   saveBlob.mockReset();
   readCmsStatuses.mockReset().mockResolvedValue(new Map());
+  readFirstAiCrawls.mockReset().mockResolvedValue({ logs: false, byDraft: new Map() });
   readDraftCms.mockReset().mockResolvedValue({ fields: {}, publishedUrl: null, last: null });
   sendPagesToCms.mockReset().mockResolvedValue({
     ok: true,
@@ -578,6 +585,73 @@ describe('Send to CMS from a Library row (#1331)', () => {
       ['A', expect.stringMatching(/^Published Oct 24, 2026/)],
     ]);
     expect(marks[1].getAttribute('href')).toBe('https://acme.example/churn');
+  });
+
+  it('says when an AI bot first came to a page that went live, from the brand’s own bot logs (#2142)', async () => {
+    getContentDrafts.mockResolvedValue([row({ status: 'published' })]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'published',
+            at: '2026-10-24T11:00:00Z',
+            httpStatus: 200,
+            error: null,
+            publishedUrl: 'https://acme.example/churn',
+          },
+        ],
+      ]),
+    );
+    const tip = async () => {
+      const mark = container.querySelector<HTMLElement>('[aria-label^="Published"]')!;
+      await act(async () => {
+        mark.focus();
+        mark.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+      });
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+      return document.querySelector('[data-slot="first-ai-crawl"]')?.textContent;
+    };
+
+    readFirstAiCrawls.mockResolvedValue({
+      logs: true,
+      byDraft: new Map([['d1', { bot: 'GPTBot', at: '2026-10-24T17:00:00Z', dayOnly: false }]]),
+    });
+    await renderPage();
+    await act(async () => {});
+    expect(readFirstAiCrawls).toHaveBeenCalledWith('brand-1', [
+      { draftId: 'd1', url: 'https://acme.example/churn', at: '2026-10-24T11:00:00Z' },
+    ]);
+    expect(await tip()).toBe('First AI crawl: GPTBot, 6 hours after it went live');
+  });
+
+  it('says to connect AI bot logs when the brand sends none (#2142)', async () => {
+    getContentDrafts.mockResolvedValue([row({ status: 'published' })]);
+    readCmsStatuses.mockResolvedValue(
+      new Map([
+        [
+          'd1',
+          {
+            status: 'published',
+            at: '2026-10-24T11:00:00Z',
+            httpStatus: 200,
+            error: null,
+            publishedUrl: 'https://acme.example/churn',
+          },
+        ],
+      ]),
+    );
+    await renderPage();
+    await act(async () => {});
+    const mark = container.querySelector<HTMLElement>('[aria-label^="Published"]')!;
+    await act(async () => {
+      mark.focus();
+      mark.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 50)));
+    expect(document.querySelector('[data-slot="first-ai-crawl"]')?.textContent).toBe(
+      'Connect AI bot logs in AI Traffic to see when AI bots first visit it',
+    );
   });
 
   it('says a page sent to Webflow is a draft item there', async () => {

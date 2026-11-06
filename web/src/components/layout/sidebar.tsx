@@ -17,9 +17,13 @@ import {
   dashboardNavBadge,
   getDashboardNavLabel,
   getDashboardNavGroupLabel,
+  isNavItemActive,
   navItemHref,
   shouldShowDashboardNavItem,
+  visibleNavChildren,
 } from '@/lib/dashboard-navigation';
+import { brandVisibilityTabOf, isEcommerceBrand } from '@/lib/brand-visibility';
+import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useChatRailStore } from '@/stores/use-chat-rail-store';
@@ -37,6 +41,7 @@ import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
+import { menuSectionOf } from '@/lib/menu-access';
 import {
   ChevronDown,
   ChevronsLeft,
@@ -70,10 +75,11 @@ const NAV_VIEWPORT =
 const NAV_SCROLLBAR =
   'data-vertical:w-2 opacity-0 transition-opacity duration-300 data-hovering:opacity-100 data-scrolling:opacity-100 data-scrolling:duration-75 [&>[data-slot=scroll-area-thumb]]:bg-muted-foreground/25 [&>[data-slot=scroll-area-thumb]:hover]:bg-muted-foreground/45';
 
-/** The items that open a submenu (Prompts, Content). */
-const EXPANDABLE_HREFS = dashboardNav.flatMap((group) =>
-  group.items.filter((item) => item.children?.length).map((item) => item.href),
+/** The items that open a submenu (Brand Visibility, Prompts, Content). */
+const EXPANDABLE_ITEMS = dashboardNav.flatMap((group) =>
+  group.items.filter((item) => item.children?.length),
 );
+const EXPANDABLE_HREFS = EXPANDABLE_ITEMS.map((item) => item.href);
 
 /**
  * Where a submenu's open/closed state is remembered, per item: Prompts keeps
@@ -158,7 +164,9 @@ export function Sidebar() {
   // always visible in it.
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
   const isSubmenuOpen = (href: string) => openMenus[href] ?? true;
-  const underMenu = EXPANDABLE_HREFS.find((href) => pathname.startsWith(href)) ?? null;
+  // Brand Visibility's tabs keep their own routes (Mentions, Citations), so
+  // an item is under the page shown when one of its entries is.
+  const underMenu = EXPANDABLE_ITEMS.find((item) => isNavItemActive(item, pathname))?.href ?? null;
   // Each titled group (Execution, Analytics) folds under its title the same
   // way: remembered per browser, open until closed, and open whenever one of
   // its pages is showing.
@@ -166,7 +174,7 @@ export function Sidebar() {
   const isGroupOpen = (title: string) => openGroups[title] ?? true;
   const underGroup =
     dashboardNav.find(
-      (group) => group.title && group.items.some((item) => pathname.startsWith(item.href)),
+      (group) => group.title && group.items.some((item) => isNavItemActive(item, pathname)),
     )?.title ?? null;
   const [trackedCount, setTrackedCount] = useState<number | null>(null);
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
@@ -182,10 +190,11 @@ export function Sidebar() {
   // derived brand keeps this reactive: switching brands via BrandSwitcher or
   // toggling the flag in Brand Settings flips the gate without a route change.
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
-  // Map from a NavItem.requiresBrandPref key to the active brand's value.
-  // Sidebar hides the item entirely when this returns false — see #155/#170
-  // for why Shopping uses this on top of the existing plan-feature gate.
-  const brandPrefs = { shoppingModeEnabled: !!activeBrand?.shoppingModeEnabled };
+  // Map from a requiresBrandPref key to the active brand's value. The
+  // sidebar hides the entry entirely when it is false — Visibility's
+  // Products shows for brands that sell online (#155/#170, 2026-11-06).
+  const brandPrefs = { ecommerce: isEcommerceBrand(activeBrand) };
+  const childGates = { brandPrefs, canUse };
   // The items the viewer sees, and the groups that keep one: a group whose
   // sections are all off their menu goes, title and all.
   const hiddenSections = useHiddenMenuSections();
@@ -193,7 +202,7 @@ export function Sidebar() {
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
-        shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic),
+        shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic, canUse),
       ),
     }))
     .filter((group) => group.items.length > 0);
@@ -473,11 +482,10 @@ export function Sidebar() {
                 <nav id={`nav-group-${i}`} className="space-y-0.5">
                   {group.items.map((item) => {
                     const href = navItemHref(item, chatAgentic);
-                    const isActive =
-                      item.href === '/dashboard'
-                        ? pathname === '/dashboard'
-                        : pathname.startsWith(href);
+                    const isActive = isNavItemActive(item, pathname, href);
                     const label = getDashboardNavLabel(item.title, t);
+                    // The entries this person's menu shows (menu access).
+                    const children = visibleNavChildren(item, hiddenSections, childGates);
 
                     // Chat's own badge: "Set up" when the org has no provider key for
                     // it (cloud only, never with the new Chat on).
@@ -520,7 +528,7 @@ export function Sidebar() {
                       );
                     }
 
-                    if (item.children?.length && !compact) {
+                    if (children.length > 0 && !compact) {
                       // Expandable item (PROMPT-001): the row toggles the
                       // submenu, whose links are the item's views.
                       const carry =
@@ -529,7 +537,7 @@ export function Sidebar() {
                           : '';
                       const submenuId = `submenu-${item.href.replace(/\W+/g, '-')}`;
                       const submenuOpen = isSubmenuOpen(item.href);
-                      const currentChild = activeChildHref(item.children, pathname);
+                      const currentChild = activeChildHref(children, pathname);
                       return (
                         <div key={item.href}>
                           <button
@@ -568,20 +576,40 @@ export function Sidebar() {
                               id={submenuId}
                               className="mt-0.5 ml-[18px] space-y-0.5 border-l pl-2"
                             >
-                              {item.children.map((child) => {
+                              {children.map((child) => {
                                 const childActive = child.href === currentChild;
+                                const childClass = cn(
+                                  'flex items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                                  childActive
+                                    ? 'bg-primary/10 font-medium text-primary'
+                                    : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                );
+                                // Brand Visibility's tabs keep the date range,
+                                // engine, country and topic, as its tab bar does.
+                                const tab = brandVisibilityTabOf(child.href);
+                                if (tab) {
+                                  return (
+                                    <li key={child.href}>
+                                      <BrandVisibilityTabLink
+                                        tab={tab}
+                                        data-nav-item="child"
+                                        aria-current={childActive ? 'page' : undefined}
+                                        className={childClass}
+                                      >
+                                        <span className="flex-1 truncate">
+                                          {getDashboardNavLabel(child.title, t)}
+                                        </span>
+                                      </BrandVisibilityTabLink>
+                                    </li>
+                                  );
+                                }
                                 return (
                                   <li key={child.href}>
                                     <Link
                                       href={`${childLinkHref(child, pathname)}${carry}`}
                                       data-nav-item="child"
                                       aria-current={childActive ? 'page' : undefined}
-                                      className={cn(
-                                        'flex items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
-                                        childActive
-                                          ? 'bg-primary/10 font-medium text-primary'
-                                          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                                      )}
+                                      className={childClass}
                                     >
                                       <span className="flex-1 truncate">
                                         {getDashboardNavLabel(child.title, t)}
@@ -609,10 +637,15 @@ export function Sidebar() {
                       );
                     }
 
+                    const ownSection = menuSectionOf(item.href);
+                    const linkHref =
+                      children.length > 0 && ownSection && hiddenSections.has(ownSection)
+                        ? children[0].href
+                        : href;
                     return (
                       <Link
                         key={item.href}
-                        href={href}
+                        href={linkHref}
                         data-nav-item="link"
                         aria-current={isActive ? 'page' : undefined}
                       >

@@ -60836,3 +60836,348 @@ alter table public.chat_user_prefs
 comment on column public.chat_user_prefs.home_view is
   'Chat Home''s view: default (the greeting, one line and the box) or focus (tailored to the focus areas). Everyone starts on default; focus stays kept for the picker.';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00486_chat_welcome_tour.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00486: Chat's welcome card and product tour — a person's progress, and the
+-- tour's texts in other languages
+-- ============================================================================
+-- Owner decision 2026-11-06: the free trial and the demo start on Chat Home,
+-- where one welcome card says the first data is being prepared, offers the
+-- Google connections and a quick product tour. The tour opens each page with
+-- Chat's side panel beside it and explains the page there in scripted turns
+-- (no model run), kept as the person's "Ansvisor tour" chat.
+--
+--   * chat_user_prefs.welcome_dismissed_at: "Not now" on the card, which then
+--     stays hidden for good, on every device.
+--   * chat_user_prefs.tour_chat_id: the person's tour chat, which each topic
+--     adds its turns to; null before the tour, and once that chat is gone.
+--   * chat_user_prefs.tour_topic: the topic the tour is on, one of its pages
+--     in order (visibility, prompts, positions, content, connections); null
+--     before the tour.
+--   * chat_user_prefs.tour_finished_at: the tour ended (End the tour): the
+--     card hides and the panel stops offering the next topic. Taking the
+--     tour again clears it.
+--   * chat_tour_translations: the tour's texts in a language other than
+--     English (the person's answer language, 00408), translated once by the
+--     small model and kept for everyone: the texts name no workspace (the
+--     brand's name goes in when a turn is written). Keyed by the language
+--     and the English texts' sha-256, so a changed text is translated again.
+--
+-- Behind CHAT_AGENTIC: nothing reads these while the flag is off. The person
+-- reads and writes their own prefs row (00400's policies); the server writes
+-- the tour's chat and its tour columns, and checks the chat is the person's
+-- own before it adds to it. The translations are server only.
+
+alter table public.chat_user_prefs
+  add column if not exists welcome_dismissed_at timestamptz,
+  add column if not exists tour_chat_id uuid
+    references public.chat_conversations(id) on delete set null,
+  add column if not exists tour_topic text check (
+    tour_topic in ('visibility', 'prompts', 'positions', 'content', 'connections')
+  ),
+  add column if not exists tour_finished_at timestamptz;
+
+-- A chat deleted for good clears the tour that points at it.
+create index if not exists chat_user_prefs_tour_chat_idx
+  on public.chat_user_prefs (tour_chat_id)
+  where tour_chat_id is not null;
+
+comment on column public.chat_user_prefs.welcome_dismissed_at is
+  'Chat Home''s welcome card (00486): Not now, after which it stays hidden.';
+comment on column public.chat_user_prefs.tour_chat_id is
+  'The product tour''s chat (00486), which each topic adds to; null before the tour or once it is gone.';
+comment on column public.chat_user_prefs.tour_topic is
+  'The topic the product tour is on (00486); null before the tour.';
+comment on column public.chat_user_prefs.tour_finished_at is
+  'The product tour ended (00486): the welcome card hides. Taking the tour again clears it.';
+
+-- ─── The tour's texts in other languages ───────────────────────────────────
+
+create table if not exists public.chat_tour_translations (
+  -- The answer language (00408's list), never English.
+  lang text not null check (lang ~ '^[a-z]{2,3}$' and lang <> 'en'),
+  -- sha-256 (hex) of the English texts it was translated from.
+  source_hash text not null check (source_hash ~ '^[0-9a-f]{64}$'),
+  -- The texts by their key, as the English ones.
+  texts jsonb not null check (
+    jsonb_typeof(texts) = 'object' and octet_length(texts::text) <= 100000
+  ),
+  -- The model that translated them.
+  model text check (char_length(model) between 1 and 200),
+  created_at timestamptz not null default now(),
+  primary key (lang, source_hash)
+);
+
+alter table public.chat_tour_translations enable row level security;
+revoke all on table public.chat_tour_translations from anon, authenticated;
+grant all on table public.chat_tour_translations to service_role;
+
+comment on table public.chat_tour_translations is
+  'Chat''s product tour (00486): its scripted texts in another language, translated once and kept for everyone by language and the English texts'' hash. No workspace data. Server only.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00487_starter_prompts_gemini.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Starter prompts track Gemini, no longer Microsoft Copilot (00487).
+--
+-- Cloro stopped serving Copilot and Perplexity on 2026-11-06: both block
+-- logged-out sessions, and Cloro rejects their tasks. The tracking worker now
+-- skips the two engines (UNAVAILABLE_PLATFORMS), and Starter's engine list in
+-- config/plans (web and server) became ChatGPT and Gemini (#2181). New or
+-- edited prompts follow that list, but the worker runs each prompt's stored
+-- `platforms`, so a Starter prompt saved with Copilot now tracks ChatGPT only.
+-- This swaps Copilot for Gemini on those prompts and drops Perplexity, which
+-- Starter no longer had (00134), keeping the order and listing Gemini once,
+-- as alignPromptsToPlanForOrg would on a plan change. Owner decision,
+-- 2026-11-06.
+--
+-- Organizations on the Starter plan, in their free trial or paid, have their
+-- prompts moved. Only cloud organizations are touched, as in 00134: a Stripe
+-- customer exists only there, and self-hosted installs run every engine,
+-- whatever `plan` holds. The demo brand is left out: its prompts are sample
+-- data the server rebuilds (00380). Past Copilot and Perplexity results stay
+-- as they are.
+
+update public.prompts p
+set platforms = coalesce(
+  (
+    select array_agg(engine.platform order by engine.first_at)
+    from (
+      select
+        case when u.platform = 'copilot-web' then 'gemini-web' else u.platform end as platform,
+        min(u.ord) as first_at
+      from unnest(p.platforms) with ordinality as u(platform, ord)
+      where u.platform <> 'perplexity-web'
+      group by 1
+    ) as engine
+  ),
+  '{}'::text[]
+)
+from public.prompt_sets ps
+join public.brands b on b.id = ps.brand_id
+join public.organizations o on o.id = b.organization_id
+where p.prompt_set_id = ps.id
+  and o.plan = 'starter'
+  and o.stripe_customer_id is not null
+  and not b.is_demo
+  and p.platforms && array['copilot-web', 'perplexity-web']::text[];
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00488_shopping_cards_brand_time.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00488: Product Visibility's card reads, newest first, from an index
+-- ============================================================================
+-- Product Visibility (Visibility's fourth tab) reads a brand's shopping cards
+-- over a window, newest first, a page of 1,000 at a time: the Shelf, the
+-- Products table, Categories, Competitors and a product's match all page
+-- through prompt_result_shopping_cards ordered by created_at desc, id desc
+-- (fetchAllCards in web/src/lib/actions/shopping.ts). The table had no index
+-- in that order (only brand + role, product brand, merchant domain and the
+-- partial ones), so every page read the brand's cards in the window again
+-- and sorted them, and a brand with many cards paid that once a page.
+--
+-- With (brand_id, created_at desc, id desc) a page reads its rows in order
+-- and stops; the window's dates are a range on the same index. The reads
+-- don't depend on it: without it they are only slower.
+--
+-- On production, build it first with CREATE INDEX CONCURRENTLY (outside a
+-- transaction); `if not exists` makes this a no-op there.
+
+create index if not exists prompt_result_shopping_cards_brand_time_idx
+  on public.prompt_result_shopping_cards (brand_id, created_at desc, id desc);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00489_chat_schedules_digest.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00489: a scheduled job that sends What's new for the person's plan
+-- ============================================================================
+-- Chat Wave 4 W4-23: "What's new for my plan, 1st of every month". There is
+-- no such job until a person sets one up on the schedule card (owner
+-- decision 14): nothing is written for anyone in advance. Its runs call no
+-- model and use none of the AI limit. The worker lists the creator's unread
+-- What's new entries for their plan in the job's chat and marks them read.
+-- A run with nothing new delivers nothing (its run row is `unchanged`).
+--
+--   * chat_schedules.digest: the kind of digest a job sends; null for any
+--     other job, which asks Chat its prompt or skill as before. A digest is
+--     about the workspace, never one brand, runs no skill, and is never a
+--     follow-up check. Its prompt is the words its chat shows as the message.
+
+alter table public.chat_schedules
+  add column if not exists digest text check (digest in ('whats_new'));
+
+alter table public.chat_schedules
+  drop constraint if exists chat_schedules_digest_shape;
+alter table public.chat_schedules
+  add constraint chat_schedules_digest_shape check (
+    digest is null
+    or (skill_name is null and brand_id is null and kind <> 'followup_check')
+  );
+
+comment on column public.chat_schedules.digest is
+  'W4-23 (00489): whats_new: each run lists the creator''s unread What''s new entries for their plan in the job''s chat, with no model and no AI use, and delivers nothing when none are new. Null: a job that asks Chat its prompt or skill.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00490_content_images_storage_bytes.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00490: content images count toward a workspace's storage
+-- ============================================================================
+-- Images uploaded in the Content Editor and the AI images it makes are kept
+-- in the public bucket content-images (00272), under the organization's
+-- folder ("<organization id>/..."). Until now only the daily upload cap
+-- counted them; the storage meter (plans' maxStorageGb and storage packs)
+-- counted Chat's files alone (chat_storage_usage, 00411).
+--
+--   * content_images_bytes(p_organization_id): the bytes the workspace keeps
+--     in content-images, read from storage.objects when asked, so an image
+--     removed (an AI option not picked) leaves the count at once and no
+--     trigger is needed on the storage schema. A browser upload goes
+--     straight to its signed address, so the server never sees its size:
+--     the object's own metadata is the one place it is known.
+--
+--     The folder is read as a range on name collate "C" ('<org>/' up to
+--     '<org>0', '0' being the character after '/'), which the bucket's
+--     (bucket_id, name collate "C") index serves; a LIKE on the database's
+--     own collation could not use it. Service role only: the app reads it
+--     on the server, for the workspace of the person asking.
+
+create or replace function public.content_images_bytes(p_organization_id uuid)
+returns bigint
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(sum((o.metadata ->> 'size')::bigint), 0)::bigint
+  from storage.objects o
+  where o.bucket_id = 'content-images'
+    and o.name collate "C" >= p_organization_id::text || '/'
+    and o.name collate "C" < p_organization_id::text || '0';
+$$;
+
+revoke all on function public.content_images_bytes(uuid) from public, anon, authenticated;
+grant execute on function public.content_images_bytes(uuid) to service_role;
+
+comment on function public.content_images_bytes(uuid) is
+  'Content images (00490): the bytes a workspace keeps in content-images (uploads and AI images, under its folder), for the storage meter with Chat''s files. Service role only.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00491_indexnow.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00491: IndexNow, telling search engines a page went live (#2142, part B)
+-- ============================================================================
+-- When Send to CMS confirms a page live, Ansvisor tells IndexNow (Bing,
+-- Yandex, Seznam, Naver and the others that share it; Bing's index feeds
+-- Microsoft Copilot) once. IndexNow trusts a site by a key file at its root,
+-- https://<host>/<key>.txt, on the same host as the pages. Ansvisor can't put
+-- a file on a brand's site, so a brand turns it on in Settings ›
+-- Integrations: Ansvisor makes the key, the person puts the file on the
+-- site, and Check reads it back.
+--
+--   * brands.indexnow_key: the brand's key, 32 hex characters; null: off.
+--     It isn't a secret (the file is public), so members read it with the
+--     brand. Only the server writes it, for admins and managers.
+--   * brands.indexnow_host: the host the file is on (the brand's primary
+--     domain when it was turned on). Only pages on this host are announced.
+--   * brands.indexnow_verified_at: when Check found the key at its address;
+--     null until then, and nothing is announced.
+--   * content_drafts.indexnow_pinged_at: when the page was announced, kept
+--     before the call, so a page is announced once however often it is read
+--     as live. A failed call is logged and never tried again.
+
+alter table public.brands
+  add column if not exists indexnow_key text
+    check (indexnow_key is null or indexnow_key ~ '^[a-f0-9]{32}$'),
+  add column if not exists indexnow_host text
+    check (
+      indexnow_host is null
+      or (char_length(indexnow_host) <= 253 and indexnow_host ~ '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$')
+    ),
+  add column if not exists indexnow_verified_at timestamptz;
+
+alter table public.content_drafts
+  add column if not exists indexnow_pinged_at timestamptz;
+
+comment on column public.brands.indexnow_key is
+  'IndexNow (00491): the brand''s key, its file at https://<indexnow_host>/<key>.txt; null: off. Not a secret.';
+comment on column public.brands.indexnow_host is
+  'IndexNow (00491): the host the key file is on; only pages on it are announced.';
+comment on column public.brands.indexnow_verified_at is
+  'IndexNow (00491): when Check found the key file; null: nothing is announced.';
+comment on column public.content_drafts.indexnow_pinged_at is
+  'IndexNow (00491): when the page, live through Send to CMS, was announced; once per page.';
+
+-- ----------------------------------------------------------------------------
+-- When a page was announced is the server's, as published_at is: 00289's
+-- guard, with indexnow_pinged_at, so a member can't clear it (announcing the
+-- page again) or set it ahead (never announcing it).
+-- ----------------------------------------------------------------------------
+create or replace function public.guard_content_draft_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations).
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.score_before is not null or new.score_after is not null then
+      raise exception 'content draft scores are set server-side'
+        using errcode = '42501';
+    end if;
+    if new.action_id is not null then
+      raise exception 'content draft action is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.agent_state is not null or new.agent_state_at is not null
+       or new.agent_run is not null then
+      raise exception 'content draft agent state is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.published_url is not null or new.published_at is not null then
+      raise exception 'content draft live address is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.restored_at is not null then
+      raise exception 'content draft restore time is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.indexnow_pinged_at is not null then
+      raise exception 'content draft IndexNow time is set server-side'
+        using errcode = '42501';
+    end if;
+  elsif new.brand_id is distinct from old.brand_id
+     or new.author is distinct from old.author
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+     or new.score_before is distinct from old.score_before
+     or new.score_after is distinct from old.score_after
+     or new.action_id is distinct from old.action_id
+     or new.agent_state is distinct from old.agent_state
+     or new.agent_state_at is distinct from old.agent_state_at
+     or new.agent_run is distinct from old.agent_run
+     or new.published_url is distinct from old.published_url
+     or new.published_at is distinct from old.published_at
+     or new.restored_at is distinct from old.restored_at
+     or new.indexnow_pinged_at is distinct from old.indexnow_pinged_at
+  then
+    raise exception 'content draft column is managed server-side'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+
+notify pgrst, 'reload schema';
+

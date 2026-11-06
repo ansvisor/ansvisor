@@ -11,6 +11,7 @@ import {
   type HelpArticle,
 } from './articles';
 import { SETTINGS_SECTIONS } from '@/app/[locale]/(dashboard)/dashboard/settings/_sections';
+import { pageExists } from '@/lib/app-pages';
 
 /**
  * Every Help article (repo /help, CHAT-19 §4) keeps the format Chat's Help
@@ -20,7 +21,6 @@ import { SETTINGS_SECTIONS } from '@/app/[locale]/(dashboard)/dashboard/settings
 
 const REPO = path.resolve(__dirname, '../../../..');
 const HELP = path.join(REPO, 'help');
-const APP = path.join(REPO, 'web/src/app/[locale]/(dashboard)');
 
 function articleFiles(dir = HELP): string[] {
   if (!existsSync(dir)) return [];
@@ -29,22 +29,6 @@ function articleFiles(dir = HELP): string[] {
     if (statSync(full).isDirectory()) return articleFiles(full);
     return entry.endsWith('.md') && full !== path.join(HELP, 'README.md') ? [full] : [];
   });
-}
-
-/** The app's page for a route: a folder per segment, or a [param] folder for any. */
-function pageExists(route: string): boolean {
-  let dirs = [APP];
-  for (const segment of route.split('?')[0].split('/').filter(Boolean)) {
-    dirs = dirs.flatMap((dir) => {
-      if (!existsSync(dir)) return [];
-      const named = path.join(dir, segment);
-      const params = readdirSync(dir)
-        .filter((entry) => /^\[[^.\]]+\]$/.test(entry))
-        .map((entry) => path.join(dir, entry));
-      return [...(existsSync(named) ? [named] : []), ...params];
-    });
-  }
-  return dirs.some((dir) => existsSync(path.join(dir, 'page.tsx')));
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;

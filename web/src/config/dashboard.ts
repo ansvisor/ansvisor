@@ -16,23 +16,44 @@ import {
 import type { Feature } from '@/config/plans';
 
 /**
- * A brand-level preference that, when present on a NavItem, must be `true`
- * on the active brand for the item to render at all. Distinct from plan-level
- * `requiredFeature` which downgrades the item to a locked/disabled state when
- * the plan doesn't include it — `requiresBrandPref` hides the item entirely so
- * it doesn't appear as a "you could have this if you paid more" hint when the
- * active brand isn't supposed to see Shopping in the first place.
+ * A brand-level preference that, when present on a NavItem or a submenu
+ * entry, must be `true` on the active brand for it to render at all.
+ * Distinct from plan-level `requiredFeature` which downgrades an item to a
+ * locked/disabled state when the plan doesn't include it — `requiresBrandPref`
+ * hides it entirely so it doesn't appear as a "you could have this if you
+ * paid more" hint when the active brand isn't supposed to see it in the first
+ * place. `ecommerce`: the brand sells online (isEcommerceBrand: Shopping mode
+ * on, or its site type is e-commerce).
  */
-export type BrandPrefKey = 'shoppingModeEnabled';
+export type BrandPrefKey = 'ecommerce';
 
 /** A submenu entry under a NavItem (PROMPT-001). */
 export interface NavChild {
   title: string;
   href: string;
+  /**
+   * For an entry that is a menu section of its own (Brand Visibility's
+   * Mentions and Citations, named by their routes): its icon where the
+   * sections are listed (menu access). The submenu shows none.
+   */
+  icon?: React.ComponentType<{ className?: string }>;
   /** On one of its pages, it links to that page: the Editor stays on the draft open. */
   keepsPage?: boolean;
   /** A short tag after the label, e.g. "New". */
   badge?: string;
+  /**
+   * Where the menu's sections are listed (menu access), its section's name
+   * when the menu's own is shorter: Visibility's Products is Product
+   * Visibility there, as it was when it was an item of its own.
+   */
+  sectionTitle?: string;
+  /**
+   * Shown only on a plan with this feature and for a brand with this
+   * preference: off either, the entry is off the menu, not locked
+   * (Visibility's Products, as its tab).
+   */
+  requiredFeature?: Feature;
+  requiresBrandPref?: BrandPrefKey;
 }
 
 export interface NavItem {
@@ -133,11 +154,31 @@ export const dashboardNav: NavGroup[] = [
   {
     title: 'Analytics',
     items: [
+      // Brand Visibility (the owner's mockup): one page with its tabs, a
+      // group like Prompts and Content. Each tab keeps its page's address
+      // (Mentions & Sentiment, Citations and Product Visibility were items
+      // of their own), so every link to them still opens them and each
+      // stays a menu section of its own (menu access). Products is Product
+      // Visibility (ECOM-spec), for brands that sell online on a plan with
+      // it (owner, 2026-11-06), as its tab.
       {
-        title: 'Answer Engine Insights',
+        title: 'Visibility',
         href: '/dashboard/insights',
         icon: BarChart3,
         requiredFeature: 'basic_insights',
+        children: [
+          { title: 'Overview', href: '/dashboard/insights' },
+          { title: 'Mentions', href: '/dashboard/mentions', icon: MessageCircleMore },
+          { title: 'Citations', href: '/dashboard/citations', icon: Quote },
+          {
+            title: 'Products',
+            href: '/dashboard/shopping',
+            icon: ShoppingBag,
+            sectionTitle: 'Product Visibility',
+            requiredFeature: 'shopping_analytics',
+            requiresBrandPref: 'ecommerce',
+          },
+        ],
       },
       // Prompts right under Brand Visibility: adding prompts is the way in,
       // so nothing sits between them (Competitors moved under Reports).
@@ -154,26 +195,6 @@ export const dashboardNav: NavGroup[] = [
           { title: 'Prompts Insights', href: '/dashboard/prompts/insights' },
         ],
       },
-      // Mentions & Sentiment (MS-05): beside Citations, its sibling concept.
-      {
-        title: 'Mentions',
-        href: '/dashboard/mentions',
-        icon: MessageCircleMore,
-      },
-      {
-        title: 'Citations',
-        href: '/dashboard/citations',
-        icon: Quote,
-      },
-      {
-        // Product Visibility (ECOM-spec): new as a whole, with its Shelf,
-        // Products and the rest, for brands that sell online.
-        title: 'Shopping',
-        href: '/dashboard/shopping',
-        icon: ShoppingBag,
-        requiredFeature: 'shopping_analytics',
-        requiresBrandPref: 'shoppingModeEnabled',
-      },
       {
         title: 'AI Referral Traffic',
         href: '/dashboard/traffic',
@@ -188,8 +209,9 @@ export const dashboardNav: NavGroup[] = [
    * Site Audit and the rest from the analytics surfaces. Filing it under either
    * heading would understate what it covers.
    *
-   * It is also the only way into /dashboard/reports besides the button on
-   * Visibility — from Citations or Site Audit there was no route to it at all.
+   * It is also the only way into /dashboard/reports besides the Reports
+   * button in Brand Visibility's header, on each of its tabs — from Site
+   * Audit there is no other route to it.
    *
    * Competitors, the head-to-head with each competitor, sits right under it,
    * out of Analytics so that group stays short. Brand Visibility's

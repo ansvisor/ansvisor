@@ -1,7 +1,7 @@
 export const siteConfig = {
   name: 'Ansvisor',
   description:
-    "Monitor, analyze, and optimize your brand's visibility in AI-powered search engines like ChatGPT, Perplexity, Gemini, and more.",
+    "Monitor, analyze, and optimize your brand's visibility in AI-powered search engines like ChatGPT, Gemini, Google AI, and more.",
   url: 'https://ansvisor.com',
   ogImage: 'https://app.ansvisor.com/opengraph-image',
   links: {

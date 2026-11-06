@@ -107,7 +107,7 @@ const starter: PlanCard = {
     priceDiff: 200,
     afterTrial: false,
     benefits: [
-      { key: 'morePlatforms', count: 6 },
+      { key: 'morePlatforms', count: 2 },
       { key: 'aiLimit', times: 5 },
     ],
   },
@@ -168,7 +168,7 @@ describe('YourPlanCard', () => {
     ).toContain('Full auto');
     expect(text()).toContain('18% used');
     expect(text()).toContain("With Growth you'd also get");
-    expect(text()).toContain('See your brand in 6 more AI platforms');
+    expect(text()).toContain('See your brand in 2 more AI platforms');
     expect(text()).toContain('5× the monthly AI limit');
     expect(text()).toContain('+$200/mo');
     expect(container.querySelector('a[href="/dashboard/settings/billing"]')).not.toBeNull();

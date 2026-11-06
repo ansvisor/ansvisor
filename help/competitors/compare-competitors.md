@@ -4,20 +4,20 @@ route: /dashboard/competitors
 keywords: [competitors, head-to-head, competitor comparison, gaps, strengths, platform breakdown, prompt-by-prompt]
 synonyms: [benchmark competitors, how do we compare, competitor visibility, us versus them, competitor score]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/competitors.mdx, docs/concepts/visibility-scoring.mdx]
 ---
-The **Competitors** page, right under **Reports** in the sidebar, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Brand Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand.
+The **Competitors** page, right under **Reports** in the sidebar, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand.
 
 ## Tracked Competitors
 
 The **Tracked Competitors** card lists every competitor with its domain and:
 
-- its AI Visibility Score from 0 to 100, the same score as on the Brand Visibility leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.
+- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.
 - the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.
 
 **No data** means no answer in the window was measured for that competitor yet, for example one you've just added.
@@ -69,6 +69,6 @@ Only what Site Audit's checks found and a summary of the page's words are kept, 
 ## Close a visibility gap
 
 1. On **Gaps**, find the prompts where the competitor leads most.
-2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on the **Citations** page lists the sources AI cites with the competitor and not with you.
+2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on Visibility's **Citations** tab lists the sources AI cites with the competitor and not with you.
 3. Create content for that prompt in **Content**.
 4. Publish it, earn placements on those sources, and watch the prompt in the comparison as new answers are tracked.
