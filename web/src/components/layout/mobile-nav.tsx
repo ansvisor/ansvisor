@@ -28,6 +28,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
+import { menuSectionOf } from '@/lib/menu-access';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { Crown, ExternalLink, Menu, MessageSquareHeart, MessageSquareText } from 'lucide-react';
 import Image from 'next/image';
@@ -149,8 +150,16 @@ export function MobileNav() {
                   );
                 }
 
+                // An entry whose own section is hidden opens its first shown child,
+                // as the desktop menu does (Visibility with Overview off → Mentions).
+                const ownSection = menuSectionOf(item.href);
+                const linkHref =
+                  children.length > 0 && ownSection && hiddenSections.has(ownSection)
+                    ? children[0].href
+                    : href;
+
                 const link = (
-                  <Link key={item.href} href={href} onClick={() => setOpen(false)}>
+                  <Link key={item.href} href={linkHref} onClick={() => setOpen(false)}>
                     <span
                       className={cn(
                         'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',

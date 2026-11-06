@@ -70,6 +70,7 @@ const { TabHeaderActions, useBrandVisibilityShell } = await import('./shell-cont
 const { TabError } = await import('./tab-error');
 const { CitationsSkeleton, MentionsSkeleton, OverviewSkeleton } = await import('./tab-skeleton');
 const { useBrandStore } = await import('@/stores/use-brand-store');
+const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -109,14 +110,16 @@ function Tab({ label = 'TAB CONTENT', read = true }: { label?: string; read?: bo
   );
 }
 
-async function render(path: string, tab: React.ReactNode = <Tab />) {
+async function render(path: string, tab: React.ReactNode = <Tab />, hidden: string[] = []) {
   const [pathname] = path.split('?');
   nav.pathname = pathname;
   window.history.replaceState(null, '', path);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <BrandVisibilityShellView>{tab}</BrandVisibilityShellView>
+        <MenuAccessProvider hidden={hidden} canManageMenus={false}>
+          <BrandVisibilityShellView>{tab}</BrandVisibilityShellView>
+        </MenuAccessProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -170,6 +173,17 @@ describe('Visibility’s header and tabs', () => {
     expect(container.querySelector('p [data-testid="run-line-loading"]')).toBeNull();
     expect(container.textContent).not.toContain('Answer Engine Insights');
     expect(container.textContent).not.toContain('Brand Visibility');
+  });
+
+  it('leave off a tab whose section the person’s menu hides, as the menu does', async () => {
+    await render('/dashboard/mentions', <Tab />, ['citations']);
+    expect(
+      [...container.querySelectorAll('nav[aria-label="Visibility"] a')].map((a) => a.textContent),
+    ).toEqual(['Overview', 'Mentions']);
+    await render('/dashboard/mentions', <Tab />, ['insights']);
+    expect(
+      [...container.querySelectorAll('nav[aria-label="Visibility"] a')].map((a) => a.textContent),
+    ).toEqual(['Mentions', 'Citations']);
   });
 
   it('read the run line after the tab’s first read, and fill it in', async () => {
