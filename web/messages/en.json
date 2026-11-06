@@ -7258,7 +7258,10 @@
       "role_review": "Only Admins approve or reject skills.",
       "not_pending": "This skill was reviewed already.",
       "blocked": "This skill holds something a skill may never hold, so it can't be approved.",
-      "no_update": "There's no update to approve: another Admin may have approved it already."
+      "no_update": "There's no update to approve: another Admin may have approved it already.",
+      "library_added": "This Library skill is in your workspace already. Find it under My skills.",
+      "library_license": "This skill's license is no longer MIT, so it can't be added from the Library.",
+      "library_plan": "Adding skills from the Library starts with the Starter plan."
     },
     "card": {
       "submit": "Save skill",
@@ -7283,7 +7286,7 @@
       "title": "Skills",
       "subtitle": "What Chat knows how to do. Run one, schedule it, or build an agent on it.",
       "agents": "Agents",
-      "tabs": { "ansvisor": "Ansvisor skills", "mine": "My skills" },
+      "tabs": { "ansvisor": "Ansvisor skills", "marketplace": "Library", "mine": "My skills" },
       "limit": "{used} of {max} in your plan",
       "search": "Search skills",
       "filters": {
@@ -7324,7 +7327,8 @@
         "you": "Made in Chat by you",
         "workspace": "Made in Chat by a teammate",
         "upload": "Uploaded",
-        "repo": "Imported from {repo} on GitHub"
+        "repo": "Imported from {repo} on GitHub",
+        "marketplace": "Added from the Library · {repo}"
       },
       "details": {
         "source": "From",
@@ -7429,6 +7433,81 @@
       "failed": "The update couldn't be approved. Try again.",
       "loadFailed": "This update couldn't be loaded.",
       "none": "There's no update for this skill."
+    },
+    "library": {
+      "search": "Search skills…",
+      "topicsLabel": "Topics",
+      "topics": {
+        "all": "All",
+        "seo": "SEO",
+        "content": "Content",
+        "brand": "Brand",
+        "analytics": "Analytics",
+        "social": "Social",
+        "cro": "CRO",
+        "email": "Email",
+        "paid-ads": "Paid Ads",
+        "growth": "Growth",
+        "gtm": "GTM"
+      },
+      "meta": "{count, plural, one {# skill} other {# skills}} · MIT license",
+      "sortLabel": "Sort",
+      "sort": {
+        "stars": "Most stars",
+        "installs": "Most installs"
+      },
+      "stars": "GitHub stars of {repo}",
+      "installs": "Installs on skills.sh",
+      "noInstalls": "No installs on skills.sh",
+      "owner": "{owner} · MIT",
+      "add": "Add",
+      "adding": "Adding…",
+      "added": "Scanned · instructions only · admin review",
+      "requested": "Scanned · instructions only · sent to your Admins for review",
+      "addFailed": "Couldn't add the skill. Try again.",
+      "state": {
+        "pending_review": "Pending approval",
+        "approved": "Added",
+        "rejected": "Rejected",
+        "blocked": "Blocked"
+      },
+      "showMore": "Show more ({count})",
+      "empty": "No skills match.",
+      "loadFailed": "The Library couldn't be loaded.",
+      "retry": "Retry"
+    },
+    "libraryPage": {
+      "back": "Skills",
+      "loadFailed": "This skill couldn't be loaded.",
+      "notFound": "This skill isn't in the Library.",
+      "readFailed": "Its SKILL.md couldn't be read from GitHub just now. {error}",
+      "unreadable": "Ansvisor can't take this skill as it is, so it can't be added. {error}",
+      "retry": "Retry",
+      "cleaned": "SKILL.md · at the pinned commit",
+      "plain": "Plain text · nothing runs",
+      "hidden": "{count, plural, one {# hidden character is} other {# hidden characters are}} marked in the text.",
+      "scan": "Ansvisor's safety scan",
+      "blocks": "Blocks it",
+      "warns": "Worth a look",
+      "clean": "Nothing found.",
+      "edited": "Edited by Ansvisor",
+      "edits": {
+        "research-lines": "Removed {lines, plural, one {# line} other {# lines}} citing a competitor's research.",
+        "extension-line": "Removed a competitor's extension from {lines, plural, one {# line} other {# lines}}.",
+        "promo-block": "Removed a paid-pack promo ({lines, plural, one {# line} other {# lines}})."
+      },
+      "removed": "Left out when added",
+      "nothingRemoved": "Nothing is left out.",
+      "source": "Source",
+      "file": "File",
+      "commit": "Commit",
+      "license": "License",
+      "licenseText": "License text",
+      "attribution": "{repo} · MIT",
+      "addNote": "Adding it scans it again; an Admin reviews it before anyone uses it.",
+      "requestNote": "Adding it asks your Admins to review it.",
+      "blockedNote": "The scan blocks this skill, so it can't be added.",
+      "openReview": "Open review"
     }
   },
   "chatMemory": {

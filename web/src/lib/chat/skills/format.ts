@@ -251,6 +251,34 @@ export const hasEmail = (text: string) => EMAIL.test(text);
 export const overridesRules = (text: string) => ROLE_OVERRIDE.some((re) => re.test(text));
 
 /**
+ * What the scan blocks because a published skill may never hold it (item
+ * 20), not because it is unsafe (item 16). A skill added from the Library
+ * may hold them: its review lists them as worth a look (owner, 2026-11-05).
+ */
+const PUBLISHED_ONLY = {
+  email: 'an email address',
+  price: 'a price (a figure with a currency sign)',
+  tracking: 'a URL with a tracking parameter',
+} as const;
+const PUBLISHED_ONLY_FINDINGS: ReadonlySet<string> = new Set(Object.values(PUBLISHED_ONLY));
+
+/**
+ * A third-party Library skill's scan: what only a published skill may never
+ * hold (an email address, a price, a tracking URL) moves from blocks to
+ * warns, for the Admin's review; the rules of item 16 still block.
+ */
+export function relaxForLibrary(scan: { blocks: string[]; warns: string[] }): {
+  blocks: string[];
+  warns: string[];
+} {
+  const moved = scan.blocks.filter((finding) => PUBLISHED_ONLY_FINDINGS.has(finding));
+  return {
+    blocks: scan.blocks.filter((finding) => !PUBLISHED_ONLY_FINDINGS.has(finding)),
+    warns: [...new Set([...moved, ...scan.warns])],
+  };
+}
+
+/**
  * What the scan finds in a skill's text: `blocks` refuse it, `warns` go to
  * review. Rules that read sentences (role override, remote instructions)
  * are a pattern list; imports add a model check later (W3).
@@ -260,9 +288,9 @@ export function scanSkillText(text: string): { blocks: string[]; warns: string[]
   const warns: string[] = [];
   if (HIDDEN.test(text)) blocks.push('hidden characters (zero-width, bidi or tag characters)');
   if (BASE64.test(text)) blocks.push('a base64 blob of 100 characters or more');
-  if (EMAIL.test(text)) blocks.push('an email address');
-  if (PRICE.test(text)) blocks.push('a price (a figure with a currency sign)');
-  if (TRACKING.test(text)) blocks.push('a URL with a tracking parameter');
+  if (EMAIL.test(text)) blocks.push(PUBLISHED_ONLY.email);
+  if (PRICE.test(text)) blocks.push(PUBLISHED_ONLY.price);
+  if (TRACKING.test(text)) blocks.push(PUBLISHED_ONLY.tracking);
   if (UUID.test(text)) blocks.push('an internal id');
   if (ROLE_OVERRIDE.some((re) => re.test(text))) {
     blocks.push(

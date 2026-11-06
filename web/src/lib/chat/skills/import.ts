@@ -1,5 +1,6 @@
 import { unzipSync } from 'fflate';
-import { checkSkillFile, parseSkillFile, scanSkillText } from './format';
+import { checkSkillFile, parseSkillFile, relaxForLibrary, scanSkillText } from './format';
+import { readYamlFrontMatter } from './front-matter-yaml';
 import { MAX_TITLE, skillChecksum, skillFileText, type SkillParts } from './skill-file';
 
 /**
@@ -368,12 +369,24 @@ function licenseOf(
 
 // ─── The skill ──────────────────────────────────────────────────────────────
 
+export interface ImportOptions {
+  /**
+   * A skill added from the Library (CHAT-17; owner, 2026-11-05): its front
+   * matter is read as a safe YAML subset (front-matter-yaml.ts), and what
+   * only a published skill may never hold (an email address, a price, a
+   * tracking URL) is worth a look in its review, not a block. What makes a
+   * skill unsafe (item 16) still blocks it. Uploads and GitHub imports keep
+   * the strict rules.
+   */
+  library?: boolean;
+}
+
 /**
  * A skill from an import's files: its one SKILL.md (at the root or in one
  * folder), cleaned, its license, checked and scanned. Paths are the
  * import's own (a .zip's, or a GitHub folder's).
  */
-export function parseSkillImport(input: ImportFile[]): ImportParse {
+export function parseSkillImport(input: ImportFile[], options: ImportOptions = {}): ImportParse {
   const skillFiles = input.filter((f) => SKILL_FILE.test(f.path));
   if (skillFiles.length === 0) return refuse('no_skill_file');
   if (skillFiles.length > 1) return refuse('several_skills');
@@ -424,10 +437,13 @@ export function parseSkillImport(input: ImportFile[]): ImportParse {
       problems: 'the file must start with front matter between two --- lines',
     });
   }
-  const front = cleanFrontMatter(match[1]);
+  // A Library skill's YAML in the one-line form; outside the subset, the strict reader says why.
+  const yaml = options.library ? readYamlFrontMatter(match[1]) : null;
+  const front = cleanFrontMatter(yaml ? yaml.text : match[1]);
   for (const field of front.removed) {
     removed.push(field === 'allowed-tools' ? 'allowed-tools' : `front matter: ${field}`);
   }
+  for (const field of yaml?.dropped ?? []) removed.push(`front matter: ${field}`);
   const body = cleanBody(normalized.slice(match[0].length));
   if (body.commands > 0) {
     removed.push(body.commands === 1 ? '1 command line' : `${body.commands} command lines`);
@@ -463,8 +479,9 @@ export function parseSkillImport(input: ImportFile[]): ImportParse {
   };
   // Checked as it is kept: the scan's findings block it, the form's refuse it.
   const check = checkSkillFile(name, skillFileText(parts));
-  const scan = scanAll(parts);
-  const problems = check.problems.filter((p) => !scan.blocks.includes(p));
+  const found = scanAll(parts);
+  const scan = options.library ? relaxForLibrary(found) : found;
+  const problems = check.problems.filter((p) => !found.blocks.includes(p));
   if (problems.length > 0) return refuse('invalid', { problems: problems.join('; ') });
   return {
     ok: true,
