@@ -46,6 +46,7 @@ import {
   refreshWordPressPublished,
   type CmsStatus,
 } from '@/lib/content/cms-send-client';
+import { readFirstAiCrawls } from '@/lib/content/first-ai-crawl';
 import {
   AGENT_POLL_MS,
   CREATED_RANGES,
@@ -193,15 +194,38 @@ export default function ContentLibraryPage() {
 
   // The sends of the drafts read, after each read of the list.
   const readIds = read?.drafts?.map((draft) => draft.id).join(',') ?? '';
+  const readBrandId = read?.brandId ?? null;
   const [cmsAttempt, setCmsAttempt] = useState(0);
   useEffect(() => {
     if (!readIds) return;
     let cancelled = false;
     readCmsStatuses(readIds.split(','))
-      .then((statuses) => {
+      .then(async (statuses) => {
         if (cancelled) return;
         setCms(statuses);
         setCmsReadFor(new Set(readIds.split(',')));
+        // Then each published page's first AI crawl (#2142), from the brand's own bot logs.
+        const published = [...statuses]
+          .filter(([, sent]) => sent.status === 'published' && sent.publishedUrl)
+          .map(([draftId, sent]) => ({ draftId, url: sent.publishedUrl!, at: sent.at }));
+        if (!readBrandId || published.length === 0) return;
+        const crawls = await readFirstAiCrawls(readBrandId, published);
+        if (cancelled) return;
+        setCms(
+          new Map(
+            [...statuses].map(([draftId, sent]) => [
+              draftId,
+              sent.status === 'published' &&
+              sent.publishedUrl &&
+              (crawls.byDraft.has(draftId) || !crawls.logs)
+                ? {
+                    ...sent,
+                    firstAiCrawl: { logs: crawls.logs, crawl: crawls.byDraft.get(draftId) ?? null },
+                  }
+                : sent,
+            ]),
+          ),
+        );
       })
       .catch((err) => {
         console.error('Failed to read the pages’ sends:', err);
@@ -211,7 +235,7 @@ export default function ContentLibraryPage() {
     return () => {
       cancelled = true;
     };
-  }, [readIds, cmsAttempt]);
+  }, [readIds, readBrandId, cmsAttempt]);
   // While a page is on its way to the CMS (a bulk send going on), its row's
   // send is read again now and then, as the list is while the agent writes.
   const cmsGoing = [...cms.values()].some((status) => status.status === 'queued');

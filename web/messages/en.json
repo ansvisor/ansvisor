@@ -4984,7 +4984,13 @@
     },
     "focus": {
       "title": "What should Chat focus on for you?",
-      "intro": "Pick one or more. Chat tailors your Home, starter questions and skills to them. You can change this anytime in Settings › General.",
+      "intro": "Start simple with just the chat box, or pick areas and Chat adds suggestions for them to your Home. You can change this anytime in Settings › General.",
+      "default": {
+        "title": "Default: simple start",
+        "note": "A clean Home: a greeting, one line on what changed and the chat box. Nothing else until you ask.",
+        "name": "Default view"
+      },
+      "orTailor": "Or tailor Home to what you work on",
       "groupLabel": "Focus areas",
       "areas": {
         "lead": {
@@ -5028,13 +5034,14 @@
           "name": "Markets and sources"
         }
       },
-      "countNone": "Pick at least one. Your access stays the same: what you can change still depends on your role.",
+      "countDefault": "Default view · your access stays the same: what you can change still depends on your role.",
       "countSome": "{count, number} selected · your access stays the same: what you can change still depends on your role.",
       "skip": "Skip for now",
       "cancel": "Cancel",
       "continue": "Continue",
       "saved": "Home focused on {label} · edit it in Settings › General",
-      "skipped": "You can choose your focus later in Settings › General",
+      "savedDefault": "Home is on the Default view · change it in Settings › General",
+      "skipped": "Home is on the Default view · pick a focus anytime in Settings › General",
       "failed": "Couldn't save your focus. Try again.",
       "label": {
         "one": "{a}",
@@ -5044,8 +5051,7 @@
       "pill": {
         "focused": "Focused on {label}",
         "edit": "Edit",
-        "none": "Get suggestions for what you work on",
-        "choose": "Choose focus"
+        "default": "Default view"
       }
     },
     "inbox": {
@@ -5304,9 +5310,9 @@
       "fullAutoAdmin": "Your Admin turned Full auto off for your role",
       "focus": {
         "label": "Your focus",
-        "note": "Pick one or more. Tailors your Home, starter questions and skill suggestions. Your access stays the same.",
+        "note": "The Default view keeps Home to a greeting, one line and the chat box. Pick areas to tailor your Home, starter questions and skill suggestions. Your access stays the same.",
         "saved": "Home focused on {label}",
-        "cleared": "Focus cleared · default Home"
+        "cleared": "Home is on the Default view"
       },
       "language": {
         "label": "Answer language",
@@ -7394,7 +7400,8 @@
         "failed": "Something went wrong.",
         "lost": "It stopped before it could start.",
         "stopped": "It was stopped.",
-        "noAnswer": "No answer in 7 days."
+        "noAnswer": "No answer in 7 days.",
+        "nothingNew": "Nothing new for your plan."
       }
     },
     "when": {
@@ -7439,7 +7446,16 @@
       "usage": "≈ {share} of monthly AI usage per run",
       "usageUnknown": "Each run uses your monthly AI limit, like a chat",
       "ownKey": "Runs on your workspace’s own AI key",
-      "emailTo": "Email goes to you"
+      "emailTo": "Email goes to you",
+      "digest": "Lists what’s new for your plan, only when there is something new. Uses no AI."
+    },
+    "digest": {
+      "title": "What’s new for my plan",
+      "prompt": "What’s new for my plan",
+      "intro": "{count, plural, one {Here’s # update} other {Here are # updates}} for your plan that you haven’t seen yet.",
+      "onPlans": "On {plans}.",
+      "tryIt": "Try it",
+      "older": "Ask me “What’s new” for older updates."
     },
     "deliver": {
       "chat": "Chat",
@@ -8730,6 +8746,14 @@
         "answered": "The webhook answered {status}.",
         "onItsOwn": "Sent by {agent} · on its own",
         "onItsOwnUnnamed": "Sent by an agent · on its own",
+        "firstCrawl": {
+          "minutes": "First AI crawl: {bot}, {count, plural, one {# minute} other {# minutes}} after it went live",
+          "hours": "First AI crawl: {bot}, {count, plural, one {# hour} other {# hours}} after it went live",
+          "days": "First AI crawl: {bot}, {count, plural, one {# day} other {# days}} after it went live",
+          "onDay": "First AI crawl: {bot}, on {date}",
+          "none": "No AI crawl yet since it went live",
+          "noLogs": "Connect AI bot logs in AI Traffic to see when AI bots first visit it"
+        },
         "webflow": {
           "queued": "Sending to Webflow since {when}",
           "sent": "In Webflow as a draft item since {when}",
@@ -9656,7 +9680,7 @@
         },
         "overlap": {
           "title": "Your other pages for these prompts",
-          "only": "{count, plural, one {The only page cited for its prompt} other {The only page cited for its # prompts}} · no overlap",
+          "only": "{count, plural, one {The only page of yours cited for its prompt} other {The only page of yours cited for its # prompts}}",
           "shared": "{count} of {total, plural, one {# prompt} other {# prompts}}"
         },
         "note": "The last {days} days against the {days} before, in whole UTC days. Citations come from tracked prompts, AI visits from the tracking snippet or Google Analytics, clicks from Search Console.",

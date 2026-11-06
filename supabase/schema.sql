@@ -60808,6 +60808,35 @@ create policy "chat_agent_trigger_claims: agent select"
   );
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00485_chat_home_view.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00485: Chat Home's view — the Default view (a greeting, one line and the
+-- box) or the person's focus
+-- ============================================================================
+-- Chat Home opened with every block the person's focus (CHAT-24) adds: For
+-- you now, What's new, starter questions and new skills. People found that
+-- first screen busy, so Home now starts on a Default view that shows only
+-- the greeting, one line on what changed, the focus pill and the box. The
+-- focus picker offers Default first, picked at the start.
+--
+--   * home_view: 'default' (the default) or 'focus' (Home tailored to the
+--     areas in focus, 00400). Everyone starts on default, people who picked
+--     areas before too: their focus stays as it was, so the picker opens
+--     with it ticked and Continue brings their Home back in one step. The
+--     composer's / menu still lists the focus's skills first.
+--
+-- Behind CHAT_AGENTIC: nothing reads it while the flag is off. The person
+-- reads and writes their own row (00400's policies).
+
+alter table public.chat_user_prefs
+  add column if not exists home_view text not null default 'default'
+    check (home_view in ('default', 'focus'));
+
+comment on column public.chat_user_prefs.home_view is
+  'Chat Home''s view: default (the greeting, one line and the box) or focus (tailored to the focus areas). Everyone starts on default; focus stays kept for the picker.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00487_starter_prompts_gemini.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- Starter prompts track Gemini, no longer Microsoft Copilot (00487).
@@ -60853,4 +60882,36 @@ where p.prompt_set_id = ps.id
   and o.stripe_customer_id is not null
   and not b.is_demo
   and p.platforms && array['copilot-web', 'perplexity-web']::text[];
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00489_chat_schedules_digest.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00489: a scheduled job that sends What's new for the person's plan
+-- ============================================================================
+-- Chat Wave 4 W4-23: "What's new for my plan, 1st of every month". There is
+-- no such job until a person sets one up on the schedule card (owner
+-- decision 14): nothing is written for anyone in advance. Its runs call no
+-- model and use none of the AI limit. The worker lists the creator's unread
+-- What's new entries for their plan in the job's chat and marks them read.
+-- A run with nothing new delivers nothing (its run row is `unchanged`).
+--
+--   * chat_schedules.digest: the kind of digest a job sends; null for any
+--     other job, which asks Chat its prompt or skill as before. A digest is
+--     about the workspace, never one brand, runs no skill, and is never a
+--     follow-up check. Its prompt is the words its chat shows as the message.
+
+alter table public.chat_schedules
+  add column if not exists digest text check (digest in ('whats_new'));
+
+alter table public.chat_schedules
+  drop constraint if exists chat_schedules_digest_shape;
+alter table public.chat_schedules
+  add constraint chat_schedules_digest_shape check (
+    digest is null
+    or (skill_name is null and brand_id is null and kind <> 'followup_check')
+  );
+
+comment on column public.chat_schedules.digest is
+  'W4-23 (00489): whats_new: each run lists the creator''s unread What''s new entries for their plan in the job''s chat, with no model and no AI use, and delivers nothing when none are new. Null: a job that asks Chat its prompt or skill.';
 
