@@ -79,6 +79,12 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-prefs.ts:saveDefaultHome': "the person's own Chat Home view, nothing that costs",
   'chat-prefs.ts:dismissChatWelcome':
     "the person's own Not now on Chat Home's welcome card (00486), nothing that costs",
+  // The product tour (00486): scripted turns in the person's own tour chat, no run. A
+  // read-only workspace and the demo meet the product through it.
+  'chat-tour.ts:showTourTopic':
+    "adds the tour's scripted turn to the person's own tour chat: no model run, nothing that costs",
+  'chat-tour.ts:endChatTour':
+    "adds the tour's last scripted line and keeps the tour ended on the person: nothing that costs",
   'chat-prefs.ts:skipChatFocus': "the person's own Chat focus left empty, nothing that costs",
   'chat-prefs.ts:markFocusPrompted':
     "the person's own record of being asked their focus, nothing that costs",

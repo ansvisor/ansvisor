@@ -16,6 +16,7 @@ import type { ChatStartAudience } from '@/lib/chat/start-audience';
 import { TOUR_TOPICS, type TourTopic } from '@/lib/chat/tour';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { TOUR_CHIP, TOUR_CHIP_PRIMARY } from './tour/tour-chip';
 
 /**
  * Chat Home's welcome card (owner decision 2026-11-06; mockup
@@ -27,13 +28,6 @@ import { useBrandStore } from '@/stores/use-brand-store';
  * Not now. The demo brand's data is ready and it connects nothing: it gets
  * the tour alone.
  */
-
-/** A topic chip: the side panel's suggestion chip. */
-export const TOUR_CHIP =
-  'rounded-full border bg-background px-3 py-1.5 text-left text-[13px] outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50';
-/** The tour's primary chip (Show me everything, Next): For you now's Ask anything. */
-export const TOUR_CHIP_PRIMARY =
-  'inline-flex items-center gap-1 border-foreground bg-foreground text-background hover:bg-foreground/90';
 
 /** The Google sources the card still offers to connect. */
 export interface WelcomeConnect {

@@ -4748,6 +4748,47 @@
       "positions": "Positions and locations",
       "content": "Content",
       "connections": "Connections"
+    },
+    "chatTitle": "Ansvisor tour",
+    "label": "Ansvisor tour · {n} of {total}",
+    "next": "Next: {topic}",
+    "showPage": "Show me this page",
+    "another": "Another topic",
+    "anotherLabel": "Pick another topic",
+    "end": "End the tour",
+    "failed": "Couldn’t open that part of the tour. Try again.",
+    "actions": {
+      "prompts": "Suggest prompts for me"
+    },
+    "script": {
+      "everything": "Show me everything",
+      "show": {
+        "visibility": "Show me Visibility",
+        "prompts": "Show me Topics and prompts",
+        "positions": "Show me Positions and locations",
+        "content": "Show me Content",
+        "connections": "Show me Connections"
+      },
+      "next": {
+        "prompts": "Next: Topics and prompts",
+        "positions": "Next: Positions and locations",
+        "content": "Next: Content",
+        "connections": "Next: Connections"
+      },
+      "body": {
+        "visibility": "I’ve opened **Visibility**. It shows how often AI answers name and cite your brand for the prompts you track.\n\n1. **Overview**: your Visibility score from 0 to 100, your rank among the brands you track, and what changed.\n2. **Mentions**: where AI answers name you, in what tone, and next to which competitors.\n3. **Citations**: the sites and pages AI answers cite, and the ones they cite for competitors but not for you.\n4. The date range, platform, country and topic you pick stay set as you switch tabs.\n\nAsk me anything about what you see here.",
+        "prompts": "This is **Prompts**: the questions your buyers ask AI, which Ansvisor asks the AI engines for you every day.\n\n1. **Tracked Prompts** lists every prompt with its results over the date range you pick.\n2. **Topics** groups your prompts by theme, so you see how you do at a higher level.\n3. **Prompt Suggestions** offers new prompts worth tracking. Press **+** on one to start tracking it.\n4. A prompt you add gets its first results with the next daily run.\n\nWant me to suggest a few prompts for you?",
+        "positions": "Back on **Tracked Prompts**, this time for where you stand in each answer.\n\n1. **Positions** shows your average position in AI answers and its change. Hover it for each platform, or open its chart for the positions panel.\n2. **Performance** groups prompts by where you’re named: Best, Good, Late or Missing.\n3. The **Table | Locations** switch compares each prompt across the countries, states and cities you track.\n4. **Track in more locations** adds places to your prompts. Each prompt counts once per location on your plan.\n\nClick any prompt to open its own page, with every platform’s answers.",
+        "content": "This is **Opportunities**, under **Content**: what to write or change so AI answers name you where they don’t yet.\n\n1. Ansvisor suggests opportunities on its own as your tracking data comes in, each with its **Impact** and **Score**.\n2. **Write this**, in a row’s **…** menu, has the Content Agent brief and write the page for you to review.\n3. **Plan** ranks what to create, optimize or protect next.\n4. **Library** keeps your drafts, and sends a finished page to your CMS.\n\nYour first opportunities come once tracking has data.",
+        "connections": "This is **Settings › Integrations**, where Ansvisor connects to your own tools.\n\n1. **Google Search Console**: your real search queries and impressions, for prompt suggestions and search-vs-AI insights.\n2. **Google Analytics**: sessions and conversions from GA4, the base of your AI traffic history.\n3. Once one is connected, pick the property each brand reads.\n4. Your CMS (Webflow, WordPress, Framer or Wix) takes pages straight from the Content Editor.\n\nOnly admins and managers can connect or change an integration."
+      },
+      "firstRun": {
+        "soon": "Your first results are still coming in; this page fills in as they arrive.",
+        "minutes": "Your first results are still coming in (about {n} min); this page fills in as they arrive.",
+        "hours": "Your first results are still coming in (about {n} h); this page fills in as they arrive."
+      },
+      "endAsk": "End the tour",
+      "endLine": "That’s the tour. Chat is on every page: press **Ctrl J** (**⌘J** on a Mac), or click **Ask Chat** at the top right of the Execution and Analytics pages. This tour stays in your chats if you want to read it again."
     }
   },
   "chatShell": {
@@ -5402,6 +5443,11 @@
       "everyPage": {
         "label": "Open Chat on every page",
         "note": "Ask Chat · Ctrl J in each page header"
+      },
+      "tour": {
+        "label": "Product tour",
+        "note": "Opens each page with Chat beside it, explained in a few lines",
+        "take": "Take the tour"
       },
       "failed": "Couldn't save that. Try again."
     }

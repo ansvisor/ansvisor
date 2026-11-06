@@ -7,6 +7,7 @@ import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-she
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFirstRun } from '@/hooks/use-first-run';
+import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { ReadError } from '@/components/brand-visibility/read-error';
 import { readKey } from '@/components/brand-visibility/read-cache';
@@ -863,7 +864,12 @@ export default function InsightsPage() {
     return (
       <div className="space-y-6">
         {headerActions}
-        {!firstRun && <EmptyState onRunPrompts={runAll} isRunning={isRunning} isCloud={isCloud} />}
+        {/* While the first run goes on, the page says its data is on the way. */}
+        {firstRun ? (
+          <FirstRunEmptyState run={firstRun} />
+        ) : (
+          <EmptyState onRunPrompts={runAll} isRunning={isRunning} isCloud={isCloud} />
+        )}
         {!isCloud && openSinglePrompt && (
           <div className="flex justify-center">
             <Button variant="outline" onClick={openSinglePrompt} className="gap-2">
@@ -919,7 +925,9 @@ export default function InsightsPage() {
           </div>
         )}
         <div className={cn('space-y-6', isRefetching && 'opacity-60')}>
-          {noResults && firstRun ? null : noResults ? (
+          {noResults && firstRun ? (
+            <FirstRunEmptyState run={firstRun} />
+          ) : noResults ? (
             <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
           ) : (
             <>
