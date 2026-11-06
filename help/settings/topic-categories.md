@@ -19,7 +19,7 @@ Open **Settings › Integrations** and go to **Product catalog**. **Topics and c
 
 ## How they're linked
 
-Ansvisor matches them for you: a category is a topic's when every word of its own name (the last part, "Cold Brew") is in the topic's name, or in at least two of the topic's prompts. Up to three categories are matched per topic, the closest first. Each shows **matched**.
+Ansvisor matches them for you: a category is a topic's when every word of its own name (the last part, "Cold Brew") is in the topic's name, or in at least two of the topic's prompts. A part above it counts too: "Whole Bean" in "Coffee > Whole Bean > Blends" links the topic "Whole bean coffee". A match on the category's own name comes first. Up to three categories are matched per topic. Each shows **matched**.
 
 ## Change a link
 

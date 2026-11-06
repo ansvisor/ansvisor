@@ -39,10 +39,38 @@ describe('autoTopicCategories', () => {
     });
     // In the name: the longer, deeper name first.
     expect(linked.get('t-cold')).toEqual(['c-cold', 'c-coffee']);
-    // Two prompts name grinders; one names a kettle: not enough.
-    expect(linked.get('t-gear')).toEqual(['c-grinders']);
-    // A topic with one prompt: that one is enough.
-    expect(linked.get('t-one')).toEqual(['c-gifts', 'c-coffee']);
+    // Two prompts name grinders; one names a kettle, not enough for its own
+    // name, but "Equipment" above it is in the topic's name.
+    expect(linked.get('t-gear')).toEqual(['c-grinders', 'c-kettles']);
+    // A topic with one prompt: that one is enough; "Coffee" above Cold Brew too, after its own.
+    expect(linked.get('t-one')).toEqual(['c-gifts', 'c-coffee', 'c-cold']);
+  });
+
+  it('matches a step above a category’s own name, its own name’s match first', () => {
+    // Brewline on dev: "Whole bean coffee" and the categories under Coffee > Whole Bean.
+    const linked = autoTopicCategories({
+      topics: [{ id: 't-whole', name: 'Whole bean coffee', prompts: [] }],
+      categories: [
+        { id: 'c-blends', name: 'Coffee > Whole Bean > Blends' },
+        { id: 'c-decaf', name: 'Coffee > Whole Bean > Decaf' },
+        { id: 'c-espresso', name: 'Coffee > Whole Bean > Espresso' },
+        { id: 'c-single', name: 'Coffee > Whole Bean > Single Origin' },
+        { id: 'c-cold', name: 'Coffee > Cold Brew' },
+        { id: 'c-subs', name: 'Subscriptions' },
+      ],
+    });
+    // "Whole Bean" (two words, deeper) above "Coffee"; three at most.
+    expect(linked.get('t-whole')).toEqual(['c-blends', 'c-decaf', 'c-espresso']);
+
+    const own = autoTopicCategories({
+      topics: [{ id: 't', name: 'Whole bean decaf', prompts: [] }],
+      categories: [
+        { id: 'c-blends', name: 'Coffee > Whole Bean > Blends' },
+        { id: 'c-decaf', name: 'Coffee > Whole Bean > Decaf' },
+      ],
+    });
+    // Its own name's match ranks above a step above's.
+    expect(own.get('t')).toEqual(['c-decaf', 'c-blends']);
   });
 
   it('keeps three at most', () => {
