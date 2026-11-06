@@ -200,7 +200,7 @@ afterEach(() => {
 });
 
 describe('MentionsHeaderActions', () => {
-  it('copies the Overview as text, with the filters and the n values', async () => {
+  it('copies the Summary as text, with the filters and the n values', async () => {
     getMentionsOverview.mockResolvedValue(overview);
     render();
     await click('Copy summary');

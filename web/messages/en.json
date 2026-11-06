@@ -12892,8 +12892,8 @@
     "selectBrand": "Select a brand to see its mentions.",
     "tabs": {
       "label": "Mentions views",
-      "overview": "Overview",
-      "mentions": "Mentions",
+      "overview": "Summary",
+      "mentions": "Answers",
       "perception": "Perception"
     },
     "filters": {

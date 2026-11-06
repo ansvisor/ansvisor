@@ -15,7 +15,7 @@ Every answer that names your brand is tagged Positive, Neutral or Negative towar
 
 ## Find and open the answer
 
-On the **Mentions** tab, the table's **Sentiment** filter or the **Most negative** sort helps you find the answers to check. Click a row to open the answer in a side panel. It shows the platform and model, the country, the date, the prompt with **View prompt**, the sentiment, your position and the topic. **Mention** shows the passage around your brand, **Also named in this answer** the competitors, **Full AI response** the answer as tracking stored it, and **Citations in this answer** each cited source.
+On the **Answers** view of Visibility's **Mentions** tab, the table's **Sentiment** filter or the **Most negative** sort helps you find the answers to check. Click a row to open the answer in a side panel. It shows the platform and model, the country, the date, the prompt with **View prompt**, the sentiment, your position and the topic. **Mention** shows the passage around your brand, **Also named in this answer** the competitors, **Full AI response** the answer as tracking stored it, and **Citations in this answer** each cited source.
 
 ## Save a correction
 
