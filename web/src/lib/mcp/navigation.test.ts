@@ -47,7 +47,8 @@ describe('openPageFor', () => {
     ).toEqual({
       found: true,
       title: 'Citations',
-      section: null,
+      // A tab of Visibility, on the address its page always had.
+      section: 'Visibility',
       locked: false,
       href: '/dashboard/citations?preset=30d&platform=gemini-web',
       filters: [

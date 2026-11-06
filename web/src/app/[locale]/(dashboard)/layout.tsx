@@ -11,6 +11,8 @@ import { RoleProvider, type TeamRole } from '@/components/providers/role-provide
 import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { isTourTopic } from '@/lib/chat/tour';
+import { readTourPrefs } from '@/lib/chat/tour-prefs';
 import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
 import { pageOpenOf } from '@/lib/chat/page-open';
@@ -70,6 +72,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     chatPrefsRead,
     chatSettingsRead,
     chatOnOwnKey,
+    tourRead,
   ] = await Promise.all([
     supabase
       .from('organizations')
@@ -103,6 +106,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     chatOn ? chatRunsOnOwnKey(profile.organization_id).catch(() => false) : false,
+    // Where the person's product tour stands (00486), read on its own: a
+    // database without those columns yet keeps the panel's choices above.
+    chatOn ? readTourPrefs(supabase, user.id) : Promise.resolve(null),
   ]);
   const chatPrefs = chatPrefsRead.data;
   // The side panel is Chat too: the person's Agent Chat conversations come
@@ -208,6 +214,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // Where a page Chat writes opens (W4-11), as Chat's pages read it.
     pageOpen: pageOpenOf(chatPrefs?.page_open),
   };
+  const tour = tourRead;
+  const tourTopic = tour?.tour_topic;
 
   return (
     <>
@@ -235,7 +243,14 @@ export default async function DashboardLayout({ children }: { children: React.Re
                   <AiUsageProvider>
                     {/* The Get more window, for every limit on the page (CHAT-18 §B item 6). */}
                     <GetMoreProvider>
-                      <ChatPanelProvider setup={chatPanel}>
+                      <ChatPanelProvider
+                        setup={chatPanel}
+                        tour={{
+                          chatId: tour?.tour_chat_id ?? null,
+                          topic: isTourTopic(tourTopic) ? tourTopic : null,
+                          finished: Boolean(tour?.tour_finished_at),
+                        }}
+                      >
                         <div className="flex h-screen overflow-hidden">
                           {/* Desktop sidebar */}
                           <div className="relative hidden md:flex md:flex-shrink-0">

@@ -26,6 +26,8 @@ import { ChatActionsProvider, useChatActions } from '../chat-actions';
 import { ChatPanelMenu, RenameField } from '../chat-menus';
 import { ChatThreadView } from '../chat-thread-view';
 import { shortcutLabel, useIsMac } from '../chat-shortcuts';
+import { TourControls, TourLabel, useChatTour } from '../tour/chat-tour';
+import { tourFocusOf, type TourTurn } from '@/lib/chat/tour';
 import { useChatPanel } from './chat-panel-context';
 import { readThread } from './read-thread';
 
@@ -39,6 +41,9 @@ type HistoryState =
   | { status: 'loading' }
   | { status: 'ready'; chats: ChatListItem[] }
   | { status: 'error' };
+
+/** How long the tour's turn about the page stays marked as the panel opens on it. */
+const TOUR_MARK_MS = 1800;
 
 /** Recent chats in History (item 23); All chats has the rest. */
 const HISTORY_LIMIT = 20;
@@ -125,7 +130,9 @@ function SizeIcon({ size }: { size: PanelSize }) {
  * the brand, the date range and filters, following the page while it is
  * open; × keeps one off on this page until New chat. The empty panel offers
  * the page's suggestions, which fill the box; Ask about this attaches its
- * object as an @ chip.
+ * object as an @ chip. On the product tour's chat, while the tour is on,
+ * "Ansvisor tour · n of 5" sits over it and the tour's chips under its
+ * latest turn.
  */
 export function ChatSidePanel() {
   const t = useTranslations('chatPanel');
@@ -135,6 +142,7 @@ export function ChatSidePanel() {
   const pathname = usePathname();
   const brand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const isMac = useIsMac();
+  const tour = useChatTour();
   const [started, setStarted] = useState(false);
   const [view, setView] = useState<PanelView>({ kind: 'chat', key: 0, thread: null });
   const [history, setHistory] = useState<HistoryState | null>(null);
@@ -226,11 +234,18 @@ export function ChatSidePanel() {
     if (row) void openChat(row.id);
   }, [available, away, row, openChat]);
 
-  // The first time it opens on this visit: its last chat, when recent.
+  // A chat handed over by the page (Run agent on an action, CHAT-21 §F item
+  // 29; the product tour): opened in place of the last one, each hand-off once.
+  const openedHandoff = useRef(0);
+  const chatHandoff = draft?.chatId ? draft : null;
+
+  // The first time it opens on this visit: its last chat, when recent, unless
+  // a chat was handed over to open (read once, not twice).
   useEffect(() => {
     if (!open || started) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setStarted(true);
+    if (chatHandoff && chatHandoff.nonce > openedHandoff.current) return;
     let stored: string | null = null;
     try {
       stored = localStorage.getItem(PANEL_LAST_CHAT_KEY);
@@ -239,12 +254,8 @@ export function ChatSidePanel() {
     }
     const id = reopenChatId(stored, Date.now());
     if (id) void openChat(id);
-  }, [open, started, openChat]);
+  }, [open, started, openChat, chatHandoff]);
 
-  // A chat handed over by the page (Run agent on an action, CHAT-21 §F item
-  // 29): opened in place of the last one, each hand-off once.
-  const openedHandoff = useRef(0);
-  const chatHandoff = draft?.chatId ? draft : null;
   useEffect(() => {
     if (!chatHandoff?.chatId || chatHandoff.nonce <= openedHandoff.current) return;
     openedHandoff.current = chatHandoff.nonce;
@@ -280,6 +291,34 @@ export function ChatSidePanel() {
     // Closed (or a chat opened) while it loaded: it stays closed.
     setHistory((was) => (was ? read : was));
   }
+
+  // The tour's chat on screen while the tour is on: its label, and its chips
+  // beside the turn about this page (tourFocusOf).
+  const tourFocus =
+    tour?.active &&
+    tour.topic &&
+    row &&
+    row.id === tour.chatId &&
+    view.kind === 'chat' &&
+    view.thread
+      ? tourFocusOf({
+          pathname,
+          turns: view.thread.messages.flatMap((message, question): TourTurn[] =>
+            message.tour ? [{ topic: message.tour, question }] : [],
+          ),
+          current: tour.topic,
+        })
+      : null;
+  const focusedAnswer = tourFocus?.kind === 'turn' ? tourFocus.question + 1 : null;
+  // The turn about this page, marked a moment as the panel opens on it or the page changes.
+  const [marked, setMarked] = useState<number | null>(null);
+  useEffect(() => {
+    if (!open || focusedAnswer === null) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMarked(focusedAnswer);
+    const timer = setTimeout(() => setMarked(null), TOUR_MARK_MS);
+    return () => clearTimeout(timer);
+  }, [open, pathname, focusedAnswer]);
 
   if (!panel || !started) return null;
   const { size, setup, page } = panel;
@@ -396,7 +435,7 @@ export function ChatSidePanel() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div data-slot="panel-scroll" className="min-h-0 flex-1 overflow-y-auto">
           {history && (
             <nav aria-label={t('history')} className="flex flex-col gap-1 p-3">
               <h3 className="px-2 pb-1 text-xs font-medium text-muted-foreground">{t('recent')}</h3>
@@ -440,6 +479,7 @@ export function ChatSidePanel() {
             </nav>
           )}
           <div className={cn('flex min-h-full flex-col', history && 'hidden')}>
+            {tourFocus && <TourLabel topic={tourFocus.topic} />}
             {view.kind === 'loading' ? (
               <div role="status" aria-label={t('loading')} className="flex flex-col gap-3 p-4">
                 <Skeleton className="ml-auto h-9 w-3/5" />
@@ -484,6 +524,15 @@ export function ChatSidePanel() {
                 pageReferences={page?.referenceables}
                 pageRoute={pathname}
                 draft={draft && draft.nonce > draftFloor ? draft : null}
+                afterLast={
+                  tourFocus
+                    ? ({ send, disabled }) => (
+                        <TourControls focus={tourFocus} send={send} disabled={disabled} />
+                      )
+                    : undefined
+                }
+                afterTurn={focusedAnswer ?? undefined}
+                markedTurn={marked !== null && marked === focusedAnswer ? marked : null}
                 empty={
                   <div className="flex flex-col items-center gap-3 pt-6 text-center">
                     <p className="text-sm text-muted-foreground">

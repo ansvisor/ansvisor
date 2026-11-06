@@ -22,9 +22,10 @@ export const IMAGE_UPLOAD_ACCEPT = Object.keys(IMAGE_UPLOAD_TYPES).join(',');
 
 /**
  * Why a file can't go up: its type, its size, the organization's plan (on
- * the cloud, an active one), the day's uploads made, or the upload failing.
+ * the cloud, an active one), its storage full (00490), the day's uploads
+ * made, or the upload failing.
  */
-export type ImageUploadError = 'type' | 'size' | 'plan' | 'limit' | 'failed';
+export type ImageUploadError = 'type' | 'size' | 'plan' | 'storage' | 'limit' | 'failed';
 
 /** Why a file can't go up, before it is sent, or null. */
 export function imageUploadProblem(file: File): ImageUploadError | null {
@@ -41,7 +42,7 @@ export async function uploadContentImage(
   if (problem) return { error: problem };
   try {
     // A new name each time, the app's: nothing already up is overwritten.
-    const ticket = await prepareImageUpload(file.type);
+    const ticket = await prepareImageUpload(file.type, file.size);
     if ('error' in ticket) return { error: ticket.error };
     const { error } = await createClient()
       .storage.from(IMAGE_UPLOAD_BUCKET)

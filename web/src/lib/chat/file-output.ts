@@ -11,10 +11,14 @@ import { planFactsFromOrgRow, type OrgPlanRow } from './plan-facts';
  * deliverables with it as they are made, and Save to Files an answer.
  */
 
-/** The workspace's Files: bytes and files kept, and its limit (plan + active storage packs). */
+/**
+ * The workspace's storage: Chat's files and the Content Editor's images
+ * (content-images, 00490) kept, its files counted, and its limit (plan +
+ * active storage packs).
+ */
 export async function readChatStorage(organizationId: string): Promise<ChatStorage> {
   const now = new Date().toISOString();
-  const [org, usage, grants] = await Promise.all([
+  const [org, usage, grants, images] = await Promise.all([
     supabaseAdmin
       .from('organizations')
       .select(ORG_PLAN_COLUMNS)
@@ -30,14 +34,19 @@ export async function readChatStorage(organizationId: string): Promise<ChatStora
       .select('bytes')
       .eq('organization_id', organizationId)
       .gt('active_until', now),
+    supabaseAdmin.rpc('content_images_bytes', { p_organization_id: organizationId }),
   ]);
   if (org.error) throw new Error(`Could not read the plan: ${org.error.message}`);
   if (usage.error) throw new Error(`Could not read the storage used: ${usage.error.message}`);
   if (grants.error) throw new Error(`Could not read the storage packs: ${grants.error.message}`);
   const facts = planFactsFromOrgRow((org.data ?? {}) as OrgPlanRow);
   const granted = (grants.data ?? []).reduce((sum, row) => sum + Number(row.bytes ?? 0), 0);
+  // Images not read count as none, as before they counted: the meter still shows Chat's files.
+  if (images.error) {
+    console.error('[chat/files] could not read the content images storage:', images.error.message);
+  }
   return {
-    usedBytes: Number(usage.data?.bytes_used ?? 0),
+    usedBytes: Number(usage.data?.bytes_used ?? 0) + Number(images.error ? 0 : (images.data ?? 0)),
     fileCount: Number(usage.data?.file_count ?? 0),
     limitBytes: storageLimitBytes(
       { isTrial: facts.isTrial, maxStorageGb: facts.limits.maxStorageGb },

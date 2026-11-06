@@ -1,11 +1,11 @@
 ---
 title: Manage drafts in the Content Library
 route: /dashboard/content/library
-keywords: [content library, drafts, draft status, archive, export drafts, made in, open chat, from chat]
+keywords: [content library, drafts, draft status, archive, export drafts, made in, open chat, from chat, first ai crawl, ai bot visit after publish]
 synonyms: [content list, my articles, saved pages, draft list]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -27,6 +27,10 @@ Each tab shows its count:
 ## Columns and filters
 
 The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Made in (Content Editor, Chat, Action Center, Agent or MCP), Status, Created and Updated. A draft made in your own chat has **Open chat**, and the editor shows **From chat** with its title. While the Content Agent writes a draft, its Status reads **Agent writing…**, and **Agent failed** if it couldn't finish; where your workspace has Chat, each comes with the same dot Chat shows for a run. The **Created** filter narrows the list to the last 7, 30 or 90 days, and **Made in** to one place, once drafts come from more than one. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published.
+
+## When AI bots first visit a page
+
+A page that went live through Send to CMS shows a link icon beside its status. Point to it, or tab to it, to see when an AI bot first visited the page after it went live, for example "First AI crawl: GPTBot, 6 hours after it went live". It comes from the AI bot logs your brand sends in **AI Traffic**, which count only verified AI bots. Without them, the line says to connect them.
 
 ## The row menu
 

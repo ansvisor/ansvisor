@@ -288,7 +288,7 @@ export const en = {
       citations: 'Citations',
       siteAudit: 'Site Audit',
       competitors: 'Competitors',
-      brandVisibility: 'Brand Visibility',
+      brandVisibility: 'Visibility',
     } as Record<FeatureTag, string>,
     targetsTitle: 'Where AI looks: sites you can get onto',
     targetsSub: 'The sites AI cites in your answers, sorted by what you can do there.',

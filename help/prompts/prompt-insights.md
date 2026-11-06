@@ -4,8 +4,8 @@ route: /dashboard/prompts/insights
 keywords: [prompt insights, analyze volumes, refresh volumes, intent, similar topics, high opportunity prompts]
 synonyms: [prompt volume, search demand, keyword volume, volume analysis]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -40,6 +40,6 @@ For analyzed prompts you see:
 - **Tracked Prompts**: the **Volume** column.
 - A prompt's own page: an **AI searches a month** card, when the prompt has a volume.
 - **Prompt Suggestions**: each AI suggestion's monthly range.
-- Outside Prompts: the Action Center's affected prompts and topic opportunities, the Brand Visibility page's Opportunities, and a content opportunity's **Est. AI Volume**.
+- Outside Prompts: the Action Center's affected prompts and topic opportunities, Opportunities on Visibility's Overview, and a content opportunity's **Est. AI Volume**.
 
 Exports mark estimated volumes, with their range and confidence, so a spreadsheet doesn't read them as counts.
