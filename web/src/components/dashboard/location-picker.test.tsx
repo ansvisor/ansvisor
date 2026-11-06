@@ -38,14 +38,14 @@ async function open() {
 describe('LocationPicker', () => {
   it('offers the countries the engines answer from, says which engines miss one, and cities only where Google answers', async () => {
     getTrackingCountries.mockResolvedValue([
-      { code: 'US', models: ['chatgpt', 'copilot', 'aimode'] },
-      { code: 'TR', models: ['chatgpt', 'copilot', 'aimode'] },
+      { code: 'US', models: ['chatgpt', 'gemini', 'aimode'] },
+      { code: 'TR', models: ['chatgpt', 'gemini', 'aimode'] },
       { code: 'BO', models: ['chatgpt', 'aimode'] },
-      { code: 'DE', models: ['chatgpt', 'copilot'] },
+      { code: 'DE', models: ['chatgpt', 'gemini'] },
     ]);
     const text = await open();
     expect(text).toContain('Bolivia');
-    expect(text).toContain('Country · not on Copilot');
+    expect(text).toContain('Country · not on Gemini');
     // No Google engine in Germany: its cities aren't offered; Türkiye's are.
     expect(text).toContain('İstanbul');
     expect(text).not.toContain('Berlin');

@@ -28,6 +28,7 @@ export function TodayCard({
   steps,
   onOpenAction,
   onOpenStep,
+  gear = null,
 }: {
   /** Null while it loads, or when it couldn't be read: the card then stays away. */
   read: TodayRead | null;
@@ -38,6 +39,8 @@ export function TodayCard({
   steps: GettingStartedStep[] | null;
   onOpenAction: (id: string) => void;
   onOpenStep: (step: GettingStartedStep) => void;
+  /** The Agent work gear (mockup screen 3), at the header's right. */
+  gear?: React.ReactNode;
 }) {
   const t = useTranslations('actionCenter.actionsPage.today');
   const tStarted = useTranslations('actionCenter.gettingStarted');
@@ -46,7 +49,11 @@ export function TodayCard({
   if (ready.length > 0) {
     return (
       <section aria-label={t('title')} className="rounded-xl border border-foreground/70 px-4 py-1">
-        <TodayHeader title={t('title')} sub={t('stepsSubtitle', { count: ready.length })} />
+        <TodayHeader
+          title={t('title')}
+          sub={t('stepsSubtitle', { count: ready.length })}
+          action={gear}
+        />
         <ol>
           {ready.map((step, index) => (
             <TodayRow
@@ -75,17 +82,19 @@ export function TodayCard({
     );
   }
 
-  return <TodayActions read={read} actions={actions} onOpenAction={onOpenAction} />;
+  return <TodayActions read={read} actions={actions} onOpenAction={onOpenAction} gear={gear} />;
 }
 
 function TodayActions({
   read,
   actions,
   onOpenAction,
+  gear,
 }: {
   read: TodayRead;
   actions: ActionItem[];
   onOpenAction: (id: string) => void;
+  gear: React.ReactNode;
 }) {
   const t = useTranslations('actionCenter.actionsPage.today');
   const tPage = useTranslations('actionCenter.actionsPage');
@@ -113,6 +122,7 @@ function TodayActions({
           title={t('title')}
           sub={today.length > 0 ? t('subtitle', { count: today.length }) : null}
           hint={t('rankHint')}
+          action={gear}
         />
         {today.length === 0 ? (
           <p className="border-t py-3 text-sm text-muted-foreground">{t('empty')}</p>
@@ -190,7 +200,17 @@ function TodayActions({
   );
 }
 
-function TodayHeader({ title, sub, hint }: { title: string; sub: string | null; hint?: string }) {
+function TodayHeader({
+  title,
+  sub,
+  hint,
+  action = null,
+}: {
+  title: string;
+  sub: string | null;
+  hint?: string;
+  action?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-2">
       <h2 className="text-base font-semibold">{title}</h2>
@@ -200,6 +220,7 @@ function TodayHeader({ title, sub, hint }: { title: string; sub: string | null; 
           <Info className="h-3.5 w-3.5" />
         </span>
       )}
+      {action}
     </div>
   );
 }

@@ -172,7 +172,7 @@ describe('ReportCardPdfDocument', () => {
     expect(value).toContain('Ansvisor Starter is $49 a month.');
     expect(value).toContain('Ansvisor Starter · $49/month');
     expect(value).toContain('or $470 a year, paid yearly: 20% off');
-    expect(value).toContain('Tracks ChatGPT and Microsoft Copilot every day');
+    expect(value).toContain('Tracks ChatGPT and Google Gemini every day');
     expect(value).toContain('Growth, $249/month or $2,390 a year (20% off)');
     expect(value).toContain('A revenue scenario');
     expect(value).toContain('Measure your own questions');
