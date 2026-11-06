@@ -123,7 +123,7 @@ export default function ContentEditorPage() {
   );
 
   return (
-    <div className="-m-6 flex h-[calc(100vh-4rem)] flex-col md:h-screen">
+    <div className="-m-6 flex h-[calc(100%+3rem)] flex-col">
       {!current ? (
         <div className="flex flex-1 items-center justify-center" aria-busy="true">
           <LoadingDots size="md" className="text-muted-foreground" />
