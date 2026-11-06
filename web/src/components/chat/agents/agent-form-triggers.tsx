@@ -230,8 +230,12 @@ function Check({
   );
 }
 
-/** The trigger kinds a kept trigger can be (Manual is always there, as its own line). */
-const KINDS = ['schedule', 'signal', 'kpi', 'watch_rule'] as const;
+/**
+ * The trigger kinds a kept trigger can be (Manual is always there, as its
+ * own line). When a brand is added needs All brands: its note says so, and
+ * the brands next to FOR are marked until they are.
+ */
+const KINDS = ['schedule', 'signal', 'kpi', 'watch_rule', 'brand_added'] as const;
 
 /** The control a trigger's problem is about, so it is marked and read with it. */
 const PROBLEM_CONTROL: Record<string, 'date' | 'time' | 'category' | 'kpi' | 'threshold'> = {
@@ -288,7 +292,9 @@ export function TriggerStep({
   // The selected trigger's problem: marked on its control and read with it.
   const draftProblem = draft && shown ? problems.triggers[draft.key] : undefined;
   const invalidOn = (control: 'date' | 'time' | 'category' | 'kpi' | 'threshold') => {
-    if (!draft || !draftProblem || draft.kind === 'watch_rule') return {};
+    if (!draft || !draftProblem || draft.kind === 'watch_rule' || draft.kind === 'brand_added') {
+      return {};
+    }
     const target = PROBLEM_CONTROL[draftProblem] ?? KIND_CONTROL[draft.kind];
     return target === control
       ? { 'aria-invalid': true, 'aria-describedby': errorId(`trigger-${draft.key}`) }
@@ -671,6 +677,12 @@ export function TriggerStep({
             <>
               <span className={KW}>{t('trigger.kw.when')}</span>
               <span>{t('trigger.watchRuleWhen')}</span>
+            </>
+          )}
+          {draft?.kind === 'brand_added' && (
+            <>
+              <span className={KW}>{t('trigger.kw.when')}</span>
+              <span>{t('trigger.brandAddedWhen')}</span>
             </>
           )}
         </div>

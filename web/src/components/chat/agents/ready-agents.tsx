@@ -2,9 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Lock } from 'lucide-react';
+import { ChevronDown, Lock } from 'lucide-react';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { buttonVariants } from '@/components/ui/button-variants';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Link } from '@/i18n/navigation';
 import { presetTriggerDraft, triggerInputOf } from '@/lib/chat/agent-form';
 import {
@@ -32,8 +39,10 @@ import type { AgentWords } from './agent-words';
  * this agent** opens New agent filled with it; nothing is saved or turned
  * on until the person does it there. A Soon card says what it waits for and
  * opens nothing. Analysts and Agency partners see the cards with the line
- * the list gives them. Filters: the goal, and business type, industry and
- * role once a preset carries one. The agents made for the site type of the
+ * the list gives them. Filters: one row of headers (Goal ▾ · Business type ▾
+ * · Role ▾), the goal, and business type, industry and role once a preset
+ * carries one; each opens its options right under it, one at a time, and
+ * names its pick ("Goal: Content ▾"). The agents made for the site type of the
  * brand on screen, or for one of the person's work areas, come first in
  * their group, marked For your site type or For your role. A link from
  * Chat to one card (setup's recommendations, list_ready_agents) brings it
@@ -49,35 +58,70 @@ const FILTER_KEYS: Record<PresetFilter, string> = {
 
 const LIST_FORMAT = new Intl.ListFormat('en', { style: 'long', type: 'conjunction' });
 
-/** A filter chip (the list's `.fc`). */
-function FilterChip({
-  on,
-  onClick,
-  children,
+/**
+ * A filter's header (the list's `.fc` chip with a ▾): its options open right
+ * under it, and picking one, All too, closes them. It names the pick, so the
+ * row says what is filtered.
+ */
+function FilterMenu({
   filter,
-  value,
+  values,
+  picked,
+  open,
+  onOpenChange,
+  onPick,
 }: {
-  on: boolean;
-  onClick: () => void;
-  children: string;
   filter: PresetFilter;
-  value: string;
+  values: readonly string[];
+  picked: string | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onPick: (value: string | null) => void;
 }) {
-  return (
-    <button
-      type="button"
-      data-action="agents.readyFilter"
+  const t = useTranslations('chatAgents.ready');
+  const name = t(`filters.${filter}`);
+  const label = (value: string) => t(`${FILTER_KEYS[filter]}.${value}`);
+  const item = (value: string, text: string) => (
+    <DropdownMenuRadioItem
+      key={value}
+      value={value}
+      closeOnClick
+      data-slot="ready-filter-option"
       data-filter={filter}
       data-value={value}
-      aria-pressed={on}
-      onClick={onClick}
-      className={cn(
-        'h-7 rounded-full border bg-card px-2.5 text-[12.5px] outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        on && 'border-foreground bg-foreground text-background hover:bg-foreground/90',
-      )}
     >
-      {children}
-    </button>
+      {text}
+    </DropdownMenuRadioItem>
+  );
+
+  return (
+    // Not modal: with one panel open, a click on another header opens that one.
+    <DropdownMenu modal={false} open={open} onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger
+        data-action="agents.readyFilter"
+        data-filter={filter}
+        data-picked={picked ?? undefined}
+        className={cn(
+          'inline-flex h-7 max-w-full items-center gap-1 rounded-full border bg-card pr-2 pl-2.5 text-[12.5px] outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50 data-popup-open:bg-accent',
+          picked &&
+            'border-foreground bg-foreground text-background hover:bg-foreground/90 data-popup-open:bg-foreground/90',
+        )}
+      >
+        <span className="truncate">
+          {picked ? t('filterPicked', { filter: name, value: label(picked) }) : name}
+        </span>
+        <ChevronDown aria-hidden className="size-3.5 shrink-0 opacity-60" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent aria-label={name} className="w-56">
+        <DropdownMenuRadioGroup
+          value={picked ?? ''}
+          onValueChange={(value: string) => onPick(value || null)}
+        >
+          {item('', t('all'))}
+          {values.map((value) => item(value, label(value)))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -221,9 +265,10 @@ export function ReadyAgents({
   /** The catalog; a test's own list otherwise. */
   presets?: readonly AgentPreset[];
 }) {
-  const t = useTranslations('chatAgents.ready');
   const options = useMemo(() => presetFilterOptions(presets), [presets]);
   const [picked, setPicked] = useState<Partial<Record<PresetFilter, string | null>>>({});
+  // The one filter whose options are open.
+  const [openFilter, setOpenFilter] = useState<PresetFilter | null>(null);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const brandsLoaded = useBrandStore((s) => s.loaded);
   // The brand on screen's site type, guessed while it isn't set; none before the brands load.
@@ -243,39 +288,20 @@ export function ReadyAgents({
 
   return (
     <div>
-      <div className="my-3 flex flex-col gap-1.5">
+      <div data-slot="ready-filters" className="my-3 flex flex-wrap items-center gap-1.5">
         {options.map(({ filter, values }) => (
-          <div
+          <FilterMenu
             key={filter}
-            role="group"
-            aria-label={t(`filters.${filter}`)}
-            className="flex flex-wrap items-center gap-1.5"
-          >
-            {options.length > 1 && (
-              <span className="mr-0.5 text-[11.5px] text-muted-foreground">
-                {t(`filters.${filter}`)}
-              </span>
-            )}
-            <FilterChip
-              filter={filter}
-              value=""
-              on={!picked[filter]}
-              onClick={() => pick(filter, null)}
-            >
-              {t('all')}
-            </FilterChip>
-            {values.map((value) => (
-              <FilterChip
-                key={value}
-                filter={filter}
-                value={value}
-                on={picked[filter] === value}
-                onClick={() => pick(filter, value)}
-              >
-                {t(`${FILTER_KEYS[filter]}.${value}`)}
-              </FilterChip>
-            ))}
-          </div>
+            filter={filter}
+            values={values}
+            picked={picked[filter] ?? null}
+            open={openFilter === filter}
+            onOpenChange={(open) =>
+              // Another header's opening and this one's closing can come in either order.
+              setOpenFilter((was) => (open ? filter : was === filter ? null : was))
+            }
+            onPick={(value) => pick(filter, value)}
+          />
         ))}
       </div>
 

@@ -170,7 +170,7 @@ describe('Prompts reads', () => {
       truncated: false,
       engines: [
         {
-          platform: 'copilot-web',
+          platform: 'gemini-web',
           answers: 4,
           answersWithFanout: 3,
           subQueries: 2,
@@ -180,7 +180,7 @@ describe('Prompts reads', () => {
       subQueries: [
         {
           query: 'best crm',
-          engines: ['copilot-web'],
+          engines: ['gemini-web'],
           timesSearched: 3,
           sourcedPrompts: [{}],
           tracked: true,
@@ -190,14 +190,14 @@ describe('Prompts reads', () => {
       promptCoverage: [],
     });
     const fanouts = await getFanoutsFor(auth(), { brandId: BRAND });
-    // Starter reads ChatGPT and Copilot: the rows are theirs from the start, so every count is.
+    // Starter reads ChatGPT and Gemini: the rows are theirs from the start, so every count is.
     expect(mocks.getQueryFanout).toHaveBeenCalledWith(BRAND, {
       days: 30,
-      platforms: ['chatgpt-web', 'copilot-web'],
+      platforms: ['chatgpt-web', 'gemini-web'],
     });
     expect(fanouts).toMatchObject({
       total_observed: 3,
-      engines: [{ platform: 'copilot-web', answers_with_fanout: 3 }],
+      engines: [{ platform: 'gemini-web', answers_with_fanout: 3 }],
       sub_queries: [{ query: 'best crm', times_searched: 3, tracked: true }],
       sub_queries_total: 1,
       data_as_of: '2026-10-29T06:00:00Z',
@@ -208,7 +208,7 @@ describe('Prompts reads', () => {
     reads.answers.prompt_results = { created_at: '2026-10-29T06:00:00Z' };
     const sub = (query: string, timesSearched: number, brandAnswers: number, extra = {}) => ({
       query,
-      engines: ['copilot-web'],
+      engines: ['gemini-web'],
       timesSearched,
       sourcedPrompts: [
         { id: 'p1', text: 'Best CRM for small teams?' },
@@ -241,11 +241,11 @@ describe('Prompts reads', () => {
       ],
     });
     const gaps = await getFanoutGapsFor(auth(), { brandId: BRAND });
-    // Starter reads ChatGPT and Copilot, and who each answer named comes with the read.
+    // Starter reads ChatGPT and Gemini, and who each answer named comes with the read.
     expect(mocks.getQueryFanout).toHaveBeenCalledWith(BRAND, {
       days: 30,
       presence: true,
-      platforms: ['chatgpt-web', 'copilot-web'],
+      platforms: ['chatgpt-web', 'gemini-web'],
     });
     expect(gaps).toEqual({
       days: 30,
@@ -255,7 +255,7 @@ describe('Prompts reads', () => {
       gaps: [
         {
           query: 'crm free trial',
-          engines: ['copilot-web'],
+          engines: ['gemini-web'],
           times_searched: 5,
           tracked: false,
           from_prompts: [
@@ -298,7 +298,7 @@ describe('Prompts reads', () => {
         },
         {
           id: 'r2',
-          platform: 'gemini-web',
+          platform: 'google-aio',
           response: 'hidden',
           createdAt: '2026-10-29T06:00:00Z',
           mentionCount: 0,

@@ -25,7 +25,7 @@ const db = vi.hoisted(() => ({
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
     from(table: string) {
-      const read = { table, filters: [] as [string, unknown][] };
+      const read = { table, filters: [] as [string, unknown][], columns: '' };
       db.reads.push(read);
       const rows = () => {
         const value = db.tables[table];
@@ -33,16 +33,20 @@ vi.mock('@/lib/supabase/admin', () => ({
           ? (value as (f: Filters) => unknown)(read.filters)
           : value;
       };
-      const result = (): Result => ({
-        data: rows() ?? null,
-        error: db.errors[table]
-          ? typeof db.errors[table] === 'string'
-            ? { message: db.errors[table] }
-            : db.errors[table]
-          : null,
-      });
+      // An error for one read of a table ("table:columns"), else for every read of it.
+      const errorOf = () => db.errors[`${table}:${read.columns}`] ?? db.errors[table];
+      const result = (): Result => {
+        const error = errorOf();
+        return {
+          data: rows() ?? null,
+          error: error ? (typeof error === 'string' ? { message: error } : error) : null,
+        };
+      };
       const builder = {
-        select: () => builder,
+        select: (columns = '') => {
+          read.columns = columns;
+          return builder;
+        },
         eq: (column: string, value: unknown) => {
           read.filters.push([column, value]);
           return builder;
@@ -198,6 +202,60 @@ describe('readPrecedenceContext', () => {
   });
 });
 
+describe('Agent work (AC-011)', () => {
+  const row = {
+    tool_policies: {},
+    full_auto_for_members: true,
+    dont_ask_again: true,
+    manager_execute_off: [],
+  };
+  const agentRun = { runId: 'run-1', mode: 'full_auto' as const };
+
+  it('reads the workspace’s Agent work, and marks an agent’s run for the precedence', async () => {
+    db.tables.chat_settings = { ...row, agent_work: 'auto_start' };
+    const agent = await readPrecedenceContext({ ...request, agent: agentRun });
+    expect(agent).toMatchObject({ agentRun: true, settings: { agentWork: 'auto_start' } });
+    const read = db.reads.find(
+      (r) => r.table === 'chat_settings' && (r as { columns?: string }).columns === 'agent_work',
+    );
+    expect(read?.filters).toEqual([['organization_id', ORG]]);
+    // A person's own chat isn't an agent's run.
+    const person = await readPrecedenceContext(request);
+    expect(person?.agentRun).toBeUndefined();
+  });
+
+  it('holds an agent’s changes for approval on I approve first, the default', async () => {
+    for (const agentWork of ['approve_first', 'not_a_choice', undefined]) {
+      db.tables.chat_settings = agentWork ? { ...row, agent_work: agentWork } : { ...row };
+      const context = await readPrecedenceContext({
+        ...request,
+        mode: 'full_auto',
+        agent: agentRun,
+      });
+      expect(
+        decideToolCall(addPrompts, context!, { brandId: null, brandIsDemo: false, tainted: false }),
+        String(agentWork),
+      ).toMatchObject({ kind: 'ask', reason: 'agent_work' });
+    }
+    expect(parseChatSettings({ ...row, agent_work: 'not_a_choice' }).agentWork).toBe(
+      'approve_first',
+    );
+  });
+
+  it('reads the rest before 00481, with agents on its default, and nothing on a failed read', async () => {
+    db.tables.chat_settings = { ...row, full_auto_for_members: false };
+    db.errors['chat_settings:agent_work'] = {
+      code: '42703',
+      message: 'column chat_settings.agent_work does not exist',
+    };
+    const context = await readPrecedenceContext({ ...request, agent: agentRun });
+    expect(context?.settings.fullAutoForMembers).toBe(false);
+    expect(context?.settings.agentWork).toBeUndefined();
+    db.errors['chat_settings:agent_work'] = 'timeout';
+    await expect(readPrecedenceContext(request)).rejects.toThrow(/timeout/);
+  });
+});
+
 describe("step 4b's facts (AUTONOMOUS-GO-LIVE §5.2)", () => {
   const AGENT_RUN = 'agent-run-1';
   const agentRun = { runId: AGENT_RUN, mode: 'full_auto' as const };
@@ -265,8 +323,16 @@ describe("step 4b's facts (AUTONOMOUS-GO-LIVE §5.2)", () => {
     const off = await readPrecedenceContext({ ...request, agent: agentRun });
     expect(off).not.toHaveProperty('autoGoLiveOn');
     expect(off).not.toHaveProperty('agent');
-    // Only the one settings read: the switch's own is made while the flag is on.
-    expect(db.reads.filter((read) => read.table === 'chat_settings')).toHaveLength(1);
+    // Only the settings and Agent work (00481) reads: the switch's own is made while the flag
+    // is on.
+    expect(
+      db.reads
+        .filter((read) => read.table === 'chat_settings')
+        .map((read) => (read as { columns?: string }).columns),
+    ).toEqual([
+      'tool_policies, full_auto_for_members, dont_ask_again, manager_execute_off, agents_full_auto',
+      'agent_work',
+    ]);
     vi.stubEnv('CHAT_AUTO_GO_LIVE', 'true');
     const own = await readPrecedenceContext(request);
     expect(own).toMatchObject({ autoGoLiveOn: true, agent: null });
