@@ -6626,8 +6626,9 @@
         "goal": "Goal",
         "businessType": "Business type",
         "industry": "Industry",
-        "role": "For your role"
+        "role": "Role"
       },
+      "filterPicked": "{filter}: {value}",
       "all": "All",
       "goals": {
         "visibility": "Visibility",

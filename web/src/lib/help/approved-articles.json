@@ -784,7 +784,10 @@
         "fan-out gaps",
         "prompt portfolio manager",
         "prompts to add",
-        "prompts to pause"
+        "prompts to pause",
+        "goal",
+        "role",
+        "filter agents"
       ],
       "synonyms": [
         "my agents",
@@ -824,11 +827,15 @@
         },
         {
           "heading": "Ready-to-use agents",
-          "text": "**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back**, **Weekly Report** and **Onboarding & Help**, and agents made for a kind of site or a team, such as **Product Answer Pages** for e-commerce or **CEO Brief** for founders. Each card says what the agent does, its skills, what starts it and its mode. Filter them by **Goal**, **Business type** and **For your role**.\n\nAdmins and Managers click **Use this agent**. **New agent** opens with its skills, triggers, mode and connections filled in, for the brand you have open. Change what you like, then click **Save as draft** or **Turn on**. Nothing turns on by itself.\n\nIf your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet."
+          "text": "**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back**, **Weekly Report** and **Onboarding & Help**, and agents made for a kind of site or a team, such as **Product Answer Pages** for e-commerce or **CEO Brief** for founders. Each card says what the agent does, its skills, what starts it and its mode.\n\nAdmins and Managers click **Use this agent**. **New agent** opens with its skills, triggers, mode and connections filled in, for the brand you have open. Change what you like, then click **Save as draft** or **Turn on**. Nothing turns on by itself.\n\nIf your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet."
         },
         {
           "heading": "Fan-out Gap Filler",
           "text": "**Fan-out Gap Filler** runs every Monday at 09:00 on **Auto, ask before changes**. It reads the sub-questions AI engines searched while answering your tracked prompts, finds the ones where no answer named your brand, and drafts an answer-first section for each in a Content draft, which **Answer-first rewrite** then goes over. Its answer lists each sub-question with the engines that searched it and the competitors named instead. Sending the draft to your CMS and publishing it stay yours. In Chat, the same skill is **/fanout**."
+        },
+        {
+          "heading": "Filter ready-to-use agents",
+          "text": "Above the cards, **Goal**, **Business type** and **Role** sit side by side, each with an arrow. Click one to open its list right under it, then pick an option: the list closes and only the matching agents show. The header then shows your pick, such as **Goal: Content**, so you can see what is filtered. Filters add up: **Goal: Content** with **Business type: B2C** shows the agents that match both. Pick **All** to clear that filter. One list is open at a time; press Esc or click elsewhere to close it. A filter shows once an agent has one of its options."
         },
         {
           "heading": "Agents for your site and your work",
