@@ -13,6 +13,7 @@ const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success:
 vi.mock('sonner', () => ({ toast }));
 
 const { ImageUploadButton } = await import('./image-upload-button');
+const { GetMoreContext } = await import('@/components/ai-usage/get-more-context');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -36,11 +37,13 @@ afterEach(() => {
   container.remove();
 });
 
-const render = () =>
+const render = (openGetMore: ((tab?: 'ai' | 'storage') => void) | null = null) =>
   act(async () =>
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ImageUploadButton onUploaded={onUploaded} />
+        <GetMoreContext.Provider value={openGetMore}>
+          <ImageUploadButton onUploaded={onUploaded} />
+        </GetMoreContext.Provider>
       </NextIntlClientProvider>,
     ),
   );
@@ -76,5 +79,20 @@ describe('ImageUploadButton', () => {
     await pick(new File(['x'], 'big.png', { type: 'image/png' }));
     expect(toast.error).toHaveBeenCalledWith('That image is over 5 MB. Use a smaller one.');
     expect(onUploaded).not.toHaveBeenCalled();
+  });
+
+  // Images count toward the workspace's storage (00490).
+  it('says the storage is full, with Get more storage where the window is', async () => {
+    uploadContentImage.mockResolvedValue({ error: 'storage' });
+    const open = vi.fn();
+    await render(open);
+    await pick(new File(['x'], 'shot.png', { type: 'image/png' }));
+    const [message, options] = toast.error.mock.calls[0];
+    expect(message).toBe(
+      "Your workspace's storage is full. Make room or get more storage, or paste the image's address instead.",
+    );
+    expect(options.action.label).toBe('Get more storage');
+    options.action.onClick();
+    expect(open).toHaveBeenCalledWith('storage');
   });
 });

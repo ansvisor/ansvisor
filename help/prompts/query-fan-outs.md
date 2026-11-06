@@ -17,11 +17,13 @@ Behind an answer, an AI engine can run searches of its own. The **Query Fan-out*
 
 ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot and Perplexity shared them, but Ansvisor no longer tracks these two engines. Searches from their past answers still show for the dates you pick.
 
+New searches now come from ChatGPT only, so the tab lists fewer of them than before. A note at the top of the tab says so.
+
 ## Engines
 
 Above the list, **All engines** counts the searches found in the range, and each engine that answered has a chip of its own. A chip gives the share of that engine's answers that came with searches, such as "40% of answers", and how many searches it ran. Click a chip to see only that engine's searches; click it again, or **All engines**, to see them all.
 
-An engine that usually shares its searches but sent none is marked in amber, "none since" a date, with a note under the chips. Its answers are still tracked as usual; only the list of searches is missing. A **not shared** chip is faded and doesn't filter.
+A **not shared** chip is faded and doesn't filter.
 
 ## By prompt
 

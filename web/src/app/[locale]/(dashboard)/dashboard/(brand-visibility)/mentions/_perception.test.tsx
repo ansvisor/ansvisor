@@ -10,7 +10,7 @@ import { MentionsPerceptionTab } from './_perception';
 import { CoMentionsCard, GapNote, HeatmapCard, TermsCard } from './_perception-cards';
 
 const getMentionsPerception = vi.fn();
-vi.mock('@/lib/actions/mentions', () => ({
+vi.mock('@/lib/visibility-reads', () => ({
   getMentionsPerception: (...args: unknown[]) => getMentionsPerception(...args),
 }));
 // The radar is loaded on demand and measured; these tests read what it is given.

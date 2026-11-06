@@ -167,8 +167,8 @@ export async function POST(req: NextRequest) {
           const planChanged = Boolean(orgBefore && newPlanId && newPlanId !== orgBefore.plan);
           if (orgBefore && planChanged) {
             // Plan changed — re-align prompts. Handles both expansion
-            // (Starter → Growth: 2 → 8 engines) and contraction
-            // (Growth → Starter: 8 → 2 engines). Issue #79.
+            // (Starter → Growth: 2 → 4 engines) and contraction
+            // (Growth → Starter: 4 → 2 engines). Issue #79.
             await alignPromptsSafe(orgBefore.id, newPlanId, 'subscription.updated');
           }
 

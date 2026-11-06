@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Check, ChevronRight, Plus, Loader2, Search } from 'lucide-react';
+import { Check, ChevronRight, Info, Plus, Loader2, Search } from 'lucide-react';
 import { usePagination, TablePager } from '@/components/table-pager';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
@@ -111,6 +111,7 @@ export function QueryFanoutTab({
   // A read-only workspace (plan not active): Track opens the upgrade dialog
   // instead, and the intents (an AI call the API refuses then) aren't asked.
   const { guard, isLocked } = useUpgradeGate();
+  const t = useTranslations('prompts.fanout');
   const tActions = useTranslations('readOnly.actions');
   // A brand with no topic yet: Track asks for one first.
   const topicFirst = useTopicFirstDialog({ onAddTopic });
@@ -365,6 +366,10 @@ export function QueryFanoutTab({
           {view === 'by-prompt'
             ? 'Your tracked prompts grouped by the sub-queries their answers actually triggered — expand a prompt to see its observed fan-out. "Answers with fan-out" is how many of that prompt’s tracked answers ran a live search at all.'
             : `The sub-queries answer engines actually ran while building your answers (${rangeLabel}) — observed, never predicted. Sorted by how often they were searched. Track any of them with the + to measure its own visibility.`}
+        </p>
+        <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {t('sourceNote')}
         </p>
       </CardHeader>
       <CardContent>

@@ -60807,3 +60807,158 @@ create policy "chat_agent_trigger_claims: agent select"
     and brand_id in (select public.user_brand_ids())
   );
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00485_chat_home_view.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00485: Chat Home's view — the Default view (a greeting, one line and the
+-- box) or the person's focus
+-- ============================================================================
+-- Chat Home opened with every block the person's focus (CHAT-24) adds: For
+-- you now, What's new, starter questions and new skills. People found that
+-- first screen busy, so Home now starts on a Default view that shows only
+-- the greeting, one line on what changed, the focus pill and the box. The
+-- focus picker offers Default first, picked at the start.
+--
+--   * home_view: 'default' (the default) or 'focus' (Home tailored to the
+--     areas in focus, 00400). Everyone starts on default, people who picked
+--     areas before too: their focus stays as it was, so the picker opens
+--     with it ticked and Continue brings their Home back in one step. The
+--     composer's / menu still lists the focus's skills first.
+--
+-- Behind CHAT_AGENTIC: nothing reads it while the flag is off. The person
+-- reads and writes their own row (00400's policies).
+
+alter table public.chat_user_prefs
+  add column if not exists home_view text not null default 'default'
+    check (home_view in ('default', 'focus'));
+
+comment on column public.chat_user_prefs.home_view is
+  'Chat Home''s view: default (the greeting, one line and the box) or focus (tailored to the focus areas). Everyone starts on default; focus stays kept for the picker.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00487_starter_prompts_gemini.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Starter prompts track Gemini, no longer Microsoft Copilot (00487).
+--
+-- Cloro stopped serving Copilot and Perplexity on 2026-11-06: both block
+-- logged-out sessions, and Cloro rejects their tasks. The tracking worker now
+-- skips the two engines (UNAVAILABLE_PLATFORMS), and Starter's engine list in
+-- config/plans (web and server) became ChatGPT and Gemini (#2181). New or
+-- edited prompts follow that list, but the worker runs each prompt's stored
+-- `platforms`, so a Starter prompt saved with Copilot now tracks ChatGPT only.
+-- This swaps Copilot for Gemini on those prompts and drops Perplexity, which
+-- Starter no longer had (00134), keeping the order and listing Gemini once,
+-- as alignPromptsToPlanForOrg would on a plan change. Owner decision,
+-- 2026-11-06.
+--
+-- Organizations on the Starter plan, in their free trial or paid, have their
+-- prompts moved. Only cloud organizations are touched, as in 00134: a Stripe
+-- customer exists only there, and self-hosted installs run every engine,
+-- whatever `plan` holds. The demo brand is left out: its prompts are sample
+-- data the server rebuilds (00380). Past Copilot and Perplexity results stay
+-- as they are.
+
+update public.prompts p
+set platforms = coalesce(
+  (
+    select array_agg(engine.platform order by engine.first_at)
+    from (
+      select
+        case when u.platform = 'copilot-web' then 'gemini-web' else u.platform end as platform,
+        min(u.ord) as first_at
+      from unnest(p.platforms) with ordinality as u(platform, ord)
+      where u.platform <> 'perplexity-web'
+      group by 1
+    ) as engine
+  ),
+  '{}'::text[]
+)
+from public.prompt_sets ps
+join public.brands b on b.id = ps.brand_id
+join public.organizations o on o.id = b.organization_id
+where p.prompt_set_id = ps.id
+  and o.plan = 'starter'
+  and o.stripe_customer_id is not null
+  and not b.is_demo
+  and p.platforms && array['copilot-web', 'perplexity-web']::text[];
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00489_chat_schedules_digest.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00489: a scheduled job that sends What's new for the person's plan
+-- ============================================================================
+-- Chat Wave 4 W4-23: "What's new for my plan, 1st of every month". There is
+-- no such job until a person sets one up on the schedule card (owner
+-- decision 14): nothing is written for anyone in advance. Its runs call no
+-- model and use none of the AI limit. The worker lists the creator's unread
+-- What's new entries for their plan in the job's chat and marks them read.
+-- A run with nothing new delivers nothing (its run row is `unchanged`).
+--
+--   * chat_schedules.digest: the kind of digest a job sends; null for any
+--     other job, which asks Chat its prompt or skill as before. A digest is
+--     about the workspace, never one brand, runs no skill, and is never a
+--     follow-up check. Its prompt is the words its chat shows as the message.
+
+alter table public.chat_schedules
+  add column if not exists digest text check (digest in ('whats_new'));
+
+alter table public.chat_schedules
+  drop constraint if exists chat_schedules_digest_shape;
+alter table public.chat_schedules
+  add constraint chat_schedules_digest_shape check (
+    digest is null
+    or (skill_name is null and brand_id is null and kind <> 'followup_check')
+  );
+
+comment on column public.chat_schedules.digest is
+  'W4-23 (00489): whats_new: each run lists the creator''s unread What''s new entries for their plan in the job''s chat, with no model and no AI use, and delivers nothing when none are new. Null: a job that asks Chat its prompt or skill.';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00490_content_images_storage_bytes.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00490: content images count toward a workspace's storage
+-- ============================================================================
+-- Images uploaded in the Content Editor and the AI images it makes are kept
+-- in the public bucket content-images (00272), under the organization's
+-- folder ("<organization id>/..."). Until now only the daily upload cap
+-- counted them; the storage meter (plans' maxStorageGb and storage packs)
+-- counted Chat's files alone (chat_storage_usage, 00411).
+--
+--   * content_images_bytes(p_organization_id): the bytes the workspace keeps
+--     in content-images, read from storage.objects when asked, so an image
+--     removed (an AI option not picked) leaves the count at once and no
+--     trigger is needed on the storage schema. A browser upload goes
+--     straight to its signed address, so the server never sees its size:
+--     the object's own metadata is the one place it is known.
+--
+--     The folder is read as a range on name collate "C" ('<org>/' up to
+--     '<org>0', '0' being the character after '/'), which the bucket's
+--     (bucket_id, name collate "C") index serves; a LIKE on the database's
+--     own collation could not use it. Service role only: the app reads it
+--     on the server, for the workspace of the person asking.
+
+create or replace function public.content_images_bytes(p_organization_id uuid)
+returns bigint
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(sum((o.metadata ->> 'size')::bigint), 0)::bigint
+  from storage.objects o
+  where o.bucket_id = 'content-images'
+    and o.name collate "C" >= p_organization_id::text || '/'
+    and o.name collate "C" < p_organization_id::text || '0';
+$$;
+
+revoke all on function public.content_images_bytes(uuid) from public, anon, authenticated;
+grant execute on function public.content_images_bytes(uuid) to service_role;
+
+comment on function public.content_images_bytes(uuid) is
+  'Content images (00490): the bytes a workspace keeps in content-images (uploads and AI images, under its folder), for the storage meter with Chat''s files. Service role only.';
+
+notify pgrst, 'reload schema';
+

@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { readKey } from '@/components/brand-visibility/read-cache';
 import { ReadError } from '@/components/brand-visibility/read-error';
 import { useBrandVisibilityShell } from '@/components/brand-visibility/shell-context';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getMentionsOverview } from '@/lib/actions/mentions';
 import { mentionsQuery, type MentionsFilters } from '@/lib/mentions-filters';
 import type { MentionsOverview } from '@/lib/mentions-overview';
 import { cn } from '@/lib/utils';
+import { getMentionsOverview } from '@/lib/visibility-reads';
 import { CompetitorTable } from './_competitor-table';
 import { Headline } from './_headline';
 import { OverviewKpis } from './_overview-kpis';
@@ -35,7 +36,8 @@ function Message({ children }: { children: React.ReactNode }) {
  * The Overview tab (MS-06), top-down as in the mockup: the summary line, the
  * KPI cards, the trend beside the platform table, and the competitor
  * framing. One read per filter change; a newer change wins over a read
- * still on its way.
+ * still on its way. Figures read before for the same brand and filters (the
+ * tab opened again) show at once while they are read again, quietly.
  */
 export function MentionsOverviewTab({
   brandId,
@@ -47,10 +49,12 @@ export function MentionsOverviewTab({
   filters: MentionsFilters;
 }) {
   const t = useTranslations('mentions.overview');
-  const { readSent } = useBrandVisibilityShell();
+  const { cache, shown } = useBrandVisibilityShell();
   const query = useMemo(() => mentionsQuery(filters), [filters]);
   const key = query ? JSON.stringify([brandId, query]) : null;
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // Kept by the filters, not the query: a range's query moves with the clock.
+  const keptKey = readKey('mentionsOverview', brandId, filters);
+  const [read, setRead] = useState<Loaded | null>(null);
   // Retry reads the same filters once more.
   const [attempt, setAttempt] = useState(0);
   const first = useRef(true);
@@ -61,18 +65,29 @@ export function MentionsOverviewTab({
     const cancelRead = scheduleRead(first, () => {
       getMentionsOverview(brandId, query)
         .then((overview) => {
-          if (!cancelled) setLoaded({ brandId, key, status: 'ok', overview });
+          cache.set(keptKey, overview);
+          if (!cancelled) setRead({ brandId, key, status: 'ok', overview });
         })
         .catch(() => {
-          if (!cancelled) setLoaded({ brandId, key, status: 'error' });
+          if (!cancelled) setRead({ brandId, key, status: 'error' });
         });
-      readSent();
     });
     return () => {
       cancelled = true;
       cancelRead();
     };
-  }, [brandId, key, query, attempt, readSent]);
+  }, [brandId, key, keptKey, query, attempt, cache]);
+
+  // This read's figures; until they are back, those kept for these filters
+  // (the tab opened again, or filters picked again); else the last read's.
+  const fresh = read?.key === key && read.status === 'ok';
+  const kept = key && !fresh ? cache.get<MentionsOverview | null>(keptKey) : undefined;
+  const loaded: Loaded | null =
+    key && kept !== undefined ? { brandId, key, status: 'ok', overview: kept } : read;
+  const showing = loaded?.status === 'ok' && loaded.brandId === brandId;
+  useEffect(() => {
+    if (showing) shown();
+  }, [showing, shown]);
 
   if (!query) return <Message>{t('pickDates')}</Message>;
   // Another brand's figures are never shown under this one's name.
@@ -83,7 +98,7 @@ export function MentionsOverviewTab({
       <ReadError
         title={t('loadError')}
         onRetry={() => {
-          setLoaded(null);
+          setRead(null);
           setAttempt((n) => n + 1);
         }}
       />

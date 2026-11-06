@@ -4,9 +4,9 @@ import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Link, useRouter } from '@/i18n/navigation';
-import { saveChatFocus, saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
+import { saveChatFocus, saveChatGeneralSettings, saveDefaultHome } from '@/lib/actions/chat-prefs';
 import { track } from '@/lib/analytics';
-import { FOCUS_AREAS, type FocusArea } from '@/lib/chat/focus';
+import { FOCUS_AREAS, type FocusArea, type HomeView } from '@/lib/chat/focus';
 import type {
   AnswerLanguage,
   ChatGeneralAccess,
@@ -90,11 +90,14 @@ export function ChatSettings({
   initial,
   access,
   focus: savedFocus,
+  view: savedView,
 }: {
   initial: ChatGeneralSettings;
   access: ChatGeneralAccess;
   /** What Chat focuses on for the person, in the order picked. */
   focus: FocusArea[];
+  /** Home's view (00485): Default, or tailored to the focus. */
+  view: HomeView;
 }) {
   const t = useTranslations('chatShell.settings');
   const tf = useTranslations('chatShell.focus');
@@ -102,6 +105,9 @@ export function ChatSettings({
   const router = useRouter();
   const [settings, setSettings] = useState(initial);
   const [focus, setFocus] = useState(savedFocus);
+  const [view, setView] = useState(savedView);
+  // The areas Home is tailored to: none on the Default view, whose focus is only kept.
+  const shown = view === 'focus' ? focus : [];
 
   /** Shows the pick at once and keeps it; a refusal puts the old value back. */
   const change = async (patch: GeneralPatch) => {
@@ -117,19 +123,38 @@ export function ChatSettings({
     }
   };
 
-  /** Turns an area on (after the others) or off; one that isn't kept goes back. */
+  /**
+   * Turns an area on (after the ones shown) or off; the last one off is the
+   * Default view. One that isn't kept goes back.
+   */
   const changeFocus = async (area: FocusArea, on: boolean) => {
-    const before = focus;
-    const next = on ? [...focus.filter((a) => a !== area), area] : focus.filter((a) => a !== area);
+    const before = { focus, view };
+    const next = on ? [...shown.filter((a) => a !== area), area] : shown.filter((a) => a !== area);
     setFocus(next);
+    setView(next.length ? 'focus' : 'default');
     const saved = await saveChatFocus(next).catch(() => ({ ok: false as const }));
     if (!saved.ok) {
-      setFocus(before);
+      setFocus(before.focus);
+      setView(before.view);
       toast.error(t('failed'));
       return;
     }
     track('chat_focus_saved', { areas: next, count: next.length, source: 'settings' });
     toast(next.length ? t('focus.saved', { label: focusLabel(next) }) : t('focus.cleared'));
+  };
+
+  /** The Default view: the focus is kept, for the picker to tick next time. */
+  const chooseDefault = async () => {
+    if (view === 'default') return;
+    setView('default');
+    const saved = await saveDefaultHome().catch(() => ({ ok: false as const }));
+    if (!saved.ok) {
+      setView('focus');
+      toast.error(t('failed'));
+      return;
+    }
+    track('chat_focus_saved', { areas: [], count: 0, source: 'settings' });
+    toast(t('focus.cleared'));
   };
 
   const lockTip =
@@ -217,13 +242,23 @@ export function ChatSettings({
               aria-label={t('focus.label')}
               className="grid shrink-0 grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]"
             >
+              <label className="col-span-2 flex items-center gap-[7px] whitespace-nowrap">
+                <input
+                  type="checkbox"
+                  data-action="chatSettings.focusDefault"
+                  checked={view === 'default'}
+                  onChange={() => void chooseDefault()}
+                  className="accent-foreground"
+                />
+                {tf('default.name')}
+              </label>
               {FOCUS_AREAS.map((area) => (
                 <label key={area} className="flex items-center gap-[7px] whitespace-nowrap">
                   <input
                     type="checkbox"
                     data-action="chatSettings.focus"
                     value={area}
-                    checked={focus.includes(area)}
+                    checked={shown.includes(area)}
                     onChange={(event) => void changeFocus(area, event.target.checked)}
                     className="accent-foreground"
                   />

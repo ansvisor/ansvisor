@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-sheet';
@@ -9,29 +9,34 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { useFirstRun } from '@/hooks/use-first-run';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { ReadError } from '@/components/brand-visibility/read-error';
+import { readKey } from '@/components/brand-visibility/read-cache';
 import {
   TabHeaderActions,
+  useBrandRead,
   useBrandVisibilityShell,
 } from '@/components/brand-visibility/shell-context';
 import { OverviewSkeleton } from '@/components/brand-visibility/tab-skeleton';
 import { OVERVIEW_DEFAULT_RANGE } from '@/lib/brand-visibility';
 import { largestMove, rangeChipLabel } from '@/lib/chat/page-context';
 import {
-  getInsightsData,
   type VisibilityRateTrendData,
-  getBrandFilterOptions,
   exportPromptResults,
+  type InsightsData,
   type InsightsSection,
   type InsightsSummary,
   type TrackedPromptsKpi,
   type CompetitorComparisonData,
   type ShareOfVoiceData,
-  type InsightsOpportunities,
   type BreakdownFilters,
   type BreakdownMetric,
   type CoverageKpi,
 } from '@/lib/actions/tracking';
-import { getTopics } from '@/lib/actions/topic';
+import {
+  getBrandFilterOptions,
+  getInsightsData,
+  getInsightsOpportunities,
+  getTopics,
+} from '@/lib/visibility-reads';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { isSingleModel, modelFamilies, modelFamilyValue, modelLabel } from '@/lib/model-families';
 import { formatRegionDisplay } from '@/lib/region';
@@ -146,6 +151,13 @@ function writeFiltersToUrl(f: InsightsFilters) {
     },
     { range: DEFAULT_FILTERS.datePreset },
   );
+}
+
+/** An Overview read as the tab shows it, kept for the brand and filters it was read with. */
+interface OverviewRead {
+  insights: InsightsData;
+  /** The window and filters the figures were read with (the breakdown panel explains those). */
+  loadedFilters: BreakdownFilters;
 }
 
 const INSIGHT_EXPORT_HEADERS = [
@@ -392,8 +404,16 @@ export default function InsightsPage() {
   const { isCloud } = usePlanContext();
   const locale = useLocale();
   const brand = useBrandStore((s) => s.getActiveBrand());
-  const { refreshes, isRunning, runAll, openSinglePrompt, reportRunWindow, reportData, readSent } =
-    useBrandVisibilityShell();
+  const {
+    refreshes,
+    isRunning,
+    runAll,
+    openSinglePrompt,
+    reportRunWindow,
+    reportData,
+    cache,
+    shown,
+  } = useBrandVisibilityShell();
   // The brand's first run while it goes on: the run's band above says it
   // all, so no empty state under it.
   const firstRun = useFirstRun();
@@ -407,13 +427,9 @@ export default function InsightsPage() {
   const [failedSections, setFailedSections] = useState<InsightsSection[]>([]);
   const [filters, setFilters] = useState<InsightsFilters>(DEFAULT_FILTERS);
   const [hasAnyData, setHasAnyData] = useState<boolean | null>(null);
-  const [availableRegions, setAvailableRegions] = useState<string[]>([]);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-  const [availableTopics, setAvailableTopics] = useState<Topic[]>([]);
   const [competitorData, setCompetitorData] = useState<CompetitorComparisonData | null>(null);
   const [rateTrend, setRateTrend] = useState<VisibilityRateTrendData | null>(null);
   const [sovData, setSovData] = useState<ShareOfVoiceData | null>(null);
-  const [opportunities, setOpportunities] = useState<InsightsOpportunities | null>(null);
   const [comparison, setComparison] = useState<PromptComparison | null>(null);
   const [coverage, setCoverage] = useState<CoverageKpi | null>(null);
   const [kpiSeries, setKpiSeries] = useState<KpiSeriesDay[] | null>(null);
@@ -452,14 +468,57 @@ export default function InsightsPage() {
   // Keyed on the id, not the brand object: the store hands out a new object
   // for the same brand, and a new loadData re-runs the load effect below.
   const brandId = brand?.id;
+
+  // The figures on screen, from a read or from what the tab kept. Only a
+  // fresh read tells the header about the run and the brand's answers: kept
+  // figures may be older than what the run line already knows.
+  const show = useCallback(
+    ({ insights, loadedFilters: read }: OverviewRead, { fresh }: { fresh: boolean }) => {
+      if (fresh) {
+        if (insights.trackingWindow) reportRunWindow(insights.trackingWindow);
+        reportData({
+          hasData: insights.hasAnyData,
+          lastCheckedAt: insights.summary.lastCheckedAt ?? null,
+        });
+      }
+      setLoadFailed(false);
+      setFailedSections(insights.failedSections ?? []);
+      setLoadedFilters(read);
+      const trend = insights.trend;
+      setRateTrend(trend && trend.points.length > 0 ? trend : null);
+      setSummary(insights.summary);
+      setTrackedPrompts(insights.trackedPrompts);
+      setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
+      setSovData(insights.sov.byPlatform.length > 0 ? insights.sov : null);
+      setComparison(insights.comparison);
+      setCoverage(insights.coverage);
+      setKpiSeries(insights.kpiSeries);
+      setPlatformChanges(insights.platformChanges);
+      setPlatforms(insights.platforms);
+      setWhyChanged(insights.whyChanged);
+      setTrendMarkers(insights.trendMarkers);
+      setTopicCompetitors(insights.topicCompetitors);
+      setHasAnyData(insights.hasAnyData);
+      shown();
+    },
+    [reportRunWindow, reportData, shown],
+  );
+
+  // Each load claims a generation: a read that lands after a newer one was
+  // sent (new filters, Retry) is not shown over it.
+  const loadGen = useRef(0);
   const loadData = useCallback(
     async (overrideFilters?: InsightsFilters, { silent = false } = {}) => {
       if (!brandId) return;
+      const gen = ++loadGen.current;
+      const stale = () => gen !== loadGen.current;
       if (!silent) {
         setIsLoading(true);
         // Retry, or new filters: loading again, not failed.
         setLoadFailed(false);
       }
+      // Quiet: a run's refresh, or figures kept from the last time already on screen.
+      let quiet = silent;
       try {
         let f = overrideFilters ?? filtersRef.current;
         // A model from an address can be one slug of a family (Chat's link,
@@ -468,11 +527,11 @@ export default function InsightsPage() {
         if (isSingleModel(f.model) && !familyRead.current.has(f.model)) {
           familyRead.current.add(f.model);
           const asked = f.model;
-          const options = getBrandFilterOptions(brandId);
-          readSent();
-          const family = await options
+          const family = await cache
+            .read(readKey('filterOptions', brandId), () => getBrandFilterOptions(brandId))
             .then((options) => modelFamilyValue(asked, modelFamilies(options.models)))
             .catch(() => asked);
+          if (stale()) return;
           familyRead.current.add(family);
           if (family !== asked) {
             f = { ...f, model: family };
@@ -502,102 +561,91 @@ export default function InsightsPage() {
 
         const hasFilters = Boolean(f.datePreset !== 'all' || f.model || f.region || f.topic);
 
-        // One consolidated server action (#313). Next.js queues server actions
-        // one after another, so everything the first paint needs — summary,
-        // competitors, SoV, KPIs and the trend chart — runs in one
-        // server-side Promise.all instead of as separate requests, and "has
-        // any data" comes from a cheap count.
+        // The same brand and filters read before (this tab opened again, or
+        // a range picked again): on screen at once, read again quietly.
+        const key = readKey('overview', brandId, f);
+        const kept = cache.get<OverviewRead>(key);
+        if (kept) {
+          show(kept, { fresh: false });
+          setIsLoading(false);
+          quiet = true;
+        }
+
+        // Everything the figures need — summary, competitors, SoV, KPIs and
+        // the trend chart — runs in one server-side Promise.all (#313), and
+        // "has any data" comes from a cheap count. The filters' choices,
+        // the topics and the Opportunities card are their own reads, sent
+        // beside this one (below), as is the run line's.
         // The 24h preset is anchored to the last completed tracking run
         // (00044) so the morning refresh can't flash "no results" while
         // today's run streams in; the action resolves that window itself.
         // The trend chart follows the same window as every other number.
-        const read = getInsightsData(brandId, {
+        const insights = await getInsightsData(brandId, {
           ...filterOpts,
           checkUnfiltered: hasFilters,
           anchor24h: f.datePreset === '24h',
         });
-        // On its way first: the run line's own read queues behind it.
-        readSent();
-        const insights = await read;
-        if (insights.trackingWindow) reportRunWindow(insights.trackingWindow);
-        reportData({
-          hasData: insights.hasAnyData,
-          lastCheckedAt: insights.summary.lastCheckedAt ?? null,
-        });
-        setLoadFailed(false);
-        setFailedSections(insights.failedSections ?? []);
+        if (stale()) return;
         const anchored = insights.trackingWindow?.anchored;
-        setLoadedFilters({
-          ...filterOpts,
-          dateFrom: anchored?.dateFrom ?? filterOpts.dateFrom,
-          dateTo: anchored?.dateTo ?? filterOpts.dateTo,
-        });
-        const trend = insights.trend;
-        setRateTrend(trend && trend.points.length > 0 ? trend : null);
-        setSummary(insights.summary);
-        setTrackedPrompts(insights.trackedPrompts);
-        setCompetitorData(insights.competitors.brands.length > 1 ? insights.competitors : null);
-        setSovData(insights.sov.byPlatform.length > 0 ? insights.sov : null);
-        setOpportunities(insights.opportunities);
-        setComparison(insights.comparison);
-        setCoverage(insights.coverage);
-        setKpiSeries(insights.kpiSeries);
-        setPlatformChanges(insights.platformChanges);
-        setPlatforms(insights.platforms);
-        setWhyChanged(insights.whyChanged);
-        setTrendMarkers(insights.trendMarkers);
-        setTopicCompetitors(insights.topicCompetitors);
-        setHasAnyData(insights.hasAnyData);
-
-        // Different ChatGPT versions ("gpt-5-3-mini" + "gpt-5-5") collapse
-        // into one "ChatGPT" filter option, stored as `slugA,slugB` so the
-        // server filters the whole family with .in() via applyModelFilter().
-        setAvailableRegions([...insights.filterOptions.regions].sort((a, b) => a.localeCompare(b)));
-        setAvailableModels(
-          modelFamilies(insights.filterOptions.models).sort((a, b) => a.localeCompare(b)),
-        );
+        const read: OverviewRead = {
+          insights,
+          loadedFilters: {
+            ...filterOpts,
+            dateFrom: anchored?.dateFrom ?? filterOpts.dateFrom,
+            dateTo: anchored?.dateTo ?? filterOpts.dateTo,
+          },
+        };
+        cache.set(key, read);
+        show(read, { fresh: true });
       } catch (err) {
-        const message = err instanceof Error ? err.message : '';
-
-        // Next.js surfaces this when a server action's response stream is
-        // cut because the user navigated away mid-load. The destination
-        // page renders fine; the toast is pure noise. Matched
-        // case-insensitively so a wording tweak between Next versions
-        // doesn't reopen the issue.
-        if (/unexpected response/i.test(message)) {
-          console.debug('[insights] load aborted by navigation', err);
-        } else if (!silent) {
-          // Next.js redacts server-action error messages in production
-          // builds ("An error occurred in the Server Components render…"),
-          // so relaying `message` verbatim shows the user that boilerplate
-          // instead of anything actionable. Anything unrecognizable gets the
-          // plain fallback.
-          const redacted = !message || /server components render|digest property/i.test(message);
-          toast.error(redacted ? 'Failed to load insights — please try again' : message);
+        if (stale()) return;
+        if (!quiet) {
+          // The read's route keeps the server's error in its log, so there
+          // is nothing more actionable to say than this.
+          toast.error('Failed to load insights — please try again');
           // Not "No tracking data yet", nor the last filters' figures: the
           // tab says the read failed, with Retry (Brand Visibility).
           setLoadFailed(true);
         } else {
           // Silent refreshes fire every ~10s while a tracking job runs; a
           // transient 5xx or network blip there shouldn't pop a red toast —
-          // the next poll will retry and the user sees nothing.
+          // the next poll will retry and the user sees nothing. Nor does a
+          // quiet read under kept figures: they stay.
           console.warn('[insights] silent refresh failed', err);
         }
       } finally {
-        setIsLoading(false);
+        if (!stale()) setIsLoading(false);
       }
     },
-    [brandId, readSent, reportRunWindow, reportData],
+    [brandId, cache, show],
   );
+
+  // The brand's filter choices, topics and Opportunities card: their own
+  // reads, sent beside the figures' and kept for the brand, so a filter
+  // change doesn't ask for them again. The choices are read again as a run
+  // brings answers in (a new engine or country shows up).
+  const readFor = urlRead ? brandId : null;
+  const filterOptions = useBrandRead('filterOptions', readFor, getBrandFilterOptions, refreshes);
+  const topics = useBrandRead('topics', readFor, getTopics);
+  const opportunities = useBrandRead('opportunities', readFor, getInsightsOpportunities);
+  const availableRegions = useMemo(
+    () => [...(filterOptions?.regions ?? [])].sort((a, b) => a.localeCompare(b)),
+    [filterOptions],
+  );
+  // Different ChatGPT versions ("gpt-5-3-mini" + "gpt-5-5") collapse into
+  // one "ChatGPT" filter option, stored as `slugA,slugB` so the server
+  // filters the whole family with .in() via applyModelFilter().
+  const availableModels = useMemo(
+    () => modelFamilies(filterOptions?.models ?? []).sort((a, b) => a.localeCompare(b)),
+    [filterOptions],
+  );
+  const availableTopics = useMemo<Topic[]>(() => topics ?? [], [topics]);
 
   // A brand switch clears the brand-specific filters. Not on the first brand,
   // so filters linked in the URL survive the initial load.
   const filteredBrandRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!brand?.id) return;
-    setAvailableRegions([]);
-    setAvailableModels([]);
-    setAvailableTopics([]);
     if (filteredBrandRef.current && filteredBrandRef.current !== brand.id) {
       const next = { ...filtersRef.current, region: '', model: '', topic: '' };
       filtersRef.current = next;
@@ -609,21 +657,6 @@ export default function InsightsPage() {
   useEffect(() => {
     if (urlRead) loadData();
   }, [loadData, urlRead]);
-
-  // The topics for the filter, read after the figures: server actions run
-  // one at a time, so the figures' read goes first (it is sent just above).
-  useEffect(() => {
-    if (!brandId || !urlRead) return;
-    let cancelled = false;
-    getTopics(brandId)
-      .then((rows) => {
-        if (!cancelled) setAvailableTopics(rows);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, urlRead]);
 
   // A run the header started or saw (Run All, the daily run, a teammate's)
   // brings answers in: read again, quietly, as they arrive and when it ends.

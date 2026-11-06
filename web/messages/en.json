@@ -4408,12 +4408,13 @@
       "sent": "Sent: {text}",
       "steered": "Stopped the run and sent: {text}",
       "stopped": "Stopped · done steps stay",
-      "homeGhost": "Why did our Perplexity citations drop this week?",
+      "homeGhost": "Why did our Gemini citations drop this week?",
       "dockGhost": "Start task 2: comparison page",
-      "panelGhost": "Show which pages Perplexity cites most"
+      "panelGhost": "Show which pages Gemini cites most"
     },
     "mode": {
       "label": "Run mode",
+      "current": "Run mode: {mode}",
       "ask_first": "Ask me first",
       "auto": "Auto, ask before changes",
       "full_auto": "Full auto",
@@ -4620,7 +4621,7 @@
     "zipFailed": "Couldn't download the files. Try again.",
     "storage": "Storage {used} of {limit} GB",
     "storageNoLimit": "Storage {used} GB",
-    "storageTip": "Files are kept for 1 year",
+    "storageTip": "Counts Chat's files and the Content Editor's images. Files are kept for 1 year.",
     "storageFull": "Storage is full. New work still shows in its chat, but isn't saved to Files.",
     "storageFullGetMore": "Storage is full. Get more storage to keep filing new work.",
     "getMoreStorage": "Get more storage",
@@ -5011,7 +5012,13 @@
     },
     "focus": {
       "title": "What should Chat focus on for you?",
-      "intro": "Pick one or more. Chat tailors your Home, starter questions and skills to them. You can change this anytime in Settings › General.",
+      "intro": "Start simple with just the chat box, or pick areas and Chat adds suggestions for them to your Home. You can change this anytime in Settings › General.",
+      "default": {
+        "title": "Default: simple start",
+        "note": "A clean Home: a greeting, one line on what changed and the chat box. Nothing else until you ask.",
+        "name": "Default view"
+      },
+      "orTailor": "Or tailor Home to what you work on",
       "groupLabel": "Focus areas",
       "areas": {
         "lead": {
@@ -5055,13 +5062,14 @@
           "name": "Markets and sources"
         }
       },
-      "countNone": "Pick at least one. Your access stays the same: what you can change still depends on your role.",
+      "countDefault": "Default view · your access stays the same: what you can change still depends on your role.",
       "countSome": "{count, number} selected · your access stays the same: what you can change still depends on your role.",
       "skip": "Skip for now",
       "cancel": "Cancel",
       "continue": "Continue",
       "saved": "Home focused on {label} · edit it in Settings › General",
-      "skipped": "You can choose your focus later in Settings › General",
+      "savedDefault": "Home is on the Default view · change it in Settings › General",
+      "skipped": "Home is on the Default view · pick a focus anytime in Settings › General",
       "failed": "Couldn't save your focus. Try again.",
       "label": {
         "one": "{a}",
@@ -5071,8 +5079,7 @@
       "pill": {
         "focused": "Focused on {label}",
         "edit": "Edit",
-        "none": "Get suggestions for what you work on",
-        "choose": "Choose focus"
+        "default": "Default view"
       }
     },
     "inbox": {
@@ -5331,9 +5338,9 @@
       "fullAutoAdmin": "Your Admin turned Full auto off for your role",
       "focus": {
         "label": "Your focus",
-        "note": "Pick one or more. Tailors your Home, starter questions and skill suggestions. Your access stays the same.",
+        "note": "The Default view keeps Home to a greeting, one line and the chat box. Pick areas to tailor your Home, starter questions and skill suggestions. Your access stays the same.",
         "saved": "Home focused on {label}",
-        "cleared": "Focus cleared · default Home"
+        "cleared": "Home is on the Default view"
       },
       "language": {
         "label": "Answer language",
@@ -7421,7 +7428,8 @@
         "failed": "Something went wrong.",
         "lost": "It stopped before it could start.",
         "stopped": "It was stopped.",
-        "noAnswer": "No answer in 7 days."
+        "noAnswer": "No answer in 7 days.",
+        "nothingNew": "Nothing new for your plan."
       }
     },
     "when": {
@@ -7466,7 +7474,16 @@
       "usage": "≈ {share} of monthly AI usage per run",
       "usageUnknown": "Each run uses your monthly AI limit, like a chat",
       "ownKey": "Runs on your workspace’s own AI key",
-      "emailTo": "Email goes to you"
+      "emailTo": "Email goes to you",
+      "digest": "Lists what’s new for your plan, only when there is something new. Uses no AI."
+    },
+    "digest": {
+      "title": "What’s new for my plan",
+      "prompt": "What’s new for my plan",
+      "intro": "{count, plural, one {Here’s # update} other {Here are # updates}} for your plan that you haven’t seen yet.",
+      "onPlans": "On {plans}.",
+      "tryIt": "Try it",
+      "older": "Ask me “What’s new” for older updates."
     },
     "deliver": {
       "chat": "Chat",
@@ -8081,7 +8098,7 @@
       "eyebrow": "AI visibility platform",
       "titleLead": "Improve AI Visibility and",
       "titleAccent": "Drive Growth.",
-      "subtitle": "Track your brand's presence across ChatGPT, Google AI, Perplexity and more.",
+      "subtitle": "Track your brand's presence across ChatGPT, Gemini, Google AI and more.",
       "features": {
         "monitor": {
           "title": "Monitor brand mentions and citations",
@@ -8755,6 +8772,14 @@
         "answered": "The webhook answered {status}.",
         "onItsOwn": "Sent by {agent} · on its own",
         "onItsOwnUnnamed": "Sent by an agent · on its own",
+        "firstCrawl": {
+          "minutes": "First AI crawl: {bot}, {count, plural, one {# minute} other {# minutes}} after it went live",
+          "hours": "First AI crawl: {bot}, {count, plural, one {# hour} other {# hours}} after it went live",
+          "days": "First AI crawl: {bot}, {count, plural, one {# day} other {# days}} after it went live",
+          "onDay": "First AI crawl: {bot}, on {date}",
+          "none": "No AI crawl yet since it went live",
+          "noLogs": "Connect AI bot logs in AI Traffic to see when AI bots first visit it"
+        },
         "webflow": {
           "queued": "Sending to Webflow since {when}",
           "sent": "In Webflow as a draft item since {when}",
@@ -9549,6 +9574,7 @@
             "ai_limit": "What's left of your monthly AI limit doesn't cover {count} images, so none was made.",
             "refused": "The image model didn't make an image for this description: {why} Try describing it another way.",
             "demo": "The demo brand makes no images. Switch to your brand to generate one.",
+            "storage_full": "Your workspace's storage is full, so the images would have nowhere to go. None was made. Make room or get more storage first.",
             "not_saved": "{count, plural, one {The image was} other {The # images were}} made, and count toward your AI limit, but couldn't be saved. Try again.",
             "failed": "Couldn't generate images. Try again.",
             "upload": "Couldn't add the image. Try again."
@@ -9681,7 +9707,7 @@
         },
         "overlap": {
           "title": "Your other pages for these prompts",
-          "only": "{count, plural, one {The only page cited for its prompt} other {The only page cited for its # prompts}} · no overlap",
+          "only": "{count, plural, one {The only page of yours cited for its prompt} other {The only page of yours cited for its # prompts}}",
           "shared": "{count} of {total, plural, one {# prompt} other {# prompts}}"
         },
         "note": "The last {days} days against the {days} before, in whole UTC days. Citations come from tracked prompts, AI visits from the tracking snippet or Google Analytics, clicks from Search Console.",
@@ -11214,8 +11240,10 @@
         "size": "That image is over 5 MB. Use a smaller one.",
         "plan": "Uploads come with an active plan. Paste the image's address instead.",
         "limit": "That's today's uploads for your workspace. Paste the image's address, or upload again tomorrow.",
+        "storage": "Your workspace's storage is full. Make room or get more storage, or paste the image's address instead.",
         "failed": "Couldn't upload the image. Try again."
-      }
+      },
+      "getMoreStorage": "Get more storage"
     },
     "title": "Content Opportunities",
     "description": "AI-powered content recommendations to improve your visibility in AI-generated answers.",
@@ -12532,6 +12560,7 @@
       "enginesLegend": "Coloured: shared searches for this prompt in the window. Faded: tracked, but shared none.",
       "engineEmptyTitle": "No {engine} searches in the {range}",
       "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
+      "sourceNote": "Copilot and Perplexity are no longer tracked, so these searches come from ChatGPT only, which shares them on some days. There are fewer of them than before.",
       "emptyTitle": "No fan-out captured yet",
       "emptyBody": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
       "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
@@ -15541,7 +15570,7 @@
     "hero": {
       "badge": "Open Source Ansops Platform",
       "title": "Your Brand in Every AI Answer",
-      "subtitle": "Monitor, analyze, and optimize your brand's visibility across ChatGPT, Perplexity, Gemini, Claude, and more.",
+      "subtitle": "Monitor, analyze, and optimize your brand's visibility across ChatGPT, Gemini, Google AI, Claude, and more.",
       "cta": "Get Started for Free",
       "secondaryCta": "View on GitHub"
     },

@@ -7,7 +7,8 @@ import messages from '../../../messages/en.json';
 /**
  * Brand Visibility's shared layout (the owner's mockup): the header, the run
  * line and the three tabs, which show at once and stay while the tab under
- * them changes; the tabs keep the filters they share.
+ * them changes; the tabs keep the filters they share, and what they read,
+ * and the other tabs are prefetched once the open one is on screen.
  */
 
 const nav = vi.hoisted(() => ({
@@ -18,8 +19,17 @@ const nav = vi.hoisted(() => ({
 vi.mock('@/i18n/navigation', () => ({
   usePathname: () => nav.pathname,
   useRouter: () => ({ push: nav.push }),
-  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
-    <a href={href} {...rest}>
+  Link: ({
+    href,
+    children,
+    prefetch,
+    ...rest
+  }: {
+    href: string;
+    children: React.ReactNode;
+    prefetch?: boolean | null;
+  }) => (
+    <a href={href} data-prefetch={String(prefetch)} {...rest}>
       {children}
     </a>
   ),
@@ -36,6 +46,8 @@ const tracking = vi.hoisted(() => ({
   getBrandPrompts: vi.fn(async () => []),
 }));
 vi.mock('@/lib/actions/tracking', () => tracking);
+// The run line's read goes through the tabs' read route, beside theirs.
+vi.mock('@/lib/visibility-reads', () => ({ getTrackingWindow: tracking.getTrackingWindow }));
 const access = vi.hoisted(() => ({ isCloud: false, canManage: true }));
 vi.mock('@/components/providers/plan-provider', () => ({
   usePlanContext: () => ({ isCloud: access.isCloud }),
@@ -65,11 +77,12 @@ vi.hoisted(() => {
   });
 });
 
-const { BrandVisibilityShellView, RUN_LINE_WAIT_MS } = await import('./shell');
-const { TabHeaderActions, useBrandVisibilityShell } = await import('./shell-context');
+const { BrandVisibilityShellView } = await import('./shell');
+const { TabHeaderActions, useBrandRead, useBrandVisibilityShell } = await import('./shell-context');
 const { TabError } = await import('./tab-error');
 const { CitationsSkeleton, MentionsSkeleton, OverviewSkeleton } = await import('./tab-skeleton');
 const { useBrandStore } = await import('@/stores/use-brand-store');
+const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -93,12 +106,12 @@ const window1 = {
   nextRunAt: new Date(Date.now() + 13 * 3600_000).toISOString(),
 };
 
-/** A tab: its first read goes out on opening, as the tabs' do. */
-function Tab({ label = 'TAB CONTENT', read = true }: { label?: string; read?: boolean }) {
-  const { readSent } = useBrandVisibilityShell();
+/** A tab: it says when its figures are on screen, as the tabs do. */
+function Tab({ label = 'TAB CONTENT', drawn = true }: { label?: string; drawn?: boolean }) {
+  const { shown } = useBrandVisibilityShell();
   useEffect(() => {
-    if (read) readSent();
-  }, [read, readSent]);
+    if (drawn) shown();
+  }, [drawn, shown]);
   return (
     <>
       <TabHeaderActions>
@@ -109,14 +122,16 @@ function Tab({ label = 'TAB CONTENT', read = true }: { label?: string; read?: bo
   );
 }
 
-async function render(path: string, tab: React.ReactNode = <Tab />) {
+async function render(path: string, tab: React.ReactNode = <Tab />, hidden: string[] = []) {
   const [pathname] = path.split('?');
   nav.pathname = pathname;
   window.history.replaceState(null, '', path);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <BrandVisibilityShellView>{tab}</BrandVisibilityShellView>
+        <MenuAccessProvider hidden={hidden} canManageMenus={false}>
+          <BrandVisibilityShellView>{tab}</BrandVisibilityShellView>
+        </MenuAccessProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -172,26 +187,24 @@ describe('Visibility’s header and tabs', () => {
     expect(container.textContent).not.toContain('Brand Visibility');
   });
 
-  it('read the run line after the tab’s first read, and fill it in', async () => {
-    await render('/dashboard/insights', <Tab read={false} />);
-    // No tab read sent yet: the run line waits, so it never holds the tab's data.
-    expect(tracking.getTrackingWindow).not.toHaveBeenCalled();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(RUN_LINE_WAIT_MS);
-    });
+  it('leave off a tab whose section the person’s menu hides, as the menu does', async () => {
+    await render('/dashboard/mentions', <Tab />, ['citations']);
+    expect(
+      [...container.querySelectorAll('nav[aria-label="Visibility"] a')].map((a) => a.textContent),
+    ).toEqual(['Overview', 'Mentions']);
+    await render('/dashboard/mentions', <Tab />, ['insights']);
+    expect(
+      [...container.querySelectorAll('nav[aria-label="Visibility"] a')].map((a) => a.textContent),
+    ).toEqual(['Mentions', 'Citations']);
+  });
+
+  it('read the run line at once, beside the tab’s reads, and fill it in', async () => {
+    await render('/dashboard/insights', <Tab drawn={false} />);
+    // Not after the tab's reads: they are fetches, which run side by side.
+    expect(tracking.getTrackingWindow).toHaveBeenCalledTimes(1);
     expect(tracking.getTrackingWindow).toHaveBeenCalledWith('b1');
     expect(container.textContent).toContain('Last run');
     expect(container.querySelector('[data-testid="run-line-loading"]')).toBeNull();
-
-    act(() => root.unmount());
-    root = createRoot(container);
-    tracking.getTrackingWindow.mockClear();
-    await render('/dashboard/insights');
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(0);
-    });
-    // Sent right behind the tab's read.
-    expect(tracking.getTrackingWindow).toHaveBeenCalledTimes(1);
   });
 
   it('put the tab’s own actions in the header, beside Reports', async () => {
@@ -257,6 +270,63 @@ describe('switching tabs', () => {
     expect(tabLink('Overview').getAttribute('href')).toBe(
       '/dashboard/insights?range=90d&model=claude&topic=t2',
     );
+  });
+});
+
+describe('the other tabs', () => {
+  const prefetchOf = (name: string) => tabLink(name).getAttribute('data-prefetch');
+
+  it('are prefetched once the open tab’s figures are on screen, not before', async () => {
+    await render('/dashboard/mentions', <Tab drawn={false} />);
+    expect([prefetchOf('Overview'), prefetchOf('Mentions'), prefetchOf('Citations')]).toEqual([
+      'false',
+      'false',
+      'false',
+    ]);
+
+    await render('/dashboard/mentions', <Tab />);
+    // The open tab is already here.
+    expect([prefetchOf('Overview'), prefetchOf('Mentions'), prefetchOf('Citations')]).toEqual([
+      'true',
+      'false',
+      'true',
+    ]);
+  });
+});
+
+describe('what a tab read', () => {
+  /** A tab showing a read it keeps for the brand. */
+  function Reading({ read }: { read: (brandId: string) => Promise<string> }) {
+    const value = useBrandRead('topics', 'b1', read);
+    return <p data-testid="kept">{value ?? 'LOADING'}</p>;
+  }
+  const kept = () => container.querySelector('[data-testid="kept"]')?.textContent;
+
+  it('shows at once when the tab is opened again, and is read again quietly', async () => {
+    const first = vi.fn(async () => 'Espresso, Filter');
+    await render('/dashboard/insights', <Reading read={first} />);
+    expect(kept()).toBe('Espresso, Filter');
+
+    // Another tab, then back: the layout stayed, and so did what was read.
+    await render('/dashboard/mentions', <Tab />);
+    let answer: (value: string) => void = () => {};
+    const again = vi.fn(() => new Promise<string>((resolve) => (answer = resolve)));
+    await render('/dashboard/insights', <Reading read={again} />);
+    expect(kept()).toBe('Espresso, Filter');
+    expect(again).toHaveBeenCalledWith('b1');
+
+    await act(async () => answer('Espresso, Filter, Cold brew'));
+    expect(kept()).toBe('Espresso, Filter, Cold brew');
+  });
+
+  it('keeps what was read when the read again fails', async () => {
+    await render('/dashboard/insights', <Reading read={async () => 'Espresso'} />);
+    await render('/dashboard/mentions', <Tab />);
+    await render(
+      '/dashboard/insights',
+      <Reading read={() => Promise.reject(new Error('offline'))} />,
+    );
+    expect(kept()).toBe('Espresso');
   });
 });
 

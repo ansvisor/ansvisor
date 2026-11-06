@@ -2,12 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { TabHeaderActions } from '@/components/brand-visibility/shell-context';
+import { TabHeaderActions, useBrandRead } from '@/components/brand-visibility/shell-context';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getCompetitors } from '@/lib/actions/competitor';
-import { getTopics } from '@/lib/actions/topic';
-import { getBrandFilterOptions } from '@/lib/actions/tracking';
 import { rangeChipLabel } from '@/lib/chat/page-context';
 import {
   DEFAULT_MENTIONS_FILTERS,
@@ -21,6 +18,7 @@ import {
 import { POSITION_PLATFORMS } from '@/lib/prompt-positions';
 import { formatRegionDisplay } from '@/lib/region';
 import { writeUrlParams } from '@/lib/url-state';
+import { getBrandFilterOptions, getCompetitors, getTopics } from '@/lib/visibility-reads';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Competitor, Topic } from '@/types';
 import { MentionsFilterBar } from './_filter-bar';
@@ -69,34 +67,19 @@ export default function MentionsPage() {
     if (urlRead) writeUrlParams(mentionsStateParams(tab, filters));
   }, [urlRead, tab, filters]);
 
-  const [regions, setRegions] = useState<string[]>([]);
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [competitors, setCompetitors] = useState<Competitor[]>([]);
-  // The filters' choices, read once the URL is: the tab's own read (sent by
-  // the tab in the same commit, before this) goes first, as server actions
-  // run one at a time.
-  useEffect(() => {
-    if (!activeBrandId || !urlRead) return;
-    let cancelled = false;
-    getBrandFilterOptions(activeBrandId)
-      .then((options) => {
-        if (!cancelled) setRegions([...options.regions].sort((a, b) => a.localeCompare(b)));
-      })
-      .catch(() => {});
-    getTopics(activeBrandId)
-      .then((rows) => {
-        if (!cancelled) setTopics(rows);
-      })
-      .catch(() => {});
-    getCompetitors(activeBrandId)
-      .then((rows) => {
-        if (!cancelled) setCompetitors(rows);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [activeBrandId, urlRead]);
+  // The filters' choices, read once the URL is, beside the tab's own read
+  // (they are fetches, run side by side), and kept for the brand: the other
+  // tabs read the same ones.
+  const readFor = urlRead ? activeBrandId : null;
+  const filterOptions = useBrandRead('filterOptions', readFor, getBrandFilterOptions);
+  const keptTopics = useBrandRead('topics', readFor, getTopics);
+  const keptCompetitors = useBrandRead('competitors', readFor, getCompetitors);
+  const regions = useMemo(
+    () => [...(filterOptions?.regions ?? [])].sort((a, b) => a.localeCompare(b)),
+    [filterOptions],
+  );
+  const topics = useMemo<Topic[]>(() => keptTopics ?? [], [keptTopics]);
+  const competitors = useMemo<Competitor[]>(() => keptCompetitors ?? [], [keptCompetitors]);
 
   const tRange = useTranslations('chatPanel.range');
   const tFilters = useTranslations('mentions.filters');

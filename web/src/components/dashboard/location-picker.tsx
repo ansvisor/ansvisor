@@ -209,8 +209,8 @@ export function LocationPicker({
 
       {hasCityPick && (
         <p className="mt-1.5 text-[11px] text-muted-foreground">
-          A city is asked by Google AI Mode, AI Overview and the API models. ChatGPT, Perplexity,
-          Copilot, Gemini and Grok answer per country, so track the country too to see them.
+          A city is asked by Google AI Mode, AI Overview and the API models. ChatGPT, Gemini and
+          Grok answer per country, so track the country too to see them.
         </p>
       )}
     </div>

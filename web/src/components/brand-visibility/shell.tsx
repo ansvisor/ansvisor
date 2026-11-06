@@ -23,7 +23,6 @@ import { Link, usePathname } from '@/i18n/navigation';
 import {
   cancelTrackingJob,
   getJobStatus,
-  getTrackingWindow,
   triggerTrackingCheck,
   type TrackingJobStatus,
   type TrackingWindow,
@@ -38,7 +37,9 @@ import {
 import { withSample, type ProgressSample } from '@/lib/tracking-eta';
 import { writeUrlParams } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
+import { getTrackingWindow } from '@/lib/visibility-reads';
 import { useBrandStore } from '@/stores/use-brand-store';
+import { createReadCache } from './read-cache';
 import { RunLine } from './run-line';
 import { RunSinglePromptDialog, ServerRunBanner, TrackingProgressBanner } from './run-controls';
 import { BrandVisibilityShellContext, type BrandVisibilityShell } from './shell-context';
@@ -46,12 +47,6 @@ import { BrandVisibilityTabs } from './tabs';
 
 /** How often the run ledger is read for the run line and a run going on. */
 export const RUN_LINE_POLL_MS = 60_000;
-
-/**
- * The run line's first read waits for the tab's first read to be sent
- * (server actions run one at a time), but no longer than this.
- */
-export const RUN_LINE_WAIT_MS = 1_500;
 
 /** A read every ~10 s while a run this browser started brings answers in. */
 const RUNNING_REFRESH_MS = 10_000;
@@ -64,7 +59,8 @@ type RunTimes = Pick<TrackingWindow, 'lastRunAt' | 'nextRunAt'>;
  * the tabs, then the band of a run going on, then the tab. It needs no data
  * of its own to draw, so it shows at once; the run line's times arrive by
  * themselves. It stays mounted while the tab under it changes, and so do
- * the runs it starts and watches (they were the Insights page's).
+ * the runs it starts and watches (they were the Insights page's), and what
+ * the tabs last read (`cache`), so a tab opened again shows at once.
  */
 export function BrandVisibilityShellView({ children }: { children: ReactNode }) {
   const t = useTranslations('brandVisibility');
@@ -128,20 +124,14 @@ export function BrandVisibilityShellView({ children }: { children: ReactNode }) 
     [refresh],
   );
 
-  // The tab's first read goes first; the run line's follows it.
-  const [readSentFor, setReadSentFor] = useState<string | null>(null);
-  const readSent = useCallback(() => {
-    const id = brandRef.current;
-    setReadSentFor((prev) => (prev === id ? prev : id));
-  }, []);
-
   useEffect(() => {
     cronRunRef.current = null;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- another brand's run isn't this one's
     setCronRun(null);
   }, [brandId]);
 
-  const tabReadSent = readSentFor !== null && readSentFor === brandId;
+  // Read beside the tab's own reads, not after them: they are fetches, which
+  // the browser runs side by side.
   useEffect(() => {
     if (!brandId) return;
     let cancelled = false;
@@ -149,14 +139,13 @@ export function BrandVisibilityShellView({ children }: { children: ReactNode }) 
       const win = await getTrackingWindow(brandId).catch(() => null);
       if (!cancelled && win) applyWindow(win, brandId);
     };
-    const first = setTimeout(tick, tabReadSent ? 0 : RUN_LINE_WAIT_MS);
+    void tick();
     const id = setInterval(tick, RUN_LINE_POLL_MS);
     return () => {
       cancelled = true;
-      clearTimeout(first);
       clearInterval(id);
     };
-  }, [brandId, tabReadSent, applyWindow]);
+  }, [brandId, applyWindow]);
 
   const reportRunWindow = useCallback(
     (win: TrackingWindow) => applyWindow(win, brandRef.current),
@@ -174,6 +163,13 @@ export function BrandVisibilityShellView({ children }: { children: ReactNode }) 
         : { brandId: id, ...next },
     );
   }, []);
+
+  // ── What the tabs read, and the tabs ahead ────────────────────────────────
+  const [cache] = useState(createReadCache);
+  // Once the open tab's figures are on screen, the other tabs are prefetched,
+  // so a switch has nothing to wait for but its own reads.
+  const [warm, setWarm] = useState(false);
+  const shown = useCallback(() => setWarm(true), []);
 
   // ── Runs this browser starts ──────────────────────────────────────────────
   const [isRunning, setIsRunning] = useState(false);
@@ -319,7 +315,8 @@ export function BrandVisibilityShellView({ children }: { children: ReactNode }) 
       openSinglePrompt: canRun ? stableOpenSinglePrompt : undefined,
       reportRunWindow,
       reportData,
-      readSent,
+      cache,
+      shown,
     }),
     [
       actionsSlot,
@@ -330,7 +327,8 @@ export function BrandVisibilityShellView({ children }: { children: ReactNode }) 
       stableOpenSinglePrompt,
       reportRunWindow,
       reportData,
-      readSent,
+      cache,
+      shown,
     ],
   );
 
@@ -390,7 +388,7 @@ export function BrandVisibilityShellView({ children }: { children: ReactNode }) 
           </div>
         </HeaderWithAiUsage>
 
-        <BrandVisibilityTabs current={tab} />
+        <BrandVisibilityTabs current={tab} prefetch={warm} />
 
         <TrackingProgressBanner
           jobStatus={jobStatus}

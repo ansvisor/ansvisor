@@ -10,8 +10,8 @@
  * read them like any brand's. The rollups those pages read are then rebuilt
  * by the same functions the nightly run calls; nothing here writes one.
  *
- * Lean on purpose, as every no-card signup gets a demo: 12 prompts, 6
- * engines, a run every 3 days over a month (720 short answers).
+ * Lean on purpose, as every no-card signup gets a demo: 12 prompts, 4
+ * engines, a run every 3 days over a month (480 short answers).
  */
 
 import supabaseAdmin from '../../config/supabase.js';
@@ -45,12 +45,18 @@ export const RUNS = 10;
 export const RUN_EVERY_DAYS = 3;
 /** When the nightly run starts (UTC hour), as the self-hosted cron's default. */
 const RUN_HOUR_UTC = 6;
-/** Seconds between two answers of a run: 72 answers take half an hour. */
+/** Seconds between two answers of a run: 48 answers take 20 minutes. */
 const ANSWER_GAP_MS = 25_000;
 /** The last runs whose shopping answers carry product cards. */
 const SHOPPING_RUNS = 4;
 /** The engines that show product cards, as they do live. */
-const CARD_PLATFORMS = new Set(['perplexity-web', 'google-aimode', 'copilot-web']);
+const CARD_PLATFORMS = new Set(['google-aimode']);
+/**
+ * ChatGPT shares the searches behind a prompt's answer one day a week, as
+ * tracking samples them (chatgpt-fanout.js): here on one run in this many,
+ * a different run for each prompt, so every run has a few.
+ */
+const FANOUT_EVERY_RUNS = 7;
 const REGION = 'US';
 const LOCATION_CODE = 2840;
 const SEED = 'brewline';
@@ -102,48 +108,20 @@ function priceText(amount) {
   return `$${amount.toFixed(2)}`;
 }
 
-/** A product card in the engine's own shape (as Cloro returns it). */
-function rawCards(platformId, products) {
+/** A product card in Google AI Mode's own shape (as Cloro returns it). */
+function rawCards(products) {
   const owner = (product) =>
     product.owner === 'brand'
       ? { name: BRAND.name, domain: BRAND.domain }
       : COMPETITORS.find((c) => c.key === product.owner);
-  if (platformId === 'perplexity-web') {
-    return products.map((p) => ({
-      title: p.title,
-      brand: owner(p).name,
-      price: priceText(p.price),
-      url: url(owner(p).domain, p.path),
-      rating: p.rating,
-      review_count: p.reviews,
-    }));
-  }
-  if (platformId === 'google-aimode') {
-    return products.map((p) => ({
-      title: p.title,
-      brand: owner(p).name,
-      price: priceText(p.price),
-      url: url(owner(p).domain, p.path),
-      rating: p.rating,
-      reviewCount: p.reviews,
-    }));
-  }
-  // Copilot wraps its products (parseCopilotCard).
-  return [
-    {
-      type: 'shoppingProducts',
-      layout: 'carousel',
-      products: products.map((p, i) => ({
-        position: i + 1,
-        name: p.title,
-        brandName: owner(p).name,
-        seller: owner(p).name,
-        price: priceText(p.price),
-        url: url(owner(p).domain, p.path),
-        rating: { value: p.rating, count: p.reviews },
-      })),
-    },
-  ];
+  return products.map((p) => ({
+    title: p.title,
+    brand: owner(p).name,
+    price: priceText(p.price),
+    url: url(owner(p).domain, p.path),
+    rating: p.rating,
+    reviewCount: p.reviews,
+  }));
 }
 
 /** The answer's text: a lead, the brands it names in order, a closing line. */
@@ -200,7 +178,7 @@ function answerProducts(prompt, { brandNamed, competitorsNamed }, rng) {
  * One tracked answer: what the engine returned, in its own shape, before
  * tracking parses it.
  */
-function rawAnswer(prompt, platform, { run, progress }) {
+function rawAnswer(prompt, platform, { run, progress, index }) {
   const rng = seededRandom(`${SEED}:${run}:${prompt.key}:${platform.id}`);
 
   const mentionChance =
@@ -236,21 +214,15 @@ function rawAnswer(prompt, platform, { run, progress }) {
   const sources = answerSources(prompt, platform, { brandNamed, competitorsNamed, progress }, rng);
   const raw = { text: answerText(prompt, named, rng), sources };
 
-  if (platform.fanout) {
-    const searches = rng.shuffle(prompt.searches).slice(0, rng.int(1, prompt.searches.length));
-    if (platform.fanout === 'perplexity') raw.search_model_queries = searches;
-    else raw.searchQueries = searches;
+  if (platform.fanout && (run + index) % FANOUT_EVERY_RUNS === 0) {
+    raw.searchQueries = rng.shuffle(prompt.searches).slice(0, rng.int(1, prompt.searches.length));
   }
 
   if (prompt.shopping && run >= RUNS - SHOPPING_RUNS && CARD_PLATFORMS.has(platform.id)) {
     const products = rng.chance(0.75)
       ? answerProducts(prompt, { brandNamed, competitorsNamed }, rng)
       : [];
-    if (products.length > 0) {
-      const cards = rawCards(platform.id, products);
-      if (platform.id === 'perplexity-web') raw.shopping_cards = cards;
-      else raw.shoppingCards = cards;
-    }
+    if (products.length > 0) raw.shoppingCards = rawCards(products);
   }
 
   // The engines' own envelopes (parseScraperResponse).
@@ -368,13 +340,13 @@ export function coreRows({ brandId, now }) {
   runStarts.forEach((startedAt, run) => {
     const progress = run / (RUNS - 1);
     let at = startedAt.getTime();
-    for (const prompt of PROMPTS) {
+    for (const [index, prompt] of PROMPTS.entries()) {
       for (const platform of PLATFORMS) {
         at += ANSWER_GAP_MS;
         const createdAt = new Date(at).toISOString();
         const resultId = id(`result:${run}:${prompt.key}:${platform.id}`);
         const promptId = id(`prompt:${prompt.key}`);
-        const { raw, sentiment } = rawAnswer(prompt, platform, { run, progress });
+        const { raw, sentiment } = rawAnswer(prompt, platform, { run, progress, index });
         const aiResponse = parseScraperResponse(raw, platform.id);
         const metrics = parseResponse(aiResponse, brandInfo, sentiment, tracked);
         results.push({

@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { readKey } from '@/components/brand-visibility/read-cache';
 import { ReadError } from '@/components/brand-visibility/read-error';
 import { useBrandVisibilityShell } from '@/components/brand-visibility/shell-context';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { getMentionsPerception } from '@/lib/actions/mentions';
 import { mentionsQuery, type MentionsFilters } from '@/lib/mentions-filters';
 import type { MentionsPerception } from '@/lib/mentions-perception';
 import { cn } from '@/lib/utils';
+import { getMentionsPerception } from '@/lib/visibility-reads';
 import { BrandShapeCard } from './_brand-shape';
 import { CoMentionsCard, HeatmapCard, TermsCard } from './_perception-cards';
 import { scheduleRead } from './_read-delay';
@@ -38,7 +39,8 @@ function Message({ children }: { children: React.ReactNode }) {
  * filter change; a newer change wins over a read still on its way. A read
  * that fails is tried once more before the tab says so (a cold read past
  * the database's limit usually answers the second time), and a slow one
- * says it is still reading.
+ * says it is still reading. Figures read before for the same brand and
+ * filters (the tab opened again) show at once while they are read again.
  */
 export function MentionsPerceptionTab({
   brandId,
@@ -50,32 +52,34 @@ export function MentionsPerceptionTab({
   filters: MentionsFilters;
 }) {
   const t = useTranslations('mentions.perception');
-  const { readSent } = useBrandVisibilityShell();
+  const { cache, shown } = useBrandVisibilityShell();
   const first = useRef(true);
   const query = useMemo(() => mentionsQuery(filters), [filters]);
   const key = query ? JSON.stringify([brandId, query]) : null;
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // Kept by the filters, not the query: a range's query moves with the clock.
+  const keptKey = readKey('mentionsPerception', brandId, filters);
+  const [read, setRead] = useState<Loaded | null>(null);
   // Try again reads the same filters once more.
   const [attempt, setAttempt] = useState(0);
   // The read (for these filters, this try) still on its way after SLOW_MS.
   const [slow, setSlow] = useState<string | null>(null);
-  const readKey = key ? `${key}#${attempt}` : null;
+  const tryKey = key ? `${key}#${attempt}` : null;
 
   useEffect(() => {
     if (!key || !query) return;
     let cancelled = false;
-    const read = () => getMentionsPerception(brandId, query);
+    const ask = () => getMentionsPerception(brandId, query);
     const cancelRead = scheduleRead(first, () => {
-      read()
+      ask()
         // Once more before saying it failed.
-        .catch((err) => (cancelled ? Promise.reject(err) : read()))
+        .catch((err) => (cancelled ? Promise.reject(err) : ask()))
         .then((perception) => {
-          if (!cancelled) setLoaded({ brandId, key, status: 'ok', perception });
+          cache.set(keptKey, perception);
+          if (!cancelled) setRead({ brandId, key, status: 'ok', perception });
         })
         .catch(() => {
-          if (!cancelled) setLoaded({ brandId, key, status: 'error' });
+          if (!cancelled) setRead({ brandId, key, status: 'error' });
         });
-      readSent();
     });
     const slowTimer = setTimeout(() => {
       if (!cancelled) setSlow(`${key}#${attempt}`);
@@ -87,9 +91,20 @@ export function MentionsPerceptionTab({
       // Back on these filters later, the read starts over: not slow yet.
       setSlow((s) => (s === `${key}#${attempt}` ? null : s));
     };
-  }, [brandId, key, query, attempt, readSent]);
+  }, [brandId, key, keptKey, query, attempt, cache]);
 
-  const isSlow = slow !== null && slow === readKey;
+  // This read's figures; until they are back, those kept for these filters
+  // (the tab opened again, or filters picked again); else the last read's.
+  const fresh = read?.key === key && read.status === 'ok';
+  const kept = key && !fresh ? cache.get<MentionsPerception | null>(keptKey) : undefined;
+  const loaded: Loaded | null =
+    key && kept !== undefined ? { brandId, key, status: 'ok', perception: kept } : read;
+  const showing = loaded?.status === 'ok' && loaded.brandId === brandId;
+  useEffect(() => {
+    if (showing) shown();
+  }, [showing, shown]);
+
+  const isSlow = slow !== null && slow === tryKey;
   const skeleton = <PerceptionSkeleton slow={isSlow} />;
   if (!query) return <Message>{t('pickDates')}</Message>;
   if (!loaded || loaded.brandId !== brandId) return skeleton;
@@ -98,7 +113,7 @@ export function MentionsPerceptionTab({
       <ReadError
         title={t('loadError')}
         onRetry={() => {
-          setLoaded(null);
+          setRead(null);
           setAttempt((n) => n + 1);
         }}
       />

@@ -36,6 +36,13 @@ vi.mock('@/lib/chat/images/provider', () => ({ generateImages: fakes.generate })
 vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: {} }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }));
 vi.mock('./ai-image-store', () => ({ storeAiImageOptions: fakes.store }));
+const storage = vi.hoisted(() => ({
+  fits: vi.fn<(org: string, bytes: number) => Promise<boolean>>(async () => true),
+}));
+vi.mock('./image-storage', () => ({
+  AI_IMAGE_BYTES: 2 * 1024 * 1024,
+  imageStorageFits: storage.fits,
+}));
 
 const { DRAFT_IMAGE_RULES, draftImagePrompt, draftImagesInput, makeDraftImages } =
   await import('./ai-images');
@@ -185,6 +192,18 @@ describe('a request for a draft', () => {
     fakes.key = new OwnKeyUnreadableError('openrouter');
     expect(await makeDraftImages(job)).toEqual({ ok: false, code: 'own_key' });
     expect(fakes.generate).not.toHaveBeenCalled();
+  });
+
+  it('makes nothing the workspace’s storage has no room for, holding and charging nothing (00490)', async () => {
+    storage.fits.mockResolvedValueOnce(false);
+    expect(await makeDraftImages(job)).toEqual({ ok: false, code: 'storage_full' });
+    expect(storage.fits).toHaveBeenCalledWith(
+      job.organizationId,
+      job.input.count * 2 * 1024 * 1024,
+    );
+    expect(fakes.reserve).not.toHaveBeenCalled();
+    expect(fakes.generate).not.toHaveBeenCalled();
+    expect(fakes.store).not.toHaveBeenCalled();
   });
 
   it('refuses a model whose maker an Admin turned off, holding, charging and sending nothing (W4-34)', async () => {

@@ -75,9 +75,9 @@ describe('ReportCardPdfDocument', () => {
     expect(status).toContain('Whole bean coffee');
     // The headline's base spelled out: 25 questions in Starter's two engines.
     expect(status).toContain(
-      'named in 8 of 50 answers: 25 questions × 2 engines (ChatGPT and Microsoft Copilot)',
+      'named in 8 of 50 answers: 25 questions × 2 engines (ChatGPT and Google Gemini)',
     );
-    expect(status).toContain('in 5 AI engines: 122 answers (3 got no answer)');
+    expect(status).toContain('in 4 AI engines: 97 answers (3 got no answer)');
     // The competitor and the citations are counted over the headline's answers.
     expect(status).toContain('named in 21 of the same 50 answers');
     expect(status).toContain('of the same 50 answers cite a page of yours');
@@ -101,12 +101,12 @@ describe('ReportCardPdfDocument', () => {
 
   it('states one visibility figure on every page: the headline’s engines', () => {
     const pages = draw(SAMPLE_REPORT_CARD);
-    // ChatGPT 6 of 25 and Microsoft Copilot 2 of 25.
+    // ChatGPT 6 of 25 and Google Gemini 2 of 25.
     expect(pages[0]).toContain('named in 8 of 50 answers');
     expect(pages[0]).toContain('Brewline Coffee (you)8 answers');
-    expect(pages[1]).toContain('in 8 of the 50 answers from ChatGPT and Microsoft Copilot');
+    expect(pages[1]).toContain('in 8 of the 50 answers from ChatGPT and Google Gemini');
     expect(pages[2]).toContain('Your site is cited in 2 of 50 answers.');
-    for (const page of pages) expect(page).not.toMatch(/\d+ of (all |the )?122 answers/);
+    for (const page of pages) expect(page).not.toMatch(/\d+ of (all |the )?97 answers/);
   });
 
   it('page 1 says how many got no answer instead of 25 questions × 2 engines over 49 answers', () => {
@@ -117,7 +117,7 @@ describe('ReportCardPdfDocument', () => {
       ),
     });
     expect(status).toContain(
-      'named in 8 of 49 answers from ChatGPT and Microsoft Copilot (1 question got no answer from one engine)',
+      'named in 8 of 49 answers from ChatGPT and Google Gemini (1 question got no answer from one engine)',
     );
     expect(status).not.toContain('25 questions × 2 engines');
   });
@@ -130,7 +130,7 @@ describe('ReportCardPdfDocument', () => {
     });
     expect(status).toContain('Your starting point');
     expect(status).toContain(
-      'ChatGPT and Microsoft Copilot don’t name you yet, but AI already reads your site: it cited your pages in 2 answers',
+      'ChatGPT and Google Gemini don’t name you yet, but AI already reads your site: it cited your pages in 2 answers',
     );
   });
 
@@ -138,13 +138,13 @@ describe('ReportCardPdfDocument', () => {
     const [, questions] = draw(SAMPLE_REPORT_CARD);
     expect(questions).toContain('The 25 questions, and what each engine said');
     expect(questions).toContain(
-      'Named in 6 of the 25 questions: in 8 of the 50 answers from ChatGPT and Microsoft Copilot.',
+      'Named in 6 of the 25 questions: in 8 of the 50 answers from ChatGPT and Google Gemini.',
     );
     expect(questions).toContain('Whole bean coffee · 14 questions · brewlinecoffee.example/beans');
     expect(questions).toContain('2,900');
     expect(questions).toContain('a need your buyers also have');
     expect(questions).toContain('Lighter columns: Google’s engines, in Growth');
-    expect(questions).toContain('CopilotGemini');
+    expect(questions).toContain('ChatGPTGeminiAI Overv.');
     expect(questions).toContain('Ridgeline Roasters');
   });
 
