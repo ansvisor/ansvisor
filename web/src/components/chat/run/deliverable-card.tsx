@@ -32,7 +32,7 @@ import {
   type TaskCardResult,
 } from '@/lib/actions/chat-task-card';
 import type { ChatDeliverable, ChatTaskStrip } from '@/lib/chat/events';
-import { SendPageButton, VersionDetails, useVersionLine } from './version-card';
+import { SendPageButton, VersionDetails, VersionPills, useVersionLine } from './version-card';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { ImageSet } from './image-set';
@@ -207,17 +207,21 @@ export function DeliverableCard({
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{deliverable.title}</p>
-          <p
-            className={cn(
-              'text-xs text-muted-foreground',
-              !filed && 'text-amber-700 dark:text-amber-400',
-            )}
-          >
-            {/* A page made or changed in chat: its version (W4-12a); one not filed says why. */}
-            {deliverable.version && filed
-              ? versionLine(deliverable.version)
-              : `${t(`types.${deliverable.type}`)} · ${status}`}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p
+              className={cn(
+                'text-xs text-muted-foreground',
+                !filed && 'text-amber-700 dark:text-amber-400',
+              )}
+            >
+              {/* A page made or changed in chat: its version (W4-12a); one not filed says why. */}
+              {deliverable.version && filed
+                ? versionLine(deliverable.version)
+                : `${t(`types.${deliverable.type}`)} · ${status}`}
+            </p>
+            {/* Its Rules and Quality, as the editor's header shows them (W4-12b part 2). */}
+            {deliverable.version && filed && <VersionPills version={deliverable.version} />}
+          </div>
           {task && (
             <p data-slot="deliverable-task" className="truncate text-xs text-muted-foreground">
               {t('task.line', { title: task.title || t('task.untitled') })}

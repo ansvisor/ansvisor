@@ -291,6 +291,38 @@ describe('AgentForm: new agent', () => {
     expect(step()).toBe('0');
   });
 
+  it('lists the Library skills an Admin approved under Library, and starts the agent on one (W4-19)', async () => {
+    // None yet: the Library source says where they come from.
+    await render();
+    const sources = action('agentNew.skillSource');
+    expect(sources.map((b) => b.textContent)).toEqual(['Ansvisor skills', 'My skills', 'Library']);
+    await click(sources[2]);
+    expect(container.textContent).toContain('Library skills an Admin adds show here.');
+    act(() => root.unmount());
+    root = createRoot(container);
+
+    await render({
+      ...SETUP,
+      librarySkills: [
+        { name: 'seo-geo', title: 'AI search / GEO optimization', repo: 'agricidaniel/claude-seo' },
+        { name: 'brand-voice', title: 'Brand voice', repo: null },
+      ],
+    });
+    await click(action('agentNew.skillSource')[2]);
+    const list = one('[data-slot="agent-form-library-skills"]')!;
+    expect([...list.querySelectorAll('[role="radio"]')].map((r) => r.textContent)).toEqual([
+      '/seo-geoAI search / GEO optimizationFrom the Library · agricidaniel/claude-seo',
+      '/brand-voiceBrand voice',
+    ]);
+    await click(list.querySelector<HTMLElement>('[data-skill="seo-geo"]')!);
+    expect(list.querySelector('[data-skill="seo-geo"]')!.getAttribute('aria-checked')).toBe('true');
+    expect(errors()).toEqual([]);
+    // Named after the skill's own title (§O).
+    expect(summary('name')).toBe('AI search / GEO optimization');
+    await next();
+    expect(step()).toBe('1');
+  });
+
   it('adds, edits and removes triggers, and stops on a one-off in the past', async () => {
     await render();
     await click(one('[data-skill="faq"]')!);

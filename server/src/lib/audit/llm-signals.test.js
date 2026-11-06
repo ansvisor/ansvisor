@@ -35,8 +35,17 @@ vi.mock('./llm-verdicts.js', () => ({
   },
 }));
 
-const { DEFAULT_MODEL, LLM_SIGNAL_KEYS, LLM_SIGNAL_VIEWS, OPENING_CHARS, evaluateLlmSignals } =
-  await import('./llm-signals.js');
+const {
+  DEFAULT_MODEL,
+  LLM_SIGNAL_KEYS,
+  LLM_SIGNAL_VIEWS,
+  OPENING_CHARS,
+  PROMPT_VERSION,
+  evaluateLlmSignals,
+  inputHash,
+  viewInputs,
+} = await import('./llm-signals.js');
+const { RUBRIC_VERSION } = await import('./rubric.js');
 const { auditContextOf } = await import('./context.js');
 const { scoreAudit } = await import('./scorer.js');
 
@@ -212,6 +221,27 @@ describe('evaluateLlmSignals', () => {
     const byKey = new Map(result.results.map((r) => [r.key, r.status]));
     expect(LLM_SIGNAL_VIEWS.opening.map((k) => byKey.get(k))).toEqual(['pass', 'pass']);
     expect(LLM_SIGNAL_VIEWS.body.every((k) => byKey.get(k) === 'na')).toBe(true);
+  });
+
+  it('reads the verdicts kept before the evidence-level rubric (SA-010): no page is judged again', async () => {
+    // Verdicts saved under rubric v1.1, whose prompt version was "v1.1/2".
+    const ctx = page();
+    const inputs = viewInputs(ctx);
+    for (const [view, keys] of Object.entries(LLM_SIGNAL_VIEWS)) {
+      for (const key of keys) {
+        kept.set(
+          keyOf(inputHash(inputs[view]), key, { model: DEFAULT_MODEL, promptVersion: 'v1.1/2' }),
+          { status: 'pass', score: 1, reason: 'Kept from v1.1.' },
+        );
+      }
+    }
+
+    const result = await evaluateLlmSignals(ctx);
+    expect(RUBRIC_VERSION).toBe('v1.2');
+    expect(PROMPT_VERSION).toBe('v1.1/2');
+    expect(generateObject).not.toHaveBeenCalled();
+    expect(result.partial).toBe(false);
+    expect(result.results.every((r) => r.status === 'pass' && r.evidence.kept)).toBe(true);
   });
 
   it('keys the kept verdicts by model: another model judges the page again', async () => {

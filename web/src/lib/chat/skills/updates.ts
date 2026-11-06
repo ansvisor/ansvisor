@@ -2,6 +2,8 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { chatAgenticEnabled } from '../flag';
 import { parseGithubUrl, readGithubSkill, type GithubOptions, type GithubRefusal } from './github';
 import { parseSkillImport, type ImportFile, type ImportRefusal } from './import';
+import { marketplaceSkill } from './marketplace';
+import { cleanMarketplaceFiles, editWords } from './marketplace-cleanup';
 import { skillChecksum, type SkillParts } from './skill-file';
 import { skillRefusal, type SkillResult, type SkillViewer } from './store';
 
@@ -14,7 +16,10 @@ import { skillRefusal, type SkillResult, type SkillViewer } from './store';
  * difference and approves it, and the new version goes through the
  * cleanup, the scan and the license check again. A skill whose file no
  * longer matches its checksum is switched off. A source that is gone, or
- * whose license is one we don't take, leaves the skill as it is.
+ * whose license is one we don't take, leaves the skill as it is. A Library
+ * skill's new version is cleaned as its catalog row says first (CHAT-17
+ * item 16), read by the Library's rules (import.ts `library`), and only MIT
+ * is taken for it (decision 11).
  */
 
 /** Days between two checks of one skill. */
@@ -27,7 +32,7 @@ export const UPDATES_PER_TICK = 5;
 export const UPDATE_HOUR_UTC = 3;
 
 const CHECK_COLUMNS =
-  'id, organization_id, name, title, description, body, license, compatibility, checksum_sha256, source_url, commit_sha, update_sha, enabled';
+  'id, organization_id, name, title, description, body, license, compatibility, checksum_sha256, source_url, commit_sha, update_sha, enabled, library_ref';
 
 export interface CheckRow extends SkillParts {
   id: string;
@@ -37,6 +42,18 @@ export interface CheckRow extends SkillParts {
   commit_sha: string | null;
   update_sha: string | null;
   enabled: boolean;
+  /** The Library row a skill added from the Library came from (00465); null for an import. */
+  library_ref?: string | null;
+}
+
+/**
+ * The files a new version is read from: a Library skill's SKILL.md cleaned
+ * as its catalog row says, so an update never brings back what the
+ * cleanup took out; an import's as they are.
+ */
+function versionFiles(row: Pick<CheckRow, 'library_ref'>, files: ImportFile[]) {
+  const skill = row.library_ref ? marketplaceSkill(row.library_ref) : null;
+  return skill ? cleanMarketplaceFiles(files, skill.cleanup) : { files, edits: [] };
 }
 
 /** The skill's folder at a ref of its repository (its default branch: HEAD), or null for a link we can't read. */
@@ -66,8 +83,13 @@ export type UpdateDecision =
 export function decideUpdate(row: CheckRow, read: SourceRead): UpdateDecision {
   if (!read.ok) return { kind: 'source', code: read.refusal.code };
   if (read.value.commitSha === row.commit_sha) return { kind: 'same' };
-  const parsed = parseSkillImport(read.value.files);
+  const parsed = parseSkillImport(versionFiles(row, read.value.files).files, {
+    library: !!row.library_ref,
+  });
   if (!parsed.ok) return { kind: 'refused', code: parsed.refusal.code };
+  if (row.library_ref && parsed.value.parts.license !== 'MIT') {
+    return { kind: 'refused', code: 'license' };
+  }
   const next = skillChecksum({ ...parsed.value.parts, name: row.name });
   return next === row.checksum_sha256
     ? { kind: 'same' }
@@ -166,7 +188,7 @@ export async function checkSkillUpdates(
 // ─── The update's review ────────────────────────────────────────────────────
 
 const UPDATE_COLUMNS =
-  'id, organization_id, name, title, description, body, license, compatibility, checksum_sha256, source_url, commit_sha, update_sha, created_by';
+  'id, organization_id, name, title, description, body, license, compatibility, checksum_sha256, source_url, commit_sha, update_sha, created_by, library_ref';
 
 type UpdateRow = CheckRow & { created_by: string | null };
 
@@ -212,9 +234,17 @@ async function readNewVersion(row: UpdateRow, sha: string, github?: GithubOption
   if (!link) return skillRefusal('github_url');
   const read = await readGithubSkill(link, github);
   if (!read.ok) return skillRefusal(read.refusal.code, read.refusal.detail);
-  const parsed = parseSkillImport(read.value.files);
+  const cleaned = versionFiles(row, read.value.files);
+  const parsed = parseSkillImport(cleaned.files, { library: !!row.library_ref });
   if (!parsed.ok) return skillRefusal(parsed.refusal.code, parsed.refusal.detail);
-  return { ok: true as const, value: { parsed: parsed.value, sourceUrl: read.value.sourceUrl } };
+  if (row.library_ref && parsed.value.parts.license !== 'MIT') {
+    return skillRefusal('library_license');
+  }
+  const removed = [...cleaned.edits.map(editWords), ...parsed.value.removed];
+  return {
+    ok: true as const,
+    value: { parsed: { ...parsed.value, removed }, sourceUrl: read.value.sourceUrl },
+  };
 }
 
 /** The update of a skill waiting for an Admin: an Admin's, or its creator's. */

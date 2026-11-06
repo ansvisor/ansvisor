@@ -1492,4 +1492,15 @@ describe('a Content Quality read for an agent run (AUTONOMOUS-GO-LIVE §6.2)', (
       code: 'run_cap',
     });
   });
+
+  it('holds a page’s Quality reads for a person’s own Chat run as its chat steps (W4-12b part 2)', async () => {
+    const reserve = budget.chatRunReserve('o1', { runId: RUN });
+    const meter = await reserve({ modelId: MODEL, holdUsd: 0.004 });
+    const args = rpcCalls.at(-1).args;
+    expect(args).toMatchObject({ p_feature: 'chat', p_chat_run_id: RUN, p_cost: 0.004 });
+    expect(args).not.toHaveProperty('p_agent_run_id');
+    expect(args).not.toHaveProperty('p_schedule_id');
+    await meter.charge({ inputTokens: 1000, outputTokens: 200 });
+    expect(ledger).toEqual([expect.objectContaining({ feature: 'chat', cost_usd: 0.002 })]);
+  });
 });

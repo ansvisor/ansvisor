@@ -3,7 +3,7 @@ import type { TeamRole } from '@/components/providers/role-provider';
 import type { Feature, PlanId } from '@/config/plans';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import type { ChatConfirmForm } from '../events';
-import type { PageVersionRead } from '../page-versions';
+import type { PageVersionRead, VersionRun } from '../page-versions';
 
 /**
  * Chat's tool registry (CHAT-20 §9): one row per tool Chat may call, saying
@@ -166,6 +166,11 @@ export type ChatToolContext = McpAuthContext & {
   pageSites?: { hosts: readonly string[]; domains: readonly string[] };
   /** The run's time zone (the person's): what a schedule's date phrase is read in. */
   timezone?: string;
+  /**
+   * The Chat run the call is made in, and the agent run or scheduled job it
+   * is: what a page's Quality read is held on (check_draft_rules, W4-12b part 2).
+   */
+  run?: { id: string; agentRunId: string | null; scheduleId: string | null };
 };
 
 /**
@@ -315,7 +320,7 @@ interface ToolFields<S extends z.ZodObject> {
   versionOf?(
     input: z.output<S>,
     output: unknown,
-    place: { conversationId: string },
+    place: { conversationId: string; run: VersionRun },
   ): Promise<PageVersionRead | null>;
   /**
    * A WRITE's check before its card or its run (CHAT-20 §12 rule 1: Send to

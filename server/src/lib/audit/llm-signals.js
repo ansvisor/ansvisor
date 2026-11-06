@@ -23,7 +23,7 @@ import { createHash } from 'node:crypto';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import { resolveModel } from '../ai-provider.js';
-import { signalsByKey, RUBRIC_VERSION } from './rubric.js';
+import { signalsByKey } from './rubric.js';
 import { readVerdicts, saveVerdicts } from './llm-verdicts.js';
 import { withRetry } from '../retry.js';
 import { logger } from '../logger.js';
@@ -32,10 +32,14 @@ import { logger } from '../logger.js';
 export const DEFAULT_MODEL = 'google/gemini-3.8-flash';
 
 /**
- * Part of every kept verdict's key: bump it when SYSTEM_PROMPT, the prompts
- * or the call's settings change, so kept verdicts are judged again.
+ * Part of every kept verdict's key: bump it when SYSTEM_PROMPT, the prompts,
+ * the judged signals' `what` or the call's settings change, so kept verdicts
+ * are judged again. It no longer follows RUBRIC_VERSION: rubric v1.2 (SA-010,
+ * evidence levels) changed how the score adds up, not what the model reads,
+ * and every page's 13 verdicts are kept through it. The value is the one
+ * rubric v1.1 gave, so no kept verdict is lost.
  */
-export const PROMPT_VERSION = `${RUBRIC_VERSION}/2`;
+export const PROMPT_VERSION = 'v1.1/2';
 
 /** The call's seed, where the provider takes one. */
 const SEED = 1;
