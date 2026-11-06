@@ -111,6 +111,9 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 vi.mock('@/lib/actions/action-center', () => ({ getActions, getActionsAffected }));
 vi.mock('@/lib/actions/action-center-today', () => ({ getToday }));
+vi.mock('@/components/action-center/agent-work-gear', () => ({
+  AgentWorkGear: () => <span data-testid="agent-work-gear" />,
+}));
 vi.mock('@/lib/actions/getting-started', () => ({
   getGettingStarted,
   startGettingStarted,
@@ -238,6 +241,8 @@ describe('Today (AC-011)', () => {
     expect(getToday).toHaveBeenCalledWith('brand-id', expect.any(String));
     expect(today()).not.toBeNull();
     expect(today()!.querySelectorAll('ol > li')).toHaveLength(1);
+    // Agent work's gear sits in the card's header (mockup screen 3).
+    expect(today()!.querySelector('[data-testid="agent-work-gear"]')).not.toBeNull();
     // The card comes before the summary cards.
     const cards = [...container.querySelectorAll('p')].find((p) => p.textContent === 'cards.top')!;
     expect(today()!.compareDocumentPosition(cards) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

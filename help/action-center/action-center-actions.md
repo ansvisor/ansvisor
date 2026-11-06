@@ -1,8 +1,8 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, today, next 7, done this week, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence]
-synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first]
+keywords: [actions, today, next 7, done this week, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence]
+synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work]
 plan: all
 updated: 2026-11-05
 last_checked: 2026-11-05
@@ -20,6 +20,15 @@ The **Today** card at the top of the **Actions** tab lists up to three things to
 Each item says why it matters, its first step and page, and who does it: **Me** (assigned to you), **Agent** (an agent can do the first step) or **Team** (no one's yet). **Open** opens the action.
 
 Under the card, **Next** lists the seven after them, and **Done this week** counts actions completed since Monday; click it for History. While Getting started runs, the card shows its next three steps instead.
+
+## Agent work
+
+When Chat is on, the **Agent work** gear on the **Today** card sets how far your workspace's agents go without a person:
+
+- **I approve first**, where every workspace starts: every change an agent makes waits for someone to approve it, whatever the agent's mode.
+- **Agent starts on its own**: each agent works in its own mode, **Ask me first**, **Auto** or **Full auto**.
+
+Neither changes going live: an agent publishes or sends only with a person's click, unless an Admin let it publish on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. It is also in **Settings › Chat**.
 
 ## Action categories
 

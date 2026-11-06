@@ -1,5 +1,6 @@
 import type { TeamRole } from '@/components/providers/role-provider';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
+import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { parseRecurringRule, type RruleDay } from './agent-schedule';
 import type { AgentListView, AgentStatus } from './agent-rules';
 import type { AgentOutcome, AgentTriggerView } from './agents';
@@ -86,6 +87,7 @@ export function engineName(id: string): string {
   return (
     ALL_SCRAPERS.find((engine) => engine.id === id)?.label ??
     ALL_MODELS.find((model) => model.id === id)?.label ??
+    PLATFORM_LABELS[id] ??
     id
   );
 }
@@ -109,7 +111,8 @@ export type TriggerSummary =
       unit: 'absolute' | 'percent';
       period: 'day' | 'week' | 'month';
     }
-  | { kind: 'watch_rule' };
+  | { kind: 'watch_rule' }
+  | { kind: 'brand_added' };
 
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value)
@@ -163,6 +166,8 @@ export function triggerSummary(trigger: Pick<AgentTriggerView, 'kind' | 'config'
       };
     case 'watch_rule':
       return { kind: 'watch_rule' };
+    case 'brand_added':
+      return { kind: 'brand_added' };
   }
 }
 

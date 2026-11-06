@@ -92,6 +92,7 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-settings.ts:setManagerExecute': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:setAutoGoLive': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:setModelProvider': 'checks ctx.plan.writable itself, answering read_only',
+  'chat-settings.ts:setAgentWork': 'checks ctx.plan.writable itself, answering read_only',
   'chat-settings.ts:removeAutoChoice':
     "removes the person's own Don't ask again tick: takes an auto-approval back, never gives one",
   // An add-on pack (CHAT-18): only on an active, paid plan.

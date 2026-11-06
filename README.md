@@ -17,7 +17,7 @@
 
 Ansvisor is an **open-source, agentic AI Search Execution Platform**. It shows how your brand appears in AI answers, finds where you can win, and turns that into work your team can ship. Agents find opportunities, turn signals into prioritized actions and draft the fixes. You approve what goes live.
 
-Connect business data and traditional search signals with AI Search behavior across ChatGPT, Google AI Overviews, Google AI Mode, Gemini, Claude, Perplexity, Microsoft Copilot, Grok, and other AI platforms to discover opportunities, prioritize what matters, and improve brand visibility.
+Connect business data and traditional search signals with AI Search behavior across ChatGPT, Google AI Overviews, Google AI Mode, Gemini, Claude, Grok, and other AI platforms to discover opportunities, prioritize what matters, and improve brand visibility.
 
 Track prompts, mentions, citations, competitors, AI traffic, and the sources AI systems rely on. Then act on them in the same place: plan content, let the Content Agent draft and fix pages, and follow every action against your AI Search KPIs.
 
@@ -98,8 +98,6 @@ Ansvisor helps you monitor and analyze brand visibility across:
 - [**Google AI Mode Rank Tracker**](https://www.ansvisor.com/features/google-ai-mode-visibility-tracker)
 - [**Gemini AI Visibility Tracker**](https://www.ansvisor.com/features/gemini-visibility-tracker)
 - [**Claude AI Visibility Tracker**](https://www.ansvisor.com/features/claude-ai-visibility-tracker)
-- [**Perplexity AI Visibility Tracker**](https://www.ansvisor.com/features/perplexity-visibility-tracker)
-- [**Microsoft Copilot AI Visibility Tracker**](https://www.ansvisor.com/features/microsoft-copilot-visibility-tracker)
 - [**Grok AI Visibility Tracker**](https://www.ansvisor.com/features/grok-visibility-tracker)
 - [**ChatGPT AI Shopping Tracker**](https://www.ansvisor.com/features/ai-shopping-analytics)
 - and other AI-powered discovery experiences
@@ -152,7 +150,7 @@ Deploy Ansvisor on your own infrastructure and maintain control over your enviro
 |---------|---------|--------------|
 | **Supabase** | Database, Auth, API | [supabase.com](https://supabase.com/) |
 | **AI Provider** (at least one) | Brand tracking across AI engines | [OpenAI](https://platform.openai.com/) / [Google Gemini](https://ai.google.dev/) / [Anthropic](https://console.anthropic.com/) |
-| **Cloro** | Web scraping for AI platform responses | [cloro.ai](https://cloro.ai/) |
+| **Cloro** | Web scraping for AI platform responses | [cloro.dev](https://cloro.dev/?utm_source=ansvisor&utm_medium=byok) |
 
 ### Optional Services
 

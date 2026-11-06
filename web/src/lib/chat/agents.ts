@@ -40,6 +40,7 @@ import {
   monthCapDenial,
   nameKey,
   nextVersion,
+  triggerScopeProblem,
   triggerTimeProblem,
   versionFromRow,
   visibilityDenial,
@@ -177,6 +178,8 @@ export type AgentRefusalCode =
   | 'version_conflict'
   | 'schedule_past'
   | 'schedule_too_far'
+  /** When a brand is added on an agent whose scope isn't All brands (00482). */
+  | 'brand_added_scope'
   | 'brand_not_found'
   | 'topic_not_found'
   | 'member_not_found'
@@ -241,6 +244,7 @@ const REFUSAL_STATUS: Record<AgentRefusalCode, number> = {
   version_conflict: 409,
   schedule_past: 400,
   schedule_too_far: 400,
+  brand_added_scope: 400,
   brand_not_found: 400,
   topic_not_found: 400,
   member_not_found: 400,
@@ -1354,6 +1358,15 @@ function triggersRefusal(triggers: readonly AgentTriggerInput[], now: Date): Ref
   return null;
 }
 
+/** A trigger its scope can't have (When a brand is added without All brands), as its refusal. */
+function triggerScopeRefusal(
+  triggers: readonly AgentTriggerInput[],
+  scope: AgentVersionData['scope'],
+): Refused | null {
+  const problem = triggerScopeProblem(triggers, scope);
+  return problem ? refused(problem) : null;
+}
+
 const isUniqueClash = (error: { code?: string } | null) => error?.code === '23505';
 
 /** Two instants the same (the database's text, or the same moment written another way). */
@@ -1587,7 +1600,10 @@ export async function createAgent(
     enginesDenial(ctx.plan, enginesNamed(version.scope, input.triggers)),
   ]);
   if (denial) return denial;
-  const problem = triggersRefusal(input.triggers, now) ?? (await referencesRefusal(ctx, version));
+  const problem =
+    triggersRefusal(input.triggers, now) ??
+    triggerScopeRefusal(input.triggers, version.scope) ??
+    (await referencesRefusal(ctx, version));
   if (problem) return problem;
   const org = ctx.actor.organizationId;
   // A name the person didn't type: §O against every agent, the ones they can't see included.
@@ -1707,6 +1723,7 @@ export async function updateAgent(
   if (denial) return denial;
   const problem =
     triggersRefusal(changedTriggers, now) ??
+    (patch.triggers || patch.scope ? triggerScopeRefusal(triggers, result.scope) : null) ??
     (next && (patch.scope || patch.notifyUserIds || patch.canCall)
       ? await referencesRefusal(ctx, next, row.id, agent.version.can_call)
       : null);

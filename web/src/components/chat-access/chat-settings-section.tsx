@@ -21,6 +21,7 @@ import {
   removeAutoChoice,
   resetToolPolicies,
   setChatSwitch,
+  setAgentWork,
   setAutoGoLive,
   setModelProvider,
   setManagerExecute,
@@ -39,6 +40,7 @@ import { YourPlanCard } from './plan-card';
 import { AskAdminButton } from './ask-admin-button';
 import { MemorySwitchRow } from './memory-switch-row';
 import { GoLiveSection } from './go-live-section';
+import { AgentWorkPanel } from './agent-work-panel';
 import { SettingsSwitch as Switch } from './settings-switch';
 
 const PRECEDENCE = ['hard', 'plan', 'role', 'policy', 'mode', 'dontAsk'] as const;
@@ -54,6 +56,7 @@ export function ChatSettingsSection() {
   const tAccess = useTranslations('chatAccess');
   const tTools = useTranslations('chatTools');
   const tActions = useTranslations('readOnly.actions');
+  const tAgentWork = useTranslations('actionCenter.agentWork');
   // A read-only workspace opens the upgrade dialog instead, as Team does.
   const { guard } = useUpgradeGate();
   const [view, setView] = useState<ChatSettingsView | 'failed' | null>(null);
@@ -194,6 +197,20 @@ export function ChatSettingsSection() {
           ))}
           <MemorySwitchRow />
         </ul>
+      </section>
+
+      {/* Agent work (AC-011): the same panel as Action Center › Today's gear. */}
+      <section className="space-y-2">
+        <h3 className="text-sm font-semibold">{tAgentWork('title')}</h3>
+        <p className="text-xs text-muted-foreground">{tAgentWork('lead')}</p>
+        <div className="max-w-xl rounded-xl border px-3.5 py-3">
+          <AgentWorkPanel
+            key={`${view.agentWork.value}:${view.agentWork.lastChange?.at ?? ''}`}
+            view={view.agentWork}
+            saving={saving}
+            onSave={(value) => change(() => setAgentWork(value), tAgentWork('saved'))}
+          />
+        </div>
       </section>
 
       <section className="space-y-2">
