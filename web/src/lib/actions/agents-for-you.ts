@@ -41,6 +41,91 @@ interface Profile {
   created_at: string | null;
 }
 
+type ChatClient = Awaited<ReturnType<typeof createClient>>;
+
+/** The person's profile, while the new Chat is on for their workspace; null otherwise. */
+async function profileOf(
+  supabase: ChatClient,
+  userId: string,
+): Promise<(Profile & { organization_id: string }) | null> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('organization_id, role, work_areas, work_areas_asked_at, created_at')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw new Error(`profiles: ${error.message}`);
+  const profile = data as Profile | null;
+  if (!profile?.organization_id || !chatAgenticEnabled(profile.organization_id)) return null;
+  return profile as Profile & { organization_id: string };
+}
+
+/**
+ * Whether the section is open for the person (agentsForYouOpen): once they
+ * answered or skipped Your work areas, from when they joined the workspace,
+ * until they hide it. Throws on a failed read.
+ */
+async function sectionOpen(
+  supabase: ChatClient,
+  user: { id: string; email?: string | null },
+  profile: Profile & { organization_id: string },
+): Promise<boolean> {
+  // Asked first: the section waits for Your work areas, answered or skipped.
+  if (!profile.work_areas_asked_at) return false;
+  const email = user.email?.trim().toLowerCase() ?? '';
+  const [prefs, invitation] = await Promise.all([
+    supabase
+      .from('chat_user_prefs')
+      .select('agents_for_you_dismissed_at')
+      .eq('user_id', user.id)
+      .maybeSingle(),
+    email
+      ? supabaseAdmin
+          .from('invitations')
+          .select('accepted_at')
+          .eq('organization_id', profile.organization_id)
+          .eq('email', email)
+          .eq('status', 'accepted')
+          .order('accepted_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+  const failed = prefs.error ?? invitation.error;
+  if (failed) throw new Error(failed.message);
+  return agentsForYouOpen({
+    workAreasAskedAt: profile.work_areas_asked_at,
+    joinedAt: joinedAt(
+      (invitation.data as { accepted_at: string | null } | null)?.accepted_at,
+      profile.created_at,
+    ),
+    dismissedAt:
+      (prefs.data as { agents_for_you_dismissed_at: string | null } | null)
+        ?.agents_for_you_dismissed_at ?? null,
+    now: Date.now(),
+  });
+}
+
+/**
+ * Whether the person is new to the workspace as Agents for you counts it,
+ * with the section open for them (owner, 2026-11-06): Chat Home's Default
+ * view shows Agents for you to them only, and reads the agents only then.
+ * No brand, no agents: read once with the page. False when it can't be read.
+ */
+export async function readAgentsForYouOpen(): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return false;
+    const profile = await profileOf(supabase, user.id);
+    return profile ? await sectionOpen(supabase, user, profile) : false;
+  } catch (error) {
+    console.error('[agents-for-you] could not read whether Agents for you is open:', error);
+    return false;
+  }
+}
+
 export async function readAgentsForYou(brandId: string): Promise<AgentsForYouResult> {
   try {
     // guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
@@ -51,60 +136,23 @@ export async function readAgentsForYou(brandId: string): Promise<AgentsForYouRes
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return { ok: false };
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('organization_id, role, work_areas, work_areas_asked_at, created_at')
-      .eq('id', user.id)
-      .maybeSingle();
-    if (error) throw new Error(`profiles: ${error.message}`);
-    const profile = data as Profile | null;
-    const orgId = profile?.organization_id ?? null;
-    if (!profile || !orgId || !chatAgenticEnabled(orgId)) return { ok: false };
+    const profile = await profileOf(supabase, user.id);
+    if (!profile) return { ok: false };
     const canTurnOn = canWriteAgents(profile.role);
     const none: AgentsForYouResult = { ok: true, agents: [], canTurnOn };
-    // Asked first: the section waits for Your work areas, answered or skipped.
     if (!profile.work_areas_asked_at) return none;
 
-    const email = user.email?.trim().toLowerCase() ?? '';
-    const [prefs, invitation, brand] = await Promise.all([
-      supabase
-        .from('chat_user_prefs')
-        .select('agents_for_you_dismissed_at')
-        .eq('user_id', user.id)
-        .maybeSingle(),
-      email
-        ? supabaseAdmin
-            .from('invitations')
-            .select('accepted_at')
-            .eq('organization_id', orgId)
-            .eq('email', email)
-            .eq('status', 'accepted')
-            .order('accepted_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-        : Promise.resolve({ data: null, error: null }),
+    const [open, brand] = await Promise.all([
+      sectionOpen(supabase, user, profile),
       supabase
         .from('brands')
         .select('site_type, industry, shopping_mode_enabled')
         .eq('id', parsed.data)
-        .eq('organization_id', orgId)
+        .eq('organization_id', profile.organization_id)
         .maybeSingle(),
     ]);
-    const failed = prefs.error ?? invitation.error ?? brand.error;
-    if (failed) throw new Error(failed.message);
+    if (brand.error) throw new Error(brand.error.message);
     if (!brand.data) return { ok: false };
-
-    const open = agentsForYouOpen({
-      workAreasAskedAt: profile.work_areas_asked_at,
-      joinedAt: joinedAt(
-        (invitation.data as { accepted_at: string | null } | null)?.accepted_at,
-        profile.created_at,
-      ),
-      dismissedAt:
-        (prefs.data as { agents_for_you_dismissed_at: string | null } | null)
-          ?.agents_for_you_dismissed_at ?? null,
-      now: Date.now(),
-    });
     if (!open) return none;
     const site = brand.data as {
       site_type: string | null;

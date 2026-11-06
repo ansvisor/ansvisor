@@ -91,7 +91,7 @@ export interface ChatHomeViewProps {
   /**
    * Agents for you (AGENTS plan §8, #11): the ready-to-use agents for a
    * person new to the workspace, and whether they may turn one on; null
-   * while it isn't shown.
+   * while it isn't shown. The Default view shows it too (owner, 2026-11-06).
    */
   agentsForYou?: { agents: AgentForYou[]; canTurnOn: boolean } | null;
   /** Hide on Agents for you: it stays hidden. */
@@ -384,12 +384,22 @@ export function ChatHomeView({
         ] as const
       ).filter((block): block is ['drop' | 'win', SinceMove] => block[1] !== null)
     : [];
+  // Agents for you: with Home's blocks on a focused Home, and on its own under the
+  // greeting on the Default view, where only a new member gets it (owner, 2026-11-06).
+  const agents =
+    agentsForYou && agentsForYou.agents.length > 0 && onHideAgents ? (
+      <AgentsForYou
+        agents={agentsForYou.agents}
+        canTurnOn={agentsForYou.canTurnOn}
+        onHide={onHideAgents}
+      />
+    ) : null;
   return (
     <div className="mx-auto w-full max-w-[720px] px-5">
       <div
         className={cn(
           'mb-[18px] text-center',
-          plain ? (welcome ? 'mt-[12vh]' : 'mt-[20vh]') : 'mt-[34px]',
+          plain ? (welcome || agents ? 'mt-[12vh]' : 'mt-[20vh]') : 'mt-[34px]',
         )}
       >
         <h1
@@ -464,16 +474,11 @@ export function ChatHomeView({
           {areas.length > 0 && words && (
             <StartWithQuestion areas={areas} fill={words.fill} starting={starting} onAsk={onAsk} />
           )}
-          {agentsForYou && onHideAgents && (
-            <AgentsForYou
-              agents={agentsForYou.agents}
-              canTurnOn={agentsForYou.canTurnOn}
-              onHide={onHideAgents}
-            />
-          )}
+          {agents}
           <NewForYou areas={areas} starting={starting} onAsk={onAsk} />
         </>
       )}
+      {plain && agents}
       {welcome?.card}
     </div>
   );
@@ -519,10 +524,16 @@ function useHomeSeen() {
 export function ChatHome({
   firstName,
   welcome: audience = null,
+  newMember = false,
 }: {
   firstName: string | null;
   /** Who the welcome card greets (00486); null for no card. */
   welcome?: ChatStartAudience | null;
+  /**
+   * Agents for you is open for the person (readAgentsForYouOpen): the
+   * Default view shows it, and reads it, for them only (owner, 2026-11-06).
+   */
+  newMember?: boolean;
 }) {
   const t = useTranslations('chatShell.home');
   const router = useRouter();
@@ -628,9 +639,10 @@ export function ChatHome({
   }, [brandId, focusKey]);
 
   // Agents for you (AGENTS plan §8, #11): for the open brand, while it is open for the
-  // person. The Default view (00485) doesn't show it, so it isn't read there.
+  // person. The Default view (00485) reads it for a new member only (owner, 2026-11-06).
+  const agentsShown = !plain || newMember;
   useEffect(() => {
-    if (plain || !brandId) return;
+    if (!agentsShown || !brandId) return;
     let current = true;
     void readAgentsForYou(brandId)
       .then((result) => {
@@ -648,7 +660,7 @@ export function ChatHome({
     return () => {
       current = false;
     };
-  }, [plain, brandId]);
+  }, [agentsShown, brandId]);
 
   useHomeSeen();
 
@@ -720,7 +732,9 @@ export function ChatHome({
         fillBox?.(t('whatsNew.showMeMessage', { feature }));
         document.querySelector<HTMLTextAreaElement>('[data-action="composer.input"]')?.focus();
       }}
-      agentsForYou={!agentsHidden && forYou && forYou.brandId === brandId ? forYou : null}
+      agentsForYou={
+        agentsShown && !agentsHidden && forYou && forYou.brandId === brandId ? forYou : null
+      }
       onHideAgents={() => {
         // Hidden at once; kept for every device. One that didn't save shows again next visit.
         setAgentsHidden(true);

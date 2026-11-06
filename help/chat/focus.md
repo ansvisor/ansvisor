@@ -23,7 +23,7 @@ In the free trial, and while you explore the demo brand, Chat doesn't ask: it op
 
 ## The Default view
 
-On the Default view, Chat Home shows your greeting, one line and the chat box in the middle of the page. The line says how many chats need you, or, when none do, how a competitor's mention rate moved this week. **For you now**, **What's new**, **Start with a question**, **Agents for you** and **New for you** don't show.
+On the Default view, Chat Home shows your greeting, one line and the chat box in the middle of the page. The line says how many chats need you, or, when none do, how a competitor's mention rate moved this week. **For you now**, **What's new**, **Start with a question** and **New for you** don't show. In your first 14 days in a workspace, **Agents for you** shows there too, until you hide it.
 
 When the Default view arrived, everyone started on it, people who had picked areas before too. Your areas are kept: select **Edit** under the greeting and the picker opens with them ticked, so **Continue** brings your focused Home back.
 

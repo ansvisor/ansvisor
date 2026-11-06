@@ -946,15 +946,43 @@ describe('Agents for you (AGENTS plan §8, #11)', () => {
     expect(section()).toBeNull();
   });
 
-  it('stays off the Default view, as Home’s other blocks do, and shows where Home has a focus', async () => {
+  it('shows on the Default view under the greeting when given, as on a focused Home', async () => {
     const shown = { agentsForYou: { agents: AGENTS, canTurnOn: true }, onHideAgents: vi.fn() };
     await render(view({ ...shown, focus: { areas: [], onEdit: () => undefined } }));
-    expect(section()).toBeNull();
+    expect(cards()).toHaveLength(3);
+    // The Default view's other blocks stay off; the greeting moves up a little to make room.
+    expect(host.textContent).not.toContain('For you now');
+    expect(host.querySelector('h1')!.parentElement?.className).toContain('mt-[12vh]');
     await render(view({ ...shown, focus: { areas: ['lead'], onEdit: () => undefined } }));
     expect(cards()).toHaveLength(3);
+    await render(
+      view({
+        agentsForYou: null,
+        onHideAgents: vi.fn(),
+        focus: { areas: [], onEdit: () => undefined },
+      }),
+    );
+    expect(section()).toBeNull();
   });
 
-  it('is not read on the Default view (00485), and is where Home has a focus', async () => {
+  it('reads and shows them on the Default view for a new member (owner, 2026-11-06)', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false })),
+    ) as unknown as typeof fetch;
+    forYou.read.mockResolvedValue({ ok: true, agents: AGENTS, canTurnOn: true });
+    homeFocus.areas = [];
+    await render(<ChatHome firstName="Alex" newMember />);
+    await act(async () => undefined);
+    expect(forYou.read).toHaveBeenCalledWith(BRAND);
+    expect(cards()).toHaveLength(3);
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="agentsForYou.hide"]')!.click(),
+    );
+    expect(section()).toBeNull();
+    expect(forYou.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not read on anyone else’s Default view (00485), and is where Home has a focus', async () => {
     globalThis.fetch = vi.fn(
       async () => new Response(JSON.stringify({ ok: false })),
     ) as unknown as typeof fetch;

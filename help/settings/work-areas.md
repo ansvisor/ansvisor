@@ -33,7 +33,7 @@ Each person can say what they work on or lead. Their left menu then keeps only t
 - when you join from an invitation, on your first sign-in;
 - on a self-hosted install, the first time the admin opens the dashboard.
 
-**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas. It shows when Home has a focus, not on its Default view.
+**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas. It shows on Home's Default view too.
 
 ## Change your work areas
 

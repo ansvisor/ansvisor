@@ -41,7 +41,7 @@ vi.mock('@/lib/supabase/admin', async () => {
   return { supabaseAdmin: fake };
 });
 
-const { readAgentsForYou } = await import('./agents-for-you');
+const { readAgentsForYou, readAgentsForYouOpen } = await import('./agents-for-you');
 const person = () => db.person as FakeSupabase;
 const admin = () => db.admin as FakeSupabase;
 const profile = () => person().tables.profiles[0];
@@ -179,6 +179,42 @@ describe('readAgentsForYou', () => {
   it('answers a failed read as a value', async () => {
     admin().failures.invitations = { message: 'down' };
     expect(await readAgentsForYou(BRAND)).toEqual({ ok: false });
+    expect(errorLog).toHaveBeenCalled();
+  });
+});
+
+describe('readAgentsForYouOpen (the Default view, owner 2026-11-06)', () => {
+  it('is true for a new member, whether invited or the workspace’s maker', async () => {
+    accepted();
+    expect(await readAgentsForYouOpen()).toBe(true);
+    admin().tables.invitations = [];
+    profile().created_at = daysAgo(3);
+    expect(await readAgentsForYouOpen()).toBe(true);
+  });
+
+  it('is false for anyone else: joined 15 days ago, work areas not asked yet, or hidden (00483)', async () => {
+    // An account 400 days old and no invitation to this workspace.
+    expect(await readAgentsForYouOpen()).toBe(false);
+    accepted({ accepted_at: daysAgo(15) });
+    expect(await readAgentsForYouOpen()).toBe(false);
+    accepted();
+    profile().work_areas_asked_at = null;
+    expect(await readAgentsForYouOpen()).toBe(false);
+    profile().work_areas_asked_at = daysAgo(1);
+    person().tables.chat_user_prefs.push({ user_id: ME, agents_for_you_dismissed_at: daysAgo(1) });
+    expect(await readAgentsForYouOpen()).toBe(false);
+  });
+
+  it('is false signed out, with the new Chat off, or when a read fails', async () => {
+    accepted();
+    vi.stubEnv('CHAT_AGENTIC_ORGS', OTHER_ORG);
+    expect(await readAgentsForYouOpen()).toBe(false);
+    vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+    db.user = null;
+    expect(await readAgentsForYouOpen()).toBe(false);
+    db.user = { id: ME, email: 'Sam@Acme.example' };
+    admin().failures.invitations = { message: 'down' };
+    expect(await readAgentsForYouOpen()).toBe(false);
     expect(errorLog).toHaveBeenCalled();
   });
 });
