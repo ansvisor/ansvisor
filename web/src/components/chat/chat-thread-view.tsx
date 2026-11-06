@@ -7,6 +7,13 @@ import { useRouter } from '@/i18n/navigation';
 import { saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
 import type { PageOpen } from '@/lib/chat/page-open';
 import { keepPageChoice, pageChoiceMade, pageHrefOf } from '@/lib/chat/page-open';
+import {
+  chatWithPageHref,
+  draftOfEditorHref,
+  openPageOf,
+  PAGE_PARAM,
+  withOpenPage,
+} from '@/lib/chat/page-pane';
 import { ApprovalCard } from '@/components/agentic/approval-card';
 import { FormCard, type FormCardValues } from '@/components/agentic/form-card';
 import { DenialCard } from '@/components/agentic/denial-card';
@@ -293,7 +300,8 @@ export function ChatThreadView({
 
   // Where a page Chat writes opens (CHAT-25 §3, W4-11): the card asks under
   // the latest answer once, in the person's own chat; "Don't ask again" keeps
-  // the choice, and a saved Content Editor opens it as its run ends here.
+  // the choice, and a saved Open here or Content Editor opens it as its run
+  // ends here.
   const router = useRouter();
   const tPage = useTranslations('chatRun.openPage');
   const [pagePref, setPagePref] = useState<PageOpen>(pageOpen);
@@ -309,6 +317,29 @@ export function ChatThreadView({
     if (!lastRunId || !pageChoiceMade(lastRunId)) return;
     setPageAnswered((was) => new Set(was).add(lastRunId));
   }, [lastRunId]);
+  /**
+   * Open here (CHAT-25 §4, W4-15b): the page beside this chat. On the chat's
+   * own page its address gains `?page`, as Close takes it out (W4-15a), so
+   * nothing reloads and the run stays; anywhere else (the side panel) the
+   * chat's full page opens with the page beside it.
+   */
+  const openBeside = useCallback(
+    (href: string) => {
+      const draftId = draftOfEditorHref(href);
+      if (!draftId || !conversationId) {
+        router.push(href);
+        return;
+      }
+      const { pathname: path, search, hash } = window.location;
+      if (!path.endsWith(`/dashboard/chat/${conversationId}`)) {
+        router.push(chatWithPageHref(conversationId, draftId, pageRoute && pageRoute + search));
+        return;
+      }
+      if (openPageOf(new URLSearchParams(search).get(PAGE_PARAM)) === draftId) return;
+      window.history.pushState(null, '', `${path}${withOpenPage(search, draftId)}${hash}`);
+    },
+    [conversationId, pageRoute, router],
+  );
   const liveRuns = useRef(new Set<string>());
   useEffect(() => {
     const runId = last?.runId;
@@ -318,10 +349,12 @@ export function ChatThreadView({
       return;
     }
     if (!liveRuns.current.delete(runId)) return;
-    // Ended here, not opened ended: a saved Content Editor opens the page it wrote.
+    // Ended here, not opened ended: a saved Open here or Content Editor opens the page it wrote.
     const href = last.run.status === 'done' ? pageHrefOf(last.run.deliverables) : null;
-    if (href && pagePref === 'editor' && ownChat) router.push(href);
-  }, [last, pagePref, ownChat, router]);
+    if (!href || !ownChat) return;
+    if (pagePref === 'editor') router.push(href);
+    else if (pagePref === 'here') openBeside(href);
+  }, [last, pagePref, ownChat, router, openBeside]);
 
   async function choosePage(runId: string, href: string, where: OpenPageChoice, remember: boolean) {
     let kept = false;
@@ -340,6 +373,7 @@ export function ChatThreadView({
     keepPageChoice(runId, where);
     setPageAnswered((was) => new Set(was).add(runId));
     if (where === 'editor') router.push(href);
+    else if (where === 'here') openBeside(href);
     // The side panel's setup is the layout's, read once: read again, so its next chat has the choice.
     if (kept) router.refresh();
   }

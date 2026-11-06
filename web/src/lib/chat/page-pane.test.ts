@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { PAGE_PARAM, SPLIT_MIN, openPageOf, withOpenPage } from './page-pane';
+import {
+  PAGE_PARAM,
+  SPLIT_MIN,
+  chatWithPageHref,
+  draftOfEditorHref,
+  openPageOf,
+  withOpenPage,
+} from './page-pane';
 
 /**
  * Open here's address (W4-15): `?page={draftId}` names the page beside the
@@ -39,6 +46,39 @@ describe('withOpenPage', () => {
     expect(withOpenPage(`?from=%2Fdashboard%2Fmentions&page=${DRAFT}`, null)).toBe(
       '?from=%2Fdashboard%2Fmentions',
     );
+  });
+});
+
+describe('draftOfEditorHref', () => {
+  it("reads the draft a page's Content Editor address names", () => {
+    expect(draftOfEditorHref(`/dashboard/content/editor/${DRAFT}`)).toBe(DRAFT);
+    expect(draftOfEditorHref(`/dashboard/content/editor/${DRAFT}?tab=chat`)).toBe(DRAFT);
+  });
+
+  it('reads none from another address, or one that is no draft id', () => {
+    expect(draftOfEditorHref('/dashboard/content/editor/d1')).toBeNull();
+    expect(draftOfEditorHref(`/dashboard/reports/${DRAFT}`)).toBeNull();
+    expect(draftOfEditorHref(`https://x.test/dashboard/content/editor/${DRAFT}`)).toBeNull();
+  });
+});
+
+describe('chatWithPageHref (W4-15b)', () => {
+  const CHAT = '33333333-3333-4333-8333-333333333333';
+
+  it("is the chat's full page with the page beside it, and the page it came from", () => {
+    expect(chatWithPageHref(CHAT, DRAFT, '/dashboard/mentions?range=7d')).toBe(
+      `/dashboard/chat/${CHAT}?from=%2Fdashboard%2Fmentions%3Frange%3D7d&page=${DRAFT}`,
+    );
+    const query = new URLSearchParams(
+      chatWithPageHref(CHAT, DRAFT, '/dashboard/mentions').split('?')[1],
+    );
+    expect(openPageOf(query.get(PAGE_PARAM))).toBe(DRAFT);
+    expect(query.get('from')).toBe('/dashboard/mentions');
+  });
+
+  it('names no page it came from without one', () => {
+    expect(chatWithPageHref(CHAT, DRAFT)).toBe(`/dashboard/chat/${CHAT}?page=${DRAFT}`);
+    expect(chatWithPageHref(CHAT, DRAFT, '')).toBe(`/dashboard/chat/${CHAT}?page=${DRAFT}`);
   });
 });
 
