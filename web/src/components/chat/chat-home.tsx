@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,8 +9,11 @@ import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-av
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
 import { readFocusFill, readHomeShortcuts, readSinceYouLeft } from '@/lib/actions/chat-home';
+import { prepareChatTour } from '@/lib/actions/chat-tour';
 import { track } from '@/lib/analytics';
 import type { FocusArea } from '@/lib/chat/focus';
+import type { ChatStartAudience } from '@/lib/chat/start-audience';
+import { TOUR_PAGES } from '@/lib/chat/tour';
 import { startChatRun } from '@/lib/chat/start-chat';
 import {
   focusGreeting,
@@ -34,6 +37,8 @@ import { useChatList } from './chat-list-provider';
 import { inboxItems, useNow } from './chat-inbox';
 import { FocusPill, useChatFocus } from './focus-picker';
 import { ForYouNow } from './for-you-now';
+import { useChatTour } from './tour/chat-tour';
+import { useChatWelcome, WelcomeCard } from './welcome-card';
 
 /** The underlined link in the greeting's line (mockup `.hlnk`). */
 const LINK =
@@ -79,6 +84,12 @@ export interface ChatHomeViewProps {
   whatsNew?: WhatsNewHome | null;
   /** Show me: puts the update's question in the box, unsent. */
   onShowMe?: (feature: string) => void;
+  /**
+   * The welcome card for the free trial and the demo (00486), right above
+   * the box, with "Welcome, {name}" in place of the time of day and its own
+   * line while the first results are on their way; null without one.
+   */
+  welcome?: { card: ReactNode; line: string | null } | null;
 }
 
 /** What's new as Chat Home shows it. */
@@ -337,6 +348,7 @@ export function ChatHomeView({
   words = null,
   whatsNew = null,
   onShowMe,
+  welcome = null,
 }: ChatHomeViewProps) {
   const t = useTranslations('chatShell.home');
   const areas = focus?.areas ?? [];
@@ -358,18 +370,31 @@ export function ChatHomeView({
     : [];
   return (
     <div className="mx-auto w-full max-w-[720px] px-5">
-      <div className={cn('mb-[18px] text-center', plain ? 'mt-[20vh]' : 'mt-[34px]')}>
+      <div
+        className={cn(
+          'mb-[18px] text-center',
+          plain ? (welcome ? 'mt-[12vh]' : 'mt-[20vh]') : 'mt-[34px]',
+        )}
+      >
         <h1
           className={cn(
             'font-bold',
             plain ? 'min-h-10 text-[34px] tracking-[-.9px]' : 'min-h-8 text-2xl tracking-[-.6px]',
           )}
         >
-          {part &&
-            (firstName ? t(`greeting.${part}`, { name: firstName }) : t(`greetingNoName.${part}`))}
+          {welcome
+            ? firstName
+              ? t('welcome.greeting', { name: firstName })
+              : t('welcome.greetingNoName')
+            : part &&
+              (firstName
+                ? t(`greeting.${part}`, { name: firstName })
+                : t(`greetingNoName.${part}`))}
         </h1>
         <p className="mt-1.5 min-h-5 text-muted-foreground">
-          {needsYou > 0 ? (
+          {welcome?.line ? (
+            welcome.line
+          ) : needsYou > 0 ? (
             <>
               {t('workedWhileAway')}{' '}
               <Link href="/dashboard/chat/inbox" data-action="home.openInbox" className={LINK}>
@@ -426,6 +451,7 @@ export function ChatHomeView({
           <NewForYou areas={areas} starting={starting} onAsk={onAsk} />
         </>
       )}
+      {welcome?.card}
     </div>
   );
 }
@@ -464,10 +490,28 @@ function useHomeSeen() {
  * "For you now" and "Since you left": a chip, Why? and Which ones? ask Chat
  * in a new chat, then open it while it works; while the workspace is
  * read-only or the demo brand is open, they open the upgrade dialog instead.
+ * The free trial and the demo get the welcome card (00486): its topics start
+ * the product tour beside their pages, and it goes once the tour ends.
  */
-export function ChatHome({ firstName }: { firstName: string | null }) {
+export function ChatHome({
+  firstName,
+  welcome: audience = null,
+}: {
+  firstName: string | null;
+  /** Who the welcome card greets (00486); null for no card. */
+  welcome?: ChatStartAudience | null;
+}) {
   const t = useTranslations('chatShell.home');
   const router = useRouter();
+  const welcome = useChatWelcome(audience);
+  const tour = useChatTour();
+  // The tour runs in the side panel; without it a topic only opens its page.
+  const tourOn = !!tour?.available;
+  const welcomeShown = welcome.shown && !tour?.finished;
+  // The tour's words in the person's language, made while the card shows.
+  useEffect(() => {
+    if (welcomeShown && tourOn) void prepareChatTour().catch(() => undefined);
+  }, [welcomeShown, tourOn]);
   const now = useNow();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const { chats } = useChatList();
@@ -624,6 +668,32 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
         fillBox?.(t('whatsNew.showMeMessage', { feature }));
         document.querySelector<HTMLTextAreaElement>('[data-action="composer.input"]')?.focus();
       }}
+      welcome={
+        welcomeShown
+          ? {
+              line: welcome.run ? t('welcome.onTheirWay') : null,
+              card: (
+                <WelcomeCard
+                  trial={welcome.trial}
+                  run={welcome.run}
+                  connect={welcome.connect}
+                  starting={!!tour?.busy}
+                  onTopic={(topic) => {
+                    track('chat_welcome_topic', { topic });
+                    if (tour && tourOn) void tour.show(topic, 'topic');
+                    else router.push(TOUR_PAGES[topic]);
+                  }}
+                  onEverything={() => {
+                    track('chat_welcome_topic', { topic: 'everything' });
+                    if (tour && tourOn) void tour.show('visibility', 'everything');
+                    else router.push(TOUR_PAGES.visibility);
+                  }}
+                  onDismiss={welcome.dismiss}
+                />
+              ),
+            }
+          : null
+      }
     />
   );
 }

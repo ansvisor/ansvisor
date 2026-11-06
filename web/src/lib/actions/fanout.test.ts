@@ -122,6 +122,15 @@ function fakeQueryBuilder(table: string) {
   return builder;
 }
 
+// No engine tracked today always shares its searches: Copilot and Perplexity
+// did until Ansvisor stopped tracking them on 2026-11-06
+// (config/fanout-platforms.ts). The look-back stays for the next one, so
+// Perplexity stands in for it here.
+vi.mock('@/config/fanout-platforms', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/config/fanout-platforms')>()),
+  FANOUT_SHARING_PLATFORMS: ['perplexity-web'],
+}));
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: async () => ({ from: (table: string) => fakeQueryBuilder(table) }),
 }));

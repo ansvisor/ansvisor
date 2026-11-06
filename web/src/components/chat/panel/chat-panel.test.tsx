@@ -8,6 +8,7 @@ import { PANEL_LAST_CHAT_KEY } from '@/lib/chat/panel';
 import type { ChatPageContext } from '@/lib/chat/page-context';
 import type { ChatReference } from '@/lib/chat/references';
 import type { ChatPanelSetup, PanelDraft } from './chat-panel-context';
+import type { ChatTourSetup } from '../tour/chat-tour';
 
 /**
  * Chat's side panel on every app page (CHAT-01 items 13–26): Ask Chat at
@@ -25,6 +26,12 @@ vi.mock('@/i18n/navigation', () => ({
       {children}
     </a>
   ),
+}));
+// The product tour's server actions (00486): their own tests.
+vi.mock('@/lib/actions/chat-tour', () => ({
+  showTourTopic: vi.fn(async () => ({ ok: false })),
+  endChatTour: vi.fn(async () => ({ ok: false })),
+  prepareChatTour: vi.fn(async () => undefined),
 }));
 const prefs = vi.hoisted(() => ({ saveChatPanelSize: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/actions/chat-prefs', () => prefs);
@@ -47,6 +54,9 @@ vi.mock('../chat-thread-view', () => ({
     pageRoute,
     draft,
     pageOpen,
+    afterLast,
+    afterTurn,
+    markedTurn,
   }: {
     thread: ChatThread | null;
     variant: string;
@@ -58,9 +68,14 @@ vi.mock('../chat-thread-view', () => ({
     pageRoute?: string;
     draft?: PanelDraft | null;
     pageOpen?: string;
+    afterLast?: (actions: { send: (message: string) => void; disabled: boolean }) => ReactNode;
+    afterTurn?: number;
+    markedTurn?: number | null;
   }) => (
     <div
       data-testid="thread"
+      data-after-turn={afterTurn ?? ''}
+      data-marked-turn={markedTurn ?? ''}
       data-variant={variant}
       data-route={pageRoute}
       data-page-open={pageOpen ?? 'ask'}
@@ -83,6 +98,7 @@ vi.mock('../chat-thread-view', () => ({
       {thread?.messages.map((m, i) => (
         <p key={i}>{m.text}</p>
       ))}
+      {afterLast?.({ send: () => undefined, disabled: false })}
       <textarea data-action="composer.input" />
       <button type="button" data-testid="send" onClick={() => onConversation?.('chat-new')}>
         send
@@ -153,6 +169,24 @@ const chatRow = (id: string, title: string | null) => ({
 });
 
 let calls: string[];
+/** The chat's messages when a test sets them (the product tour's). */
+let chatMessages: object[] | null = null;
+const line = (role: 'user' | 'assistant', text: string, tour?: string) => ({
+  role,
+  text,
+  generatedAt: null,
+  dataAsOf: null,
+  timezone: null,
+  run: null,
+  ...(tour ? { tour } : {}),
+});
+/** A tour chat: Visibility, then Topics and prompts. */
+const TOUR_MESSAGES = [
+  line('user', 'Show me Visibility', 'visibility'),
+  line('assistant', 'I’ve opened Visibility.'),
+  line('user', 'Next: Topics and prompts', 'prompts'),
+  line('assistant', 'This is Prompts.'),
+];
 const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
   calls.push(init?.method ? `${init.method} ${url}` : url);
   if (init?.method === 'PATCH') {
@@ -169,7 +203,7 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     return Response.json({
       ok: true,
       chat: chatRow(CHAT, 'Citations drop'),
-      messages: [
+      messages: chatMessages ?? [
         {
           role: 'user',
           text: 'Why did citations drop?',
@@ -187,11 +221,11 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(over: Partial<ChatPanelSetup> = {}) {
+async function render(over: Partial<ChatPanelSetup> = {}, tour?: ChatTourSetup) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatPanelProvider setup={setup(over)}>
+        <ChatPanelProvider setup={setup(over)} tour={tour}>
           <ChatPanelPage className="page">
             <header>
               <h1>Mentions</h1>
@@ -239,6 +273,7 @@ beforeEach(() => {
   route.pathname = '/dashboard/mentions';
   route.push.mockClear();
   pageContext = null;
+  chatMessages = null;
   calls = [];
   fetchMock.mockClear();
   prefs.saveChatPanelSize.mockClear();
@@ -376,6 +411,66 @@ describe('the panel’s chat', () => {
     await click(ask());
     expect(calls).toContain(`/api/chat/conversations/${CHAT}`);
     expect(panel()!.textContent).toContain('Why did citations drop?');
+  });
+
+  it('opens by itself on the tour’s chat, on the turn about the page, marked (00486)', async () => {
+    chatMessages = TOUR_MESSAGES;
+    route.pathname = '/dashboard/insights';
+    await render({}, { chatId: CHAT, topic: 'prompts', finished: false });
+    // No Ask Chat: the tour opens it.
+    expect(shown()).toBe(true);
+    expect(calls).toEqual([`/api/chat/conversations/${CHAT}`]);
+    expect(panel()!.querySelector('[data-slot="tour-label"]')?.textContent).toBe(
+      'Ansvisor tour · 1 of 5',
+    );
+    // Visibility's answer, not the newer Prompts turn: the chips go under it.
+    const thread = container.querySelector('[data-testid="thread"]')!;
+    expect(thread.getAttribute('data-after-turn')).toBe('1');
+    expect(thread.getAttribute('data-marked-turn')).toBe('1');
+    expect(panel()!.querySelector('[data-action="tour.next"]')?.textContent).toBe(
+      'Next: Topics and prompts',
+    );
+  });
+
+  it('offers to explain a topic page not explained yet, and keeps the newest turn elsewhere', async () => {
+    chatMessages = TOUR_MESSAGES;
+    route.pathname = '/dashboard/content';
+    await render({}, { chatId: CHAT, topic: 'prompts', finished: false });
+    expect(panel()!.querySelector('[data-action="tour.showPage"]')?.textContent).toBe(
+      'Show me this page',
+    );
+    expect(panel()!.querySelector('[data-action="tour.next"]')).toBeNull();
+    expect(container.querySelector('[data-testid="thread"]')!.getAttribute('data-after-turn')).toBe(
+      '',
+    );
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    route.pathname = '/dashboard/audit';
+    await render({}, { chatId: CHAT, topic: 'prompts', finished: false });
+    expect(panel()!.querySelector('[data-slot="tour-label"]')?.textContent).toBe(
+      'Ansvisor tour · 2 of 5',
+    );
+    expect(panel()!.querySelector('[data-action="tour.next"]')?.textContent).toBe(
+      'Next: Positions and locations',
+    );
+  });
+
+  it('shows none on another chat, or once the tour ended', async () => {
+    localStorage.setItem(PANEL_LAST_CHAT_KEY, JSON.stringify({ id: CHAT, at: Date.now() }));
+    await render({}, { chatId: 'another', topic: 'prompts', finished: false });
+    expect(panel()!.querySelector('[data-slot="tour-label"]')).toBeNull();
+    expect(panel()!.querySelector('[data-slot="tour-controls"]')).toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    chatMessages = TOUR_MESSAGES;
+    await render({}, { chatId: CHAT, topic: 'prompts', finished: true });
+    // Ended: it waits for Ask Chat.
+    expect(shown()).toBe(false);
+    await click(ask());
+    expect(panel()!.querySelector('[data-slot="tour-label"]')).toBeNull();
+    expect(panel()!.querySelector('[data-slot="tour-controls"]')).toBeNull();
   });
 
   it('starts empty after 30 minutes, and remembers a chat it starts', async () => {

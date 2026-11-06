@@ -4,8 +4,8 @@ route: /dashboard/prompts/topics
 keywords: [topics, topic, add topic, delete topic, rename topic, manage topics, topic suggestions, topic leaderboard, topic visibility, top competitor]
 synonyms: [themes, prompt groups, clusters, categories]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -29,7 +29,7 @@ Four cards sum up your topics:
 The **Topic leaderboard** has a row per topic:
 
 - the topic's name and how many prompts it has;
-- **Visibility**: the 0 to 100 score over the topic's answers, the same score as on **Brand Visibility**;
+- **Visibility**: the 0 to 100 score over the topic's answers, the same score as on the **Visibility** page;
 - **SoV**, **Mentions** and **Citations**;
 - **Trend**: a small line and the change in points against the window of the same length just before;
 - **Top competitor**: the competitor with the largest share of voice in the topic;
@@ -53,7 +53,7 @@ A topic's page shows all of its results, not only the date range picked on the T
 - **Competitor comparison**: the top six brands on this topic, ranked by their score, with yours marked **YOU**;
 - **Prompt performance**: the topic's **Top performers** and the prompts under **Needs improvement**, from its last 50 runs.
 
-**View all prompt results for this topic** opens **Brand Visibility** filtered to the topic.
+**View all prompt results for this topic** opens **Visibility** filtered to the topic.
 
 ## Topic Suggestions
 

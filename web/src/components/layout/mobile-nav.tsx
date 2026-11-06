@@ -10,9 +10,13 @@ import {
   childLinkHref,
   dashboardNavBadge,
   getDashboardNavLabel,
+  isNavItemActive,
   navItemHref,
   shouldShowDashboardNavItem,
+  visibleNavChildren,
 } from '@/lib/dashboard-navigation';
+import { brandVisibilityTabOf, isEcommerceBrand } from '@/lib/brand-visibility';
+import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
@@ -24,6 +28,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
+import { menuSectionOf } from '@/lib/menu-access';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { Crown, ExternalLink, Menu, MessageSquareHeart, MessageSquareText } from 'lucide-react';
 import Image from 'next/image';
@@ -43,7 +48,8 @@ export function MobileNav() {
   const chatSetUp = agentKeyMissing ? t('chatSetUp') : null;
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
-  const brandPrefs = { shoppingModeEnabled: !!activeBrand?.shoppingModeEnabled };
+  const brandPrefs = { ecommerce: isEcommerceBrand(activeBrand) };
+  const childGates = { brandPrefs, canUse };
   const hiddenSections = useHiddenMenuSections();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -109,16 +115,17 @@ export function MobileNav() {
             )}
             {dashboardNav.flatMap((group) =>
               group.items.map((item) => {
-                if (!shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic)) {
+                if (
+                  !shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic, canUse)
+                ) {
                   return null;
                 }
 
                 const href = navItemHref(item, chatAgentic);
-                const isActive =
-                  item.href === '/dashboard'
-                    ? pathname === '/dashboard'
-                    : pathname.startsWith(href);
+                const isActive = isNavItemActive(item, pathname, href);
                 const label = getDashboardNavLabel(item.title, t);
+                // The entries this person's menu shows (menu access).
+                const children = visibleNavChildren(item, hiddenSections, childGates);
 
                 // Chat's own badge: "Set up" when the org has no provider key for
                 // it (cloud only, never with the new Chat on).
@@ -146,8 +153,16 @@ export function MobileNav() {
                   );
                 }
 
+                // An entry whose own section is hidden opens its first shown child,
+                // as the desktop menu does (Visibility with Overview off → Mentions).
+                const ownSection = menuSectionOf(item.href);
+                const linkHref =
+                  children.length > 0 && ownSection && hiddenSections.has(ownSection)
+                    ? children[0].href
+                    : href;
+
                 const link = (
-                  <Link key={item.href} href={href} onClick={() => setOpen(false)}>
+                  <Link key={item.href} href={linkHref} onClick={() => setOpen(false)}>
                     <span
                       className={cn(
                         'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
@@ -169,19 +184,16 @@ export function MobileNav() {
                     </span>
                   </Link>
                 );
-                if (!item.children?.length) return link;
-                // A submenu (Prompts, Content), always shown on mobile.
-                const currentChild = activeChildHref(item.children, pathname);
+                if (children.length === 0) return link;
+                // A submenu (Brand Visibility, Prompts, Content), always shown on mobile.
+                const currentChild = activeChildHref(children, pathname);
                 return (
                   <div key={item.href}>
                     {link}
                     <div className="ml-7 border-l pl-2">
-                      {item.children.map((child) => (
-                        <Link
-                          key={child.href}
-                          href={childLinkHref(child, pathname)}
-                          onClick={() => setOpen(false)}
-                        >
+                      {children.map((child) => {
+                        const tab = brandVisibilityTabOf(child.href);
+                        const childBody = (
                           <span
                             className={cn(
                               'flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors',
@@ -200,8 +212,27 @@ export function MobileNav() {
                               </Badge>
                             )}
                           </span>
-                        </Link>
-                      ))}
+                        );
+                        // Brand Visibility's tabs keep the date range, engine,
+                        // country and topic, as its tab bar does.
+                        return tab ? (
+                          <BrandVisibilityTabLink
+                            key={child.href}
+                            tab={tab}
+                            onClick={() => setOpen(false)}
+                          >
+                            {childBody}
+                          </BrandVisibilityTabLink>
+                        ) : (
+                          <Link
+                            key={child.href}
+                            href={childLinkHref(child, pathname)}
+                            onClick={() => setOpen(false)}
+                          >
+                            {childBody}
+                          </Link>
+                        );
+                      })}
                     </div>
                   </div>
                 );
