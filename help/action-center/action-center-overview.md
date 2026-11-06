@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. It is the first page you see after you sign in. Everything in it is per brand: switch brands to see another brand's work.
+The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. On a paid plan it is the first page you see after you sign in; in the free trial, and while you explore the demo brand, Ansvisor opens on **Chat** instead. Everything in it is per brand: switch brands to see another brand's work.
 
 ## The tabs
 
