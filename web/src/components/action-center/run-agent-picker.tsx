@@ -4,8 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Loader2, MessageSquare, Plus } from 'lucide-react';
-import { Link, usePathname, useRouter } from '@/i18n/navigation';
-import { useChatPanel } from '@/components/chat/panel/chat-panel-context';
+import { Link } from '@/i18n/navigation';
 import { AgentDenial, StatusDot } from '@/components/chat/agents/agent-parts';
 import {
   readCompatibleAgents,
@@ -17,8 +16,8 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { ActionItem } from '@/lib/actions/action-center';
 import type { CompatibleAgents } from '@/lib/chat/agent-action';
 import type { ChatDenialCard } from '@/lib/chat/events';
-import { PANEL_FROM_PARAM } from '@/lib/chat/panel';
 import { PickerLoading } from './run-agent-button';
+import { useShowChat } from './use-show-chat';
 
 /**
  * Run agent's picker (CHAT-21 §F item 27), inside the button's popover
@@ -59,9 +58,6 @@ export function RunAgentPicker({
   const tModes = useTranslations('chatAgents.modes');
   const tActions = useTranslations('readOnly.actions');
   const { openUpgrade } = useUpgradeGate();
-  const panel = useChatPanel();
-  const router = useRouter();
-  const pathname = usePathname();
   const [picker, setPicker] = useState<Picker>({ kind: 'loading' });
   const [busy, setBusy] = useState<Busy>(null);
 
@@ -84,17 +80,7 @@ export function RunAgentPicker({
   }, [action.id, onClose, openUpgrade, tActions]);
 
   /** The run's chat: in the side panel beside the action, else on Chat's own page. */
-  const showChat = useCallback(
-    (chatId: string) => {
-      if (panel?.available) {
-        panel.openChat(chatId);
-        return;
-      }
-      const from = `${pathname}${window.location.search}`;
-      router.push(`/dashboard/chat/${chatId}?${PANEL_FROM_PARAM}=${encodeURIComponent(from)}`);
-    },
-    [panel, pathname, router],
-  );
+  const showChat = useShowChat();
 
   const refused = useCallback(
     (answer: AgentRefused) => {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_KEPT,
   MAX_REMOVED,
+  actionProductIds,
+  actionShoppingSeed,
   leftOutReason,
   placementOf,
   shoppingPathFits,
@@ -168,5 +171,41 @@ describe('bestInStock', () => {
     const cheap = variant(120, 'In Stock');
     expect(bestInStock([variant(null, 'in_stock'), variant(180, 'in stock'), cheap])).toBe(cheap);
     expect(bestInStock([variant(10, 'preorder'), variant(12, null)])).toBeNull();
+  });
+});
+
+describe('the shopping path a draft started from an action opens with (AC plan P-3)', () => {
+  const now = new Date('2026-11-05T10:00:00Z');
+
+  it("reads an action's products: its group's, and the one it was sent for", () => {
+    expect(
+      actionProductIds({
+        products: ['p1', { id: 'p2' }, 'p1', 7],
+        target: { type: 'product', id: 'p3', name: 'Boot' },
+      }),
+    ).toEqual(['p1', 'p2', 'p3']);
+    expect(actionProductIds({ target: { type: 'category', id: 'c1' } })).toEqual([]);
+    const many = Array.from({ length: 50 }, (_, i) => `p${i}`);
+    expect(actionProductIds({ products: many })).toHaveLength(MAX_KEPT);
+  });
+
+  it('locks them in on a page type that takes a path, on a shop', () => {
+    const seed = actionShoppingSeed({ products: ['p1', 'p2'] }, 'ecommerce', 'buying_guide', now);
+    expect(seed).toMatchObject({
+      version: 1,
+      builtAt: now.toISOString(),
+      pageType: 'buying_guide',
+      products: [],
+      locked: ['p1', 'p2'],
+      added: ['p1', 'p2'],
+      removed: [],
+    });
+    expect(shoppingPathSchema.safeParse(seed).success).toBe(true);
+  });
+
+  it('writes none off a shop, for a page type without a path, or without products', () => {
+    expect(actionShoppingSeed({ products: ['p1'] }, 'b2b', 'buying_guide', now)).toBeNull();
+    expect(actionShoppingSeed({ products: ['p1'] }, 'ecommerce', 'product_page', now)).toBeNull();
+    expect(actionShoppingSeed({}, 'ecommerce', 'best_of', now)).toBeNull();
   });
 });

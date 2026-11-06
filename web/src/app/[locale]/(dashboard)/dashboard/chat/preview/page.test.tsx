@@ -209,6 +209,10 @@ describe('the Chat pieces preview', () => {
     ]);
     // Version 2 is an Admin's or a Manager's card: Send to CMS on it.
     expect(container.querySelectorAll('[data-action="version.sendToCms"]')).toHaveLength(1);
+    // Its Rules and Quality pills (W4-12b part 2).
+    expect([...slots('version-pills')].map((el) => el.textContent)).toEqual([
+      'Rules 11/12Quality 90',
+    ]);
     // The Inbox notice of a page an agent sent to the webhook on its own (go-live PR 11).
     expect(container.textContent).toContain('Publisher sent “Pricing FAQ” to your webhook');
     expect(container.querySelectorAll('[data-action="runs.toggleTray"]')).toHaveLength(3);

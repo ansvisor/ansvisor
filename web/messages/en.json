@@ -1531,7 +1531,8 @@
         "deleteConfirm": "It leaves the Action Center for everyone and won't come back on its own tomorrow.",
         "cancel": "Cancel",
         "statusChanged": "Moved to {status}",
-        "deleted": "Action deleted"
+        "deleted": "Action deleted",
+        "startNow": "Start in Content Editor"
       },
       "empty": {
         "title": "No actions yet",
@@ -1603,8 +1604,8 @@
           "commercial": "commercial intent",
           "heldBefore": "previously visible",
           "pastSuccess": {
-            "worked": "{improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here",
-            "rarely": "only {improved} of {results} earlier {results, plural, one {action} other {actions}} of this kind improved results here"
+            "worked": "{improved} of {results} earlier {results, plural, one {action} other {actions}} {by, select, play {with this play} other {of this kind}} improved results here",
+            "rarely": "only {improved} of {results} earlier {results, plural, one {action} other {actions}} {by, select, play {with this play} other {of this kind}} improved results here"
           },
           "sources": "confirmed by {count} sources",
           "confidence": {
@@ -2224,6 +2225,41 @@
           "didntStart": "{reason, select, action_closed {The action was closed, so the run didn’t start.} brand_gone {The action’s brand is no longer in the agent’s scope, so the run didn’t start.} other {The run didn’t start. The agent’s Runs tab says why.}}",
           "failed": "Couldn’t start the run. Try again."
         }
+      },
+      "startNow": {
+        "title": "Start now",
+        "hint": {
+          "create": "Opens a new draft with this action's prompts, then builds its brief from your AI usage.",
+          "optimize": "Opens the page as a draft with this action's prompts, then builds its brief from your AI usage.",
+          "optimizePage": "Opens {page} as a draft with this action's prompts, then builds its brief from your AI usage.",
+          "optimizeSeveral": "Opens a draft for each of its {count, plural, one {# page} other {# pages}}, with this action's prompts. They wait for you in the Library.",
+          "written": "Its draft is started. Open it where you left off.",
+          "writtenSeveral": "Its {count, plural, one {# draft is} other {# drafts are}} started. They wait for you in the Library."
+        },
+        "editor": "Content Editor",
+        "editorSeveral": "Content Editor · {count, plural, one {# draft} other {# drafts}}",
+        "openDraft": "Open draft",
+        "openDrafts": "Open {count, plural, one {# draft} other {# drafts}}",
+        "chat": "Chat",
+        "soon": "Soon",
+        "chatSoonHint": "Chat isn't on for this workspace yet. Start in the Content Editor for now.",
+        "chatHint": "Chat works this action's tasks with you, in your default mode. Closing them stays your click.",
+        "failed": "Couldn't open the Content Editor. Try again.",
+        "someFailed": "Some drafts couldn't be started. Start now again writes the rest.",
+        "pageNotRead": "Couldn't read a live page, so its draft starts with its title. Paste the page into the editor.",
+        "chatFailed": "Couldn't start Chat. Try again."
+      },
+      "play": {
+        "title": "{siteType, select, ecommerce {What to do for an online store} b2b {What to do for a SaaS} app {What to do for an app} b2c {What to do for a travel brand} other {What to do here}}",
+        "plays": {
+          "comparison": "Write a comparison page",
+          "best_of": "Write a best-of list",
+          "guide": "Write a how-to guide",
+          "definition": "Write a definition page"
+        },
+        "reason": "{prompts, number} of {of, plural, one {# prompt} other {# prompts}} {play, select, comparison {ask to compare options} best_of {ask for the best options} guide {ask how to do something or fix a problem} definition {ask what something is} other {ask for this}}: {share, number, percent} of their estimated AI searches.",
+        "also": "Also worth doing here",
+        "alsoLine": "{name} · {share, number, percent} of the AI searches"
       }
     },
     "gettingStarted": {
@@ -3325,7 +3361,7 @@
         "readings": "Read after it closed: {list}.",
         "reading": "day {day}, {outcome}",
         "finalOn": "The final reading is on day {day}.",
-        "measuredOn": "Measured on the {entity, select, pages {{count, plural, one {page} other {# pages}}} other {{count, plural, one {prompt} other {# prompts}}}} it named.",
+        "measuredOn": "{entity, select, topics {Measured on its topic's {count, plural, one {prompt} other {# prompts}}.} pages {Measured on the {count, plural, one {page} other {# pages}} it named.} other {Measured on the {count, plural, one {prompt} other {# prompts}} it named.}}",
         "brandWide": "Brand-wide over the same days: {list}",
         "controlNet": "Net of {basis, select, topics {the {prompts} other prompts in its topics} other {the brand's {prompts} other prompts}} over the same days: {list}",
         "netPoints": "{metric} {value} pts",
@@ -3381,7 +3417,8 @@
           "results": "Results",
           "successRate": "Success rate",
           "medianChange": "Median change",
-          "dismissed": "Dismissed"
+          "dismissed": "Dismissed",
+          "play": "Play"
         },
         "tooFew": "Too few results",
         "mostly": "Mostly: {reason}",
@@ -3390,7 +3427,17 @@
           "description": "A kind of action shows here once one of its actions is completed or dismissed."
         },
         "error": "The scorecard couldn't be loaded.",
-        "retry": "Try again"
+        "retry": "Try again",
+        "noteByPlay": "What each page the Action Center picked for an action's prompts did at this brand, whichever kind of action it was for. Only actions opened with a play count here.",
+        "emptyByPlay": {
+          "title": "No plays to score in this range",
+          "description": "A play shows here once an action opened with it is completed or dismissed."
+        },
+        "by": {
+          "label": "Group the scorecard by",
+          "kind": "By kind",
+          "play": "By play"
+        }
       },
       "outcomeSoFar": "so far: day {day} of {final}",
       "outcomeHint": {
@@ -3560,6 +3607,10 @@
     },
     "drafts": { "name": "Read the Content Library", "step": "Read Library" },
     "draft": { "name": "Read a draft", "step": "Read draft" },
+    "pageRulesCheck": {
+      "name": "Check pages against their rules",
+      "step": "Checked the page against its rules"
+    },
     "reports": { "name": "Read reports", "step": "Read Reports" },
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
@@ -4004,7 +4055,15 @@
       "fill": "Fill the {what}",
       "markReady": "Mark ready",
       "markReadyPrompt": "Mark this page ready",
+      "checkRules": "Check it against the rules",
+      "checkRulesPrompt": "Check this page against the rules",
+      "openEditor": "Open in Content Editor",
       "untitled": "Untitled page"
+    },
+    "pageCheck": {
+      "todo": "Yours to do: the Content Editor’s Quality tab says how.",
+      "qualityNotKept": "Quality isn’t read yet for the page as it is now: the page’s card in this chat and the Content Editor show it.",
+      "qualityOff": "Content Quality isn’t on for this workspace."
     },
     "actionCard": {
       "tasks": "{count, plural, one {# task} other {# tasks}}",
@@ -4548,6 +4607,10 @@
   "chatDeliverable": {
     "version": {
       "line": "Version {n} · {parts} · {characters, number} characters",
+      "rulesPill": "Rules {met}/{total}",
+      "rulesPillLabel": "{met} of {total} rules met",
+      "qualityPill": "Quality {score}",
+      "qualityPillLabel": "Quality {score}: {band}",
       "questions": "{count, plural, one {# question} other {# questions}}",
       "sections": "{count, plural, one {# section} other {# sections}}",
       "whatChanged": "What changed",
@@ -6457,12 +6520,13 @@
         "sources": {
           "ansvisor": "Ansvisor skills",
           "mine": "My skills",
-          "marketplace": "Marketplace"
+          "marketplace": "Library"
         },
         "empty": {
           "mine": "Skills you save show here.",
           "marketplace": "Library skills an Admin adds show here."
         },
+        "fromLibrary": "From the Library · {repo}",
         "uses": "Uses {connections}",
         "noConnection": "No connection needed",
         "followOn": "Follow-on skills",
@@ -7212,7 +7276,10 @@
       "role_review": "Only Admins approve or reject skills.",
       "not_pending": "This skill was reviewed already.",
       "blocked": "This skill holds something a skill may never hold, so it can't be approved.",
-      "no_update": "There's no update to approve: another Admin may have approved it already."
+      "no_update": "There's no update to approve: another Admin may have approved it already.",
+      "library_added": "This Library skill is in your workspace already. Find it under My skills.",
+      "library_license": "This skill's license is no longer MIT, so it can't be added from the Library.",
+      "library_plan": "Adding skills from the Library starts with the Starter plan."
     },
     "card": {
       "submit": "Save skill",
@@ -7237,7 +7304,7 @@
       "title": "Skills",
       "subtitle": "What Chat knows how to do. Run one, schedule it, or build an agent on it.",
       "agents": "Agents",
-      "tabs": { "ansvisor": "Ansvisor skills", "mine": "My skills" },
+      "tabs": { "ansvisor": "Ansvisor skills", "marketplace": "Library", "mine": "My skills" },
       "limit": "{used} of {max} in your plan",
       "search": "Search skills",
       "filters": {
@@ -7278,7 +7345,8 @@
         "you": "Made in Chat by you",
         "workspace": "Made in Chat by a teammate",
         "upload": "Uploaded",
-        "repo": "Imported from {repo} on GitHub"
+        "repo": "Imported from {repo} on GitHub",
+        "marketplace": "Added from the Library · {repo}"
       },
       "details": {
         "source": "From",
@@ -7383,6 +7451,81 @@
       "failed": "The update couldn't be approved. Try again.",
       "loadFailed": "This update couldn't be loaded.",
       "none": "There's no update for this skill."
+    },
+    "library": {
+      "search": "Search skills…",
+      "topicsLabel": "Topics",
+      "topics": {
+        "all": "All",
+        "seo": "SEO",
+        "content": "Content",
+        "brand": "Brand",
+        "analytics": "Analytics",
+        "social": "Social",
+        "cro": "CRO",
+        "email": "Email",
+        "paid-ads": "Paid Ads",
+        "growth": "Growth",
+        "gtm": "GTM"
+      },
+      "meta": "{count, plural, one {# skill} other {# skills}} · MIT license",
+      "sortLabel": "Sort",
+      "sort": {
+        "stars": "Most stars",
+        "installs": "Most installs"
+      },
+      "stars": "GitHub stars of {repo}",
+      "installs": "Installs on skills.sh",
+      "noInstalls": "No installs on skills.sh",
+      "owner": "{owner} · MIT",
+      "add": "Add",
+      "adding": "Adding…",
+      "added": "Scanned · instructions only · admin review",
+      "requested": "Scanned · instructions only · sent to your Admins for review",
+      "addFailed": "Couldn't add the skill. Try again.",
+      "state": {
+        "pending_review": "Pending approval",
+        "approved": "Added",
+        "rejected": "Rejected",
+        "blocked": "Blocked"
+      },
+      "showMore": "Show more ({count})",
+      "empty": "No skills match.",
+      "loadFailed": "The Library couldn't be loaded.",
+      "retry": "Retry"
+    },
+    "libraryPage": {
+      "back": "Skills",
+      "loadFailed": "This skill couldn't be loaded.",
+      "notFound": "This skill isn't in the Library.",
+      "readFailed": "Its SKILL.md couldn't be read from GitHub just now. {error}",
+      "unreadable": "Ansvisor can't take this skill as it is, so it can't be added. {error}",
+      "retry": "Retry",
+      "cleaned": "SKILL.md · at the pinned commit",
+      "plain": "Plain text · nothing runs",
+      "hidden": "{count, plural, one {# hidden character is} other {# hidden characters are}} marked in the text.",
+      "scan": "Ansvisor's safety scan",
+      "blocks": "Blocks it",
+      "warns": "Worth a look",
+      "clean": "Nothing found.",
+      "edited": "Edited by Ansvisor",
+      "edits": {
+        "research-lines": "Removed {lines, plural, one {# line} other {# lines}} citing a competitor's research.",
+        "extension-line": "Removed a competitor's extension from {lines, plural, one {# line} other {# lines}}.",
+        "promo-block": "Removed a paid-pack promo ({lines, plural, one {# line} other {# lines}})."
+      },
+      "removed": "Left out when added",
+      "nothingRemoved": "Nothing is left out.",
+      "source": "Source",
+      "file": "File",
+      "commit": "Commit",
+      "license": "License",
+      "licenseText": "License text",
+      "attribution": "{repo} · MIT",
+      "addNote": "Adding it scans it again; an Admin reviews it before anyone uses it.",
+      "requestNote": "Adding it asks your Admins to review it.",
+      "blockedNote": "The scan blocks this skill, so it can't be added.",
+      "openReview": "Open review"
     }
   },
   "chatMemory": {
@@ -9000,7 +9143,13 @@
       },
       "loadError": "Couldn't load the Library.",
       "retry": "Try again",
-      "newContent": "New content"
+      "newContent": "New content",
+      "actionFilter": {
+        "of": "Drafts for AC-{no}",
+        "one": "Drafts for one Action Center action",
+        "showAll": "Show all drafts",
+        "empty": "No drafts for this action in this tab."
+      }
     },
     "newContent": {
       "title": "New content",

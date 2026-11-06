@@ -81,6 +81,7 @@ beforeEach(() => {
       is_demo: false,
     },
   ];
+  db.tables.chat_skills = [];
   db.tables.topics = [
     { id: 't1', brand_id: BRAND, name: 'Pricing', is_active: true },
     { id: 't2', brand_id: BRAND, name: 'Old', is_active: false },
@@ -112,6 +113,38 @@ beforeEach(() => {
 });
 
 describe('agentFormSetupFor', () => {
+  it('lists the Library skills an Admin approved that the person may run (W4-19)', async () => {
+    const sha = 'c'.repeat(40);
+    const skill = (name: string, over: Record<string, unknown> = {}) => ({
+      id: `skill-${name}`,
+      organization_id: ORG,
+      name,
+      title: name.replace(/-/g, ' '),
+      source: 'library',
+      source_url: `https://github.com/acme/skills/tree/${sha}/${name}`,
+      status: 'approved',
+      enabled: true,
+      visibility: 'workspace',
+      created_by: PEOPLE.admin,
+      ...over,
+    });
+    db.tables.chat_skills = [
+      skill('shared-one'),
+      skill('my-own', { visibility: 'private', created_by: PEOPLE.manager }),
+      skill('their-private', { visibility: 'private', created_by: PEOPLE.otherManager }),
+      skill('waiting', { status: 'pending_review' }),
+      skill('turned-off', { enabled: false }),
+      skill('an-import', { source: 'import' }),
+      { ...skill('elsewhere'), organization_id: OTHER_ORG },
+    ];
+    expect((await setupOf(PEOPLE.manager)).librarySkills).toEqual([
+      { name: 'my-own', title: 'my own', repo: 'acme/skills' },
+      { name: 'shared-one', title: 'shared one', repo: 'acme/skills' },
+    ]);
+    // An Admin sees their private ones, but runs only theirs and the shared ones.
+    expect((await setupOf(PEOPLE.admin)).librarySkills!.map((s) => s.name)).toEqual(['shared-one']);
+  });
+
   it('reads the brands without the demo, their active topics, and the plan’s engines', async () => {
     const setup = await setupOf(PEOPLE.manager);
     expect(setup.role).toBe('manager');

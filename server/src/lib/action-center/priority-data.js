@@ -10,7 +10,7 @@ import { isDeepStrictEqual } from 'node:util';
 import supabaseAdmin from '../../config/supabase.js';
 import { resolve } from '../../config/action-engine.js';
 import { logger } from '../logger.js';
-import { priorityColumns, promptIdsOf, scorePriority } from './priority.js';
+import { playTrackKey, priorityColumns, promptIdsOf, scorePriority } from './priority.js';
 
 const DAY_MS = 86_400_000;
 
@@ -97,28 +97,36 @@ export async function loadPromptDemand(promptIds) {
 /**
  * Per kind, how the brand's own actions of it turned out over the last
  * `pastSuccessDays` (learning B4): its results with a verdict and how many
- * improved, from the History scorecard (action_scorecard, 00368). Never
- * another brand's.
+ * improved, from the History scorecard (action_scorecard, 00368). And per
+ * play (AC plan §11, 00484), under playTrackKey: an action opened with a
+ * play reads its play's track first. Never another brand's. The plays' read
+ * failing leaves the kinds'.
  *
  * @param {string} brandId
  * @returns {Promise<Map<string, { improved: number, results: number }>>}
  */
 export async function loadKindTrack(brandId, now = new Date()) {
-  const { data, error } = await supabaseAdmin.rpc('action_scorecard', {
-    p_brand_id: brandId,
-    p_since: new Date(now.getTime() - P.pastSuccessDays * DAY_MS).toISOString(),
-  });
-  if (error) throw new Error(`action scorecard read failed: ${error.message}`);
+  const since = new Date(now.getTime() - P.pastSuccessDays * DAY_MS).toISOString();
+  const [kinds, plays] = await Promise.all([
+    supabaseAdmin.rpc('action_scorecard', { p_brand_id: brandId, p_since: since }),
+    supabaseAdmin.rpc('action_scorecard', { p_brand_id: brandId, p_since: since, p_by: 'play' }),
+  ]);
+  if (kinds.error) throw new Error(`action scorecard read failed: ${kinds.error.message}`);
+  if (plays.error) {
+    logger.warn(
+      { brandId, err: plays.error.message },
+      '[actions] past success by play unavailable',
+    );
+  }
   const n = (v) => Number(v) || 0;
-  return new Map(
-    (data ?? []).map((row) => [
-      row.kind,
-      {
-        improved: n(row.improved),
-        results: n(row.improved) + n(row.mixed) + n(row.no_change) + n(row.declined),
-      },
-    ]),
-  );
+  const trackOf = (row) => ({
+    improved: n(row.improved),
+    results: n(row.improved) + n(row.mixed) + n(row.no_change) + n(row.declined),
+  });
+  return new Map([
+    ...(kinds.data ?? []).map((row) => [row.kind, trackOf(row)]),
+    ...(plays.error ? [] : (plays.data ?? [])).map((row) => [playTrackKey(row.kind), trackOf(row)]),
+  ]);
 }
 
 /**

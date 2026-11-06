@@ -115,6 +115,7 @@ export const CONTENT_TOOLS = [
             draftId: input.draft_id,
             conversationId: place.conversationId,
             beforeVersionId: output.beforeVersionId,
+            run: place.run,
           })
         : Promise.resolve(null),
     target: async (input) => {

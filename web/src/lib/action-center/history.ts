@@ -185,7 +185,7 @@ export interface ActionHistoryItem {
    * The prompts or pages it named, when it was measured on them (learning
    * A1), with the brand-wide figures kept as a second line.
    */
-  measuredOn?: { entity: 'prompts' | 'pages'; count: number } | null;
+  measuredOn?: { entity: 'prompts' | 'pages' | 'topics'; count: number } | null;
   /**
    * Nights tracking missed in its before and after windows (learning A6);
    * `tooMany` when past the limit, the result then not measurable.

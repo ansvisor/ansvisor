@@ -28,6 +28,7 @@ import { ChatThreadView } from '../chat-thread-view';
 import { shortcutLabel, useIsMac } from '../chat-shortcuts';
 import { TourControls, TourLabel, useChatTour } from '../tour/chat-tour';
 import { tourFocusOf, type TourTurn } from '@/lib/chat/tour';
+import { useTourHighlight } from '../tour/tour-highlight';
 import { useChatPanel } from './chat-panel-context';
 import { readThread } from './read-thread';
 
@@ -319,6 +320,11 @@ export function ChatSidePanel() {
     const timer = setTimeout(() => setMarked(null), TOUR_MARK_MS);
     return () => clearTimeout(timer);
   }, [open, pathname, focusedAnswer]);
+  // And the element it explains, outlined on the page at the same moments.
+  useTourHighlight(
+    open && tourFocus?.kind === 'turn' ? tourFocus.topic : null,
+    `${pathname}:${focusedAnswer}`,
+  );
 
   if (!panel || !started) return null;
   const { size, setup, page } = panel;

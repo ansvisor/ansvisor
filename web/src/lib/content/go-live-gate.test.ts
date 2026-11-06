@@ -42,8 +42,14 @@ vi.mock('@/lib/supabase/admin', () => {
 });
 vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://api.test' }));
 
-const { gateVerdict, goLiveGate, statesBrandFacts, GATE_MIN_AVERAGE, GATE_MIN_EACH } =
-  await import('./go-live-gate');
+const {
+  gateVerdict,
+  goLiveGate,
+  readPageQuality,
+  statesBrandFacts,
+  GATE_MIN_AVERAGE,
+  GATE_MIN_EACH,
+} = await import('./go-live-gate');
 
 const ORG = '22222222-2222-4222-8222-222222222222';
 const DRAFT = '44444444-4444-4444-8444-444444444444';
@@ -362,5 +368,62 @@ describe('goLiveGate', () => {
       result.pass === true ||
         ['qualityLow', 'quality', 'facts_unchecked'].includes((result as { hold: string }).hold),
     ).toBe(true);
+  });
+
+  describe('a page’s Quality in Chat (CHAT-25 §6, W4-12b part 2)', () => {
+    const PAGE = {
+      organizationId: ORG,
+      draftId: DRAFT,
+      runId: INPUT.runId,
+      actingUserId: INPUT.actingUserId,
+      actingRole: 'analyst',
+      spend: true,
+    };
+
+    it('reads the page as the gate does, on the Chat run’s own reads, with no holds', async () => {
+      // Suggestions waiting and placeholders hold a page from going live, not from its score.
+      db.tables.content_draft_suggestions = [{ id: 's1' }];
+      pkg.value = { error: 'not_ready', problem: 'placeholders', message: '' };
+      const read = await readPageQuality(PAGE);
+      expect(read).not.toBeNull();
+      const { eeatScore, trustScore, readable } = read!.state;
+      const scores = [eeatScore?.score, trustScore?.score, readable?.score].filter(
+        (score): score is number => typeof score === 'number',
+      );
+      expect(read!.score).toBe(
+        scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null,
+      );
+      expect(read!.brandName).toBe('Acme');
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe('http://api.test/api/internal/chat/quality/reads');
+      expect(JSON.parse(init.body)).toEqual({
+        orgId: ORG,
+        runId: INPUT.runId,
+        actingUserId: INPUT.actingUserId,
+        draftId: DRAFT,
+        sites: [],
+        spend: true,
+      });
+    });
+
+    it('names the agent run or the job a page is read for, and asks for kept reads only', async () => {
+      await readPageQuality({ ...PAGE, agentRunId: INPUT.agentRunId, spend: false });
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toMatchObject({
+        agentRunId: INPUT.agentRunId,
+        spend: false,
+      });
+    });
+
+    it('gives nothing with Content Quality off, or when a read it needs wasn’t made', async () => {
+      vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '0');
+      expect(await readPageQuality(PAGE)).toBeNull();
+      expect(fetchMock).not.toHaveBeenCalled();
+      vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '2');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      reads.claims = { ok: false, code: 'not_kept' };
+      expect(await readPageQuality(PAGE)).toBeNull();
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
+    });
   });
 });

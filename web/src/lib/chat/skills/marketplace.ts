@@ -1,4 +1,9 @@
 import marketplace from './marketplace.json';
+import {
+  MARKETPLACE_TOPICS,
+  type MarketplaceSort,
+  type MarketplaceTopic,
+} from './marketplace-view';
 
 /**
  * The Library (CHAT-17, "701 · MIT"; Chat Wave 4, W4-17): third-party skills
@@ -16,7 +21,11 @@ import marketplace from './marketplace.json';
  * `yarn test -u src/lib/chat/skills`).
  *
  * Attribution: each skill's name and description belong to its authors,
- * under the MIT license of the repository its row names. When a workspace
+ * under the MIT license of the repository its row names. The Library shows
+ * a cleaned one-line summary: where the directory's line was broken (a
+ * phrase twice, a stub such as "Provides content strategist."), the row
+ * holds the skill's own SKILL.md description at the pinned commit, cut to
+ * one line (owner, 2026-11-05). When a workspace
  * adds a skill, that license's text is read from the pinned commit and kept
  * with the skill, as for any import (00458).
  *
@@ -26,20 +35,13 @@ import marketplace from './marketplace.json';
  * route hands it.
  */
 
-/** The Library's topics, in the chips' order (CHAT-17 item 2). */
-export const MARKETPLACE_TOPICS = [
-  'seo',
-  'content',
-  'brand',
-  'analytics',
-  'social',
-  'cro',
-  'email',
-  'paid-ads',
-  'growth',
-  'gtm',
-] as const;
-export type MarketplaceTopic = (typeof MARKETPLACE_TOPICS)[number];
+// What the page needs without the catalog (topics, sorts, counts): marketplace-view.ts.
+export {
+  MARKETPLACE_TOPICS,
+  formatSkillCount,
+  type MarketplaceSort,
+  type MarketplaceTopic,
+} from './marketplace-view';
 
 /**
  * A catalog line's text to drop when the skill is read (CHAT-17 item 15):
@@ -84,22 +86,6 @@ const BY_ID = new Map(MARKETPLACE_SKILLS.map((skill) => [skill.id, skill]));
 export function marketplaceSkill(id: string): MarketplaceSkill | null {
   return BY_ID.get(id) ?? null;
 }
-
-/**
- * A count as the cards show it (CHAT-17 item 6): under 1,000 as is,
- * 1,000–9,999 with one decimal ("6.9K"), 10,000 and up without ("48K"),
- * millions with one ("1.2M"). A trailing ".0" is dropped.
- */
-export function formatSkillCount(value: number): string {
-  const n = Math.max(0, Math.round(value));
-  const short = (num: number, digits: number) => num.toFixed(digits).replace(/\.0$/, '');
-  if (n < 1000) return String(n);
-  if (n < 9950) return `${short(n / 1000, 1)}K`;
-  if (n < 999_500) return `${short(n / 1000, 0)}K`;
-  return `${short(n / 1_000_000, 1)}M`;
-}
-
-export type MarketplaceSort = 'stars' | 'installs';
 
 /**
  * The skills a filter shows (CHAT-17 items 3–4): one topic or all, those

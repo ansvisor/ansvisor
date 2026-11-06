@@ -33,6 +33,8 @@ const drafts = vi.hoisted(() => ({ getActionDrafts: vi.fn(), startDraftFromActio
 const taskCheck = vi.hoisted(() => ({ checkActionTask: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   useRouter: () => ({ push }),
+  // Start now's Chat opens beside the action (AC plan P-3).
+  usePathname: () => '/dashboard/action-center/actions',
   Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
     <a href={href} {...rest}>
       {children}
@@ -487,6 +489,77 @@ describe('ActionDrawer', () => {
         title: expect.any(String),
       });
       expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
+    });
+
+    it('offers Start now at the top of Overview, for an open action whose work is writing (AC plan P-3)', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [task('t1', 'optimize_content', 'Optimize the page')],
+      });
+      drafts.getActionDrafts.mockResolvedValue([]);
+      drafts.startDraftFromAction.mockResolvedValue({
+        draftId: 'd-new',
+        created: true,
+        importFailed: false,
+      });
+      await renderDrawer({ ...action, payload: { pages: [PRICING] } });
+      const block = document.querySelector('section[aria-label="Start now"]');
+      expect(block?.textContent).toContain('Opens /pricing as a draft');
+      await act(async () => button('Content Editor')!.click());
+      expect(drafts.startDraftFromAction).toHaveBeenCalledWith('b1', 'a1', 't1', {
+        page: PRICING,
+        title: expect.any(String),
+      });
+      // A new draft's brief is built as it opens.
+      expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new?brief=build');
+
+      // Not for a closed action, nor one whose work isn't writing.
+      await renderDrawer({
+        ...action,
+        id: 'a2',
+        status: 'completed',
+        payload: { pages: [PRICING] },
+      });
+      expect(document.querySelector('section[aria-label="Start now"]')).toBeNull();
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [task('t1', 'prepare_outreach', 'Prepare outreach')],
+      });
+      await renderDrawer({ ...action, id: 'a3' });
+      expect(document.querySelector('section[aria-label="Start now"]')).toBeNull();
+    });
+
+    it('says what to do for the kind of site, why, and what else is worth doing (AC plan P-2)', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [task('t1', 'create_content_draft', 'Write the page')],
+      });
+      drafts.getActionDrafts.mockResolvedValue([]);
+      await renderDrawer({
+        ...action,
+        kind: 'create_content_for_topics',
+        payload: {
+          play: {
+            version: 1,
+            id: 'best_of',
+            assetType: 'best_of',
+            siteType: 'ecommerce',
+            reasons: [{ kind: 'intent', intents: ['best-top'], prompts: 6, of: 14, share: 0.52 }],
+            supporting: [{ id: 'guide', assetType: 'guide', prompts: 3, of: 14, share: 0.2 }],
+          },
+        },
+      });
+      const section = document.querySelector<HTMLElement>(
+        'section[aria-label="What to do for an online store"]',
+      )!;
+      expect(section.textContent).toContain('Write a best-of list');
+      expect(section.textContent).toContain(
+        '6 of 14 prompts ask for the best options: 52% of their estimated AI searches.',
+      );
+      expect(section.textContent).toContain('Also worth doing here');
+      expect(section.textContent).toContain('Write a how-to guide · 20% of the AI searches');
+      // Start now writes the play's page, inside it.
+      expect(section.querySelector('section[aria-label="Start now"]')).not.toBeNull();
     });
 
     it('starts no draft on a read-only workspace: Optimize page opens the upgrade dialog', async () => {
