@@ -18,9 +18,7 @@ export const SCRAPER_TASK_TYPES = {
   'chatgpt-shopping': 'CHATGPT',
   'google-aio': 'GOOGLE',
   'google-aimode': 'AIMODE',
-  'copilot-web': 'COPILOT',
   'grok-web': 'GROK',
-  'perplexity-web': 'PERPLEXITY',
   'gemini-web': 'GEMINI',
 };
 
@@ -104,9 +102,9 @@ export function buildRequestBody(promptText, scraperId, region, state, location,
       html: false,
       markdown: true,
       rawResponse: false,
-      // Opt in to the observed query fan-out (#332), which Copilot and
-      // Perplexity populate; the health report's fan-out section flags one
-      // that stops. Not on ChatGPT's default task: since 2026-09-30 its
+      // Opt in to the observed query fan-out (#332); the health report's
+      // fan-out section flags a platform whose share drops. Not on ChatGPT's
+      // default task: since 2026-09-30 its
       // default (mobile-web) interface carries no query text, so the field
       // came back empty on every answer while the add-on still cost +2
       // credits a task (#1119). Only its legacy task asks.

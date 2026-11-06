@@ -1358,6 +1358,17 @@ describe("an Admin's go-live permission (AUTONOMOUS-GO-LIVE §5.2, step 4b)", ()
   it('lifts the click only when every condition and guard holds', () => {
     expect(goLiveCandidate(sendOwn, allowed())).toBe(true);
     expect(decided(PASSED)).toEqual({ kind: 'run', via: 'go_live' });
+    // Agent work (AC-011) holds changes, never going live: its own switches decide that.
+    expect(
+      decided(PASSED, {
+        agentRun: true,
+        settings: settings({
+          autoGoLiveGroups: ['publishing'],
+          agentsFullAuto: true,
+          agentWork: 'approve_first',
+        }),
+      }),
+    ).toEqual({ kind: 'run', via: 'go_live' });
     // Self-hosted passes the plan gate (§9): the operator's flag and the Admin decide.
     expect(decided(PASSED, { planKey: 'selfHosted' })).toEqual({ kind: 'run', via: 'go_live' });
     // A Manager the run acts as, with publishing on for Managers.
@@ -1559,6 +1570,80 @@ describe("an Admin's go-live permission (AUTONOMOUS-GO-LIVE §5.2, step 4b)", ()
     expect(decideToolCall(ROWS.draft, allowed(), call())).toEqual({
       kind: 'run',
       via: 'full_auto',
+    });
+  });
+});
+
+describe('Agent work (AC-011): the workspace caps what an agent run does without a person', () => {
+  const approveFirst = settings({ agentWork: 'approve_first' });
+  const autoStart = settings({ agentWork: 'auto_start' });
+  const always = settings({ toolPolicies: { draft: 'always' } });
+
+  it('asks for every change an agent run makes, in every mode, with I approve first', () => {
+    for (const mode of CHAT_MODES) {
+      const decision = decideToolCall(
+        ROWS.draft,
+        ctx({ mode, agentRun: true, settings: approveFirst }),
+        call(),
+      );
+      expect(decision).toEqual(ask(mode === 'ask_first' ? 'mode' : 'agent_work'));
+    }
+  });
+
+  it('asks even for a tool an Admin set to Always, as Ask me first does', () => {
+    const decision = decideToolCall(
+      ROWS.draft,
+      ctx({
+        mode: 'full_auto',
+        agentRun: true,
+        settings: { ...always, agentWork: 'approve_first' },
+      }),
+      call(),
+    );
+    expect(decision).toEqual(ask('agent_work'));
+  });
+
+  it('starts every workspace on I approve first: no row, or a value it can’t read', () => {
+    expect(DEFAULT_CHAT_SETTINGS.agentWork).toBeUndefined();
+    expect(decideToolCall(ROWS.draft, ctx({ mode: 'full_auto', agentRun: true }), call())).toEqual(
+      ask('agent_work'),
+    );
+  });
+
+  it('lets each agent’s own mode apply with Agent starts on its own', () => {
+    for (const mode of CHAT_MODES) {
+      const agent = decideToolCall(
+        ROWS.draft,
+        ctx({ mode, agentRun: true, settings: autoStart }),
+        call(),
+      );
+      const person = decideToolCall(ROWS.draft, ctx({ mode, settings: autoStart }), call());
+      expect(agent).toEqual(person);
+    }
+    expect(
+      decideToolCall(
+        ROWS.draft,
+        ctx({ mode: 'full_auto', agentRun: true, settings: autoStart }),
+        call(),
+      ),
+    ).toEqual({ kind: 'run', via: 'full_auto' });
+  });
+
+  it('never touches a person’s own chat', () => {
+    for (const mode of CHAT_MODES) {
+      expect(decideToolCall(ROWS.draft, ctx({ mode, settings: approveFirst }), call())).toEqual(
+        decideToolCall(ROWS.draft, ctx({ mode, settings: autoStart }), call()),
+      );
+    }
+  });
+
+  it('leaves reads, refusals and clicks as they are', () => {
+    const agent = (over: Partial<PrecedenceContext> = {}) =>
+      ctx({ mode: 'full_auto', agentRun: true, settings: approveFirst, ...over });
+    expect(decideToolCall(ROWS.read, agent(), call())).toEqual(RUN_READ);
+    expect(decideToolCall(ROWS.publish, agent(), call())).toEqual(CLICK);
+    expect(decideToolCall(ROWS.addPrompts, agent({ role: 'analyst' }), call())).toMatchObject({
+      kind: 'deny',
     });
   });
 });

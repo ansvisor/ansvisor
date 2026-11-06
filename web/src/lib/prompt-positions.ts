@@ -15,18 +15,18 @@ import type { Sentiment } from '@/types';
 
 /**
  * The engines the panel and the table's platform dots list, in the order
- * they list them: ChatGPT and Microsoft Copilot first, Perplexity last.
+ * they list them: Starter's, ChatGPT and Gemini, first. Copilot and
+ * Perplexity are no longer tracked, so they aren't listed: a card for them
+ * would stay empty, or offer an upgrade to an engine no plan tracks.
  */
 export const POSITION_PLATFORMS = [
   { id: 'chatgpt-web', label: 'ChatGPT' },
-  { id: 'copilot-web', label: 'Microsoft Copilot' },
+  { id: 'gemini-web', label: 'Gemini' },
   { id: 'google-aio', label: 'Google AI Overviews' },
   { id: 'google-aimode', label: 'Google AI Mode' },
-  { id: 'gemini-web', label: 'Gemini' },
   { id: 'grok-web', label: 'Grok' },
   // API-model tracking stores its answers under this platform.
   { id: 'claude', label: 'Claude' },
-  { id: 'perplexity-web', label: 'Perplexity' },
 ] as const;
 
 export type PositionPlatformId = (typeof POSITION_PLATFORMS)[number]['id'];

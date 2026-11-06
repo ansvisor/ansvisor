@@ -4,8 +4,8 @@ home_line: Agents now ask before every change until an Admin lets them start wor
 route: /dashboard/action-center/actions
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
-published: 2099-12-31
-approved: false
+published: 2026-11-06
+approved: true
 ---
 Agents set to Auto or Full auto could change your work before anyone on the team had looked.
 Agent work now starts on I approve first: each change an agent makes waits for a person, whatever its mode.

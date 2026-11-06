@@ -4,8 +4,8 @@ route: /dashboard/prompts/fan-outs
 keywords: [query fan-out, fan-outs, searches behind answers, copilot, perplexity, by prompt, high frequency, times searched, track a sub-query]
 synonyms: [sub-queries, background searches, AI search queries, what the AI searched, not shared]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ Behind an answer, an AI engine can run searches of its own. The **Query Fan-out*
 
 ## Which engines share their searches
 
-Copilot and Perplexity share the searches behind their answers. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them.
+ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot and Perplexity shared them, but Ansvisor no longer tracks these two engines. Searches from their past answers still show for the dates you pick.
 
 ## Engines
 

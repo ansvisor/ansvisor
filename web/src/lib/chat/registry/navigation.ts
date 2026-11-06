@@ -27,7 +27,7 @@ export const NAVIGATION_READS = [
     inputSchema: z.object({
       route: z.string().trim().min(1).max(100).describe('The page, e.g. "citations".'),
       range: z.enum(['24h', '7d', '30d', '90d', 'all']).optional(),
-      platform: z.enum(PLATFORM_IDS).optional().describe('A platform id, e.g. "perplexity-web".'),
+      platform: z.enum(PLATFORM_IDS).optional().describe('A platform id, e.g. "gemini-web".'),
     }),
     run: (ctx, input) =>
       openPageFor(ctx, { route: input.route, range: input.range, platform: input.platform }),
