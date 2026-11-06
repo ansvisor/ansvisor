@@ -1,11 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // The module imports the supabase admin client, whose config hard-exits when
 // SUPABASE_* env is absent (as in CI) — stub it before the import chain.
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
+import supabaseAdmin from '../../config/supabase.js';
 import {
   daily,
+  degradedPlatforms,
   isTransientDbError,
   positiveSentimentPct,
   series,
@@ -173,5 +175,66 @@ describe('positiveSentimentPct', () => {
       positiveSentimentPct({ positive_count: 0, mentioning_results: 2, mention_results: 0 }),
     ).toBe(0);
     expect(positiveSentimentPct(null)).toBe(0);
+  });
+});
+
+describe('degradedPlatforms', () => {
+  afterEach(() => {
+    delete supabaseAdmin.from;
+  });
+
+  /**
+   * prompt_results counts per platform: `today` over the last day, `week`
+   * over the seven days before it. Records which platforms were read.
+   */
+  function stubCounts(counts) {
+    const read = new Set();
+    supabaseAdmin.from = () => {
+      const q = { platform: null, baseline: false };
+      const builder = {
+        select: () => builder,
+        eq: (_column, value) => {
+          q.platform = value;
+          read.add(value);
+          return builder;
+        },
+        gte: () => builder,
+        lt: () => {
+          q.baseline = true;
+          return builder;
+        },
+        then: (resolve) => {
+          const c = counts[q.platform] ?? { today: 0, week: 0 };
+          return resolve({ count: q.baseline ? c.week : c.today });
+        },
+      };
+      return builder;
+    };
+    return read;
+  }
+
+  it('flags a collapse, but not the paused platforms, whose answers stop by design', async () => {
+    // Copilot and Perplexity were paused on 2026-11-06, Grok before them:
+    // a busy week, then nothing today.
+    const read = stubCounts({
+      'chatgpt-web': { today: 10, week: 7000 },
+      'gemini-web': { today: 1000, week: 7000 },
+      'copilot-web': { today: 0, week: 7000 },
+      'perplexity-web': { today: 0, week: 7000 },
+      'grok-web': { today: 0, week: 7000 },
+    });
+    expect(await degradedPlatforms(new Date('2026-11-07T12:00:00Z'))).toEqual(['chatgpt-web']);
+    for (const paused of ['copilot-web', 'perplexity-web', 'grok-web']) {
+      expect(read.has(paused)).toBe(false);
+    }
+  });
+
+  it('finds no outage when only the paused platforms went quiet', async () => {
+    stubCounts({
+      'chatgpt-web': { today: 1000, week: 7000 },
+      'copilot-web': { today: 0, week: 7000 },
+      'perplexity-web': { today: 0, week: 7000 },
+    });
+    expect(await degradedPlatforms(new Date('2026-11-07T12:00:00Z'))).toEqual([]);
   });
 });
