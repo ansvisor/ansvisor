@@ -121,6 +121,19 @@ describe('the microphone', () => {
     expect(box().value).toBe('Why did citations drop last week?');
   });
 
+  it('sits on the right of the box’s row, right before Send', async () => {
+    (window as unknown as { webkitSpeechRecognition: unknown }).webkitSpeechRecognition =
+      FakeRecognition;
+    await render();
+    const send = container.querySelector('[data-action="composer.send"]');
+    expect(mic()!.nextElementSibling).toBe(send);
+    expect(mic()!.parentElement!.getAttribute('data-slot')).toBe('composer-send-group');
+    // ＋ / @ stay on the left, before it.
+    expect(mic()!.parentElement!.previousElementSibling?.getAttribute('data-action')).toBe(
+      'composer.openRef',
+    );
+  });
+
   it('stops on a second click', async () => {
     (window as unknown as { webkitSpeechRecognition: unknown }).webkitSpeechRecognition =
       FakeRecognition;

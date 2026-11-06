@@ -250,3 +250,64 @@ describe('GET /api/stripe/success and the demo brand', () => {
     expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
   });
 });
+
+/**
+ * Where the person lands (owner decision 2026-11-06): the free trial on Chat
+ * Home, a paid plan on the Action Center, while the new Chat is on.
+ */
+describe('GET /api/stripe/success, the start page', () => {
+  const checkout = (status: string, planId = 'starter') => ({
+    payment_status: 'paid',
+    status: 'complete',
+    customer: 'cus1',
+    created: 1_800_000_000,
+    subscription: {
+      ...subscription(),
+      status,
+      metadata: { organization_id: 'org1', plan_id: planId },
+    },
+  });
+
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    db.brand = { id: 'brand1' };
+    api.mockResolvedValue(Response.json({ success: true, jobId: 'job-s', created: true }));
+  });
+
+  it('opens Chat Home for the free trial, with the first run carried along', async () => {
+    stripeApi.retrieveSession.mockResolvedValue(checkout('trialing'));
+    const res = await back();
+    const location = new URL(res.headers.get('location')!);
+    expect(location.pathname).toBe('/dashboard/chat');
+    expect(location.searchParams.get('jobId')).toBe('job-s');
+  });
+
+  it('opens the Action Center for a plan bought without a trial, or an Enterprise trial', async () => {
+    stripeApi.retrieveSession.mockResolvedValue(checkout('active'));
+    let res = await back();
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/action-center/actions');
+
+    stripeApi.retrieveSession.mockResolvedValue(checkout('trialing', 'enterprise'));
+    res = await back();
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/action-center/actions');
+  });
+
+  it('keeps the Action Center while the new Chat is off', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    stripeApi.retrieveSession.mockResolvedValue(checkout('trialing'));
+    const res = await back();
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/action-center/actions');
+  });
+
+  it('leaves it to /dashboard without a checkout, or when the plan was not written', async () => {
+    let res = await GET(
+      new Request('http://localhost/api/stripe/success') as unknown as NextRequest,
+    );
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard');
+
+    stripeApi.retrieveSession.mockRejectedValue(new Error('stripe down'));
+    res = await back();
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard');
+  });
+});

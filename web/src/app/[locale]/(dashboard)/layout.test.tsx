@@ -106,6 +106,12 @@ vi.mock('@/components/chat/panel/chat-side-panel-slot', async () => {
 });
 const legacy = vi.hoisted(() => ({ importLegacyChats: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/chat/legacy-import', () => legacy);
+// The product tour's server actions (00486): their own tests.
+vi.mock('@/lib/actions/chat-tour', () => ({
+  showTourTopic: vi.fn(async () => ({ ok: false })),
+  endChatTour: vi.fn(async () => ({ ok: false })),
+  prepareChatTour: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/actions/chat-prefs', () => ({ saveChatPanelSize: vi.fn() }));
 const ownKey = vi.hoisted(() => ({ chatRunsOnOwnKey: vi.fn(async () => false) }));
 vi.mock('@/lib/chat/key', () => ownKey);

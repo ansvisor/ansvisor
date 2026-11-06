@@ -1,7 +1,7 @@
 ---
 title: Change your Chat settings
 route: /dashboard/chat/settings
-keywords: [chat settings, default mode, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, thought for, thinking time, ask chat on every page, full auto]
+keywords: [chat settings, default mode, product tour, take the tour, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, thought for, thinking time, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
 updated: 2026-11-06
@@ -36,5 +36,9 @@ When one of your agents stops to ask you something or to wait for your OK on a c
 ## Chat on every page
 
 **Open Chat on every page** shows or hides **Ask Chat** with Ctrl J in each page's header.
+
+## Product tour
+
+**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.
 
 Workspace rules, such as which tools Chat may use on its own, are in **Tool policy**; only Admins change them.

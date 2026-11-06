@@ -105,7 +105,6 @@ import { usePreloadDemo } from '@/hooks/use-explore-demo';
 import { wantsDemoAhead } from '@/lib/demo/demo-ahead';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
 import { WorkAreasStep } from '@/components/onboarding/work-areas-step';
-import { DASHBOARD_HOME } from '@/config/home';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
@@ -1100,7 +1099,8 @@ export default function OnboardingPage() {
 
       // Full page navigation bypasses Next.js router cache, ensuring
       // the server-side layout reads the fresh onboarding_completed flag.
-      window.location.href = DASHBOARD_HOME;
+      // /dashboard opens the person's start page.
+      window.location.href = '/dashboard';
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save competitors');
       setSavingCompetitors(false);

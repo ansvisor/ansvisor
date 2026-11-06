@@ -11,6 +11,7 @@ import { pageOpenOf } from '@/lib/chat/page-open';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
 import { skillMenuFor } from '@/lib/chat/skills/store';
 import { isChatStaff } from '@/lib/chat/staff';
+import { readChatStartAudience, type ChatStartAudience } from '@/lib/chat/start-audience';
 
 export { composerSetupOf, type ChatComposerSetup };
 
@@ -96,13 +97,54 @@ export async function chatFirstName(): Promise<string | null> {
   );
 }
 
+/**
+ * Chat Home's welcome card (owner decision 2026-11-06; 00486): who it greets,
+ * the free trial or the demo (ChatStartAudience), until the person says Not
+ * now or ends the product tour; null for everyone else, and when a read fails.
+ */
+export async function chatWelcome(): Promise<ChatStartAudience | null> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (!profile?.organization_id) return null;
+    const [audience, prefs] = await Promise.all([
+      readChatStartAudience(supabase, profile.organization_id),
+      supabase
+        .from('chat_user_prefs')
+        .select('welcome_dismissed_at, tour_finished_at')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+    ]);
+    if (prefs.error || prefs.data?.welcome_dismissed_at || prefs.data?.tour_finished_at) {
+      return null;
+    }
+    return audience;
+  } catch (error) {
+    console.error('[chat] could not read the welcome card:', error);
+    return null;
+  }
+}
+
 /** What Chat focuses on for the person (CHAT-24 §3), as Home and Settings › General open. */
 export interface ChatFocusState {
   /** The picked areas, in order; empty when skipped or cleared; null when never asked. */
   focus: FocusArea[] | null;
   /** Home's view (00485): the Default view, or the one the focus tailors. */
   view: HomeView;
-  /** The picker opens by itself: never answered and never shown (it shows once). */
+  /**
+   * The picker opens by itself: never answered and never shown (it shows
+   * once). Never for the free trial and the demo (owner decision 2026-11-06):
+   * they land on the Default view with the welcome card, and pick a focus
+   * later from the pill.
+   */
   ask: boolean;
 }
 
@@ -111,7 +153,9 @@ const NO_FOCUS: ChatFocusState = { focus: null, view: 'default', ask: false };
 /**
  * The person's focus, Home's view and whether the picker should open by
  * itself. A read that fails opens Home on the Default view, without the
- * picker.
+ * picker. Who the workspace is to Chat's start (ChatStartAudience) is read
+ * only for someone the picker would open for: once, on the first visit; a
+ * read of it that fails leaves the picker as it was.
  */
 export async function chatFocusState(): Promise<ChatFocusState> {
   const supabase = await createClient();
@@ -126,11 +170,31 @@ export async function chatFocusState(): Promise<ChatFocusState> {
     .maybeSingle();
   if (prefs.error) return NO_FOCUS;
   const focus = focusOf(prefs.data?.focus);
+  const firstVisit = focus === null && !prefs.data?.focus_prompted_at;
   return {
     focus,
     view: homeViewOf(prefs.data?.home_view),
-    ask: focus === null && !prefs.data?.focus_prompted_at,
+    ask: firstVisit && !(await startsOnWelcome(supabase, user.id)),
   };
+}
+
+/** The free trial or the demo (ChatStartAudience): Home opens on its welcome card, not the picker. */
+async function startsOnWelcome(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<boolean> {
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!profile?.organization_id) return false;
+    return (await readChatStartAudience(supabase, profile.organization_id)) !== null;
+  } catch (error) {
+    console.error('[chat] could not read who Chat starts:', error);
+    return false;
+  }
 }
 
 /**
