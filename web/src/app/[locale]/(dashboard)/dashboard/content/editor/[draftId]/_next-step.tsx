@@ -257,6 +257,7 @@ export function NextStepButton({
   working,
   raises = [],
   cost = null,
+  compact = false,
 }: {
   next: NextPath;
   state: NextStepState;
@@ -282,6 +283,8 @@ export function NextStepButton({
    * the month's AI usage (null on an unlimited plan, or while unread).
    */
   cost?: { minutes: number; percent: number | null } | null;
+  /** In a narrow pane (embedded in Chat): "Next" and the bars at any window width. */
+  compact?: boolean;
 }) {
   const t = useTranslations('contentEditor.editor.nextStep');
   const { step, path, tips } = next;
@@ -351,7 +354,7 @@ export function NextStepButton({
         <Bars path={path} />
         <span>{t('short')}</span>
         {/* The step's name where there's room (§3b: "Next" with the bars at 1024px). */}
-        <span className="hidden max-w-48 truncate xl:inline">
+        <span className={cn('hidden max-w-48 truncate', !compact && 'xl:inline')}>
           {t('buttonStep', { step: name })}
         </span>
       </DialogTrigger>

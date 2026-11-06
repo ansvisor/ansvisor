@@ -2613,7 +2613,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-07",
       "sections": [
         {
           "heading": null,
@@ -2633,7 +2633,7 @@
         },
         {
           "heading": "Write and paste",
-          "text": "The page starts with its H1, which is also its title. A page has one H1: the toolbar won't add a second one. A paste keeps headings, lists, links and tables, and drops fonts, colors and styles. Press Command or Ctrl + Shift + V to paste plain text.\n\n**Attach a file** inserts Excel, CSV, Word, Markdown, HTML or text, up to 10 MB each; a sheet comes in as a table. **Add HTML** adds an embed, a widget or a form, kept exactly as written; Ansvisor never runs it. **Edit as HTML** shows the page's source; scripts, iframes and inline styles are removed when you switch back."
+          "text": "The page starts with its H1, which is also its title. A page has one H1: the toolbar won't add a second one. A paste keeps headings, lists, links and tables, and drops fonts, colors and styles. Press Command or Ctrl + Shift + V to paste plain text.\n\n**Attach a file** inserts Excel, CSV, Word, Markdown, HTML or text, up to 10 MB each; a sheet comes in as a table. **Add HTML** adds an embed, a widget or a form, kept exactly as written; Ansvisor never runs it. **Edit as HTML** shows the page's source; scripts, iframes and inline styles are removed when you switch back.\n\nIn a narrow editor, such as beside the side panel on a small screen, the numbered list, quote, table, **Add HTML**, **Products**, **Attach a file** and **Edit as HTML** move under **More** in the toolbar."
         },
         {
           "heading": "Facts and your input",
