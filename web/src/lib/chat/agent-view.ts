@@ -1,5 +1,6 @@
 import type { TeamRole } from '@/components/providers/role-provider';
 import { ALL_MODELS, ALL_SCRAPERS } from '@/config/prompt-options';
+import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { parseRecurringRule, type RruleDay } from './agent-schedule';
 import type { AgentListView, AgentStatus } from './agent-rules';
 import type { AgentOutcome, AgentTriggerView } from './agents';
@@ -86,6 +87,7 @@ export function engineName(id: string): string {
   return (
     ALL_SCRAPERS.find((engine) => engine.id === id)?.label ??
     ALL_MODELS.find((model) => model.id === id)?.label ??
+    PLATFORM_LABELS[id] ??
     id
   );
 }

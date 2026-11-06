@@ -17,26 +17,24 @@ const accessFor = (plan: Plan) =>
   Object.fromEntries(POSITION_PLATFORMS.map((p) => [p.id, platformAccess(plan, p.id)]));
 
 describe('POSITION_PLATFORMS', () => {
-  it('lists ChatGPT, then Microsoft Copilot, and Perplexity last', () => {
+  it('lists Starter’s engines first, and no longer Copilot or Perplexity', () => {
     expect(POSITION_PLATFORMS.map((p) => p.label)).toEqual([
       'ChatGPT',
-      'Microsoft Copilot',
+      'Gemini',
       'Google AI Overviews',
       'Google AI Mode',
-      'Gemini',
       'Grok',
       'Claude',
-      'Perplexity',
     ]);
   });
 });
 
 describe('platformAccess', () => {
-  it('locks Starter to ChatGPT and Microsoft Copilot, with Grok and Claude behind sales', () => {
+  it('locks Starter to ChatGPT and Gemini, with Grok and Claude behind sales', () => {
     const access = accessFor(PLANS.starter);
     expect(access['chatgpt-web']).toEqual({ state: 'included' });
-    expect(access['copilot-web']).toEqual({ state: 'included' });
-    for (const id of ['google-aio', 'google-aimode', 'gemini-web', 'perplexity-web']) {
+    expect(access['gemini-web']).toEqual({ state: 'included' });
+    for (const id of ['google-aio', 'google-aimode']) {
       expect(access[id]).toEqual({ state: 'locked', requiredPlan: 'growth' });
     }
     expect(access['grok-web']).toEqual({ state: 'locked', requiredPlan: 'enterprise' });
@@ -242,7 +240,7 @@ const included = { state: 'included' } as const;
 const growthOnly = { state: 'locked', requiredPlan: 'growth' } as const;
 const PLATFORMS = [
   { id: 'chatgpt-web' as const, label: 'ChatGPT', access: included },
-  { id: 'perplexity-web' as const, label: 'Perplexity', access: included },
+  { id: 'gemini-web' as const, label: 'Gemini', access: included },
   { id: 'google-aio' as const, label: 'Google AI Overviews', access: growthOnly },
 ];
 const WEEK = { from: '2026-10-04T00:00:00.000Z', to: '2026-10-10T23:59:59.999Z' };
@@ -259,7 +257,7 @@ describe('summarizePositions', () => {
           citations: 2,
         }),
         answer({ createdAt: '2026-10-08T02:20:00Z', mentioned: true, mentions: 1 }),
-        answer({ createdAt: '2026-10-09T02:00:00Z', platform: 'perplexity-web' }),
+        answer({ createdAt: '2026-10-09T02:00:00Z', platform: 'gemini-web' }),
         // A locked engine's answer is not the panel's, nor counted.
         answer({
           createdAt: '2026-10-09T02:00:00Z',
@@ -339,7 +337,7 @@ describe('summarizePositions', () => {
         answer({ createdAt: '2026-10-08T02:00:00Z', mentioned: true, mentionPosition: 2 }),
         answer({
           createdAt: '2026-10-08T02:30:00Z',
-          platform: 'perplexity-web',
+          platform: 'gemini-web',
           mentioned: true,
           mentionPosition: 4,
         }),

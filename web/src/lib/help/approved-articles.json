@@ -3682,7 +3682,7 @@
         "stop tracking a location"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -3706,7 +3706,7 @@
         },
         {
           "heading": "Which engines answer from a state or city",
-          "text": "**US states** are asked by every engine from the state itself. Google's engines asked a state country-wide until October 2026, so their answers from before then stay in the country's column.\n\n**Cities** are asked only by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Perplexity, Copilot, Gemini and Grok answer per country, so they skip a city and their answers stay in the country's column; track the country too to see them. A city column says **AI Mode · AIO · APIs**. A city counts as one location on your plan, like a country."
+          "text": "**US states** are asked by every engine from the state itself. Google's engines asked a state country-wide until October 2026, so their answers from before then stay in the country's column.\n\n**Cities** are asked only by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Gemini and Grok answer per country, so they skip a city and their answers stay in the country's column; track the country too to see them. A city column says **AI Mode · AIO · APIs**. A city counts as one location on your plan, like a country."
         },
         {
           "heading": "What a new location shows",
@@ -3795,7 +3795,7 @@
         "not shared"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -3803,7 +3803,7 @@
         },
         {
           "heading": "Which engines share their searches",
-          "text": "Copilot and Perplexity share the searches behind their answers. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them."
+          "text": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot and Perplexity shared them, but Ansvisor no longer tracks these two engines. Searches from their past answers still show for the dates you pick."
         },
         {
           "heading": "Engines",
@@ -4023,15 +4023,15 @@
         "free ai report"
       ],
       "plan": "all",
-      "updated": "2026-11-04",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 25 that match what you sell best and that people search for most, asks each one once in ChatGPT, Microsoft Copilot, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once."
+          "text": "The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 25 that match what you sell best and that people search for most, asks each one once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once."
         },
         {
           "heading": "What the card measured",
-          "text": "- **AI visibility**: the share of ChatGPT's and Microsoft Copilot's answers that name your brand or your site. These are the engines Ansvisor Starter tracks. Gemini, Google AI Overviews and Google AI Mode, which Growth adds, are shown apart in an \"In Ansvisor Growth\" band. Competitors, cited sites and your citations count the same answers.\n- The same share for each engine.\n- The competitors the answers named most, and the sites they cite, with yours, your competitors' and marketplaces marked."
+          "text": "- **AI visibility**: the share of ChatGPT's and Gemini's answers that name your brand or your site. These are the engines Ansvisor Starter tracks. Google AI Overviews and Google AI Mode, which Growth adds, are shown apart in an \"In Ansvisor Growth\" band. A card made before Ansvisor stopped tracking Microsoft Copilot counts ChatGPT and Copilot instead. Competitors, cited sites and your citations count the same answers.\n- The same share for each engine.\n- The competitors the answers named most, and the sites they cite, with yours, your competitors' and marketplaces marked."
         },
         {
           "heading": "The four pages",
@@ -4055,7 +4055,7 @@
         },
         {
           "heading": "Measure your own questions every day",
-          "text": "The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Microsoft Copilot. **Brand Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next."
+          "text": "The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Brand Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next."
         },
         {
           "heading": "The value table and the revenue scenario",
