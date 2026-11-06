@@ -2,7 +2,7 @@
 title: Visibility’s Mentions tab
 route: /dashboard/mentions
 keywords: [mentions, sentiment, brand mentions, mention rate, net sentiment, co-mentioned, mentions tab]
-synonyms: [where AI names my brand, tone of AI answers, brand mentions in AI answers, how AI talks about us, mentions and sentiment page]
+synonyms: [where AI names my brand, tone of AI answers, brand mentions in AI answers, how AI talks about us, mentions and sentiment page, mentions overview, mentions summary, answers view]
 plan: all
 updated: 2026-11-06
 last_checked: 2026-11-06
@@ -17,18 +17,18 @@ The **Mentions** tab of **Visibility** (it used to be the Mentions & Sentiment p
 
 All three views share one filter bar, for the brand active in the sidebar. **Date range** offers 24h, 7d, 30d (the default), 90d or Custom; a custom range is read as whole UTC days. **Platform** picks one AI platform or all of them. **Country** appears only when the brand tracks more than one country, and **Topic** only when it has topics. **Search** matches the prompts' text, also on the Perception view, where the box reads *Search keywords…*. The view and the filters are kept in the page's address, so a refresh or a shared link opens the same view. The date range, platform, country and topic come with you from Visibility's other tabs, and go with you to them.
 
-## Overview view
+## Summary view
 
-The **Overview** opens with a summary line: net sentiment and its change, the platform behind most of that change, and the competitors AI usually names next to you. Four cards follow: **Total mentions**, **Mention rate**, **Prompts with mentions**, and **Net sentiment** with its positive, neutral and negative split. **Mentions & sentiment over time** draws one point per day; the 24h view has no trend. **By AI platform** compares the platforms and notes when two platforms' net sentiment is 40 or more points apart. **Competitor framing** shows how often AI names each competitor and, under **Also names you**, how many of those answers name you too.
+The **Summary** opens with a summary line: net sentiment and its change, the platform behind most of that change, and the competitors AI usually names next to you. Four cards follow: **Total mentions**, **Mention rate**, **Prompts with mentions**, and **Net sentiment** with its positive, neutral and negative split. **Mentions & sentiment over time** draws one point per day; the 24h view has no trend. **By AI platform** compares the platforms and notes when two platforms' net sentiment is 40 or more points apart. **Competitor framing** shows how often AI names each competitor and, under **Also names you**, how many of those answers name you too.
 
 ## Changes from the previous period
 
 Every change compares the selected period with the period of the same length just before it. It is taken only on the prompts that were answered in both periods, so adding or pausing prompts doesn't show up as a rise or a fall.
 
-## Mentions view
+## Answers view
 
-The **Mentions** view lists every answer that names your brand, 100 per page. Each row shows the prompt, the platform, the country when the brand tracks more than one, the **Mention context** around your brand, the **Sentiment**, the **Position** (#2 of 5 means named second of five brands), the **Co-mentioned** competitors, the topic and the date. The table's own controls filter by **Sentiment** and **Co-mentioned**, **Group by** prompt or platform, and **Sort** by Newest, Oldest, Most co-mentions or Most negative. Click a row to open the full answer in a side panel.
+The **Answers** view lists every answer that names your brand, 100 per page. Each row shows the prompt, the platform, the country when the brand tracks more than one, the **Mention context** around your brand, the **Sentiment**, the **Position** (#2 of 5 means named second of five brands), the **Co-mentioned** competitors, the topic and the date. The table's own controls filter by **Sentiment** and **Co-mentioned**, **Group by** prompt or platform, and **Sort** by Newest, Oldest, Most co-mentions or Most negative. Click a row to open the full answer in a side panel.
 
 ## Copy summary and Export CSV
 
-Visibility's header has these buttons on this tab. **Copy summary** copies the Overview as plain text: the filters, the summary line, the four figures and the period, ready to paste into a doc or a ticket. **Export CSV** downloads the answers that name your brand under the filters, one row per answer, up to 5,000 rows per file. From the Mentions view, the file also follows the table's sentiment and co-mention filters and its sort. Lines above the rows record the filters, the period and the counts. **Reports** opens the Reports page.
+Visibility's header has these buttons on this tab. **Copy summary** copies the Summary as plain text: the filters, the summary line, the four figures and the period, ready to paste into a doc or a ticket. **Export CSV** downloads the answers that name your brand under the filters, one row per answer, up to 5,000 rows per file. From the Mentions view, the file also follows the table's sentiment and co-mention filters and its sort. Lines above the rows record the filters, the period and the counts. **Reports** opens the Reports page.

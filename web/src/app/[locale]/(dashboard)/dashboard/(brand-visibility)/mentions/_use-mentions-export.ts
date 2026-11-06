@@ -247,7 +247,7 @@ export function useMentionsExport({
     ].join('\n');
   };
 
-  /** Copies the Overview's summary under the page's filters. */
+  /** Copies the Summary view's figures under the page's filters. */
   const copySummary = async () => {
     if (!query || busy) return;
     setBusy('copy');
