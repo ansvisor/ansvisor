@@ -4731,6 +4731,7 @@
       "inboxLabelNeedsYou": "Inbox · {count, plural, one {# item} other {# items}} · {needsYou, plural, one {# needs you} other {# need you}}",
       "skills": "Skills",
       "governance": "Governance",
+      "toggleGovernance": "Show or hide Governance",
       "activity": "Activity",
       "capabilities": "What Chat can do",
       "policy": "Tool policy",

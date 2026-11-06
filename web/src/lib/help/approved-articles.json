@@ -1141,7 +1141,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -1293,7 +1293,7 @@
         },
         {
           "heading": "Open and close Governance",
-          "text": "Click **Governance** in the chat menu to show or hide **Activity**, **What Chat can do** and **Tool policy**. Its arrow points down while it is open, as in the groups of the main menu. It stays closed until you open it, and it opens by itself while you are on **Activity** or **What Chat can do**. Chat remembers whether you left it open or closed, in this browser."
+          "text": "Click the **▾** beside **Governance** in the chat menu to show or hide **Activity**, **What Chat can do** and **Tool policy**, as beside **Menu** and **Chats**. It turns to **▴** while Governance is open. It stays closed until you open it, and it opens by itself while you are on **Activity** or **What Chat can do**. Chat remembers whether you left it open or closed, in this browser."
         },
         {
           "heading": "Hide the chat menu",
