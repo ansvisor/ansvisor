@@ -1,5 +1,5 @@
 import supabaseAdmin from '../../config/supabase.js';
-import { CategoryPageError, leafName, wordsOf } from './category-pages.js';
+import { CategoryPageError, wordsOf } from './category-pages.js';
 
 /**
  * Which catalog categories a store's topic is about (AC plan P-7, spec
@@ -8,9 +8,9 @@ import { CategoryPageError, leafName, wordsOf } from './category-pages.js';
  *
  * Worked out on every read, as a category's page is (category-pages.js): a
  * category is a topic's when every word of its own name (the last step,
- * "Cold Brew") is in the topic's name, or in at least two of its prompts
- * (its one prompt, for a topic with one). The more prompts name it, and the
- * longer and deeper its name, the better; three at most per topic. A
+ * "Cold Brew"), or of a step above it ("Whole Bean"), is in the topic's
+ * name, or in at least two of its prompts (its one prompt, for a topic with
+ * one). Its own name's match ranks first; three at most per topic. A
  * person's decision (topic_catalog_categories) replaces it: linked, or
  * taken away.
  */
@@ -24,40 +24,64 @@ const PAGE = 1000;
 /** Prompts read for a brand at most: enough for every topic's words. */
 const MAX_PROMPTS = 5000;
 
-const depth = (name) =>
+/** A category's name's steps: "Coffee > Whole Bean > Blends" → its three. */
+const stepsOf = (name) =>
   String(name ?? '')
     .split(/[>›/|]/)
-    .filter((s) => s.trim()).length;
+    .map((s) => s.trim())
+    .filter(Boolean);
 
 /**
  * The categories each topic is about by the words, best first.
+ *
+ * A category matches by its own name (the last step), or by a step above
+ * it ("Whole Bean" in "Coffee > Whole Bean > Blends" for the topic "Whole
+ * bean coffee"), when every word of that step is in the topic's name or in
+ * enough of its prompts. Its own name's match ranks above a step above's;
+ * then a name's match above the prompts', the more prompts, the longer and
+ * the deeper the step.
  *
  * @param {{ topics: { id: string, name: string, prompts?: string[] }[],
  *   categories: { id: string, name: string }[] }} input
  * @returns {Map<string, string[]>} category ids by topic id
  */
 export function autoTopicCategories({ topics = [], categories = [] }) {
-  const leaves = categories
-    .map((category) => ({
-      id: category.id,
-      words: [...new Set(wordsOf(leafName(category.name)))],
-      depth: depth(category.name),
-    }))
-    .filter((leaf) => leaf.words.length > 0);
+  const read = categories
+    .map((category) => {
+      const steps = stepsOf(category.name);
+      return {
+        id: category.id,
+        steps: steps
+          .map((step, i) => ({
+            words: [...new Set(wordsOf(step))],
+            depth: i + 1,
+            own: i === steps.length - 1,
+          }))
+          .filter((step) => step.words.length > 0),
+      };
+    })
+    .filter((category) => category.steps.length > 0);
   const linked = new Map();
   for (const topic of topics) {
     const named = new Set(wordsOf(topic.name));
     const prompts = (topic.prompts ?? []).map((text) => new Set(wordsOf(text)));
     const needed = Math.min(MIN_PROMPTS, Math.max(prompts.length, 1));
     const found = [];
-    for (const leaf of leaves) {
-      const inName = leaf.words.every((w) => named.has(w));
-      const asking = prompts.filter((words) => leaf.words.every((w) => words.has(w))).length;
-      if (!inName && asking < needed) continue;
-      found.push({
-        id: leaf.id,
-        score: (inName ? 1000 : 0) + asking * 10 + leaf.words.length * 2 + leaf.depth,
-      });
+    for (const category of read) {
+      let best = null;
+      for (const step of category.steps) {
+        const inName = step.words.every((w) => named.has(w));
+        const asking = prompts.filter((words) => step.words.every((w) => words.has(w))).length;
+        if (!inName && asking < needed) continue;
+        const score =
+          (step.own ? 10_000 : 0) +
+          (inName ? 1000 : 0) +
+          asking * 10 +
+          step.words.length * 3 +
+          step.depth * 2;
+        if (!best || score > best) best = score;
+      }
+      if (best !== null) found.push({ id: category.id, score: best });
     }
     found.sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : 1));
     linked.set(
