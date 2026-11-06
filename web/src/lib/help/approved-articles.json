@@ -2042,7 +2042,10 @@
         "updates",
         "show me",
         "new line",
-        "latest changes"
+        "latest changes",
+        "every month",
+        "monthly digest",
+        "what's new for my plan"
       ],
       "synonyms": [
         "release notes",
@@ -2052,7 +2055,7 @@
         "recent improvements"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -2069,6 +2072,10 @@
         {
           "heading": "When an update counts as read",
           "text": "An update counts as read once Chat shows it in an answer, or once you open its **Try it**. What you've read is yours alone, the same in the side panel and on the full page."
+        },
+        {
+          "heading": "Get it every month",
+          "text": "Ask Chat \"Send me What's new every month\" to make a scheduled job, **What's new for my plan**. It runs on the 1st of every month at 9:00 unless you pick another time on its card. You can set where results go, but there is no prompt to write.\n\nEach run lists the updates for your plan that you haven't read, up to ten, in the job's own chat, and marks them read. With nothing new, it sends nothing and its run shows as unchanged. It uses no AI usage. Find, pause or delete it on the **Scheduled** page."
         }
       ]
     },
@@ -2648,7 +2655,9 @@
         "export drafts",
         "made in",
         "open chat",
-        "from chat"
+        "from chat",
+        "first ai crawl",
+        "ai bot visit after publish"
       ],
       "synonyms": [
         "content list",
@@ -2657,7 +2666,7 @@
         "draft list"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -2670,6 +2679,10 @@
         {
           "heading": "Columns and filters",
           "text": "The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Made in (Content Editor, Chat, Action Center, Agent or MCP), Status, Created and Updated. A draft made in your own chat has **Open chat**, and the editor shows **From chat** with its title. While the Content Agent writes a draft, its Status reads **Agent writing…**, and **Agent failed** if it couldn't finish; where your workspace has Chat, each comes with the same dot Chat shows for a run. The **Created** filter narrows the list to the last 7, 30 or 90 days, and **Made in** to one place, once drafts come from more than one. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published."
+        },
+        {
+          "heading": "When AI bots first visit a page",
+          "text": "A page that went live through Send to CMS shows a link icon beside its status. Point to it, or tab to it, to see when an AI bot first visited the page after it went live, for example \"First AI crawl: GPTBot, 6 hours after it went live\". It comes from the AI bot logs your brand sends in **AI Traffic**, which count only verified AI bots. Without them, the line says to connect them."
         },
         {
           "heading": "The row menu",
