@@ -4967,7 +4967,7 @@
         "raise page score"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-07",
       "sections": [
         {
           "heading": null,
@@ -4992,6 +4992,10 @@
         {
           "heading": "How audits feed the Action Center",
           "text": "Each night the Action Center reads each page's latest audit from the last 90 days and turns failed signals into actions:\n\n- **Fix low-scoring pages**, for audited pages scoring below 50;\n- **Fix AI crawler accessibility**, **Fix structured data issues** and **Fix outdated content**;\n- **Fix weak entity signals**, **Fix internal content connectivity** and **Fix content gaps**.\n\nAn action lists the pages it covers and the failed checks on each, with **Open Site Audit**."
+        },
+        {
+          "heading": "Canonical tags",
+          "text": "The **Canonical URL** check scores whether a page has a canonical tag. When the tag points to another address, the audit also opens that address once. **Fix canonical tags** opens in the Action Center for pages whose tag is missing, or points to another site, a redirect, a page that asks not to be indexed or one that isn't there. Its score stays as it is. Its task checks the page again: it's done once the tag points to the page itself or to a live page of your site."
         },
         {
           "heading": "Re-audit after you fix",

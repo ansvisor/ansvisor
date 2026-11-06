@@ -27,6 +27,7 @@ import { resolveBrandSources } from '../../action-center/sources.js';
 import * as c from './classify.js';
 import { isTransientDbError } from '../../pulse/metrics.js';
 import { describeSignal } from '../../audit/rubric.js';
+import { canonicalIssue } from '../../audit/canonical.js';
 import { TRAFFIC_WINDOW_DAYS } from '../traffic-evidence.js';
 
 const { library: t } = resolve();
@@ -893,6 +894,7 @@ const FAMILIES = [
       'weak_entity',
       'weak_internal_links',
       'content_gap',
+      'canonical_issue',
     ],
     async run(ctx) {
       const since = new Date(ctx.now.getTime() - 90 * DAY_MS).toISOString();
@@ -939,7 +941,7 @@ const FAMILIES = [
         });
         set.set(page, entry);
       }
-      return Object.entries(groups).map(([kind, pages]) =>
+      const found = Object.entries(groups).map(([kind, pages]) =>
         group(
           kind,
           'pages',
@@ -948,6 +950,39 @@ const FAMILIES = [
           AUDIT,
         ),
       );
+
+      // The canonical tag (AC plan P-11): missing, or pointing to another
+      // site, a redirect, a noindex or a missing page, as the audit read it.
+      // Passing the score, it's still read: a wrong tag scores as present.
+      const canonicals = await selectAll(() =>
+        supabaseAdmin
+          .from('audit_signal_results')
+          .select('audit_id, evidence')
+          .in('audit_id', ids)
+          .eq('signal_key', 'canonical'),
+      );
+      const wrong = canonicals
+        .map((r) => ({ page: pageOf.get(r.audit_id), evidence: r.evidence ?? {} }))
+        .map((e) => ({ ...e, issue: canonicalIssue(e.evidence) }))
+        .filter((e) => e.page && e.issue);
+      if (wrong.length) {
+        found.push(
+          group(
+            'canonical_issue',
+            'pages',
+            wrong,
+            (e) => ({
+              id: e.page,
+              label: e.page,
+              issue: e.issue,
+              canonical: e.evidence.canonical ?? null,
+              ...(e.evidence.target?.to ? { to: e.evidence.target.to } : {}),
+            }),
+            AUDIT,
+          ),
+        );
+      }
+      return found;
     },
   },
 ];

@@ -1341,6 +1341,10 @@
         "title": "Structured data issues on {targets}",
         "description": "Structured data is missing or invalid on these pages."
       },
+      "canonical_issue": {
+        "title": "Canonical tag issues on {targets}",
+        "description": "The canonical tag is missing, or points to another site, a redirect, a noindex page or a missing page."
+      },
       "outdated_content": {
         "title": "Outdated content on {targets}",
         "description": "These pages fail Site Audit’s freshness checks."
@@ -2821,6 +2825,12 @@
         "description": "Structured data is missing or invalid on these pages.",
         "goal": "Describe your pages in a form engines understand."
       },
+      "fix_canonical_tags": {
+        "title": "Fix the canonical tags on {targets}",
+        "titleGeneric": "Fix canonical tags",
+        "description": "These pages have no canonical tag, or it points to another site, a redirect, a page that asks not to be indexed or one that isn't there.",
+        "goal": "Point engines and AI answers to the right address of each page."
+      },
       "fix_content_gaps": {
         "title": "Fix content gaps on {targets}",
         "titleGeneric": "Fix content gaps",
@@ -3140,6 +3150,8 @@
       "fix_crawler_access_target": "Fix crawler access on {targets}",
       "fix_structured_data": "Add or correct structured data",
       "fix_structured_data_target": "Fix structured data on {targets}",
+      "fix_canonical": "Fix the canonical tags",
+      "fix_canonical_target": "Fix the canonical tags on {targets}",
       "fix_broken_target": "Repair the broken page or redirect",
       "fix_broken_target_target": "Repair {targets}",
       "fix_technical_issue": "Resolve the audit issues",
@@ -3229,6 +3241,7 @@
       "publish_content": "The page is published at its address and answers when fetched",
       "fix_crawler_access": "robots.txt and the page let the AI crawlers in, fetched again",
       "fix_structured_data": "The page has valid structured data (JSON-LD), fetched again",
+      "fix_canonical": "The page's canonical tag points to itself, or to a live page of the site that can be indexed, fetched again",
       "fix_broken_target": "The page, or its redirect, answers when fetched again",
       "fix_technical_issue": "A new Site Audit no longer finds the issue",
       "validate_technical_fix": "A new Site Audit passes the checks that failed",
@@ -3267,6 +3280,13 @@
       "old_text_still_there": "the text it replaces is still on the page",
       "off_site": "the page isn't on the brand's site",
       "valid_before": "the structured data was valid before the fix. Mark the task done once it's fixed",
+      "canonical_missing": "the page has no canonical tag",
+      "canonical_invalid": "its canonical tag isn't a web address",
+      "canonical_other_host": "its canonical tag points to another site",
+      "canonical_redirect": "its canonical tag points to a page that redirects",
+      "canonical_noindex": "its canonical tag points to a page that asks not to be indexed",
+      "canonical_not_found": "its canonical tag points to a page that isn't there",
+      "canonical_error_status": "its canonical tag points to a page that answers with an error",
       "links_not_for_sale": "the page still links products that no longer sell"
     },
     "taskChecks": {
