@@ -7,7 +7,7 @@
  * Run from server/, with CLORO_API_KEY in .env. Sends ONE async task, billed
  * by Cloro (ChatGPT with fan-out: about 9 credits):
  *   node src/scripts/probe-cloro-fanout.js [platform] ["prompt"] [country]
- *   platform defaults to chatgpt-web; e.g. copilot-web, perplexity-web, gemini-web
+ *   platform defaults to chatgpt-web; e.g. gemini-web, google-aimode
  *
  * Prints a summary and writes the full response to a temp file. Never prints
  * the API key.

@@ -7,7 +7,8 @@ import type { ChatListItem } from '@/lib/chat/conversations';
 
 /**
  * The chat menu and its shell (CHAT-01 items 6, 9a–9f; CHAT-23 G1): the
- * toggle and New chat, Home with what needs the person, Agents at work in
+ * toggle and New chat, Home with what needs the person, Governance folded
+ * under its title with the main menu's chevron, Agents at work in
  * three rows with See all and Show less, Chats by day, Search chats in
  * place of the days while typing, All chats and Archived at the end, and no
  * item for a page that isn't built. `Ctrl+\` hides the menu, keeps the
@@ -165,8 +166,13 @@ describe('ChatMenuView', () => {
     expect(toggle.getAttribute('title')).toBe('Hide menu · Ctrl+\\');
     expect(action('chat.new')[0].textContent).toContain('New chat');
     expect(action('chatMenu.openHome')[0].getAttribute('aria-current')).toBe('page');
+    // Governance's pages, once it is opened.
+    await act(async () => action('chatMenu.toggleGovernance')[0].click());
     expect(action('chatMenu.openActivity')[0].getAttribute('href')).toBe(
       '/dashboard/chat/activity',
+    );
+    expect(action('chatMenu.openCapabilities')[0].getAttribute('href')).toBe(
+      '/dashboard/chat/capabilities',
     );
     expect(action('chatMenu.openPolicy')[0].getAttribute('href')).toBe('/dashboard/settings/chat');
     expect(action('chatMenu.openSettings')[0].getAttribute('href')).toBe(
@@ -201,6 +207,112 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openArchived')[0].getAttribute('href')).toBe(
       '/dashboard/chat/all?tab=archived',
     );
+  });
+
+  describe('Governance', () => {
+    // A browser's storage, where the menu's folds are kept.
+    const kept = new Map<string, string>();
+    beforeEach(() => {
+      kept.clear();
+      vi.stubGlobal('localStorage', {
+        getItem: (key: string) => kept.get(key) ?? null,
+        setItem: (key: string, value: string) => void kept.set(key, value),
+        removeItem: (key: string) => void kept.delete(key),
+        clear: () => kept.clear(),
+      });
+    });
+    afterEach(() => vi.unstubAllGlobals());
+
+    const toggle = () => action('chatMenu.toggleGovernance')[0];
+    const items = () => host.querySelector<HTMLElement>('#chat-menu-governance');
+    const stored = () => JSON.parse(kept.get('ansvisor.chatMenu.sections') ?? '{}').governance;
+    /** The menu again, as on the next visit to a page. */
+    async function revisit(pathname = '/dashboard/chat') {
+      act(() => root.unmount());
+      root = createRoot(host);
+      await render(menu([], { pathname }));
+    }
+
+    it('folds with the ▴ / ▾ Menu and Chats have, closed until opened', async () => {
+      await render(menu([]));
+      const head = toggle();
+      expect(head.tagName).toBe('BUTTON');
+      expect(head.getAttribute('type')).toBe('button');
+      // The same button as Menu's and Chats', beside the title.
+      expect(head.className).toBe(action('chatMenu.toggleMenuSection')[0].className);
+      expect(head.parentElement?.textContent).toBe('Governance▾');
+      expect(head.getAttribute('aria-label')).toBe('Show or hide Governance');
+      expect(head.textContent).toBe('▾');
+      expect(head.getAttribute('aria-expanded')).toBe('false');
+      expect(head.getAttribute('aria-controls')).toBe('chat-menu-governance');
+      expect(items()).toBeNull();
+      expect(action('chatMenu.openActivity')).toHaveLength(0);
+
+      await act(async () => head.click());
+      expect(head.getAttribute('aria-expanded')).toBe('true');
+      expect(head.textContent).toBe('▴');
+      expect(
+        [...items()!.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]),
+      ).toEqual([
+        ['Activity', '/dashboard/chat/activity'],
+        ['What Chat can do', '/dashboard/chat/capabilities'],
+        ['Tool policy', '/dashboard/settings/chat'],
+      ]);
+      // Home is the page shown: none of Governance's items is marked.
+      expect(items()!.querySelector('[aria-current]')).toBeNull();
+
+      await act(async () => head.click());
+      expect(head.getAttribute('aria-expanded')).toBe('false');
+      expect(items()).toBeNull();
+    });
+
+    it('remembers whether it was left open or closed in this browser', async () => {
+      await render(menu([]));
+      await act(async () => toggle().click());
+      expect(stored()).toBe(false);
+      await revisit();
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      expect(items()).not.toBeNull();
+
+      await act(async () => toggle().click());
+      expect(stored()).toBe(true);
+      await revisit();
+      expect(toggle().getAttribute('aria-expanded')).toBe('false');
+      // The other sections' folds are kept beside it.
+      await act(async () => action('chatMenu.toggleChats')[0].click());
+      expect(JSON.parse(kept.get('ansvisor.chatMenu.sections')!)).toMatchObject({
+        governance: true,
+        chats: true,
+      });
+    });
+
+    it('is open on one of its pages, with that page marked, without remembering it', async () => {
+      await render(menu([], { pathname: '/dashboard/chat/activity' }));
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      expect(action('chatMenu.openActivity')[0].getAttribute('aria-current')).toBe('page');
+      expect(action('chatMenu.openCapabilities')[0].getAttribute('aria-current')).toBeNull();
+      expect(action('chatMenu.openPolicy')[0].getAttribute('aria-current')).toBeNull();
+      // Opened by the page, not by the person: nothing is kept.
+      expect(stored()).toBeUndefined();
+
+      // Left closed before: What Chat can do's page still opens it.
+      kept.set('ansvisor.chatMenu.sections', JSON.stringify({ governance: true }));
+      await revisit('/dashboard/chat/capabilities');
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+      expect(action('chatMenu.openCapabilities')[0].getAttribute('aria-current')).toBe('page');
+
+      // Moving to a Governance page from elsewhere opens it too.
+      await revisit('/dashboard/chat/inbox');
+      expect(toggle().getAttribute('aria-expanded')).toBe('false');
+      await render(menu([], { pathname: '/dashboard/chat/activity' }));
+      expect(toggle().getAttribute('aria-expanded')).toBe('true');
+
+      // The person can still close it there, and that is kept.
+      await act(async () => toggle().click());
+      expect(toggle().getAttribute('aria-expanded')).toBe('false');
+      expect(items()).toBeNull();
+      expect(stored()).toBe(true);
+    });
   });
 
   it('lists the matching chats in place of the days while Search chats has words', async () => {

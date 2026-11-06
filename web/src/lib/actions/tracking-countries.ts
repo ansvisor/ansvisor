@@ -1,10 +1,13 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import type { TrackingCountry } from '@/lib/tracking-countries';
+import { PLATFORM_MODELS, type TrackingCountry } from '@/lib/tracking-countries';
 
 /** Rows read per page: PostgREST stops a read at 1000. */
 const PAGE = 1000;
+
+/** The provider's engines that tracking asks. */
+const ENGINES = new Set(Object.values(PLATFORM_MODELS));
 
 /**
  * The countries the tracking engines answer from (PROMPT-015e), as the API
@@ -28,6 +31,8 @@ export async function getTrackingCountries(): Promise<TrackingCountry[]> {
   }
   const byCountry = new Map<string, string[]>();
   for (const { model, country } of rows) {
+    // An engine no longer tracked (Copilot, Perplexity) keeps its last list.
+    if (!ENGINES.has(model)) continue;
     if (!byCountry.has(country)) byCountry.set(country, []);
     byCountry.get(country)!.push(model);
   }

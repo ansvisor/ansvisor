@@ -236,12 +236,9 @@ const PLATFORM_WORDS: [string, PlatformId][] = [
   ['ai overviews', 'google-aio'],
   ['google ai mode', 'google-aimode'],
   ['ai mode', 'google-aimode'],
-  ['microsoft copilot', 'copilot-web'],
-  ['copilot', 'copilot-web'],
   ['google gemini', 'gemini-web'],
   ['gemini', 'gemini-web'],
   ['chatgpt', 'chatgpt-web'],
-  ['perplexity', 'perplexity-web'],
   ['grok', 'grok-web'],
 ];
 

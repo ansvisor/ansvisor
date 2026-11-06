@@ -22,8 +22,6 @@ import { locationsForScraper, parseLocation } from './locations.js';
 export const CLORO_COUNTRY_MODELS = {
   'chatgpt-web': 'chatgpt',
   'chatgpt-shopping': 'chatgpt',
-  'perplexity-web': 'perplexity',
-  'copilot-web': 'copilot',
   'gemini-web': 'gemini',
   'google-aimode': 'aimode',
   // AI Overview is asked through Google Search; its own list says where one shows.

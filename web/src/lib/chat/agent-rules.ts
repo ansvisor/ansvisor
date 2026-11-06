@@ -50,8 +50,18 @@ export type AgentVisibility = (typeof AGENT_VISIBILITIES)[number];
 export const AGENT_EFFORTS = ['normal', 'high', 'max'] as const;
 export type AgentEffort = (typeof AGENT_EFFORTS)[number];
 
-/** The triggers kept as rows (§E): Run now and Run agent on an action are always on and have none. */
-export const AGENT_TRIGGER_KINDS = ['schedule', 'signal', 'kpi', 'watch_rule'] as const;
+/**
+ * The triggers kept as rows (§E): Run now and Run agent on an action are
+ * always on and have none. `brand_added`: When a brand is added (00482),
+ * once per brand, for an agent on All brands.
+ */
+export const AGENT_TRIGGER_KINDS = [
+  'schedule',
+  'signal',
+  'kpi',
+  'watch_rule',
+  'brand_added',
+] as const;
 export type AgentTriggerKind = (typeof AGENT_TRIGGER_KINDS)[number];
 
 /** Triggers an agent may have (§D item 16); Manual comes on top, always. */
@@ -74,7 +84,15 @@ const uuid = z.guid();
 const ids = (max: number) => z.array(uuid).max(max).refine(distinct, 'No repeats');
 const httpUrl = z.url({ protocol: /^https?$/ }).max(2048);
 const words = (max: number) => z.string().trim().min(1).max(max);
-const engine = z.string().refine((e) => AGENT_ENGINES.includes(e), 'Unknown engine');
+/**
+ * Engines no longer tracked (Copilot, Perplexity) that a saved scope may
+ * still name. Not offered, but a scope that names one still parses, so the
+ * agent keeps running.
+ */
+const RETIRED_ENGINES: readonly string[] = ['copilot-web', 'perplexity-web'];
+const engine = z
+  .string()
+  .refine((e) => AGENT_ENGINES.includes(e) || RETIRED_ENGINES.includes(e), 'Unknown engine');
 
 /** A whole percent, as a share: 0.07 for 7%. */
 const share = (min: number, max: number) =>
@@ -192,6 +210,9 @@ const kpiConfigSchema = z
 // A watch rule (CHAT-22) whose THEN runs this agent.
 const watchRuleConfigSchema = z.strictObject({ watch_rule_id: uuid });
 
+// A brand added to the workspace (00482): no settings.
+const brandAddedConfigSchema = z.strictObject({});
+
 const enabled = z.boolean().default(true);
 
 /** One trigger as the API takes it; `config` is chat_agent_triggers.config_json. */
@@ -200,6 +221,7 @@ export const agentTriggerSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('signal'), config: signalConfigSchema, enabled }),
   z.strictObject({ kind: z.literal('kpi'), config: kpiConfigSchema, enabled }),
   z.strictObject({ kind: z.literal('watch_rule'), config: watchRuleConfigSchema, enabled }),
+  z.strictObject({ kind: z.literal('brand_added'), config: brandAddedConfigSchema, enabled }),
 ]);
 export type AgentTriggerInput = z.output<typeof agentTriggerSchema>;
 
@@ -311,6 +333,19 @@ export function triggerTimeProblem(
   if (at <= now.getTime()) return 'schedule_past';
   if (at > now.getTime() + ONCE_MAX_AHEAD_MS) return 'schedule_too_far';
   return null;
+}
+
+/**
+ * A trigger the scope makes wrong: When a brand is added fires for a brand
+ * no one picked yet, so it needs All brands. Null when they fit.
+ */
+export function triggerScopeProblem(
+  triggers: readonly Pick<AgentTriggerInput, 'kind'>[],
+  scope: Pick<AgentScope, 'all_brands'>,
+): 'brand_added_scope' | null {
+  return triggers.some((t) => t.kind === 'brand_added') && scope.all_brands !== true
+    ? 'brand_added_scope'
+    : null;
 }
 
 // ─── A version ───────────────────────────────────────────────────────────────

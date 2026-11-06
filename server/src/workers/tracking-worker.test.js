@@ -237,8 +237,18 @@ describe('fetchAllPendingRows', () => {
 describe('runnablePlatforms', () => {
   it('drops a platform that is currently unavailable', () => {
     expect(
-      runnablePlatforms(['chatgpt-web', 'grok-web', 'perplexity-web'], { shoppingEnabled: true }),
-    ).toEqual(['chatgpt-web', 'perplexity-web']);
+      runnablePlatforms(['chatgpt-web', 'grok-web', 'gemini-web'], { shoppingEnabled: true }),
+    ).toEqual(['chatgpt-web', 'gemini-web']);
+  });
+
+  // Copilot and Perplexity are no longer offered; a prompt saved with them
+  // still runs its other engines.
+  it('skips Copilot and Perplexity on a prompt that still lists them', () => {
+    expect(
+      runnablePlatforms(['copilot-web', 'chatgpt-web', 'perplexity-web'], {
+        shoppingEnabled: true,
+      }),
+    ).toEqual(['chatgpt-web']);
   });
 
   it('drops shopping unless the brand has it enabled', () => {

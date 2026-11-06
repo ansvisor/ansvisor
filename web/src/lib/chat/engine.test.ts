@@ -4810,7 +4810,10 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
       const AGENT = 'abababab-0000-4000-8000-000000000001';
       const AGENT_RUN = 'abababab-0000-4000-8000-000000000002';
 
-      /** The agent behind the run: its current version's mode, and the Admin's switch for agents. */
+      /**
+       * The agent behind the run: its current version's mode, and the Admin's switch for
+       * agents, in a workspace whose Agent work lets each agent's mode apply (AC-011).
+       */
       function agent(mode: Mode, agentsFullAuto = true) {
         db.tables.chat_agent_runs = [{ id: AGENT_RUN, organization_id: ORG, agent_id: AGENT }];
         db.tables.chat_agents = [{ id: AGENT, organization_id: ORG, version: 2 }];
@@ -4818,7 +4821,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
           { agent_id: AGENT, version: 1, mode: 'full_auto' },
           { agent_id: AGENT, version: 2, mode },
         ];
-        settings({ agents_full_auto: agentsFullAuto });
+        settings({ agents_full_auto: agentsFullAuto, agent_work: 'auto_start' });
       }
 
       /** An agent run that started in Full auto, its writer calling `call` after `meanwhile`. */
@@ -4851,6 +4854,19 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
         agent('full_auto');
         expect(await agentRun()).toMatchObject({ status: 'done', cards: [] });
         expect(createContentDraftFor).toHaveBeenCalledTimes(1);
+      });
+
+      it('asks for the change while Agent work is I approve first, the default (AC-011)', async () => {
+        agent('full_auto');
+        // No Agent work saved: every workspace starts on I approve first.
+        settings({ agents_full_auto: true });
+        const run = await agentRun();
+        expect(run.status).toBe('waiting');
+        expect(run.cards).toHaveLength(1);
+        expect(createContentDraftFor).not.toHaveBeenCalled();
+        // On Agent starts on its own, the agent's Full auto makes it.
+        settings({ agents_full_auto: true, agent_work: 'auto_start' });
+        expect(await agentRun()).toMatchObject({ status: 'done', cards: [] });
       });
 
       it('asks once an Admin turned Full auto off for agents, read at the change', async () => {

@@ -79,7 +79,7 @@ export const PLANS = {
       maxCatalogProducts: 5_000,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
-      allowedScrapers: ['chatgpt-web', 'copilot-web'],
+      allowedScrapers: ['chatgpt-web', 'gemini-web'],
       allowedModels: [],
       features: [
         'basic_insights',
