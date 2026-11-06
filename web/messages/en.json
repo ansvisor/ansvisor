@@ -4414,6 +4414,7 @@
     },
     "mode": {
       "label": "Run mode",
+      "current": "Run mode: {mode}",
       "ask_first": "Ask me first",
       "auto": "Auto, ask before changes",
       "full_auto": "Full auto",
