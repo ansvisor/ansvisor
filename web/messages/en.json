@@ -9353,6 +9353,7 @@
     },
     "editor": {
       "back": "Back to the Library",
+      "closeHere": "Close",
       "untitled": "Untitled",
       "newPage": "New page",
       "pageType": {

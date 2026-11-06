@@ -18,6 +18,7 @@ import { activeRules, ruleSet } from '@/lib/content/rules';
 import { CLAIMS_EVERY_MS } from './_use-claims';
 import { PROOF_READ_EVERY_MS, PROOF_READ_SLACK_MS } from './_use-page-read';
 import ContentEditorPage from './page';
+import { ContentEditorSurface } from './_editor-surface';
 
 const getContentDraft = vi.fn();
 const markContentDraftReady = vi.fn();
@@ -9212,5 +9213,105 @@ describe('the editor on a read-only workspace (plan not active)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// Chat's Open here (CHAT-25 §4, W4-13a): the same editor inside Chat, beside the conversation.
+describe('the editor embedded in Chat', () => {
+  const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+  const panel = () => container.querySelector('aside');
+  const rail = () => container.querySelector('nav[aria-label="Side panel"]');
+  const libraryLink = () => container.querySelector('a[href="/dashboard/content/library"]');
+  const closeButton = () =>
+    container.querySelector<HTMLButtonElement>('header button[aria-label="Close"]');
+  const innerWidth = window.innerWidth;
+
+  async function renderSurface(props: { embedded?: boolean; onClose?: () => void } = {}) {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <ChatAgenticProvider enabled>
+            <RoleProvider role="admin">
+              <ContentEditorSurface draftId="d1" {...props} />
+            </RoleProvider>
+          </ChatAgenticProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    // The editor mounts on the client after the first render.
+    await act(async () => {});
+  }
+
+  beforeEach(() => {
+    // The new Chat on, with the panel's setup: the editor's own page has its Chat tab.
+    chatPanel.value = { setup: { enabled: true } };
+    routerPush.mockReset();
+    getContentDraft.mockResolvedValue(
+      draft({ conversation: { id: CHAT, title: 'Pricing FAQ', mine: true } }),
+    );
+  });
+  afterEach(() => {
+    chatPanel.value = null;
+    window.innerWidth = innerWidth;
+  });
+
+  it('puts Close in the Library link’s place, and Close hands the editor back', async () => {
+    const onClose = vi.fn();
+    await renderSurface({ embedded: true, onClose });
+
+    const header = container.querySelector('header')!;
+    expect(header.querySelector('h1')!.textContent).toBe('Pipeline forecasting');
+    expect(libraryLink()).toBeNull();
+    expect(closeButton()!.getAttribute('title')).toBe('Close');
+    await act(async () => closeButton()!.click());
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('leaves Chat out of the side panel, open or closed, and Ctrl J doesn’t ask for it', async () => {
+    localStorage.setItem('aeo:content-editor-panel', '1');
+    await renderSurface({ embedded: true, onClose: vi.fn() });
+
+    const tabs = [...panel()!.querySelectorAll('[role="tab"]')].map(tabName);
+    expect(tabs).toEqual(['Instructions', 'Sources', 'Live page']);
+    // Even on a draft the member's own chat made: the chat is beside the editor already.
+    expect(selectedTab()).toBe('Instructions');
+    expect(container.querySelector('[data-slot="editor-chat"]')).toBeNull();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true }));
+    });
+    expect(selectedTab()).toBe('Instructions');
+
+    await act(async () => button('Hide side panel')!.click());
+    expect(panel()).toBeNull();
+    expect([...rail()!.querySelectorAll('button')].map((b) => b.textContent)).toEqual([
+      'Instructions',
+      'Sources',
+      'Live page',
+    ]);
+  });
+
+  it('puts Close in the Library link’s place while the Content Agent writes the page too', async () => {
+    const onClose = vi.fn();
+    getContentDraft.mockResolvedValue(
+      draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
+    );
+    await renderSurface({ embedded: true, onClose });
+
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    expect(libraryLink()).toBeNull();
+    await act(async () => closeButton()!.click());
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the Library link and the Chat tab on the editor’s own page', async () => {
+    localStorage.setItem('aeo:content-editor-panel', '1');
+    await renderSurface();
+
+    expect(libraryLink()!.getAttribute('aria-label')).toBe('Back to the Library');
+    expect(closeButton()).toBeNull();
+    const tabs = [...panel()!.querySelectorAll('[role="tab"]')].map(tabName);
+    expect(tabs).toEqual(['Chat', 'Instructions', 'Sources', 'Live page']);
+    expect(selectedTab()).toBe('Chat');
   });
 });
