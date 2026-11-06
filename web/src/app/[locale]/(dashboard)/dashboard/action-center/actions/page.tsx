@@ -70,6 +70,8 @@ import {
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { ActionTable } from '@/components/action-center/action-table';
 import { ActionDrawer } from '@/components/action-center/action-drawer';
+import { useStartNow } from '@/components/action-center/start-now';
+import { getStartNowWork } from '@/lib/actions/content-drafts';
 import { TodayCard } from '@/components/action-center/today-card';
 import { AgentWorkGear } from '@/components/action-center/agent-work-gear';
 import {
@@ -474,6 +476,21 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const removeAction = (action: ActionItem) => {
     if (selectedId === action.id) selectAction(null);
     void runRowChange(action, () => deleteAction(action.id), t('rowMenu.deleted'));
+  };
+  // Start in Content Editor (AC-ACTION-PLAN spec §10): the action's writing
+  // work read first, as its drawer's Start now has it, then started there.
+  const startNow = useStartNow(brand.id);
+  const startFromRow = async (action: ActionItem) => {
+    const read = await getStartNowWork(brand.id, action.id).catch(() => null);
+    if (!read) {
+      toast.error(t('startNow.failed'));
+      return;
+    }
+    await startNow.start(
+      { id: action.id, actionNo: action.actionNo, title: actionTexts(action, tTexts).title },
+      read.work,
+      read.drafts,
+    );
   };
 
   // The list's copy, else Today's own: the list holds at most 1000 actions,
@@ -1088,6 +1105,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           onStatusChange={changeStatus}
           onKeep={keepAction}
           onDelete={removeAction}
+          onStartNow={(action) => void startFromRow(action)}
           canDelete={canManage}
           busyIds={busyIds}
         />

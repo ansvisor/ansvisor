@@ -8,6 +8,7 @@ import {
   Check,
   CirclePlay,
   Clock,
+  FilePen,
   MessageSquare,
   MoreHorizontal,
   MousePointerClick,
@@ -52,11 +53,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { ActionItem } from '@/lib/actions/action-center';
-import type {
-  ActionCategory,
-  ActionDismissReason,
-  ActionKind,
-  ActionStatus,
+import {
+  OPEN_ACTION_STATUSES,
+  type ActionCategory,
+  type ActionDismissReason,
+  type ActionKind,
+  type ActionStatus,
 } from '@/lib/action-center/registry';
 import { DismissReasonDialog } from './dismiss-reason-dialog';
 import {
@@ -228,9 +230,11 @@ const MENU_STATUSES = [
 ] as const;
 
 /**
- * An action's row menu: set it In Progress, Completed or Dismissed, keep a
- * stale one, or delete it, without opening the drawer. The status it already
- * has is off; Delete asks first, and is off for members who can't delete.
+ * An action's row menu: Start in Content Editor for an open action whose
+ * work is writing (AC-ACTION-PLAN spec §10 item 6), set it In Progress,
+ * Completed or Dismissed, keep a stale one, or delete it, without opening
+ * the drawer. The status it already has is off; Delete asks first, and is
+ * off for members who can't delete.
  */
 function ActionMenu({
   action,
@@ -240,6 +244,7 @@ function ActionMenu({
   onStatusChange,
   onKeep,
   onDelete,
+  onStartNow,
 }: {
   action: ActionItem;
   title: string;
@@ -252,6 +257,7 @@ function ActionMenu({
   ) => void;
   onKeep?: (action: ActionItem) => void;
   onDelete: (action: ActionItem) => void;
+  onStartNow?: (action: ActionItem) => void;
 }) {
   const t = useTranslations('actionCenter.actionsPage');
   const [confirming, setConfirming] = useState(false);
@@ -276,7 +282,22 @@ function ActionMenu({
         >
           <MoreHorizontal className="h-4 w-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuContent align="end" className="w-52">
+          {onStartNow && action.startNow && OPEN_ACTION_STATUSES.includes(action.status) && (
+            <>
+              <DropdownMenuItem
+                onClick={guard(() => onStartNow(action), {
+                  action: tActions(
+                    action.startNow === 'optimize' ? 'optimizeContent' : 'createContent',
+                  ),
+                })}
+              >
+                <FilePen className="h-4 w-4" />
+                {t('rowMenu.startNow')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           {MENU_STATUSES.map(({ status, icon: Icon }) => (
             <DropdownMenuItem
               key={status}
@@ -335,6 +356,7 @@ export function ActionTable({
   onStatusChange,
   onKeep,
   onDelete,
+  onStartNow,
   canDelete = false,
   busyIds,
 }: {
@@ -349,6 +371,8 @@ export function ActionTable({
   /** Still relevant on a stale action's row menu. */
   onKeep?: (action: ActionItem) => void;
   onDelete?: (action: ActionItem) => void;
+  /** Start in Content Editor, on the menu of a row whose work is writing. */
+  onStartNow?: (action: ActionItem) => void;
   canDelete?: boolean;
   /** Actions with a change in flight: their menu waits. */
   busyIds?: Set<string>;
@@ -475,6 +499,7 @@ export function ActionTable({
                       onStatusChange={onStatusChange}
                       onKeep={onKeep}
                       onDelete={onDelete}
+                      onStartNow={onStartNow}
                     />
                   </TableCell>
                 )}

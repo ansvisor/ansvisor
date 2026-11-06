@@ -67,6 +67,8 @@ import { assertWritable } from '@/lib/subscription-guard';
 import { canAccessBrand } from '@/lib/brand-access';
 import { logEvent, touchAction, writeTaskStatus } from '@/lib/action-center/task-status';
 import { readTaskAttachments, type TaskAttachment } from '@/lib/action-center/chat-attachments';
+import { startNowWork } from '@/lib/content/action-drafts';
+import type { DraftMethod } from '@/lib/content/drafts';
 
 export interface ActionAssignee {
   id: string;
@@ -106,6 +108,12 @@ export interface ActionItem {
   priorityScore: number | null;
   priorityLevel: PriorityLevel | null;
   priorityReason: PriorityReason | null;
+  /**
+   * The draft its "Start now" writes (AC-ACTION-PLAN spec §10): a new page or
+   * an existing page's, from a writing task still to do; null when its work
+   * isn't writing. Read with the list only.
+   */
+  startNow?: DraftMethod | null;
 }
 
 export async function getActions(brandId: string): Promise<ActionItem[]> {
@@ -123,7 +131,10 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
   const assigneeIds = [...new Set(rows.map((row) => row.assignee_id).filter(Boolean))] as string[];
 
   const [tasksRes, signalsRes, profiles, entityCounts] = await Promise.all([
-    supabase.from('action_tasks').select('action_id, status').in('action_id', actionIds),
+    supabase
+      .from('action_tasks')
+      .select('id, action_id, status, task_key')
+      .in('action_id', actionIds),
     // The signals that support each action now (AC-007): its open ones.
     supabase
       .from('signals')
@@ -140,10 +151,14 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
   if (signalsRes.error) throw new Error(signalsRes.error.message);
 
   const taskStatuses = new Map<string, string[]>();
+  const taskRows = new Map<string, { id: string; taskKey: string | null; status: string }[]>();
   for (const task of tasksRes.data ?? []) {
     const statuses = taskStatuses.get(task.action_id) ?? [];
     statuses.push(task.status);
     taskStatuses.set(task.action_id, statuses);
+    const rows = taskRows.get(task.action_id) ?? [];
+    rows.push({ id: task.id, taskKey: task.task_key, status: task.status });
+    taskRows.set(task.action_id, rows);
   }
   const signalCounts = new Map<string, number>();
   for (const signal of signalsRes.data ?? []) {
@@ -152,13 +167,17 @@ export async function getActions(brandId: string): Promise<ActionItem[]> {
   }
   return rows.map((row) => {
     const progress = taskProgress(taskStatuses.get(row.id) ?? []);
-    return actionItemFromRow(row, {
+    const item = actionItemFromRow(row, {
       assignee: row.assignee_id ? (profiles.get(row.assignee_id) ?? null) : null,
       taskTotal: progress.total,
       taskCompleted: progress.completed,
       signalCount: signalCounts.get(row.id) ?? 0,
       entityCounts: entityCounts.get(row.id),
     });
+    return {
+      ...item,
+      startNow: startNowWork(taskRows.get(row.id) ?? [], item.payload)?.method ?? null,
+    };
   });
 }
 

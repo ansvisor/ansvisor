@@ -25,6 +25,7 @@ import {
 import { scoreRange, type ScoreRange } from '@/lib/audit/score-range';
 import { AUTHORITY_SIGNAL, AuthoritySources } from './authority-sources';
 import { ScoreRangeMark, useScoreRangeTip } from './score-range';
+import { ScoreFormula } from './score-formula';
 import { formatMonthDay } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -61,6 +62,14 @@ const STATUS_ICON = {
   warn: AlertTriangle,
   fail: XCircle,
   na: Minus,
+} as const;
+
+// Strong evidence stands out; the hygiene and informational levels stay quiet (SA-010).
+const EVIDENCE_VARIANT = {
+  strong: 'default',
+  likely: 'secondary',
+  hygiene: 'outline',
+  informational: 'outline',
 } as const;
 
 const STATUS_COLOR = {
@@ -281,12 +290,17 @@ function SignalRow({
       >
         <Icon className={cn('h-4 w-4 shrink-0', STATUS_COLOR[signal.status])} />
         <span className="flex-1 text-sm font-medium">{signal.label}</span>
-        {signal.impactTier && (
+        {signal.evidenceLevel === 'informational' && (
+          <span className="hidden text-[11px] text-muted-foreground sm:inline">
+            {t('notScored')}
+          </span>
+        )}
+        {signal.evidenceLevel && (
           <Badge
-            variant={signal.impactTier === 'high' ? 'default' : 'secondary'}
-            className="text-[10px]"
+            variant={EVIDENCE_VARIANT[signal.evidenceLevel] ?? 'outline'}
+            className="whitespace-nowrap text-[10px] font-medium"
           >
-            {signal.impactTier}
+            {t(`evidenceLevel.${signal.evidenceLevel}`)}
           </Badge>
         )}
         <ChevronDown
@@ -308,6 +322,13 @@ function SignalRow({
             <p>
               <span className="font-medium text-foreground">{t('why')}: </span>
               {signal.why}
+            </p>
+          )}
+          {signal.evidenceNote && (
+            <p>
+              <span className="font-medium text-foreground">{t('evidenceNote')}: </span>
+              {signal.evidenceNote}
+              {signal.evidenceLevel === 'informational' && ` ${t('notScored')}.`}
             </p>
           )}
           {/* Prefer the page-specific AI recommendation when we have one; fall
@@ -470,8 +491,14 @@ export function AuditReport({ audit }: { audit: AuditResult }) {
 
       {/* Category breakdown */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">{t('categoryBreakdown')}</CardTitle>
+          <ScoreFormula
+            categories={CATEGORY_META}
+            notScored={audit.signals
+              .filter((s) => s.evidenceLevel === 'informational')
+              .map((s) => s.label)}
+          />
         </CardHeader>
         <CardContent className="space-y-4">
           {CATEGORY_META.map((cat) => {

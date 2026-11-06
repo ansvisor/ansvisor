@@ -102,15 +102,24 @@ import { RUN_STALE_MS } from '@/lib/content/agent-runs';
 import { HANDOFF_KEYS } from '@/lib/content/hand-off';
 import type { AgentRule, AgentWriteRequest } from '@/lib/content/agent-write';
 import {
+  MAX_ACTION_PROMPTS,
   actionPages,
+  actionPromptIds,
+  actionTopicIds,
   completeDraftTasks,
   draftMethodForTask,
   findActionDraft,
+  playAssetType,
   reopenDraftTasks,
   setDraftTasksStatus,
+  startNowWork,
   unpublishDraftWork,
   type ActionDraft,
+  type StartNowWork,
 } from '@/lib/content/action-drafts';
+import { opportunityPageType } from '@/lib/content/asset-types';
+import { actionShoppingSeed } from '@/lib/content/shopping-path';
+import { buildDraftShoppingPath } from '@/lib/actions/shopping-path';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import {
   DRAFT_SOURCE_KINDS,
@@ -223,7 +232,7 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
     supabase
       .from('content_drafts')
       .select(
-        `id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at, shopping_built:shopping_path->>builtAt, origin, ${DRAFT_CHAT}` as const,
+        `id, title, page_type, method, status, author, created_by, agent_state, agent_state_at, created_at, updated_at, archived_at, shopping_built:shopping_path->>builtAt, origin, action_id, actions(action_no), ${DRAFT_CHAT}` as const,
       )
       .eq('brand_id', brandId)
       .order('updated_at', { ascending: false })
@@ -264,6 +273,10 @@ export async function getContentDrafts(brandId: string): Promise<ContentLibrary>
       shopping: draftShopping(row.shopping_built, checks.get(row.id) ?? null),
       origin: draftOriginOf(row.origin),
       conversation: draftConversationOf(row.conversation, me),
+      action:
+        row.action_id && row.actions
+          ? { id: row.action_id, number: Number(row.actions.action_no) }
+          : null,
     }),
   );
   // Under the cap the rows are every draft; at it, each tab is counted on its own.
@@ -970,11 +983,10 @@ export async function startDraftFromAction(
           : '';
     const rules = startingRules(method, bodyHtml !== undefined ? body : undefined);
 
-    const wantedPrompts = Array.isArray(payload.promptIds)
-      ? payload.promptIds
-          .filter((id): id is string => typeof id === 'string' && draftId.safeParse(id).success)
-          .slice(0, MAX_DRAFT_PROMPTS)
-      : [];
+    // The prompts it lists, or those it targets; a topic's for one opened
+    // before it kept them (the API's work scope, AC plan P-3).
+    const wantedPrompts = actionPromptIds(payload).slice(0, MAX_DRAFT_PROMPTS);
+    const topics = wantedPrompts.length ? [] : actionTopicIds(payload);
     const opportunity =
       typeof payload.opportunityId === 'string' && draftId.safeParse(payload.opportunityId).success
         ? payload.opportunityId
@@ -992,7 +1004,16 @@ export async function startDraftFromAction(
             .select('id, prompt_sets!inner(brand_id)')
             .eq('prompt_sets.brand_id', brandId)
             .in('id', wantedPrompts)
-        : Promise.resolve({ data: [] as { id: string }[], error: null }),
+        : topics.length
+          ? supabase
+              .from('prompts')
+              .select('id, prompt_sets!inner(brand_id)')
+              .eq('prompt_sets.brand_id', brandId)
+              .in('topic_id', topics)
+              .order('is_active', { ascending: false })
+              .order('created_at', { ascending: true })
+              .limit(Math.min(MAX_ACTION_PROMPTS, MAX_DRAFT_PROMPTS))
+          : Promise.resolve({ data: [] as { id: string }[], error: null }),
       opportunity
         ? supabase
             .from('content_opportunities')
@@ -1006,6 +1027,15 @@ export async function startDraftFromAction(
     if (promptsRes.error) throw new Error(promptsRes.error.message);
     if (opportunityRes.error) throw new Error(opportunityRes.error.message);
 
+    const siteType = brandSiteType(brandRes.data);
+    // The page's address is the strongest sign of its type, as in Start; a
+    // new page takes the asset its play picked (payload.play, AC plan §5).
+    const detected = detectPageType({ title, html: body, url: page }, siteType);
+    const played = opportunityPageType(playAssetType(payload), siteType);
+    const pageType = method === 'create' ? (played ?? detected) : (detected ?? played);
+    // On a shop, the action's products locked into the page's shopping path.
+    const shoppingSeed = actionShoppingSeed(payload, siteType, pageType, new Date());
+
     const { data: inserted, error } = await supabaseAdmin
       .from('content_drafts')
       .insert({
@@ -1014,9 +1044,9 @@ export async function startDraftFromAction(
         author: 'user',
         method,
         title,
-        // The page's address is the strongest sign of its type, as in Start.
-        page_type: detectPageType({ title, html: body, url: page }, brandSiteType(brandRes.data)),
+        page_type: pageType,
         page_type_source: 'detected',
+        ...(shoppingSeed ? { shopping_path: shoppingSeed } : {}),
         body_html: body,
         opportunity_id: opportunityRes.data?.id ?? null,
         source_url: page,
@@ -1044,6 +1074,12 @@ export async function startDraftFromAction(
 
     // A page brought in from its address starts History as the live page.
     if (bodyHtml !== undefined) await keepVersion(supabase, inserted.id, 'import');
+    // The locked products' path built around them: best effort, Pick again builds it later.
+    if (shoppingSeed) {
+      await buildDraftShoppingPath(inserted.id, brandId).catch((err) =>
+        console.error("Failed to build the action's shopping path:", err),
+      );
+    }
     if (taskRes.data.status === 'todo') {
       // The draft is started either way; the task's status can be set in the drawer.
       await setDraftTasksStatus(
@@ -1059,6 +1095,49 @@ export async function startDraftFromAction(
     console.error('Failed to start a draft from an action:', err);
     return { error: 'failed' };
   }
+}
+
+/**
+ * What "Start now" opens on an action, for its row in the Actions list
+ * (AC-ACTION-PLAN spec §10 item 6, the row menu's Start in Content Editor):
+ * its writing task and pages (startNowWork), and the drafts already
+ * written for it. Null when the action's work isn't writing, or it is
+ * closed or not the member's to read.
+ */
+export async function getStartNowWork(
+  brandId: string,
+  actionId: string,
+): Promise<{ work: StartNowWork; drafts: ActionDraft[] } | null> {
+  if (!draftId.safeParse(brandId).success || !draftId.safeParse(actionId).success) return null;
+  const supabase = await createClient();
+  const [actionRes, tasksRes] = await Promise.all([
+    supabase
+      .from('actions')
+      .select('id, status, payload')
+      .eq('brand_id', brandId)
+      .eq('id', actionId)
+      .is('deleted_at', null)
+      .maybeSingle(),
+    supabase
+      .from('action_tasks')
+      .select('id, task_key, status, position')
+      .eq('action_id', actionId)
+      .order('position', { ascending: true }),
+  ]);
+  if (actionRes.error) throw new Error(actionRes.error.message);
+  if (tasksRes.error) throw new Error(tasksRes.error.message);
+  const action = actionRes.data;
+  if (!action || action.status === 'completed' || action.status === 'dismissed') return null;
+  const work = startNowWork(
+    (tasksRes.data ?? []).map((task) => ({
+      id: task.id,
+      taskKey: task.task_key,
+      status: task.status,
+    })),
+    (action.payload ?? {}) as Record<string, unknown>,
+  );
+  if (!work) return null;
+  return { work, drafts: await readActionDrafts(supabase, brandId, actionId) };
 }
 
 /**

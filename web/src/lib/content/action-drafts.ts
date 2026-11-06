@@ -43,6 +43,110 @@ export function actionPages(payload: Record<string, unknown> | null | undefined)
   ];
 }
 
+/** Drafts one "Start now" click opens at most: one per page of a multi-page play. */
+export const MAX_START_DRAFTS = 10;
+/** Prompts a draft started from an action takes, as the API's work scope lists them. */
+export const MAX_ACTION_PROMPTS = 50;
+
+const PROMPT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The ids a payload counts its targets by: every one (targetIds) when it shows fewer. */
+function targetKeys(payload: Record<string, unknown>): string[] {
+  const listed = Array.isArray(payload.targetIds)
+    ? payload.targetIds
+    : (Array.isArray(payload.targets) ? payload.targets : []).map((target: unknown) =>
+        target && typeof target === 'object' ? (target as { id?: unknown }).id : null,
+      );
+  return [...new Set(listed.filter((key): key is string => typeof key === 'string'))];
+}
+
+/**
+ * The prompts an action's work is about: the ones its payload lists
+ * (promptIds, the API's work scope), else, for an action opened before it
+ * kept them, the prompts it targets. Ids only, MAX_ACTION_PROMPTS at most.
+ */
+export function actionPromptIds(payload: Record<string, unknown> | null | undefined): string[] {
+  const p = payload ?? {};
+  const ids = Array.isArray(p.promptIds)
+    ? p.promptIds
+    : p.targetEntity === 'prompts'
+      ? targetKeys(p)
+      : [];
+  return [
+    ...new Set(ids.filter((id): id is string => typeof id === 'string' && PROMPT_ID.test(id))),
+  ].slice(0, MAX_ACTION_PROMPTS);
+}
+
+/** The topics an action targets (G16, C09) or was sent for, for one opened before it kept its prompts. */
+export function actionTopicIds(payload: Record<string, unknown> | null | undefined): string[] {
+  const p = payload ?? {};
+  const ids = [
+    ...(p.targetEntity === 'topics' ? targetKeys(p) : []),
+    ...(typeof p.topicId === 'string' ? [p.topicId] : []),
+  ];
+  return [...new Set(ids.filter((id) => PROMPT_ID.test(id)))];
+}
+
+/**
+ * The page type the action's play picked for its page (payload.play.assetType,
+ * AC-ACTION-PLAN spec §5), as written; null for none. The Content Editor
+ * reads it as the brand's site does (opportunityPageType).
+ */
+export function playAssetType(payload: Record<string, unknown> | null | undefined): string | null {
+  const play = payload?.play;
+  if (!play || typeof play !== 'object') return null;
+  const type = (play as { assetType?: unknown }).assetType;
+  return typeof type === 'string' && type.length <= 60 ? type : null;
+}
+
+/**
+ * What "Start now" opens (AC-ACTION-PLAN spec §10): the action's writing
+ * task still to do, a new page's first, else an existing page's, in the
+ * tasks' order; and the pages it is done on, one draft each (none for a new
+ * page, or an existing page's work that names none). Null without one: the
+ * action's work isn't writing.
+ */
+export interface StartNowWork {
+  taskId: string;
+  method: DraftMethod;
+  pages: string[];
+}
+
+export function startNowWork(
+  tasks: readonly { id: string; taskKey: string | null; status: string }[],
+  payload: Record<string, unknown> | null | undefined,
+): StartNowWork | null {
+  const open = tasks.filter((task) => !TASK_DONE.includes(task.status));
+  const of = (method: DraftMethod) =>
+    open.find((task) => draftMethodForTask(task.taskKey) === method);
+  const create = of('create');
+  if (create) return { taskId: create.id, method: 'create', pages: [] };
+  const optimize = of('optimize');
+  if (!optimize) return null;
+  return {
+    taskId: optimize.id,
+    method: 'optimize',
+    pages: actionPages(payload).slice(0, MAX_START_DRAFTS),
+  };
+}
+
+/** The pages Start now writes drafts for: each of the work's, or the one new page (null). */
+export function startNowPages(work: StartNowWork): (string | null)[] {
+  return work.method === 'optimize' && work.pages.length ? work.pages : [null];
+}
+
+/**
+ * The drafts already written for that work, one for each of its pages, or
+ * null while any page has none yet: then Start now writes the rest.
+ */
+export function startNowDrafts(
+  work: StartNowWork,
+  drafts: readonly ActionDraft[],
+): ActionDraft[] | null {
+  const found = startNowPages(work).map((page) => findActionDraft(drafts, work.method, page));
+  return found.every((draft): draft is ActionDraft => draft !== null) ? found : null;
+}
+
 /**
  * The draft already written for this work: for a page, the one optimizing
  * it; without one, the action's draft of that method.

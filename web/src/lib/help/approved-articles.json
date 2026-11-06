@@ -221,7 +221,8 @@
         "action results",
         "scorecard",
         "success rate",
-        "measured outcome"
+        "measured outcome",
+        "by play"
       ],
       "synonyms": [
         "what worked",
@@ -230,7 +231,7 @@
         "did it work"
       ],
       "plan": "all",
-      "updated": "2026-10-29",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
@@ -242,7 +243,7 @@
         },
         {
           "heading": "How a result is measured",
-          "text": "Only a completed action is measured. Its metrics are read three times, over the week ending 7, 14 and 30 days after it closed, each against the 7 days before it was raised. Until the final reading on day 30, the result reads *so far*, and the drawer lists each reading.\n\nAn action that names its prompts or pages is measured on them, with the brand-wide figures beside. Its prompts' change is also shown net of the brand's prompts it didn't touch, so a change that hit every prompt, such as an engine's update, is told apart from its own. A Site Audit fix is judged by its pages audited again since it closed."
+          "text": "Only a completed action is measured. Its metrics are read three times, over the week ending 7, 14 and 30 days after it closed, each against the 7 days before it was raised. Until the final reading on day 30, the result reads *so far*, and the drawer lists each reading.\n\nAn action that names its prompts or pages is measured on them, with the brand-wide figures beside. An action about a topic is measured on that topic's prompts. Its prompts' change is also shown net of the brand's prompts it didn't touch, so a change that hit every prompt, such as an engine's update, is told apart from its own. A Site Audit fix is judged by its pages audited again since it closed."
         },
         {
           "heading": "What a result means",
@@ -255,6 +256,10 @@
         {
           "heading": "The Scorecard",
           "text": "Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand over the range, 90 days unless you pick another. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only."
+        },
+        {
+          "heading": "The Scorecard by play",
+          "text": "When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. On the **Scorecard**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result."
         },
         {
           "heading": "When a problem comes back",
@@ -753,6 +758,7 @@
         "required connection",
         "agent skills",
         "follow-on skills",
+        "library skills in an agent",
         "buyer questions",
         "rival brief",
         "listing gaps",
@@ -891,7 +897,7 @@
         },
         {
           "heading": "Skills an agent can use",
-          "text": "Step 1 lists the same skills Chat offers. Besides **Win back lost citations**, **Weekly report** and the other content and reporting skills, there are the skills for what you focus on: **Buyer questions**, **How AI compares us**, **No clear leader**, **Who AI recommends by market**, **Listing gaps**, **Rival brief** and **Site audit fixes**. Each card says which connections it uses. These seven work from your Ansvisor data and public pages, so they need no connection. An agent can run up to 2 follow-on skills after its first one, for example **Comparison page** after **How AI compares us**."
+          "text": "Step 1 lists the same skills Chat offers. Besides **Win back lost citations**, **Weekly report** and the other content and reporting skills, there are the skills for what you focus on: **Buyer questions**, **How AI compares us**, **No clear leader**, **Who AI recommends by market**, **Listing gaps**, **Rival brief** and **Site audit fixes**. Each card says which connections it uses. These seven work from your Ansvisor data and public pages, so they need no connection. An agent can run up to 2 follow-on skills after its first one, for example **Comparison page** after **How AI compares us**.\n\n**Library** lists the skills your workspace added from the Library that an Admin approved and you may run: the shared ones and your own. Pick one to start the agent on it."
         },
         {
           "heading": "Connections",
@@ -1981,6 +1987,13 @@
         "review a skill",
         "skill update",
         "update available",
+        "library",
+        "skill library",
+        "library skills",
+        "add a skill from the library",
+        "third-party skills",
+        "mit skills",
+        "pending approval",
         "faq from fan-outs",
         "weekly report",
         "win back citations",
@@ -1999,7 +2012,9 @@
         "slash commands",
         "playbooks",
         "how-tos",
-        "templates"
+        "templates",
+        "marketplace",
+        "skills directory"
       ],
       "plan": "all",
       "updated": "2026-11-06",
@@ -2014,7 +2029,7 @@
         },
         {
           "heading": "The Skills page",
-          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
+          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **Library** lists skills by other people to add (below). **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
         },
         {
           "heading": "When Chat picks a skill",
@@ -2027,6 +2042,14 @@
         {
           "heading": "Import a skill",
           "text": "Admins and Managers on a paid plan can bring in a skill from outside. On the **Skills** page, click **New skill**, then **Upload a SKILL.md or .zip** (up to 5 MB), or **Import from GitHub** and paste a public github.com link. Only the skill's instructions come in: scripts, commands and allowed tools are removed, and nothing runs. A GitHub skill is read at today's commit and never updates by itself. Only MIT, Apache-2.0, BSD and ISC licenses are accepted.\n\nAn imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it."
+        },
+        {
+          "heading": "The Library",
+          "text": "The **Library** tab lists 701 skills that other people share on GitHub under the MIT license, for SEO, content, brand, analytics, social, CRO, email, paid ads, growth and go-to-market work. Pick a topic, or search by a skill's name, what it does or its repository. **Most stars** sorts by the repository's GitHub stars, **Most installs** by its installs on skills.sh. The first 30 show; **Show more** adds 30 at a time.\n\nClick a skill to read it before you add it: its SKILL.md at the version the Library lists, Ansvisor's own safety scan, what adding it leaves out, its file on GitHub and its license. **Edited by Ansvisor** says what Ansvisor took out of a few skills, such as a promotion."
+        },
+        {
+          "heading": "Add a skill from the Library",
+          "text": "Admins and Managers on a paid plan can click **Add**. The skill comes in as an imported skill does: instructions only, cleaned, scanned and kept with its license and source. It stays off until an Admin reviews it. An Admin's **Add** opens the review; a Manager's asks the Admins. The card then says **Pending approval**, then **Added** once an Admin approves it, and the skill is under **My skills**, on for whoever added it.\n\nEach skill is added once per workspace and stays at the version it was added at. Analysts and Agency partners can browse the Library but can't add. Its review lists a price, an email address or a tracking link in the skill as worth a look. A skill the scan blocks as unsafe, or whose file Ansvisor can't read, can't be added: its page says why."
         },
         {
           "heading": "Updates to an imported skill",
@@ -4981,7 +5004,10 @@
         "grade",
         "readability",
         "first person",
-        "score range"
+        "score range",
+        "evidence level",
+        "formula",
+        "llms.txt"
       ],
       "synonyms": [
         "audit results",
@@ -4993,7 +5019,14 @@
         "reading score",
         "score changed",
         "plus or minus",
-        "score margin"
+        "score margin",
+        "strong evidence",
+        "likely helps",
+        "hygiene",
+        "informational",
+        "category weights",
+        "how the score is calculated",
+        "llms.txt score"
       ],
       "plan": "all",
       "updated": "2026-11-05",
@@ -5008,11 +5041,15 @@
         },
         {
           "heading": "Categories",
-          "text": "**Category breakdown** scores each category out of 100, with how many of its signals were evaluated:\n\n- **Structure** (25%): whether an AI engine can parse the page, such as heading hierarchy, FAQ schema, lists and tables, and alt text.\n- **Content** (25%): whether the page answers its question directly and completely.\n- **Authority** (20%): whether it reads as expert and sourced, such as author byline, citations, statistics and freshness.\n- **E-E-A-T** (20%): experience, expertise and trust, such as case studies and author credentials.\n- **Trust** (10%): crawl-time basics such as AI bot access in robots.txt, llms.txt, HTTPS, canonical URL and meta description."
+          "text": "**Category breakdown** scores each category out of 100, with how many of its signals were evaluated:\n\n- **Structure** (25%): whether an AI engine can parse the page, such as heading hierarchy, FAQ schema, lists and tables, and alt text.\n- **Content** (25%): whether the page answers its question directly and completely.\n- **Authority** (20%): whether it reads as expert and sourced, such as author byline, citations, statistics and freshness.\n- **E-E-A-T** (20%): experience, expertise and trust, such as case studies and author credentials.\n- **Trust** (10%): crawl-time basics such as AI bot access in robots.txt, HTTPS, canonical URL and meta description. **llms.txt presence** is listed here for information only."
         },
         {
           "heading": "How the score is worked out",
-          "text": "A category's score is the average of its signals, and the total is the weighted average of the categories. A signal that couldn't be evaluated, shown as n/a, is left out, so it never lowers the score.\n\nMost signals are read straight from the page, its robots.txt and its llms.txt. Thirteen, such as **Direct answer to query** and **Case study evidence**, are judged by an AI model that first works out what the page itself is about, so a page is never judged against a topic it isn't trying to cover. **Brand entity in Wikidata** looks your brand up in Wikidata."
+          "text": "A category's score is the average of its signals, each counting the same, and the total is the weighted average of the categories. A signal that couldn't be evaluated, shown as n/a, is left out, so it never lowers the score. **Formula**, beside **Category breakdown**, shows the weights and these rules.\n\nMost signals are read straight from the page, its robots.txt and its llms.txt. Thirteen, such as **Direct answer to query** and **Case study evidence**, are judged by an AI model that first works out what the page itself is about, so a page is never judged against a topic it isn't trying to cover. **Brand entity in Wikidata** looks your brand up in Wikidata."
+        },
+        {
+          "heading": "llms.txt",
+          "text": "**llms.txt presence** doesn't count toward the score. There's little evidence it helps: most llms.txt files are never requested by AI crawlers, and Google says it has no effect. The report still shows whether your site has one."
         },
         {
           "heading": "Same page, same score",
@@ -5023,8 +5060,12 @@
           "text": "Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits. A line beside it gives those two scores. Partial audits aren't counted. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five. A page that didn't change usually shows ± 0.\n\nThe same range comes with an audit wherever else you read it: in Chat, on the audit's card under the answer, in AI assistants connected over MCP, and in a report's **Site Audit Score**, from the page's audits up to the report's end date."
         },
         {
+          "heading": "When the scoring changes",
+          "text": "A change to how the score is worked out counts like a change to the page. Since llms.txt left the score, a page's next audit can move by a point or two with no change to the page. Its range and its change badge show that move until the older scores leave the last five."
+        },
+        {
           "heading": "Signals",
-          "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one. Recommended fixes follow the brand's rules from **Settings › Content › Brand rules**; the score doesn't change."
+          "text": "The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its evidence level: **Strong evidence** (studies tie it to AI citations or crawling), **Likely helps** (plausible, with weaker evidence) or **Hygiene / informational** (basic page health, or little evidence it moves AI citations). The level explains a signal; it doesn't change its weight. A check left out of the score says **Not in the score**. **Issues only** hides the passing ones. Open a signal to see:\n\n- the **Finding**: what this audit saw on the page, when the check reports it;\n- what the signal measures, and **Why** it matters to AI engines;\n- the **Recommended fix** written for this page, or the general **Fix** for signals without one. Recommended fixes follow the brand's rules from **Settings › Content › Brand rules**; the score doesn't change."
         },
         {
           "heading": "Readability",

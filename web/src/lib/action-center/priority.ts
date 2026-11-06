@@ -40,7 +40,13 @@ export interface PriorityReason {
    * results with a verdict, how many improved, and the points that moved
    * its score. Null with no history, or from a scorer before it.
    */
-  pastSuccess?: { improved: number; results: number; points: number } | null;
+  pastSuccess?: {
+    improved: number;
+    results: number;
+    points: number;
+    /** Read from its play's track (AC plan P-4): the play's id; absent, its kind's. */
+    play?: string;
+  } | null;
   /** How sure the score is of what it rests on; null from a scorer before it was kept. */
   confidence?: PriorityConfidence | null;
 }
@@ -176,7 +182,12 @@ function pastSuccessOf(value: unknown): PriorityReason['pastSuccess'] {
     typeof v === 'number' && Number.isFinite(v) ? v : null,
   );
   if (improved === null || results === null || points === null || results < 1) return null;
-  return { improved, results, points };
+  return {
+    improved,
+    results,
+    points,
+    ...(typeof p.play === 'string' && p.play ? { play: p.play } : {}),
+  };
 }
 
 function daysSince(days: number | null, scoredAt: string | null | undefined, now: Date) {
@@ -287,6 +298,7 @@ export function priorityReasonText(reason: PriorityReason, t: Translator): strin
       t(past.points > 0 ? 'reason.pastSuccess.worked' : 'reason.pastSuccess.rarely', {
         improved: past.improved,
         results: past.results,
+        by: past.play ? 'play' : 'kind',
       }),
     );
   }

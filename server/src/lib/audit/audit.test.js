@@ -45,6 +45,31 @@ describe('scoreAudit', () => {
     expect(totalScore).toBeCloseTo(0.6428, 3);
   });
 
+  it('leaves llms.txt out of the score: it is informational (SA-010)', () => {
+    const trust = [
+      { key: 'https', status: 'pass', score: 1 },
+      { key: 'canonical', status: 'pass', score: 1 },
+      { key: 'ai-bot-access', status: 'warn', score: 0.5 },
+    ];
+    const without = scoreAudit([...trust, { key: 'llms-txt-presence', status: 'fail', score: 0 }]);
+    const withFile = scoreAudit([...trust, { key: 'llms-txt-presence', status: 'pass', score: 1 }]);
+
+    // Present or missing, the file moves neither the category nor the total.
+    expect(without.categoryScores.trust.score).toBeCloseTo(2.5 / 3, 5);
+    expect(withFile.categoryScores.trust.score).toBeCloseTo(2.5 / 3, 5);
+    expect(without.totalScore).toBe(withFile.totalScore);
+    // Trust counts its six scored signals: llms.txt isn't one of them.
+    expect(without.categoryScores.trust).toMatchObject({ evaluated: 3, total: 6 });
+  });
+
+  it('gives a category of llms.txt alone no score', () => {
+    const { totalScore, categoryScores } = scoreAudit([
+      { key: 'llms-txt-presence', status: 'pass', score: 1 },
+    ]);
+    expect(categoryScores.trust).toEqual({ score: null, evaluated: 0, total: 6 });
+    expect(totalScore).toBeNull();
+  });
+
   it('excludes na signals and reports null for categories with no evaluated signals', () => {
     const results = [
       { key: 'https', status: 'pass', score: 1 },

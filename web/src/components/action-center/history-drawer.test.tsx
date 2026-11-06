@@ -181,6 +181,21 @@ describe('HistoryDrawer', () => {
     const result = under('Result');
     expect(result).toContain('Measured on the 2 prompts it named.');
     expect(result).toMatch(/Brand-wide over the same days: \S.* 100 → 104/);
+
+    // A topic's action, on its topic's prompts (AC plan P-4).
+    render(
+      <HistoryDrawer
+        brandId="b1"
+        item={{
+          ...item,
+          results: [metric('mentions', 2, 6)],
+          measuredOn: { entity: 'topics', count: 14 },
+        }}
+        onOpenChange={() => {}}
+      />,
+    );
+    await act(async () => {});
+    expect(under('Result')).toContain("Measured on its topic's 14 prompts.");
   });
 
   /** Its change net of the brand's prompts it didn't touch (learning B2). */

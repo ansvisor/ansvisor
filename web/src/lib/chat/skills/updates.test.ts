@@ -147,6 +147,30 @@ describe('what the source at its default branch means (decideUpdate)', () => {
     };
     expect(updates.decideUpdate(row(), unlicensed)).toMatchObject({ kind: 'refused' });
   });
+
+  it('cleans a Library skill’s new version as its catalog row says, and takes MIT only', () => {
+    // A catalog row with research lines to drop (CHAT-17 item 15).
+    const library = () =>
+      seedSkill({ source: 'library', library_ref: 'agricidaniel/claude-seo/seo-geo' }) as never;
+    const cited = skillFile(`${BODY}\nWikipedia leads ChatGPT's sources (Profound, 2025).`);
+    // What the cleanup drops is no update.
+    expect(updates.decideUpdate(library(), at(NEW, cited))).toEqual({ kind: 'same' });
+    // An import keeps its text as it is: the same change is one.
+    expect(updates.decideUpdate(row(), at(NEW, cited))).toEqual({ kind: 'update', sha: NEW });
+    const apache = {
+      ok: true as const,
+      value: {
+        files: files(skillFile(`${BODY}\nNew.`, 'Apache-2.0'), null),
+        commitSha: NEW,
+      },
+    };
+    expect(updates.decideUpdate(row(), apache)).toEqual({ kind: 'update', sha: NEW });
+    expect(updates.decideUpdate(library(), apache)).toEqual({ kind: 'refused', code: 'license' });
+    // Its YAML front matter and a price read by the Library's rules; an import's by the strict ones.
+    const yaml = `---\nname: copy-editing\ndescription: >\n  Tightens copy:\n  removes filler.\nlicense: MIT\n---\n\n${BODY}\nFrom $9 a month.\n`;
+    expect(updates.decideUpdate(library(), at(NEW, yaml))).toEqual({ kind: 'update', sha: NEW });
+    expect(updates.decideUpdate(row(), at(NEW, yaml))).toMatchObject({ kind: 'refused' });
+  });
 });
 
 describe('one minute of the weekly check (checkSkillUpdates)', () => {
