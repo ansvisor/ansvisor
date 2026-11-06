@@ -251,6 +251,7 @@ describe('Product Visibility, the fourth tab', () => {
     brandFields: object,
     planId = 'growth',
     path = '/dashboard/insights',
+    hidden: string[] = [],
   ) => {
     access.planId = planId;
     useBrandStore.setState({
@@ -258,7 +259,7 @@ describe('Product Visibility, the fourth tab', () => {
       activeBrandId: 'b1',
       loaded: true,
     });
-    await render(path);
+    await render(path, <Tab />, hidden);
   };
 
   it('shows for a brand in Shopping mode on a plan with it, on its old address', async () => {
@@ -274,6 +275,11 @@ describe('Product Visibility, the fourth tab', () => {
   it('shows for an e-commerce brand whose Shopping mode is still off', async () => {
     await withBrand({ shoppingModeEnabled: false, siteType: 'ecommerce' });
     expect(tabs().map(([name]) => name)).toContain('Product Visibility');
+  });
+
+  it('is not there when the member’s menu hides Product Visibility', async () => {
+    await withBrand({ shoppingModeEnabled: true }, 'growth', '/dashboard/insights', ['shopping']);
+    expect(tabs().map(([name]) => name)).toEqual(['Overview', 'Mentions', 'Citations']);
   });
 
   it('is not there for another brand, or on a plan without it', async () => {
