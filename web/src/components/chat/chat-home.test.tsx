@@ -514,13 +514,50 @@ describe('the focus pill (CHAT-24 §3 item 3)', () => {
     expect(pill.getAttribute('title')).toBe('Big picture, Competitors, Brand');
   });
 
-  it('offers a focus without one, and shows no pill outside Chat Home', async () => {
+  it('says the Default view without a focus, and shows no pill outside Chat Home', async () => {
     await render(view({ focus: { areas: [], onEdit: () => undefined } }));
-    expect(host.querySelector('[data-slot="focus-pill"]')?.textContent).toBe(
-      'Get suggestions for what you work onChoose focus',
-    );
+    expect(host.querySelector('[data-slot="focus-pill"]')?.textContent).toBe('Default viewEdit');
     await render(view());
     expect(host.querySelector('[data-slot="focus-pill"]')).toBeNull();
+  });
+});
+
+describe('the Default view (00485)', () => {
+  const busy = {
+    since: SINCE,
+    whatsNew: {
+      line: { feature: 'Agent Center', homeLine: 'Agent Center runs your routine work.' },
+      unread: true,
+    },
+    onShowMe: () => undefined,
+    words: {
+      fill: { rival: 'Kestrel CRM', topic: 'Integrations', market: null },
+      rivalMove: { name: 'Kestrel CRM', points: 4 },
+    },
+  };
+
+  it('shows only the greeting, one line and the pill, larger and lower on the page', async () => {
+    await render(view({ ...busy, focus: { areas: [], onEdit: () => undefined } }));
+    const h1 = host.querySelector('h1')!;
+    expect(h1.textContent).toBe('Good afternoon, Alex');
+    expect(h1.className).toContain('text-[34px]');
+    expect(h1.parentElement?.className).toContain('mt-[20vh]');
+    // Its line says how a rival moved, as Competitors' does.
+    expect(host.querySelector('h1 + p')?.textContent).toBe(
+      'Kestrel CRM’s mention rate rose 4 points this week.',
+    );
+    for (const hidden of ['Since you left', 'For you now', 'Agent Center runs', 'New for you']) {
+      expect(host.textContent).not.toContain(hidden);
+    }
+  });
+
+  it('keeps every block where Home has a focus, or no focus at all', async () => {
+    await render(view({ ...busy, focus: { areas: ['lead'], onEdit: () => undefined } }));
+    expect(host.textContent).toContain('Since you left');
+    expect(host.textContent).toContain('For you now');
+    expect(host.querySelector('h1')!.className).toContain('text-2xl');
+    await render(view(busy));
+    expect(host.textContent).toContain('Agent Center runs your routine work.');
   });
 });
 
