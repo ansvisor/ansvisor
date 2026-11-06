@@ -3,24 +3,27 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
-import type { FocusArea } from '@/lib/chat/focus';
+import type { FocusArea, HomeView } from '@/lib/chat/focus';
 
 /**
  * What Chat focuses on (CHAT-24 §3, §7 items 1–2; mockup #s-dept): the
- * picker opens once on the first Chat Home with the work areas' picks on,
- * Continue needs one, Skip for now keeps the default Home, and neither
- * brings it back by itself; Home's pill opens it again with the picks on.
- * Focus moves into the picker as it opens and back out as it closes.
+ * picker opens once on the first Chat Home with the Default view on (00485),
+ * Continue keeps it or the areas picked, Skip for now keeps the Default
+ * view, and neither brings it back by itself; Home's pill opens it again
+ * with the focus ticked, the Default view's kept one too. Focus moves into
+ * the picker as it opens and back out as it closes.
  */
 
 const prefs = vi.hoisted(() => ({
   ok: true,
   saveChatFocus: vi.fn(),
+  saveDefaultHome: vi.fn(),
   skipChatFocus: vi.fn(),
   markFocusPrompted: vi.fn(),
 }));
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatFocus: prefs.saveChatFocus,
+  saveDefaultHome: prefs.saveDefaultHome,
   skipChatFocus: prefs.skipChatFocus,
   markFocusPrompted: prefs.markFocusPrompted,
 }));
@@ -53,7 +56,12 @@ let root: Root;
 
 beforeEach(() => {
   prefs.ok = true;
-  for (const action of [prefs.saveChatFocus, prefs.skipChatFocus, prefs.markFocusPrompted]) {
+  for (const action of [
+    prefs.saveChatFocus,
+    prefs.saveDefaultHome,
+    prefs.skipChatFocus,
+    prefs.markFocusPrompted,
+  ]) {
     action.mockReset().mockImplementation(async () => ({ ok: prefs.ok }));
   }
   toast.mockClear();
@@ -68,16 +76,19 @@ afterEach(() => {
   host.remove();
 });
 
+/** A saved focus is Home's unless `view` says the Default view keeps it. */
 async function render(
   focus: FocusArea[] | null,
   ask: boolean,
-  prefill: FocusArea[] = [],
-  readOnly = false,
+  {
+    view = focus?.length ? 'focus' : 'default',
+    readOnly = false,
+  }: { view?: HomeView; readOnly?: boolean } = {},
 ) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ChatFocusGate focus={focus} ask={ask} prefill={prefill}>
+        <ChatFocusGate focus={focus} view={view} ask={ask}>
           <Home readOnly={readOnly} />
         </ChatFocusGate>
       </NextIntlClientProvider>,
@@ -91,18 +102,21 @@ const pressed = () =>
   [...host.querySelectorAll('[data-action="dept.pick"][aria-pressed="true"]')].map((b) =>
     b.getAttribute('data-dept'),
   );
+const defaultOn = () => $('[data-action="dept.default"]')?.getAttribute('aria-pressed') === 'true';
 const homeShown = () => $('[data-slot="focus-home"]')!.className === 'contents';
 const pill = () => $('[data-slot="home"] [data-action="dept.change"]');
 const composer = () => $('[data-action="composer.input"]');
 
 describe('ChatFocusGate', () => {
-  it('opens the picker once in place of Home, with the work areas’ picks on', async () => {
-    await render(null, true, ['pd', 'bd']);
+  it('opens the picker once in place of Home, with the Default view on', async () => {
+    await render(null, true);
     expect($('h1')?.textContent).toBe('What should Chat focus on for you?');
+    expect($('[data-action="dept.default"]')?.textContent).toContain('Default: simple start ✓');
+    expect(defaultOn()).toBe(true);
     expect(host.querySelectorAll('[data-action="dept.pick"]')).toHaveLength(8);
-    expect(pressed()).toEqual(['pd', 'bd']);
+    expect(pressed()).toEqual([]);
     expect($('[data-slot="focus-count"]')?.textContent).toBe(
-      '2 selected · your access stays the same: what you can change still depends on your role.',
+      'Default view · your access stays the same: what you can change still depends on your role.',
     );
     expect(homeShown()).toBe(false);
     expect(prefs.markFocusPrompted).toHaveBeenCalledOnce();
@@ -111,13 +125,14 @@ describe('ChatFocusGate', () => {
     });
   });
 
-  it('needs one pick to continue, and keeps the picks in the order picked', async () => {
+  it('keeps the picks in the order picked, an area turning the Default view off', async () => {
     await render(null, true);
-    expect(($('[data-action="dept.continue"]') as HTMLButtonElement).disabled).toBe(true);
-    expect($('[data-slot="focus-count"]')?.textContent).toMatch(/^Pick at least one\./);
+    expect(($('[data-action="dept.continue"]') as HTMLButtonElement).disabled).toBe(false);
     await click('[data-dept="brand"]');
     await click('[data-dept="comp"]');
+    expect(defaultOn()).toBe(false);
     expect(pressed()).toEqual(['comp', 'brand']);
+    expect($('[data-slot="focus-count"]')?.textContent).toMatch(/^2 selected · /);
     expect($('[data-dept="brand"]')?.textContent).toContain('Brand and reputation ✓');
     await click('[data-action="dept.continue"]');
     expect(prefs.saveChatFocus).toHaveBeenCalledWith(['brand', 'comp']);
@@ -133,19 +148,34 @@ describe('ChatFocusGate', () => {
     });
   });
 
-  it('skips to the default Home', async () => {
-    await render(null, true, ['lead']);
+  it('keeps the Default view on Continue', async () => {
+    await render(null, true);
+    await click('[data-action="dept.continue"]');
+    expect(prefs.saveChatFocus).toHaveBeenCalledWith([]);
+    expect(prefs.saveDefaultHome).not.toHaveBeenCalled();
+    expect(homeShown()).toBe(true);
+    expect($('[data-slot="home-focus"]')?.textContent).toBe('');
+    expect(toast).toHaveBeenCalledWith(
+      'Home is on the Default view · change it in Settings › General',
+    );
+  });
+
+  it('skips to the Default view', async () => {
+    await render(null, true);
     await click('[data-action="dept.skip"]');
     expect(prefs.skipChatFocus).toHaveBeenCalledOnce();
     expect(homeShown()).toBe(true);
     expect($('[data-slot="home-focus"]')?.textContent).toBe('');
-    expect(toast).toHaveBeenCalledWith('You can choose your focus later in Settings › General');
+    expect(toast).toHaveBeenCalledWith(
+      'Home is on the Default view · pick a focus anytime in Settings › General',
+    );
     expect(analytics.track).toHaveBeenCalledWith('chat_focus_skipped');
   });
 
   it('stays in the picker and says so when the pick isn’t kept', async () => {
     prefs.ok = false;
-    await render(null, true, ['seo']);
+    await render(null, true);
+    await click('[data-dept="seo"]');
     await click('[data-action="dept.continue"]');
     expect(toast.error).toHaveBeenCalledWith("Couldn't save your focus. Try again.");
     expect(homeShown()).toBe(false);
@@ -155,8 +185,9 @@ describe('ChatFocusGate', () => {
   });
 
   it('opens Home for someone already asked, and the pill reopens the picker with their picks', async () => {
-    await render(['growth', 'content'], false, ['lead']);
+    await render(['growth', 'content'], false);
     expect(homeShown()).toBe(true);
+    expect($('[data-slot="home-focus"]')?.textContent).toBe('growth,content');
     expect($('[data-action="dept.pick"]')).toBeNull();
     expect(prefs.markFocusPrompted).not.toHaveBeenCalled();
     await click('[data-slot="home"] [data-action="dept.change"]');
@@ -185,15 +216,41 @@ describe('ChatFocusGate', () => {
     expect(pressed()).toEqual(['growth', 'content']);
   });
 
-  it('starts "Choose focus" with the work areas’ picks when there are none', async () => {
-    await render([], false, ['pd']);
+  it('starts everyone on the Default view, ticking a focus picked before so Continue brings it back', async () => {
+    await render(['growth', 'content'], false, { view: 'default' });
+    expect($('[data-slot="home-focus"]')?.textContent).toBe('');
     await click('[data-slot="home"] [data-action="dept.change"]');
-    expect(pressed()).toEqual(['pd']);
+    expect(defaultOn()).toBe(false);
+    expect(pressed()).toEqual(['growth', 'content']);
+    await click('[data-action="dept.continue"]');
+    expect(prefs.saveChatFocus).toHaveBeenCalledWith(['growth', 'content']);
+    expect($('[data-slot="home-focus"]')?.textContent).toBe('growth,content');
+    // Back to the Default view: only the view changes, and the focus stays ticked.
+    await click('[data-slot="home"] [data-action="dept.change"]');
+    await click('[data-action="dept.default"]');
+    expect(pressed()).toEqual([]);
+    await click('[data-action="dept.continue"]');
+    expect(prefs.saveDefaultHome).toHaveBeenCalledOnce();
+    expect(prefs.saveChatFocus).toHaveBeenCalledOnce();
+    expect($('[data-slot="home-focus"]')?.textContent).toBe('');
+    await click('[data-slot="home"] [data-action="dept.change"]');
+    expect(pressed()).toEqual(['growth', 'content']);
+  });
+
+  it('opens with the Default view on when there is no focus', async () => {
+    await render([], false);
+    await click('[data-slot="home"] [data-action="dept.change"]');
+    expect(defaultOn()).toBe(true);
+    await click('[data-dept="pd"]');
+    expect(defaultOn()).toBe(false);
+    await click('[data-action="dept.default"]');
+    expect(defaultOn()).toBe(true);
+    expect(pressed()).toEqual([]);
   });
 
   describe('keyboard focus', () => {
     it('starts at the question on the first opening, and goes to the composer after Skip for now', async () => {
-      await render(null, true, ['pd']);
+      await render(null, true);
       expect(document.activeElement).toBe($('h1'));
       await click('[data-action="dept.skip"]');
       expect(homeShown()).toBe(true);
@@ -201,7 +258,7 @@ describe('ChatFocusGate', () => {
     });
 
     it('goes to the composer after the first opening’s Continue', async () => {
-      await render(null, true, ['pd']);
+      await render(null, true);
       await click('[data-action="dept.continue"]');
       expect(document.activeElement).toBe(composer());
     });
@@ -222,7 +279,7 @@ describe('ChatFocusGate', () => {
     });
 
     it('lands on the pill when the composer can’t be typed in', async () => {
-      await render(null, true, [], true);
+      await render(null, true, { readOnly: true });
       await click('[data-action="dept.skip"]');
       expect(document.activeElement).toBe(pill());
     });

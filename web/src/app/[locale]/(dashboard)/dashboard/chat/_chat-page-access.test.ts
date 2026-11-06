@@ -21,10 +21,10 @@ const db = vi.hoisted(() => ({
     usage_notice_period?: string | null;
     focus?: string[] | null;
     focus_prompted_at?: string | null;
+    home_view?: string;
     page_open?: string | null;
   } | null,
   prefsError: null as { message: string } | null,
-  workAreas: [] as string[] | null,
   confirmedAt: null as string | null,
 }));
 
@@ -48,7 +48,7 @@ vi.mock('@/lib/supabase/server', () => ({
         eq: () => ({
           maybeSingle: async () =>
             table === 'profiles'
-              ? { data: { organization_id: 'org-1', work_areas: db.workAreas }, error: null }
+              ? { data: { organization_id: 'org-1' }, error: null }
               : { data: db.prefs, error: db.prefsError },
         }),
       }),
@@ -90,7 +90,6 @@ beforeEach(() => {
   db.prefs = null;
   db.prefsError = null;
   db.confirmedAt = null;
-  db.workAreas = [];
   facts.ctx = null;
   facts.fail = false;
   facts.ownKey = false;
@@ -348,28 +347,33 @@ describe('chatComposerSetup', () => {
 });
 
 describe('chatFocusState (CHAT-24 §3)', () => {
-  it('opens the picker once, for someone never asked, with their work areas picked', async () => {
-    db.workAreas = ['product', 'bizdev', 'developers', 'aeo', 'unknown'];
-    expect(await chatFocusState()).toEqual({
-      focus: null,
-      ask: true,
-      prefill: ['pd', 'bd', 'seo'],
-    });
+  it('opens the picker once, for someone never asked, on the Default view', async () => {
+    expect(await chatFocusState()).toEqual({ focus: null, view: 'default', ask: true });
     // Shown once already, left without a pick: it doesn't open by itself again.
     db.prefs = { focus: null, focus_prompted_at: '2026-10-31T09:00:00.000Z' };
     expect((await chatFocusState()).ask).toBe(false);
   });
 
-  it('keeps the picks in their order, and a skip as none', async () => {
-    db.prefs = { focus: ['brand', 'comp', 'brand', 'nope'], focus_prompted_at: null };
-    expect(await chatFocusState()).toEqual({ focus: ['brand', 'comp'], ask: false, prefill: [] });
+  it('keeps the picks in their order, a skip as none, and the view Home is on (00485)', async () => {
+    db.prefs = {
+      focus: ['brand', 'comp', 'brand', 'nope'],
+      focus_prompted_at: null,
+      home_view: 'focus',
+    };
+    expect(await chatFocusState()).toEqual({ focus: ['brand', 'comp'], view: 'focus', ask: false });
+    // Everyone starts on the Default view: a focus picked before is kept for the picker.
+    db.prefs = { focus: ['brand', 'comp'], focus_prompted_at: null, home_view: 'default' };
+    expect(await chatFocusState()).toEqual({
+      focus: ['brand', 'comp'],
+      view: 'default',
+      ask: false,
+    });
     db.prefs = { focus: [], focus_prompted_at: null };
-    expect(await chatFocusState()).toMatchObject({ focus: [], ask: false });
+    expect(await chatFocusState()).toMatchObject({ focus: [], view: 'default', ask: false });
   });
 
-  it('opens Home as it is, without the picker, when the settings could not be read', async () => {
+  it('opens Home on the Default view, without the picker, when the settings could not be read', async () => {
     db.prefsError = { message: 'down' };
-    db.workAreas = null;
-    expect(await chatFocusState()).toEqual({ focus: null, ask: false, prefill: [] });
+    expect(await chatFocusState()).toEqual({ focus: null, view: 'default', ask: false });
   });
 });

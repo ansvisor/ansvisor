@@ -11,17 +11,22 @@ import {
 } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { markFocusPrompted, saveChatFocus, skipChatFocus } from '@/lib/actions/chat-prefs';
+import {
+  markFocusPrompted,
+  saveChatFocus,
+  saveDefaultHome,
+  skipChatFocus,
+} from '@/lib/actions/chat-prefs';
 import { track } from '@/lib/analytics';
-import { FOCUS_AREAS, type FocusArea, type FocusSource } from '@/lib/chat/focus';
+import { FOCUS_AREAS, type FocusArea, type FocusSource, type HomeView } from '@/lib/chat/focus';
 import { cn } from '@/lib/utils';
 
 /**
  * What Chat focuses on for the person (CHAT-24 §3; mockup #s-dept): the
- * picker that opens once on their first Chat Home, starting with the areas
- * their work areas suggest, and again from Home's pill; the pill itself;
- * and the label both show ("Product and Markets and sources", "Big
- * picture, Competitors +2"). Focus only changes what Chat suggests.
+ * picker that opens once on their first Chat Home, with the Default view
+ * picked, and again from Home's pill; the pill itself; and the label both
+ * show ("Product and Markets and sources", "Big picture, Competitors +2").
+ * Focus only changes what Chat suggests.
  */
 
 /** The focus's label: one or two areas by name, more as the first two and how many else. */
@@ -36,7 +41,7 @@ export function useFocusLabel(): (areas: readonly FocusArea[]) => string {
 }
 
 interface ChatFocusValue {
-  /** The picked areas, in order; empty with none. */
+  /** The areas Home is tailored to, in order; empty on the Default view (00485). */
   focus: FocusArea[];
   /** Opens the picker with the current picks on (Home's pill). */
   edit: () => void;
@@ -49,9 +54,25 @@ export function useChatFocus(): ChatFocusValue | null {
   return useContext(ChatFocusContext);
 }
 
+/** A card in the picker, and the look of one that is on. */
+const CARD =
+  'flex flex-col items-start gap-1 rounded-[14px] border bg-card p-3.5 text-left text-[13.5px] outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50';
+const CARD_ON = 'border-foreground shadow-[inset_0_0_0_1px_var(--foreground)]';
+
+function Tick() {
+  return (
+    <span aria-hidden className="text-green-600 dark:text-green-400">
+      {' '}
+      ✓
+    </span>
+  );
+}
+
 /**
- * The picker (mockup #s-dept): eight areas that toggle, Continue once one
- * is on, Skip for now. Presentational: the gate keeps what it answers.
+ * The picker (mockup #s-dept): the Default view on top, on while no area is
+ * (Home shows the greeting, one line and the box), then eight areas that
+ * toggle; Continue keeps either, Skip for now. Presentational: the gate
+ * keeps what it answers.
  */
 export function FocusPicker({
   initial,
@@ -90,10 +111,30 @@ export function FocusPicker({
         </h1>
         <p className="mt-1.5 text-muted-foreground">{t('intro')}</p>
       </div>
+      <button
+        type="button"
+        data-action="dept.default"
+        aria-pressed={picks.length === 0}
+        onClick={() => setPicks([])}
+        className={cn(CARD, 'mt-[18px] w-full', picks.length === 0 && CARD_ON)}
+      >
+        <b className="text-sm font-semibold">
+          {t('default.title')}
+          {picks.length === 0 && <Tick />}
+        </b>
+        <span className="text-[12.5px] leading-[1.45] text-muted-foreground">
+          {t('default.note')}
+        </span>
+      </button>
+      <p className="mt-3.5 flex items-center gap-3 text-[11.5px] font-medium tracking-[.06em] text-muted-foreground uppercase">
+        <span aria-hidden className="h-px flex-1 bg-border" />
+        {t('orTailor')}
+        <span aria-hidden className="h-px flex-1 bg-border" />
+      </p>
       <div
         role="group"
         aria-label={t('groupLabel')}
-        className="mt-[18px] mb-1.5 grid grid-cols-2 gap-2.5 @2xl:grid-cols-4"
+        className="mt-3.5 mb-1.5 grid grid-cols-2 gap-2.5 @2xl:grid-cols-4"
       >
         {FOCUS_AREAS.map((area) => {
           const on = picks.includes(area);
@@ -105,19 +146,11 @@ export function FocusPicker({
               data-dept={area}
               aria-pressed={on}
               onClick={() => toggle(area)}
-              className={cn(
-                'flex min-h-24 flex-col items-start gap-1 rounded-[14px] border bg-card p-3.5 text-left text-[13.5px] outline-none hover:border-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                on && 'border-foreground shadow-[inset_0_0_0_1px_var(--foreground)]',
-              )}
+              className={cn(CARD, 'min-h-24', on && CARD_ON)}
             >
               <b className="text-sm font-semibold">
                 {t(`areas.${area}.title`)}
-                {on && (
-                  <span aria-hidden className="text-green-600 dark:text-green-400">
-                    {' '}
-                    ✓
-                  </span>
-                )}
+                {on && <Tick />}
               </b>
               <span className="text-[12.5px] leading-[1.45] text-muted-foreground">
                 {t(`areas.${area}.note`)}
@@ -128,7 +161,7 @@ export function FocusPicker({
       </div>
       <div className="mt-3.5 flex items-center justify-between gap-2.5 text-[12.5px] text-muted-foreground">
         <span data-slot="focus-count">
-          {picks.length ? t('countSome', { count: picks.length }) : t('countNone')}
+          {picks.length ? t('countSome', { count: picks.length }) : t('countDefault')}
         </span>
         <div className="flex shrink-0 gap-2">
           <button
@@ -143,7 +176,7 @@ export function FocusPicker({
           <button
             type="button"
             data-action="dept.continue"
-            disabled={busy || picks.length === 0}
+            disabled={busy}
             onClick={() => onContinue(picks)}
             className="h-8 rounded-lg bg-foreground px-3 text-[13px] font-medium text-background outline-none hover:bg-foreground/90 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
           >
@@ -157,8 +190,7 @@ export function FocusPicker({
 
 /**
  * Home's pill under the greeting (CHAT-24 §3 item 3): "Focused on … ·
- * Edit", or "Get suggestions for what you work on · Choose focus". Both
- * open the picker.
+ * Edit", or "Default view · Edit". Both open the picker.
  */
 export function FocusPill({ areas, onEdit }: { areas: readonly FocusArea[]; onEdit: () => void }) {
   const t = useTranslations('chatShell.focus');
@@ -169,14 +201,14 @@ export function FocusPill({ areas, onEdit }: { areas: readonly FocusArea[]; onEd
       title={areas.length ? areas.map((area) => t(`areas.${area}.name`)).join(', ') : undefined}
       className="mt-2.5 inline-flex items-center gap-2 rounded-full border bg-card py-[3px] pr-1 pl-2.5 text-xs text-muted-foreground"
     >
-      {areas.length ? t('pill.focused', { label: label(areas) }) : t('pill.none')}
+      {areas.length ? t('pill.focused', { label: label(areas) }) : t('pill.default')}
       <button
         type="button"
         data-action="dept.change"
         onClick={onEdit}
         className="rounded-full bg-muted px-[9px] py-0.5 text-xs text-foreground outline-none hover:bg-muted/70 focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
-        {areas.length ? t('pill.edit') : t('pill.choose')}
+        {t('pill.edit')}
       </button>
     </span>
   );
@@ -185,7 +217,9 @@ export function FocusPill({ areas, onEdit }: { areas: readonly FocusArea[]; onEd
 /**
  * Chat Home with the person's focus: the picker in place of Home and its
  * composer the first time (once: it is marked shown as it opens), or when
- * the pill opens it; Home otherwise. Under the picker Home stays laid out
+ * the pill opens it; Home otherwise, on its Default view or tailored to the
+ * focus (00485). The pill opens the picker with the focus ticked even on
+ * the Default view, so Continue brings it back. Under the picker Home stays laid out
  * but unseen and out of reach (not display: none), so the composer sizes
  * itself and a draft survives. A pick that isn't kept stays in the picker
  * and says so. Closed, it hands focus back: to the pill that opened it, or
@@ -193,21 +227,22 @@ export function FocusPill({ areas, onEdit }: { areas: readonly FocusArea[]; onEd
  */
 export function ChatFocusGate({
   focus: saved,
+  view: savedView,
   ask,
-  prefill,
   children,
 }: {
   focus: FocusArea[] | null;
+  view: HomeView;
   ask: boolean;
-  prefill: FocusArea[];
   children: ReactNode;
 }) {
   const t = useTranslations('chatShell.focus');
   const label = useFocusLabel();
   const [focus, setFocus] = useState<FocusArea[]>(saved ?? []);
+  const [view, setView] = useState<HomeView>(savedView);
   // The picker's starting picks and where it opened; null while it is closed.
   const [picking, setPicking] = useState<{ picks: FocusArea[]; source: FocusSource } | null>(
-    ask ? { picks: prefill, source: 'first_open' } : null,
+    ask ? { picks: [], source: 'first_open' } : null,
   );
   const [busy, setBusy] = useState(false);
   const home = useRef<HTMLDivElement>(null);
@@ -234,23 +269,28 @@ export function ChatFocusGate({
 
   const edit = useCallback(() => {
     track('chat_focus_picker_shown', { source: 'home_pill' });
-    setPicking({ picks: focus.length ? focus : prefill, source: 'home_pill' });
-  }, [focus, prefill]);
+    setPicking({ picks: focus, source: 'home_pill' });
+  }, [focus]);
 
   const keep = async (picks: FocusArea[]) => {
     if (!picking) return;
     setBusy(true);
-    const kept = await saveChatFocus(picks).catch(() => ({ ok: false as const }));
+    // The Default view over a focus keeps the focus, to tick it next time.
+    const toDefault = picks.length === 0 && focus.length > 0;
+    const kept = await (toDefault ? saveDefaultHome() : saveChatFocus(picks)).catch(() => ({
+      ok: false as const,
+    }));
     setBusy(false);
     if (!kept.ok) {
       toast.error(t('failed'));
       return;
     }
     track('chat_focus_saved', { areas: picks, count: picks.length, source: picking.source });
-    setFocus(picks);
+    if (!toDefault) setFocus(picks);
+    setView(picks.length ? 'focus' : 'default');
     closed.current = picking.source;
     setPicking(null);
-    toast(t('saved', { label: label(picks) }));
+    toast(picks.length ? t('saved', { label: label(picks) }) : t('savedDefault'));
   };
 
   const skip = async () => {
@@ -270,13 +310,14 @@ export function ChatFocusGate({
     }
     track('chat_focus_skipped');
     setFocus([]);
+    setView('default');
     closed.current = 'first_open';
     setPicking(null);
     toast(t('skipped'));
   };
 
   return (
-    <ChatFocusContext.Provider value={{ focus, edit }}>
+    <ChatFocusContext.Provider value={{ focus: view === 'focus' ? focus : [], edit }}>
       {picking && (
         <FocusPicker
           initial={picking.picks}
