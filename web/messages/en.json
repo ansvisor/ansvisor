@@ -1339,6 +1339,41 @@
       "fix": "Fix",
       "compete": "Compete"
     },
+    "agentWork": {
+      "title": "Agent work",
+      "lead": "How far your workspace's agents go without a person. The gear on Action Center's Today card shows the same setting.",
+      "gear": "Agent work",
+      "gearHint": "Who starts agent work",
+      "question": "Who starts agent work?",
+      "default": "Default",
+      "choices": {
+        "approve_first": {
+          "label": "I approve first",
+          "note": "Every change an agent makes waits for someone's approval, whatever the agent's mode."
+        },
+        "auto_start": {
+          "label": "Agent starts on its own",
+          "note": "Each agent works in its own mode: Ask me first, Auto or Full auto."
+        }
+      },
+      "goLive": "Neither changes going live: an agent publishes or sends only with a person's click, unless an Admin let it publish on its own.",
+      "changedBy": "Changed by {name} · {date}",
+      "someone": "someone no longer in the workspace",
+      "neverChanged": "Not changed yet: every workspace starts on I approve first.",
+      "save": "Save",
+      "saved": "Agent work saved",
+      "adminsOnly": "Only Admins change this.",
+      "failures": {
+        "chat_off": "Agent work isn't available here.",
+        "forbidden": "Only Admins change Agent work.",
+        "invalid": "Pick one of the two choices.",
+        "locked": "Your plan doesn't include this.",
+        "read_only": "Your plan has ended: choose a plan to change settings.",
+        "quality_off": "This needs Content Quality on.",
+        "unavailable": "Agent work isn't available yet. Try again later.",
+        "failed": "Couldn't save Agent work. Try again."
+      }
+    },
     "actionsPage": {
       "title": "Actions",
       "subtitle": "Know what changed, what matters, and what to do next.",

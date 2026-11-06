@@ -2,6 +2,7 @@ import { brandAccessOf, readAccessProfile } from '@/lib/brand-access';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-guard';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Database } from '@/types/supabase';
+import { parseAgentWork } from './agent-work';
 import { autoGoLiveEnabled } from './flag';
 import { planFactsFromOrgRow } from './plan-facts';
 import {
@@ -58,7 +59,7 @@ type SettingsRow = Pick<
   Partial<
     Pick<
       Database['public']['Tables']['chat_settings']['Row'],
-      'agents_full_auto' | 'auto_go_live_groups'
+      'agents_full_auto' | 'auto_go_live_groups' | 'agent_work'
     >
   >;
 
@@ -85,6 +86,8 @@ export function parseChatSettings(row: SettingsRow | null): ChatSettings {
       ? { autoGoLiveGroups: executeGroups(row.auto_go_live_groups) }
       : {}),
     ...(typeof row.agents_full_auto === 'boolean' ? { agentsFullAuto: row.agents_full_auto } : {}),
+    // A value it doesn't know is "I approve first", the careful side.
+    ...(typeof row.agent_work === 'string' ? { agentWork: parseAgentWork(row.agent_work) } : {}),
   };
 }
 
@@ -189,7 +192,7 @@ export async function readBrandIsDemo(brandId: string): Promise<boolean> {
 export async function readPrecedenceContext(
   req: PrecedenceRequest,
 ): Promise<PrecedenceContext | null> {
-  const [profile, org, settings, choices] = await Promise.all([
+  const [profile, org, settings, choices, agentWork] = await Promise.all([
     readAccessProfile(req.userId),
     supabaseAdmin
       .from('organizations')
@@ -208,9 +211,19 @@ export async function readPrecedenceContext(
       .select('tool_key')
       .eq('user_id', req.userId)
       .eq('organization_id', req.organizationId),
+    // Agent work (00481) on its own: before the migration, the rest still reads, and agents
+    // ask first (its default).
+    supabaseAdmin
+      .from('chat_settings')
+      .select('agent_work')
+      .eq('organization_id', req.organizationId)
+      .maybeSingle(),
   ]);
   for (const result of [org, settings, choices]) {
     if (result.error) throw new Error(`Could not read Chat's permissions: ${result.error.message}`);
+  }
+  if (agentWork.error && !beforeMigration(agentWork.error)) {
+    throw new Error(`Could not read Chat's permissions: ${agentWork.error.message}`);
   }
 
   const role = parseTeamRole(profile?.role);
@@ -218,7 +231,11 @@ export async function readPrecedenceContext(
   // The brands they may use (BRAND-ACCESS, 00388), read now: a brand taken away counts at once.
   const brandAccess = (await brandAccessOf(profile, req.userId, req.organizationId)) ?? [];
 
-  const parsed = parseChatSettings(settings.data);
+  const parsed = parseChatSettings(
+    settings.data && agentWork.data
+      ? { ...settings.data, agent_work: agentWork.data.agent_work }
+      : settings.data,
+  );
   const goLiveOn = autoGoLiveEnabled(req.organizationId);
   const goLive = goLiveOn ? await readGoLive(req.organizationId, req.agent ?? null) : null;
   return {
@@ -227,6 +244,8 @@ export async function readPrecedenceContext(
     plan: planFactsFromOrgRow(org.data),
     settings: goLive ? { ...parsed, autoGoLiveGroups: goLive.groups } : parsed,
     ...(goLive ? { autoGoLiveOn: true, agent: goLive.agent } : {}),
+    // An agent's run, which Agent work caps (precedence step 5).
+    ...(req.agent ? { agentRun: true } : {}),
     mode: CHAT_MODES.find((mode) => mode === req.mode) ?? 'ask_first',
     surface: CHAT_SURFACES.find((surface) => surface === req.surface) ?? 'mcp',
     autoChoices: new Set((choices.data ?? []).map((row) => row.tool_key)),

@@ -3,6 +3,7 @@ import type { PlanId } from '@/config/plans';
 import type { BrandAccess } from '@/lib/brand-access';
 import type { GateResult } from '@/lib/content/go-live-gate';
 import type { GoLiveTextHold } from './go-live-checks';
+import { parseAgentWork, type AgentWork } from './agent-work';
 import { planGateLock, type PlanFacts } from './plan-facts';
 import {
   WRITE_POLICIES,
@@ -53,7 +54,9 @@ import {
  *      whose Admins let agents take that group live, on Growth and up
  *      (goLiveCandidate); then the page's guards in order (goLiveHold), and
  *      any that fails keeps the click, saying why.
- *   5. The run mode: Ask me first shows a card for every WRITE. Auto shows
+ *   5. The run mode: Ask me first shows a card for every WRITE, and so does
+ *      an agent's run while the workspace's Agent work is "I approve first"
+ *      (AC-011, the default), whatever the agent's mode. Auto shows
  *      one too, except for a tool whose policy is Always, which runs in Auto
  *      and Full auto alike. Full auto also runs "Ask (auto allowed in Full
  *      auto)". No WRITE runs by itself anywhere but Chat: over MCP (v1), or
@@ -139,6 +142,11 @@ export interface ChatSettings {
   autoGoLiveGroups?: readonly ExecuteGroup[];
   /** Agents may run in Full auto (chat_settings.agents_full_auto, 00419); absent: not known, so no. */
   agentsFullAuto?: boolean;
+  /**
+   * Agent work (chat_settings.agent_work, 00481, AC-011): how far agents go
+   * without a person. Absent (no row, or before 00481): "I approve first".
+   */
+  agentWork?: AgentWork;
 }
 
 /** A workspace without a chat_settings row. Frozen: every such workspace shares it. */
@@ -176,6 +184,11 @@ export interface PrecedenceContext {
   agent?: GoLiveAgent | null;
   /** CHAT_AUTO_GO_LIVE (and _ORGS) for this workspace; absent: off. */
   autoGoLiveOn?: boolean;
+  /**
+   * The call is an agent's run (chat_conversations.agent_run_id), which
+   * Agent work caps (step 5); absent or false: a person's own chat.
+   */
+  agentRun?: boolean;
 }
 
 /** An agent run as step 4b reads it. */
@@ -280,6 +293,8 @@ export type ToolDenial =
 export type AskReason =
   | 'always_card'
   | 'mode'
+  /** An agent's run while the workspace's Agent work is "I approve first" (AC-011). */
+  | 'agent_work'
   | 'full_auto_locked'
   | 'policy'
   | 'full_auto_off'
@@ -551,6 +566,11 @@ function decideWrite(
   if (tool.flags.alwaysCard || tool.flags.costCard || call.overBatch) return ask('always_card');
   // 5. The person asked to be asked first: their mode wins over every policy.
   if (mode === 'ask_first') return ask('mode');
+  // 5. An agent's run under "I approve first" (AC-011): as Ask me first, whatever the agent's
+  // mode, so an Admin's Always asks too. Going live (an EXECUTE, step 4b) isn't a WRITE: untouched.
+  if (ctx.agentRun && parseAgentWork(ctx.settings.agentWork) === 'approve_first') {
+    return ask('agent_work');
+  }
   // 4–5. Set to Always by an Admin: runs in Auto and Full auto (see the header).
   if (policy === 'always') {
     // 2. Under Full auto's plan lock: Always mustn't get past the plan difference (Starter, trial).
