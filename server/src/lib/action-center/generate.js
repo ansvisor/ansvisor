@@ -55,6 +55,8 @@ import { orderByPriority, scoreCandidate } from './candidates.js';
 import { priorityColumns, promptIdsOf, scorePriority } from './priority.js';
 import { kindTrackOrNone, loadPromptDemand } from './priority-data.js';
 import { withWorkScope } from './work-scope.js';
+import { PLAY_DEFINITIONS, choosePlay } from './playbooks.js';
+import { siteTypeOf } from '../content-page-types.js';
 
 const DAY_MS = 86_400_000;
 
@@ -140,6 +142,45 @@ async function scopedPayload(brandId, definitionId, payload) {
   }
 }
 
+/**
+ * The payload with the play its prompts pick (playbooks.js, AC plan §5),
+ * for G15, G16 and C09: the brand's kind of site and its prompts' intents
+ * and AI searches read, then chosen. Best effort: a failed read, or no play
+ * the data supports, opens the action without one.
+ */
+async function playedPayload(brandId, definitionId, payload) {
+  if (!PLAY_DEFINITIONS.includes(definitionId) || payload.play) return payload;
+  const promptIds = Array.isArray(payload.promptIds) ? payload.promptIds : [];
+  if (!promptIds.length) return payload;
+  try {
+    const [brand, demand] = await Promise.all([
+      supabaseAdmin
+        .from('brands')
+        .select('site_type, industry, shopping_mode_enabled')
+        .eq('id', brandId)
+        .maybeSingle(),
+      loadPromptDemand(promptIds),
+    ]);
+    if (brand.error) throw new Error(brand.error.message);
+    const play = choosePlay({
+      siteType: siteTypeOf({
+        siteType: brand.data?.site_type,
+        industry: brand.data?.industry,
+        shoppingModeEnabled: brand.data?.shopping_mode_enabled,
+      }),
+      prompts: promptIds.map((id) => ({
+        id,
+        intent: demand.get(id)?.intent ?? null,
+        volume: demand.get(id)?.volume ?? null,
+      })),
+    });
+    return play ? { ...payload, play } : payload;
+  } catch (err) {
+    logger.warn({ brandId, definitionId, err: err.message }, '[actions] play not chosen');
+    return payload;
+  }
+}
+
 async function openCycle({
   brandId,
   definition,
@@ -150,7 +191,11 @@ async function openCycle({
   priority,
   now,
 }) {
-  const payload = await scopedPayload(brandId, definition.id, found);
+  const payload = await playedPayload(
+    brandId,
+    definition.id,
+    await scopedPayload(brandId, definition.id, found),
+  );
   const { data: inserted, error } = await supabaseAdmin
     .from('actions')
     .insert({

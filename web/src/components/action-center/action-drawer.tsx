@@ -106,6 +106,8 @@ import {
   type ActionDraft,
 } from '@/lib/content/action-drafts';
 import { StartNowBlock } from './start-now';
+import { PlaySection } from './play-section';
+import { actionPlay } from '@/lib/action-center/play';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
 import {
@@ -287,6 +289,16 @@ export function ActionDrawer({
     detail && action.status !== 'completed' && action.status !== 'dismissed'
       ? startNowWork(detail.tasks, action.payload)
       : null;
+  const startNowBlock = startNow ? (
+    <StartNowBlock
+      brandId={brandId}
+      action={{ id: action.id, actionNo: action.actionNo, title: texts.title }}
+      work={startNow}
+      drafts={drafts}
+    />
+  ) : null;
+  // The page its prompts pick, on G15, G16 and C09 (AC-ACTION-PLAN spec §5).
+  const play = actionPlay(action.payload);
   // Sent by a person from Content Optimization (#857): its evidence is the
   // opportunity, not detection signals.
   const opportunityId =
@@ -673,14 +685,9 @@ export function ActionDrawer({
             </div>
           ) : tab === 'overview' ? (
             <>
-              {startNow && (
+              {(play || startNow) && (
                 <>
-                  <StartNowBlock
-                    brandId={brandId}
-                    action={{ id: action.id, actionNo: action.actionNo, title: texts.title }}
-                    work={startNow}
-                    drafts={drafts}
-                  />
+                  {play ? <PlaySection play={play}>{startNowBlock}</PlaySection> : startNowBlock}
                   <Separator />
                 </>
               )}

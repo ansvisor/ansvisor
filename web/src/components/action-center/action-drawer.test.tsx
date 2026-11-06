@@ -529,6 +529,39 @@ describe('ActionDrawer', () => {
       expect(document.querySelector('section[aria-label="Start now"]')).toBeNull();
     });
 
+    it('says what to do for the kind of site, why, and what else is worth doing (AC plan P-2)', async () => {
+      server.getActionDetail.mockResolvedValue({
+        ...emptyDetail,
+        tasks: [task('t1', 'create_content_draft', 'Write the page')],
+      });
+      drafts.getActionDrafts.mockResolvedValue([]);
+      await renderDrawer({
+        ...action,
+        kind: 'create_content_for_topics',
+        payload: {
+          play: {
+            version: 1,
+            id: 'best_of',
+            assetType: 'best_of',
+            siteType: 'ecommerce',
+            reasons: [{ kind: 'intent', intents: ['best-top'], prompts: 6, of: 14, share: 0.52 }],
+            supporting: [{ id: 'guide', assetType: 'guide', prompts: 3, of: 14, share: 0.2 }],
+          },
+        },
+      });
+      const section = document.querySelector<HTMLElement>(
+        'section[aria-label="What to do for an online store"]',
+      )!;
+      expect(section.textContent).toContain('Write a best-of list');
+      expect(section.textContent).toContain(
+        '6 of 14 prompts ask for the best options: 52% of their estimated AI searches.',
+      );
+      expect(section.textContent).toContain('Also worth doing here');
+      expect(section.textContent).toContain('Write a how-to guide · 20% of the AI searches');
+      // Start now writes the play's page, inside it.
+      expect(section.querySelector('section[aria-label="Start now"]')).not.toBeNull();
+    });
+
     it('starts no draft on a read-only workspace: Optimize page opens the upgrade dialog', async () => {
       server.getActionDetail.mockResolvedValue({
         ...emptyDetail,

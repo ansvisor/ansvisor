@@ -1,8 +1,8 @@
 ---
 title: Start an action's writing in one click
 route: /dashboard/action-center/actions
-keywords: [start now, content editor, start in content editor, write page, open draft, chat]
-synonyms: [one click to editor, start writing, draft from action, work on action]
+keywords: [start now, content editor, start in content editor, write page, open draft, chat, what to do, play, also worth doing]
+synonyms: [one click to editor, start writing, draft from action, work on action, which page to write, playbook]
 plan: all
 updated: 2026-11-05
 last_checked: 2026-11-05
@@ -12,6 +12,14 @@ approved: false
 sources: [docs/guides/action-center.mdx]
 ---
 When an action's work is writing, a new page or a better existing one, its drawer opens with a **Start now** block at the top of **Overview**. It takes you straight to the writing, with what the action knows already filled in.
+
+## What to do for your kind of site
+
+When an action asks for new content for prompts or a topic, Ansvisor reads what those prompts ask and picks the page to write. Overview then starts with **What to do for an online store** (or a SaaS, an app, a travel brand) and the page, such as **Write a comparison page**, with why: how many of the prompts ask for it and their share of the estimated AI searches. A page qualifies when at least 15% of the searches ask for it.
+
+**Also worth doing here** lists up to two more pages the same prompts ask for. When the prompts' search intents aren't known yet, nothing is picked.
+
+**Start now** sits under it and writes that kind of page.
 
 ## What Content Editor opens
 
