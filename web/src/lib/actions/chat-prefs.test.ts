@@ -48,6 +48,7 @@ vi.mock('@/lib/chat/general-settings', async (original) => ({
 }));
 
 const {
+  dismissChatWelcome,
   markFocusPrompted,
   saveChatFocus,
   saveChatGeneralSettings,
@@ -219,6 +220,29 @@ describe('saveHomeSeen', () => {
         options: { onConflict: 'user_id' },
       },
     ]);
+  });
+});
+
+describe('dismissChatWelcome (00486)', () => {
+  it("keeps Not now on the person's own row, so the welcome card stays hidden", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-06T09:00:00Z'));
+    expect(await dismissChatWelcome()).toEqual({ ok: true });
+    vi.useRealTimers();
+    expect(db.upserts).toEqual([
+      {
+        row: { user_id: 'user-1', welcome_dismissed_at: '2026-11-06T09:00:00.000Z' },
+        options: { onConflict: 'user_id' },
+      },
+    ]);
+  });
+
+  it('does nothing while the new Chat is off, and answers a failure as a value', async () => {
+    vi.stubEnv('CHAT_AGENTIC', 'false');
+    expect(await dismissChatWelcome()).toEqual({ ok: false });
+    vi.stubEnv('CHAT_AGENTIC', 'true');
+    db.error = { message: 'nope' };
+    expect(await dismissChatWelcome()).toEqual({ ok: false });
   });
 });
 

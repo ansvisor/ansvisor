@@ -11,6 +11,7 @@ import { pageOpenOf } from '@/lib/chat/page-open';
 import { readPrecedenceContext } from '@/lib/chat/precedence-context';
 import { skillMenuFor } from '@/lib/chat/skills/store';
 import { isChatStaff } from '@/lib/chat/staff';
+import { readChatStartAudience, type ChatStartAudience } from '@/lib/chat/start-audience';
 
 export { composerSetupOf, type ChatComposerSetup };
 
@@ -94,6 +95,42 @@ export async function chatFirstName(): Promise<string | null> {
   return firstNameOf(
     profile?.full_name ?? (typeof metadataName === 'string' ? metadataName : null),
   );
+}
+
+/**
+ * Chat Home's welcome card (owner decision 2026-11-06; 00486): who it greets,
+ * the free trial or the demo (ChatStartAudience), until the person says Not
+ * now or ends the product tour; null for everyone else, and when a read fails.
+ */
+export async function chatWelcome(): Promise<ChatStartAudience | null> {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (!profile?.organization_id) return null;
+    const [audience, prefs] = await Promise.all([
+      readChatStartAudience(supabase, profile.organization_id),
+      supabase
+        .from('chat_user_prefs')
+        .select('welcome_dismissed_at, tour_finished_at')
+        .eq('user_id', user.id)
+        .maybeSingle(),
+    ]);
+    if (prefs.error || prefs.data?.welcome_dismissed_at || prefs.data?.tour_finished_at) {
+      return null;
+    }
+    return audience;
+  } catch (error) {
+    console.error('[chat] could not read the welcome card:', error);
+    return null;
+  }
 }
 
 /** What Chat focuses on for the person (CHAT-24 §3), as Home and Settings › General open. */

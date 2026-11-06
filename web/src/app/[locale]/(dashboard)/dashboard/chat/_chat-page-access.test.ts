@@ -23,6 +23,8 @@ const db = vi.hoisted(() => ({
     focus_prompted_at?: string | null;
     home_view?: string;
     page_open?: string | null;
+    welcome_dismissed_at?: string | null;
+    tour_finished_at?: string | null;
   } | null,
   prefsError: null as { message: string } | null,
   confirmedAt: null as string | null,
@@ -78,11 +80,14 @@ vi.mock('@/lib/chat/key-health', () => keyHealth);
 vi.mock('@/lib/supabase/admin', async () => ({
   supabaseAdmin: (await import('@/lib/chat/testing/fake-supabase')).createFakeSupabase(),
 }));
+// Who the welcome card greets (00486): the trial, the demo or nobody.
+const audience = vi.hoisted(() => ({ read: vi.fn() }));
+vi.mock('@/lib/chat/start-audience', () => ({ readChatStartAudience: audience.read }));
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const skillsDb = supabaseAdmin as unknown as FakeSupabase;
 
 const { importLegacyChats } = await import('@/lib/chat/legacy-import');
-const { chatPageOpen, chatShellPrefs, chatComposerSetup, chatFocusState } =
+const { chatPageOpen, chatShellPrefs, chatComposerSetup, chatFocusState, chatWelcome } =
   await import('./_chat-page-access');
 
 beforeEach(() => {
@@ -95,6 +100,7 @@ beforeEach(() => {
   facts.ownKey = false;
   skillsDb.tables = {};
   vi.mocked(importLegacyChats).mockClear();
+  audience.read.mockReset().mockResolvedValue(null);
 });
 afterEach(() => vi.unstubAllEnvs());
 
@@ -375,5 +381,35 @@ describe('chatFocusState (CHAT-24 §3)', () => {
   it('opens Home on the Default view, without the picker, when the settings could not be read', async () => {
     db.prefsError = { message: 'down' };
     expect(await chatFocusState()).toEqual({ focus: null, view: 'default', ask: false });
+  });
+});
+
+describe('chatWelcome (00486)', () => {
+  it('greets the trial and the demo, from their organization', async () => {
+    audience.read.mockResolvedValueOnce('trial').mockResolvedValueOnce('demo');
+    expect(await chatWelcome()).toBe('trial');
+    expect(await chatWelcome()).toBe('demo');
+    expect(audience.read).toHaveBeenCalledWith(expect.anything(), 'org-1');
+  });
+
+  it('shows no card after Not now, once the tour ended, or to anyone else', async () => {
+    audience.read.mockResolvedValue('trial');
+    db.prefs = { welcome_dismissed_at: '2026-11-06T09:00:00.000Z' };
+    expect(await chatWelcome()).toBeNull();
+    db.prefs = { tour_finished_at: '2026-11-06T09:00:00.000Z' };
+    expect(await chatWelcome()).toBeNull();
+    db.prefs = null;
+    audience.read.mockResolvedValue(null);
+    expect(await chatWelcome()).toBeNull();
+  });
+
+  it('shows none when a read fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    audience.read.mockResolvedValue('trial');
+    db.prefsError = { message: 'down' };
+    expect(await chatWelcome()).toBeNull();
+    db.prefsError = null;
+    audience.read.mockRejectedValue(new Error('down'));
+    expect(await chatWelcome()).toBeNull();
   });
 });
