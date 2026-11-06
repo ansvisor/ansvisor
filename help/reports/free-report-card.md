@@ -4,18 +4,18 @@ route: /dashboard/insights
 keywords: [report card, free report card, ai visibility report, report card pdf, value table, revenue scenario]
 synonyms: [free audit from the website, the pdf you e-mailed me, visibility report card, free ai report]
 plan: all
-updated: 2026-11-04
-last_checked: 2026-11-04
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/api-reference/report-card.mdx]
 ---
-The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 25 that match what you sell best and that people search for most, asks each one once in ChatGPT, Microsoft Copilot, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once.
+The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 25 that match what you sell best and that people search for most, asks each one once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once.
 
 ## What the card measured
 
-- **AI visibility**: the share of ChatGPT's and Microsoft Copilot's answers that name your brand or your site. These are the engines Ansvisor Starter tracks. Gemini, Google AI Overviews and Google AI Mode, which Growth adds, are shown apart in an "In Ansvisor Growth" band. Competitors, cited sites and your citations count the same answers.
+- **AI visibility**: the share of ChatGPT's and Gemini's answers that name your brand or your site. These are the engines Ansvisor Starter tracks. Google AI Overviews and Google AI Mode, which Growth adds, are shown apart in an "In Ansvisor Growth" band. A card made before Ansvisor stopped tracking Microsoft Copilot counts ChatGPT and Copilot instead. Competitors, cited sites and your citations count the same answers.
 - The same share for each engine.
 - The competitors the answers named most, and the sites they cite, with yours, your competitors' and marketplaces marked.
 
@@ -46,7 +46,7 @@ The card asks each question once, on one day. In Ansvisor, your tracked prompts 
 
 ## Measure your own questions every day
 
-The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Microsoft Copilot. **Brand Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next.
+The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Brand Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next.
 
 ## The value table and the revenue scenario
 

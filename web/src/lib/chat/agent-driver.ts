@@ -331,6 +331,8 @@ function runScope(
   if (withIds) {
     for (const fire of evidence.fires) {
       if (chips.length >= MAX_CHIPS - 1) break;
+      // A brand added names the run's own brand: its chip is there already.
+      if (fire.kind === 'brand_added') continue;
       chips.push(
         fire.kind === 'signal'
           ? {
