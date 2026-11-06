@@ -54,6 +54,7 @@ const {
   saveChatMenuOpen,
   saveChatPanelSize,
   saveChatRailOpen,
+  saveDefaultHome,
   saveHomeSeen,
   saveUsageNoticePeriod,
   skipChatFocus,
@@ -221,18 +222,21 @@ describe('saveHomeSeen', () => {
   });
 });
 
-describe('saveChatFocus, skipChatFocus and markFocusPrompted (CHAT-24 §3)', () => {
-  it('keeps the picks in their order, a skip as none, and when the picker opened', async () => {
+describe('saveChatFocus, saveDefaultHome, skipChatFocus and markFocusPrompted (CHAT-24 §3)', () => {
+  it('keeps the picks in their order with Home on them, none as the Default view, a skip as none, and when the picker opened', async () => {
     expect(await saveChatFocus(['pd', 'comp'])).toEqual({ ok: true });
     expect(await saveChatFocus([])).toEqual({ ok: true });
+    expect(await saveDefaultHome()).toEqual({ ok: true });
     expect(await skipChatFocus()).toEqual({ ok: true });
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-10-31T09:00:00Z'));
     expect(await markFocusPrompted()).toEqual({ ok: true });
     vi.useRealTimers();
     expect(db.upserts.map((u) => u.row)).toEqual([
-      { user_id: 'user-1', focus: ['pd', 'comp'] },
-      { user_id: 'user-1', focus: [] },
+      { user_id: 'user-1', focus: ['pd', 'comp'], home_view: 'focus' },
+      { user_id: 'user-1', focus: [], home_view: 'default' },
+      // The Default view over a focus keeps the focus, for the picker to tick (00485).
+      { user_id: 'user-1', home_view: 'default' },
       { user_id: 'user-1', focus: [] },
       { user_id: 'user-1', focus_prompted_at: '2026-10-31T09:00:00.000Z' },
     ]);
