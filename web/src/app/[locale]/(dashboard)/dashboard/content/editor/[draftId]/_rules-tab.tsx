@@ -48,7 +48,7 @@ import {
   type TextRule,
 } from '@/lib/content/rules';
 import { listed } from '@/lib/content/shopping-check';
-import { formatNumber } from '@/lib/format';
+import { ruleStatusDetail, ruleStatusText } from '@/lib/content/rule-words';
 import { cn } from '@/lib/utils';
 import { useUserRole } from '@/hooks/use-user-role';
 import { RunCard } from './_run-card';
@@ -895,31 +895,8 @@ function LengthValue({
   );
 }
 
-/** How a rule reads now, as its badge says it ("✓", "3 found", "Missing"). */
-export function ruleStatusText(
-  t: (key: string, values?: Record<string, number>) => string,
-  status: RuleStatus,
-): string {
-  if (status.state === 'ok') return '✓';
-  if (status.code === 'partOf') return t('partOf', { count: status.count, of: status.of });
-  if (status.code === 'current') return formatNumber(status.count);
-  if ('count' in status) return t(status.code, { count: status.count });
-  return t(status.code);
-}
-
-/**
- * The same in full, for the badge's hover and what the agent is told: a
- * length out of its band with the band ("15,921 characters, over 2,400–3,600").
- */
-export function ruleStatusDetail(
-  t: (key: string, values?: Record<string, number>) => string,
-  status: RuleStatus,
-): string {
-  if (status.state === 'bad' && (status.code === 'short' || status.code === 'long')) {
-    return t(`${status.code}Detail`, { count: status.count, min: status.min, max: status.max });
-  }
-  return ruleStatusText(t, status);
-}
+// The badge's words live with the rules, so Chat's check_draft_rules says them too.
+export { ruleStatusDetail, ruleStatusText };
 
 function StatusBadge({
   on,

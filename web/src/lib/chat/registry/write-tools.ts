@@ -136,7 +136,7 @@ export const WRITE_TOOLS = [
     // Version 1 of the page in this chat (W4-12a).
     versionOf: (_input, output, place) =>
       typeof output === 'string' && output
-        ? readPageVersion({ draftId: output, conversationId: place.conversationId })
+        ? readPageVersion({ draftId: output, conversationId: place.conversationId, run: place.run })
         : Promise.resolve(null),
     fixture: {
       input: {

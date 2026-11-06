@@ -7,9 +7,13 @@
  * The total re-normalizes over the weight of categories that had at least one
  * evaluated signal, so the headline number stays a true 0..1 even mid-rollout.
  * Each result also reports `evaluated / total` so the UI can show coverage.
+ *
+ * Informational signals (llms.txt, SA-010) are evaluated and shown, but they
+ * aren't part of the score: a category's mean and its `evaluated / total`
+ * cover its scored signals only.
  */
 
-import { categories, signalsByKey } from './rubric.js';
+import { categories, isScored, signalsByKey } from './rubric.js';
 
 /**
  * @param {Array<{ key: string, status: string, score: number|null }>} results
@@ -24,7 +28,7 @@ export function scoreAudit(results) {
 
   for (const cat of categories) {
     const catSignalKeys = Object.values(signalsByKey)
-      .filter((s) => s.category === cat.key)
+      .filter((s) => s.category === cat.key && isScored(s.key))
       .map((s) => s.key);
 
     const evaluated = catSignalKeys

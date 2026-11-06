@@ -534,6 +534,26 @@ describe('listSkills', () => {
     expect(analyst.skills.map((s) => s.name)).toEqual(['c-shared']);
     expect(analyst.can).toEqual({ save: false, manageLibrary: false });
   });
+
+  it('keeps a skill added from the Library apart from an import, and runs it as a third party’s (W4-19)', async () => {
+    const url = `https://github.com/acme/skills/tree/${'c'.repeat(40)}/copy-editing`;
+    seedSkill({
+      name: 'copy-editing',
+      source: 'library',
+      library_ref: 'acme/skills/copy-editing',
+      source_url: url,
+      commit_sha: 'c'.repeat(40),
+      license: 'MIT',
+    });
+    const list = await store.listSkills(await viewer(PEOPLE.manager));
+    expect(list.skills[0]).toMatchObject({ source: 'library', sourceUrl: url, license: 'MIT' });
+    const run = (await store.enabledSkillsFor(ORG, PEOPLE.manager)).find(
+      (s) => s.name === 'copy-editing',
+    );
+    // Its step names the repo's owner, as an import's does.
+    expect(run).toMatchObject({ source: 'import', sourceUrl: url });
+    expect(store.skillSourceWords(run!, PEOPLE.manager)).toContain('acme');
+  });
 });
 
 describe("an agent's skills (CHAT-21 §G item 34: skill_off)", () => {

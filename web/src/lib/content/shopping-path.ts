@@ -202,6 +202,60 @@ export type ShoppingPath = z.infer<typeof shoppingPathSchema>;
 export type ShoppingProduct = ShoppingPath['products'][number];
 export type ShoppingChoices = z.infer<typeof shoppingChoicesSchema>;
 
+/**
+ * The catalog products an action is about (AC-ACTION-PLAN spec §10 item 3):
+ * its product groups' (payload.products, ids or `{ id }`), and the one
+ * product Product Visibility sent it for (payload.target). MAX_KEPT at most.
+ */
+export function actionProductIds(payload: Record<string, unknown> | null | undefined): string[] {
+  const p = payload ?? {};
+  const listed = Array.isArray(p.products) ? p.products : [];
+  const target =
+    p.target && typeof p.target === 'object'
+      ? (p.target as { type?: unknown; id?: unknown })
+      : null;
+  const ids = [
+    ...listed.map((item: unknown) =>
+      item && typeof item === 'object' ? (item as { id?: unknown }).id : item,
+    ),
+    ...(target?.type === 'product' ? [target.id] : []),
+  ];
+  return [
+    ...new Set(
+      ids.filter((id): id is string => typeof id === 'string' && id.length > 0 && id.length <= 100),
+    ),
+  ].slice(0, MAX_KEPT);
+}
+
+/**
+ * The shopping path a draft started from an action opens with: its products
+ * locked in (they stay whatever a build picks around them), nothing picked
+ * yet; the API's build fills the rest. Null where no path fits (not a shop,
+ * a page type that takes none) or the action names no product.
+ */
+export function actionShoppingSeed(
+  payload: Record<string, unknown> | null | undefined,
+  siteType: SiteType,
+  pageType: string | null,
+  now: Date,
+): ShoppingPath | null {
+  if (!shoppingPathFits(siteType, pageType)) return null;
+  const ids = actionProductIds(payload);
+  if (!ids.length) return null;
+  return {
+    version: 1,
+    builtAt: now.toISOString(),
+    savedAt: null,
+    pageType,
+    categories: [],
+    products: [],
+    leftOut: [],
+    locked: ids,
+    removed: [],
+    added: ids,
+  };
+}
+
 /** The person's choices in a path. */
 export function choicesOf(path: ShoppingPath): ShoppingChoices {
   return { locked: path.locked, removed: path.removed, added: path.added };

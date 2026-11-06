@@ -1,7 +1,7 @@
 import type { TeamRole } from '@/components/providers/role-provider';
 import { storedPriorityLevel, type PriorityLevel } from '@/lib/action-center/priority';
 import { CLOSED_ACTION_STATUSES, type ActionStatus } from '@/lib/action-center/registry';
-import { TASK_DONE, actionPages, draftMethodForTask } from '@/lib/content/action-drafts';
+import { startNowWork } from '@/lib/content/action-drafts';
 import type { DraftMethod } from '@/lib/content/drafts';
 import { formatMonthDay } from '@/lib/format';
 import { effectiveTimeZone } from '@/lib/time-zone';
@@ -291,14 +291,9 @@ export function suggestionStart(
   tasks: readonly { id: string; taskKey: string | null; status: string }[],
   payload: Record<string, unknown>,
 ): SuggestionStart | null {
-  const open = tasks.filter((task) => !TASK_DONE.includes(task.status));
-  const of = (method: DraftMethod) =>
-    open.find((task) => draftMethodForTask(task.taskKey) === method);
-  const create = of('create');
-  if (create) return { taskId: create.id, method: 'create', page: null };
-  const optimize = of('optimize');
-  if (!optimize) return null;
-  return { taskId: optimize.id, method: 'optimize', page: actionPages(payload)[0] ?? null };
+  const work = startNowWork(tasks, payload);
+  if (!work) return null;
+  return { taskId: work.taskId, method: work.method, page: work.pages[0] ?? null };
 }
 
 /** The prompts an action names (payload.promptIds, else its count), for "Read AC-2841 · 14 prompts". */

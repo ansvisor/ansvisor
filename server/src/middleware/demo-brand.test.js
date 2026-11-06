@@ -463,6 +463,9 @@ describe('coverage of the write routes', () => {
       'internal-chat-notices.js',
       // Chat's page reads (CRON_SECRET, called by the web's engine): a public URL, no brand.
       'internal-chat-pages.js',
+      // A Chat page's Quality reads (CRON_SECRET, called by the web's engine): the go-live
+      // step's reads of a draft, for a person's own run and metered as its steps.
+      'internal-chat-quality.js',
       // Chat's scheduled jobs' e-mails (CRON_SECRET, called by the web's worker): a job's own
       // recipients, checked as they are sent; nothing a demo brand writes.
       'internal-chat-schedules.js',
