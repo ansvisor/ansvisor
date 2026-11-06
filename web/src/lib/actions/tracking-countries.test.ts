@@ -23,10 +23,10 @@ vi.mock('@/lib/supabase/server', () => ({
 const { getTrackingCountries } = await import('./tracking-countries');
 
 describe('getTrackingCountries', () => {
-  it('lists each country with the engines that answer from it', async () => {
+  it('lists each country with the engines that answer from it, no longer Copilot', async () => {
     expect(await getTrackingCountries()).toEqual([
       { code: 'KE', models: ['aimode', 'chatgpt'] },
-      { code: 'US', models: ['aimode', 'copilot'] },
+      { code: 'US', models: ['aimode'] },
     ]);
   });
 });

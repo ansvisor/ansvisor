@@ -374,7 +374,7 @@ describe('getPromptsPageData', () => {
   it("gives the demo brand Growth's engines in the Positions column, on any plan", async () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
     const [p1] = promptSetRows[0].prompts as Record<string, unknown>[];
-    p1.platforms = ['chatgpt-web', 'perplexity-web'];
+    p1.platforms = ['chatgpt-web', 'google-aio'];
 
     // Starter's engines alone on the organization's own brand…
     const own = await getPromptsPageData('b1');
@@ -383,7 +383,7 @@ describe('getPromptsPageData', () => {
     // …and Growth's on its demo brand.
     brandIsDemo = true;
     const demo = await getPromptsPageData('b1');
-    expect(demo.positions.p1.dots.map((d) => d.id)).toEqual(['chatgpt-web', 'perplexity-web']);
+    expect(demo.positions.p1.dots.map((d) => d.id)).toEqual(['chatgpt-web', 'google-aio']);
   });
 
   /** 1000 rows of other prompts, which come before p1's in the RPC's order. */

@@ -9,7 +9,7 @@ The **Prompts** page (`/dashboard/prompts`) has four tabs. The **Prompts** item 
 
 - **Prompts** — your prompt list. A switch above the filters picks **Tracked Prompts** (`/dashboard/prompts/tracked`) or **Prompt Suggestions** (`/dashboard/prompts/suggestions`)
 - **Topics** (`/dashboard/prompts/topics`) — your tracked prompts grouped by theme
-- **Query Fan-out** (`/dashboard/prompts/fan-outs`) — the searches AI engines ran behind their answers. Copilot and Perplexity share them when they search; ChatGPT's are sampled one day a week for each prompt (see [ChatGPT fan-out](#chatgpt-fan-out))
+- **Query Fan-out** (`/dashboard/prompts/fan-outs`) — the searches AI engines ran behind their answers. ChatGPT's are sampled one day a week for each prompt (see [ChatGPT fan-out](#chatgpt-fan-out))
 - **Insights** (`/dashboard/prompts/insights`) — estimated AI search volume, intent and the highest-demand prompts
 
 The date range (24h, 7d, 30d, 90d or custom) applies to Prompts, Topics and Query Fan-out, and carries over when you switch tabs. Insights has no range: volume estimates aren't tied to a period.
@@ -83,13 +83,13 @@ Click a cell to open the prompt's Positions panel for that location. A location 
 
 **+ Add location** in the Locations view, **+ Track** in a cell, or **Locations › Add locations** in the bar that shows when you select prompts opens **Track in more locations**:
 
-1. Pick one or more countries, US states or cities (50 major cities). The countries are the ones the AI engines answer from, read from the tracking provider every day: a country one engine doesn't answer from says so ("not on Copilot"), and that engine is skipped there while the others run.
+1. Pick one or more countries, US states or cities (50 major cities). The countries are the ones the AI engines answer from, read from the tracking provider every day: a country one engine doesn't answer from says so ("not on Gemini"), and that engine is skipped there while the others run.
 2. Choose which prompts to ask there: the one you clicked, the selected ones, a topic, or every prompt shown.
 3. Check **Plan usage**. Every prompt in every location counts once on your plan's prompt locations; for example, 50 prompts in two more places use 100 more. Paused prompts don't count.
 
-**US states** are asked by every engine from the state itself: ChatGPT, Perplexity, Copilot and Gemini through the provider's state setting, Google AI Mode and Google AI Overview by the state's name as Google knows it ("California, United States"), and the API models (OpenAI, Claude) by its region. Google's engines asked a state country-wide until October 2026: their answers from before then stay in the country's column.
+**US states** are asked by every engine from the state itself: ChatGPT and Gemini through the provider's state setting, Google AI Mode and Google AI Overview by the state's name as Google knows it ("California, United States"), and the API models (OpenAI, Claude) by its region. Google's engines asked a state country-wide until October 2026: their answers from before then stay in the country's column.
 
-**Cities** are asked by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Perplexity, Copilot, Gemini and Grok answer per country, so they skip a city, and their answers stay in the country's column; track the country too to see them. A city column in the Locations view says *AI Mode · AIO · APIs*. A city counts as one location on your plan, like a country, on every plan. If none of the chosen prompts runs one of those engines, the dialog says so and adds nothing.
+**Cities** are asked by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Gemini and Grok answer per country, so they skip a city, and their answers stay in the country's column; track the country too to see them. A city column in the Locations view says *AI Mode · AIO · APIs*. A city counts as one location on your plan, like a country, on every plan. If none of the chosen prompts runs one of those engines, the dialog says so and adds nothing.
 
 If the choice would pass your plan's limit, the dialog says how many it needs and how many are left, and saves nothing. Pick fewer prompts or places, or:
 

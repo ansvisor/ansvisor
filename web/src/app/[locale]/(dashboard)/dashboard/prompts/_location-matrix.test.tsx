@@ -312,13 +312,13 @@ describe('a location with no answers yet', () => {
 
   it('says when the prompt is paused, or none of its engines answers from there (PROMPT-015e)', async () => {
     getTrackingCountries.mockResolvedValue([
-      { code: 'US', models: ['chatgpt', 'copilot'] },
+      { code: 'US', models: ['chatgpt', 'gemini'] },
       { code: 'KE', models: ['chatgpt'] },
     ]);
     getPromptLocationMatrix.mockResolvedValue({ p1: { US: cell(62) }, p2: { US: cell(40) } });
     await renderRows([
       prompt('p1', 'paused prompt', ['US', 'KE'], 'Coffee', { isActive: false }),
-      prompt('p2', 'copilot only', ['US', 'KE'], 'Coffee', { platforms: ['copilot-web'] }),
+      prompt('p2', 'gemini only', ['US', 'KE'], 'Coffee', { platforms: ['gemini-web'] }),
     ]);
     const rows = bodyRows();
     // KE comes before US.
@@ -435,15 +435,15 @@ describe('a prompt with no answers yet, in the Table view', () => {
   });
 
   it('says Paused, or No engine here, whatever its age', async () => {
-    // Copilot answers from Türkiye, not Kenya.
+    // Gemini answers from Türkiye, not Kenya.
     getTrackingCountries.mockResolvedValue([
-      { code: 'TR', models: ['chatgpt', 'copilot'] },
+      { code: 'TR', models: ['chatgpt', 'gemini'] },
       { code: 'KE', models: ['chatgpt'] },
     ]);
     const paused = prompt('p1', 'paused prompt', ['US'], 'Coffee', { isActive: false });
     expect((await renderPending(paused, undefined, {}, false)).shown).toBe('Paused');
-    const copilot = prompt('p2', 'copilot only', ['KE'], 'Coffee', { platforms: ['copilot-web'] });
-    expect((await renderPending(copilot, 'KE', {}, false)).shown).toBe('No engine here');
+    const gemini = prompt('p2', 'gemini only', ['KE'], 'Coffee', { platforms: ['gemini-web'] });
+    expect((await renderPending(gemini, 'KE', {}, false)).shown).toBe('No engine here');
   });
 
   it('shows the plain dash for a custom range that ended before today', async () => {
@@ -457,7 +457,7 @@ describe('a prompt with no answers yet, in the Table view', () => {
 
   it('with a location picked, says it for that location', async () => {
     getTrackingCountries.mockResolvedValue([
-      { code: 'TR', models: ['chatgpt', 'copilot'] },
+      { code: 'TR', models: ['chatgpt', 'gemini'] },
       { code: 'KE', models: ['chatgpt'] },
     ]);
     expect(await renderPending(prompt('p1', 'new prompt', ['US', 'TR']), 'TR')).toEqual({
@@ -465,8 +465,8 @@ describe('a prompt with no answers yet, in the Table view', () => {
       tip: 'Tracked in Türkiye from the next daily run: its first results come within 24 hours.',
     });
     // None of its engines answers from there: no answers will come.
-    const copilot = prompt('p2', 'copilot only', ['KE'], 'Coffee', { platforms: ['copilot-web'] });
-    expect((await renderPending(copilot, 'KE')).shown).toBe('No engine here');
+    const gemini = prompt('p2', 'gemini only', ['KE'], 'Coffee', { platforms: ['gemini-web'] });
+    expect((await renderPending(gemini, 'KE')).shown).toBe('No engine here');
   });
 });
 
