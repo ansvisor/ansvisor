@@ -378,6 +378,27 @@ describe('chatFocusState (CHAT-24 §3)', () => {
     expect(await chatFocusState()).toMatchObject({ focus: [], view: 'default', ask: false });
   });
 
+  it('never opens it by itself for the trial or the demo, who land on the welcome card', async () => {
+    audience.read.mockResolvedValueOnce('trial').mockResolvedValueOnce('demo');
+    expect(await chatFocusState()).toEqual({ focus: null, view: 'default', ask: false });
+    expect(await chatFocusState()).toEqual({ focus: null, view: 'default', ask: false });
+    expect(audience.read).toHaveBeenCalledWith(expect.anything(), 'org-1');
+    // A paid workspace keeps it, and so does a read that fails.
+    audience.read.mockResolvedValueOnce(null);
+    expect((await chatFocusState()).ask).toBe(true);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    audience.read.mockRejectedValueOnce(new Error('down'));
+    expect((await chatFocusState()).ask).toBe(true);
+  });
+
+  it('reads who Chat starts only for someone the picker would open for', async () => {
+    db.prefs = { focus: null, focus_prompted_at: '2026-10-31T09:00:00.000Z' };
+    await chatFocusState();
+    db.prefs = { focus: [], focus_prompted_at: null };
+    await chatFocusState();
+    expect(audience.read).not.toHaveBeenCalled();
+  });
+
   it('opens Home on the Default view, without the picker, when the settings could not be read', async () => {
     db.prefsError = { message: 'down' };
     expect(await chatFocusState()).toEqual({ focus: null, view: 'default', ask: false });
