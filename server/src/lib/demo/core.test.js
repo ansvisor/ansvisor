@@ -35,7 +35,7 @@ const DAY = 86_400_000;
 const rows = coreRows({ brandId: BRAND_ID, now: NOW });
 
 describe('coreRows', () => {
-  it('is lean: 12 prompts in 3 topics, 6 engines, 4 competitors, a run every 3 days', () => {
+  it('is lean: 12 prompts in 3 topics, 4 engines, 4 competitors, a run every 3 days', () => {
     expect(rows.prompts).toHaveLength(12);
     expect(new Set(rows.prompts.map((p) => p.topic_id)).size).toBe(3);
     expect(rows.topics).toHaveLength(3);
@@ -45,16 +45,15 @@ describe('coreRows', () => {
       'Morning Ritual Co.',
       'Daybreak Beans',
     ]);
+    // Copilot and Perplexity are no longer tracked (00487).
     expect(rows.platforms.map((p) => p.platform).sort()).toEqual([
       'chatgpt-web',
-      'copilot-web',
       'gemini-web',
       'google-aimode',
       'google-aio',
-      'perplexity-web',
     ]);
     expect(rows.runs).toHaveLength(RUNS);
-    expect(rows.results).toHaveLength(12 * 6 * RUNS);
+    expect(rows.results).toHaveLength(12 * 4 * RUNS);
     expect(rows.volumes).toHaveLength(12);
   });
 
@@ -82,7 +81,7 @@ describe('coreRows', () => {
     expect(Math.max(...times)).toBeLessThan(NOW.getTime());
     expect(NOW.getTime() - Math.min(...times)).toBeLessThan(31 * DAY);
     for (const run of rows.runs) {
-      expect(run).toMatchObject({ brand_id: BRAND_ID, source: 'cron', result_count: 72 });
+      expect(run).toMatchObject({ brand_id: BRAND_ID, source: 'cron', result_count: 48 });
       expect(Date.parse(run.completed_at)).toBeLessThan(NOW.getTime());
     }
     expect(rows.runs.at(-1).started_at).toBe(latest.toISOString());
@@ -115,7 +114,7 @@ describe('coreRows', () => {
     const share = named(rows.results);
     expect(share).toBeGreaterThan(0.4);
     expect(share).toBeLessThan(0.65);
-    expect(named(rows.results.slice(-72))).toBeGreaterThan(named(rows.results.slice(0, 72)));
+    expect(named(rows.results.slice(-48))).toBeGreaterThan(named(rows.results.slice(0, 48)));
     // Not named: no sentiment of its own, as tracking stores it.
     for (const r of rows.results.filter((x) => x.mention_count === 0)) {
       expect(r.sentiment).toBe('neutral');
@@ -126,12 +125,18 @@ describe('coreRows', () => {
 
   it('shares searches only on the engines that do, and cards only where they show', () => {
     const engines = (list) => [...new Set(list.map((r) => r.platform))].sort();
-    expect(engines(rows.results.filter((r) => r.search_queries.length > 0))).toEqual([
-      'copilot-web',
-      'perplexity-web',
-    ]);
+    const withSearches = rows.results.filter((r) => r.search_queries.length > 0);
+    expect(engines(withSearches)).toEqual(['chatgpt-web']);
+    // ChatGPT's are sampled: one run in seven per prompt, a few in every run.
+    const chatgpt = rows.results.filter((r) => r.platform === 'chatgpt-web');
+    expect(withSearches.length).toBeLessThan(chatgpt.length / 4);
+    const perRun = rows.results.length / RUNS;
+    for (let run = 0; run < RUNS; run++) {
+      const ofRun = rows.results.slice(run * perRun, (run + 1) * perRun);
+      expect(ofRun.some((r) => r.search_queries.length > 0)).toBe(true);
+    }
     const withCards = rows.results.filter((r) => r.shopping_cards.length > 0);
-    expect(engines(withCards)).toEqual(['copilot-web', 'google-aimode', 'perplexity-web']);
+    expect(engines(withCards)).toEqual(['google-aimode']);
     expect(rows.shoppingCards.length).toBeGreaterThan(20);
     expect(new Set(rows.shoppingCards.map((c) => c.matched_brand_role))).toEqual(
       new Set(['own', 'competitor']),
@@ -207,7 +212,7 @@ describe('core.build', () => {
     const db = recordingDb();
     const built = await core.build({ brandId: BRAND_ID, now: NOW, db });
 
-    expect(built).toMatchObject({ prompts: 12, results: 720 });
+    expect(built).toMatchObject({ prompts: 12, results: 480 });
     const [brand] = db.calls;
     expect(brand).toMatchObject({ table: 'brands', op: 'update', eq: ['id', BRAND_ID] });
     expect(brand.payload).toMatchObject({ name: 'Brewline Coffee', site_type: 'ecommerce' });
@@ -230,7 +235,7 @@ describe('core.build', () => {
     ]);
     const count = (table) =>
       db.calls.filter((c) => c.table === table).reduce((n, c) => n + (c.rows?.length ?? 0), 0);
-    expect(count('prompt_results')).toBe(720);
+    expect(count('prompt_results')).toBe(480);
     expect(count('prompt_result_citations')).toBe(rows.citations.length);
     // Statements stay small: the answers 250 at a time, the small citation rows 1,000.
     const largest = (table) =>

@@ -10,7 +10,8 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   Chat: 'chat',
   'Agent Center': 'agentCenter',
   'Action Center': 'actionCenter',
-  'Answer Engine Insights': 'insights',
+  Visibility: 'insights',
+  Overview: 'overview',
   Competitors: 'competitors',
   'AI Referral Traffic': 'traffic',
   Prompts: 'prompts',
@@ -70,6 +71,36 @@ export function activeChildHref(children: NavChild[], pathname: string): string 
 }
 
 /**
+ * Whether a menu item is the current page's: its route (`href`, where it
+ * links), or one of its submenu's (Brand Visibility on its Mentions and
+ * Citations tabs, whose routes aren't under its own).
+ */
+export function isNavItemActive(
+  item: Pick<NavItem, 'href' | 'children'>,
+  pathname: string,
+  href: string = item.href,
+): boolean {
+  if (item.href === '/dashboard') return pathname === '/dashboard';
+  if (pathname.startsWith(href)) return true;
+  return !!item.children?.length && activeChildHref(item.children, pathname) !== null;
+}
+
+/**
+ * The submenu entries a person's menu shows: each entry's section is its
+ * route's, so Brand Visibility's Mentions and Citations go with theirs
+ * (menu access), and Prompts' and Content's with the item's own.
+ */
+export function visibleNavChildren(
+  item: Pick<NavItem, 'children'>,
+  hiddenSections: ReadonlySet<string> = new Set(),
+): NavChild[] {
+  return (item.children ?? []).filter((child) => {
+    const section = menuSectionOf(child.href);
+    return !section || !hiddenSections.has(section);
+  });
+}
+
+/**
  * Where a submenu entry links: its route, or the page open under it when it
  * keeps it (the Editor, on a draft: clicking it doesn't open the draft again).
  */
@@ -90,8 +121,14 @@ export function shouldShowDashboardNavItem(
   chatAgentic = false,
 ): boolean {
   if (item.requiresChatAgentic && !chatAgentic) return false;
-  const section = menuSectionOf(item.href);
-  if (section && hiddenSections.has(section)) return false;
+  if (item.children?.length) {
+    // A submenu shows while one of its entries does: Brand Visibility with
+    // only Citations on someone's menu still shows, with Citations alone.
+    if (visibleNavChildren(item, hiddenSections).length === 0) return false;
+  } else {
+    const section = menuSectionOf(item.href);
+    if (section && hiddenSections.has(section)) return false;
+  }
   return !item.requiresBrandPref || brandPrefs[item.requiresBrandPref];
 }
 

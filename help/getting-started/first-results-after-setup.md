@@ -4,8 +4,8 @@ route: /dashboard/insights
 keywords: [first results, after onboarding, first run, first tracking, visibility zero, brand name prompts, tracking snippet]
 synonyms: [no data yet, empty dashboard, why is my score zero, what happens next, how long until results]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ When you finish setting up a brand, the first round of questions to the AI engin
 
 ## How long the first run takes
 
-The first run can take anywhere from a few minutes to one or two hours at busy times. **Brand Visibility** shows that the first tracking is in progress, and fills in with your results as they come back.
+The first run can take anywhere from a few minutes to one or two hours at busy times. **Visibility** shows that the first tracking is in progress, and fills in with your results as they come back.
 
 You can leave the page: the run keeps going in the background. When your workspace's first results are ready, everyone in it gets one e-mail, **Your first results are ready**, where e-mail is set up, as on the cloud. It's sent once, not for every brand you add.
 
@@ -23,7 +23,7 @@ You can leave the page: the run keeps going in the background. When your workspa
 
 While you wait:
 
-- **Brand Visibility** fills in with your first results.
+- **Visibility** fills in with your first results.
 - **Citations** fills in with the addresses of the pages AI answers cite.
 - **Prompt Suggestions**, on the **Prompts** page, offers prompt ideas to add to tracking.
 
@@ -43,7 +43,7 @@ Once the snippet sends a visit, **Tracking snippet** in the **Data sources** str
 
 ## While the first tracking runs
 
-Brand Visibility says **First tracking in progress** at the top until its first results are in. Above the **Tracked Prompts** table, a note says "Your first answers are arriving", with how many are in and about how long is left, and rows still without results say **Arriving now**. Everything fills in when tracking finishes. Meanwhile, do the **Ready now** steps of **Getting started** on the Action Center. When tracking finishes, the app says **Your first results are ready**.
+The **Visibility** page says **First tracking in progress** at the top until its first results are in. Above the **Tracked Prompts** table, a note says "Your first answers are arriving", with how many are in and about how long is left, and rows still without results say **Arriving now**. Everything fills in when tracking finishes. Meanwhile, do the **Ready now** steps of **Getting started** on the Action Center. When tracking finishes, the app says **Your first results are ready**.
 
 ## My visibility score is 0
 

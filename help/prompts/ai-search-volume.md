@@ -4,8 +4,8 @@ route: /dashboard/prompts/insights
 keywords: [ai search volume, estimate, confidence, volume range, estimate badge, head terms, opportunity volume]
 synonyms: [how many people ask, monthly AI searches, AI volume, est. ai volume]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -47,7 +47,7 @@ Some estimates are built differently, and their note says so:
 
 - **Totals and averages** (**Total Est. AI Volume**, **Avg. AI Volume**, and Similar Topics' **Est. AI Volume**): the sum of the lows to the sum of the highs; an average divides both by the prompt count. A total is high-confidence when at least 80% of its volume is, low when more than half is low-confidence, and medium otherwise. The note gives the mix.
 - **One keyword** (each row of Similar Topics): only the AI share is assumed, so it is Medium with a ±25% range, or Low when it has no volume or is over six months old.
-- **An AI's guess** (suggestions from Ansvisor Agents, the Brand Visibility page's Opportunities, and the Action Center's topic opportunities): always Low, from half to twice the guess. Track the prompt to get an estimate from its keywords' Google searches.
+- **An AI's guess** (suggestions from Ansvisor Agents, Opportunities on Visibility's Overview, and the Action Center's topic opportunities): always Low, from half to twice the guess. Track the prompt to get an estimate from its keywords' Google searches.
 
 ## A content opportunity's volume
 
