@@ -459,7 +459,10 @@ function AgentFormBody({
   const { isLocked, openUpgrade } = useUpgradeGate();
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
 
-  const skillTitle = (id: string) => (tSkills.has(id) ? tSkills(id) : id);
+  const librarySkills = setup.librarySkills ?? [];
+  // An Ansvisor skill's title, a Library skill's own (W4-19), else its /command.
+  const skillTitle = (id: string) =>
+    tSkills.has(id) ? tSkills(id) : (librarySkills.find((s) => s.name === id)?.title ?? id);
   const presetName = preset ? tAgents(`presets.${preset.id}.name`) : null;
   /** The title a new agent is named by (§O): its ready-to-use agent's, while it keeps its skill. */
   const autoTitle = (skills: readonly string[]) => {
@@ -501,7 +504,10 @@ function AgentFormBody({
   const [step, setStep] = useState<AgentFormStep>(0);
   const [shown, setShown] = useState<Shown>({ 0: false, 1: false, 2: false, 3: false });
   const [selected, setSelected] = useState<string | null>(state.triggers[0]?.key ?? null);
-  const [source, setSource] = useState<'ansvisor' | 'mine' | 'marketplace'>('ansvisor');
+  // An agent on a Library skill opens on the Library's list.
+  const [source, setSource] = useState<'ansvisor' | 'mine' | 'marketplace'>(() =>
+    librarySkills.some((s) => s.name === state.skills[0]) ? 'marketplace' : 'ansvisor',
+  );
   const [server, setServer] = useState<ServerProblem | null>(null);
   const [busy, setBusy] = useState<'draft' | 'on' | 'save' | null>(null);
   // What a save patches: the agent being edited, or the draft a first save made.
@@ -1031,6 +1037,46 @@ function AgentFormBody({
                                 })
                               : t('skill.noConnection')}
                           </em>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : source === 'marketplace' && librarySkills.length > 0 ? (
+                  // The Library skills an Admin approved for the workspace (W4-19).
+                  <div
+                    role="radiogroup"
+                    aria-label={t('skill.sources.marketplace')}
+                    aria-invalid={invalid('skills') || undefined}
+                    aria-describedby={described('skills')}
+                    onKeyDown={radioKeys}
+                    data-slot="agent-form-library-skills"
+                    className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-2"
+                  >
+                    {librarySkills.map((skill, i) => {
+                      const on = primary === skill.name;
+                      return (
+                        <button
+                          key={skill.name}
+                          type="button"
+                          role="radio"
+                          aria-checked={on}
+                          tabIndex={radioTab(
+                            on,
+                            i === 0,
+                            librarySkills.some((s) => s.name === primary),
+                          )}
+                          data-action="agentNew.pickSkill"
+                          data-skill={skill.name}
+                          onClick={() => pickPrimary(skill.name)}
+                          className={cn(OPT, on && OPT_ON)}
+                        >
+                          <code className="font-mono text-xs text-muted-foreground">
+                            /{skill.name}
+                          </code>
+                          <b className="font-semibold">{skill.title}</b>
+                          {skill.repo && (
+                            <em className={EM}>{t('skill.fromLibrary', { repo: skill.repo })}</em>
+                          )}
                         </button>
                       );
                     })}

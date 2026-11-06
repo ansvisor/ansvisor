@@ -6519,12 +6519,13 @@
         "sources": {
           "ansvisor": "Ansvisor skills",
           "mine": "My skills",
-          "marketplace": "Marketplace"
+          "marketplace": "Library"
         },
         "empty": {
           "mine": "Skills you save show here.",
           "marketplace": "Library skills an Admin adds show here."
         },
+        "fromLibrary": "From the Library · {repo}",
         "uses": "Uses {connections}",
         "noConnection": "No connection needed",
         "followOn": "Follow-on skills",
