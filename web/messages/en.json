@@ -8219,6 +8219,32 @@
     "why": "Why",
     "recommendedFix": "Recommended fix",
     "fix": "Fix",
+    "evidenceLevel": {
+      "strong": "Strong evidence",
+      "likely": "Likely helps",
+      "hygiene": "Hygiene / informational",
+      "informational": "Hygiene / informational"
+    },
+    "evidenceNote": "Evidence",
+    "notScored": "Not in the score",
+    "formula": {
+      "button": "Formula",
+      "title": "How the score is worked out",
+      "totalTitle": "Total",
+      "total": "The weighted average of the five categories. A category with nothing evaluated is left out, and the others' weights scale up.",
+      "weight": "{weight}%",
+      "categoryTitle": "Each category",
+      "category": "The average of its signals: a pass counts 1, a warning 0.5 and a fail 0. Every signal counts the same, and n/a ones are left out.",
+      "evidenceTitle": "Evidence levels",
+      "evidenceIntro": "Each signal says how strong the evidence behind it is. The level doesn't change its weight.",
+      "evidence": {
+        "strong": "Studies tie it to AI citations or crawling.",
+        "likely": "Plausible and widely recommended, with weaker evidence.",
+        "hygiene": "Basic page health, or little evidence it moves AI citations."
+      },
+      "notScoredTitle": "Not in the score",
+      "notScored": "{signals}: shown for information only."
+    },
     "signalsEvaluated": "signals evaluated",
     "recent": {
       "question": "Audited {minutes} min ago. Open it or audit again?",

@@ -1,6 +1,6 @@
 {
-  "version": "v1.1",
-  "description": "48-signal AEO/GEO scoring rubric for measuring whether a page will get cited by AI answer engines.",
+  "version": "v1.2",
+  "description": "48-signal AEO/GEO scoring rubric for measuring whether a page will get cited by AI answer engines. Each signal carries an evidence level; informational signals are shown but left out of the score.",
   "totalSignals": 48,
   "categories": [
     {
@@ -28,7 +28,7 @@
       "key": "trust",
       "label": "Trust",
       "weight": 0.1,
-      "description": "Crawl-time + share-time trust signals: HTTPS, canonical, viewport, AI-bot access via robots/llms.txt, Twitter card, meta description.",
+      "description": "Crawl-time + share-time trust signals: HTTPS, canonical, viewport, AI-bot access via robots.txt, Twitter card, meta description. llms.txt is shown for information only.",
       "signalCount": 7
     },
     {
@@ -48,7 +48,8 @@
       "why": "arXiv:2603.29979 shows a +17.3% citation lift for pages with measurable structural depth vs flat documents.",
       "howToFix": "Group your content under named H2 subsections. Use H3 for sub-points. Don't skip levels.",
       "source": "GEO-SFE (arXiv:2603.29979) + Aggarwal et al. NeurIPS 2024",
-      "impactTier": "high"
+      "impactTier": "high",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "internal-linking",
@@ -58,7 +59,8 @@
       "why": "AI crawlers expand context via internal links the same way they crawl. Isolated pages get under-indexed.",
       "howToFix": "Add 5–10 internal links per page to related concepts, glossary terms, or supporting pages.",
       "source": "Anthropic web-search retrieval docs",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "page-weight",
@@ -68,7 +70,8 @@
       "why": "AI render bots have shorter timeouts than humans. Heavy pages get truncated or skipped.",
       "howToFix": "Strip unused JS, defer below-the-fold images, kill render-blocking third-party scripts.",
       "source": "Google SGE crawler docs",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "json-ld-presence",
@@ -78,7 +81,8 @@
       "why": "Schema.org is the single highest-leverage signal for AI Overview eligibility — engines parse it before text.",
       "howToFix": "Add at minimum an Organization or Article block. Our /tools/schema-generator outputs valid JSON-LD.",
       "source": "Google SGE evaluation guide",
-      "impactTier": "high"
+      "impactTier": "high",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "json-ld-validity",
@@ -88,7 +92,8 @@
       "why": "Malformed JSON-LD is worse than absent — engines log a parse error and downrank trust.",
       "howToFix": "Run your JSON-LD through Google's Rich Results Test before shipping.",
       "source": "Google SGE evaluation guide",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "json-ld-relevance",
@@ -98,7 +103,8 @@
       "why": "Wrong-type schema gets ignored — Article markup on a homepage is parsed as noise.",
       "howToFix": "Pick the closest schema.org type for the page's actual content, not a generic catch-all.",
       "source": "schema.org documentation",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "faq-schema",
@@ -108,7 +114,8 @@
       "why": "FAQPage is the highest single-type lift for AI Overview citations per Google's own SGE guidance.",
       "howToFix": "Add FAQPage schema with 3–5 question/answer pairs that mirror real buyer queries.",
       "source": "Google SGE evaluation guide",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "h1-quality",
@@ -118,7 +125,8 @@
       "why": "AI engines treat H1 as the page's claim — multiple H1s confuse the topical model.",
       "howToFix": "One H1 per page, descriptive, 30–60 chars, includes the page's primary topic.",
       "source": "Google SGE crawler docs",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "h2-coverage",
@@ -128,7 +136,8 @@
       "why": "AI engines extract H2s as section anchors — pages without them are harder to summarize.",
       "howToFix": "Break content into 3–6 H2 subsections, each addressing a sub-question.",
       "source": "Aggarwal et al. NeurIPS 2024",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "likely"
     },
     {
       "key": "lists",
@@ -138,7 +147,8 @@
       "why": "Lists are the unit AI engines preferentially extract for 'how to X' and 'best Y' queries.",
       "howToFix": "Convert at least one paragraph of enumerated reasons or steps into a real <ul>/<ol>.",
       "source": "Aggarwal et al. NeurIPS 2024",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "likely"
     },
     {
       "key": "tables",
@@ -148,7 +158,8 @@
       "why": "Tables are the highest-extraction-rate format for comparison and spec-sheet queries.",
       "howToFix": "If you have specs, prices, or comparisons, render them as real <table>s, not images.",
       "source": "Aggarwal et al. NeurIPS 2024",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "likely"
     },
     {
       "key": "alt-text",
@@ -158,7 +169,8 @@
       "why": "Multi-modal engines (Gemini, Claude, GPT-4o) read alt-text as page semantic context.",
       "howToFix": "Add descriptive alt to every meaningful image. Decorative images get alt=\"\".",
       "source": "Google SGE evaluation guide",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "open-graph",
@@ -168,7 +180,8 @@
       "why": "AI engine link previews + social shares use OG meta as the citation card.",
       "howToFix": "Add the 4 OG tags. Use 1200×630 og:image. Our /tools/og-checker validates them.",
       "source": "Open Graph Protocol",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "outbound-authority-links",
@@ -178,7 +191,8 @@
       "why": "Linking out to trusted sources transfers authority backwards (citation graph effect).",
       "howToFix": "Cite primary sources with real <a> tags, not bare-text references. Aim for 2–3 per long page.",
       "source": "GEO paper §4.2 + Anthropic retrieval docs",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "strong"
     },
     {
       "key": "citation-density",
@@ -188,7 +202,8 @@
       "why": "Pages that cite sources get cited as sources. Citation density is the strongest non-link authority signal.",
       "howToFix": "Replace 'studies show' with 'a 2024 Stanford study (link)'. Specificity wins.",
       "source": "GEO paper §4.2",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "strong"
     },
     {
       "key": "statistic-density",
@@ -198,7 +213,8 @@
       "why": "AI engines preferentially cite content with measurable claims over hand-wavy text.",
       "howToFix": "Add real numbers — percentages, dollar amounts, time durations — to your claims.",
       "source": "Aggarwal et al. NeurIPS 2024",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "strong"
     },
     {
       "key": "quotations",
@@ -208,7 +224,8 @@
       "why": "Quotations imply primary research. They lift citation rates ~12% in the GEO paper test set.",
       "howToFix": "Quote one customer, one expert, or one primary source per long page.",
       "source": "GEO paper",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "strong"
     },
     {
       "key": "author-byline",
@@ -218,7 +235,8 @@
       "why": "Anonymous content is treated as low-E-E-A-T. AI engines surface authored content.",
       "howToFix": "Add 'By [Name]' at the top. Link to a real author bio page. Use Person schema.",
       "source": "Google SGE + E-E-A-T docs",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "likely"
     },
     {
       "key": "date-markup",
@@ -228,7 +246,8 @@
       "why": "Engines penalize undated content as potentially stale. Dated content gets freshness scoring.",
       "howToFix": "Add JSON-LD datePublished + dateModified, or a visible <time datetime> tag.",
       "source": "Google SGE evaluation guide",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "freshness",
@@ -238,7 +257,8 @@
       "why": "Stale content gets downranked for time-sensitive queries. Re-publishing dates resets the clock.",
       "howToFix": "Refresh top pages at least annually. Bump dateModified when you do.",
       "source": "Google freshness algorithm docs",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "strong"
     },
     {
       "key": "technical-terms",
@@ -248,7 +268,8 @@
       "why": "Pages that use precise technical vocabulary signal genuine expertise.",
       "howToFix": "Use the field's actual technical language. Glossary-link or define the first occurrence.",
       "source": "GEO paper §4.3",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "direct-answer",
@@ -258,7 +279,8 @@
       "why": "AI engines preferentially extract direct answers. Burying the answer = no citation.",
       "howToFix": "Lead the page with a 1–2 sentence direct answer to the primary query. Then expand.",
       "source": "GEO paper §3.2",
-      "impactTier": "high"
+      "impactTier": "high",
+      "evidenceLevel": "likely"
     },
     {
       "key": "bluf-answer",
@@ -268,7 +290,8 @@
       "why": "Military-doctrine writing style — BLUF dramatically improves AI extractability.",
       "howToFix": "Open with 'The answer is X. Here's why.' Don't bury the lede.",
       "source": "U.S. military writing doctrine + adopted by Anthropic prompt eng team",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "likely"
     },
     {
       "key": "query-coverage",
@@ -278,7 +301,8 @@
       "why": "Coverage is a baseline relevance signal — missing tokens means the page misses the query.",
       "howToFix": "Make sure every meaningful query token appears at least once in body content.",
       "source": "BM25 + cosine retrieval fundamentals",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "entity-coverage",
@@ -288,7 +312,8 @@
       "why": "AI engines build an entity graph per page — missing related entities reduces topical authority.",
       "howToFix": "If the page is about X, mention X's known related entities (people, places, products).",
       "source": "Knowledge graph extraction literature",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "readability",
@@ -298,7 +323,8 @@
       "why": "Engines extract from content humans can read. Dense, academic text underperforms; in English, very simple text (over 70) can leave out the detail readers expect.",
       "howToFix": "Under the target: shorten sentences and use plainer words, about 16 words a sentence. English over 70: write fuller sentences with the detail readers expect.",
       "source": "Flesch (1948), Ateşman (1997) + adapted by SGE",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "length",
@@ -308,7 +334,8 @@
       "why": "Too short = thin; too long = engines truncate. Sweet spot is medium-long form.",
       "howToFix": "If under 600 words, expand with examples + sub-sections. If over 4000, split into hub + spokes.",
       "source": "Empirical GEO paper data",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "info-density",
@@ -318,7 +345,8 @@
       "why": "Dense content gets preferentially cited. Engines model 'value per token' implicitly.",
       "howToFix": "Cut throat-clearing sentences. Replace 'It is important to note that' with the actual point.",
       "source": "Empirical GEO paper data",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "mega-page-coverage",
@@ -328,7 +356,8 @@
       "why": "Mega-pages outrank thin pages on AI engines because they cover entity neighborhoods.",
       "howToFix": "Consolidate 3 thin pages into one comprehensive page with H2-segmented sub-topics.",
       "source": "Ahrefs research + Cleartopic.io",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "youtube-embed",
@@ -338,7 +367,8 @@
       "why": "Multi-modal engines weight pages with on-topic video. 0.737 correlation with citation rate.",
       "howToFix": "Create or embed a 2–4 minute video on the page topic. Mark up with VideoObject schema.",
       "source": "Ahrefs 2025 study",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "product-description-opening",
@@ -348,7 +378,8 @@
       "why": "ChatGPT appears to read only about the first 50 tokens of a product description when it matches products to a shopping question. A description that opens with the brand's story may never be matched.",
       "howToFix": "Put the product type and key attributes in the first 40 words.",
       "source": "brightonSEO 2026 research on ChatGPT Shopping (to be confirmed by our own tests)",
-      "impactTier": "high"
+      "impactTier": "high",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "sub-query-coverage",
@@ -358,7 +389,8 @@
       "why": "Engines decompose seed queries into 4–6 sub-queries (Profound 'fanouts') — missing answers = missing citations.",
       "howToFix": "Add a Q&A section that explicitly addresses the top 5 sub-questions for your topic.",
       "source": "Profound Query Fanouts methodology",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "likely"
     },
     {
       "key": "definitions",
@@ -368,7 +400,8 @@
       "why": "Defined-in-place pages get cited as glossary sources. AI engines preferentially link to them.",
       "howToFix": "Define the key 3–5 terms on first use, in-line.",
       "source": "Stanford NLP citation extraction work",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "likely"
     },
     {
       "key": "ai-bot-access",
@@ -378,17 +411,20 @@
       "why": "Default-allow gets you crawled, but explicit allow signals intent + unlocks niche AI bots.",
       "howToFix": "Add User-agent: GPTBot/ClaudeBot/OAI-SearchBot/PerplexityBot rules to robots.txt.",
       "source": "OpenAI / Anthropic / Perplexity bot docs",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "strong"
     },
     {
       "key": "llms-txt-presence",
       "category": "trust",
       "label": "llms.txt presence",
-      "what": "Whether /llms.txt exists per llmstxt.org spec.",
-      "why": "Explicit channel for telling AI engines exactly which content to ingest. 2026 frontier signal.",
-      "howToFix": "Generate llms.txt via our /audit/llms-txt tool. Add to site root.",
-      "source": "llmstxt.org spec",
-      "impactTier": "medium"
+      "what": "Whether /llms.txt exists at the site root, per the llmstxt.org proposal. Shown for information only: it does not change the score.",
+      "why": "Proposed as a plain-text map of a site for AI engines.",
+      "howToFix": "Optional. Add /llms.txt at your site root if you want one; it does not change the score.",
+      "source": "llmstxt.org proposal; Ahrefs llms.txt study; Google AI features guidance",
+      "impactTier": "medium",
+      "evidenceLevel": "informational",
+      "evidenceNote": "Weak evidence: Ahrefs found 97% of llms.txt files are never requested, and Google says it has no effect."
     },
     {
       "key": "https",
@@ -398,7 +434,8 @@
       "why": "AI crawlers refuse to crawl mixed-content pages. HTTPS is table stakes.",
       "howToFix": "Migrate to HTTPS. Force redirect with HSTS. Fix mixed-content warnings.",
       "source": "Web standards + Google ranking docs",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "canonical",
@@ -408,7 +445,8 @@
       "why": "Without canonical, AI engines may split citations across duplicate URLs and downrank each.",
       "howToFix": "Add <link rel=canonical href=…> to every page. Self-canonical on canonical pages.",
       "source": "Google canonical docs",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "viewport",
@@ -418,7 +456,8 @@
       "why": "Mobile rendering signal — AI crawlers favor mobile-first content.",
       "howToFix": "Add <meta name=viewport content=\"width=device-width, initial-scale=1\">.",
       "source": "Google mobile-first indexing docs",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "twitter-card",
@@ -428,7 +467,8 @@
       "why": "AI engines fall back to Twitter card on platforms without OG support.",
       "howToFix": "Add twitter:card=summary_large_image + twitter:image (can reuse og:image).",
       "source": "X (Twitter) card docs",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "meta-description",
@@ -438,7 +478,8 @@
       "why": "AI engines use meta description as a primary summary candidate when generating cites.",
       "howToFix": "Write a 130-char meta description for every page. Include the primary query.",
       "source": "Google docs + SGE evaluation guide",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "first-person",
@@ -448,7 +489,8 @@
       "why": "Google's E-E-A-T update prioritizes lived experience. First-person signals it.",
       "howToFix": "Use first-person sparingly but precisely — 'we tested', 'in our experience', 'I found that…'.",
       "source": "Google E-E-A-T quality rater guidelines",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "likely"
     },
     {
       "key": "case-study-evidence",
@@ -458,7 +500,8 @@
       "why": "Case studies are the highest-conversion E-E-A-T signal — prove it, don't just claim it.",
       "howToFix": "Name one customer. Quote one outcome with numbers. 'We helped X go from Y → Z.'",
       "source": "Google E-E-A-T guidelines",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "likely"
     },
     {
       "key": "author-credentials",
@@ -468,7 +511,8 @@
       "why": "Anonymous bylines fail E-E-A-T. Credentialed authors get treated as expert sources.",
       "howToFix": "Each author page lists credentials, prior roles, years in field, links to LinkedIn/Twitter.",
       "source": "Google E-E-A-T guidelines (Quality Rater Guidelines §3.2)",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "likely"
     },
     {
       "key": "byline-depth",
@@ -478,7 +522,8 @@
       "why": "Byline → bio page → credentialed author chain is the E-E-A-T graph engines trace.",
       "howToFix": "Make every byline link to /authors/[name] with bio, photo, credentials, prior work.",
       "source": "Google E-E-A-T guidelines",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "likely"
     },
     {
       "key": "brand-entity",
@@ -488,7 +533,8 @@
       "why": "Wikidata is the canonical entity database — engines use it to validate brand identity. No entity = no trust anchor.",
       "howToFix": "Get a Wikidata entry: requires 2–3 press mentions as citations. Submit at wikidata.org.",
       "source": "Wikidata + knowledge graph literature",
-      "impactTier": "medium"
+      "impactTier": "medium",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "press-mentions",
@@ -498,7 +544,8 @@
       "why": "Press mentions transfer authority across the citation graph and validate brand entity claims.",
       "howToFix": "Earn press. Display logos. Link back to the original article (not your case study).",
       "source": "Empirical brand-citation research",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "privacy-terms",
@@ -508,7 +555,8 @@
       "why": "YMYL (Your-Money-Your-Life) categories require these — and engines treat them as legitimacy signals everywhere.",
       "howToFix": "Footer-link privacy and terms on every page. Real pages, not coming-soon stubs.",
       "source": "Google YMYL + E-E-A-T guidelines",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
     },
     {
       "key": "contact-info",
@@ -518,7 +566,34 @@
       "why": "Anonymous brands fail E-E-A-T. Real contact info signals real entity behind the content.",
       "howToFix": "Add an email + physical address (real or registered office) to the footer.",
       "source": "Google E-E-A-T guidelines",
-      "impactTier": "standard"
+      "impactTier": "standard",
+      "evidenceLevel": "hygiene"
+    }
+  ],
+  "evidenceLevels": [
+    {
+      "key": "strong",
+      "label": "Strong evidence",
+      "scored": true,
+      "description": "Published studies tie it to AI citations or crawling."
+    },
+    {
+      "key": "likely",
+      "label": "Likely helps",
+      "scored": true,
+      "description": "Plausible and widely recommended, with weaker evidence."
+    },
+    {
+      "key": "hygiene",
+      "label": "Hygiene / informational",
+      "scored": true,
+      "description": "Basic page health, with little evidence it changes AI citations on its own."
+    },
+    {
+      "key": "informational",
+      "label": "Hygiene / informational",
+      "scored": false,
+      "description": "Shown for information only: it does not change the score."
     }
   ]
 }

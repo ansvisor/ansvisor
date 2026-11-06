@@ -249,6 +249,26 @@ describe('GET /api/audits/:id', () => {
     expect(body.pageTrend).toEqual([0.6, 0.58, 0.63]);
   });
 
+  it("sends each signal's evidence level, and llms.txt's note (SA-010)", async () => {
+    signals.push(
+      { audit_id: 'p2', signal_key: 'freshness', category: 'authority', status: 'pass', score: 1 },
+      {
+        audit_id: 'p2',
+        signal_key: 'llms-txt-presence',
+        category: 'trust',
+        status: 'fail',
+        score: 0,
+      },
+    );
+    const { audit: body } = await (await fetch(`${baseUrl}/p2`)).json();
+    const byKey = Object.fromEntries(body.signals.map((s) => [s.key, s]));
+    expect(byKey.freshness).toMatchObject({ evidenceLevel: 'strong', evidenceNote: null });
+    expect(byKey['llms-txt-presence']).toMatchObject({
+      evidenceLevel: 'informational',
+      evidenceNote: expect.stringMatching(/never requested/),
+    });
+  });
+
   it('sends no trend for an audit that is never compared', async () => {
     audits.unshift({ ...audit('pp', 'https://acme.com/pricing', 20, '0.7'), partial: true });
     const { audit: body } = await (await fetch(`${baseUrl}/pp`)).json();

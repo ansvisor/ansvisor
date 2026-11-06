@@ -68,7 +68,9 @@ const router = Router();
 
 /**
  * Merge a stored audit row + its signal results with the rubric copy the UI
- * needs (label / what / why / howToFix / impactTier).
+ * needs (label / what / why / howToFix / impactTier / evidenceLevel). The
+ * evidence level and its note come from the current rubric, so an older
+ * audit's report shows them too.
  */
 function assembleAudit(audit, signalRows) {
   const signals = signalRows.map((row) => {
@@ -84,6 +86,8 @@ function assembleAudit(audit, signalRows) {
       why: meta.why ?? null,
       howToFix: meta.howToFix ?? null,
       impactTier: meta.impactTier ?? null,
+      evidenceLevel: meta.evidenceLevel ?? null,
+      evidenceNote: meta.evidenceNote ?? null,
     };
   });
 
