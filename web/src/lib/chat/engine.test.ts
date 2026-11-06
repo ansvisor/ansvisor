@@ -8502,6 +8502,104 @@ describe('the page open in the Content Editor beside the chat (CHAT-25 §4–§5
     await inEditor('Make the other page shorter');
     expect(suggestDraftChanges).not.toHaveBeenCalled();
   });
+
+  describe('what the person decided in the page since the chat’s last message (W4-16 follow-up)', () => {
+    /** The chat's next message, from the editor beside it, with "This draft" or without. */
+    const next = async (first: string, message: string, chip = true) => {
+      const started = await engine.startChatRun(ADMIN, {
+        message,
+        conversationId: runRow(first).conversation_id as string,
+        mode: 'full_auto',
+        context: {
+          route: ROUTE,
+          chips: chip ? [{ key: 'draft', label: 'This draft', value: DRAFT }] : [],
+        },
+      });
+      if (!started.ok) throw new Error(`not started: ${started.code}`);
+      await engine.driveRun(ADMIN, started.runId);
+      return started.runId;
+    };
+    /** The first run's writer: the Content Agent leaves suggestions in the page. */
+    const suggesting = () => [
+      calls(
+        toolCall('w1', 'suggest_draft_changes', {
+          draft_id: DRAFT,
+          request: 'Make answer 3 shorter',
+        }),
+      ),
+      text('Two suggestions wait in the editor.'),
+    ];
+    /** The first run (its models set up first), its suggestions decided after it started. */
+    async function suggestedThenDecided() {
+      const first = await inEditor('Make answer 3 shorter');
+      // When it started, as the database keeps it.
+      runRow(first).created_at = '2026-11-05T10:00:00.000Z';
+      const decided = (status: string, reason: string, at: string, ruleKeys = ['chat']) => ({
+        id: `${status}-${reason}`,
+        draft_id: DRAFT,
+        status,
+        reason,
+        rule_keys: ruleKeys,
+        decided_at: at,
+      });
+      (db.tables.content_draft_suggestions ??= []).push(
+        decided('accepted', 'Answer 3 in two sentences', '2026-11-05T10:01:00.000Z'),
+        decided('rejected', 'Drop the refund line', '2026-11-05T10:02:00.000Z'),
+        // Fix open rules' own, and one decided before the chat's last message: not told.
+        decided('rejected', 'Shorter title', '2026-11-05T10:02:30.000Z', ['length']),
+        decided('accepted', 'An older change', '2026-11-05T09:59:00.000Z'),
+      );
+      return first;
+    }
+
+    /** Whom can_access_brand (00388) was asked about: the page's brand, for the run's person. */
+    let askedAbout: unknown[];
+    beforeEach(() => {
+      askedAbout = [];
+      db.rpcs.can_access_brand = ({ p_brand_id, p_user_id }) => {
+        askedAbout.push(p_user_id);
+        const brand = db.tables.brands.find((b) => b.id === p_brand_id);
+        const person = db.tables.profiles.find((p) => p.id === p_user_id);
+        if (!brand || !person || person.organization_id !== brand.organization_id) return false;
+        return person.role === 'admin' || person.brand_scope === 'all';
+      };
+    });
+
+    it('tells the next run what went in and what didn’t, with a step and suggestion.resolved', async () => {
+      useModels([READY], suggesting());
+      const first = await suggestedThenDecided();
+      const { sonnet } = useModels([READY], [text('Answer 3 is shorter now. One rule is open.')]);
+      const second = await next(first, 'Is the page ready?');
+      expect(runRow(second).status).toBe('done');
+      const events = await eventsOf(second);
+      expectClean(events);
+      expect(ofType(events, 'suggestion.resolved').map((e) => e.data)).toEqual([{ count: 2 }]);
+      const step = stepsOf(second).find((s) => s.label === 'Read your choices in the editor');
+      expect(step).toMatchObject({
+        kind: 'check',
+        status: 'done',
+        detail: '1 accepted · 1 rejected',
+      });
+      const prompt = JSON.stringify(sonnet.seen[0].prompt);
+      expect(prompt).toContain('Answer 3 in two sentences');
+      expect(prompt).toContain('Drop the refund line');
+      expect(prompt).not.toContain('Shorter title');
+      expect(prompt).not.toContain('An older change');
+      // Read only once the person was found to see the page's brand.
+      expect(askedAbout).toEqual([ADMIN.userId]);
+    });
+
+    it('tells nothing without the page open beside the chat, or on the chat’s first message', async () => {
+      useModels([READY], suggesting());
+      const first = await suggestedThenDecided();
+      expect(stepsOf(first).some((s) => s.label === 'Read your choices in the editor')).toBe(false);
+      const { sonnet } = useModels([READY], [text('Here is the plan.')]);
+      const second = await next(first, 'Plan next week', false);
+      const events = await eventsOf(second);
+      expect(ofType(events, 'suggestion.resolved')).toEqual([]);
+      expect(JSON.stringify(sonnet.seen[0].prompt)).not.toContain('Answer 3 in two sentences');
+    });
+  });
 });
 
 describe('the model menu’s pick (W4-02)', () => {

@@ -235,6 +235,12 @@ import {
 } from './skills/save-steps';
 import { placeholderWords } from '@/lib/content/page-version';
 import { openDraftOf } from './editor-page';
+import {
+  decisionCount,
+  editorDecisionsBlock,
+  readEditorDecisions,
+  type EditorDecisions,
+} from './editor-decisions';
 import { MAX_UPLOADS } from './uploads';
 import { answerUnattended, withAssumptions } from './schedule/unattended';
 import { cardFormOf, cardFormValuesInput, editedInput } from './card-form';
@@ -936,6 +942,11 @@ type Progress = RunProgress & {
   recovered?: 'retry' | 'answer';
   /** The lines its "Used memory" step listed, once it has one (CHAT-14 item 17). */
   memoryItems?: number;
+  /**
+   * What the person decided in the editor beside the chat since its previous
+   * message, read once (W4-16 follow-up); null when nothing was.
+   */
+  editorDecisions?: EditorDecisions | null;
   /** The lasting preference the writer flagged with its next moves ("Remember this?", W4-33). */
   remember?: string;
 };
@@ -1630,6 +1641,52 @@ async function noteMemory(rc: RunContext): Promise<void> {
   rc.sink.emit('step.finished', { step: clientStep(row) });
 }
 
+// ─── The page open beside the chat ──────────────────────────────────────────
+
+/**
+ * What the person decided in the Content Editor beside the chat since its
+ * previous message (CHAT-25 §12 `suggestion.resolved`; the W4-16
+ * follow-up): read once a run, at its first model step, from the Content
+ * Agent's suggestions from chat on the page open there (editor-decisions.ts).
+ * When there are any, a step says how many went in and how many didn't,
+ * `suggestion.resolved` carries how many were decided, and every model
+ * step's turn has them (turnMessage). A read that fails tells nothing.
+ */
+async function noteEditorDecisions(rc: RunContext): Promise<void> {
+  if (!rc.openDraft || rc.progress.editorDecisions !== undefined) return;
+  const decisions = await readEditorDecisions({
+    organizationId: rc.actor.organizationId,
+    userId: rc.actor.userId,
+    draftId: rc.openDraft,
+    conversationId: rc.run.conversationId,
+    runId: rc.run.id,
+  }).catch((err: unknown) => {
+    console.error('[chat/engine] could not read the editor’s decisions:', err);
+    return null;
+  });
+  rc.progress.editorDecisions = decisions;
+  const count = decisionCount(decisions);
+  if (!decisions || count === 0) return;
+  const row = await insertStep(rc.run.id, {
+    position: ++rc.progress.steps,
+    kind: 'check',
+    status: 'done',
+    label: t('step.editorDecisions'),
+    detail: [
+      decisions.accepted.length > 0
+        ? t('step.editorAccepted', { count: decisions.accepted.length })
+        : null,
+      decisions.rejected.length > 0
+        ? t('step.editorRejected', { count: decisions.rejected.length })
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  });
+  rc.sink.emit('step.finished', { step: clientStep(row) });
+  rc.sink.emit('suggestion.resolved', { count });
+}
+
 // ─── Skills ─────────────────────────────────────────────────────────────────
 
 /**
@@ -1874,6 +1931,7 @@ function stepInput(rc: RunContext, phase: ChatPhase, claude: boolean) {
 async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepResult> {
   const choice = rc.models.pick(phase);
   await noteMemory(rc);
+  await noteEditorDecisions(rc);
   const { system, messages } = stepInput(rc, phase, choice.claude);
   const tools = toolSet(rc, phase);
   const reservation = await reserveChatStep({
@@ -2045,6 +2103,11 @@ function turnMessage(rc: RunContext, phase: ChatPhase): ModelMessage {
           : blockJson(scope)
       }\n</page_context>`,
     });
+  }
+  // What the person accepted and rejected in the editor beside the chat since its last message.
+  const decisions = rc.progress.editorDecisions;
+  if (decisions && decisionCount(decisions) > 0) {
+    parts.push({ type: 'text', text: editorDecisionsBlock(decisions) });
   }
   const saveSteps = rc.progress.saveSteps;
   if (saveSteps?.length) {

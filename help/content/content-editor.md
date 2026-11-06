@@ -1,11 +1,11 @@
 ---
 title: Write a page in the Content Editor
 route: /dashboard/content/editor
-keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, health claims, supplements, chat in the editor, chat tab, continued from your chat, from your chat, this draft, ctrl j]
+keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, health claims, supplements, chat in the editor, chat tab, continued from your chat, from your chat, this draft, ctrl j, accepted suggestions, rejected suggestions, read your choices in the editor]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -64,6 +64,10 @@ Building the brief and running the Content Agent use your workspace's monthly AI
 With Chat on, **Chat** is the side panel's first tab. A page Chat made opens on it and continues that chat: "Continued from your chat". Otherwise it continues the chat you last had here about the page, or starts one. **Ctrl J** opens it.
 
 What you ask about the page doesn't change it. The Content Agent leaves suggestions in the page, labelled "Content Agent · from your chat", with the same guards as Fix open rules; the page changes only when you **Accept** one. Remove **This draft** from the box to talk about something else. The expand icon opens the chat on Chat's own page.
+
+## Chat knows what you accepted
+
+When you send your next message in the Chat tab, Chat reads which of its suggestions you accepted and which you rejected since your last one. Its steps show **Read your choices in the editor**, such as "1 accepted · 1 rejected". It takes the page as it is now, and doesn't suggest a rejected change again unless you ask.
 
 ## The brief
 
