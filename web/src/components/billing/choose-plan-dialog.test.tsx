@@ -206,7 +206,7 @@ describe('ChoosePlanDialog', () => {
     expect(price('starter')).toBe('$49/mo');
     expect(price('growth')).toBe('$249/mo');
     expect(card('growth').textContent).toContain('Popular');
-    expect(card('starter').textContent).toContain('ChatGPT & Microsoft Copilot tracking');
+    expect(card('starter').textContent).toContain('ChatGPT & Gemini tracking');
     expect(card('starter').textContent).toContain('1x AI usage');
     expect(card('growth').textContent).toContain('5x AI usage');
     expect(card('growth').textContent).toContain('White-label reports & exports');

@@ -256,7 +256,7 @@ The chat menu on the left of Chat lists your chats. **New chat** starts a new on
 
 ## Open and close Governance
 
-Click **Governance** in the chat menu to show or hide **Activity**, **What Chat can do** and **Tool policy**. Its arrow points down while it is open, as in the groups of the main menu. It stays closed until you open it, and it opens by itself while you are on **Activity** or **What Chat can do**. Chat remembers whether you left it open or closed, in this browser.
+Click the **▾** beside **Governance** in the chat menu to show or hide **Activity**, **What Chat can do** and **Tool policy**, as beside **Menu** and **Chats**. It turns to **▴** while Governance is open. It stays closed until you open it, and it opens by itself while you are on **Activity** or **What Chat can do**. Chat remembers whether you left it open or closed, in this browser.
 
 ## Hide the chat menu
 

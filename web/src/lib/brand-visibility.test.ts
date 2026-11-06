@@ -76,13 +76,13 @@ describe('the filters the tabs share', () => {
     expect(
       readSharedFilters(
         'citations',
-        new URLSearchParams('preset=custom&from=2026-10-01&to=2026-10-07&platform=perplexity-web'),
+        new URLSearchParams('preset=custom&from=2026-10-01&to=2026-10-07&platform=gemini-web'),
       ),
     ).toMatchObject({
       range: 'custom',
       from: '2026-10-01',
       to: '2026-10-07',
-      engine: 'perplexity-web',
+      engine: 'gemini-web',
     });
     // An unknown range is the tab's default; Mentions has no All time.
     expect(readSharedFilters('mentions', new URLSearchParams('range=all')).range).toBe('');
@@ -98,7 +98,9 @@ describe('the filters the tabs share', () => {
 
   it('names an engine as Mentions does: one of its platforms', () => {
     expect(mentionsPlatformOf('chatgpt-web,gpt-5-chat-latest')).toBe('chatgpt-web');
-    expect(mentionsPlatformOf('perplexity-web')).toBe('perplexity-web');
+    expect(mentionsPlatformOf('gemini-web')).toBe('gemini-web');
+    // An engine no longer tracked (#2181) isn't one of its platforms: no filter.
+    expect(mentionsPlatformOf('perplexity-web')).toBe('');
     // Claude's API models answer under the "claude" platform there.
     expect(mentionsPlatformOf('claude-sonnet-5')).toBe('claude');
     expect(mentionsPlatformOf('')).toBe('');
