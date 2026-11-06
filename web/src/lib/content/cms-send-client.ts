@@ -3,6 +3,7 @@ import { apiFailure } from '@/lib/api-failure';
 import { createClient } from '@/lib/supabase/client';
 import type { CmsFields, CmsPage } from '@/lib/content/cms-send';
 import { lastSend } from '@/lib/content/cms-status';
+import type { FirstAiCrawl } from '@/lib/content/first-ai-crawl';
 
 /**
  * Send to CMS from the browser (#1331), through the API's same-origin proxy:
@@ -230,6 +231,11 @@ export interface CmsStatus {
    * or null when it can't be read by the person; absent for a person's send.
    */
   agent?: { name: string | null };
+  /**
+   * A published page's first AI crawl (#2142), once read: whether the brand
+   * sends AI bot logs, and the first crawl, or null when none came yet.
+   */
+  firstAiCrawl?: { logs: boolean; crawl: FirstAiCrawl | null };
 }
 
 /** Ids a read takes: content_draft_last_deliveries (00262) reads up to 500. */
