@@ -472,6 +472,9 @@ const WEIGHTS = {
   recency: P.weightRecency,
 };
 
+/** The key a play's track is kept under beside the kinds' (AC plan §11): `play:{id}`. */
+export const playTrackKey = (playId) => `play:${playId}`;
+
 /**
  * Past success (learning B4): from a kind's results at this brand, the
  * share that improved, shrunk toward the prior by a few imagined results,
@@ -565,7 +568,11 @@ export function scorePriority(
     recoverability,
     recency,
   };
-  const past = pastSuccessOf(track.get(action.kind));
+  // Its play's track first (AC plan §11), once one of its results is in; else its kind's.
+  const playId = typeof action.payload?.play?.id === 'string' ? action.payload.play.id : null;
+  const played = playId ? track.get(playTrackKey(playId)) : undefined;
+  const byPlay = Boolean(played?.results);
+  const past = pastSuccessOf(byPlay ? played : track.get(action.kind));
   const score = Math.round(weightedScore(factors, WEIGHTS).total + past.points);
   const bounded = Math.min(100, Math.max(0, score));
 
@@ -596,7 +603,12 @@ export function scorePriority(
       sources: confidence.sources,
       // How its kind did here before (learning B4); null with nothing to go on.
       pastSuccess: past.results
-        ? { improved: past.improved, results: past.results, points: round(past.points) }
+        ? {
+            improved: past.improved,
+            results: past.results,
+            points: round(past.points),
+            ...(byPlay ? { play: playId } : {}),
+          }
         : null,
       // Its rate only with a result behind it: with none, the prior would
       // read as a measured 0.5.

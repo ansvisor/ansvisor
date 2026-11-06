@@ -221,7 +221,8 @@
         "action results",
         "scorecard",
         "success rate",
-        "measured outcome"
+        "measured outcome",
+        "by play"
       ],
       "synonyms": [
         "what worked",
@@ -230,7 +231,7 @@
         "did it work"
       ],
       "plan": "all",
-      "updated": "2026-10-29",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
@@ -242,7 +243,7 @@
         },
         {
           "heading": "How a result is measured",
-          "text": "Only a completed action is measured. Its metrics are read three times, over the week ending 7, 14 and 30 days after it closed, each against the 7 days before it was raised. Until the final reading on day 30, the result reads *so far*, and the drawer lists each reading.\n\nAn action that names its prompts or pages is measured on them, with the brand-wide figures beside. Its prompts' change is also shown net of the brand's prompts it didn't touch, so a change that hit every prompt, such as an engine's update, is told apart from its own. A Site Audit fix is judged by its pages audited again since it closed."
+          "text": "Only a completed action is measured. Its metrics are read three times, over the week ending 7, 14 and 30 days after it closed, each against the 7 days before it was raised. Until the final reading on day 30, the result reads *so far*, and the drawer lists each reading.\n\nAn action that names its prompts or pages is measured on them, with the brand-wide figures beside. An action about a topic is measured on that topic's prompts. Its prompts' change is also shown net of the brand's prompts it didn't touch, so a change that hit every prompt, such as an engine's update, is told apart from its own. A Site Audit fix is judged by its pages audited again since it closed."
         },
         {
           "heading": "What a result means",
@@ -255,6 +256,10 @@
         {
           "heading": "The Scorecard",
           "text": "Switch History from **Actions** to **Scorecard** to see what each kind of action did at this brand over the range, 90 days unless you pick another. It shows how many were completed, their results so far, the **Success rate** (the share of results that improved, shown once a kind has three), the median change in each action's main metric, and how many were dismissed, with the reason given most often. It counts this brand's own actions only."
+        },
+        {
+          "heading": "The Scorecard by play",
+          "text": "When an action asks for new content, the page its prompts pick is its play, such as a comparison page or a how-to guide. On the **Scorecard**, switch from **By kind** to **By play** to see what each play did at this brand, whichever kind of action it was for. Only actions opened with a play count there. A play's results also weigh on the priority of new actions opened with it, once one of them has a result."
         },
         {
           "heading": "When a problem comes back",
@@ -333,7 +338,7 @@
         "task checks"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -349,7 +354,7 @@
         },
         {
           "heading": "What an automatic check looks for",
-          "text": "- **A broken page**: the page answers again.\n- **Publishing**: the page answers where it wasn't before.\n- **Structured data**: the audit checks that raised the action now pass on the page.\n- **Crawler access**: robots.txt lets the AI crawlers in, and the page isn't noindex.\n- **Optimizing or refreshing**: the page changed by more than a date, a price or a rotating quote. Blocks that change by themselves, such as the latest posts, don't count.\n- **New text**: the task's new text is on the page, and the text it replaces is gone.\n\nA task you reopen after it passed stays open: the call is yours."
+          "text": "- **A broken page**: the page answers again.\n- **Publishing**: the page answers where it wasn't before.\n- **Structured data**: the audit checks that raised the action now pass on the page.\n- **Crawler access**: robots.txt lets the AI crawlers in, and the page isn't noindex. When the audit saw a CDN or firewall turn AI bots away, the page is asked as those bots again, and the task stays open while they're still turned away.\n- **Optimizing or refreshing**: the page changed by more than a date, a price or a rotating quote. Blocks that change by themselves, such as the latest posts, don't count.\n- **New text**: the task's new text is on the page, and the text it replaces is gone.\n\nA task you reopen after it passed stays open: the call is yours."
         },
         {
           "heading": "Task status",
@@ -753,6 +758,7 @@
         "required connection",
         "agent skills",
         "follow-on skills",
+        "library skills in an agent",
         "buyer questions",
         "rival brief",
         "listing gaps",
@@ -891,7 +897,7 @@
         },
         {
           "heading": "Skills an agent can use",
-          "text": "Step 1 lists the same skills Chat offers. Besides **Win back lost citations**, **Weekly report** and the other content and reporting skills, there are the skills for what you focus on: **Buyer questions**, **How AI compares us**, **No clear leader**, **Who AI recommends by market**, **Listing gaps**, **Rival brief** and **Site audit fixes**. Each card says which connections it uses. These seven work from your Ansvisor data and public pages, so they need no connection. An agent can run up to 2 follow-on skills after its first one, for example **Comparison page** after **How AI compares us**."
+          "text": "Step 1 lists the same skills Chat offers. Besides **Win back lost citations**, **Weekly report** and the other content and reporting skills, there are the skills for what you focus on: **Buyer questions**, **How AI compares us**, **No clear leader**, **Who AI recommends by market**, **Listing gaps**, **Rival brief** and **Site audit fixes**. Each card says which connections it uses. These seven work from your Ansvisor data and public pages, so they need no connection. An agent can run up to 2 follow-on skills after its first one, for example **Comparison page** after **How AI compares us**.\n\n**Library** lists the skills your workspace added from the Library that an Admin approved and you may run: the shared ones and your own. Pick one to start the agent on it."
         },
         {
           "heading": "Connections",
@@ -1126,6 +1132,12 @@
         "show all questions",
         "mark ready",
         "set ready",
+        "rules pill",
+        "quality pill",
+        "rules met",
+        "check it against the rules",
+        "check rules",
+        "open rules",
         "voice",
         "microphone",
         "speak",
@@ -1218,6 +1230,10 @@
         {
           "heading": "Versions of a page in chat",
           "text": "Each time Chat writes or changes a page, its card shows the version, such as **Version 2 · 7 questions · 905 characters**. **What changed** lists sections Chat made shorter, new questions or sections, and placeholders in [BRACKETS] for you to fill; the first next move offers to fill one. The card previews the first sections; **Show all** opens the rest. **Undo to version 1** puts the version before back, as the editor's History does. Every version is saved to the Library as a draft. Admins and Managers can **Send to CMS** from the card, as from the Library. Once nothing is left to fill, **Mark ready** is a next move: it sets the draft to Ready as the editor does, and Undo takes it back for 7 days."
+        },
+        {
+          "heading": "Rules and Quality on a page's card",
+          "text": "A page's card also shows **Rules 11/12** and **Quality 82**, as the Content Editor's header does: how many of the page's rules it meets, and the average of its E-E-A-T, Trust and Readability scores. Rules is green when every rule is met and amber when some are open. Quality is read the way the editor reads it: with its AI checks on, a read the page doesn't have yet counts toward your AI usage as part of the run. A pill that couldn't be read isn't shown, and Quality shows only where Content Quality is on. While rules are open, **Check it against the rules** is a next move: Chat lists each open rule and Quality check in the editor's words, using no AI, and offers **Open in Content Editor**."
         },
         {
           "heading": "Send or publish a page from Chat",
@@ -1962,6 +1978,13 @@
         "review a skill",
         "skill update",
         "update available",
+        "library",
+        "skill library",
+        "library skills",
+        "add a skill from the library",
+        "third-party skills",
+        "mit skills",
+        "pending approval",
         "faq from fan-outs",
         "weekly report",
         "win back citations",
@@ -1980,7 +2003,9 @@
         "slash commands",
         "playbooks",
         "how-tos",
-        "templates"
+        "templates",
+        "marketplace",
+        "skills directory"
       ],
       "plan": "all",
       "updated": "2026-11-06",
@@ -1995,7 +2020,7 @@
         },
         {
           "heading": "The Skills page",
-          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
+          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **Library** lists skills by other people to add (below). **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
         },
         {
           "heading": "When Chat picks a skill",
@@ -2008,6 +2033,14 @@
         {
           "heading": "Import a skill",
           "text": "Admins and Managers on a paid plan can bring in a skill from outside. On the **Skills** page, click **New skill**, then **Upload a SKILL.md or .zip** (up to 5 MB), or **Import from GitHub** and paste a public github.com link. Only the skill's instructions come in: scripts, commands and allowed tools are removed, and nothing runs. A GitHub skill is read at today's commit and never updates by itself. Only MIT, Apache-2.0, BSD and ISC licenses are accepted.\n\nAn imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it."
+        },
+        {
+          "heading": "The Library",
+          "text": "The **Library** tab lists 701 skills that other people share on GitHub under the MIT license, for SEO, content, brand, analytics, social, CRO, email, paid ads, growth and go-to-market work. Pick a topic, or search by a skill's name, what it does or its repository. **Most stars** sorts by the repository's GitHub stars, **Most installs** by its installs on skills.sh. The first 30 show; **Show more** adds 30 at a time.\n\nClick a skill to read it before you add it: its SKILL.md at the version the Library lists, Ansvisor's own safety scan, what adding it leaves out, its file on GitHub and its license. **Edited by Ansvisor** says what Ansvisor took out of a few skills, such as a promotion."
+        },
+        {
+          "heading": "Add a skill from the Library",
+          "text": "Admins and Managers on a paid plan can click **Add**. The skill comes in as an imported skill does: instructions only, cleaned, scanned and kept with its license and source. It stays off until an Admin reviews it. An Admin's **Add** opens the review; a Manager's asks the Admins. The card then says **Pending approval**, then **Added** once an Admin approves it, and the skill is under **My skills**, on for whoever added it.\n\nEach skill is added once per workspace and stays at the version it was added at. Analysts and Agency partners can browse the Library but can't add. Its review lists a price, an email address or a tracking link in the skill as worth a look. A skill the scan blocks as unsafe, or whose file Ansvisor can't read, can't be added: its page says why."
         },
         {
           "heading": "Updates to an imported skill",
@@ -5003,7 +5036,7 @@
         "hidden content"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -5051,7 +5084,7 @@
         },
         {
           "heading": "AI bot access",
-          "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot your CDN or firewall refuses, while robots.txt lets it in, fails the check, and so does a bot robots.txt keeps out, by name or with \"User-agent: *\". A slow or busy answer isn't counted as a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides.\n\nThe bots are asked from Ansvisor's servers: a firewall that checks a crawler's own addresses can treat the real one differently."
+          "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot robots.txt keeps out, by name or with \"User-agent: *\", fails the check. A bot your CDN or firewall refuses while robots.txt lets it in only warns: the bots are asked from Ansvisor's servers, and a firewall that checks a crawler's own addresses can still let the real one in. A slow or busy answer isn't a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides."
         },
         {
           "heading": "Main text without JavaScript",

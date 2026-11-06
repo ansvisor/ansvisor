@@ -4,8 +4,8 @@ route: /dashboard/audit
 keywords: [audit report, audit score, signals, audit categories, grade, readability, first person, score range, evidence level, formula, llms.txt, AI bot access, robots.txt, firewall, JavaScript, server-side rendering]
 synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed, plus or minus, score margin, strong evidence, likely helps, hygiene, informational, category weights, how the score is calculated, llms.txt score, GPTBot blocked, ClaudeBot blocked, PerplexityBot blocked, Cloudflare blocks AI bots, CDN blocks crawlers, WAF, client-side rendering, JS rendering, SSR, prerender, hidden content]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -75,9 +75,7 @@ The finding shows the score with its formula and language, then its parts: words
 
 **AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.
 
-A bot your CDN or firewall refuses, while robots.txt lets it in, fails the check, and so does a bot robots.txt keeps out, by name or with "User-agent: *". A slow or busy answer isn't counted as a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides.
-
-The bots are asked from Ansvisor's servers: a firewall that checks a crawler's own addresses can treat the real one differently.
+A bot robots.txt keeps out, by name or with "User-agent: *", fails the check. A bot your CDN or firewall refuses while robots.txt lets it in only warns: the bots are asked from Ansvisor's servers, and a firewall that checks a crawler's own addresses can still let the real one in. A slow or busy answer isn't a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides.
 
 ## Main text without JavaScript
 

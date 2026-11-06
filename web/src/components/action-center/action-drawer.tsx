@@ -99,7 +99,15 @@ import { hasActiveWebhook, sendActionTask } from '@/lib/actions/action-task-send
 import { useUserRole } from '@/hooks/use-user-role';
 import { checkActionTask } from '@/lib/actions/action-task-check';
 import { getActionDrafts, startDraftFromAction } from '@/lib/actions/content-drafts';
-import { actionPages, draftMethodForTask, type ActionDraft } from '@/lib/content/action-drafts';
+import {
+  actionPages,
+  draftMethodForTask,
+  startNowWork,
+  type ActionDraft,
+} from '@/lib/content/action-drafts';
+import { StartNowBlock } from './start-now';
+import { PlaySection } from './play-section';
+import { actionPlay } from '@/lib/action-center/play';
 import { contentEditorPath } from '@/lib/content/drafts';
 import { RegenerateTasks, taskWriterEnabled } from './regenerate-tasks';
 import {
@@ -276,6 +284,21 @@ export function ActionDrawer({
         }))
       : [];
   const relatedKpis: string[] = action.kpiKeys.filter(isKpiKey);
+  // Start now (AC-ACTION-PLAN spec §10): an open action's writing work, at the top of Overview.
+  const startNow =
+    detail && action.status !== 'completed' && action.status !== 'dismissed'
+      ? startNowWork(detail.tasks, action.payload)
+      : null;
+  const startNowBlock = startNow ? (
+    <StartNowBlock
+      brandId={brandId}
+      action={{ id: action.id, actionNo: action.actionNo, title: texts.title }}
+      work={startNow}
+      drafts={drafts}
+    />
+  ) : null;
+  // The page its prompts pick, on G15, G16 and C09 (AC-ACTION-PLAN spec §5).
+  const play = actionPlay(action.payload);
   // Sent by a person from Content Optimization (#857): its evidence is the
   // opportunity, not detection signals.
   const opportunityId =
@@ -662,6 +685,12 @@ export function ActionDrawer({
             </div>
           ) : tab === 'overview' ? (
             <>
+              {(play || startNow) && (
+                <>
+                  {play ? <PlaySection play={play}>{startNowBlock}</PlaySection> : startNowBlock}
+                  <Separator />
+                </>
+              )}
               {action.priorityReason && (
                 <>
                   <section>

@@ -433,9 +433,22 @@ const fitsIn = (roomUsd, unitUsd, count) =>
  * a second step.
  */
 export function agentRunReserve(orgId, { runId, agentRunId }) {
+  return runStepReserve(orgId, { feature: 'agent', runId, agentRunId });
+}
+
+/**
+ * The same meter for a person's own Chat run (a page's version card, CHAT-25
+ * §6, W4-12b part 2): the reads are the run's own steps (feature `chat`,
+ * within the month's budget; a scheduled job's run's as the job's).
+ */
+export function chatRunReserve(orgId, { runId, scheduleId = null }) {
+  return runStepReserve(orgId, { feature: 'chat', runId, scheduleId });
+}
+
+function runStepReserve(orgId, { feature, runId, agentRunId = null, scheduleId = null }) {
   return async ({ modelId, holdUsd = null }) => {
     const hold = () =>
-      reserveChatStep(orgId, { feature: 'agent', modelId, runId, agentRunId, holdUsd });
+      reserveChatStep(orgId, { feature, modelId, runId, agentRunId, scheduleId, holdUsd });
     let usageId = await hold();
     let settled = false;
     return {
@@ -446,7 +459,10 @@ export function agentRunReserve(orgId, { runId, agentRunId }) {
           settled = true;
           await chargeChatStep(orgId, usageId, { modelId, usage });
         } catch (err) {
-          logger.error({ err, orgId, agentRunId }, '[chat-budget] a read for the run not charged');
+          logger.error(
+            { err, orgId, runId, agentRunId },
+            '[chat-budget] a read for the run not charged',
+          );
         }
       },
       async release() {
@@ -455,7 +471,10 @@ export function agentRunReserve(orgId, { runId, agentRunId }) {
         try {
           await releaseChatStep(orgId, usageId);
         } catch (err) {
-          logger.error({ err, orgId, agentRunId }, '[chat-budget] a read’s hold not released');
+          logger.error(
+            { err, orgId, runId, agentRunId },
+            '[chat-budget] a read’s hold not released',
+          );
         }
       },
       // A call sent and then cut off is billed all the same: the hold stays as its cost.

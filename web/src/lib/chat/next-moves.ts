@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { TeamRole } from '@/components/providers/role-provider';
-import { maskIds, type ChatNextMove } from './events';
+import { maskIds, type ChatHref, type ChatNextMove } from './events';
 
 /**
  * Next moves (CHAT-07 §C): what the model suggests with its final answer,
@@ -101,6 +101,8 @@ export interface PickedMove {
    * then ghost text. Its word, not checked here; the card shows what it sends.
    */
   ghostOk: boolean;
+  /** A move the engine made that opens a page (Open in Content Editor, W4-12b part 2). */
+  href?: ChatHref;
 }
 
 /**
@@ -109,7 +111,7 @@ export interface PickedMove {
  * per kind and per prompt; at most three; ids masked.
  */
 export function pickNextMoves(
-  moves: readonly NextMoveInput[],
+  moves: readonly (NextMoveInput & { href?: ChatHref })[],
   who: { role: TeamRole; writable: boolean },
 ): PickedMove[] {
   const readOnly = READ_ONLY_ROLES.includes(who.role) || !who.writable;
@@ -128,6 +130,7 @@ export function pickNextMoves(
       prompt,
       class: move.class,
       ghostOk: move.continues_this_run === true,
+      ...(move.href ? { href: move.href } : {}),
     });
     if (picked.length === MAX_NEXT_MOVES) break;
   }
@@ -135,8 +138,15 @@ export function pickNextMoves(
 }
 
 /** A kept move as the browser gets it: the ghost mark, never its class. */
-export function clientMove(move: Pick<PickedMove, 'label' | 'prompt' | 'ghostOk'>): ChatNextMove {
-  return { label: move.label, prompt: move.prompt, ...(move.ghostOk ? { ghost: true } : {}) };
+export function clientMove(
+  move: Pick<PickedMove, 'label' | 'prompt' | 'ghostOk' | 'href'>,
+): ChatNextMove {
+  return {
+    label: move.label,
+    prompt: move.prompt,
+    ...(move.ghostOk && !move.href ? { ghost: true } : {}),
+    ...(move.href ? { href: move.href } : {}),
+  };
 }
 
 /**

@@ -109,3 +109,23 @@ describe('History range', () => {
     expect(daysAsked(getActionHistory)).toBe(7);
   });
 });
+
+describe('History scorecard by play (AC plan P-4)', () => {
+  it('reads the scorecard by kind, or by play once picked, and keeps it in the URL', async () => {
+    await renderAt('/?view=scorecard');
+    expect(getActionScorecard.mock.calls.at(-1)?.[1]).toMatchObject({ by: 'kind' });
+    expect(button('scorecard.by.kind').getAttribute('aria-pressed')).toBe('true');
+
+    await act(async () => button('scorecard.by.play').click());
+    expect(getActionScorecard.mock.calls.at(-1)?.[1]).toMatchObject({ by: 'play' });
+    await act(() => new Promise((resolve) => setTimeout(resolve, 350)));
+    expect(window.location.search).toBe('?view=scorecard&by=play');
+  });
+
+  it('opens on the play the URL names, and offers no grouping on the Actions list', async () => {
+    await renderAt('/?view=scorecard&by=play');
+    expect(getActionScorecard.mock.calls.at(-1)?.[1]).toMatchObject({ by: 'play' });
+    await act(async () => button('view.actions').click());
+    expect(() => button('scorecard.by.play')).toThrow();
+  });
+});

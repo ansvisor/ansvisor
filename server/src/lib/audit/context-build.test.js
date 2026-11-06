@@ -42,8 +42,9 @@ describe('buildAuditContext', () => {
     expect(probeCalls).toEqual(['https://acme.com/pricing']);
     expect(ctx.botAccess).toEqual(tested);
     expect(ctx.rawPage).toBeNull();
+    // Refused only in the live test: a warning, the real crawler may get in.
     expect(aiBotAccess.evaluate(ctx)).toMatchObject({
-      status: 'fail',
+      status: 'warn',
       evidence: { wafBlockedBots: ['perplexitybot'] },
     });
   });

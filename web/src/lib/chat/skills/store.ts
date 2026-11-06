@@ -190,7 +190,11 @@ export type SkillRefusalCode =
   | 'not_pending'
   | 'blocked'
   // The weekly update check (W4-31).
-  | 'no_update';
+  | 'no_update'
+  // Adding from the Library (W4-19).
+  | 'library_added'
+  | 'library_license'
+  | 'library_plan';
 
 const REFUSAL_STATUS: Record<SkillRefusalCode, number> = {
   invalid: 400,
@@ -226,6 +230,9 @@ const REFUSAL_STATUS: Record<SkillRefusalCode, number> = {
   not_pending: 409,
   blocked: 409,
   no_update: 409,
+  library_added: 409,
+  library_license: 409,
+  library_plan: 403,
 };
 
 export interface SkillRefusal {
@@ -372,7 +379,8 @@ export async function enabledSkillsFor(
           name: row.name,
           title: row.title,
           description: row.description,
-          source: row.source === 'import' ? 'import' : 'user',
+          // A skill added from the Library is a third party's, as an import is.
+          source: row.source === 'user' ? 'user' : 'import',
           body: null,
           id: row.id,
           createdBy: row.created_by,
@@ -517,12 +525,18 @@ export interface LibrarySkillView {
   enabled: boolean;
 }
 
+/** A workspace skill's source (00465): made in Chat, imported, or added from the Library. */
+export type WorkspaceSkillSource = 'user' | 'import' | 'library';
+
+const workspaceSource = (source: string): WorkspaceSkillSource =>
+  source === 'import' || source === 'library' ? source : 'user';
+
 export interface WorkspaceSkillView {
   id: string;
   name: string;
   title: string;
   description: string;
-  source: 'user' | 'import';
+  source: WorkspaceSkillSource;
   sourceUrl: string | null;
   license: string | null;
   status: SkillStatus;
@@ -558,7 +572,7 @@ function viewOf(viewer: SkillViewer, row: ListRow): WorkspaceSkillView {
     name: row.name,
     title: row.title,
     description: row.description,
-    source: row.source === 'import' ? 'import' : 'user',
+    source: workspaceSource(row.source),
     sourceUrl: row.source_url,
     license: row.license,
     status: row.status as SkillStatus,
@@ -897,22 +911,43 @@ export function canImportSkill(
   return null;
 }
 
+/** Whether the workspace already holds a Library skill, by its catalog row (00465: once per workspace). */
+export async function hasLibrarySkill(
+  organizationId: string,
+  libraryRef: string,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_skills')
+    .select('id')
+    .eq('organization_id', organizationId)
+    .eq('library_ref', libraryRef)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the workspace's skills: ${error.message}`);
+  return !!data;
+}
+
 /**
  * Keeps an imported skill for review (CHAT-13 items 13–18): an Admin's or
  * a Manager's, while the workspace isn't read-only, on a paid plan or
  * self-hosted (not in the trial, Wave 3 decision 9), under the plan's
  * limit, never with an Ansvisor skill's name. It waits off and private,
  * `pending_review` (or `blocked`); a Manager's asks the Admins to review it
- * (chat_access_requests, through their own session).
+ * (chat_access_requests, through their own session). A skill added from
+ * the Library (W4-19) is kept the same way, as `library` with the catalog
+ * row it came from, once per workspace.
  */
 export async function importSkill(
   viewer: SkillViewer,
   parsed: ParsedImport,
-  source: { url: string | null; commitSha: string | null },
+  source: { url: string | null; commitSha: string | null; libraryRef?: string | null },
 ): Promise<SkillResult<ImportedSkill>> {
   const cannot = canImportSkill(viewer);
   if (cannot) return cannot;
   const { parts } = parsed;
+  const libraryRef = source.libraryRef ?? null;
+  if (libraryRef && (await hasLibrarySkill(viewer.organizationId, libraryRef))) {
+    return skillRefusal('library_added');
+  }
   if (RESERVED_NAMES.has(parts.name)) return skillRefusal('library_name', { name: parts.name });
   const limit = skillPlanLimit(viewer.plan);
   if (limit !== null && (await countSkills(viewer.organizationId)) >= limit) {
@@ -929,9 +964,10 @@ export async function importSkill(
       compatibility: parts.compatibility ?? null,
       license: parts.license,
       license_text: parsed.licenseText,
-      source: 'import',
+      source: libraryRef ? 'library' : 'import',
       source_url: source.url,
       commit_sha: source.url ? source.commitSha : null,
+      ...(libraryRef ? { library_ref: libraryRef } : {}),
       checksum_sha256: parsed.checksum,
       scan_json: parsed.scan,
       removed_json: parsed.removed,
@@ -942,7 +978,13 @@ export async function importSkill(
     })
     .select('id, name, title')
     .single();
-  if (error?.code === '23505') return skillRefusal('name_taken', { name: parts.name });
+  if (error?.code === '23505') {
+    // Added from the Library meanwhile, or a skill of that name.
+    if (libraryRef && (await hasLibrarySkill(viewer.organizationId, libraryRef))) {
+      return skillRefusal('library_added');
+    }
+    return skillRefusal('name_taken', { name: parts.name });
+  }
   if (error || !data) throw new Error(`Could not keep the skill: ${error?.message ?? 'no row'}`);
   const kept = data as { id: string; name: string; title: string };
 
@@ -998,7 +1040,7 @@ export interface SkillReview {
   compatibility: string | null;
   license: string | null;
   licenseText: string | null;
-  source: 'user' | 'import';
+  source: WorkspaceSkillSource;
   sourceUrl: string | null;
   commitSha: string | null;
   status: SkillStatus;
@@ -1043,7 +1085,7 @@ export async function readSkillReview(
       compatibility: row.compatibility ?? null,
       license: row.license ?? null,
       licenseText: row.license_text,
-      source: row.source === 'import' ? 'import' : 'user',
+      source: workspaceSource(row.source),
       sourceUrl: row.source_url,
       commitSha: row.commit_sha,
       status: row.status as SkillStatus,

@@ -98,6 +98,26 @@ export function contentEditorPath(draftId: string) {
 }
 
 /**
+ * The editor's query param that builds a new draft's brief as it opens,
+ * once (AC-ACTION-PLAN spec §10 item 5): set by the Action Center's Start
+ * now, the person's click, and taken off the address as it is read.
+ */
+export const START_BRIEF_PARAM = 'brief';
+
+/** Where a draft Start now just wrote opens: the editor, its brief to build. */
+export function startedDraftPath(draftId: string) {
+  return `${contentEditorPath(draftId)}?${START_BRIEF_PARAM}=build`;
+}
+
+/** The Library's query param listing one action's drafts (Start now's several pages). */
+export const LIBRARY_ACTION_PARAM = 'action';
+
+/** The Library listing one action's drafts. */
+export function actionLibraryPath(actionId: string) {
+  return `${CONTENT_LIBRARY_PATH}?${LIBRARY_ACTION_PARAM}=${encodeURIComponent(actionId)}`;
+}
+
+/**
  * The Library's tabs: everything, one per status, then the archived drafts
  * (00233), which leave every other tab and keep their status for Restore.
  */
@@ -142,6 +162,8 @@ export interface ContentDraftListItem {
   origin: DraftOrigin;
   /** The chat it was made in, when the member may open it; null otherwise. */
   conversation: DraftConversation | null;
+  /** The Action Center action it is the work of (CE-022), by id and number; null for none. */
+  action?: { id: string; number: number } | null;
 }
 
 /**
@@ -383,6 +405,14 @@ export function draftsCreatedIn(
 /** The Library's Made in filter (W4-10): any, or one place a draft was made. */
 export const MADE_IN_FILTERS = ['all', ...DRAFT_ORIGINS] as const;
 export type MadeInFilter = (typeof MADE_IN_FILTERS)[number];
+
+/** The drafts written for one Action Center action (Start now's several pages); all for none. */
+export function draftsOfAction(
+  drafts: ContentDraftListItem[],
+  actionId: string | null,
+): ContentDraftListItem[] {
+  return actionId ? drafts.filter((d) => d.action?.id === actionId) : drafts;
+}
 
 /** The drafts made where the filter says. */
 export function draftsMadeIn(

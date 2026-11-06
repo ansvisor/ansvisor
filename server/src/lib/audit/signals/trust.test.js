@@ -127,12 +127,15 @@ describe('aiBotAccess', () => {
     });
     const robotsTxt = 'User-agent: GPTBot\nAllow: /\n\nUser-agent: PerplexityBot\nAllow: /';
 
-    it('fails on a bot the CDN or firewall refuses while robots.txt lets it in', () => {
+    it('warns, never fails, on a bot only the live test saw refused: the real crawler may get in', () => {
+      // A CDN that checks a crawler's published addresses refuses a request
+      // that only names the bot: can't tell, so neither a fail nor a 0, and
+      // not the pass robots.txt alone would give.
       const { status, score, evidence } = aiBotAccess.evaluate({
         robotsTxt,
         botAccess: live({ perplexitybot: { http: 403, live: 'blocked' } }),
       });
-      expect({ status, score }).toEqual({ status: 'fail', score: 0 });
+      expect({ status, score }).toEqual({ status: 'warn', score: 0.5 });
       expect(evidence).toMatchObject({
         blocked: false,
         blockedBots: [],
@@ -155,14 +158,15 @@ describe('aiBotAccess', () => {
       });
     });
 
-    it('fails a page without robots.txt that the firewall closes to a bot', () => {
+    it('warns on a page without robots.txt that the firewall closes to a bot', () => {
       expect(
         aiBotAccess.evaluate({
           robotsTxt: null,
           botAccess: live({ claudebot: { http: 401, live: 'blocked' } }),
         }),
       ).toMatchObject({
-        status: 'fail',
+        status: 'warn',
+        score: 0.5,
         evidence: { robotsTxt: false, wafBlockedBots: ['claudebot'] },
       });
     });
@@ -207,6 +211,15 @@ describe('aiBotAccess', () => {
       });
       expect(evidence.blockedBots).toEqual(['gptbot']);
       expect(evidence).not.toHaveProperty('wafBlockedBots');
+    });
+
+    it("still fails on robots.txt's block, with the firewall's refusals named beside it", () => {
+      const { status, score, evidence } = aiBotAccess.evaluate({
+        robotsTxt: 'User-agent: GPTBot\nDisallow: /',
+        botAccess: live({ claudebot: { http: 403, live: 'blocked' } }),
+      });
+      expect({ status, score }).toEqual({ status: 'fail', score: 0 });
+      expect(evidence).toMatchObject({ blockedBots: ['gptbot'], wafBlockedBots: ['claudebot'] });
     });
   });
 
