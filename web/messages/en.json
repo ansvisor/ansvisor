@@ -9662,7 +9662,7 @@
         },
         "overlap": {
           "title": "Your other pages for these prompts",
-          "only": "{count, plural, one {The only page cited for its prompt} other {The only page cited for its # prompts}} · no overlap",
+          "only": "{count, plural, one {The only page of yours cited for its prompt} other {The only page of yours cited for its # prompts}}",
           "shared": "{count} of {total, plural, one {# prompt} other {# prompts}}"
         },
         "note": "The last {days} days against the {days} before, in whole UTC days. Citations come from tracked prompts, AI visits from the tracking snippet or Google Analytics, clicks from Search Console.",
