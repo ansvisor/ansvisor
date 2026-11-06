@@ -15126,6 +15126,33 @@
           "failed": "Couldn't save the page. Try again later."
         }
       },
+      "topicCategories": {
+        "title": "Topics and categories",
+        "description": "Which catalog categories each topic is about, so its work reaches the category page and its products. Worked out from the category's name in the topic's name or prompts; change them here.",
+        "unavailable": "Couldn't read the topics' categories. Reload the page to try again.",
+        "topic": "Topic",
+        "categories": "Categories",
+        "none": "No category yet",
+        "source": {
+          "auto": "matched",
+          "manual": "set by hand"
+        },
+        "remove": "Take {category} away",
+        "add": "Add a category",
+        "addLabel": "Add a category to {topic}",
+        "saved": "Topic categories saved",
+        "errors": {
+          "invalid": "That change can't be made.",
+          "off_site": "That change can't be made.",
+          "not_found": "This topic or category isn't there any more. Reload the page.",
+          "forbidden": "Only admins and managers can change this.",
+          "session": "Your session expired. Sign in again.",
+          "workspace": "This brand isn't in your workspace.",
+          "busy": "Too many requests. Wait a few minutes.",
+          "subscription": "Your plan has ended. Upgrade to change this.",
+          "failed": "Couldn't save the change. Try again later."
+        }
+      },
       "synced": "{count, plural, one {# product read} other {# products read}}",
       "errors": {
         "invalid": "Enter a feed address starting with http:// or https://.",
