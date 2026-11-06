@@ -16,6 +16,7 @@ import { PANEL_WIDTHS, nextPanelSize, panelRouteOf, type PanelSize } from '@/lib
 import type { ChatReference } from '@/lib/chat/references';
 import { cn } from '@/lib/utils';
 import { chatShortcutOf } from '../chat-shortcuts';
+import { ChatTourProvider, type ChatTourSetup } from '../tour/chat-tour';
 import {
   ChatPageSetterContext,
   ChatPanelContext,
@@ -38,14 +39,17 @@ const ASK_CHAT = '[data-action="panel.open"]';
  * this, a suggestion chip (items 20–22). Read once by the dashboard's layout:
  * whether the new Chat is on for the workspace, the person's "Ask Chat on
  * pages" (chat_user_prefs.panel_on_pages, set in Chat's settings) and the
- * size the panel had last.
+ * size the panel had last. With `tour`, where the person's product tour
+ * stands (00486): the tour runs in this panel (ChatTourProvider).
  */
 
 export function ChatPanelProvider({
   setup,
+  tour,
   children,
 }: {
   setup: ChatPanelSetup;
+  tour?: ChatTourSetup;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -55,6 +59,7 @@ export function ChatPanelProvider({
   const before = useRef<Exclude<PanelSize, 'full'>>(setup.size === 'full' ? 'compact' : setup.size);
   const [page, setPage] = useState<ChatPageContext | null>(null);
   const [draft, setDraft] = useState<PanelDraft | null>(null);
+  const [closes, setCloses] = useState(0);
   const handoffs = useRef(0);
 
   const ask = useCallback((reference: ChatReference) => {
@@ -76,6 +81,7 @@ export function ChatPanelProvider({
 
   const close = useCallback(() => {
     setOpen(false);
+    setCloses((n) => n + 1);
     // After the panel is gone: Ask Chat on the page the person was on.
     requestAnimationFrame(() => document.querySelector<HTMLElement>(ASK_CHAT)?.focus());
   }, []);
@@ -116,6 +122,7 @@ export function ChatPanelProvider({
       size,
       toggle,
       close,
+      closes,
       resize,
       page,
       setPage,
@@ -124,11 +131,13 @@ export function ChatPanelProvider({
       fill,
       openChat,
     }),
-    [setup, available, open, size, toggle, close, resize, page, draft, ask, fill, openChat],
+    [setup, available, open, size, toggle, close, closes, resize, page, draft, ask, fill, openChat],
   );
   return (
     <ChatPageSetterContext.Provider value={setPage}>
-      <ChatPanelContext.Provider value={value}>{children}</ChatPanelContext.Provider>
+      <ChatPanelContext.Provider value={value}>
+        {tour ? <ChatTourProvider initial={tour}>{children}</ChatTourProvider> : children}
+      </ChatPanelContext.Provider>
     </ChatPageSetterContext.Provider>
   );
 }

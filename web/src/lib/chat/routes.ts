@@ -78,7 +78,8 @@ const FILTERS: Record<string, readonly RouteFilter[]> = {
 /** Other words for a page, by id. */
 const SYNONYMS: Record<string, readonly string[]> = {
   // "insights" alone is this page's address and Prompts › Insights' name: the model asks.
-  insights: ['visibility', 'answer engine insights', 'visibility dashboard', 'insights'],
+  // Named Brand Visibility until 2026-11-06.
+  insights: ['brand visibility', 'answer engine insights', 'visibility dashboard', 'insights'],
   // Was Chat › Agents.
   agents: ['agents', 'my agents', 'agent centre'],
   'action-center': ['actions', 'action centre'],
@@ -188,7 +189,14 @@ export function routeRegistry({ cloud = isCloud() }: { cloud?: boolean } = {}): 
       for (const child of item.children ?? []) {
         // Content's Opportunities is the item's own address.
         if (child.href === item.href) continue;
-        out.push(route(child.href as ChatHref, navName(child.title), name, item.requiredFeature));
+        out.push(
+          route(
+            child.href as ChatHref,
+            navName(child.title),
+            name,
+            child.requiredFeature ?? item.requiredFeature,
+          ),
+        );
       }
     }
   }

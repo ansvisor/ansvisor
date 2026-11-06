@@ -11,8 +11,11 @@ import { finishDelay } from '@/lib/demo/setup-steps';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 
-/** Where the demo opens: the page the product starts on. */
-export const DEMO_START_HREF = '/dashboard/action-center';
+/**
+ * Where the demo opens: the page the product starts on, which /dashboard
+ * picks (Chat Home for a workspace that never had a plan).
+ */
+export const DEMO_START_HREF = '/dashboard';
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -20,7 +23,8 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
  * "Explore the demo" (onboarding's plan step) and "See the demo" (the
  * read-only band): the organization's demo brand, made or brought up to
  * date (POST /api/demo), shown again if it was hidden, selected, and opened
- * on the Action Center. When the API can't be asked (a member's call
+ * on the person's start page (Chat Home for a workspace that never had a
+ * plan, else the Action Center). When the API can't be asked (a member's call
  * refused), a demo brand already in the list still opens. The setup started
  * ahead (usePreloadDemo) is the one waited for.
  *

@@ -14,7 +14,7 @@ import type { ChatGeneralAccess, ChatGeneralSettings } from '@/lib/chat/general-
  * something reads them.
  */
 
-const router = vi.hoisted(() => ({ refresh: vi.fn() }));
+const router = vi.hoisted(() => ({ refresh: vi.fn(), push: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
@@ -35,6 +35,12 @@ const saved = vi.hoisted(() => ({
   focus: [] as unknown[],
   defaults: 0,
 }));
+// The product tour's server actions (00486): their own tests.
+vi.mock('@/lib/actions/chat-tour', () => ({
+  showTourTopic: vi.fn(async () => ({ ok: false })),
+  endChatTour: vi.fn(async () => ({ ok: false })),
+  prepareChatTour: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatGeneralSettings: vi.fn(async (patch: unknown) => {
     saved.patches.push(patch);
@@ -52,6 +58,9 @@ vi.mock('@/lib/actions/chat-prefs', () => ({
 vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
 
 const { ChatSettings } = await import('./chat-settings');
+const { ChatTourProvider } = await import('./tour/chat-tour');
+const { ChatPanelContext } = await import('./panel/chat-panel-context');
+const tourActions = await import('@/lib/actions/chat-tour');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -293,5 +302,45 @@ describe('ChatSettings', () => {
     await act(async () => brand.click());
     expect(brand.checked).toBe(true);
     expect(toasts.calls).toEqual(["error: Couldn't save that. Try again."]);
+  });
+});
+
+describe('ChatSettings › Product tour (00486)', () => {
+  const openChat = vi.fn();
+  async function renderWithTour(settings = SETTINGS, enabled = true) {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <ChatPanelContext.Provider value={{ setup: { enabled }, openChat } as never}>
+            <ChatTourProvider initial={{ chatId: 'tour-1', topic: null, finished: true }}>
+              <ChatSettings initial={settings} access={OPEN} focus={[]} view="default" />
+            </ChatTourProvider>
+          </ChatPanelContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+
+  it('takes the tour again from its first topic, beside the page', async () => {
+    vi.mocked(tourActions.showTourTopic).mockResolvedValueOnce({ ok: true, chatId: 'tour-1' });
+    await renderWithTour();
+    const take = action('chatSettings.takeTour')[0];
+    expect(take.textContent).toBe('Take the tour');
+    await act(async () => take.click());
+    expect(tourActions.showTourTopic).toHaveBeenCalledWith(
+      expect.objectContaining({ topic: 'visibility', via: 'everything' }),
+    );
+    expect(router.push).toHaveBeenCalledWith('/dashboard/insights');
+    expect(openChat).toHaveBeenCalledWith('tour-1');
+  });
+
+  it('offers no tour where Chat isn’t on pages for the person', async () => {
+    await renderWithTour({ ...SETTINGS, panelOnPages: false });
+    expect(action('chatSettings.takeTour')).toHaveLength(0);
+    await renderWithTour(SETTINGS, false);
+    expect(action('chatSettings.takeTour')).toHaveLength(0);
+    // Without the dashboard's tour (a test, the Chat flag off): none either.
+    await render();
+    expect(action('chatSettings.takeTour')).toHaveLength(0);
   });
 });

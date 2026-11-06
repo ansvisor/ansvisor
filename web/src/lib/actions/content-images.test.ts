@@ -72,6 +72,11 @@ vi.mock('@/lib/supabase/admin', () => ({
     },
   },
 }));
+// Room in the workspace's storage (00490), as image-storage.ts answers it.
+const storageFits = vi.fn<(org: string, bytes: number) => Promise<boolean>>(async () => true);
+vi.mock('@/lib/content/image-storage', () => ({
+  imageStorageFits: (org: string, bytes: number) => storageFits(org, bytes),
+}));
 let cloud: boolean;
 vi.mock('@/config/plans', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/config/plans')>()),
@@ -97,6 +102,7 @@ beforeEach(() => {
   cloud = true;
   given = [];
   noteFails = false;
+  storageFits.mockReset().mockResolvedValue(true);
   createSignedUploadUrl.mockReset().mockImplementation(async (_bucket: string, path: string) => ({
     data: { path, token: 'tok', signedUrl: 'https://store.example/sign' },
     error: null,
@@ -140,6 +146,20 @@ describe('prepareImageUpload', () => {
     expect(createSignedUploadUrl).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses an image the workspace’s storage has no room for, before it counts toward the day', async () => {
+    storageFits.mockResolvedValue(false);
+    expect(await prepareImageUpload('image/png', 1_234_567)).toEqual({ error: 'storage' });
+    expect(storageFits).toHaveBeenCalledWith('org-1', 1_234_567);
+    expect(given).toEqual([]);
+    expect(createSignedUploadUrl).not.toHaveBeenCalled();
+  });
+
+  it('reckons a size it wasn’t told, or one past 5 MB, as 5 MB', async () => {
+    await prepareImageUpload('image/png');
+    await prepareImageUpload('image/png', 50 * 1024 * 1024);
+    expect(storageFits.mock.calls.map(([, bytes]) => bytes)).toEqual([5_242_880, 5_242_880]);
+  });
+
   it('leaves out, and clears, the addresses given more than a day ago', async () => {
     given = givenBefore(IMAGE_UPLOADS_PER_DAY, 25);
     expect(await prepareImageUpload('image/png')).toMatchObject({ token: 'tok' });
@@ -151,6 +171,7 @@ describe('prepareImageUpload', () => {
     org = null;
     expect(await prepareImageUpload('image/png')).toMatchObject({ token: 'tok' });
     expect(given).toEqual([]);
+    expect(storageFits).not.toHaveBeenCalled();
   });
 
   it('fails with no session or organization, or when storage does', async () => {

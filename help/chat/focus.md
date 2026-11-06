@@ -19,6 +19,8 @@ The first time you open Chat, it asks **What should Chat focus on for you?** **D
 
 **Skip for now** also keeps the Default view. Chat asks only once, whichever you choose.
 
+In the free trial, and while you explore the demo brand, Chat doesn't ask: it opens on the Default view with a welcome card. Select **Edit** under the greeting to pick your focus whenever you like.
+
 ## The Default view
 
 On the Default view, Chat Home shows your greeting, one line and the chat box in the middle of the page. The line says how many chats need you, or, when none do, how a competitor's mention rate moved this week. **For you now**, **What's new**, **Start with a question** and **New for you** don't show.

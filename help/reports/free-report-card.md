@@ -42,11 +42,11 @@ The questions and answers are in your target country's language. The PDF and its
 
 ## Why the app shows other numbers
 
-The card asks each question once, on one day. In Ansvisor, your tracked prompts are asked every day, so the figures move from day to day. The **AI Visibility Score** on **Brand Visibility** is a score from 0 to 100 that also weighs citations and how early you're named, not only the share of answers that name you.
+The card asks each question once, on one day. In Ansvisor, your tracked prompts are asked every day, so the figures move from day to day. The **AI Visibility Score** on the **Visibility** page is a score from 0 to 100 that also weighs citations and how early you're named, not only the share of answers that name you.
 
 ## Measure your own questions every day
 
-The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Brand Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next.
+The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next.
 
 ## The value table and the revenue scenario
 
