@@ -143,6 +143,8 @@ export type TriggerDraft = { key: string; enabled: boolean; raw: Json | null } &
     }
   /** Watch rules are picked on the rule itself (CHAT-22): kept here as they are. */
   | { kind: 'watch_rule' }
+  /** When a brand is added (00482): no settings; the agent needs All brands. */
+  | { kind: 'brand_added' }
 );
 
 export type TriggerKind = TriggerDraft['kind'];
@@ -301,6 +303,8 @@ export function newTriggerDraft(
         unit: 'percent',
         period: 'week',
       };
+    case 'brand_added':
+      return { key, kind, enabled: true, raw: null };
   }
 }
 
@@ -373,6 +377,8 @@ export function draftFromView(
       };
     case 'watch_rule':
       return { ...base, kind: 'watch_rule' };
+    case 'brand_added':
+      return { ...base, kind: 'brand_added' };
   }
 }
 
@@ -437,6 +443,8 @@ export function triggerInputOf(
     }
     case 'watch_rule':
       return null;
+    case 'brand_added':
+      return out({});
   }
 }
 
@@ -470,6 +478,8 @@ export function triggerError(draft: TriggerDraft, now: Date): string | null {
       }
       case 'watch_rule':
         return 'watch_rule_required';
+      case 'brand_added':
+        break;
     }
   }
   const input = triggerInputOf(draft);
@@ -563,7 +573,8 @@ export function presetTriggerDraft(
 /**
  * A new agent's form from a ready-to-use agent (Agent Center › Ready to
  * use, "Use this agent"): its skills, triggers, mode and connections, on
- * the brand on screen. Full auto where the plan or Settings › Chat keeps it
+ * the brand on screen, or on All brands when a trigger needs it (When a
+ * brand is added). Full auto where the plan or Settings › Chat keeps it
  * closed starts on Auto, ask before changes: the card said so. Only filled
  * in, never saved: the person saves it.
  */
@@ -573,8 +584,10 @@ export function formFromPreset(
   options: { timeZone: string; brandId: string | null },
 ): AgentFormState {
   const skills = [...preset.skills];
+  const allBrands = preset.triggers.some((trigger) => trigger.kind === 'brand_added');
   return {
     ...newForm(setup, { ...options, skill: null, triggerKey: 'k0' }),
+    ...(allBrands ? { allBrands, brandIds: [] } : {}),
     skills,
     triggers: preset.triggers.map((trigger, i) =>
       presetTriggerDraft(trigger, `k${i}`, options.timeZone),
@@ -697,7 +710,10 @@ export function stepProblems(
         const keys = built.map((t) => `${t.kind}:${canonical(t.config)}`);
         if (new Set(keys).size !== keys.length) fields.triggers = 'triggers_same';
       }
-      if (!state.allBrands && state.brandIds.length === 0) {
+      if (!state.allBrands && state.triggers.some((d) => d.kind === 'brand_added')) {
+        // When a brand is added fires for a brand no one picked yet (00482).
+        fields.brands = 'brand_added_all_brands';
+      } else if (!state.allBrands && state.brandIds.length === 0) {
         fields.brands = ctx.setup.brands.length === 0 ? 'no_brands' : 'brand_required';
       }
       if (state.engines.length > 10) fields.engines = 'engines_many';
@@ -862,6 +878,8 @@ export function refusalPlace(
     case 'schedule_past':
     case 'schedule_too_far':
       return { step: 1, field: 'triggers' };
+    case 'brand_added_scope':
+      return { step: 1, field: 'brands' };
     case 'brand_not_found':
     case 'topic_not_found':
     case 'no_brand':

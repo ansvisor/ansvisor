@@ -9,8 +9,6 @@
 /** The provider's engines, as the location picker names them. */
 export const ENGINE_LABELS: Record<string, string> = {
   chatgpt: 'ChatGPT',
-  perplexity: 'Perplexity',
-  copilot: 'Copilot',
   gemini: 'Gemini',
   aimode: 'Google AI Mode',
   aioverview: 'Google AI Overview',
@@ -20,8 +18,6 @@ export const ENGINE_LABELS: Record<string, string> = {
 export const PLATFORM_MODELS: Record<string, string> = {
   'chatgpt-web': 'chatgpt',
   'chatgpt-shopping': 'chatgpt',
-  'perplexity-web': 'perplexity',
-  'copilot-web': 'copilot',
   'gemini-web': 'gemini',
   'google-aimode': 'aimode',
   'google-aio': 'aioverview',

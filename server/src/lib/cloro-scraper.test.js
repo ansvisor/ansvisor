@@ -679,11 +679,19 @@ describe('cloro-scraper – submitPromptTask', () => {
 
   it('never retries a task that did not ask', async () => {
     answers = [400];
-    await expect(submitPromptTask({ ...task, scraperId: 'copilot-web' })).rejects.toMatchObject({
+    await expect(submitPromptTask({ ...task, scraperId: 'gemini-web' })).rejects.toMatchObject({
       status: 400,
     });
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(sent()[0].payload).not.toHaveProperty('legacy');
+  });
+
+  // Cloro rejects both with 400 MODEL_UNAVAILABLE; nothing is sent.
+  it('sends no Copilot or Perplexity task', async () => {
+    for (const scraperId of ['copilot-web', 'perplexity-web']) {
+      await expect(submitPromptTask({ ...task, scraperId })).rejects.toThrow(/Unknown scraper/);
+    }
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
 

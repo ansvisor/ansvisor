@@ -127,7 +127,7 @@ describe('platforms', () => {
 
   it('knows what each plan tracks', () => {
     expect(planPlatforms(PLANS.starter.limits)).toMatchObject({
-      scrapers: ['chatgpt-web', 'copilot-web'],
+      scrapers: ['chatgpt-web', 'gemini-web'],
       models: [],
       someScrapers: true,
     });
@@ -177,7 +177,7 @@ describe('platforms', () => {
   });
 
   it("holds a read with no platform to the plan's, on a plan that tracks some", async () => {
-    const modelsOf = vi.fn(async () => ['gpt-5-3-mini', 'sonar-pro', 'google-aio', 'copilot-web']);
+    const modelsOf = vi.fn(async () => ['gpt-5-3-mini', 'sonar-pro', 'google-aio', 'gemini-web']);
     const scoped = await scopeRead(
       visibility,
       { brand_id: BRAND },
@@ -185,7 +185,7 @@ describe('platforms', () => {
     );
     expect(modelsOf).toHaveBeenCalledWith(BRAND);
     expect(scoped).toMatchObject({
-      input: { model: 'gpt-5-3-mini,copilot-web' },
+      input: { model: 'gpt-5-3-mini,gemini-web' },
       platformNames: expect.arrayContaining(['ChatGPT']),
     });
     // None of the plan's seen yet: its own ids, which match its rows or none.
@@ -194,7 +194,7 @@ describe('platforms', () => {
       { brand_id: BRAND },
       facts({ limits: PLANS.starter.limits, modelsOf: async () => ['sonar-pro'] }),
     );
-    expect(unseen).toMatchObject({ input: { model: 'chatgpt-web,copilot-web' } });
+    expect(unseen).toMatchObject({ input: { model: 'chatgpt-web,gemini-web' } });
     // The brand's models couldn't be read: not read, rather than held to ids that read empty.
     const failed = await scopeRead(
       visibility,
