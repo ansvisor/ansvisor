@@ -1,21 +1,21 @@
 ---
-title: Brand Visibility’s Mentions tab
+title: Visibility’s Mentions tab
 route: /dashboard/mentions
 keywords: [mentions, sentiment, brand mentions, mention rate, net sentiment, co-mentioned, mentions tab]
 synonyms: [where AI names my brand, tone of AI answers, brand mentions in AI answers, how AI talks about us, mentions and sentiment page]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/mentions.mdx]
 ---
-The **Mentions** tab of **Brand Visibility** (it used to be the Mentions & Sentiment page) shows where AI answers name your brand, in what tone, and next to which competitors. Open it from the tabs under Brand Visibility's header, or from **Brand Visibility › Mentions** in the sidebar. It reads the answers your tracking already stores, so opening it or changing a filter never asks an AI model again. It has three views of its own: **Overview**, **Mentions** and **Perception**.
+The **Mentions** tab of **Visibility** (it used to be the Mentions & Sentiment page) shows where AI answers name your brand, in what tone, and next to which competitors. Open it from the tabs under Visibility's header, or from **Visibility › Mentions** in the sidebar. It reads the answers your tracking already stores, so opening it or changing a filter never asks an AI model again. It has three views of its own: **Overview**, **Mentions** and **Perception**.
 
 ## Filters
 
-All three views share one filter bar, for the brand active in the sidebar. **Date range** offers 24h, 7d, 30d (the default), 90d or Custom; a custom range is read as whole UTC days. **Platform** picks one AI platform or all of them. **Country** appears only when the brand tracks more than one country, and **Topic** only when it has topics. **Search** matches the prompts' text, also on the Perception view, where the box reads *Search keywords…*. The view and the filters are kept in the page's address, so a refresh or a shared link opens the same view. The date range, platform, country and topic come with you from Brand Visibility's other tabs, and go with you to them.
+All three views share one filter bar, for the brand active in the sidebar. **Date range** offers 24h, 7d, 30d (the default), 90d or Custom; a custom range is read as whole UTC days. **Platform** picks one AI platform or all of them. **Country** appears only when the brand tracks more than one country, and **Topic** only when it has topics. **Search** matches the prompts' text, also on the Perception view, where the box reads *Search keywords…*. The view and the filters are kept in the page's address, so a refresh or a shared link opens the same view. The date range, platform, country and topic come with you from Visibility's other tabs, and go with you to them.
 
 ## Overview view
 
@@ -31,4 +31,4 @@ The **Mentions** view lists every answer that names your brand, 100 per page. Ea
 
 ## Copy summary and Export CSV
 
-Brand Visibility's header has these buttons on this tab. **Copy summary** copies the Overview as plain text: the filters, the summary line, the four figures and the period, ready to paste into a doc or a ticket. **Export CSV** downloads the answers that name your brand under the filters, one row per answer, up to 5,000 rows per file. From the Mentions view, the file also follows the table's sentiment and co-mention filters and its sort. Lines above the rows record the filters, the period and the counts. **Reports** opens the Reports page.
+Visibility's header has these buttons on this tab. **Copy summary** copies the Overview as plain text: the filters, the summary line, the four figures and the period, ready to paste into a doc or a ticket. **Export CSV** downloads the answers that name your brand under the filters, one row per answer, up to 5,000 rows per file. From the Mentions view, the file also follows the table's sentiment and co-mention filters and its sort. Lines above the rows record the filters, the period and the counts. **Reports** opens the Reports page.

@@ -123,7 +123,7 @@ async function render(path: string, tab: React.ReactNode = <Tab />) {
 }
 
 const tabLink = (name: string) =>
-  [...container.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Brand Visibility"] a')].find(
+  [...container.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Visibility"] a')].find(
     (a) => a.textContent === name,
   )!;
 
@@ -147,13 +147,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('Brand Visibility’s header and tabs', () => {
-  it('show at once, named Brand Visibility, with the three tabs and the current one marked', async () => {
+describe('Visibility’s header and tabs', () => {
+  it('show at once, named Visibility, with the three tabs and the current one marked', async () => {
     tracking.getTrackingWindow.mockReturnValue(new Promise(() => {}));
     await render('/dashboard/mentions');
-    expect(container.querySelector('h1')?.textContent).toBe('Brand Visibility');
+    expect(container.querySelector('h1')?.textContent).toBe('Visibility');
     expect(
-      [...container.querySelectorAll('nav[aria-label="Brand Visibility"] a')].map((a) => [
+      [...container.querySelectorAll('nav[aria-label="Visibility"] a')].map((a) => [
         a.textContent,
         a.getAttribute('aria-current'),
       ]),
@@ -167,6 +167,7 @@ describe('Brand Visibility’s header and tabs', () => {
     expect(container.textContent).toContain('Brewline Coffee');
     expect(container.querySelector('[data-testid="run-line-loading"]')).not.toBeNull();
     expect(container.textContent).not.toContain('Answer Engine Insights');
+    expect(container.textContent).not.toContain('Brand Visibility');
   });
 
   it('read the run line after the tab’s first read, and fill it in', async () => {
@@ -265,7 +266,7 @@ describe('a tab that breaks', () => {
       '/dashboard/mentions',
       <TabError error={new Error('boom')} reset={reset} title="Couldn't load the mentions" />,
     );
-    expect(container.querySelector('h1')?.textContent).toBe('Brand Visibility');
+    expect(container.querySelector('h1')?.textContent).toBe('Visibility');
     expect(tabLink('Overview')).toBeDefined();
     expect(container.querySelector('[role="alert"]')?.textContent).toContain(
       "Couldn't load the mentions",

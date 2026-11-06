@@ -1589,7 +1589,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Mentions summary',
       description:
-        "Brand Visibility's Mentions tab, its Overview, for a brand: times named (`timesNamed`, the " +
+        "Visibility's Mentions tab, its Overview, for a brand: times named (`timesNamed`, the " +
         "tab's Total mentions), responses naming it, mention rate, prompts with mentions, " +
         'average position and sentiment (counts, shares, net), now and in the window before, ' +
         "with `changes` taken as the tab's cards take them: on the prompts both windows " +
@@ -1680,7 +1680,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Competitors in mentions',
       description:
-        "Competitor framing from Brand Visibility's Mentions tab: how often AI names each competitor in the " +
+        "Competitor framing from Visibility's Mentions tab: how often AI names each competitor in the " +
         "brand's tracked responses (count and share of responses, change against the window " +
         'before) and how often in the same response as the brand. ' +
         MENTIONS_BASIS,

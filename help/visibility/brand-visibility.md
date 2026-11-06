@@ -1,21 +1,21 @@
 ---
-title: Brand Visibility and its Overview tab
+title: Visibility and its Overview tab
 route: /dashboard/insights
 keywords: [brand visibility, overview tab, mentions tab, citations tab, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, topics vs competitors, opportunities, filters]
-synonyms: [AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
+synonyms: [visibility page, AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/answer-engine-insights.mdx, docs/guides/competitors.mdx, docs/guides/prompts.mdx]
 ---
-**Brand Visibility** is the main analytics page for a brand (it used to be called Answer Engine Insights). It has three tabs: **Overview**, **Mentions** and **Citations**. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next.
+**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs: **Overview**, **Mentions** and **Citations**. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next.
 
 ## The tabs and how to reach them
 
-The tabs sit under the page's header. In the sidebar, **Brand Visibility** under **Analytics** opens and closes a group with the same three entries, **Overview**, **Mentions** and **Citations**; it is open whenever one of them is showing.
+The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** opens and closes a group with the same three entries, **Overview**, **Mentions** and **Citations**; it is open whenever one of them is showing.
 
 Each tab loads its own data when you open it, and shows a placeholder while it loads. The date range, AI platform, country and topic you picked stay set when you switch tabs; Mentions has no **All** range, so it opens on its 30 days instead. A tab whose data can't be read says so, with **Retry**, and the other tabs keep working.
 

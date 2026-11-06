@@ -520,7 +520,7 @@
     "chatSetUp": "Set up",
     "agentCenter": "Agent Center",
     "actionCenter": "Action Center",
-    "insights": "Brand Visibility",
+    "insights": "Visibility",
     "traffic": "AI Referral Traffic",
     "prompts": "Prompts",
     "content": "Content",
@@ -556,17 +556,17 @@
     "railTip": "Ansvisor · hover or click to expand"
   },
   "brandVisibility": {
-    "title": "Brand Visibility",
+    "title": "Visibility",
     "loading": "Loading…",
     "tabs": {
-      "label": "Brand Visibility",
+      "label": "Visibility",
       "overview": "Overview",
       "mentions": "Mentions",
       "citations": "Citations"
     },
     "pageName": {
-      "mentions": "Brand Visibility · Mentions",
-      "citations": "Brand Visibility · Citations"
+      "mentions": "Visibility · Mentions",
+      "citations": "Visibility · Citations"
     },
     "actions": {
       "reports": "Reports",
@@ -625,7 +625,7 @@
       "details": "Details",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
-      "link": "Follow it on Brand Visibility"
+      "link": "Follow it on Visibility"
     },
     "pages": {
       "actions": "What should you do now, ranked by your KPI goals.",
@@ -1085,7 +1085,7 @@
           "competitors": "Open Competitors",
           "traffic": "Open Traffic",
           "audit": "Open Site Audit",
-          "insights": "Open Brand Visibility"
+          "insights": "Open Visibility"
         }
       }
     },
@@ -2099,17 +2099,17 @@
             "noteFinal": "The 7 days before this action was sent, next to the 7 days ending 30 days after it was completed. A position counts as changed when it moves at least 0.5."
           }
         },
-        "noSignalsTopicGap": "This action was sent from Brand Visibility's Topics vs competitors, so it has no detection signals. Its evidence is the topic and scores on the Overview tab.",
+        "noSignalsTopicGap": "This action was sent from Visibility's Topics vs competitors, so it has no detection signals. Its evidence is the topic and scores on the Overview tab.",
         "topicGap": {
           "source": "Source",
-          "sourceValue": "Brand Visibility › Topics vs competitors",
+          "sourceValue": "Visibility › Topics vs competitors",
           "openTopic": "Open topic",
           "topic": "Topic",
           "scores": "Visibility when sent",
           "you": "You",
           "gap": "{gap} pts behind"
         },
-        "noSignalsTopicOpportunity": "This action was sent from Brand Visibility's Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
+        "noSignalsTopicOpportunity": "This action was sent from Visibility's Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
         "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
         "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
         "noSignalsAuditPage": "This action was sent from a Site Audit report, so it has no detection signals. Its evidence is the page and the checks it fails on the Overview tab.",
@@ -2127,7 +2127,7 @@
         },
         "topicOpportunity": {
           "source": "Source",
-          "sourceValue": "Brand Visibility › Opportunities",
+          "sourceValue": "Visibility › Opportunities",
           "topic": "Topic",
           "openTopic": "Open topic",
           "plan": "Plan",
@@ -2169,7 +2169,7 @@
         },
         "mentionReview": {
           "source": "Source",
-          "sourceValue": "Brand Visibility › Mentions",
+          "sourceValue": "Visibility › Mentions",
           "openMentions": "Open Mentions",
           "answers": "Answers when sent",
           "answersValue": "{count, plural, one {# answer naming your brand} other {# answers naming your brand}}",
@@ -2356,16 +2356,12 @@
           ]
         },
         "visibility": {
-          "title": "See where you stand in Brand Visibility",
+          "title": "See where you stand in Visibility",
           "summary": "Your share of AI answers vs competitors.",
-          "open": "Open Brand Visibility",
+          "open": "Open Visibility",
           "doneWhen": "Page opened",
           "why": ["Your share of AI answers vs competitors.", "The starting point for every goal."],
-          "how": [
-            "Open Brand Visibility",
-            "Check your rank and the leader",
-            "Note your weakest platform"
-          ]
+          "how": ["Open Visibility", "Check your rank and the leader", "Note your weakest platform"]
         },
         "answers": {
           "title": "Read your first AI answers",
@@ -2911,13 +2907,13 @@
       "topic_competitor_gap": {
         "title": "Close the {gap}-pt gap with {competitor} in {topic}",
         "titleGeneric": "Close a topic gap with a competitor",
-        "description": "Sent from Brand Visibility: a competitor leads one of your topics on Visibility.",
+        "description": "Sent from Visibility: a competitor leads one of your topics on the Visibility score.",
         "goal": "Lead the topic, or close most of the gap."
       },
       "topic_opportunity": {
         "title": "Capture {demand}/mo of estimated AI demand in {topic}",
         "titleGeneric": "Capture the AI demand in a topic",
-        "description": "Sent from Brand Visibility: prompts suggested for one of your topics, with the monthly AI demand behind them.",
+        "description": "Sent from Visibility: prompts suggested for one of your topics, with the monthly AI demand behind them.",
         "goal": "Get the brand into AI answers for the topic's suggested prompts."
       },
       "mention_review": {
@@ -3565,7 +3561,7 @@
     "fanoutGaps": { "name": "Read fan-out gaps", "step": "Read fan-out gaps" },
     "aiAnswers": { "name": "Read a prompt's AI answers", "step": "Read AI answers" },
     "promptInsights": { "name": "Read prompt insights", "step": "Read Prompts · Insights" },
-    "overviewSummary": { "name": "Read the brand overview", "step": "Read Brand Visibility" },
+    "overviewSummary": { "name": "Read the brand overview", "step": "Read Visibility" },
     "actionCenterKpis": { "name": "Read Action Center KPIs", "step": "Read KPIs" },
     "onboardingProgress": {
       "name": "Read Getting started progress",
@@ -7151,7 +7147,7 @@
       "filters": {
         "all": "All",
         "content": "Content",
-        "visibility": "Brand Visibility",
+        "visibility": "Visibility",
         "product": "Product Visibility",
         "technical": "Technical",
         "reports": "Reports"
@@ -13082,7 +13078,7 @@
         "exported": "Exported (UTC)"
       },
       "summary": {
-        "title": "Brand Visibility · Mentions · {brand}",
+        "title": "Visibility · Mentions · {brand}",
         "search": "Search: “{q}”",
         "kpi": "{label}: {value}",
         "kpiChange": "{label}: {value} ({change})",
@@ -13189,7 +13185,7 @@
       "noStrengths": "No strengths found — competitor leads on all prompts.",
       "noPromptData": "No prompt-level data available. Run a tracking check first.",
       "noDataTitle": "No comparison data",
-      "noDataDescription": "Run a tracking check from Brand Visibility to generate comparison data for this competitor.",
+      "noDataDescription": "Run a tracking check from Visibility to generate comparison data for this competitor.",
       "loadError": "Failed to load comparison data."
     },
     "timeline": {
@@ -15494,7 +15490,7 @@
       "citations": "Citations",
       "domainsTracked": "Domains Tracked",
       "manage": "Manage",
-      "viewInsights": "View Brand Visibility",
+      "viewInsights": "View Visibility",
       "addTopic": "Add Topics",
       "addPrompt": "Add Prompts"
     },
@@ -15542,7 +15538,7 @@
     "features": {
       "title": "Everything you need for AI visibility",
       "insights": {
-        "title": "Brand Visibility",
+        "title": "Visibility",
         "description": "Track your brand mentions and citations across all major AI platforms in real time."
       },
       "content": {

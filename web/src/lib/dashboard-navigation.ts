@@ -10,7 +10,7 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   Chat: 'chat',
   'Agent Center': 'agentCenter',
   'Action Center': 'actionCenter',
-  'Brand Visibility': 'insights',
+  Visibility: 'insights',
   Overview: 'overview',
   Competitors: 'competitors',
   'AI Referral Traffic': 'traffic',

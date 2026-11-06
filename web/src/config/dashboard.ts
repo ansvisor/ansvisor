@@ -145,7 +145,7 @@ export const dashboardNav: NavGroup[] = [
       // every link to them still opens them and each stays a menu section
       // of its own (menu access).
       {
-        title: 'Brand Visibility',
+        title: 'Visibility',
         href: '/dashboard/insights',
         icon: BarChart3,
         requiredFeature: 'basic_insights',

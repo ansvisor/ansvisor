@@ -114,9 +114,9 @@ describe('shouldShowDashboardNavItem', () => {
 // Brand Visibility (the owner's mockup): one page with three tabs. Mentions
 // and Citations are no longer items of their own but its submenu's, each on
 // the route its page always had.
-describe('the Brand Visibility group', () => {
+describe('the Visibility group', () => {
   const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
-  const brandVisibility = analytics.find((item) => item.title === 'Brand Visibility')!;
+  const brandVisibility = analytics.find((item) => item.title === 'Visibility')!;
 
   it('gathers Overview, Mentions and Citations, on their old routes', () => {
     expect(brandVisibility).toMatchObject({
@@ -133,9 +133,9 @@ describe('the Brand Visibility group', () => {
     expect(analytics.map((item) => item.title)).not.toContain('Citations');
   });
 
-  it('reads its label from nav.insights, "Brand Visibility", and its tabs’ from nav', () => {
-    expect(getDashboardNavLabel('Brand Visibility', translateNav)).toBe('nav.insights');
-    expect(messages.nav.insights).toBe('Brand Visibility');
+  it('reads its label from nav.insights, "Visibility", and its tabs’ from nav', () => {
+    expect(getDashboardNavLabel('Visibility', translateNav)).toBe('nav.insights');
+    expect(messages.nav.insights).toBe('Visibility');
     expect(getDashboardNavLabel('Overview', translateNav)).toBe('nav.overview');
     expect(messages.nav.overview).toBe('Overview');
     expect(messages.nav.mentions).toBe('Mentions');
@@ -201,8 +201,8 @@ describe('the Competitors item', () => {
     expect(item.children).toBeUndefined();
   });
 
-  it('leaves Prompts right under Brand Visibility', () => {
-    expect(index('Prompts')).toBe(index('Brand Visibility') + 1);
+  it('leaves Prompts right under Visibility', () => {
+    expect(index('Prompts')).toBe(index('Visibility') + 1);
   });
 
   it('reads Competitors from the nav namespace', () => {

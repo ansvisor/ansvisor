@@ -1,17 +1,17 @@
 ---
-title: Brand Visibility’s Citations tab
+title: Visibility’s Citations tab
 route: /dashboard/citations
 keywords: [citations, cited sources, cited URLs, source types, domains, top sources, export citations, third-party sources]
 synonyms: [which sites AI cites, AI sources, links in AI answers, references in AI answers, cited pages, citations page]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/citations.mdx]
 ---
-The **Citations** tab of **Brand Visibility** (it used to be the Citations page) lists the domains and URLs that AI engines cited in their answers to your tracked prompts, for the brand selected in the sidebar. Open it from the tabs under Brand Visibility's header, or from **Brand Visibility › Citations** in the sidebar. It shows which sources AI engines rely on when they answer questions in your category, and sorts them by source type. It reads the answers your tracking already collects.
+The **Citations** tab of **Visibility** (it used to be the Citations page) lists the domains and URLs that AI engines cited in their answers to your tracked prompts, for the brand selected in the sidebar. Open it from the tabs under Visibility's header, or from **Visibility › Citations** in the sidebar. It shows which sources AI engines rely on when they answer questions in your category, and sorts them by source type. It reads the answers your tracking already collects.
 
 ## Filters
 
@@ -21,7 +21,7 @@ The **Citations** tab of **Brand Visibility** (it used to be the Citations page)
 - **Platform**: one AI platform, or all of them.
 - **Region**: one region the answers were tracked in, or all of them.
 
-The filters are kept in the page's address, so a refresh or a shared link opens the same view. The date range, platform, region and topic come with you from Brand Visibility's other tabs, and go with you to them. When a table is empty for the window but the brand has citations outside it, **Show all data** clears the filters and shows all dates and all sources.
+The filters are kept in the page's address, so a refresh or a shared link opens the same view. The date range, platform, region and topic come with you from Visibility's other tabs, and go with you to them. When a table is empty for the window but the brand has citations outside it, **Show all data** clears the filters and shows all dates and all sources.
 
 ## Summary cards
 
@@ -63,7 +63,7 @@ The tab lists up to the 2,000 most-cited URLs, and its count gives the full numb
 
 ## Export CSV
 
-**Export CSV**, in Brand Visibility's header while this tab is open, downloads the open table, with the filters applied:
+**Export CSV**, in Visibility's header while this tab is open, downloads the open table, with the filters applied:
 
 - **Domains**: each domain with its source type, citations, the answers citing it, its usage and the AI platforms.
 - **URLs**: each page with its domain, source type, title, citations, the answers citing it and its usage.

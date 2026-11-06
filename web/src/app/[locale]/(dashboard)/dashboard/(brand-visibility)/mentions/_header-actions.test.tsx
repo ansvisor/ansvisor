@@ -207,7 +207,7 @@ describe('MentionsHeaderActions', () => {
     expect(getMentionsOverview).toHaveBeenCalledWith('b1', expect.objectContaining({}));
     expect(writeText.mock.calls[0][0]).toBe(
       [
-        'Brand Visibility · Mentions · Acme Coffee',
+        'Visibility · Mentions · Acme Coffee',
         'All platforms · All countries · All topics',
         'Net sentiment is +34 (↓ 6 vs the previous 30 days). AI usually names Acme Coffee next to Crema Club.',
         // Total mentions counts every time a response names the brand, as the card does.
@@ -301,7 +301,7 @@ describe('MentionsHeaderActions', () => {
     expect(saved[0].name).toMatch(/^ansvisor_acme-coffee_mentions_\d{4}-\d{2}-\d{2}\.csv$/);
     const lines = (await savedText()).split('\n');
     expect(lines.slice(0, 11)).toEqual([
-      'Brand Visibility · Mentions,Acme Coffee',
+      'Visibility · Mentions,Acme Coffee',
       'Period,"2026-09-18 – 2026-10-17 (30 days, UTC)"',
       'Platform,All platforms',
       'Country,All countries',

@@ -9,7 +9,7 @@ describe('routeRegistry', () => {
   const routes = routeRegistry({ cloud: true });
 
   it('comes from the live sidebar and Settings, named as the sidebar names them', () => {
-    expect(routeById('insights')).toMatchObject({ name: 'Brand Visibility', section: null });
+    expect(routeById('insights')).toMatchObject({ name: 'Visibility', section: null });
     expect(routeById('/dashboard/prompts/tracked')).toMatchObject({
       name: 'Tracked Prompts',
       section: 'Prompts',
@@ -36,24 +36,26 @@ describe('routeRegistry', () => {
     });
   });
 
-  // Brand Visibility's tabs (the owner's mockup): "Go to a page" and
+  // Visibility's tabs (the owner's mockup): "Go to a page" and
   // open_page name Mentions and Citations under it, at their tabs' routes.
-  it('names Brand Visibility’s Mentions and Citations tabs under it', () => {
+  it('names Visibility’s Mentions and Citations tabs under it', () => {
     expect(routeById('mentions')).toMatchObject({
       href: '/dashboard/mentions',
       name: 'Mentions',
-      section: 'Brand Visibility',
+      section: 'Visibility',
     });
     expect(routeById('citations')).toMatchObject({
       href: '/dashboard/citations',
       name: 'Citations',
-      section: 'Brand Visibility',
+      section: 'Visibility',
     });
-    // The Overview is the group's own address: listed once, as Brand Visibility.
+    // The Overview is the group's own address: listed once, as Visibility.
     expect(routes.filter((r) => r.href === '/dashboard/insights')).toHaveLength(1);
-    expect(routeRequest('open brand visibility mentions', routes)?.route.href).toBe(
+    expect(routeRequest('open visibility mentions', routes)?.route.href).toBe(
       '/dashboard/mentions',
     );
+    // Its name until 2026-11-06 still opens it.
+    expect(routeRequest('open brand visibility', routes)?.route.href).toBe('/dashboard/insights');
     expect(routeRequest('open citations', routes)?.route.href).toBe('/dashboard/citations');
   });
 
@@ -138,7 +140,7 @@ describe('routeRequest', () => {
     expect(routeRequest('open plan', routeRegistry({ cloud: false }))?.route.id).toBe(
       'content/plan',
     );
-    // Brand Visibility's address, or Prompts › Insights.
+    // Visibility's address, or Prompts › Insights.
     expect(to('open insights')).toBeNull();
   });
 

@@ -96,10 +96,10 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-describe('the Brand Visibility group', () => {
+describe('the Visibility group', () => {
   it('lists Overview, Mentions and Citations under it, with no Mentions or Citations items of their own', async () => {
     await render('/dashboard/action-center');
-    expect(group().textContent).toBe('Brand Visibility');
+    expect(group().textContent).toBe('Visibility');
     expect(entries()).toEqual([
       { label: 'Overview', href: '/dashboard/insights', current: null },
       { label: 'Mentions', href: '/dashboard/mentions', current: null },

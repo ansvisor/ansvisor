@@ -47,8 +47,8 @@ describe('openPageFor', () => {
     ).toEqual({
       found: true,
       title: 'Citations',
-      // A tab of Brand Visibility, on the address its page always had.
-      section: 'Brand Visibility',
+      // A tab of Visibility, on the address its page always had.
+      section: 'Visibility',
       locked: false,
       href: '/dashboard/citations?preset=30d&platform=perplexity-web',
       filters: [
