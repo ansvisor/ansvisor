@@ -164,6 +164,25 @@ describe('a new agent', () => {
     ).toEqual([]);
   });
 
+  it('starts Onboarding & Help on All brands, its When a brand is added needing them (00482)', () => {
+    const form = formFromPreset(SETUP, readyPreset('onboarding-help')!, {
+      timeZone: 'UTC',
+      brandId: BRAND_2,
+    });
+    expect(form).toMatchObject({ skills: ['setup'], mode: 'ask_first', allBrands: true });
+    expect(form.brandIds).toEqual([]);
+    expect(form.triggers.map(triggerInputOf)).toEqual([
+      { kind: 'brand_added', enabled: true, config: {} },
+    ]);
+    expect(firstStepWithProblems({ ...form, name: 'Onboarding & Help' }, ctxOf())).toBeNull();
+    expect(
+      createAgentInput.parse(createBody({ ...form, name: 'Onboarding' }, 'manager')),
+    ).toMatchObject({
+      scope: { all_brands: true },
+      triggers: [{ kind: 'brand_added', config: {}, enabled: true }],
+    });
+  });
+
   it('starts a Full auto preset on Auto, ask before changes where the plan or Settings › Chat keep Full auto closed', () => {
     const preset = readyPreset('weekly-report')!;
     const at = { timeZone: 'UTC', brandId: null };
@@ -348,6 +367,15 @@ describe('each step’s checks', () => {
       'no_brands',
     );
     expect(stepProblems(1, fresh({ allBrands: true, brandIds: [] }), ctxOf()).fields).toEqual({});
+    // When a brand is added needs All brands: picked brands are marked, with why.
+    const added = [newTriggerDraft('brand_added', 'n', 'UTC')];
+    expect(stepProblems(1, fresh({ triggers: added }), ctxOf())).toEqual({
+      fields: { brands: 'brand_added_all_brands' },
+      triggers: {},
+    });
+    expect(
+      stepProblems(1, fresh({ triggers: added, allBrands: true, brandIds: [] }), ctxOf()),
+    ).toEqual({ fields: {}, triggers: {} });
     expect(stepProblems(1, fresh({ urlsText: 'ansvisor.com/pricing' }), ctxOf()).fields.urls).toBe(
       'urls_invalid',
     );
@@ -550,6 +578,7 @@ describe('the server’s refusals', () => {
     expect(refusalPlace('name_taken_hidden', null)).toEqual({ step: 3, field: 'name' });
     expect(refusalPlace('schedule_past', null)).toEqual({ step: 1, field: 'triggers' });
     expect(refusalPlace('topic_not_found', null)).toEqual({ step: 1, field: 'brands' });
+    expect(refusalPlace('brand_added_scope', null)).toEqual({ step: 1, field: 'brands' });
     expect(refusalPlace('demo_brand', null)).toEqual({ step: 1, field: 'brands' });
     expect(refusalPlace('plan_locked', 'fullAuto')).toEqual({ step: 2, field: 'mode' });
     expect(refusalPlace('plan_locked', 'engines')).toEqual({ step: 1, field: 'engines' });

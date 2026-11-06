@@ -1,11 +1,11 @@
 ---
 title: Set the rules Chat follows
 route: /dashboard/settings/chat
-keywords: [chat rules, tool policy, full auto, don't ask again, managers publish, agents publish on their own, go live, model providers, turn off openai, turn off google, deepseek, data collection]
-synonyms: [chat permissions, chat policy, let agents publish, autonomous publishing]
+keywords: [chat rules, tool policy, full auto, don't ask again, agent work, i approve first, agent starts on its own, managers publish, agents publish on their own, go live, model providers, turn off openai, turn off google, deepseek, data collection]
+synonyms: [chat permissions, chat policy, let agents publish, autonomous publishing, who starts agent work, approve agent changes]
 plan: growth
-updated: 2026-11-02
-last_checked: 2026-11-02
+updated: 2026-11-05
+last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -18,6 +18,15 @@ sources: [web/messages/en.json]
 **Full auto** lets people run changes without a card. **Don't ask again** lets each person skip a card for one tool. Both need the Growth plan.
 
 Under **Tool policy**, set each tool to **Never**, **Ask** or **Always**, within what the tool allows. **Reset to defaults** puts every tool back.
+
+## Agent work
+
+**Agent work** sets how far your agents go without a person:
+
+- **I approve first**, where every workspace starts: every change an agent's run makes waits for someone to approve it, whatever the agent's mode, even for a tool set to **Always**.
+- **Agent starts on its own**: each agent works in its own mode, **Ask me first**, **Auto** or **Full auto**.
+
+It doesn't change going live: that stays under **Agents that publish on their own** and a person's click. Only Admins change it. Below the choices you see who changed it last and when. The gear on Action Center's **Today** card shows the same setting.
 
 ## Model providers
 
