@@ -17,6 +17,15 @@ let plan: Plan;
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
+// What runs once the answer has gone (after()): kept to run by hand.
+const later = vi.hoisted(() => ({ tasks: [] as (() => Promise<void>)[], fire: vi.fn() }));
+vi.mock('next/server', () => ({
+  after: (task: () => Promise<void>) => {
+    later.tasks.push(task);
+  },
+}));
+vi.mock('@/lib/chat/agent-triggers', () => ({ fireBrandAdded: later.fire }));
+
 vi.mock('@/lib/guards/plan-guard', () => ({
   getOrgPlan: vi.fn(async () => plan),
 }));
@@ -95,6 +104,8 @@ describe('createBrand plan limit', () => {
     countCalls = [];
     readBackFilters = [];
     returningRequested = false;
+    later.tasks = [];
+    later.fire.mockReset();
   });
 
   it('counts every brand of the organization, whatever the person sees, never the demo brand (00380, 00390)', async () => {
@@ -142,6 +153,33 @@ describe('createBrand plan limit', () => {
     const { row } = inserted[0] as { row: { id: string } };
     expect(returningRequested).toBe(false);
     expect(readBackFilters).toEqual([[['id', row.id]]]);
+  });
+
+  it('fires the agents’ When a brand is added once the answer has gone, never at the limit (00482)', async () => {
+    brandCount = 0;
+    plan = capped(5);
+
+    const result = await createBrand(input);
+
+    // Nothing fired while the page waited: it runs after the answer.
+    expect(later.fire).not.toHaveBeenCalled();
+    expect(later.tasks).toHaveLength(1);
+    await later.tasks[0]();
+    const id = 'brand' in result ? result.brand.id : null;
+    expect(later.fire).toHaveBeenCalledWith(id, expect.any(Date), null);
+
+    // A failed fire is logged; the brand stays.
+    later.fire.mockRejectedValueOnce(new Error('down'));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await createBrand(input);
+    await expect(later.tasks[1]()).resolves.toBeUndefined();
+    expect(errors).toHaveBeenCalled();
+    errors.mockRestore();
+
+    brandCount = 5;
+    later.tasks = [];
+    await createBrand(input);
+    expect(later.tasks).toEqual([]);
   });
 });
 

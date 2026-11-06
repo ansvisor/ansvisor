@@ -3,9 +3,9 @@ import { pollScraperResult, submitScraperTask } from '../cloro-scraper.js';
 import { loadSupportedCountries, supportsCountry } from '../cloro-countries.js';
 
 /**
- * A report card's questions asked in the five engines (REPORT-CARD §1),
+ * A report card's questions asked in the four engines (REPORT-CARD §1),
  * through the tracking's own provider (Cloro), from the target country: one
- * answer per question and engine, 125 at most (25 questions). An engine
+ * answer per question and engine, 100 at most (25 questions). An engine
  * that doesn't answer from the country is left out; a question Google gives
  * no AI Overview for is no answer, not a failure. A few tasks run at a time.
  */
@@ -13,11 +13,12 @@ import { loadSupportedCountries, supportsCountry } from '../cloro-countries.js';
 /**
  * The engines a card asks, in the order it lists them (web
  * lib/report-card/payload.ts; owner decision 2026-11-04): Ansvisor
- * Starter's engines, ChatGPT and Microsoft Copilot, are the card's main
- * result; the Google engines, which only Growth tracks, are shown apart.
+ * Starter's engines, ChatGPT and Gemini, are the card's main result; the
+ * Google engines only Growth tracks are shown apart. Cards made before
+ * Copilot was dropped asked it as a main engine.
  */
-export const MAIN_ENGINES = ['chatgpt-web', 'copilot-web'];
-export const GROWTH_ENGINES = ['gemini-web', 'google-aio', 'google-aimode'];
+export const MAIN_ENGINES = ['chatgpt-web', 'gemini-web'];
+export const GROWTH_ENGINES = ['google-aio', 'google-aimode'];
 export const REPORT_CARD_ENGINES = [...MAIN_ENGINES, ...GROWTH_ENGINES];
 
 /** Tasks in flight at once. */

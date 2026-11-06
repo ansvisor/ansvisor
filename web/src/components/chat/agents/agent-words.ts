@@ -83,6 +83,8 @@ export function useAgentWords(now: Date, timeZone?: string) {
         }
         case 'watch_rule':
           return t('trigger.watchRule');
+        case 'brand_added':
+          return t('trigger.brandAdded');
       }
     };
 
