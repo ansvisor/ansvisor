@@ -13622,8 +13622,7 @@
         "chatgpt_europe": "Google Shopping · via Merchant Center",
         "google-aio": "Via Merchant Center",
         "google-aimode": "Google Shopping Graph",
-        "gemini-web": "Google Shopping Graph",
-        "copilot-web": "Microsoft Merchant Center"
+        "gemini-web": "Google Shopping Graph"
       },
       "view": "View products",
       "connect": "Connect",
