@@ -222,16 +222,15 @@ function benefitsOf(from: PlanId, to: PlanId, afterTrial: boolean): PlanBenefit[
   const own = PLANS[from].limits;
   const next = PLANS[to].limits;
   const out: PlanBenefit[] = [];
-  if (next.maxPlatforms > own.maxPlatforms) {
-    out.push({ key: 'morePlatforms', count: next.maxPlatforms - own.maxPlatforms });
-  }
+  // Claude's answers are tracked on Enterprise, set per contract (plan_overrides).
+  const claude = !tracksClaude(own) && (to === 'enterprise' || tracksClaude(next));
+  // Claude counts among the platforms but has a line of its own: not counted twice.
+  const more = next.maxPlatforms - own.maxPlatforms - (claude ? 1 : 0);
+  if (more > 0) out.push({ key: 'morePlatforms', count: more });
   if (rank(from) < rank('growth') && rank(to) >= rank('growth')) {
     out.push({ key: 'fullAuto' }, { key: 'mcpWrite' });
   }
-  // Claude's answers are tracked on Enterprise, set per contract (plan_overrides).
-  if (!tracksClaude(own) && (to === 'enterprise' || tracksClaude(next))) {
-    out.push({ key: 'claude' });
-  }
+  if (claude) out.push({ key: 'claude' });
   if (to === 'enterprise') {
     out.push({ key: 'ownKeys' }, { key: 'contract' });
   } else if (

@@ -29,9 +29,9 @@ In the free trial, and while you explore the demo brand, a welcome card sits abo
 
 Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.
 
-Next to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
+Under the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.
 
-Analysts and Agency partners only read; their box says **Read-only**, with a link to their role.
+Analysts and Agency partners only read; under their box it says **Read-only**, with a link to their role.
 
 The demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog.
 
@@ -47,7 +47,7 @@ The box in the panel starts with chips for what you have on screen: the page, yo
 
 An empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.
 
-The speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Brand Visibility, Mentions & Sentiment, Citations, AI Referral Traffic, Prompts and Action Center.
+The speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Visibility's Overview, Mentions and Citations tabs, AI Referral Traffic, Prompts and Action Center.
 
 ## Chats in the panel
 
@@ -204,7 +204,7 @@ In **＋**, **Connect a tool** opens **Settings › Integrations** for Admins; o
 
 ## Speak your message
 
-Click the microphone beside **@** and speak. While it listens, it shows **Listening…** with a red dot; click it again, or pause, to stop. Your words go into the box in your browser's language, and nothing is sent until you send it. Using voice doesn't count toward your AI usage.
+Click the microphone next to the arrow and speak. While it listens, it shows **Listening…** with a red dot; click it again, or pause, to stop. Your words go into the box in your browser's language, and nothing is sent until you send it. Using voice doesn't count toward your AI usage.
 
 Your browser turns the speech into text, not Ansvisor, and Ansvisor keeps no audio. Chrome and Edge send the audio to Google or Microsoft to do it. Firefox has no speech recognition, so there is no microphone there. If the browser asks, allow the microphone; otherwise the box says how.
 

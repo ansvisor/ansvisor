@@ -4,14 +4,14 @@ route: /dashboard/mentions
 keywords: [perception, brand attributes, brand shape, biggest gap, associated words]
 synonyms: [how AI describes my brand, brand themes, what AI says about us, words AI uses for us]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/mentions.mdx]
 ---
-The **Perception** tab of the Mentions & Sentiment page shows the words AI uses next to your brand, and how they compare with the words it uses for your competitors. The terms are taken from the sentences that name each brand by fixed rules, not by an AI model. A sentence that names two brands lends its words to both.
+The **Perception** view, on Visibility's **Mentions** tab, shows the words AI uses next to your brand, and how they compare with the words it uses for your competitors. The terms are taken from the sentences that name each brand by fixed rules, not by an AI model. A sentence that names two brands lends its words to both.
 
 ## What AI associates with your brand
 

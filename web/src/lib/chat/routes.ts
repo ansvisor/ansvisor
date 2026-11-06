@@ -78,7 +78,8 @@ const FILTERS: Record<string, readonly RouteFilter[]> = {
 /** Other words for a page, by id. */
 const SYNONYMS: Record<string, readonly string[]> = {
   // "insights" alone is this page's address and Prompts › Insights' name: the model asks.
-  insights: ['visibility', 'answer engine insights', 'visibility dashboard', 'insights'],
+  // Named Brand Visibility until 2026-11-06.
+  insights: ['brand visibility', 'answer engine insights', 'visibility dashboard', 'insights'],
   // Was Chat › Agents.
   agents: ['agents', 'my agents', 'agent centre'],
   'action-center': ['actions', 'action centre'],

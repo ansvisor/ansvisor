@@ -25,7 +25,7 @@ import {
   WORK_AREAS,
   WORK_AREA_IDS,
   hiddenWithWorkAreas,
-  menuSectionOf,
+  menuSectionEntries,
   type WorkAreaId,
 } from '@/lib/menu-access';
 import { setMyWorkAreas } from '@/lib/actions/menu-access';
@@ -44,12 +44,7 @@ const AREA_ICONS: Record<WorkAreaId, LucideIcon> = {
 };
 
 /** The menu's sections with their icons and nav titles, in its order. */
-const SECTIONS = dashboardNav
-  .flatMap((group) => group.items)
-  .flatMap((item) => {
-    const section = menuSectionOf(item.href);
-    return section ? [{ section, title: item.title, icon: item.icon }] : [];
-  });
+const SECTIONS = menuSectionEntries(dashboardNav.flatMap((group) => group.items));
 
 /**
  * "What do you work on?" (menu access): the person picks what they work on or
