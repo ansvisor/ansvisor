@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { TabHeaderActions } from '@/components/brand-visibility/shell-context';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getCompetitors } from '@/lib/actions/competitor';
@@ -28,21 +29,22 @@ import { MentionsListTab } from './_mentions-tab';
 import { MentionsOverviewTab } from './_overview';
 import { MentionsPerceptionTab } from './_perception';
 import { useMentionsExport } from './_use-mentions-export';
-import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
 /**
- * Mentions & Sentiment (MS-05): where AI mentions the brand, how it describes
- * it, and what to do about it — built from the answers tracking already
- * stores, so opening the page or changing a filter never calls an LLM.
+ * Brand Visibility's Mentions tab (was the Mentions & Sentiment page, MS-05):
+ * where AI mentions the brand, how it describes it, and what to do about it —
+ * built from the answers tracking already stores, so opening the tab or
+ * changing a filter never calls an LLM.
  *
- * Top-down as the spec orders it: the header's Copy summary, Export CSV and
- * Reports, the tabs, then the filters every tab shares, then the tab's
- * content. Tab and filters live in the URL. Chat's side panel sees the
- * page's name, dates and filters, three questions about it, and its trend
- * chart and platform table (W1-08).
+ * Top-down as the spec orders it: Copy summary and Export CSV in the shared
+ * header (beside Reports), its own tabs, then the filters every one of them
+ * shares, then the tab's content. Tab and filters live in the URL. Chat's
+ * side panel sees the tab's name, dates and filters, three questions about
+ * it, and its trend chart and platform table (W1-08).
  */
 export default function MentionsPage() {
   const t = useTranslations('mentions');
+  const tBrandVisibility = useTranslations('brandVisibility');
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const brandName = activeBrand?.name ?? '';
@@ -70,8 +72,11 @@ export default function MentionsPage() {
   const [regions, setRegions] = useState<string[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
+  // The filters' choices, read once the URL is: the tab's own read (sent by
+  // the tab in the same commit, before this) goes first, as server actions
+  // run one at a time.
   useEffect(() => {
-    if (!activeBrandId) return;
+    if (!activeBrandId || !urlRead) return;
     let cancelled = false;
     getBrandFilterOptions(activeBrandId)
       .then((options) => {
@@ -91,7 +96,7 @@ export default function MentionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBrandId]);
+  }, [activeBrandId, urlRead]);
 
   const tRange = useTranslations('chatPanel.range');
   const tFilters = useTranslations('mentions.filters');
@@ -102,7 +107,7 @@ export default function MentionsPage() {
   useChatPageContext(
     activeBrandId
       ? {
-          pageName: t('title'),
+          pageName: tBrandVisibility('pageName.mentions'),
           dateRange: {
             from: filters.range === 'custom' ? filters.from : filters.range,
             to: filters.range === 'custom' ? filters.to : null,
@@ -155,15 +160,11 @@ export default function MentionsPage() {
 
   return (
     <div className="space-y-6">
-      <HeaderWithAiUsage>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-            <p className="text-sm text-muted-foreground">{t('description')}</p>
-          </div>
-          {urlRead && <MentionsHeaderActions tab={tab} exporter={exporter} />}
-        </div>
-      </HeaderWithAiUsage>
+      {urlRead && (
+        <TabHeaderActions>
+          <MentionsHeaderActions tab={tab} exporter={exporter} />
+        </TabHeaderActions>
+      )}
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as MentionsTab)}>
         <TabsList aria-label={t('tabs.label')}>

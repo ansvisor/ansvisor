@@ -28,7 +28,7 @@ Signals are detected after your daily tracking run. Ansvisor groups related sign
 
 ## While the first tracking runs
 
-While a new brand's first tracking runs, one thin line sits under the tabs: **First tracking running**, how many of its checks are done and about how long is left. If another analysis is running, the line says **First tracking queued** until a slot opens. Click **Details** to read what it means and follow the run on Brand Visibility. Actions, signals and KPIs fill in once it finishes, and the line goes away. Meanwhile, a new brand starts with the **Getting started** steps on the Actions tab.
+While a new brand's first tracking runs, one thin line sits under the tabs: **First tracking running**, how many of its checks are done and about how long is left. If another analysis is running, the line says **First tracking queued** until a slot opens. Click **Details** to read what it means and follow the run on Visibility. Actions, signals and KPIs fill in once it finishes, and the line goes away. Meanwhile, a new brand starts with the **Getting started** steps on the Actions tab.
 
 ## A weekly routine
 

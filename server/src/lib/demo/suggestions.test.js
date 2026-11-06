@@ -6,6 +6,7 @@ const { IMPROVE_PRESETS, IMPROVE_PROMPTS, suggestionRows, suggestions } =
   await import('./suggestions.js');
 const { DEMO_MAX_AGE_MS } = await import('./index.js');
 const { coreRows } = await import('./core.js');
+const { PLATFORMS } = await import('./brewline.js');
 const { ACTIONABLE_STATES, isKnownSource } = await import('../prompt-improve.js');
 
 /**
@@ -56,7 +57,7 @@ describe('suggestionRows', () => {
           .at(-1),
       );
       expect(set.region).toBe('');
-      expect(set.platform_states).toHaveLength(6);
+      expect(set.platform_states).toHaveLength(PLATFORMS.length);
       expect(set.suggestions.length).toBeGreaterThan(0);
       for (const s of set.suggestions) {
         const state = set.platform_states.find((p) => p.id === s.platform);

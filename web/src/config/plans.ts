@@ -238,7 +238,10 @@ export const PLANS: Record<PlanId, Plan> = {
     limits: {
       maxBrands: 4,
       maxPrompts: 200,
-      maxPlatforms: 8,
+      // The engines Growth tracks: ChatGPT, Gemini, Google AI Overviews and
+      // Google AI Mode, since Copilot and Perplexity went (2026-11-06).
+      // ChatGPT Shopping feeds Product Visibility and isn't counted.
+      maxPlatforms: 4,
       maxTeamMembers: -1,
       maxDomainsPerBrand: 10,
       maxVolumeAnalyses: 10,
@@ -285,7 +288,8 @@ export const PLANS: Record<PlanId, Plan> = {
     limits: {
       maxBrands: -1,
       maxPrompts: -1,
-      maxPlatforms: 8,
+      // Growth's four engines plus Claude, set per contract.
+      maxPlatforms: 5,
       maxTeamMembers: -1,
       maxDomainsPerBrand: -1,
       maxVolumeAnalyses: -1,

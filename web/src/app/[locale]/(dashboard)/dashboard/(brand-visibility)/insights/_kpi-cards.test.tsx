@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import messages from '../../../../../../messages/en.json';
+import messages from '../../../../../../../messages/en.json';
 import type { InsightsSummary, TrackedPromptsKpi } from '@/lib/actions/tracking';
 import { InfoTip, KpiRows } from './_kpi-cards';
 

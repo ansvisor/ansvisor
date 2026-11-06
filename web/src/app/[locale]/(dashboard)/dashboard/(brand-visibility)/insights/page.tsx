@@ -2,33 +2,31 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Link, useRouter } from '@/i18n/navigation';
-import { useSearchParams } from 'next/navigation';
 import { useLocale, useTranslations } from 'next-intl';
-import { Skeleton } from '@/components/ui/skeleton';
 import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-sheet';
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFirstRun } from '@/hooks/use-first-run';
-import { useUserRole } from '@/hooks/use-user-role';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
+import { ReadError } from '@/components/brand-visibility/read-error';
+import {
+  TabHeaderActions,
+  useBrandVisibilityShell,
+} from '@/components/brand-visibility/shell-context';
+import { OverviewSkeleton } from '@/components/brand-visibility/tab-skeleton';
+import { OVERVIEW_DEFAULT_RANGE } from '@/lib/brand-visibility';
 import { largestMove, rangeChipLabel } from '@/lib/chat/page-context';
 import {
   getInsightsData,
-  getTrackingWindow,
-  type TrackingWindow,
   type VisibilityRateTrendData,
-  triggerTrackingCheck,
-  getJobStatus,
-  cancelTrackingJob,
-  getBrandPrompts,
   getBrandFilterOptions,
   exportPromptResults,
+  type InsightsSection,
   type InsightsSummary,
   type TrackedPromptsKpi,
   type CompetitorComparisonData,
   type ShareOfVoiceData,
   type InsightsOpportunities,
-  type TrackingJobStatus,
   type BreakdownFilters,
   type BreakdownMetric,
   type CoverageKpi,
@@ -45,11 +43,7 @@ import {
   type DateRangePreset,
 } from '@/components/filters/date-range-filter';
 import { getDateRange } from '@/lib/date-range';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { buttonVariants } from '@/components/ui/button-variants';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   BarChart3,
   CalendarX2,
@@ -57,10 +51,9 @@ import {
   Loader2,
   FlaskConical,
   Users,
-  StopCircle,
   ArrowRight,
   Download,
-  FileText,
+  RotateCw,
 } from 'lucide-react';
 import {
   Select,
@@ -71,9 +64,10 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { usePlanContext } from '@/components/providers/plan-provider';
-import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { toast } from 'sonner';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
+import { toCsv } from '@/lib/csv';
+import { exportFileName } from '@/lib/white-label/export-name';
 import type { PromptComparison } from '@/lib/insights-same-prompts';
 import type { KpiSeriesDay } from '@/lib/insights-kpis';
 import type { PlatformChange, PlatformTableRow } from '@/lib/insights-summary';
@@ -108,7 +102,7 @@ interface InsightsFilters {
 const DEFAULT_FILTERS: InsightsFilters = {
   // The last 24 hours: what the latest run found. Longer ranges are one
   // click away.
-  datePreset: '24h',
+  datePreset: OVERVIEW_DEFAULT_RANGE,
   dateFrom: '',
   dateTo: '',
   region: '',
@@ -168,113 +162,6 @@ const INSIGHT_EXPORT_HEADERS = [
   'citation_urls',
   'competitor_mentions',
 ];
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-// ─── Run Single Prompt Dialog ─────────────────────────────────────────────────
-
-function RunSinglePromptDialog({
-  brandId,
-  open,
-  onClose,
-  onJobStarted,
-}: {
-  brandId: string;
-  open: boolean;
-  onClose: () => void;
-  onJobStarted: (jobId: string) => void;
-}) {
-  const [prompts, setPrompts] = useState<
-    { id: string; text: string; category?: string; platforms: string[] }[]
-  >([]);
-  const [loading, setLoading] = useState(false);
-  const [runningId, setRunningId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    setLoading(true);
-    getBrandPrompts(brandId)
-      .then(setPrompts)
-      .catch(() => toast.error('Failed to load prompts'))
-      .finally(() => setLoading(false));
-  }, [open, brandId]);
-
-  const handleRun = async (promptId: string) => {
-    setRunningId(promptId);
-    try {
-      const { jobId } = await triggerTrackingCheck(brandId, { promptId });
-      onClose();
-      onJobStarted(jobId);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to run prompt');
-    } finally {
-      setRunningId(null);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-[calc(100%-2rem)] sm:max-w-lg max-h-[70vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <FlaskConical className="h-4 w-4" />
-            Run Single Prompt
-          </DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Pick a prompt to test. Only that prompt will run across your enabled platforms.
-          </p>
-        </DialogHeader>
-
-        <div className="space-y-2 pt-2">
-          {loading && (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full" />
-              ))}
-            </div>
-          )}
-
-          {!loading && prompts.length === 0 && (
-            <p className="text-sm text-muted-foreground py-6 text-center">
-              No active prompts found. Add prompts in brand settings first.
-            </p>
-          )}
-
-          {!loading &&
-            prompts.map((p) => (
-              <div
-                key={p.id}
-                className="flex items-center gap-3 rounded-lg border p-3 hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium line-clamp-2">{p.text}</p>
-                  {p.category && (
-                    <Badge variant="outline" className="text-[10px] mt-1">
-                      {p.category}
-                    </Badge>
-                  )}
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 shrink-0"
-                  disabled={runningId !== null}
-                  onClick={() => handleRun(p.id)}
-                >
-                  {runningId === p.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Play className="h-3.5 w-3.5" />
-                  )}
-                  Run
-                </Button>
-              </div>
-            ))}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ─── Filter Bar ───────────────────────────────────────────────────────────────
 
@@ -401,38 +288,6 @@ function FilterBar({
   );
 }
 
-// ─── Loading Skeleton ─────────────────────────────────────────────────────────
-
-function InsightsSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-80" />
-        </div>
-        <Skeleton className="h-10 w-32" />
-      </div>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-5">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="pt-6 space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="h-3 w-32" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <Card>
-        <CardContent className="pt-6">
-          <Skeleton className="h-48 w-full" />
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
 // ─── Empty State ──────────────────────────────────────────────────────────────
 
 function EmptyState({
@@ -488,137 +343,6 @@ function NoDataForPeriod({ datePreset, onReset }: { datePreset: DatePreset; onRe
   );
 }
 
-// ─── Tracking Progress ────────────────────────────────────────────────────────
-
-import {
-  saveTrackingJob,
-  loadTrackingJob,
-  clearTrackingJob,
-  doneMessage,
-} from '@/lib/tracking-job-store';
-import { etaParts, minutesLeft, withSample, type ProgressSample } from '@/lib/tracking-eta';
-import { toCsv } from '@/lib/csv';
-import { exportFileName } from '@/lib/white-label/export-name';
-import { RunLine } from './_run-line';
-import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
-
-function TrackingProgressBanner({
-  jobStatus,
-  pace,
-  onStop,
-}: {
-  jobStatus: TrackingJobStatus | null;
-  /** The run's progress readings while this page polls it, for the time left. */
-  pace: ProgressSample[];
-  /** Stop: admins and managers only, as the run's start. */
-  onStop?: () => void;
-}) {
-  const t = useTranslations('insights.tracking');
-  if (!jobStatus) return null;
-
-  const isActive = jobStatus.status === 'active' || jobStatus.status === 'waiting';
-  if (!isActive) return null;
-
-  const progress = jobStatus.progress;
-  const pct = progress ? Math.round((progress.current / progress.total) * 100) : 0;
-  const eta = progress ? minutesLeft(pace, progress.total) : null;
-  const left = eta === null ? null : etaParts(eta);
-
-  return (
-    <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Loader2 className="h-4 w-4 animate-spin text-primary" />
-          <span className="text-sm font-medium">
-            {jobStatus.status === 'waiting' ? t('queued') : t('analyzing')}
-          </span>
-        </div>
-        {onStop && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-            onClick={onStop}
-          >
-            <StopCircle className="h-3.5 w-3.5" />
-            {t('stop')}
-          </Button>
-        )}
-      </div>
-
-      {jobStatus.status === 'waiting' && (
-        <p className="text-xs text-muted-foreground">{t('queuedBody')}</p>
-      )}
-
-      {jobStatus.status === 'active' && (
-        <p className="text-xs text-muted-foreground">
-          {/* The pace so far, once there is enough of it; the general range before. */}
-          {left === null
-            ? t('activeBody')
-            : 'hours' in left
-              ? t('activeBodyHours', left)
-              : t('activeBodyMinutes', left)}
-        </p>
-      )}
-
-      {progress && progress.total > 0 && (
-        <>
-          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-            <div
-              className="h-full rounded-full bg-primary transition-all duration-500"
-              style={{ width: `${Math.max(pct, 2)}%` }}
-            />
-          </div>
-          {progress.promptText && (
-            <p className="text-xs text-muted-foreground truncate">
-              {progress.model && (
-                <span className="font-medium text-foreground">
-                  {PLATFORM_LABELS[progress.model] ?? progress.model}
-                  {progress.region && <span> · {progress.region}</span>}
-                  {' — '}
-                </span>
-              )}
-              {progress.promptText}
-            </p>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-/**
- * Banner for runs this browser did NOT start (the daily cron, or a teammate's
- * Run All), or whose saved job this browser no longer restores: detected
- * from the tracking_runs ledger, not localStorage. The dashboard keeps
- * showing the last completed run's numbers until the active run finishes,
- * then swaps in one step. A brand's first run has none to show, and says so.
- */
-function ServerRunBanner({
-  run,
-  firstRun,
-}: {
-  run: TrackingWindow['activeRun'];
-  /** No completed run yet: nothing older is on the page. */
-  firstRun: boolean;
-}) {
-  const t = useTranslations('insights.tracking');
-  if (!run) return null;
-  return (
-    <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-      <div className="flex items-center gap-2">
-        <Loader2 className="h-4 w-4 animate-spin text-primary" />
-        <span className="text-sm font-medium">
-          {firstRun ? t('firstRun') : run.source === 'cron' ? t('dailyRun') : t('run')}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {firstRun ? t('firstRunBody') : t('runBody')}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 // ─── No Competitors Teaser ────────────────────────────────────────────────────
 
 /**
@@ -650,13 +374,15 @@ function NoCompetitorsTeaser() {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
+/**
+ * Brand Visibility's Overview tab (was the Answer Engine Insights page). The
+ * header, the run line, Run All and the run's bands are the shared layout's
+ * (components/brand-visibility/shell.tsx); a run there brings this tab's
+ * figures in as they arrive (`refreshes`).
+ */
 export default function InsightsPage() {
   const t = useTranslations('insights');
-  // The job poll's toasts read it: the loop outlives a render.
-  const tRef = useRef(t);
-  tRef.current = t;
-  // The tracking job's pace while this page polls it ("about N min left").
-  const [pace, setPace] = useState<ProgressSample[]>([]);
+  const tBrandVisibility = useTranslations('brandVisibility');
   const tCommon = useTranslations('common');
   const tChat = useTranslations('chatPanel.suggest');
   const tChatRange = useTranslations('chatPanel.range');
@@ -664,24 +390,21 @@ export default function InsightsPage() {
   const tLeaderboard = useTranslations('insights.leaderboard');
   const router = useRouter();
   const { isCloud } = usePlanContext();
-  // A read-only workspace (plan not active): Run All and Test Single Prompt
-  // open the upgrade dialog instead.
-  const { guard } = useUpgradeGate();
-  // Running tracking now (or stopping it) spends the plan's checks: admins and managers (2026-11-03).
-  const { canManage } = useUserRole();
-  const tActions = useTranslations('readOnly.actions');
   const locale = useLocale();
   const brand = useBrandStore((s) => s.getActiveBrand());
+  const { refreshes, isRunning, runAll, openSinglePrompt, reportRunWindow, reportData, readSent } =
+    useBrandVisibilityShell();
   // The brand's first run while it goes on: the run's band above says it
   // all, so no empty state under it.
   const firstRun = useFirstRun();
   const [summary, setSummary] = useState<InsightsSummary | null>(null);
   const [trackedPrompts, setTrackedPrompts] = useState<TrackedPromptsKpi | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRunning, setIsRunning] = useState(false);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const [jobStatus, setJobStatus] = useState<TrackingJobStatus | null>(null);
-  const [showSinglePrompt, setShowSinglePrompt] = useState(false);
+  // The latest read failed: the tab says so, with Retry, rather than an
+  // empty state or the last filters' figures under the new ones.
+  const [loadFailed, setLoadFailed] = useState(false);
+  // Sections whose own read failed, standing in empty: said, not shown as "none".
+  const [failedSections, setFailedSections] = useState<InsightsSection[]>([]);
   const [filters, setFilters] = useState<InsightsFilters>(DEFAULT_FILTERS);
   const [hasAnyData, setHasAnyData] = useState<boolean | null>(null);
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
@@ -706,23 +429,6 @@ export default function InsightsPage() {
   // numbers rather than recomputing "now" on every render (VIS-001).
   const [loadedFilters, setLoadedFilters] = useState<BreakdownFilters>();
   const [isExporting, setIsExporting] = useState(false);
-  const [cronRun, setCronRun] = useState<TrackingWindow['activeRun']>(null);
-  const cronRunRef = useRef<TrackingWindow['activeRun']>(null);
-  // The header's last and next run (VIS-012), from the ledger read every minute.
-  const [runTimes, setRunTimes] = useState<Pick<TrackingWindow, 'lastRunAt' | 'nextRunAt'>>({
-    lastRunAt: null,
-    nextRunAt: null,
-  });
-  // Kept as is when unchanged, so the minute's read doesn't re-render the page.
-  const updateRunTimes = useCallback(
-    ({ lastRunAt, nextRunAt }: Pick<TrackingWindow, 'lastRunAt' | 'nextRunAt'>) =>
-      setRunTimes((prev) =>
-        prev.lastRunAt === lastRunAt && prev.nextRunAt === nextRunAt
-          ? prev
-          : { lastRunAt, nextRunAt },
-      ),
-    [],
-  );
   const filtersRef = useRef(filters);
   filtersRef.current = filters;
   // The single models already read as their family (modelFamilyValue): each
@@ -749,7 +455,11 @@ export default function InsightsPage() {
   const loadData = useCallback(
     async (overrideFilters?: InsightsFilters, { silent = false } = {}) => {
       if (!brandId) return;
-      if (!silent) setIsLoading(true);
+      if (!silent) {
+        setIsLoading(true);
+        // Retry, or new filters: loading again, not failed.
+        setLoadFailed(false);
+      }
       try {
         let f = overrideFilters ?? filtersRef.current;
         // A model from an address can be one slug of a family (Chat's link,
@@ -758,7 +468,9 @@ export default function InsightsPage() {
         if (isSingleModel(f.model) && !familyRead.current.has(f.model)) {
           familyRead.current.add(f.model);
           const asked = f.model;
-          const family = await getBrandFilterOptions(brandId)
+          const options = getBrandFilterOptions(brandId);
+          readSent();
+          const family = await options
             .then((options) => modelFamilyValue(asked, modelFamilies(options.models)))
             .catch(() => asked);
           familyRead.current.add(family);
@@ -799,16 +511,21 @@ export default function InsightsPage() {
         // (00044) so the morning refresh can't flash "no results" while
         // today's run streams in; the action resolves that window itself.
         // The trend chart follows the same window as every other number.
-        const insights = await getInsightsData(brandId, {
+        const read = getInsightsData(brandId, {
           ...filterOpts,
           checkUnfiltered: hasFilters,
           anchor24h: f.datePreset === '24h',
         });
-        if (insights.trackingWindow) {
-          cronRunRef.current = insights.trackingWindow.activeRun;
-          setCronRun(insights.trackingWindow.activeRun);
-          updateRunTimes(insights.trackingWindow);
-        }
+        // On its way first: the run line's own read queues behind it.
+        readSent();
+        const insights = await read;
+        if (insights.trackingWindow) reportRunWindow(insights.trackingWindow);
+        reportData({
+          hasData: insights.hasAnyData,
+          lastCheckedAt: insights.summary.lastCheckedAt ?? null,
+        });
+        setLoadFailed(false);
+        setFailedSections(insights.failedSections ?? []);
         const anchored = insights.trackingWindow?.anchored;
         setLoadedFilters({
           ...filterOpts,
@@ -857,6 +574,9 @@ export default function InsightsPage() {
           // plain fallback.
           const redacted = !message || /server components render|digest property/i.test(message);
           toast.error(redacted ? 'Failed to load insights — please try again' : message);
+          // Not "No tracking data yet", nor the last filters' figures: the
+          // tab says the read failed, with Retry (Brand Visibility).
+          setLoadFailed(true);
         } else {
           // Silent refreshes fire every ~10s while a tracking job runs; a
           // transient 5xx or network blip there shouldn't pop a red toast —
@@ -867,7 +587,7 @@ export default function InsightsPage() {
         setIsLoading(false);
       }
     },
-    [brandId, updateRunTimes],
+    [brandId, readSent, reportRunWindow, reportData],
   );
 
   // A brand switch clears the brand-specific filters. Not on the first brand,
@@ -884,186 +604,42 @@ export default function InsightsPage() {
       setFilters(next);
     }
     filteredBrandRef.current = brand.id;
-    getTopics(brand.id)
-      .then(setAvailableTopics)
-      .catch(() => {});
   }, [brand?.id]);
 
   useEffect(() => {
     if (urlRead) loadData();
   }, [loadData, urlRead]);
 
-  // Watch the tracking-run ledger so server-started (cron) runs surface too:
-  // the job banner below only knows about jobs this browser started via
-  // localStorage, which is why users never saw anything during the daily
-  // morning run. When the active run disappears (= completed), silently
-  // reload so the anchored 24h window swaps to the fresh run in one step.
-  // Another brand's run times never show under this one's name, even when
-  // its first read fails.
+  // The topics for the filter, read after the figures: server actions run
+  // one at a time, so the figures' read goes first (it is sent just above).
   useEffect(() => {
-    updateRunTimes({ lastRunAt: null, nextRunAt: null });
-  }, [brand?.id, updateRunTimes]);
-  useEffect(() => {
-    if (!brand?.id) return;
+    if (!brandId || !urlRead) return;
     let cancelled = false;
-
-    const tick = async () => {
-      const win = await getTrackingWindow(brand.id).catch(() => null);
-      if (cancelled || !win) return;
-      const wasRunning = cronRunRef.current !== null;
-      cronRunRef.current = win.activeRun;
-      setCronRun(win.activeRun);
-      updateRunTimes(win);
-      if (wasRunning && !win.activeRun) {
-        loadData(undefined, { silent: true });
-      }
-    };
-
-    const id = setInterval(tick, 60_000);
-    tick();
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-  }, [brand?.id, loadData, updateRunTimes]);
-
-  // Restore active job from localStorage or URL query param (post-payment redirect)
-  const searchParams = useSearchParams();
-  useEffect(() => {
-    if (!brand) return;
-
-    const urlJobId = searchParams.get('jobId');
-    if (urlJobId) {
-      saveTrackingJob({ jobId: urlJobId, brandId: brand.id, startedAt: Date.now() });
-      setActiveJobId(urlJobId);
-      setIsRunning(true);
-      writeUrlParams({ jobId: null });
-      return;
-    }
-
-    const saved = loadTrackingJob();
-    if (saved && saved.brandId === brand.id) {
-      setActiveJobId(saved.jobId);
-      setIsRunning(true);
-    }
-  }, [brand, searchParams]);
-
-  // Poll job status while a job is active
-  useEffect(() => {
-    if (!activeJobId) return;
-
-    let cancelled = false;
-    let lastRefresh = 0;
-    const poll = async () => {
-      while (!cancelled) {
-        try {
-          const status = await getJobStatus(activeJobId);
-          if (cancelled) break;
-          setJobStatus(status);
-          const current = status.progress?.current;
-          if (current !== undefined) {
-            setPace((prev) => withSample(prev, { at: Date.now(), current }));
-          }
-
-          // Refresh data every ~10s while active so new results appear progressively
-          const now = Date.now();
-          if (status.status === 'active' && now - lastRefresh > 10_000) {
-            lastRefresh = now;
-            loadData(undefined, { silent: true });
-          }
-
-          if (status.status === 'completed') {
-            clearTrackingJob();
-            setActiveJobId(null);
-            setIsRunning(false);
-            setJobStatus(null);
-            const done = doneMessage(status.result);
-            toast.success(tRef.current(`tracking.${done.key}`, 'count' in done ? done : undefined));
-            loadData(undefined, { silent: true });
-            break;
-          }
-
-          if (status.status === 'failed' || status.status === 'not_found') {
-            clearTrackingJob();
-            setActiveJobId(null);
-            setIsRunning(false);
-            setJobStatus(null);
-            if (status.status === 'failed') {
-              toast.error(
-                tRef.current('tracking.failed', {
-                  reason: status.failedReason ?? tRef.current('tracking.unknownError'),
-                }),
-              );
-            }
-            break;
-          }
-        } catch {
-          // network error, keep polling
-        }
-        await new Promise((r) => setTimeout(r, 3000));
-      }
-    };
-
-    poll();
+    getTopics(brandId)
+      .then((rows) => {
+        if (!cancelled) setAvailableTopics(rows);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [activeJobId, loadData]);
+  }, [brandId, urlRead]);
+
+  // A run the header started or saw (Run All, the daily run, a teammate's)
+  // brings answers in: read again, quietly, as they arrive and when it ends.
+  const seenRefreshes = useRef(refreshes);
+  useEffect(() => {
+    if (refreshes === seenRefreshes.current) return;
+    seenRefreshes.current = refreshes;
+    if (urlRead) loadData(undefined, { silent: true });
+  }, [refreshes, urlRead, loadData]);
 
   const handleFilterChange = (newFilters: InsightsFilters) => {
     setFilters(newFilters);
     loadData(newFilters);
   };
 
-  const handleRunPrompts = async () => {
-    if (!brand) return;
-    setIsRunning(true);
-    try {
-      const { jobId } = await triggerTrackingCheck(brand.id);
-      saveTrackingJob({ jobId, brandId: brand.id, startedAt: Date.now() });
-      setActiveJobId(jobId);
-      setJobStatus({
-        status: 'waiting',
-        progress: null,
-        result: null,
-        failedReason: null,
-      });
-    } catch (err) {
-      setIsRunning(false);
-      toast.error(err instanceof Error ? err.message : 'Failed to trigger tracking');
-    }
-  };
-
-  const runAll = guard(handleRunPrompts, { action: tActions('runPrompts') });
-  const openSinglePrompt = guard(() => setShowSinglePrompt(true), {
-    action: tActions('testPrompt'),
-  });
-
-  const handleStopTracking = async () => {
-    if (!activeJobId) return;
-    try {
-      await cancelTrackingJob(activeJobId);
-    } catch {}
-    clearTrackingJob();
-    setActiveJobId(null);
-    setIsRunning(false);
-    setJobStatus(null);
-    toast.success('Tracking stopped');
-    loadData(undefined, { silent: true });
-  };
-
-  const handleJobStarted = (jobId: string) => {
-    if (!brand) return;
-    setIsRunning(true);
-    saveTrackingJob({ jobId, brandId: brand.id, startedAt: Date.now() });
-    setActiveJobId(jobId);
-    setJobStatus({
-      status: 'waiting',
-      progress: null,
-      result: null,
-      failedReason: null,
-    });
-  };
+  const retry = () => loadData();
 
   const handleExportCsv = useCallback(async () => {
     if (!brand) return;
@@ -1144,7 +720,7 @@ export default function InsightsPage() {
   useChatPageContext(
     brand
       ? {
-          pageName: t('title'),
+          pageName: tBrandVisibility('title'),
           dateRange: {
             from: filters.datePreset === 'custom' ? filters.dateFrom : filters.datePreset,
             to: filters.datePreset === 'custom' ? filters.dateTo : null,
@@ -1192,7 +768,54 @@ export default function InsightsPage() {
       : null,
   );
 
-  if (!brand || (isLoading && !summary)) return <InsightsSkeleton />;
+  // The tab's own actions, in the shared header beside Reports: Formulas
+  // and this tab's Export CSV. They need no data to show.
+  const headerActions = (
+    <TabHeaderActions>
+      <FormulaDialog />
+      <Button variant="outline" className="gap-2" onClick={handleExportCsv} disabled={isExporting}>
+        {isExporting ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Download className="h-4 w-4" />
+        )}
+        {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
+      </Button>
+    </TabHeaderActions>
+  );
+
+  // Until the first read is back the tab is loading, never empty.
+  if (!brand || (isLoading && !summary)) {
+    return (
+      <>
+        {headerActions}
+        <OverviewSkeleton />
+      </>
+    );
+  }
+
+  const filterBar = (
+    <FilterBar
+      filters={filters}
+      onChange={handleFilterChange}
+      availableRegions={availableRegions}
+      availableModels={availableModels}
+      availableTopics={availableTopics}
+    />
+  );
+
+  // The read failed or timed out: say so, with Retry. Not "No tracking data
+  // yet" (nothing said there was none), and not the last filters' figures
+  // under the new filters. No figures and no read on its way is the same.
+  if (loadFailed || !summary) {
+    return (
+      <div className="space-y-6">
+        {headerActions}
+        {filterBar}
+        <ReadError title={tBrandVisibility('readError.overview')} onRetry={retry} />
+      </div>
+    );
+  }
 
   const noResults = !summary || summary.totalResults === 0;
 
@@ -1201,36 +824,14 @@ export default function InsightsPage() {
   // content stays visible under the overlay instead of flashing a skeleton.
   const isRefetching = isLoading && summary !== null;
 
-  const trulyEmpty = noResults && !hasAnyData;
-
-  // The localStorage-tracked job banner (with progress + Stop) wins when this
-  // browser started the run; the ledger banner covers everything else.
-  const localJobActive =
-    jobStatus !== null && (jobStatus.status === 'active' || jobStatus.status === 'waiting');
+  const trulyEmpty = noResults && hasAnyData === false;
 
   if (trulyEmpty) {
     return (
       <div className="space-y-6">
-        <HeaderWithAiUsage>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
-            <p className="text-muted-foreground text-sm">{brand.name}</p>
-          </div>
-        </HeaderWithAiUsage>
-        <TrackingProgressBanner
-          jobStatus={jobStatus}
-          pace={pace}
-          onStop={canManage ? handleStopTracking : undefined}
-        />
-        {!localJobActive && <ServerRunBanner run={cronRun} firstRun={!runTimes.lastRunAt} />}
-        {!firstRun && (
-          <EmptyState
-            onRunPrompts={canManage ? runAll : undefined}
-            isRunning={isRunning}
-            isCloud={isCloud}
-          />
-        )}
-        {!isCloud && canManage && (
+        {headerActions}
+        {!firstRun && <EmptyState onRunPrompts={runAll} isRunning={isRunning} isCloud={isCloud} />}
+        {!isCloud && openSinglePrompt && (
           <div className="flex justify-center">
             <Button variant="outline" onClick={openSinglePrompt} className="gap-2">
               <FlaskConical className="h-4 w-4" />
@@ -1238,12 +839,6 @@ export default function InsightsPage() {
             </Button>
           </div>
         )}
-        <RunSinglePromptDialog
-          brandId={brand.id}
-          open={showSinglePrompt}
-          onClose={() => setShowSinglePrompt(false)}
-          onJobStarted={handleJobStarted}
-        />
       </div>
     );
   }
@@ -1263,85 +858,18 @@ export default function InsightsPage() {
     loadData(resetFilters);
   };
 
+  // A section whose own read failed stands in empty: it says so instead.
+  const competitorsFailed = failedSections.includes('competitors');
+  const trendFailed = failedSections.includes('trend');
+  const otherSectionsFailed = failedSections.some(
+    (section) => section !== 'competitors' && section !== 'trend',
+  );
+
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <HeaderWithAiUsage>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
+      {headerActions}
 
-            {/* The brand's last full run from the ledger; before the ledger has
-                one, the newest answer in view. */}
-            <RunLine
-              brandName={brand.name}
-              lastRunAt={runTimes.lastRunAt ?? summary?.lastCheckedAt ?? null}
-              nextRunAt={runTimes.nextRunAt}
-              hasData={hasAnyData === true}
-            />
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Always visible */}
-            <FormulaDialog />
-
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={handleExportCsv}
-              disabled={isExporting}
-            >
-              {isExporting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4" />
-              )}
-              {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
-            </Button>
-
-            <Link href="/dashboard/reports" className={cn(buttonVariants(), 'gap-2')}>
-              <FileText className="h-4 w-4" />
-              Reports
-            </Link>
-
-            {/* Self-host only, for admins and managers */}
-            {!isCloud && canManage && (
-              <>
-                <Button variant="outline" onClick={openSinglePrompt} className="gap-2">
-                  <FlaskConical className="h-4 w-4" />
-                  Test Single Prompt
-                </Button>
-
-                <Button onClick={runAll} disabled={isRunning} className="gap-2">
-                  {isRunning ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Play className="h-4 w-4" />
-                  )}
-                  Run All
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </HeaderWithAiUsage>
-
-      {/* Filter Bar */}
-      <FilterBar
-        filters={filters}
-        onChange={handleFilterChange}
-        availableRegions={availableRegions}
-        availableModels={availableModels}
-        availableTopics={availableTopics}
-      />
-
-      {/* Tracking Progress */}
-      <TrackingProgressBanner
-        jobStatus={jobStatus}
-        pace={pace}
-        onStop={canManage ? handleStopTracking : undefined}
-      />
-      {!localJobActive && <ServerRunBanner run={cronRun} firstRun={!runTimes.lastRunAt} />}
+      {filterBar}
 
       {/* Refetch overlay: on a filter/date change the previous window's data
           stays mounted (no skeleton — that's first-load only), so without a
@@ -1362,6 +890,20 @@ export default function InsightsPage() {
             <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
           ) : (
             <>
+              {/* Some sections' own reads failed: they are left out or say so, and Retry reads them again. */}
+              {otherSectionsFailed && (
+                <div
+                  role="alert"
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+                >
+                  <span>{tBrandVisibility('readError.sections')}</span>
+                  <Button variant="outline" size="sm" className="gap-2" onClick={retry}>
+                    <RotateCw className="h-3.5 w-3.5" aria-hidden />
+                    {tBrandVisibility('readError.retry')}
+                  </Button>
+                </div>
+              )}
+
               {/* Summary line (VIS-006): the page's story in one line. */}
               <SummaryLine
                 trend={rateTrend}
@@ -1395,20 +937,35 @@ export default function InsightsPage() {
                 })}
               />
 
-              {/* Competitor Comparison */}
-              {competitorData ? (
+              {/* Competitor Comparison. A failed read of it is not "no competitors". */}
+              {competitorsFailed ? (
+                <ReadError
+                  compact
+                  title={tBrandVisibility('readError.competitors')}
+                  onRetry={retry}
+                />
+              ) : competitorData ? (
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-                  <TrendCard
-                    className="lg:col-span-3"
-                    brandId={brand.id}
-                    data={rateTrend}
-                    markers={trendMarkers}
-                    rangeLabel={trendRangeLabel}
-                    answers={summary?.totalResults}
-                    onPinnedChange={(pinned) =>
-                      setRateTrend((current) => current && { ...current, pinned })
-                    }
-                  />
+                  {trendFailed ? (
+                    <ReadError
+                      compact
+                      className="lg:col-span-3"
+                      title={tBrandVisibility('readError.trend')}
+                      onRetry={retry}
+                    />
+                  ) : (
+                    <TrendCard
+                      className="lg:col-span-3"
+                      brandId={brand.id}
+                      data={rateTrend}
+                      markers={trendMarkers}
+                      rangeLabel={trendRangeLabel}
+                      answers={summary?.totalResults}
+                      onPinnedChange={(pinned) =>
+                        setRateTrend((current) => current && { ...current, pinned })
+                      }
+                    />
+                  )}
 
                   <Leaderboard
                     className="lg:col-span-2"
@@ -1480,14 +1037,6 @@ export default function InsightsPage() {
           )}
         </div>
       </div>
-
-      {/* Single Prompt Runner */}
-      <RunSinglePromptDialog
-        brandId={brand.id}
-        open={showSinglePrompt}
-        onClose={() => setShowSinglePrompt(false)}
-        onJobStarted={handleJobStarted}
-      />
 
       {/* Metric Breakdown Drilldown */}
       <MetricBreakdownSheet

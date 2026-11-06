@@ -111,7 +111,7 @@ const relaxedUuid = z
     'Invalid UUID format',
   );
 
-/** The Mentions & Sentiment page's filters, the same on every mentions tool. */
+/** Brand Visibility's Mentions tab's filters, the same on every mentions tool. */
 const mentionFilters = {
   brand_id: relaxedUuid.describe('Brand UUID, from list_brands.'),
   date_from: z
@@ -125,7 +125,7 @@ const mentionFilters = {
   platform: z
     .string()
     .optional()
-    .describe('One platform id, e.g. "chatgpt-web", "gemini-web", "perplexity-web".'),
+    .describe('One platform id, e.g. "chatgpt-web", "gemini-web", "google-aio".'),
   region: z.string().optional().describe('Optional country code filter (e.g. "US", "TR").'),
   topic_id: relaxedUuid.optional().describe('Topic UUID, from list_topics.'),
   search: z.string().optional().describe("Matched against the prompts' text."),
@@ -1144,9 +1144,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
         platform: z
           .string()
           .optional()
-          .describe(
-            'Optional scraper/platform filter (e.g. "chatgpt-shopping", "perplexity-web").',
-          ),
+          .describe('Optional scraper/platform filter (e.g. "chatgpt-shopping", "google-aimode").'),
         region: z.string().optional().describe('Optional region code filter (e.g. "US", "TR").'),
         limit: z
           .number()
@@ -1541,7 +1539,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
               platform: z
                 .string()
                 .describe(
-                  'Platform id: chatgpt-web, perplexity-web, google-aio, google-aimode, gemini-web, copilot-web, grok-web or claude.',
+                  'Platform id: chatgpt-web, google-aio, google-aimode, gemini-web, grok-web or claude.',
                 ),
               title: z.string().min(1).max(200).describe('Task title.'),
               body: z.string().max(1000).optional().describe('What to do, in a sentence or two.'),
@@ -1589,10 +1587,10 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Mentions summary',
       description:
-        "The Mentions & Sentiment page's Overview for a brand: times named (`timesNamed`, the " +
-        "page's Total mentions), responses naming it, mention rate, prompts with mentions, " +
+        "Visibility's Mentions tab, its Overview, for a brand: times named (`timesNamed`, the " +
+        "tab's Total mentions), responses naming it, mention rate, prompts with mentions, " +
         'average position and sentiment (counts, shares, net), now and in the window before, ' +
-        "with `changes` taken as the page's cards take them: on the prompts both windows " +
+        "with `changes` taken as the tab's cards take them: on the prompts both windows " +
         'answered (`changes.basis`), mentionsPct on times named; the platform that moved net sentiment ' +
         'most and the competitors AI names beside the brand (`headline`); each platform; and ' +
         'each day. Use it for "how is AI talking about us" / "why did sentiment drop on ' +
@@ -1680,7 +1678,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Competitors in mentions',
       description:
-        'Competitor framing from the Mentions page: how often AI names each competitor in the ' +
+        "Competitor framing from Visibility's Mentions tab: how often AI names each competitor in the " +
         "brand's tracked responses (count and share of responses, change against the window " +
         'before) and how often in the same response as the brand. ' +
         MENTIONS_BASIS,

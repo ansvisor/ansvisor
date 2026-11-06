@@ -68,8 +68,14 @@ async function render(
 const box = () => container.querySelector('textarea')!;
 const button = (label: string) =>
   container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
-const radios = () => [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
-const under = () => container.lastElementChild!.lastElementChild!.textContent;
+const modeButton = () =>
+  container.querySelector<HTMLButtonElement>('[data-action="composer.openMode"]');
+// The menu opens in a portal, outside the composer.
+const modeItems = () => [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
+// The box's bottom row: ＋ / @, then the microphone and Send.
+const sendRow = () => button('Send')!.closest('[data-slot="composer-send-group"]')!.parentElement!;
+const footer = () => container.lastElementChild!.lastElementChild!;
+const under = () => footer().textContent;
 
 async function type(value: string) {
   const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!;
@@ -209,32 +215,90 @@ describe('ChatComposer', () => {
     expect(box().value).toBe('only blog pages');
   });
 
-  it('switches the run mode, saying what it does, and locks Full auto below Growth', async () => {
+  it('puts the run mode under the box, as a menu that says what each pick does, and locks Full auto below Growth', async () => {
     await render({ fullAutoOpen: false });
-    expect(radios().map((r) => r.textContent)).toEqual([
+    const open = modeButton()!;
+    expect(open.textContent).toBe('Auto, ask before changes ▾');
+    expect(open.getAttribute('aria-label')).toBe('Run mode: Auto, ask before changes');
+    expect(open.getAttribute('aria-haspopup')).toBe('menu');
+    // In the line under the box, not in the box's row with Send.
+    expect(footer().contains(open)).toBe(true);
+    expect(sendRow().contains(open)).toBe(false);
+    expect(modeItems()).toHaveLength(0);
+
+    await act(async () => open.click());
+    expect(open.getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelector('[role="menu"]')?.textContent).toContain('Run mode');
+    expect(modeItems().map((r) => r.textContent)).toEqual([
       'Ask me first',
       'Auto, ask before changes',
       'Full autoNeeds Growth',
     ]);
-    expect(radios()[1].getAttribute('aria-checked')).toBe('true');
+    expect(modeItems().map((r) => r.getAttribute('aria-checked'))).toEqual([
+      'false',
+      'true',
+      'false',
+    ]);
 
-    const fullAuto = radios()[2];
+    const fullAuto = modeItems()[2];
     expect(fullAuto.getAttribute('aria-disabled')).toBe('true');
+    expect(fullAuto.getAttribute('title')).toBe(
+      'Full auto · Needs Growth: agents apply changes for you, logged and undoable',
+    );
     await act(async () => fullAuto.click());
     expect(handlers.onModeChange).not.toHaveBeenCalled();
 
-    await act(async () => radios()[0].click());
+    await act(async () => modeItems()[0].click());
     expect(handlers.onModeChange).toHaveBeenCalledExactlyOnceWith('ask_first');
     expect(toast).toHaveBeenCalledWith('Ask me first: the agent asks before every step.');
   });
 
   it('opens Full auto on Growth, with its toast', async () => {
     await render({ fullAutoOpen: true });
-    await act(async () => radios()[2].click());
+    await act(async () => modeButton()!.click());
+    expect(modeItems()[2].getAttribute('aria-disabled')).toBeNull();
+    await act(async () => modeItems()[2].click());
     expect(handlers.onModeChange).toHaveBeenCalledWith('full_auto');
     expect(toast).toHaveBeenCalledWith(
       'Full auto: the agent makes changes without asking. Nothing is published or sent without your click. Every change is in the Activity log.',
     );
+  });
+
+  it('names the mode the chat is in on the menu’s button', async () => {
+    await render({ mode: 'full_auto' });
+    expect(modeButton()!.textContent).toBe('Full auto ▾');
+    await render({ mode: 'ask_first' });
+    expect(modeButton()!.textContent).toBe('Ask me first ▾');
+  });
+
+  it('keeps one row in the box in every composer: ＋ / @ on the left, Send on the right', async () => {
+    for (const variant of ['home', 'dock', 'panel'] as const) {
+      await render({ variant, fullAutoOpen: false });
+      const row = sendRow();
+      // One line that never wraps, so Send is always in it.
+      expect(row.className).not.toContain('flex-wrap');
+      const group = button('Send')!.parentElement!;
+      expect(group.getAttribute('data-slot')).toBe('composer-send-group');
+      expect(group.className).toContain('ml-auto');
+      expect(group.className).toContain('shrink-0');
+      expect(group.lastElementChild).toBe(button('Send'));
+      expect([...row.children].slice(0, -1).map((el) => el.getAttribute('data-action'))).toEqual([
+        'composer.openPlus',
+        'composer.openSlash',
+        'composer.openRef',
+      ]);
+      // No run mode in it: that is under the box.
+      expect(row.querySelector('[data-action="composer.openMode"]')).toBeNull();
+    }
+  });
+
+  it('keeps Stop and Send together on the right while a question waits', async () => {
+    await render({ answering: true, onStop: handlers.onStop });
+    const group = button('Send')!.parentElement!;
+    expect([...group.children].map((el) => el.getAttribute('data-action'))).toEqual([
+      'composer.stop',
+      'composer.send',
+    ]);
   });
 
   it('reads only for an Analyst or an Agency partner: no mode, a link to what they can do', async () => {
@@ -243,15 +307,17 @@ describe('ChatComposer', () => {
       ['agency_partner', 'Agency partner'],
     ] as const) {
       await render({}, role);
-      expect(radios()).toHaveLength(0);
+      expect(modeButton()).toBeNull();
       const link = container.querySelector('a')!;
       expect(link.textContent).toBe(`Read-only · ${name}`);
       expect(link.getAttribute('href')).toBe('/dashboard/chat/capabilities');
+      // Where the mode is for others: under the box.
+      expect(footer().contains(link)).toBe(true);
       expect(under()).toContain('@ data · read-only');
     }
     // A manager changes things: the mode is there.
     await render({}, 'manager');
-    expect(radios()).toHaveLength(3);
+    expect(modeButton()).not.toBeNull();
   });
 
   it('starts Chat home’s box at two rows, the others at one', async () => {

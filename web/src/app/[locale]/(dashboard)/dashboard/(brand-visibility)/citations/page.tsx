@@ -93,7 +93,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { exportFileName } from '@/lib/white-label/export-name';
-import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { ReadError } from '@/components/brand-visibility/read-error';
+import {
+  TabHeaderActions,
+  useBrandVisibilityShell,
+} from '@/components/brand-visibility/shell-context';
+import { CitationsSkeleton } from '@/components/brand-visibility/tab-skeleton';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -725,7 +730,19 @@ function ByCompetitorView({
   );
 }
 
-function CompetitorGapsTab({ loading, gaps }: { loading: boolean; gaps: CitationGaps | null }) {
+function CompetitorGapsTab({
+  loading,
+  gaps,
+  failed,
+  onRetry,
+}: {
+  loading: boolean;
+  gaps: CitationGaps | null;
+  /** The gaps' read failed: said, with Retry, not an endless "Checking…". */
+  failed: boolean;
+  onRetry: () => void;
+}) {
+  const tBrandVisibility = useTranslations('brandVisibility.readError');
   const [view, setView] = useState<'list' | 'byCompetitor'>('list');
   // The user's pick; falls back to the first competitor (derived, no effect) so
   // it stays valid when the gaps data changes under a filter switch.
@@ -742,7 +759,24 @@ function CompetitorGapsTab({ loading, gaps }: { loading: boolean; gaps: Citation
       </div>
     );
   }
-  if (!gaps) return <EmptyRows />;
+  if (failed) {
+    return (
+      <ReadError
+        compact
+        className="border-0 shadow-none"
+        title={tBrandVisibility('gaps')}
+        onRetry={onRetry}
+      />
+    );
+  }
+  // Not read yet (the tab just opened): loading, as above.
+  if (!gaps) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -854,8 +888,15 @@ function writeFiltersToUrl(f: UIFilters) {
   );
 }
 
+/**
+ * Brand Visibility's Citations tab (was the Citations page): the domains and
+ * URLs AI answers cite, under the tab's filters. Export CSV sits in the
+ * shared header, beside Reports.
+ */
 export default function CitationsPage() {
   const t = useTranslations('citations');
+  const tBrandVisibility = useTranslations('brandVisibility');
+  const { readSent } = useBrandVisibilityShell();
   const tCommon = useTranslations('common');
   const tChat = useTranslations('chatPanel.suggest');
   const tChatRange = useTranslations('chatPanel.range');
@@ -876,7 +917,11 @@ export default function CitationsPage() {
   }, [urlRead, filters]);
   const [data, setData] = useState<CitationsOverview | null>(null);
   const [hasAnyCitations, setHasAnyCitations] = useState<boolean | null>(null);
+  // The latest overview read failed: the tab says so, with Retry.
   const [loadFailed, setLoadFailed] = useState(false);
+  // The "any citations at all" check failed; Retry runs it again.
+  const [checkFailed, setCheckFailed] = useState(false);
+  const [checkAttempt, setCheckAttempt] = useState(0);
 
   // Every cited domain arrives (the list isn't capped), so the scope is
   // applied here, and the Domains tab counts these rows rather than all of them.
@@ -922,6 +967,9 @@ export default function CitationsPage() {
   const [sourceTab, setSourceTab] = useState<'domains' | 'urls' | 'gaps' | 'types'>('domains');
   const [gaps, setGaps] = useState<CitationGaps | null>(null);
   const [gapsLoading, setGapsLoading] = useState(false);
+  const [gapsFailed, setGapsFailed] = useState(false);
+  // Retry on Competitor Gaps reads them again.
+  const [gapsAttempt, setGapsAttempt] = useState(0);
 
   // Shared scoping filters (date / platform / region / topic / prompt). The
   // domain-list flags below don't apply to Competitor Gaps, so keeping them out
@@ -959,16 +1007,6 @@ export default function CitationsPage() {
     [gapFilters, filters.sourceScope],
   );
 
-  useEffect(() => {
-    if (!activeBrandId) return;
-    getTopics(activeBrandId)
-      .then(setTopics)
-      .catch(() => {});
-    getBrandPrompts(activeBrandId)
-      .then((rows) => setPrompts(rows.map((r) => ({ id: r.id, text: r.text }))))
-      .catch(() => {});
-  }, [activeBrandId]);
-
   // Each load claims a generation. The effect's cleanup bumps the counter, so
   // a response arriving after the filters changed — or after the user left the
   // page — can recognise itself as stale instead of writing state or toasting.
@@ -994,7 +1032,9 @@ export default function CitationsPage() {
     const asked = overviewFilters.platforms?.[0] ?? '';
     if (isSingleModel(asked) && !familyRead.current.has(asked)) {
       familyRead.current.add(asked);
-      const family = await getBrandFilterOptions(activeBrandId)
+      const options = getBrandFilterOptions(activeBrandId);
+      readSent();
+      const family = await options
         .then((options) => modelFamilyValue(asked, modelFamilies(options.models)))
         .catch(() => asked);
       if (stale()) return;
@@ -1006,7 +1046,10 @@ export default function CitationsPage() {
       }
     }
     try {
-      const overview = await getCitationsOverview(activeBrandId, overviewFilters);
+      const read = getCitationsOverview(activeBrandId, overviewFilters);
+      // On its way first: the run line's read, and the filters' choices, queue behind it.
+      readSent();
+      const overview = await read;
       if (stale()) return;
       setData(overview);
 
@@ -1037,29 +1080,7 @@ export default function CitationsPage() {
     } finally {
       if (!stale()) setIsLoading(false);
     }
-  }, [activeBrandId, overviewFilters]);
-
-  useEffect(() => {
-    if (!activeBrandId) return;
-
-    let active = true;
-
-    brandHasCitations(activeBrandId)
-      .then((result) => {
-        if (!active) return;
-        setHasAnyCitations(result);
-      })
-      .catch((err) => {
-        if (!active) return;
-        console.error('[citations] brandHasCitations failed', err);
-        setLoadFailed(true);
-        toast.error('Failed to check citation data');
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [activeBrandId]);
+  }, [activeBrandId, overviewFilters, readSent]);
 
   useEffect(() => {
     if (!urlRead) return;
@@ -1077,6 +1098,58 @@ export default function CitationsPage() {
     };
   }, [loadData, urlRead]);
 
+  // The filters' choices and the "any citations at all" check, read once the
+  // URL is, after the overview's read above: server actions run one at a
+  // time, so the figures go first.
+  useEffect(() => {
+    if (!activeBrandId || !urlRead) return;
+    let active = true;
+    getTopics(activeBrandId)
+      .then((rows) => {
+        if (active) setTopics(rows);
+      })
+      .catch(() => {});
+    getBrandPrompts(activeBrandId)
+      .then((rows) => {
+        if (active) setPrompts(rows.map((r) => ({ id: r.id, text: r.text })));
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [activeBrandId, urlRead]);
+
+  useEffect(() => {
+    if (!activeBrandId || !urlRead) return;
+
+    let active = true;
+
+    brandHasCitations(activeBrandId)
+      .then((result) => {
+        if (!active) return;
+        setHasAnyCitations(result);
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.error('[citations] brandHasCitations failed', err);
+        setCheckFailed(true);
+        toast.error('Failed to check citation data');
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [activeBrandId, urlRead, checkAttempt]);
+
+  // Retry: the overview again, and the "any citations" check if it failed.
+  const retry = useCallback(() => {
+    void loadData();
+    if (checkFailed) {
+      setCheckFailed(false);
+      setCheckAttempt((n) => n + 1);
+    }
+  }, [loadData, checkFailed]);
+
   // Lazy-load Competitor Gaps only when its tab is active; re-fetch when the
   // shared scoping filters change while it's open. Uses `gapFilters` (not
   // `apiFilters`) so the domain-list flags don't trigger a no-op refetch.
@@ -1084,12 +1157,14 @@ export default function CitationsPage() {
     if (sourceTab !== 'gaps' || !activeBrandId || !urlRead) return;
     let cancelled = false;
     setGapsLoading(true);
+    setGapsFailed(false);
     getCitationGaps(activeBrandId, gapFilters)
       .then((res) => {
         if (!cancelled) setGaps(res);
       })
       .catch(() => {
-        if (!cancelled) setGaps(null);
+        // Said as a failed read, with Retry: not an endless "Checking…".
+        if (!cancelled) setGapsFailed(true);
       })
       .finally(() => {
         if (!cancelled) setGapsLoading(false);
@@ -1097,7 +1172,7 @@ export default function CitationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [sourceTab, activeBrandId, gapFilters, urlRead]);
+  }, [sourceTab, activeBrandId, gapFilters, urlRead, gapsAttempt]);
 
   const totals = data?.totals;
   // Within the selected scope, as the Domains tab and the URL count under it.
@@ -1224,7 +1299,7 @@ export default function CitationsPage() {
   useChatPageContext(
     brand
       ? {
-          pageName: t('title'),
+          pageName: tBrandVisibility('pageName.citations'),
           dateRange: {
             from: filters.datePreset === 'custom' ? filters.dateFrom : filters.datePreset,
             to: filters.datePreset === 'custom' ? filters.dateTo : null,
@@ -1290,36 +1365,31 @@ export default function CitationsPage() {
 
   return (
     <div className="space-y-6">
-      <HeaderWithAiUsage>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">{t('title')}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
-          </div>
-          <span
-            title={
-              sourceTab === 'types'
-                ? 'Source Types is a chart breakdown, not exportable — switch to Domains, URLs, or Competitor Gaps to export.'
-                : undefined
-            }
+      {/* This tab's Export CSV, in the shared header beside Reports. */}
+      <TabHeaderActions>
+        <span
+          title={
+            sourceTab === 'types'
+              ? 'Source Types is a chart breakdown, not exportable — switch to Domains, URLs, or Competitor Gaps to export.'
+              : undefined
+          }
+        >
+          <Button
+            variant="outline"
+            className="gap-2"
+            onClick={handleExportCsv}
+            disabled={exportDisabled}
           >
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={handleExportCsv}
-              disabled={exportDisabled}
-            >
-              {isExporting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4" />
-              )}
+            {isExporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
 
-              {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
-            </Button>
-          </span>
-        </div>
-      </HeaderWithAiUsage>
+            {isExporting ? tCommon('exporting') : tCommon('exportCsv')}
+          </Button>
+        </span>
+      </TabHeaderActions>
 
       <CitationsFilterBar
         filters={filters}
@@ -1330,8 +1400,13 @@ export default function CitationsPage() {
         regions={availableRegions}
       />
 
+      {/* Until the first read is back the tab is loading, never empty. A
+          failed read says so, with Retry: not "—" cards over "(0)" tabs, nor
+          the last filters' figures under the new ones. */}
       {isLoading && data === null ? (
-        <CitationsSkeleton />
+        <CitationsSkeleton filters={false} />
+      ) : loadFailed || data === null ? (
+        <ReadError title={tBrandVisibility('readError.citations')} onRetry={retry} />
       ) : (
         <div className="relative">
           {isRefetching && (
@@ -1399,8 +1474,8 @@ export default function CitationsPage() {
                         setFilters({ ...DEFAULT_FILTERS, datePreset: 'all', sourceScope: 'all' })
                       }
                       hasAnyCitations={hasAnyCitations}
-                      loadFailed={loadFailed}
-                      onRetry={loadData}
+                      loadFailed={checkFailed}
+                      onRetry={retry}
                     />
                   </TabsContent>
                   <TabsContent value="urls" keepMounted className="mt-4">
@@ -1413,12 +1488,17 @@ export default function CitationsPage() {
                         setFilters({ ...DEFAULT_FILTERS, datePreset: 'all', sourceScope: 'all' })
                       }
                       hasAnyCitations={hasAnyCitations}
-                      loadFailed={loadFailed}
-                      onRetry={loadData}
+                      loadFailed={checkFailed}
+                      onRetry={retry}
                     />
                   </TabsContent>
                   <TabsContent value="gaps" className="mt-4">
-                    <CompetitorGapsTab loading={gapsLoading} gaps={gaps} />
+                    <CompetitorGapsTab
+                      loading={gapsLoading}
+                      gaps={gaps}
+                      failed={gapsFailed}
+                      onRetry={() => setGapsAttempt((n) => n + 1)}
+                    />
                   </TabsContent>
                   <TabsContent value="types" keepMounted className="mt-4">
                     {/* Cap the width: the donut sizes itself to its container, and
@@ -1436,30 +1516,6 @@ export default function CitationsPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function CitationsSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Card key={i}>
-            <CardContent className="pt-6 space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-8 w-16" />
-              <Skeleton className="h-3 w-32" />
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-      <Card>
-        <CardContent className="pt-6">
-          <Skeleton className="mb-4 h-8 w-48" />
-          <Skeleton className="h-64 w-full" />
-        </CardContent>
-      </Card>
     </div>
   );
 }
