@@ -2679,7 +2679,11 @@
         "title": "Create content to cover {targets}",
         "titleGeneric": "Create content for topic gaps",
         "description": "You barely appear in this topic, and new content is needed rather than edits.",
-        "goal": "Build coverage for a topic you are missing."
+        "goal": "Build coverage for a topic you are missing.",
+        "categoryTitle": "Optimize the category page for {targets}",
+        "categoryTitleGeneric": "Optimize a category page for a topic gap",
+        "categoryDescription": "You barely appear in this topic, and its category page is live: optimizing that page answers the topic's questions.",
+        "categoryGoal": "Make your category page the answer for this topic."
       },
       "optimize_content_for_ai": {
         "title": "Optimize pages for {targets}",

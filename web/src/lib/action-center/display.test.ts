@@ -58,6 +58,29 @@ describe('actionTexts', () => {
     expect(ACTION_KINDS).toHaveLength(74);
   });
 
+  it('says a store’s topic action optimizes its category page when that is its play (AC plan P-7)', () => {
+    const topic = (play: string) =>
+      action({
+        kind: 'create_content_for_topics',
+        payload: { targetEntity: 'topics', targetCount: 0, play: { id: play } },
+      });
+    expect(actionTexts(topic('category_page'), t)).toEqual({
+      title: 'Optimize a category page for a topic gap',
+      description:
+        "You barely appear in this topic, and its category page is live: optimizing that page answers the topic's questions.",
+    });
+    expect(actionGoal('create_content_for_topics', t, { play: { id: 'category_page' } })).toBe(
+      'Make your category page the answer for this topic.',
+    );
+    // A buying guide is a new page: the topic action's own words.
+    expect(actionTexts(topic('buying_guide'), t).description).toBe(
+      'You barely appear in this topic, and new content is needed rather than edits.',
+    );
+    expect(actionGoal('create_content_for_topics', t, { play: { id: 'buying_guide' } })).toBe(
+      'Build coverage for a topic you are missing.',
+    );
+  });
+
   it('names a product or category sent from Product Visibility after it (ECOM-013)', () => {
     expect(
       actionTexts(action({ kind: 'shopping_product', payload: { title: 'Ridge 30L Backpack' } }), t)
