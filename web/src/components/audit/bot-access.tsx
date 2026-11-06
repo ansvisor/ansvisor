@@ -105,7 +105,7 @@ export function BotAccess({ signal }: { signal: AuditSignal }) {
           );
         })}
       </ul>
-      {liveTest && <p className="text-xs">{t('note')}</p>}
+      {liveTest ? <p className="text-xs">{t('note')}</p> : null}
     </div>
   );
 }
