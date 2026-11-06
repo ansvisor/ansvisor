@@ -7,7 +7,8 @@ import type { Brand } from '@/types';
 
 /**
  * Explore the demo / See the demo: the demo brand made or brought up to
- * date, shown again if hidden, selected, and opened on the Action Center.
+ * date, shown again if hidden, selected, and opened on the start page that
+ * /dashboard picks (Chat Home for a workspace that never had a plan).
  */
 
 // An in-memory localStorage for the brand store, before it loads: the test environment has none.
@@ -101,7 +102,7 @@ afterEach(() => {
 });
 
 describe('useExploreDemo', () => {
-  it('makes the demo brand, lists it, selects it and opens the Action Center', async () => {
+  it('makes the demo brand, lists it, selects it and opens the start page', async () => {
     const demo = brand('demo', { isDemo: true, name: 'Brewline Coffee' });
     demoClient.prepareDemoBrand.mockResolvedValue({
       ok: true,
@@ -114,7 +115,7 @@ describe('useExploreDemo', () => {
     expect(getBrandById).toHaveBeenCalledWith('demo');
     expect(useBrandStore.getState().brands.map((b) => b.id)).toEqual(['own', 'demo']);
     expect(useBrandStore.getState().activeBrandId).toBe('demo');
-    expect(router.push).toHaveBeenCalledWith('/dashboard/action-center');
+    expect(router.push).toHaveBeenCalledWith('/dashboard');
     expect(router.refresh).toHaveBeenCalled();
     expect(demoClient.setDemoHidden).not.toHaveBeenCalled();
   });
@@ -139,7 +140,7 @@ describe('useExploreDemo', () => {
     await clickExplore();
     expect(getBrandById).not.toHaveBeenCalled();
     expect(useBrandStore.getState().activeBrandId).toBe('demo');
-    expect(router.push).toHaveBeenCalledWith('/dashboard/action-center');
+    expect(router.push).toHaveBeenCalledWith('/dashboard');
   });
 
   it('says so, and stays, when there is no demo brand to open', async () => {
@@ -192,7 +193,7 @@ describe('useExploreDemo while the demo is still being prepared', () => {
     expect(dialogText()).toContain('Ready. Opening the Action Center…');
     expect(router.push).not.toHaveBeenCalled();
     await advance(600);
-    expect(router.push).toHaveBeenCalledWith('/dashboard/action-center');
+    expect(router.push).toHaveBeenCalledWith('/dashboard');
     expect(useBrandStore.getState().activeBrandId).toBe('demo');
     vi.useRealTimers();
     await vi.waitFor(() => expect(dialogText()).toBeUndefined());
@@ -236,7 +237,7 @@ describe('useExploreDemo while the demo is still being prepared', () => {
     getBrandById.mockResolvedValue(brand('demo', { isDemo: true }));
     await clickExplore();
     expect(dialogText()).toBeUndefined();
-    expect(router.push).toHaveBeenCalledWith('/dashboard/action-center');
+    expect(router.push).toHaveBeenCalledWith('/dashboard');
   });
 });
 

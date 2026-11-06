@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { Link, useRouter } from '@/i18n/navigation';
 import { saveChatFocus, saveChatGeneralSettings, saveDefaultHome } from '@/lib/actions/chat-prefs';
 import { track } from '@/lib/analytics';
@@ -18,6 +19,7 @@ import { PAGE_OPENS } from '@/lib/chat/page-open';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { cn } from '@/lib/utils';
 import { useFocusLabel } from './focus-picker';
+import { useChatTour } from './tour/chat-tour';
 
 /**
  * Chat's Settings (CHAT-01 owner update 2026-10-26; CHAT-23
@@ -25,7 +27,8 @@ import { useFocusLabel } from './focus-picker';
  * preferences. Each pick is kept at once on the person (every device); one
  * that can't be kept goes back and says so. Default mode is for the roles
  * that change things; Full auto says why it's locked. Your focus (CHAT-24
- * §3 item 2) is for everyone: it only changes what Chat suggests. The
+ * §3 item 2) is for everyone: it only changes what Chat suggests. Product
+ * tour takes the tour again, where Chat opens on pages (00486). The
  * mockup's other tabs come with their pages.
  */
 
@@ -101,6 +104,7 @@ export function ChatSettings({
 }) {
   const t = useTranslations('chatShell.settings');
   const tf = useTranslations('chatShell.focus');
+  const tour = useChatTour();
   const focusLabel = useFocusLabel();
   const router = useRouter();
   const [settings, setSettings] = useState(initial);
@@ -328,6 +332,26 @@ export function ChatSettings({
               onChange={(next) => void change({ panelOnPages: next })}
             />
           </Row>
+
+          {/* The product tour again, from its first topic: it runs in the side panel. */}
+          {tour?.available && settings.panelOnPages && (
+            <Row label={t('tour.label')} note={t('tour.note')}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                data-action="chatSettings.takeTour"
+                disabled={tour.busy}
+                onClick={() => {
+                  track('chat_tour_restarted');
+                  void tour.show('visibility', 'everything');
+                }}
+                className="shrink-0"
+              >
+                {t('tour.take')}
+              </Button>
+            </Row>
+          )}
 
           {/* Where a page Chat writes opens (CHAT-25 §3, W4-11): "Open here" comes with W4-15. */}
           <Row label={t('pageOpen.label')} note={t('pageOpen.note')}>

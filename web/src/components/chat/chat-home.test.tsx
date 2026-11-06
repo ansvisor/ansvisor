@@ -49,6 +49,12 @@ vi.mock('@/lib/actions/chat-home', () => ({
 }));
 const analytics = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('@/lib/analytics', () => analytics);
+// The product tour's server actions (00486): their own tests.
+vi.mock('@/lib/actions/chat-tour', () => ({
+  showTourTopic: vi.fn(async () => ({ ok: false })),
+  endChatTour: vi.fn(async () => ({ ok: false })),
+  prepareChatTour: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatFocus: vi.fn(),
   skipChatFocus: vi.fn(),
@@ -71,6 +77,9 @@ vi.mock('./chat-list-provider', () => ({
 }));
 
 const { ChatHome, ChatHomeView } = await import('./chat-home');
+const { ChatTourProvider } = await import('./tour/chat-tour');
+const { ChatPanelContext } = await import('./panel/chat-panel-context');
+const tourActions = await import('@/lib/actions/chat-tour');
 const { ChatInboxView } = await import('./chat-inbox');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -101,6 +110,8 @@ beforeEach(() => {
   host = document.createElement('div');
   document.body.appendChild(host);
   root = createRoot(host);
+  vi.mocked(tourActions.showTourTopic).mockClear();
+  vi.mocked(tourActions.prepareChatTour).mockClear();
   nav.push.mockClear();
   gate.isLocked = false;
   gate.openUpgrade.mockClear();
@@ -155,6 +166,23 @@ describe('ChatHomeView', () => {
       await render(view({ now: at(time) }));
       expect(host.querySelector('h1')?.textContent).toBe(words);
     }
+  });
+
+  it('welcomes the person beside the welcome card, with its line, right above the box', async () => {
+    await render(
+      view({
+        focus: { areas: [], onEdit: () => undefined },
+        welcome: { line: 'Your first results are on their way.', card: <div data-slot="card" /> },
+      }),
+    );
+    expect(host.querySelector('h1')?.textContent).toBe('Welcome, Alex');
+    expect(host.querySelector('p')?.textContent).toBe('Your first results are on their way.');
+    // The card closes Home's top: the box follows it.
+    expect(host.firstElementChild?.lastElementChild?.getAttribute('data-slot')).toBe('card');
+
+    await render(view({ firstName: null, welcome: { line: null, card: null } }));
+    expect(host.querySelector('h1')?.textContent).toBe('Welcome');
+    expect(host.querySelector('p')?.textContent).toBe('All caught up.');
   });
 
   it('greets without a name, and not at all until the clock is known', async () => {
@@ -362,6 +390,48 @@ describe('ChatHome', () => {
       },
     });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/cccccccc-0000-4000-8000-000000000001');
+  });
+
+  it('starts the product tour from the welcome card, beside the page, in the side panel', async () => {
+    vi.mocked(tourActions.showTourTopic).mockResolvedValueOnce({ ok: true, chatId: 'tour-1' });
+    const openChat = vi.fn();
+    await render(
+      <ChatPanelContext.Provider value={{ setup: { enabled: true }, openChat } as never}>
+        <ChatTourProvider initial={{ chatId: null, topic: null, finished: false }}>
+          <ChatHome firstName="Alex" welcome="demo" />
+        </ChatTourProvider>
+      </ChatPanelContext.Provider>,
+    );
+    expect(host.querySelector('h1')?.textContent).toBe('Welcome, Alex');
+    // The tour's words in the person's language are made while the card shows.
+    expect(tourActions.prepareChatTour).toHaveBeenCalled();
+    await act(async () => (host.querySelector('[data-topic="content"]') as HTMLElement).click());
+    expect(tourActions.showTourTopic).toHaveBeenCalledWith({
+      topic: 'content',
+      via: 'topic',
+      brandId: BRAND,
+      firstRun: null,
+    });
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/content');
+    expect(openChat).toHaveBeenCalledWith('tour-1');
+  });
+
+  it('opens the page alone without the side panel, and shows no card once the tour ended', async () => {
+    await render(<ChatHome firstName="Alex" welcome="demo" />);
+    await act(async () =>
+      (host.querySelector('[data-action="welcome.tourAll"]') as HTMLElement).click(),
+    );
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/insights');
+    expect(tourActions.showTourTopic).not.toHaveBeenCalled();
+
+    await render(
+      <ChatPanelContext.Provider value={{ setup: { enabled: true }, openChat: vi.fn() } as never}>
+        <ChatTourProvider initial={{ chatId: 'tour-1', topic: 'content', finished: true }}>
+          <ChatHome firstName="Alex" welcome="demo" />
+        </ChatTourProvider>
+      </ChatPanelContext.Provider>,
+    );
+    expect(host.querySelector('[data-slot="chat-welcome"]')).toBeNull();
   });
 
   it('shows no job when the counts can’t be read, and keeps Ask anything', async () => {

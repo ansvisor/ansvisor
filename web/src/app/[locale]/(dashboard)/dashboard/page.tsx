@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
-import { DASHBOARD_HOME } from '@/config/home';
+import { dashboardHome } from '@/lib/dashboard-home';
 
-export default function DashboardPage() {
-  redirect(DASHBOARD_HOME);
+/** Each person's start: Chat Home in the free trial and the demo, else the Action Center. */
+export default async function DashboardPage() {
+  redirect(await dashboardHome());
 }

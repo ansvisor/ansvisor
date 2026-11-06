@@ -29,7 +29,7 @@ import {
 import { pct, scoreColor } from '@/components/audit/audit-report';
 import { ScoreRangeMark } from '@/components/audit/score-range';
 import { scoreRange } from '@/lib/audit/score-range';
-import { signedValue, TONE_TEXT } from '../insights/kpi-format';
+import { signedValue, TONE_TEXT } from '../(brand-visibility)/insights/kpi-format';
 import type { AuditedPage, AuditedPageStatus, AuditRun, AuditTemplate } from '@/lib/actions/audits';
 import { formatDate, formatDateTime, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';

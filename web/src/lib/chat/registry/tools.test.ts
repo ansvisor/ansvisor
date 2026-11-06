@@ -1,12 +1,11 @@
 // @vitest-environment node
-import { existsSync, readdirSync } from 'node:fs';
-import path from 'node:path';
 import { z } from 'zod';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { ChatTool } from './define-tool';
 import { clientEventProblems, type ChatEvent } from '../events';
+import { pageExists } from '@/lib/app-pages';
 
 /**
  * The registry's rows (CHAT-20 §9, §21): each has its label and a fixture,
@@ -215,22 +214,6 @@ function rowProblems(tool: ChatTool, chatTools: Record<string, unknown> = labels
     problems.push("its fixture doesn't pass its input schema");
   }
   return problems;
-}
-
-/** The app's page for a route: a folder per segment, or a [param] folder for any. */
-const dashboardDir = path.join(__dirname, '../../../app/[locale]/(dashboard)');
-function pageExists(route: string): boolean {
-  let dirs = [dashboardDir];
-  for (const segment of route.split('/').filter(Boolean)) {
-    dirs = dirs.flatMap((dir) => {
-      if (!existsSync(dir)) return [];
-      const children = readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory());
-      return children
-        .filter((d) => d.name === segment || /^\[[^.\]]+\]$/.test(d.name))
-        .map((d) => path.join(dir, d.name));
-    });
-  }
-  return dirs.some((dir) => existsSync(path.join(dir, 'page.tsx')));
 }
 
 const readRow = {

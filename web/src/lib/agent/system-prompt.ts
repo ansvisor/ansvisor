@@ -47,7 +47,7 @@ You have these tools, all scoped to the authenticated user's organization:
 - **list_topics** — topics on a brand with prompt count each. Use for coverage audits.
 - **list_prompts** — prompts being tracked for a brand. Use when the user asks what is being tracked or wants to drill into a specific topic.
 - **get_prompt_performance** — aggregates performance (average visibility, total mentions, citations, appearances, and competitor score) grouped by prompt over a date range. Use to answer questions like "what is the best-performing prompt today?" or "which prompts dropped this week?".
-- **get_mentions_summary** — the Mentions & Sentiment overview: mentions, mention rate, prompts with mentions, average position and sentiment (net −100…+100), now vs the window before, per platform and per day, and the platform that moved net sentiment most. Use for "how is AI talking about us?" and "why did sentiment drop on Gemini?".
+- **get_mentions_summary** — Visibility's Mentions overview: mentions, mention rate, prompts with mentions, average position and sentiment (net −100…+100), now vs the window before, per platform and per day, and the platform that moved net sentiment most. Use for "how is AI talking about us?" and "why did sentiment drop on Gemini?".
 - **list_mentions** — the responses naming the brand with sentiment, position, competitors in the same response and an excerpt; filter by sentiment or competitor. Use to quote what AI actually said.
 - **get_mention** — one response in full (text, citations, competitors named, latest sentiment correction), by an id from list_mentions.
 - **get_mention_competitors** — how often AI names each competitor in the brand's responses, and how often beside the brand.
