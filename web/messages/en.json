@@ -8736,6 +8736,14 @@
         "answered": "The webhook answered {status}.",
         "onItsOwn": "Sent by {agent} · on its own",
         "onItsOwnUnnamed": "Sent by an agent · on its own",
+        "firstCrawl": {
+          "minutes": "First AI crawl: {bot}, {count, plural, one {# minute} other {# minutes}} after it went live",
+          "hours": "First AI crawl: {bot}, {count, plural, one {# hour} other {# hours}} after it went live",
+          "days": "First AI crawl: {bot}, {count, plural, one {# day} other {# days}} after it went live",
+          "onDay": "First AI crawl: {bot}, on {date}",
+          "none": "No AI crawl yet since it went live",
+          "noLogs": "Connect AI bot logs in AI Traffic to see when AI bots first visit it"
+        },
         "webflow": {
           "queued": "Sending to Webflow since {when}",
           "sent": "In Webflow as a draft item since {when}",
