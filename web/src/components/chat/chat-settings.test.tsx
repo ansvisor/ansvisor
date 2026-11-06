@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
-import type { FocusArea } from '@/lib/chat/focus';
+import type { FocusArea, HomeView } from '@/lib/chat/focus';
 import type { ChatGeneralAccess, ChatGeneralSettings } from '@/lib/chat/general-settings';
 
 /**
@@ -29,7 +29,12 @@ vi.mock('sonner', () => {
   toast.error = (text: string) => toasts.calls.push(`error: ${text}`);
   return { toast };
 });
-const saved = vi.hoisted(() => ({ ok: true, patches: [] as unknown[], focus: [] as unknown[] }));
+const saved = vi.hoisted(() => ({
+  ok: true,
+  patches: [] as unknown[],
+  focus: [] as unknown[],
+  defaults: 0,
+}));
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatGeneralSettings: vi.fn(async (patch: unknown) => {
     saved.patches.push(patch);
@@ -37,6 +42,10 @@ vi.mock('@/lib/actions/chat-prefs', () => ({
   }),
   saveChatFocus: vi.fn(async (areas: unknown) => {
     saved.focus.push(areas);
+    return { ok: saved.ok };
+  }),
+  saveDefaultHome: vi.fn(async () => {
+    saved.defaults += 1;
     return { ok: saved.ok };
   }),
 }));
@@ -64,6 +73,7 @@ beforeEach(() => {
   saved.ok = true;
   saved.patches = [];
   saved.focus = [];
+  saved.defaults = 0;
   toasts.calls = [];
   router.refresh.mockClear();
   host = document.createElement('div');
@@ -75,11 +85,16 @@ afterEach(() => {
   host.remove();
 });
 
-async function render(settings = SETTINGS, access = OPEN, focus: FocusArea[] = []) {
+async function render(
+  settings = SETTINGS,
+  access = OPEN,
+  focus: FocusArea[] = [],
+  view: HomeView = focus.length ? 'focus' : 'default',
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ChatSettings initial={settings} access={access} focus={focus} />
+        <ChatSettings initial={settings} access={access} focus={focus} view={view} />
       </NextIntlClientProvider>,
     );
   });
@@ -229,15 +244,44 @@ describe('ChatSettings', () => {
         .filter((box) => box.checked)
         .map((box) => box.value),
     ).toEqual(['pd']);
+    const plain = () => (action('chatSettings.focusDefault')[0] as HTMLInputElement).checked;
+    expect(plain()).toBe(false);
     await act(async () => boxes()[0].click());
     await act(async () => boxes()[6].click());
     await act(async () => boxes()[0].click());
     expect(saved.focus).toEqual([['pd', 'lead'], ['lead'], []]);
+    expect(plain()).toBe(true);
     expect(toasts.calls).toEqual([
       'Home focused on Product and Big picture',
       'Home focused on Big picture',
-      'Focus cleared · default Home',
+      'Home is on the Default view',
     ]);
+  });
+
+  it('puts Home on the Default view with its focus kept, and an area starts a new focus (00485)', async () => {
+    await render(SETTINGS, OPEN, ['pd', 'comp']);
+    const plain = action('chatSettings.focusDefault')[0] as HTMLInputElement;
+    expect(plain.parentElement?.textContent).toBe('Default view');
+    await act(async () => plain.click());
+    expect(saved.defaults).toBe(1);
+    expect(saved.focus).toEqual([]);
+    const checked = () =>
+      ([...action('chatSettings.focus')] as HTMLInputElement[])
+        .filter((box) => box.checked)
+        .map((box) => box.value);
+    expect(plain.checked).toBe(true);
+    expect(checked()).toEqual([]);
+    expect(toasts.calls).toEqual(['Home is on the Default view']);
+    // Already on it: nothing to keep.
+    await act(async () => plain.click());
+    expect(saved.defaults).toBe(1);
+    const brand = [...action('chatSettings.focus')].find(
+      (box) => (box as HTMLInputElement).value === 'brand',
+    ) as HTMLInputElement;
+    await act(async () => brand.click());
+    expect(saved.focus).toEqual([['brand']]);
+    expect(checked()).toEqual(['brand']);
+    expect(plain.checked).toBe(false);
   });
 
   it('gives a role that only reads its focus too, and puts a change back that was not kept', async () => {
