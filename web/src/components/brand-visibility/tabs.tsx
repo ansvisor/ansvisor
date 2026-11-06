@@ -2,16 +2,26 @@
 
 import { useEffect, useState, type ComponentProps, type MouseEvent } from 'react';
 import { useTranslations } from 'next-intl';
+import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import {
   BRAND_VISIBILITY_TABS,
   brandVisibilityTabHref,
   brandVisibilityTabOf,
+  hasProductVisibilityTab,
   type BrandVisibilityTab,
 } from '@/lib/brand-visibility';
 import { menuSectionOf } from '@/lib/menu-access';
 import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/stores/use-brand-store';
+
+/** Whether the active brand has Product Visibility as Visibility's fourth tab (hasProductVisibilityTab). */
+export function useProductVisibilityTab(): boolean {
+  const brand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
+  const { canUse } = useFeatureGate();
+  return hasProductVisibilityTab(brand, canUse);
+}
 
 /**
  * A link to one of Brand Visibility's tabs that keeps the filters the tabs
@@ -53,8 +63,9 @@ export function BrandVisibilityTabLink({
 }
 
 /**
- * The three tabs under the header: Overview, Mentions, Citations. Each is
- * its own route, so a tab loads its own data only when it is opened, and
+ * The tabs under the header: Overview, Mentions, Citations, and Product
+ * Visibility for a brand that sells online (useProductVisibilityTab). Each
+ * is its own route, so a tab loads its own data only when it is opened, and
  * the header above stays as it is. A tab whose section the person's menu
  * hides (menu access) is left off, as the menu leaves it off. With
  * `prefetch` (once the open tab's figures are on screen) the others are
@@ -70,8 +81,10 @@ export function BrandVisibilityTabs({
   prefetch?: boolean;
 }) {
   const t = useTranslations('brandVisibility.tabs');
+  const products = useProductVisibilityTab();
   const hiddenSections = useHiddenMenuSections();
-  const tabs = BRAND_VISIBILITY_TABS.filter(({ href }) => {
+  const tabs = BRAND_VISIBILITY_TABS.filter(({ id, href }) => {
+    if (id === 'products' && !products) return false;
     const section = menuSectionOf(href);
     return !section || !hiddenSections.has(section);
   });

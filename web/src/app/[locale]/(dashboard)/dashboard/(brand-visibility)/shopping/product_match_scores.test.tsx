@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import messages from '../../../../../../messages/en.json';
+import messages from '../../../../../../../messages/en.json';
 import type { ProductPromptMatch, ShoppingProduct } from '@/lib/actions/shopping';
 
 /** #1282, part 1: an own product's match with each prompt, in its drawer. */

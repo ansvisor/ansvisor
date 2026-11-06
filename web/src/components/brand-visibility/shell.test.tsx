@@ -48,9 +48,9 @@ const tracking = vi.hoisted(() => ({
 vi.mock('@/lib/actions/tracking', () => tracking);
 // The run line's read goes through the tabs' read route, beside theirs.
 vi.mock('@/lib/visibility-reads', () => ({ getTrackingWindow: tracking.getTrackingWindow }));
-const access = vi.hoisted(() => ({ isCloud: false, canManage: true }));
+const access = vi.hoisted(() => ({ isCloud: false, canManage: true, planId: 'starter' }));
 vi.mock('@/components/providers/plan-provider', () => ({
-  usePlanContext: () => ({ isCloud: access.isCloud }),
+  usePlanContext: () => ({ isCloud: access.isCloud, planId: access.planId }),
 }));
 vi.mock('@/hooks/use-user-role', () => ({
   useUserRole: () => ({ canManage: access.canManage }),
@@ -149,6 +149,7 @@ beforeEach(() => {
   nav.refresh.mockReset();
   access.isCloud = false;
   access.canManage = true;
+  access.planId = 'starter';
   useBrandStore.setState({ brands: [brand as never], activeBrandId: 'b1', loaded: true });
   container = document.createElement('div');
   document.body.appendChild(container);
@@ -236,6 +237,66 @@ describe('the old addresses', () => {
       expect(tabLink(tab).getAttribute('aria-current'), path).toBe('page');
       expect(`${window.location.pathname}${window.location.search}`).toBe(path);
     }
+  });
+});
+
+describe('Product Visibility, the fourth tab', () => {
+  const tabs = () =>
+    [...container.querySelectorAll('nav[aria-label="Visibility"] a')].map((a) => [
+      a.textContent,
+      a.getAttribute('href'),
+      a.getAttribute('aria-current'),
+    ]);
+  const withBrand = async (
+    brandFields: object,
+    planId = 'growth',
+    path = '/dashboard/insights',
+    hidden: string[] = [],
+  ) => {
+    access.planId = planId;
+    useBrandStore.setState({
+      brands: [{ ...brand, ...brandFields } as never],
+      activeBrandId: 'b1',
+      loaded: true,
+    });
+    await render(path, <Tab />, hidden);
+  };
+
+  it('shows for a brand in Shopping mode on a plan with it, on its old address', async () => {
+    await withBrand({ shoppingModeEnabled: true });
+    expect(tabs()).toEqual([
+      ['Overview', '/dashboard/insights', 'page'],
+      ['Mentions', '/dashboard/mentions', null],
+      ['Citations', '/dashboard/citations', null],
+      ['Product Visibility', '/dashboard/shopping', null],
+    ]);
+  });
+
+  it('shows for an e-commerce brand whose Shopping mode is still off', async () => {
+    await withBrand({ shoppingModeEnabled: false, siteType: 'ecommerce' });
+    expect(tabs().map(([name]) => name)).toContain('Product Visibility');
+  });
+
+  it('is not there when the member’s menu hides Product Visibility', async () => {
+    await withBrand({ shoppingModeEnabled: true }, 'growth', '/dashboard/insights', ['shopping']);
+    expect(tabs().map(([name]) => name)).toEqual(['Overview', 'Mentions', 'Citations']);
+  });
+
+  it('is not there for another brand, or on a plan without it', async () => {
+    await withBrand({ shoppingModeEnabled: false, siteType: 'b2b' });
+    expect(tabs().map(([name]) => name)).toEqual(['Overview', 'Mentions', 'Citations']);
+    await withBrand({ shoppingModeEnabled: true }, 'starter');
+    expect(tabs().map(([name]) => name)).toEqual(['Overview', 'Mentions', 'Citations']);
+  });
+
+  it('is the current tab on its address, keeps its view, and carries no filter to the others', async () => {
+    await withBrand({ shoppingModeEnabled: true }, 'growth', '/dashboard/shopping?tab=readiness');
+    expect(tabs()).toEqual([
+      ['Overview', '/dashboard/insights', null],
+      ['Mentions', '/dashboard/mentions', null],
+      ['Citations', '/dashboard/citations', null],
+      ['Product Visibility', '/dashboard/shopping?tab=readiness', 'page'],
+    ]);
   });
 });
 

@@ -189,7 +189,14 @@ export function routeRegistry({ cloud = isCloud() }: { cloud?: boolean } = {}): 
       for (const child of item.children ?? []) {
         // Content's Opportunities is the item's own address.
         if (child.href === item.href) continue;
-        out.push(route(child.href as ChatHref, navName(child.title), name, item.requiredFeature));
+        out.push(
+          route(
+            child.href as ChatHref,
+            navName(child.title),
+            name,
+            child.requiredFeature ?? item.requiredFeature,
+          ),
+        );
       }
     }
   }

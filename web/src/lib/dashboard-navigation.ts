@@ -1,4 +1,5 @@
 import type { BrandPrefKey, NavChild, NavItem } from '@/config/dashboard';
+import type { Feature } from '@/config/plans';
 import { menuSectionOf } from '@/lib/menu-access';
 
 type Translator = (key: string) => string;
@@ -28,7 +29,9 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   'Site Audit': 'audit',
   Citations: 'citations',
   Mentions: 'mentions',
-  Shopping: 'shopping',
+  Products: 'products',
+  // Products' section where menu access lists the sections.
+  'Product Visibility': 'shopping',
   Reports: 'reports',
 };
 
@@ -86,15 +89,30 @@ export function isNavItemActive(
 }
 
 /**
+ * What decides a gated submenu entry (Visibility's Products): the active
+ * brand's preferences and the plan's features. Without them, a gated entry
+ * is left out.
+ */
+export interface NavChildGates {
+  brandPrefs: Record<BrandPrefKey, boolean>;
+  canUse: (feature: Feature) => boolean;
+}
+
+/**
  * The submenu entries a person's menu shows: each entry's section is its
- * route's, so Brand Visibility's Mentions and Citations go with theirs
- * (menu access), and Prompts' and Content's with the item's own.
+ * route's, so Brand Visibility's Mentions, Citations and Products go with
+ * theirs (menu access), and Prompts' and Content's with the item's own. An
+ * entry for some brands or plans only shows for them: off, it is off the
+ * menu rather than locked.
  */
 export function visibleNavChildren(
   item: Pick<NavItem, 'children'>,
   hiddenSections: ReadonlySet<string> = new Set(),
+  gates?: NavChildGates,
 ): NavChild[] {
   return (item.children ?? []).filter((child) => {
+    if (child.requiresBrandPref && !gates?.brandPrefs[child.requiresBrandPref]) return false;
+    if (child.requiredFeature && !gates?.canUse(child.requiredFeature)) return false;
     const section = menuSectionOf(child.href);
     return !section || !hiddenSections.has(section);
   });
@@ -119,12 +137,14 @@ export function shouldShowDashboardNavItem(
   brandPrefs: Record<BrandPrefKey, boolean>,
   hiddenSections: ReadonlySet<string> = new Set(),
   chatAgentic = false,
+  canUse?: (feature: Feature) => boolean,
 ): boolean {
   if (item.requiresChatAgentic && !chatAgentic) return false;
   if (item.children?.length) {
     // A submenu shows while one of its entries does: Brand Visibility with
     // only Citations on someone's menu still shows, with Citations alone.
-    if (visibleNavChildren(item, hiddenSections).length === 0) return false;
+    const gates = canUse ? { brandPrefs, canUse } : undefined;
+    if (visibleNavChildren(item, hiddenSections, gates).length === 0) return false;
   } else {
     const section = menuSectionOf(item.href);
     if (section && hiddenSections.has(section)) return false;

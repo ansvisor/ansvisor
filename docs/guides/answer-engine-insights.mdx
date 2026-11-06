@@ -5,15 +5,18 @@ description: "The Visibility page is your daily view of how AI answers treat you
 
 ## What you see
 
-**Visibility** is the main analytics hub for a brand (it was called Brand Visibility, and before that Answer Engine Insights). It has three tabs, each on its own address:
+**Visibility** is the main analytics hub for a brand (it was called Brand Visibility, and before that Answer Engine Insights). It has three tabs, and a fourth for brands that sell online, each on its own address:
 
 | Tab | Address | What it shows |
 |---|---|---|
 | **Overview** | `/dashboard/insights` | Everything on this page |
 | **Mentions** | `/dashboard/mentions` | [Mentions & sentiment](/guides/mentions) |
 | **Citations** | `/dashboard/citations` | [The sources AI cites](/guides/citations) |
+| **Product Visibility** | `/dashboard/shopping` | Your products on AI shopping shelves: its Shelf, Categories, Products, Readiness and Competitors views |
 
-The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** is a group with the same three entries, open whenever one of them is showing. Each tab loads its own data only when you open it, and shows a skeleton until it arrives: a tab never says there is no data before its read is back, and a read that fails says so with **Retry**, without touching the other tabs. A date range you picked, and the AI platform, region and topic, stay set from tab to tab. Without a picked range each tab opens on its own default (the latest run on the Overview and Citations, 30 days on Mentions), and Mentions, which has no **All**, opens its 30 days for it.
+**Product Visibility** shows for a brand with Shopping mode on, or whose site type is an online store, on a plan with Product Visibility (Growth and Enterprise). It was a page of its own in the sidebar; its address and its `?tab=` views (`shelf`, `categories`, `products`, `readiness`, `competitors`) still open it. When the site is an online store but Shopping mode is off, the tab says so and offers admins and managers **Turn on Shopping mode**. It keeps its own filters (date range, platform, region and the ChatGPT Shopping market).
+
+The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** is a group with the same entries (Product Visibility is **Products** there), open whenever one of them is showing. Each tab loads its own data only when you open it, and shows a skeleton until it arrives: a tab never says there is no data before its read is back, and a read that fails says so with **Retry**, without touching the other tabs. A date range you picked, and the AI platform, region and topic, stay set from tab to tab. Without a picked range each tab opens on its own default (the latest run on the Overview and Citations, 30 days on Mentions), and Mentions, which has no **All**, opens its 30 days for it.
 
 The Overview, from top to bottom:
 

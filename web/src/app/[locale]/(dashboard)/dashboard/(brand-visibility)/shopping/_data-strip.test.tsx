@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import messages from '../../../../../../messages/en.json';
+import messages from '../../../../../../../messages/en.json';
 import type { CatalogSource } from '@/lib/catalog';
 import type { SourceState } from '@/lib/actions/integrations';
 
@@ -20,7 +20,7 @@ vi.mock('@/hooks/use-integration-connect', () => ({
 }));
 vi.mock('@/lib/actions/catalog', () => ({ listCatalogSources: vi.fn() }));
 vi.mock('@/lib/actions/traffic', () => ({ getTrafficSources: vi.fn() }));
-vi.mock('../traffic/_bots-connect', () => ({ BotsSource: () => null }));
+vi.mock('../../traffic/_bots-connect', () => ({ BotsSource: () => null }));
 
 const { ProductDataStrip } = await import('./_data-strip');
 

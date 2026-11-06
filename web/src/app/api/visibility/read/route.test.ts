@@ -38,6 +38,28 @@ vi.mock('@/lib/actions/citations', () => ({
 }));
 vi.mock('@/lib/actions/topic', () => ({ getTopics: reads.getTopics }));
 vi.mock('@/lib/actions/competitor', () => ({ getCompetitors: vi.fn() }));
+const shopping = vi.hoisted(() => ({
+  getCompetitorProducts: vi.fn(),
+  getCompetitorSummary: vi.fn(),
+  getOwnProducts: vi.fn(),
+  getResellerPriceAlerts: vi.fn(),
+  getShoppingActionResults: vi.fn(),
+  getShoppingAiOrders: vi.fn(),
+  getShoppingAmazonShareDropAlert: vi.fn(),
+  getShoppingCategories: vi.fn(),
+  getShoppingFilterOptions: vi.fn(),
+  getShoppingMerchantSplit: vi.fn(),
+  getShoppingOverview: vi.fn(),
+  getShoppingProducts: vi.fn(),
+  getShoppingSearchAppearance: vi.fn(),
+  getShoppingShelf: vi.fn(),
+}));
+vi.mock('@/lib/actions/shopping', () => shopping);
+vi.mock('@/lib/actions/shopping-market', () => ({ getBrandMarketCountries: vi.fn() }));
+vi.mock('@/lib/actions/shopping-openai-index', () => ({ getOpenAiIndexRead: vi.fn() }));
+vi.mock('@/lib/actions/catalog', () => ({ listCatalogSources: vi.fn() }));
+vi.mock('@/lib/actions/integrations', () => ({ getMerchantCenterOffered: vi.fn() }));
+vi.mock('@/lib/actions/traffic', () => ({ getTrafficSources: vi.fn() }));
 
 const { POST } = await import('./route');
 
@@ -54,6 +76,8 @@ const WEEK = { from: '2026-10-30T00:00:00.000Z', platform: 'claude' };
 beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
+  vi.spyOn(console, 'info').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
   user = { id: 'u1' };
 });
 
@@ -102,5 +126,49 @@ describe('POST /api/visibility/read', () => {
     const res = await post({ read: 'citationsOverview', args: [BRAND, { datePreset: '24h' }] });
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({ error: 'Failed to load' });
+  });
+
+  it("runs Product Visibility's reads, with their filters", async () => {
+    const filters = { datePreset: '30d', chatgptMarket: 'us' };
+    shopping.getShoppingShelf.mockResolvedValue({ rows: [], stats: {}, catalogProducts: null });
+    const res = await post({ read: 'shoppingShelf', args: [BRAND, filters] });
+    expect(res.status).toBe(200);
+    expect(shopping.getShoppingShelf).toHaveBeenCalledWith(BRAND, filters);
+  });
+
+  it('logs each read with how long it took, and a slow one as a warning', async () => {
+    reads.getTopics.mockResolvedValue([]);
+    await post({ read: 'topics', args: [BRAND] });
+    expect(console.info).toHaveBeenCalledWith(
+      expect.stringMatching(/^\[visibility\/read\] topics \d+ms$/),
+    );
+
+    vi.useFakeTimers({ toFake: ['performance'] });
+    try {
+      shopping.getShoppingProducts.mockImplementation(async () => {
+        vi.advanceTimersByTime(2500);
+        return null;
+      });
+      await post({ read: 'shoppingProducts', args: [BRAND, { datePreset: '30d' }] });
+      expect(console.warn).toHaveBeenCalledWith('[visibility/read] shoppingProducts 2500ms (slow)');
+    } finally {
+      vi.useRealTimers();
+    }
+
+    reads.getCitationsOverview.mockRejectedValue(new Error('down'));
+    await post({ read: 'citationsOverview', args: [BRAND, {}] });
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringMatching(/^\[visibility\/read\] citationsOverview failed after \d+ms:$/),
+      expect.any(Error),
+    );
+  });
+
+  it('reads where AI sends shoppers in one read, a part that fails coming back empty', async () => {
+    shopping.getShoppingMerchantSplit.mockRejectedValue(new Error('down'));
+    shopping.getResellerPriceAlerts.mockResolvedValue([{ productTitle: 'Beans' }]);
+    const res = await post({ read: 'shoppingDestinations', args: [BRAND, { datePreset: '7d' }] });
+    expect(await res.json()).toEqual({
+      data: { split: null, priceAlerts: [{ productTitle: 'Beans' }] },
+    });
   });
 });

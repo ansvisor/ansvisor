@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import dynamic from 'next/dynamic';
 const DynamicPlatformCardRateChart = dynamic(
@@ -30,29 +30,31 @@ import {
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useUserRole } from '@/hooks/use-user-role';
+import type {
+  ShoppingDatePreset,
+  ShoppingFilters,
+  ShoppingProduct,
+  CompetitorShoppingSummary,
+  ShoppingShelf,
+} from '@/lib/actions/shopping';
 import {
-  getShoppingFilterOptions,
-  getShoppingOverview,
-  getShoppingAmazonShareDropAlert,
-  getOwnProducts,
   getCompetitorProducts,
   getCompetitorSummary,
-  getShoppingAiOrders,
+  getOwnProducts,
   getShoppingActionResults,
+  getShoppingAiOrders,
+  getShoppingAmazonShareDropAlert,
   getShoppingCategories,
+  getShoppingFilterOptions,
+  getShoppingOverview,
   getShoppingProducts,
   getShoppingSearchAppearance,
   getShoppingShelf,
-  type ShoppingChartData,
-  type ShoppingDatePreset,
-  type ShoppingFilters,
-  type ShoppingKpis,
-  type ShoppingProduct,
-  type CompetitorShoppingSummary,
-  type ShoppingAiOrders,
-  type ShoppingProducts,
-  type ShoppingShelf,
-} from '@/lib/actions/shopping';
+} from '@/lib/visibility-reads';
+import {
+  TabHeaderActions,
+  useBrandVisibilityShell,
+} from '@/components/brand-visibility/shell-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
@@ -90,12 +92,9 @@ import {
 import { toCsv } from '@/lib/csv';
 import { PLATFORM_LABELS } from '@/config/platform-labels';
 import { formatRegionDisplay } from '@/lib/region';
-import type { AmazonShareDropAlert } from '@/lib/shopping-amazon-share-alert';
-import type { CategoryRow } from '@/lib/shopping/categories';
-import { RECHECK_TARGETS, type ActionResult } from '@/lib/shopping/recheck';
+import { RECHECK_TARGETS } from '@/lib/shopping/recheck';
 import { readinessChecklist } from '@/lib/shopping/readiness';
 import { formatNumber } from '@/lib/format';
-import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 import { googleSourceStatus } from '@/lib/traffic-sources';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { CatalogNote } from './_catalog-note';
@@ -105,6 +104,7 @@ import { ProductsTable } from './_products-table';
 import { ReadinessTab } from './_readiness';
 import { ShelfFailed, ShelfKpis, ShelfRows } from './_shelf';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
+import { ShoppingModeOff } from './_shopping-off';
 import { WhyDialog } from './_why-dialog';
 import { MerchantSplitCard } from './merchant_split_card';
 import { OpenAiIndexCard } from './openai_index_card';
@@ -116,18 +116,40 @@ import { useOpenAiIndex } from './use_openai_index';
 
 const DATE_PRESETS: ShoppingDatePreset[] = ['7d', '30d', '90d', 'all'];
 
-/** The page's tabs, the one open in the URL (?tab=products). */
+/** The tab's views, the one open in the URL (?tab=products). */
 const SHOPPING_TABS = ['shelf', 'categories', 'products', 'readiness', 'competitors'] as const;
 type ShoppingTab = (typeof SHOPPING_TABS)[number];
+
+const NO_FILTER_OPTIONS: { platforms: string[]; regions: string[] } = {
+  platforms: [],
+  regions: [],
+};
+const NO_PRODUCTS: ShoppingProduct[] = [];
+const NO_SUMMARIES: CompetitorShoppingSummary[] = [];
 
 // Theme tokens in globals.css ship as full oklch values; reference them
 // directly with var(--…). Wrapping in hsl() yields invalid CSS, so chart
 // text turns black on dark mode (lesson learned from #138).
 
+/**
+ * Visibility's Product Visibility tab (owner, 2026-11-06; was the Product
+ * Visibility page, which kept its address): which of the brand's products
+ * AI shopping answers show, why, and what they sell. Its views (Shelf,
+ * Categories, Products, Readiness, Competitors) are a second row, as the
+ * Mentions tab's; "Why Ansvisor Product Visibility?" sits in the shared
+ * header, beside Reports.
+ *
+ * Each view reads only what it shows, when it is opened, every read at once
+ * through Visibility's read route (none waits for another, except what
+ * needs the market first, and the market the brand had last is ready at
+ * once). What a view read stays in Visibility's cache, by brand and
+ * filters: a view or the tab opened again shows it at once.
+ */
 export default function ShoppingPage() {
   const t = useTranslations('shopping');
   const tCommon = useTranslations('common');
-  const { activeBrandId } = useBrandStore();
+  const { shown } = useBrandVisibilityShell();
+  const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const { canUse, requiredPlanFor } = useFeatureGate();
   const { canManage } = useUserRole();
@@ -138,32 +160,11 @@ export default function ShoppingPage() {
   const [region, setRegion] = useState<string>('all');
   const shoppingMarket = useShoppingMarket(activeBrandId, region);
 
-  const [filterOpts, setFilterOpts] = useState<{ platforms: string[]; regions: string[] }>({
-    platforms: [],
-    regions: [],
-  });
-  const [kpis, setKpis] = useState<ShoppingKpis | null>(null);
-  const [charts, setCharts] = useState<ShoppingChartData | null>(null);
-  // True from the start: the first load waits for the market, and an idle
-  // page with no KPIs yet would read as empty.
-  const [loading, setLoading] = useState(true);
-  const [amazonShareDropAlert, setAmazonShareDropAlert] = useState<AmazonShareDropAlert | null>(
-    null,
-  );
-
-  const [ownProducts, setOwnProducts] = useState<ShoppingProduct[]>([]);
-  const [competitorProducts, setCompetitorProducts] = useState<ShoppingProduct[]>([]);
-  const [competitorSummary, setCompetitorSummary] = useState<CompetitorShoppingSummary[]>([]);
-  // The catalog's categories (ECOM-008), read when their tab opens, for the filters they were read with.
-  const [categories, setCategories] = useState<{
-    key: string;
-    rows: CategoryRow[] | null | 'failed';
-    /** Each category's last done action, 7 days on (ECOM-018). */
-    results?: Record<string, ActionResult>;
-  } | null>(null);
-  const [tableLoading, setTableLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ShoppingProduct | null>(null);
   const [activeTab, setActiveTab] = useState<ShoppingTab>('shelf');
+  // The view is read from the address after mount: no view reads before it,
+  // so a link to Products doesn't read the Shelf first.
+  const [urlRead, setUrlRead] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
   const sources = useProductSources(activeBrandId);
   const primaryDomain =
@@ -177,12 +178,15 @@ export default function ShoppingPage() {
     canManage && !!sources.google && googleSourceStatus(sources.google.ga) === 'not_connected';
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one read of the URL after mount
     setActiveTab(readUrlChoice('tab', SHOPPING_TABS, 'shelf'));
+    setUrlRead(true);
   }, []);
   const changeTab = (next: ShoppingTab) => {
     setActiveTab(next);
     writeUrlParams({ tab: next }, { tab: 'shelf' });
   };
+  const view = urlRead ? activeTab : null;
 
   const filters = useMemo<ShoppingFilters>(
     () => ({
@@ -193,99 +197,123 @@ export default function ShoppingPage() {
     }),
     [datePreset, platform, region, shoppingMarket.filter],
   );
-  // Like the Overview's own load, these wait for the market.
+  // What a read is for: the brand and the filters. The window's reads wait
+  // for the market (its ChatGPT Shopping regions are one of the filters).
+  const filterKey = `${activeBrandId}:${JSON.stringify(filters)}`;
+  const brandKey = activeBrandId ?? '';
+  const hasBrand = !!activeBrandId;
+  const marketReady = hasBrand && shoppingMarket.ready && urlRead;
+  const canRead = marketReady && hasFullAccess;
+
+  // ── Every view's: the filters' choices, the Amazon alert, the overview ──
+  // The dropdowns show only platform / region values that actually appear in
+  // this brand's data; read once per brand.
+  const filterOptsRead = useKeyedRead(
+    hasBrand,
+    'filterOptions',
+    brandKey,
+    () => getShoppingFilterOptions(activeBrandId!),
+    'the filter choices',
+  );
+  const filterOpts =
+    filterOptsRead && filterOptsRead !== 'failed' ? filterOptsRead : NO_FILTER_OPTIONS;
+  // This alert always evaluates five consecutive rolling seven-day windows
+  // ending at query time, independently of display/platform/region filters.
+  // Supplemental: a failed read must not break the tab.
+  const alertRead = useKeyedRead(
+    hasBrand,
+    'amazonAlert',
+    brandKey,
+    () => getShoppingAmazonShareDropAlert(activeBrandId!),
+    'the Amazon share alert',
+  );
+  const amazonShareDropAlert = alertRead && alertRead !== 'failed' ? alertRead : null;
+  // The KPIs and charts: whether the window has any cards at all (every
+  // view's empty state) and the Shelf's trends.
+  const overviewRead = useKeyedRead(
+    marketReady,
+    'overview',
+    filterKey,
+    () => getShoppingOverview(activeBrandId!, filters),
+    'the overview',
+  );
+  const overview = overviewRead && overviewRead !== 'failed' ? overviewRead : null;
+  const loading = overviewRead === undefined;
+  const charts = overview?.charts ?? null;
+  // platformCardRate's data has card-rate built in, so the trend total is
+  // sufficient as a "do we have any data at all?" check.
+  const totalCards = (charts?.ownPresenceTrend ?? []).reduce((sum, p) => sum + p.totalCards, 0);
+  const isEmpty = !!overview && overview.kpis.shoppingCardRateSampleSize === 0 && totalCards === 0;
+
+  // ── Shelf (ECOM-006) ───────────────────────────────────────────────────────
+  // Readiness reads it too, for its channel cards, with every channel shown.
+  // Each "Try again" on a shelf that couldn't be read is a new read.
+  const [shelfTry, setShelfTry] = useState(0);
+  const shelfRead = useKeyedRead(
+    canRead && (view === 'shelf' || (view === 'readiness' && platform === 'all')),
+    'shelf',
+    filterKey,
+    () => getShoppingShelf(activeBrandId!, filters),
+    'the shelves',
+    shelfTry,
+  );
+  // Null while it reads.
+  const shelf: ShoppingShelf | 'failed' | null = shelfRead ?? null;
+  // Orders from AI visits, the last 30 days whatever the filters (ECOM-006),
+  // kept by brand: another brand's never show while this one's are read.
+  const ordersRead = useKeyedRead(
+    hasBrand && hasFullAccess && view === 'shelf',
+    'orders',
+    brandKey,
+    () => getShoppingAiOrders(activeBrandId!),
+    'the orders from AI visits',
+  );
+  // Undefined while they're read, null when they couldn't be.
+  const orders = ordersRead === 'failed' ? null : ordersRead;
+  // Where AI sends shoppers and the cheaper resellers: the Shelf's cards and
+  // a Readiness check.
   const destinations = useMerchantDestinations(
     activeBrandId,
     filters,
-    hasFullAccess && shoppingMarket.ready,
+    canRead && (view === 'shelf' || view === 'readiness'),
   );
   const destinationsLoading = destinations.loading || !shoppingMarket.ready;
-  // ChatGPT in the US (#1281): only while the market shown is the US.
-  const showOpenAiIndex = shoppingMarket.shown === 'us';
-  const openAiIndex = useOpenAiIndex(activeBrandId, datePreset, hasFullAccess && showOpenAiIndex);
 
-  // Load filter options once per brand so the dropdowns only show
-  // platform / region values that actually appear in this brand's data.
-  useEffect(() => {
-    if (!activeBrandId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const opts = await getShoppingFilterOptions(activeBrandId);
-        if (!cancelled) setFilterOpts(opts);
-      } catch {
-        if (!cancelled) setFilterOpts({ platforms: [], regions: [] });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeBrandId]);
+  // ── Products (ECOM-007) ────────────────────────────────────────────────────
+  // The catalog's products with their shelves: the Products table, a
+  // Readiness check, and on the Shelf "Why not you?", read there only once
+  // the shelf is on screen and has a catalog and a shelf without the brand.
+  const whyNotYou =
+    view === 'shelf' &&
+    !!shelf &&
+    shelf !== 'failed' &&
+    shelf.catalogProducts !== null &&
+    shelf.rows.some((row) => row.ownRank === null);
+  const productsRead = useKeyedRead(
+    canRead && (view === 'products' || view === 'readiness' || whyNotYou),
+    'products',
+    filterKey,
+    () => getShoppingProducts(activeBrandId!, filters),
+    'the products',
+  );
+  const productsLoading = productsRead === undefined;
+  // Null for a brand without a catalog, and while it reads.
+  const catalogTable = productsRead ?? null;
+  // No catalog: the products AI showed, by title, until one is connected.
+  // Read beside the catalog's when the brand has no catalog source.
+  const noCatalog =
+    productsRead === null ||
+    (sources.loaded && sources.catalog !== null && !sources.catalog.length);
+  const ownRead = useKeyedRead(
+    canRead && view === 'products' && noCatalog,
+    'ownProducts',
+    filterKey,
+    () => getOwnProducts(activeBrandId!, filters),
+    'the products AI showed',
+  );
+  const ownProducts = Array.isArray(ownRead) ? ownRead : NO_PRODUCTS;
 
-  // De-dupe overlapping fetches when filters change in quick succession.
-  const reqIdRef = useRef(0);
-  const loadData = useCallback(async () => {
-    if (!activeBrandId) return;
-    const reqId = ++reqIdRef.current;
-    setLoading(true);
-    if (hasFullAccess) {
-      setTableLoading(true);
-    }
-    try {
-      const promises: [
-        Promise<{ kpis: ShoppingKpis; charts: ShoppingChartData }>,
-        ...Promise<unknown>[],
-      ] = [getShoppingOverview(activeBrandId, filters)];
-
-      if (hasFullAccess) {
-        promises.push(
-          getOwnProducts(activeBrandId, filters),
-          getCompetitorProducts(activeBrandId, filters),
-          getCompetitorSummary(activeBrandId, filters),
-        );
-      }
-
-      const results = await Promise.all(promises);
-
-      if (reqId === reqIdRef.current) {
-        const overview = results[0] as { kpis: ShoppingKpis; charts: ShoppingChartData };
-        setKpis(overview.kpis);
-        setCharts(overview.charts);
-        if (hasFullAccess && results.length >= 4) {
-          setOwnProducts(results[1] as ShoppingProduct[]);
-          setCompetitorProducts(results[2] as ShoppingProduct[]);
-          setCompetitorSummary(results[3] as CompetitorShoppingSummary[]);
-        }
-      }
-    } finally {
-      if (reqId === reqIdRef.current) {
-        setLoading(false);
-        setTableLoading(false);
-      }
-    }
-  }, [activeBrandId, filters, hasFullAccess]);
-
-  useEffect(() => {
-    if (!shoppingMarket.ready) return;
-    void loadData();
-  }, [loadData, shoppingMarket.ready]);
-
-  // The Shelf (ECOM-006) and the Products table (ECOM-007) read once per
-  // brand and filters, apart from the rest: neither waits for the other, nor
-  // for the older tables. The Products table reads when its tab, or
-  // Readiness, is open.
-  const readKey = `${activeBrandId}:${JSON.stringify(filters)}`;
-  const canRead = !!activeBrandId && hasFullAccess && shoppingMarket.ready;
-  // Each "Try again" on a shelf that couldn't be read is a new read.
-  const [shelfTry, setShelfTry] = useState(0);
-  // Null while it reads.
-  const shelf: ShoppingShelf | 'failed' | null =
-    useKeyedRead(
-      canRead,
-      `${readKey}#${shelfTry}`,
-      () => getShoppingShelf(activeBrandId!, filters),
-      'the shelves',
-    ) ?? null;
+  // ── Readiness (ECOM-015) ───────────────────────────────────────────────────
   // Readiness's channel cards look at every channel whatever the one chosen
   // (the Shelf's chips): with one chosen, the shelf read for it has only its
   // cards, and would show the others as not showing the brand's products.
@@ -294,204 +322,180 @@ export default function ShoppingPage() {
     [filters],
   );
   const channelShelfRead = useKeyedRead(
-    canRead && activeTab === 'readiness' && platform !== 'all',
+    canRead && view === 'readiness' && platform !== 'all',
+    'shelf',
     `${activeBrandId}:${JSON.stringify(channelFilters)}`,
     () => getShoppingShelf(activeBrandId!, channelFilters),
     'the shelves of every channel',
   );
   // Null while it reads.
   const channelShelf = platform === 'all' ? shelf : (channelShelfRead ?? null);
-  const productsRead = useKeyedRead(
-    canRead && (activeTab === 'products' || activeTab === 'readiness'),
-    readKey,
-    () => getShoppingProducts(activeBrandId!, filters),
-    'the products',
-  );
-  const productsLoading = productsRead === undefined;
-  // "Why not you?" on the Shelf needs the catalog's products, not the
-  // window's numbers: read once per brand there, apart from the table.
-  const shelfProducts = useKeyedRead(
-    canRead && activeTab === 'shelf' && !productsRead,
-    activeBrandId ?? '',
-    () => getShoppingProducts(activeBrandId!, filters),
-    'the products for the shelf',
-  );
-  // Null for a brand without a catalog, and while it reads.
-  const catalogTable: ShoppingProducts | null | 'failed' = productsRead ?? null;
-  // Google's shopping results from Search Console (00377), for Readiness.
+  // Google's shopping results from Search Console (00377).
   const searchAppearance = useKeyedRead(
-    canRead && activeTab === 'readiness',
-    activeBrandId ?? '',
+    canRead && view === 'readiness',
+    'searchAppearance',
+    brandKey,
     () => getShoppingSearchAppearance(activeBrandId!),
     "Search Console's shopping results",
   );
-
-  // The Categories tab reads when it's open, once per brand and filters.
-  const categoriesKey = `${activeBrandId}:${JSON.stringify(filters)}`;
-  useEffect(() => {
-    if (activeTab !== 'categories' || !activeBrandId || !hasFullAccess) return;
-    if (!shoppingMarket.ready || categories?.key === categoriesKey) return;
-    let cancelled = false;
-    getShoppingCategories(activeBrandId, filters)
-      .then((rows) => {
-        if (cancelled) return;
-        setCategories({ key: categoriesKey, rows });
-        if (!rows?.length) return;
-        // Then their last done actions, 7 days on: a table without them is still the table.
-        // Kept by key, not `cancelled`: setting the rows re-runs this effect.
-        getShoppingActionResults(
-          activeBrandId,
-          rows.slice(0, RECHECK_TARGETS).map((row) => ({ type: 'category' as const, id: row.id })),
-        )
-          .then((results) =>
-            setCategories((read) => (read?.key === categoriesKey ? { ...read, results } : read)),
-          )
-          .catch((err) => console.error('Failed to re-check the categories’ actions:', err));
-      })
-      .catch((err) => {
-        console.error('Failed to read the categories:', err);
-        if (!cancelled) setCategories({ key: categoriesKey, rows: 'failed' });
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    activeTab,
+  // ChatGPT in the US (#1281): only while the market shown is the US.
+  const showOpenAiIndex = shoppingMarket.shown === 'us';
+  const openAiIndex = useOpenAiIndex(
     activeBrandId,
-    hasFullAccess,
-    shoppingMarket.ready,
-    categoriesKey,
-    categories?.key,
-    filters,
-  ]);
-  const categoriesRead = categories?.key === categoriesKey ? categories.rows : undefined;
-
-  // Orders from AI visits, the last 30 days whatever the filters (ECOM-006),
-  // kept by brand: another brand's never show while this one's are read.
-  const ordersRead = useKeyedRead(
-    !!activeBrandId && hasFullAccess,
-    activeBrandId ?? '',
-    () => getShoppingAiOrders(activeBrandId!),
-    'the orders from AI visits',
+    datePreset,
+    hasFullAccess && view === 'readiness' && showOpenAiIndex,
   );
-  // Undefined while they're read, null when they couldn't be.
-  const orders: ShoppingAiOrders | null | undefined = ordersRead === 'failed' ? null : ordersRead;
 
-  // This alert always evaluates five consecutive rolling seven-day windows
-  // ending at query time, independently of display/platform/region filters.
+  // ── Categories (ECOM-008) ──────────────────────────────────────────────────
+  const categoriesRead = useKeyedRead(
+    canRead && view === 'categories',
+    'categories',
+    filterKey,
+    () => getShoppingCategories(activeBrandId!, filters),
+    'the categories',
+  );
+  // Then their last done actions, 7 days on (ECOM-018): a table without them is still the table.
+  const recheckTargets = useMemo(
+    () =>
+      Array.isArray(categoriesRead)
+        ? categoriesRead
+            .slice(0, RECHECK_TARGETS)
+            .map((row) => ({ type: 'category' as const, id: row.id }))
+        : [],
+    [categoriesRead],
+  );
+  const categoryResultsRead = useKeyedRead(
+    canRead && view === 'categories' && recheckTargets.length > 0,
+    'categoryResults',
+    `${activeBrandId}:${recheckTargets.map((target) => target.id).join(',')}`,
+    () => getShoppingActionResults(activeBrandId!, recheckTargets),
+    'the categories’ actions',
+  );
+  const categoryResults =
+    categoryResultsRead && categoryResultsRead !== 'failed' ? categoryResultsRead : undefined;
+
+  // ── Competitors ────────────────────────────────────────────────────────────
+  const summaryRead = useKeyedRead(
+    canRead && view === 'competitors',
+    'competitorSummary',
+    filterKey,
+    () => getCompetitorSummary(activeBrandId!, filters),
+    'the competitor summary',
+  );
+  const competitorRead = useKeyedRead(
+    canRead && view === 'competitors',
+    'competitorProducts',
+    filterKey,
+    () => getCompetitorProducts(activeBrandId!, filters),
+    "the competitors' products",
+  );
+  const competitorSummary = Array.isArray(summaryRead) ? summaryRead : NO_SUMMARIES;
+  const competitorProducts = Array.isArray(competitorRead) ? competitorRead : NO_PRODUCTS;
+
+  // The open view's first figures are on screen: Visibility's other tabs are
+  // prefetched then, not before, so they don't compete with its reads.
+  const viewShown =
+    !hasFullAccess ||
+    (view === 'shelf' && shelf !== null) ||
+    (view === 'categories' && categoriesRead !== undefined) ||
+    (view === 'products' && !productsLoading) ||
+    (view === 'readiness' && sources.loaded && !productsLoading) ||
+    (view === 'competitors' && summaryRead !== undefined);
   useEffect(() => {
-    if (!activeBrandId) {
-      setAmazonShareDropAlert(null);
-      return;
-    }
-    let cancelled = false;
-    getShoppingAmazonShareDropAlert(activeBrandId)
-      .then((alert) => {
-        if (!cancelled) setAmazonShareDropAlert(alert);
-      })
-      .catch(() => {
-        // The alert is supplemental; a query failure must not break Shopping.
-        if (!cancelled) setAmazonShareDropAlert(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeBrandId]);
+    if (viewShown && hasBrand) shown();
+  }, [viewShown, hasBrand, shown]);
 
   if (!activeBrandId) {
-    return (
-      <div className="space-y-6">
-        <PageHeader t={t} onWhy={() => setWhyOpen(true)} />
-        <EmptyState title={t('noBrandTitle')} description={t('noBrandDescription')} />
-      </div>
-    );
+    return <EmptyState title={t('noBrandTitle')} description={t('noBrandDescription')} />;
   }
-
-  const totalCards =
-    (charts?.ownPresenceTrend ?? []).reduce((sum, p) => sum + p.totalCards, 0) +
-    // platformCardRate's data has card-rate built in, so the trend total is
-    // sufficient as a "do we have any data at all?" check.
-    0;
-  const isEmpty = !loading && (kpis?.shoppingCardRateSampleSize ?? 0) === 0 && totalCards === 0;
 
   return (
     <div className="space-y-6">
-      <PageHeader t={t} onWhy={() => setWhyOpen(true)} />
+      {/* "Why Ansvisor Product Visibility?" (ECOM-010), beside Reports in the shared header. */}
+      <TabHeaderActions>
+        <Button variant="outline" className="gap-2" onClick={() => setWhyOpen(true)}>
+          <HelpCircle className="h-4 w-4" aria-hidden />
+          {t('why.button')}
+        </Button>
+      </TabHeaderActions>
       <WhyDialog
         open={whyOpen}
         onOpenChange={setWhyOpen}
         offerGa={offerGa}
         onConnected={sources.reload}
       />
-      <ProductDataStrip
-        sources={sources}
-        domain={primaryDomain}
-        canConnect={canManage}
-        onConnected={sources.reload}
-      />
 
-      {amazonShareDropAlert && (
-        <div
-          role="alert"
-          className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30"
-        >
-          <AlertTriangle
-            className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500"
-            aria-hidden="true"
-          />
-          <p className="text-sm text-amber-900 dark:text-amber-200">
-            {t('amazonShareDropAlert', {
-              from: Math.round(amazonShareDropAlert.fromShare * 100),
-              to: Math.round(amazonShareDropAlert.toShare * 100),
-            })}
-          </p>
-        </div>
-      )}
+      {activeBrand && !activeBrand.shoppingModeEnabled && <ShoppingModeOff brand={activeBrand} />}
 
-      <FilterBar
-        t={t}
-        datePreset={datePreset}
-        setDatePreset={setDatePreset}
-        platform={platform}
-        setPlatform={setPlatform}
-        region={region}
-        setRegion={setRegion}
-        platformOpts={filterOpts.platforms}
-        regionOpts={filterOpts.regions}
-      />
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => changeTab(value as ShoppingTab)}
+        className="space-y-6"
+      >
+        <TabsList aria-label={t('views')}>
+          <TabsTrigger value="shelf">{t('tabShelf')}</TabsTrigger>
+          <TabsTrigger value="categories">
+            {t('tabCategories')}
+            {Array.isArray(categoriesRead) && (
+              <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">
+                {categoriesRead.length}
+              </span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="products">{t('tabProducts')}</TabsTrigger>
+          <TabsTrigger value="readiness">{t('tabReadiness')}</TabsTrigger>
+          <TabsTrigger value="competitors">{t('tabCompetitors')}</TabsTrigger>
+        </TabsList>
 
-      <ShoppingMarketSwitch
-        state={shoppingMarket}
-        onSelect={(market) => {
-          shoppingMarket.select(market);
-          setRegion('all');
-        }}
-      />
+        <FilterBar
+          t={t}
+          datePreset={datePreset}
+          setDatePreset={setDatePreset}
+          platform={platform}
+          setPlatform={setPlatform}
+          region={region}
+          setRegion={setRegion}
+          platformOpts={filterOpts.platforms}
+          regionOpts={filterOpts.regions}
+        />
 
-      {isEmpty ? (
-        <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
-      ) : (
-        <>
-          <Tabs
-            value={activeTab}
-            onValueChange={(value) => changeTab(value as ShoppingTab)}
-            className="space-y-6"
+        <ShoppingMarketSwitch
+          state={shoppingMarket}
+          onSelect={(market) => {
+            shoppingMarket.select(market);
+            setRegion('all');
+          }}
+        />
+
+        <ProductDataStrip
+          sources={sources}
+          domain={primaryDomain}
+          canConnect={canManage}
+          onConnected={sources.reload}
+        />
+
+        {amazonShareDropAlert && (
+          <div
+            role="alert"
+            className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30"
           >
-            <TabsList>
-              <TabsTrigger value="shelf">{t('tabShelf')}</TabsTrigger>
-              <TabsTrigger value="categories">
-                {t('tabCategories')}
-                {Array.isArray(categoriesRead) && (
-                  <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">
-                    {categoriesRead.length}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="products">{t('tabProducts')}</TabsTrigger>
-              <TabsTrigger value="readiness">{t('tabReadiness')}</TabsTrigger>
-              <TabsTrigger value="competitors">{t('tabCompetitors')}</TabsTrigger>
-            </TabsList>
+            <AlertTriangle
+              className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500"
+              aria-hidden="true"
+            />
+            <p className="text-sm text-amber-900 dark:text-amber-200">
+              {t('amazonShareDropAlert', {
+                from: Math.round(amazonShareDropAlert.fromShare * 100),
+                to: Math.round(amazonShareDropAlert.toShare * 100),
+              })}
+            </p>
+          </div>
+        )}
 
+        {isEmpty ? (
+          <EmptyState title={t('emptyTitle')} description={t('emptyDescription')} />
+        ) : (
+          <>
             <TabsContent value="shelf" className="space-y-6">
               {hasFullAccess ? (
                 <>
@@ -514,11 +518,7 @@ export default function ShoppingPage() {
                       platform={platform}
                       onPlatform={setPlatform}
                       products={
-                        catalogTable && catalogTable !== 'failed'
-                          ? catalogTable.rows
-                          : shelfProducts && shelfProducts !== 'failed'
-                            ? shelfProducts.rows
-                            : undefined
+                        catalogTable && catalogTable !== 'failed' ? catalogTable.rows : undefined
                       }
                     />
                   )}
@@ -548,7 +548,7 @@ export default function ShoppingPage() {
                   categories={categoriesRead === 'failed' ? null : (categoriesRead ?? null)}
                   loading={categoriesRead === undefined}
                   failed={categoriesRead === 'failed'}
-                  results={categories?.key === categoriesKey ? categories.results : undefined}
+                  results={categoryResults}
                 />
               ) : (
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
@@ -569,7 +569,7 @@ export default function ShoppingPage() {
                       {t('products.failed')}
                     </p>
                   ) : (
-                    <CatalogNote brandId={activeBrandId} />
+                    <CatalogNote sources={sources.loaded ? sources.catalog : null} />
                   )}
                   <div className="flex items-center justify-between">
                     <h2 className="text-lg font-semibold">{t('tabMyProducts')}</h2>
@@ -618,7 +618,7 @@ export default function ShoppingPage() {
                   <ProductTable
                     t={t}
                     products={ownProducts}
-                    loading={tableLoading}
+                    loading={ownRead === undefined}
                     onRowClick={setSelectedProduct}
                   />
                 </>
@@ -687,7 +687,7 @@ export default function ShoppingPage() {
                   <CompetitorSummaryList
                     t={t}
                     summaries={competitorSummary}
-                    loading={tableLoading}
+                    loading={summaryRead === undefined}
                   />
 
                   <div className="flex items-center justify-between pt-4">
@@ -739,7 +739,7 @@ export default function ShoppingPage() {
                   <ProductTable
                     t={t}
                     products={competitorProducts}
-                    loading={tableLoading}
+                    loading={competitorRead === undefined}
                     onRowClick={setSelectedProduct}
                     showCompetitorName
                   />
@@ -748,55 +748,22 @@ export default function ShoppingPage() {
                 <UpgradeCard t={t} requiredPlan={requiredPlanFor('shopping_analytics')} />
               )}
             </TabsContent>
-          </Tabs>
+          </>
+        )}
+      </Tabs>
 
-          {hasFullAccess && (
-            <ProductAppearancesDrawer
-              t={t}
-              brandId={activeBrandId}
-              filters={filters}
-              product={selectedProduct}
-              onOpenChange={(open) => {
-                if (!open) setSelectedProduct(null);
-              }}
-            />
-          )}
-        </>
+      {hasFullAccess && (
+        <ProductAppearancesDrawer
+          t={t}
+          brandId={activeBrandId}
+          filters={filters}
+          product={selectedProduct}
+          onOpenChange={(open) => {
+            if (!open) setSelectedProduct(null);
+          }}
+        />
       )}
     </div>
-  );
-}
-
-// ── Header ────────────────────────────────────────────────────────────────────
-
-/** The title, with "Why Ansvisor Product Visibility?" beside it (ECOM-010). */
-function PageHeader({
-  t,
-  onWhy,
-}: {
-  t: ReturnType<typeof useTranslations<'shopping'>>;
-  onWhy: () => void;
-}) {
-  return (
-    <HeaderWithAiUsage>
-      <div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <ShoppingBag className="h-6 w-6 text-primary" />
-            {t('title')}
-          </h1>
-          <button
-            type="button"
-            onClick={onWhy}
-            className="inline-flex h-7 items-center gap-1.5 rounded-full border bg-card px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <HelpCircle className="h-3.5 w-3.5" aria-hidden />
-            {t('why.button')}
-          </button>
-        </div>
-        <p className="mt-1 text-sm text-muted-foreground">{t('description')}</p>
-      </div>
-    </HeaderWithAiUsage>
   );
 }
 

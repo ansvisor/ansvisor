@@ -1,6 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { ShoppingBag } from 'lucide-react';
+import { dashboardNav } from '@/config/dashboard';
 import {
   ALWAYS_ON_SECTION,
   CHAT_AGENTIC_SECTIONS,
@@ -11,6 +13,7 @@ import {
   hiddenMenuSections,
   hiddenWithWorkAreas,
   menuOfProfile,
+  menuSectionEntries,
   menuSectionOf,
   menuSectionsFor,
   readRoleHidden,
@@ -46,17 +49,26 @@ describe('MENU_SECTIONS', () => {
     );
   });
 
-  // Brand Visibility gathered Mentions and Citations as its tabs; each keeps
-  // its section, so menus set before (and the work areas naming them) stand.
-  it('keeps Mentions and Citations as sections of their own, right after Brand Visibility', () => {
+  // Brand Visibility gathered Mentions, Citations and Product Visibility as
+  // its tabs; each keeps its section, so menus set before (and the work areas
+  // naming them) stand.
+  it('keeps Mentions, Citations and Product Visibility as sections of their own, right after Brand Visibility', () => {
     const at = MENU_SECTIONS.indexOf('insights');
-    expect(MENU_SECTIONS.slice(at, at + 4)).toEqual([
+    expect(MENU_SECTIONS.slice(at, at + 5)).toEqual([
       'insights',
       'mentions',
       'citations',
+      'shopping',
       'prompts',
     ]);
     expect(cleanMenuSections(['citations', 'mentions'])).toEqual(['mentions', 'citations']);
+    // Product Visibility keeps its name and icon where the sections are listed,
+    // though the menu calls it Products.
+    expect(
+      menuSectionEntries(dashboardNav.flatMap((group) => group.items)).find(
+        (entry) => entry.section === 'shopping',
+      ),
+    ).toEqual({ section: 'shopping', title: 'Product Visibility', icon: ShoppingBag });
     expect(hidden({ roleHidden: ['mentions'] })).toEqual(['mentions']);
   });
 
@@ -218,8 +230,8 @@ describe('hiddenWithWorkAreas', () => {
       'content',
       'audit',
       'mentions',
-      'prompts',
       'shopping',
+      'prompts',
       'traffic',
     ]);
     expect(hiddenWithWorkAreas(['mentions'], [])).toEqual(['mentions']);
@@ -238,7 +250,7 @@ describe('menuOfProfile', () => {
 
   it('builds the menu from the profile and the role’s row', () => {
     expect(menuOfProfile(profile, ['citations'])).toEqual({
-      hidden: ['content', 'audit', 'citations', 'prompts', 'shopping', 'traffic'],
+      hidden: ['content', 'audit', 'citations', 'shopping', 'prompts', 'traffic'],
       hiddenByAdmin: ['citations'],
       workAreas: ['brand'],
       workAreasAsked: false,
