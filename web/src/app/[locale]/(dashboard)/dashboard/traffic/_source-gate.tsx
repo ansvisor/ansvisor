@@ -15,7 +15,7 @@ import {
   sectionsNeeding,
   sourceHost,
 } from '@/lib/traffic-sources';
-import { MetricCard } from '../insights/_kpi-cards';
+import { MetricCard } from '../(brand-visibility)/insights/_kpi-cards';
 
 /**
  * What a section that needs Google Analytics or Google Search Console shows

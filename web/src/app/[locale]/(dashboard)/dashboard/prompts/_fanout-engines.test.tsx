@@ -6,6 +6,21 @@ import messages from '../../../../../../messages/en.json';
 import type { FanoutEngineCoverage } from '@/lib/actions/fanout';
 import { FanoutEngineNotices, FanoutEngineStrip, isSilentEngine } from './_fanout-engines';
 
+// No engine tracked today always shares its searches: Copilot and Perplexity
+// did until Ansvisor stopped tracking them on 2026-11-06
+// (config/fanout-platforms.ts). The silent-engine view stays for the next
+// one, so the two stand in for it here.
+vi.mock('@/config/fanout-platforms', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/config/fanout-platforms')>();
+  const sharing = ['copilot-web', 'perplexity-web'];
+  return {
+    ...actual,
+    FANOUT_SHARING_PLATFORMS: sharing,
+    fanoutSharing: (platform: string) =>
+      sharing.includes(platform) ? 'shares' : actual.fanoutSharing(platform),
+  };
+});
+
 (
   globalThis as typeof globalThis & {
     IS_REACT_ACT_ENVIRONMENT: boolean;

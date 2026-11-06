@@ -87,6 +87,15 @@ vi.mock('sonner', () => ({
   toast,
 }));
 
+// The brand's first tracking run: none going unless a test says so, and whether the page asked.
+const firstRun = vi.hoisted(() => ({ run: null as unknown, asked: [] as boolean[] }));
+vi.mock('@/hooks/use-first-run', () => ({
+  useFirstRun: ({ enabled }: { enabled: boolean }) => {
+    firstRun.asked.push(enabled);
+    return enabled ? firstRun.run : null;
+  },
+}));
+
 const { default: ContentPage } = await import('./page');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -147,6 +156,8 @@ const rowItem = async (item: string) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  firstRun.run = null;
+  firstRun.asked = [];
   viewer.canManage = true;
   opened.newOpportunities = false;
   opened.newContent = false;
@@ -414,5 +425,42 @@ describe('A "+ New" request for one prompt', () => {
       description:
         '10 needs already have one. Add prompts for new needs, or use Another angle on an opportunity.',
     });
+  });
+});
+
+describe('Content Opportunities while the first tracking run goes on', () => {
+  beforeEach(() => {
+    content.getOpportunities.mockResolvedValue({
+      opportunities: [],
+      total: 0,
+      aggregates: { avgScore: 0, highImpactCount: 0, sentCount: 0, signalCount: 0 },
+    });
+  });
+
+  it('says the first results are on their way in place of "No content opportunities yet"', async () => {
+    firstRun.run = {
+      brandId: 'b1',
+      queued: false,
+      progress: { current: 6, total: 24 },
+      left: { minutes: 9 },
+    };
+    await render(false);
+    expect(container.textContent).toContain('Your first answers are arriving (6 of 24) · ~9 min.');
+    expect(container.textContent).not.toContain('No content opportunities yet');
+  });
+
+  it('keeps its own empty state once the first run is done, and reads it only for the empty list', async () => {
+    await render(false);
+    expect(container.textContent).toContain('No content opportunities yet');
+    content.getOpportunities.mockResolvedValue({
+      opportunities: [OPPORTUNITY],
+      total: 1,
+      aggregates: { avgScore: 74, highImpactCount: 1, sentCount: 0, signalCount: 0 },
+    });
+    firstRun.asked = [];
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render(false);
+    expect(firstRun.asked.at(-1)).toBe(false);
   });
 });

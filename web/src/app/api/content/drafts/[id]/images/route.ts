@@ -70,7 +70,7 @@ export async function POST(req: Request, { params }: Params) {
         ? 429
         : made.code === 'refused'
           ? 422
-          : made.code === 'own_key' || made.code === 'provider_off'
+          : made.code === 'own_key' || made.code === 'provider_off' || made.code === 'storage_full'
             ? 409
             : made.code === 'not_saved'
               ? 502

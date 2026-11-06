@@ -4,14 +4,14 @@ route: /dashboard/insights
 keywords: [AI Visibility Score, visibility formula, mention rate, citation rate, position, score calculation, formulas]
 synonyms: [how is visibility calculated, score weights, what makes up my score, visibility math, how the score works]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/concepts/visibility-scoring.mdx, docs/guides/answer-engine-insights.mdx, docs/guides/competitors.mdx]
 ---
-The **AI Visibility Score** is a score from 0 to 100, not a percentage. It blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named. A score of 0 means no answer names or cites you; the closer every answer comes to naming you first and citing you, the closer the score gets to 100. **Formulas** on **Brand Visibility** shows the exact formula.
+The **AI Visibility Score** is a score from 0 to 100, not a percentage. It blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named. A score of 0 means no answer names or cites you; the closer every answer comes to naming you first and citing you, the closer the score gets to 100. **Formulas** on the **Visibility** page shows the exact formula.
 
 ## The three parts
 
@@ -42,9 +42,9 @@ The change shown beside a score, in green or red, compares your date range with 
 
 ## Where you see the score
 
-- **Brand Visibility**: the brand's score, its trend and the change vs the previous period.
+- The **Visibility** page: the brand's score, its trend and the change vs the previous period.
 - **Tracked Prompts** under **Prompts**: each prompt's score.
-- **Topics** under **Prompts**: each topic's score, and **Topics vs competitors** on Brand Visibility.
+- **Topics** under **Prompts**: each topic's score, and **Topics vs competitors** on the Visibility page.
 - **Competitors**: each tracked competitor's score beside yours.
 
 ## What moves your score

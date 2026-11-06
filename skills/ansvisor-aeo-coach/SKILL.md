@@ -162,12 +162,12 @@ timestamps (`date_from` / `date_to`).
 
 **Mentions & sentiment**
 
-These take the Mentions page's filters: `date_from` / `date_to` (the
+These take the filters of Visibility's Mentions tab: `date_from` / `date_to` (the
 last 30 days when left out), `platform` (e.g. `gemini-web`), `region`,
 `topic_id` and `search` over the prompts' text. They read the stored
 answers; no LLM is called.
 
-- **`get_mentions_summary`** — the Overview: `current` and `previous`
+- **`get_mentions_summary`** — the Mentions tab's Summary view: `current` and `previous`
   times named, mentions, mention rate, prompts with mentions, average
   position and `sentiment` (counts, shares, `net`, `lowSample`);
   `changes` with their `basis`; the
