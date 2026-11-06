@@ -23,11 +23,16 @@ export function PlaySection({ play, children }: { play: ActionPlay; children?: R
         {play.reasons.map((reason, i) => (
           <p key={i} className="text-xs text-muted-foreground">
             {reason.kind === 'category'
-              ? t('categoryReason', {
-                  category: reason.category,
-                  page: pagePath(reason.page),
-                  inStock: reason.inStock,
-                })
+              ? reason.page
+                ? t('categoryReason', {
+                    category: reason.category,
+                    page: pagePath(reason.page),
+                    inStock: reason.inStock,
+                  })
+                : t('buyingGuideReason', {
+                    category: reason.category,
+                    inStock: reason.inStock,
+                  })
               : t('reason', {
                   play: play.id,
                   prompts: reason.prompts,

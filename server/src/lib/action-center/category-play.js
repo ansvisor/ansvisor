@@ -16,10 +16,16 @@ import { PRODUCTS_FOR } from '../shopping-path.js';
  * person's); a category's page is category-pages.js's (matched, or a
  * person's). The first of the topics' categories with a page and a product
  * in stock is the one.
+ *
+ * A topic whose categories have products in stock but no live page writes
+ * a buying guide for it instead (EC-1, spec §6.2): a new page, its shopping
+ * path starting with the category's best sellers.
  */
 
 /** The page type a category page is written as (content-page-types.js). */
 export const CATEGORY_PAGE_TYPE = 'category_page';
+/** The page a topic writes when its category has no page (EC-1). */
+export const BUYING_GUIDE_TYPE = 'buying_guide';
 /** Best sellers read at most, to keep the ones in stock. */
 const CANDIDATES = 40;
 /** Days of AI visits and orders the best sellers are ranked by. */
@@ -28,25 +34,31 @@ const DAY_MS = 86_400_000;
 
 /**
  * The category whose page the action optimizes: the first, in the topics'
- * order then each topic's own, with a page and a product in stock. Null for
- * none.
+ * order then each topic's own, with a page and a product in stock. Else the
+ * first with a product in stock and no page (`url` null), for a buying
+ * guide. Null for none.
  *
  * @param {{ topicIds: string[], topics: { id: string, categories: { id: string,
  *   name: string }[] }[], pages: { name: string, inStock: number,
  *   page: { url: string } | null }[] }} input
  */
 export function pickCategoryPage({ topicIds = [], topics = [], pages = [] }) {
-  const pageOf = new Map(pages.filter((p) => p.page?.url).map((p) => [p.name, p]));
-  for (const topicId of topicIds) {
-    const topic = topics.find((t) => t.id === topicId);
-    for (const category of topic?.categories ?? []) {
-      const page = pageOf.get(category.name);
-      if (page && page.inStock > 0) {
-        return { id: category.id, name: category.name, url: page.page.url, inStock: page.inStock };
-      }
-    }
-  }
-  return null;
+  const byName = new Map(pages.map((p) => [p.name, p]));
+  const linked = topicIds.flatMap(
+    (topicId) => topics.find((t) => t.id === topicId)?.categories ?? [],
+  );
+  const stocked = linked
+    .map((category) => ({ category, row: byName.get(category.name) }))
+    .filter(({ row }) => row && row.inStock > 0);
+  const live = stocked.find(({ row }) => row.page?.url);
+  const pick = live ?? stocked[0];
+  if (!pick) return null;
+  return {
+    id: pick.category.id,
+    name: pick.category.name,
+    url: pick.row.page?.url ?? null,
+    inStock: pick.row.inStock,
+  };
 }
 
 /**
@@ -116,8 +128,9 @@ export async function categoryBestSellers(
 }
 
 /**
- * The category page for a store's topic action, and its best sellers: null
- * when none of its topics' categories has a page with a product in stock.
+ * The category for a store's topic action, and its best sellers, as many
+ * as its page links (a category page's, or a buying guide's when it has
+ * no page): null when none of its topics' categories has a product in stock.
  */
 export async function categoryPageFor(
   brandId,
@@ -131,6 +144,10 @@ export async function categoryPageFor(
   ]);
   const category = pickCategoryPage({ topicIds, topics: links.topics, pages });
   if (!category) return null;
-  const products = await categoryBestSellers(brandId, category.id, { db, now });
+  const products = await categoryBestSellers(brandId, category.id, {
+    db,
+    now,
+    max: PRODUCTS_FOR[category.url ? CATEGORY_PAGE_TYPE : BUYING_GUIDE_TYPE],
+  });
   return { category, products };
 }

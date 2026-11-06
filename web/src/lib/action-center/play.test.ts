@@ -37,7 +37,14 @@ describe('actionPlay', () => {
   });
 
   it("names the server's plays, and a store's category page (AC plan P-7)", () => {
-    expect(PLAY_IDS).toEqual(['comparison', 'best_of', 'guide', 'definition', 'category_page']);
+    expect(PLAY_IDS).toEqual([
+      'comparison',
+      'best_of',
+      'guide',
+      'definition',
+      'category_page',
+      'buying_guide',
+    ]);
   });
 
   it('reads a category page play’s reason: the category, its page and its products in stock', () => {
@@ -54,7 +61,10 @@ describe('actionPlay', () => {
             page: 'https://shop.example/c/coffee',
             inStock: 30,
           },
+          // Not a whole address: left out.
           { kind: 'category', category: 'Gifts', page: '/c/gifts', inStock: 2 },
+          // No page: a buying guide's reason (EC-1).
+          { kind: 'category', category: 'Mugs', page: null, inStock: 3 },
         ],
       },
     });
@@ -67,6 +77,7 @@ describe('actionPlay', () => {
           page: 'https://shop.example/c/coffee',
           inStock: 30,
         },
+        { kind: 'category', category: 'Mugs', page: null, inStock: 3 },
       ],
     });
   });

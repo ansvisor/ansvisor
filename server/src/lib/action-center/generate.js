@@ -160,8 +160,10 @@ function topicIdsOf(payload) {
  * and AI searches read, then chosen. On a store, a topic action whose topic
  * has a live category page optimizes that page instead (AC plan P-7,
  * category-play.js): its page, its best sellers locked into the draft's
- * shopping path, and the optimize branch of its plan. Best effort: a failed
- * read, or no play the data supports, opens the action without one.
+ * shopping path, and the optimize branch of its plan; one whose category
+ * has products but no page writes a buying guide (EC-1), its best sellers
+ * locked in. Best effort: a failed read, or no play the data supports,
+ * opens the action without one.
  */
 async function playedPayload(brandId, definitionId, payload) {
   if (!PLAY_DEFINITIONS.includes(definitionId) || payload.play) return payload;
@@ -190,12 +192,20 @@ async function playedPayload(brandId, definitionId, payload) {
     }));
     if (siteType === 'ecommerce' && topicIds.length) {
       const found = await categoryPageFor(brandId, topicIds);
-      if (found) {
+      // Its page optimized, or a buying guide written when it has none (EC-1).
+      if (found?.category.url) {
         return {
           ...payload,
           play: categoryPagePlay({ siteType, category: found.category, prompts }),
           contentExists: true,
           pages: [found.category.url],
+          products: found.products,
+        };
+      }
+      if (found) {
+        return {
+          ...payload,
+          play: categoryPagePlay({ siteType, category: found.category, prompts }),
           products: found.products,
         };
       }

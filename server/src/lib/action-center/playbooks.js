@@ -86,7 +86,20 @@ export const CATEGORY_PAGE_PLAY = Object.freeze({
   assetType: 'category_page',
 });
 
-const PLAY_IDS = new Set([...PLAYS.map((play) => play.id), CATEGORY_PAGE_PLAY.id]);
+/**
+ * A store's topic whose category has no live page (EC-1, AC plan P-7): a
+ * buying guide for the topic, linking the category's best sellers.
+ */
+export const BUYING_GUIDE_PLAY = Object.freeze({
+  id: 'buying_guide',
+  assetType: 'buying_guide',
+});
+
+const PLAY_IDS = new Set([
+  ...PLAYS.map((play) => play.id),
+  CATEGORY_PAGE_PLAY.id,
+  BUYING_GUIDE_PLAY.id,
+]);
 
 /** Whether a play id is one the chooser picks (the drawer names only those). */
 export function isPlayId(id) {
@@ -150,18 +163,20 @@ export function rankPlays(prompts) {
 }
 
 /**
- * The category page play for a store's topic action (above), as the
- * payload keeps it: the category and its page as the reason, and the plays
+ * The catalog's play for a store's topic action (above), as the payload
+ * keeps it: its category page, or a buying guide when the category has no
+ * page (`url` null); the category and its page as the reason, and the plays
  * its prompts qualify for as the ones also worth doing.
  *
- * @param {{ siteType: string, category: { name: string, url: string, inStock: number },
+ * @param {{ siteType: string, category: { name: string, url: string|null, inStock: number },
  *   prompts: Array<{ id: string, intent: string|null, volume: number|null }> }} input
  */
 export function categoryPagePlay({ siteType, category, prompts = [] }) {
+  const play = category.url ? CATEGORY_PAGE_PLAY : BUYING_GUIDE_PLAY;
   return {
     version: PLAY_VERSION,
-    id: CATEGORY_PAGE_PLAY.id,
-    assetType: CATEGORY_PAGE_PLAY.assetType,
+    id: play.id,
+    assetType: play.assetType,
     siteType,
     reasons: [
       {
