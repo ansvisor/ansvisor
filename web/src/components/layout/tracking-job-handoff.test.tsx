@@ -61,11 +61,13 @@ describe('TrackingJobHandoff', () => {
     expect(window.location.search).toBe('?jobId=j1&x=1');
   });
 
-  it('leaves Visibility, which reads the id itself, alone', async () => {
-    nav.pathname = '/dashboard/insights';
-    await render();
-    expect(saveTrackingJob).not.toHaveBeenCalled();
-    expect(window.location.search).toBe('?jobId=j1&x=1');
+  it('leaves Brand Visibility, whose header reads the id itself on each tab, alone', async () => {
+    for (const pathname of ['/dashboard/insights', '/dashboard/mentions', '/dashboard/citations']) {
+      nav.pathname = pathname;
+      await render();
+      expect(saveTrackingJob, pathname).not.toHaveBeenCalled();
+      expect(window.location.search).toBe('?jobId=j1&x=1');
+    }
   });
 
   it('does nothing without an id', async () => {

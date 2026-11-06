@@ -8774,6 +8774,10 @@ export type Database = {
         }
         Returns: Json
       }
+      content_images_bytes: {
+        Args: { p_organization_id: string }
+        Returns: number
+      }
       content_opportunity_aggregates: {
         Args: {
           p_brand_id: string

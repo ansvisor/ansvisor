@@ -1,34 +1,15 @@
 // @vitest-environment node
-import { existsSync, readdirSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { hrefWithFilters, routeById, routeRegistry, routeRequest } from './routes';
+import { pageExists } from '@/lib/app-pages';
 
 /** Chat's "Go to a page" (CHAT-19 §2, W1-28): the route registry and the rules-based router. */
-
-const APP = path.resolve(__dirname, '../../app/[locale]/(dashboard)');
-
-/** The app's page for a route: a folder per segment, or a [param] folder for any. */
-function pageExists(route: string): boolean {
-  let dirs = [APP];
-  for (const segment of route.split('/').filter(Boolean)) {
-    dirs = dirs.flatMap((dir) => {
-      if (!existsSync(dir)) return [];
-      const params = readdirSync(dir)
-        .filter((entry) => /^\[[^.\]]+\]$/.test(entry))
-        .map((entry) => path.join(dir, entry));
-      const named = path.join(dir, segment);
-      return [...(existsSync(named) ? [named] : []), ...params];
-    });
-  }
-  return dirs.some((dir) => existsSync(path.join(dir, 'page.tsx')));
-}
 
 describe('routeRegistry', () => {
   const routes = routeRegistry({ cloud: true });
 
   it('comes from the live sidebar and Settings, named as the sidebar names them', () => {
-    expect(routeById('insights')).toMatchObject({ name: 'Brand Visibility', section: null });
+    expect(routeById('insights')).toMatchObject({ name: 'Visibility', section: null });
     expect(routeById('/dashboard/prompts/tracked')).toMatchObject({
       name: 'Tracked Prompts',
       section: 'Prompts',
@@ -53,6 +34,29 @@ describe('routeRegistry', () => {
       section: null,
       requiredFeature: 'ai_agent',
     });
+  });
+
+  // Visibility's tabs (the owner's mockup): "Go to a page" and
+  // open_page name Mentions and Citations under it, at their tabs' routes.
+  it('names Visibility’s Mentions and Citations tabs under it', () => {
+    expect(routeById('mentions')).toMatchObject({
+      href: '/dashboard/mentions',
+      name: 'Mentions',
+      section: 'Visibility',
+    });
+    expect(routeById('citations')).toMatchObject({
+      href: '/dashboard/citations',
+      name: 'Citations',
+      section: 'Visibility',
+    });
+    // The Overview is the group's own address: listed once, as Visibility.
+    expect(routes.filter((r) => r.href === '/dashboard/insights')).toHaveLength(1);
+    expect(routeRequest('open visibility mentions', routes)?.route.href).toBe(
+      '/dashboard/mentions',
+    );
+    // Its name until 2026-11-06 still opens it.
+    expect(routeRequest('open brand visibility', routes)?.route.href).toBe('/dashboard/insights');
+    expect(routeRequest('open citations', routes)?.route.href).toBe('/dashboard/citations');
   });
 
   it('lists only the Settings sections this install shows: a self-hosted one has no Billing or AI Providers', () => {
@@ -136,7 +140,7 @@ describe('routeRequest', () => {
     expect(routeRequest('open plan', routeRegistry({ cloud: false }))?.route.id).toBe(
       'content/plan',
     );
-    // Brand Visibility's address, or Prompts › Insights.
+    // Visibility's address, or Prompts › Insights.
     expect(to('open insights')).toBeNull();
   });
 

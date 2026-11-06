@@ -23,9 +23,9 @@ import {
   scraperTasksFor,
   shoppingTracked,
   tailRemainder,
-  UNAVAILABLE_PLATFORMS,
 } from './tracking-worker.js';
 import { getPlan, PLANS } from '../config/plans.js';
+import { UNAVAILABLE_PLATFORMS } from '../lib/cloro-scraper.js';
 import { chatgptFanoutWeekday } from '../lib/chatgpt-fanout.js';
 
 /**

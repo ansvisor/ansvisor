@@ -4,8 +4,8 @@ route: /dashboard/insights
 keywords: [visibility score, position, mentions, citations, coverage, share of voice, citation rate, net sentiment, performance]
 synonyms: [metrics explained, what is visibility, ranking in AI answers, why is my score zero, what is coverage, what is share of voice]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,7 +15,7 @@ Ansvisor describes how AI answers treat your brand with a few metrics: visibilit
 
 ## Read your visibility score
 
-Visibility is a score from 0 to 100, not a percentage. It blends how often AI answers mention your brand, how often they cite your site and how early they name you; **Formulas** on **Brand Visibility** shows the exact formula. A rough guide, not bands the app shows:
+Visibility is a score from 0 to 100, not a percentage. It blends how often AI answers mention your brand, how often they cite your site and how early they name you; **Formulas** on the **Visibility** page shows the exact formula. A rough guide, not bands the app shows:
 
 - **Under 15**: cold start. AI engines barely know the brand on these prompts.
 - **15 to 35**: emerging presence. AI sometimes mentions you, but competitors dominate.
@@ -36,7 +36,7 @@ A score of 0 doesn't mean something is broken. New, niche or B2B brands often st
 
 ## Coverage, share of voice and the other rates
 
-The key metric cards on **Brand Visibility** also show:
+The key metric cards on the **Visibility** page also show:
 
 - **Coverage**: the share of answered prompts where you appear at least once.
 - **Share of voice**: your mentions out of all mentions of tracked brands.
@@ -61,7 +61,7 @@ A prompt with no answers in the range, such as a new one, has no performance yet
 
 A mention is each time an AI answer names your brand or your domain; one answer can add several. The **Mentions** card counts them. Mention detection ignores upper and lower case, so name the brand exactly as it's named in the wild, not by an abbreviation.
 
-A citation is a source page that comes with an AI answer. The **Citations** card counts how often answers cited your pages, and the **Citations** page shows which domains and pages AI engines cite for your prompts.
+A citation is a source page that comes with an AI answer. The **Citations** card counts how often answers cited your pages, and the **Citations** tab of the **Visibility** page shows which domains and pages AI engines cite for your prompts.
 
 ## Prompts that skew your metrics
 

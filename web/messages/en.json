@@ -521,7 +521,7 @@
     "chatSetUp": "Set up",
     "agentCenter": "Agent Center",
     "actionCenter": "Action Center",
-    "insights": "Brand Visibility",
+    "insights": "Visibility",
     "traffic": "AI Referral Traffic",
     "prompts": "Prompts",
     "content": "Content",
@@ -555,6 +555,37 @@
     "expandRail": "Expand the Ansvisor menu",
     "collapseRail": "Collapse the Ansvisor menu",
     "railTip": "Ansvisor · hover or click to expand"
+  },
+  "brandVisibility": {
+    "title": "Visibility",
+    "loading": "Loading…",
+    "tabs": {
+      "label": "Visibility",
+      "overview": "Overview",
+      "mentions": "Mentions",
+      "citations": "Citations"
+    },
+    "pageName": {
+      "mentions": "Visibility · Mentions",
+      "citations": "Visibility · Citations"
+    },
+    "actions": {
+      "reports": "Reports",
+      "testSinglePrompt": "Test Single Prompt",
+      "runAll": "Run All"
+    },
+    "readError": {
+      "title": "Couldn't load this data",
+      "body": "The read failed or took too long. Nothing is lost: try again.",
+      "retry": "Retry",
+      "overview": "Couldn't load the overview",
+      "mentions": "Couldn't load the mentions",
+      "citations": "Couldn't load the citations",
+      "competitors": "Couldn't load the competitor comparison",
+      "trend": "Couldn't load the visibility trend",
+      "gaps": "Couldn't load the competitor gaps",
+      "sections": "Some sections couldn't load, so they're left out."
+    }
   },
   "actionCenter": {
     "dismissReason": {
@@ -595,7 +626,7 @@
       "details": "Details",
       "runningBody": "AI assistants are answering your prompts for the first time. Actions, signals and KPIs fill in once it finishes: a few minutes, or an hour or two at busy times. You can leave this page.",
       "queuedBody": "Another analysis is running right now. Yours starts the moment a slot opens, and keeps going in the background.",
-      "link": "Follow it on Brand Visibility"
+      "link": "Follow it on Visibility"
     },
     "pages": {
       "actions": "What should you do now, ranked by your KPI goals.",
@@ -1055,7 +1086,7 @@
           "competitors": "Open Competitors",
           "traffic": "Open Traffic",
           "audit": "Open Site Audit",
-          "insights": "Open Insights"
+          "insights": "Open Visibility"
         }
       }
     },
@@ -2069,17 +2100,17 @@
             "noteFinal": "The 7 days before this action was sent, next to the 7 days ending 30 days after it was completed. A position counts as changed when it moves at least 0.5."
           }
         },
-        "noSignalsTopicGap": "This action was sent from Insights' Topics vs competitors, so it has no detection signals. Its evidence is the topic and scores on the Overview tab.",
+        "noSignalsTopicGap": "This action was sent from Visibility's Topics vs competitors, so it has no detection signals. Its evidence is the topic and scores on the Overview tab.",
         "topicGap": {
           "source": "Source",
-          "sourceValue": "Insights › Topics vs competitors",
+          "sourceValue": "Visibility › Topics vs competitors",
           "openTopic": "Open topic",
           "topic": "Topic",
           "scores": "Visibility when sent",
           "you": "You",
           "gap": "{gap} pts behind"
         },
-        "noSignalsTopicOpportunity": "This action was sent from Insights' Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
+        "noSignalsTopicOpportunity": "This action was sent from Visibility's Opportunities, so it has no detection signals. Its evidence is the topic and suggested prompts on the Overview tab.",
         "noSignalsMentionReview": "This action was sent from Mentions, so it has no detection signals. Its evidence is the answers quoted on the Overview tab.",
         "noSignalsTrafficPages": "This action was sent from AI Traffic Analytics, so it has no detection signals. Its evidence is the pages and figures on the Overview tab.",
         "noSignalsAuditPage": "This action was sent from a Site Audit report, so it has no detection signals. Its evidence is the page and the checks it fails on the Overview tab.",
@@ -2097,7 +2128,7 @@
         },
         "topicOpportunity": {
           "source": "Source",
-          "sourceValue": "Insights › Opportunities",
+          "sourceValue": "Visibility › Opportunities",
           "topic": "Topic",
           "openTopic": "Open topic",
           "plan": "Plan",
@@ -2139,7 +2170,7 @@
         },
         "mentionReview": {
           "source": "Source",
-          "sourceValue": "Mentions & Sentiment › Mentions",
+          "sourceValue": "Visibility › Mentions",
           "openMentions": "Open Mentions",
           "answers": "Answers when sent",
           "answersValue": "{count, plural, one {# answer naming your brand} other {# answers naming your brand}}",
@@ -2326,16 +2357,12 @@
           ]
         },
         "visibility": {
-          "title": "See where you stand in Brand Visibility",
+          "title": "See where you stand in Visibility",
           "summary": "Your share of AI answers vs competitors.",
-          "open": "Open Brand Visibility",
+          "open": "Open Visibility",
           "doneWhen": "Page opened",
           "why": ["Your share of AI answers vs competitors.", "The starting point for every goal."],
-          "how": [
-            "Open Brand Visibility",
-            "Check your rank and the leader",
-            "Note your weakest platform"
-          ]
+          "how": ["Open Visibility", "Check your rank and the leader", "Note your weakest platform"]
         },
         "answers": {
           "title": "Read your first AI answers",
@@ -2881,13 +2908,13 @@
       "topic_competitor_gap": {
         "title": "Close the {gap}-pt gap with {competitor} in {topic}",
         "titleGeneric": "Close a topic gap with a competitor",
-        "description": "Sent from Insights: a competitor leads one of your topics on Visibility.",
+        "description": "Sent from Visibility: a competitor leads one of your topics on the Visibility score.",
         "goal": "Lead the topic, or close most of the gap."
       },
       "topic_opportunity": {
         "title": "Capture {demand}/mo of estimated AI demand in {topic}",
         "titleGeneric": "Capture the AI demand in a topic",
-        "description": "Sent from Insights: prompts suggested for one of your topics, with the monthly AI demand behind them.",
+        "description": "Sent from Visibility: prompts suggested for one of your topics, with the monthly AI demand behind them.",
         "goal": "Get the brand into AI answers for the topic's suggested prompts."
       },
       "mention_review": {
@@ -3535,7 +3562,7 @@
     "fanoutGaps": { "name": "Read fan-out gaps", "step": "Read fan-out gaps" },
     "aiAnswers": { "name": "Read a prompt's AI answers", "step": "Read AI answers" },
     "promptInsights": { "name": "Read prompt insights", "step": "Read Prompts · Insights" },
-    "overviewSummary": { "name": "Read the brand overview", "step": "Read Brand Visibility" },
+    "overviewSummary": { "name": "Read the brand overview", "step": "Read Visibility" },
     "actionCenterKpis": { "name": "Read Action Center KPIs", "step": "Read KPIs" },
     "onboardingProgress": {
       "name": "Read Getting started progress",
@@ -4382,12 +4409,13 @@
       "sent": "Sent: {text}",
       "steered": "Stopped the run and sent: {text}",
       "stopped": "Stopped · done steps stay",
-      "homeGhost": "Why did our Perplexity citations drop this week?",
+      "homeGhost": "Why did our Gemini citations drop this week?",
       "dockGhost": "Start task 2: comparison page",
-      "panelGhost": "Show which pages Perplexity cites most"
+      "panelGhost": "Show which pages Gemini cites most"
     },
     "mode": {
       "label": "Run mode",
+      "current": "Run mode: {mode}",
       "ask_first": "Ask me first",
       "auto": "Auto, ask before changes",
       "full_auto": "Full auto",
@@ -4594,7 +4622,7 @@
     "zipFailed": "Couldn't download the files. Try again.",
     "storage": "Storage {used} of {limit} GB",
     "storageNoLimit": "Storage {used} GB",
-    "storageTip": "Files are kept for 1 year",
+    "storageTip": "Counts Chat's files and the Content Editor's images. Files are kept for 1 year.",
     "storageFull": "Storage is full. New work still shows in its chat, but isn't saved to Files.",
     "storageFullGetMore": "Storage is full. Get more storage to keep filing new work.",
     "getMoreStorage": "Get more storage",
@@ -7137,7 +7165,7 @@
       "filters": {
         "all": "All",
         "content": "Content",
-        "visibility": "Brand Visibility",
+        "visibility": "Visibility",
         "product": "Product Visibility",
         "technical": "Technical",
         "reports": "Reports"
@@ -8071,7 +8099,7 @@
       "eyebrow": "AI visibility platform",
       "titleLead": "Improve AI Visibility and",
       "titleAccent": "Drive Growth.",
-      "subtitle": "Track your brand's presence across ChatGPT, Google AI, Perplexity and more.",
+      "subtitle": "Track your brand's presence across ChatGPT, Gemini, Google AI and more.",
       "features": {
         "monitor": {
           "title": "Monitor brand mentions and citations",
@@ -8125,8 +8153,6 @@
       "failed": "Job failed: {reason}",
       "unknownError": "Unknown error"
     },
-    "title": "Answer Engine Insights",
-    "description": "Monitor how your brand is represented in AI-generated answers.",
     "runPrompts": "Run Prompts",
     "runPromptsNow": "Run Prompts Now",
     "promptResults": "Prompt Results",
@@ -8180,7 +8206,7 @@
       "citationsTip": "Times answers cited your pages. The change is against the previous period.",
       "vsPrevious": "vs previous period",
       "netSentiment": "Net sentiment",
-      "netSentimentTip": "Positive minus negative share of the answers that name your brand, as on the Mentions page.",
+      "netSentimentTip": "Positive minus negative share of the answers that name your brand, as on the Mentions tab.",
       "sentimentSplit": "{positive} pos · {negative} neg",
       "sampleTip": {
         "all": "{count, plural, one {Based on # answer} other {Based on # answers}} in this period.",
@@ -9549,6 +9575,7 @@
             "ai_limit": "What's left of your monthly AI limit doesn't cover {count} images, so none was made.",
             "refused": "The image model didn't make an image for this description: {why} Try describing it another way.",
             "demo": "The demo brand makes no images. Switch to your brand to generate one.",
+            "storage_full": "Your workspace's storage is full, so the images would have nowhere to go. None was made. Make room or get more storage first.",
             "not_saved": "{count, plural, one {The image was} other {The # images were}} made, and count toward your AI limit, but couldn't be saved. Try again.",
             "failed": "Couldn't generate images. Try again.",
             "upload": "Couldn't add the image. Try again."
@@ -11214,8 +11241,10 @@
         "size": "That image is over 5 MB. Use a smaller one.",
         "plan": "Uploads come with an active plan. Paste the image's address instead.",
         "limit": "That's today's uploads for your workspace. Paste the image's address, or upload again tomorrow.",
+        "storage": "Your workspace's storage is full. Make room or get more storage, or paste the image's address instead.",
         "failed": "Couldn't upload the image. Try again."
-      }
+      },
+      "getMoreStorage": "Get more storage"
     },
     "title": "Content Opportunities",
     "description": "AI-powered content recommendations to improve your visibility in AI-generated answers.",
@@ -12532,6 +12561,7 @@
       "enginesLegend": "Coloured: shared searches for this prompt in the window. Faded: tracked, but shared none.",
       "engineEmptyTitle": "No {engine} searches in the {range}",
       "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
+      "sourceNote": "Copilot and Perplexity are no longer tracked, so these searches come from ChatGPT only, which shares them on some days. There are fewer of them than before.",
       "emptyTitle": "No fan-out captured yet",
       "emptyBody": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
       "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
@@ -12860,11 +12890,9 @@
       "insteadOfUs": "Which competitors get mentioned instead of us?",
       "actions": "Turn this page into actions"
     },
-    "title": "Mentions & Sentiment",
-    "description": "Where AI mentions your brand, how it describes you, why, and what to do about it.",
     "selectBrand": "Select a brand to see its mentions.",
     "tabs": {
-      "label": "Mentions & Sentiment views",
+      "label": "Mentions views",
       "overview": "Overview",
       "mentions": "Mentions",
       "perception": "Perception"
@@ -12882,7 +12910,7 @@
     },
     "overview": {
       "sectionLabel": "Mentions overview",
-      "loadError": "Couldn't load the overview. Try again in a moment.",
+      "loadError": "Couldn't load the overview",
       "unavailable": "Mention figures aren't available yet. They appear once the mentions data has been prepared.",
       "pickDates": "Choose a start or end date to see the overview.",
       "empty": "No tracked responses in this period. Try a longer range or clear the filters.",
@@ -12902,7 +12930,7 @@
       },
       "kpi": {
         "totalMentions": "Total mentions",
-        "totalMentionsTip": "Every time the responses name {brand}: a response naming you three times counts three, as on the Insights page.",
+        "totalMentionsTip": "Every time the responses name {brand}: a response naming you three times counts three, as on the Overview tab.",
         "totalMentionsSub": "times responses named {brand}",
         "mentionRate": "Mention rate",
         "mentionRateTip": "The share of tracked responses that name {brand}.",
@@ -12993,7 +13021,7 @@
       "groupRow": "{label} · {count, plural, one {# mention} other {# mentions}}",
       "openRow": "Open the answer to “{prompt}” on {platform}",
       "empty": "No mentions match these filters. Try another sentiment or co-mention filter, or a longer range.",
-      "loadError": "Couldn't load the mentions. Try again in a moment.",
+      "loadError": "Couldn't load the mentions",
       "unavailable": "The mentions table isn't available yet. It appears once the mentions data has been prepared.",
       "pickDates": "Choose a start or end date to see the mentions."
     },
@@ -13075,7 +13103,6 @@
       "nothing": "No mentions to export for these filters.",
       "capped": "The file holds {shown} of {total} responses. Narrow the filters to export the rest.",
       "pickDates": "Choose a start or end date first.",
-      "reports": "Reports",
       "exportSelected": "Export",
       "facts": {
         "period": "Period",
@@ -13091,7 +13118,7 @@
         "exported": "Exported (UTC)"
       },
       "summary": {
-        "title": "Mentions & Sentiment · {brand}",
+        "title": "Visibility · Mentions · {brand}",
         "search": "Search: “{q}”",
         "kpi": "{label}: {value}",
         "kpiChange": "{label}: {value} ({change})",
@@ -13198,7 +13225,7 @@
       "noStrengths": "No strengths found — competitor leads on all prompts.",
       "noPromptData": "No prompt-level data available. Run a tracking check first.",
       "noDataTitle": "No comparison data",
-      "noDataDescription": "Run a tracking check from the Insights page to generate comparison data for this competitor.",
+      "noDataDescription": "Run a tracking check from Visibility to generate comparison data for this competitor.",
       "loadError": "Failed to load comparison data."
     },
     "timeline": {
@@ -13236,8 +13263,6 @@
     "missingCompetitorWebsite": "Add a website to this brand before asking AI to suggest competitors."
   },
   "citations": {
-    "title": "Citations",
-    "description": "Domains and URLs that AI platforms cite when mentioning you — and your competitors.",
     "kpiTotalCitations": "Total Citations",
     "kpiTotalCitationsSub": "Across {results} tracked results",
     "kpiUniqueDomains": "Unique Domains",
@@ -15546,7 +15571,7 @@
       "citations": "Citations",
       "domainsTracked": "Domains Tracked",
       "manage": "Manage",
-      "viewInsights": "View Insights",
+      "viewInsights": "View Visibility",
       "addTopic": "Add Topics",
       "addPrompt": "Add Prompts"
     },
@@ -15587,14 +15612,14 @@
     "hero": {
       "badge": "Open Source Ansops Platform",
       "title": "Your Brand in Every AI Answer",
-      "subtitle": "Monitor, analyze, and optimize your brand's visibility across ChatGPT, Perplexity, Gemini, Claude, and more.",
+      "subtitle": "Monitor, analyze, and optimize your brand's visibility across ChatGPT, Gemini, Google AI, Claude, and more.",
       "cta": "Get Started for Free",
       "secondaryCta": "View on GitHub"
     },
     "features": {
       "title": "Everything you need for AI visibility",
       "insights": {
-        "title": "Answer Engine Insights",
+        "title": "Visibility",
         "description": "Track your brand mentions and citations across all major AI platforms in real time."
       },
       "content": {

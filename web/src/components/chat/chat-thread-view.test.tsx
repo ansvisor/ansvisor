@@ -187,8 +187,8 @@ describe('ChatThreadView', () => {
   it('starts a chat from Home with the person’s mode and brand, and streams the answer in', async () => {
     await render();
     expect(box().rows).toBe(2);
-    expect(container.querySelector('[role="radio"][aria-checked="true"]')!.textContent).toBe(
-      'Ask me first',
+    expect(container.querySelector('[data-action="composer.openMode"]')!.textContent).toBe(
+      'Ask me first ▾',
     );
     await type('Why did citations drop?');
     await enter();
@@ -1241,12 +1241,19 @@ describe('ChatThreadView', () => {
 
   it('says the Admin, not the plan, closed Full auto for this person', async () => {
     await render({ fullAutoOpen: false, fullAutoOffByAdmin: true });
-    const fullAuto = [...container.querySelectorAll('[role="radio"]')].find((el) =>
+    await act(async () =>
+      container.querySelector<HTMLElement>('[data-action="composer.openMode"]')!.click(),
+    );
+    // The mode's menu opens in a portal, outside the chat.
+    const fullAuto = [...document.querySelectorAll('[role="menuitemradio"]')].find((el) =>
       el.textContent?.startsWith('Full auto'),
     )!;
     expect(fullAuto.getAttribute('aria-disabled')).toBe('true');
     expect(fullAuto.textContent).toContain('Off by Admin');
     expect(fullAuto.textContent).not.toContain('Needs Growth');
+    expect(fullAuto.getAttribute('title')).toBe(
+      'Full auto · Your Admin turned it off for your role in Settings › Chat',
+    );
   });
 
   it('only reads a teammate’s shared chat', async () => {

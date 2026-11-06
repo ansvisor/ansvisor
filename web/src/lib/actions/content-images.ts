@@ -5,6 +5,7 @@ import { isCloud, isSubscriptionActive } from '@/config/plans';
 import { createClient } from '@/lib/supabase/server';
 import {
   IMAGE_UPLOAD_BUCKET,
+  IMAGE_UPLOAD_MAX_BYTES,
   IMAGE_UPLOADS_PER_DAY,
   imageUploadExtension,
 } from '@/lib/content/image-upload-types';
@@ -23,14 +24,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * much, not the bucket's policies: only it knows a managed cloud from a
  * self-host. On the cloud, an organization with an active or trialing
  * subscription (the dashboard's gate), IMAGE_UPLOADS_PER_DAY addresses a
- * day (content_image_uploads); a self-host has no limits. The name is the
- * app's: the organization's folder, a new id and the type's extension. The
- * browser then sends the file itself to the one-time address (no server
- * action's body limit).
+ * day (content_image_uploads), and room in the workspace's storage for the
+ * file's `size` (00490: images count with Chat's files); a self-host has no
+ * limits. The name is the app's: the organization's folder, a new id and
+ * the type's extension. The browser then sends the file itself to the
+ * one-time address (no server action's body limit).
  */
 export async function prepareImageUpload(
   type: string,
-): Promise<ImageUploadTicket | { error: 'type' | 'plan' | 'limit' | 'failed' }> {
+  size?: number,
+): Promise<ImageUploadTicket | { error: 'type' | 'plan' | 'storage' | 'limit' | 'failed' }> {
   const ext = typeof type === 'string' ? imageUploadExtension(type) : null;
   if (!ext) return { error: 'type' };
   const supabase = await createClient();
@@ -58,6 +61,14 @@ export async function prepareImageUpload(
       .eq('id', orgId)
       .maybeSingle();
     if (!isSubscriptionActive(org?.subscription_status)) return { error: 'plan' };
+    // Room for it in the workspace's storage, before it counts toward the day's uploads.
+    // Imported here for the admin client, as below; a storage read that fails lets it go up.
+    const { imageStorageFits } = await import('@/lib/content/image-storage');
+    const bytes =
+      typeof size === 'number' && size > 0 && size <= IMAGE_UPLOAD_MAX_BYTES
+        ? size
+        : IMAGE_UPLOAD_MAX_BYTES;
+    if (!(await imageStorageFits(orgId, bytes))) return { error: 'storage' };
     // Each address given counts, kept before the count: addresses asked for
     // in a loop or at once can't pass the cap, used now or later.
     const uploads = () => supabaseAdmin.from('content_image_uploads');
