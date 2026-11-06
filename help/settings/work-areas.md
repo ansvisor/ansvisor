@@ -4,8 +4,8 @@ route: /dashboard/settings/account
 keywords: [work areas, what do you work on, my menu, hidden sections, sections off your menu, agents for you]
 synonyms: [missing menu item, where is a page, simplify my menu, my role focus]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -33,7 +33,7 @@ Each person can say what they work on or lead. Their left menu then keeps only t
 - when you join from an invitation, on your first sign-in;
 - on a self-hosted install, the first time the admin opens the dashboard.
 
-**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas.
+**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas. It shows when Home has a focus, not on its Default view.
 
 ## Change your work areas
 

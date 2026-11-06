@@ -1158,7 +1158,7 @@
         },
         {
           "heading": "Agents for you",
-          "text": "In your first 14 days in a workspace, once you've answered or skipped **What do you work on?**, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nAdmins and Managers click an agent to open its card in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide the section. It stays hidden on all your devices."
+          "text": "In your first 14 days in a workspace, once you've answered or skipped **What do you work on?**, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nIt shows when Home has a focus, not on the **Default view**. Select **Edit** under the greeting and pick an area to see it.\n\nAdmins and Managers click an agent to open its card in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide the section. It stays hidden on all your devices."
         },
         {
           "heading": "Ask Chat",
@@ -1580,7 +1580,7 @@
         },
         {
           "heading": "The Default view",
-          "text": "On the Default view, Chat Home shows your greeting, one line and the chat box in the middle of the page. The line says how many chats need you, or, when none do, how a competitor's mention rate moved this week. **For you now**, **What's new**, **Start with a question** and **New for you** don't show.\n\nWhen the Default view arrived, everyone started on it, people who had picked areas before too. Your areas are kept: select **Edit** under the greeting and the picker opens with them ticked, so **Continue** brings your focused Home back."
+          "text": "On the Default view, Chat Home shows your greeting, one line and the chat box in the middle of the page. The line says how many chats need you, or, when none do, how a competitor's mention rate moved this week. **For you now**, **What's new**, **Start with a question**, **Agents for you** and **New for you** don't show.\n\nWhen the Default view arrived, everyone started on it, people who had picked areas before too. Your areas are kept: select **Edit** under the greeting and the picker opens with them ticked, so **Continue** brings your focused Home back."
         },
         {
           "heading": "What changes on Chat Home",
@@ -4852,7 +4852,7 @@
         "my role focus"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -4864,7 +4864,7 @@
         },
         {
           "heading": "When you're asked",
-          "text": "**What do you work on?** is asked once:\n\n- when you sign up, after your competitors and before you choose a plan;\n- when you join from an invitation, on your first sign-in;\n- on a self-hosted install, the first time the admin opens the dashboard.\n\n**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas."
+          "text": "**What do you work on?** is asked once:\n\n- when you sign up, after your competitors and before you choose a plan;\n- when you join from an invitation, on your first sign-in;\n- on a self-hosted install, the first time the admin opens the dashboard.\n\n**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas. It shows when Home has a focus, not on its Default view."
         },
         {
           "heading": "Change your work areas",

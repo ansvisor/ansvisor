@@ -332,7 +332,8 @@ function SinceBlock({
  * when citations moved since the person last left Home; then "For you now"
  * (CHAT-08 v2), this week's Action Center tasks one of its chips; for a
  * person new to the workspace, "Agents for you" (AGENTS plan §8, #11)
- * before New for you. The composer follows.
+ * before New for you, off the Default view as the other blocks. The
+ * composer follows.
  */
 export function ChatHomeView({
   firstName,
@@ -582,9 +583,10 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     };
   }, [brandId, focusKey]);
 
-  // Agents for you (AGENTS plan §8, #11): for the open brand, while it is open for the person.
+  // Agents for you (AGENTS plan §8, #11): for the open brand, while it is open for the
+  // person. The Default view (00485) doesn't show it, so it isn't read there.
   useEffect(() => {
-    if (!brandId) return;
+    if (plain || !brandId) return;
     let current = true;
     void readAgentsForYou(brandId)
       .then((result) => {
@@ -602,7 +604,7 @@ export function ChatHome({ firstName }: { firstName: string | null }) {
     return () => {
       current = false;
     };
-  }, [brandId]);
+  }, [plain, brandId]);
 
   useHomeSeen();
 

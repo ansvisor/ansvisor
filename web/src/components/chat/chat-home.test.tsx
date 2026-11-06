@@ -53,6 +53,12 @@ vi.mock('@/lib/analytics', () => analytics);
 const forYou = vi.hoisted(() => ({ read: vi.fn(), dismiss: vi.fn(), request: vi.fn() }));
 vi.mock('@/lib/actions/agents-for-you', () => ({ readAgentsForYou: forYou.read }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: forYou.request }));
+// The person's focus on Chat Home: none (outside the gate) unless a test sets one.
+const homeFocus = vi.hoisted(() => ({ areas: null as FocusArea[] | null }));
+vi.mock('./focus-picker', async (original) => ({
+  ...(await original<typeof import('./focus-picker')>()),
+  useChatFocus: () => (homeFocus.areas ? { focus: homeFocus.areas, edit: () => undefined } : null),
+}));
 vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatFocus: vi.fn(),
   skipChatFocus: vi.fn(),
@@ -117,6 +123,7 @@ beforeEach(() => {
   forYou.read.mockReset().mockResolvedValue({ ok: true, agents: [], canTurnOn: true });
   forYou.dismiss.mockReset().mockResolvedValue({ ok: true });
   forYou.request.mockReset();
+  homeFocus.areas = null;
   analytics.track.mockClear();
 });
 
@@ -867,5 +874,30 @@ describe('Agents for you (AGENTS plan §8, #11)', () => {
     await render(<ChatHome firstName="Alex" />);
     await act(async () => undefined);
     expect(section()).toBeNull();
+  });
+
+  it('stays off the Default view, as Home’s other blocks do, and shows where Home has a focus', async () => {
+    const shown = { agentsForYou: { agents: AGENTS, canTurnOn: true }, onHideAgents: vi.fn() };
+    await render(view({ ...shown, focus: { areas: [], onEdit: () => undefined } }));
+    expect(section()).toBeNull();
+    await render(view({ ...shown, focus: { areas: ['lead'], onEdit: () => undefined } }));
+    expect(cards()).toHaveLength(3);
+  });
+
+  it('is not read on the Default view (00485), and is where Home has a focus', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false })),
+    ) as unknown as typeof fetch;
+    forYou.read.mockResolvedValue({ ok: true, agents: AGENTS, canTurnOn: true });
+    homeFocus.areas = [];
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(forYou.read).not.toHaveBeenCalled();
+    expect(section()).toBeNull();
+    homeFocus.areas = ['lead'];
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(forYou.read).toHaveBeenCalledWith(BRAND);
+    expect(cards()).toHaveLength(3);
   });
 });
