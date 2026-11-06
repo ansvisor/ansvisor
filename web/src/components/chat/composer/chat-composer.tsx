@@ -42,7 +42,7 @@ import {
   matchSkills,
   type PlusItem,
 } from './composer-menus';
-import { ModeSwitch } from './mode-switch';
+import { ModeMenu } from './mode-menu';
 import { ModelMenu, useModelLabel } from './model-menu';
 import { VoiceButton } from './voice-button';
 import { YourKeysDialog } from './your-keys-dialog';
@@ -134,12 +134,14 @@ export function atQuery(text: string, cursor: number): { query: string; start: n
 const refKey = (ref: ChatReference) => `ref:${ref.type}:${ref.id}`;
 
 /**
- * Chat's composer (CHAT-02, mockup compHTML): the box, its toolbar with the
- * run mode and Send, and the line under it. Enter sends, Shift+Enter adds a
+ * Chat's composer (CHAT-02, mockup compHTML): the box, its toolbar (＋ / @ on
+ * the left, the microphone and Send on the right), and the line under it,
+ * which starts with the run mode's menu. Enter sends, Shift+Enter adds a
  * line. While a run answers, Send is Stop (Esc too), and the box steers:
  * Enter stops the run, its done steps kept, and sends the text as the next
  * message (decided 2026-10-30). Analysts and Agency partners read only: no
- * mode switch and no skills, a "Read-only" link to what they can do. A send
+ * run mode and no skills, a "Read-only" link to what they can do in its place
+ * under the box. A send
  * the page refuses (it answers false) puts the text back.
  *
  * Context chips sit above the text (W1-11): × takes one off, and the page
@@ -912,7 +914,8 @@ export function ChatComposer({
             </div>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 pt-1.5 pr-2 pb-2 pl-2.5">
+        {/* One row under the text: ＋ / @ on the left, the microphone and Send on the right. */}
+        <div className="flex items-center gap-2 pt-1.5 pr-2 pb-2 pl-2.5">
           <button
             type="button"
             data-action="composer.openPlus"
@@ -950,62 +953,44 @@ export function ChatComposer({
           >
             @
           </button>
-          <VoiceButton onText={addSpoken} onDeniedChange={setMicDenied} disabled={disabled} />
-          {readOnly ? (
-            <Link
-              data-action="access.see"
-              href={ACCESS_HREF}
-              title={t('readOnlyTitle', { role: tRoles(role) })}
-              className="rounded-lg border bg-muted/60 px-[9px] py-[3px] text-xs text-foreground/80 no-underline hover:bg-muted"
-            >
-              {t('readOnly', { role: tRoles(role) })}
-            </Link>
-          ) : (
-            <ModeSwitch
-              mode={mode}
-              onChange={onModeChange}
-              fullAutoOpen={fullAutoOpen}
-              offByAdmin={fullAutoOffByAdmin}
-            />
-          )}
-          {(running || answering) && (
-            // While a question waits, Stop sits beside Send, outlined: Send answers.
-            <button
-              type="button"
-              data-action="composer.stop"
-              onClick={onStop}
-              aria-label={t('stop')}
-              title={t('stop')}
-              className={cn(
-                'ml-auto flex size-8 items-center justify-center rounded-[10px]',
-                running ? 'bg-foreground text-background' : 'border hover:bg-muted',
-              )}
-            >
-              <i
+          <div data-slot="composer-send-group" className="ml-auto flex shrink-0 items-center gap-2">
+            <VoiceButton onText={addSpoken} onDeniedChange={setMicDenied} disabled={disabled} />
+            {(running || answering) && (
+              // While a question waits, Stop sits beside Send, outlined: Send answers.
+              <button
+                type="button"
+                data-action="composer.stop"
+                onClick={onStop}
+                aria-label={t('stop')}
+                title={t('stop')}
                 className={cn(
-                  'block size-2.5 rounded-[2px]',
-                  running ? 'bg-background' : 'bg-foreground',
+                  'flex size-8 items-center justify-center rounded-[10px]',
+                  running ? 'bg-foreground text-background' : 'border hover:bg-muted',
                 )}
-                aria-hidden
-              />
-            </button>
-          )}
-          {!running && (
-            <button
-              type="button"
-              data-action="composer.send"
-              onClick={() => void submit(false)}
-              disabled={!hasText || sending || disabled || uploading || keyInText}
-              aria-label={t('send')}
-              title={t('send')}
-              className={cn(
-                'flex size-8 items-center justify-center rounded-[10px] bg-foreground text-background disabled:cursor-not-allowed disabled:opacity-35',
-                !answering && 'ml-auto',
-              )}
-            >
-              <ArrowUp className="size-4" aria-hidden />
-            </button>
-          )}
+              >
+                <i
+                  className={cn(
+                    'block size-2.5 rounded-[2px]',
+                    running ? 'bg-background' : 'bg-foreground',
+                  )}
+                  aria-hidden
+                />
+              </button>
+            )}
+            {!running && (
+              <button
+                type="button"
+                data-action="composer.send"
+                onClick={() => void submit(false)}
+                disabled={!hasText || sending || disabled || uploading || keyInText}
+                aria-label={t('send')}
+                title={t('send')}
+                className="flex size-8 items-center justify-center rounded-[10px] bg-foreground text-background disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                <ArrowUp className="size-4" aria-hidden />
+              </button>
+            )}
+          </div>
         </div>
       </div>
       {keyInText && (
@@ -1058,7 +1043,24 @@ export function ChatComposer({
           )}
         </p>
       )}
-      <div className="mt-1.5 flex flex-wrap items-center gap-2 px-0.5 text-[11.5px] text-muted-foreground">
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5 text-[11.5px] text-muted-foreground">
+        {readOnly ? (
+          <Link
+            data-action="access.see"
+            href={ACCESS_HREF}
+            title={t('readOnlyTitle', { role: tRoles(role) })}
+            className="rounded-lg border bg-muted/60 px-[9px] py-[3px] text-xs text-foreground/80 no-underline hover:bg-muted"
+          >
+            {t('readOnly', { role: tRoles(role) })}
+          </Link>
+        ) : (
+          <ModeMenu
+            mode={mode}
+            onChange={onModeChange}
+            fullAutoOpen={fullAutoOpen}
+            offByAdmin={fullAutoOffByAdmin}
+          />
+        )}
         <span>{uploading ? t('files.sendWaits') : under}</span>
         <span className="ml-auto flex items-center gap-2.5">
           {usage}
