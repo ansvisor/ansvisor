@@ -87,12 +87,14 @@ export const BRAND_TRAITS = {
   ],
 };
 
-/** The platforms the demo tracks, with how often each names Brewline at the start and end of the month. */
+/**
+ * The platforms the demo tracks, with how often each names Brewline at the
+ * start and end of the month. `fanout` marks the one that shares the searches
+ * behind its answers: ChatGPT, on some runs only, as tracking samples them.
+ */
 export const PLATFORMS = [
-  { id: 'chatgpt-web', mention: [0.42, 0.6], citations: [3, 5] },
-  { id: 'perplexity-web', mention: [0.52, 0.7], citations: [4, 6], fanout: 'perplexity' },
+  { id: 'chatgpt-web', mention: [0.42, 0.6], citations: [3, 5], fanout: 'sampled' },
   { id: 'gemini-web', mention: [0.34, 0.5], citations: [2, 4] },
-  { id: 'copilot-web', mention: [0.4, 0.56], citations: [3, 5], fanout: 'copilot' },
   { id: 'google-aimode', mention: [0.38, 0.54], citations: [3, 5] },
   { id: 'google-aio', mention: [0.3, 0.46], citations: [2, 3] },
 ];

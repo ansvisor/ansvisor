@@ -18,6 +18,7 @@ import { RUNS_PER_USER, claimRunSlot, readRunCounts, workspaceRunLimit } from '.
 import { enabledSkillsFor, loadSkillBodies } from '../skills/store';
 import { closeJobNotices, keepRunResult, noticeJobPaused, type PausedReason } from './deliver';
 import { nextJobRun } from './rule';
+import { isWhatsNewDigest, sendWhatsNewDigest, type DigestOutcome } from './whats-new-digest';
 
 /**
  * Chat's scheduled jobs at work (CHAT-12 items 11–17, 26–27; W3-01), on
@@ -55,6 +56,10 @@ import { nextJobRun } from './rule';
  * change waits as a card in the chat (engine.ts askWithoutSession; the
  * session-free writers' own rule comes with their PRs).
  *
+ * A What's new digest (W4-23, 00489) calls no model: it needs no run
+ * slot and is not held at the AI limit, and its run ends at once, Done in
+ * its chat or Unchanged with nothing new (whats-new-digest.ts).
+ *
  * A failed run is tried once more 10 minutes later; 3 failed runs in a
  * row turn the job off (failed). Server only.
  */
@@ -73,7 +78,7 @@ export const HANDOVER_GRACE_MS = 5 * 60_000;
 const TICK_ROWS = 200;
 
 const JOB_COLUMNS =
-  'id, organization_id, kind, run_mode, due_at, next_run_at, rrule, timezone, title, prompt, skill_name, brand_id, created_by, conversation_id, mode, enabled, paused_reason, fail_count, retry_at, change_only, last_fingerprint';
+  'id, organization_id, kind, run_mode, due_at, next_run_at, rrule, timezone, title, prompt, skill_name, brand_id, created_by, conversation_id, mode, enabled, paused_reason, fail_count, retry_at, change_only, last_fingerprint, digest';
 const RUN_COLUMNS = 'id, schedule_id, slot_at, attempt, run_now, run_id, status, started_at';
 
 /** Run statuses still open: working, waiting on a person, or held at the AI limit. */
@@ -104,6 +109,8 @@ export interface JobRow {
   /** "Notify only if the answer changed" (CHAT-12 item 20), and what its last delivered run read. */
   change_only?: boolean;
   last_fingerprint?: string | null;
+  /** whats_new: a What's new digest, with no model (00489); null: any other job. */
+  digest?: string | null;
 }
 
 interface RunRow {
@@ -130,7 +137,8 @@ type Reason =
   | 'failed'
   | 'lost'
   | 'stopped'
-  | 'noAnswer';
+  | 'noAnswer'
+  | 'nothingNew';
 
 const reasonWords = (reason: Reason, skill?: string | null) =>
   t(`reason.${reason}`, { skill: skill ?? '' }).slice(0, 200);
@@ -474,7 +482,8 @@ async function checkJob(
     .limit(1);
   if (openError) throw new Error(`Could not read a job's runs: ${openError.message}`);
   if ((open ?? []).length > 0) return refuse({ status: 'skipped', reason: 'stillOpen' });
-  if (await aiLimitReached(actor, ctx.role)) {
+  // A digest uses no AI: the limit doesn't hold it.
+  if (!isWhatsNewDigest(job) && (await aiLimitReached(actor, ctx.role))) {
     return refuse({ status: 'paused_cap', reason: 'aiLimit', pause: 'cap' });
   }
   return { ok: true, facts: { actor, plan: ctx.plan, brand } };
@@ -609,7 +618,8 @@ async function fireDueRun(
     due.by === 'next' &&
     now.getTime() - Date.parse(due.slot) > LATE_GRACE_MS;
   // Every slot busy: it waits for the next minute, unless it is too late for this slot.
-  if (plan.writable && !late && !(await hasRoom(job, plan))) {
+  // A digest takes no slot: it runs no model.
+  if (plan.writable && !late && !isWhatsNewDigest(job) && !(await hasRoom(job, plan))) {
     counts.busy += 1;
     return;
   }
@@ -638,6 +648,7 @@ async function fireDueRun(
   if (!plan.writable) return skip({ status: 'skipped', reason: 'readOnly' });
   const checked = await checkJob(job, runRowId);
   if (!checked.ok) return skip(checked.refusal);
+  if (isWhatsNewDigest(job)) return runDigest(due, runRowId, checked.facts, now, counts);
 
   const opened = await openJobRun(job, due, runRowId, checked.facts, now);
   if (!opened) {
@@ -713,6 +724,51 @@ export async function runJobNow(
   }
   await driver(opened);
   return { kind: 'started' };
+}
+
+/**
+ * A What's new digest's run (above): no model, so it ends here. Done with
+ * the entries in its chat, Unchanged with nothing new (nothing delivered);
+ * either counts as a run that worked. A failure counts as any failed run's:
+ * tried again 10 minutes on.
+ */
+async function runDigest(
+  due: DueRun,
+  runRowId: string,
+  facts: RunFacts,
+  now: Date,
+  counts: DueCounts,
+): Promise<void> {
+  const { job } = due;
+  try {
+    let sent: DigestOutcome | null = null;
+    for (let attempt = 0; attempt < 2 && !sent; attempt++) {
+      sent = await sendWhatsNewDigest({
+        job,
+        runRowId,
+        userId: facts.actor.userId,
+        plan: facts.plan,
+        chatId: await jobChat(job),
+        slot: due.slot,
+        timezone: validTimezone(job.timezone),
+        now,
+      });
+    }
+    if (!sent) throw new Error("Could not make the digest's chat");
+    const nothing = sent.kind === 'nothing';
+    await moveRunRow(runRowId, 'running', nothing ? 'unchanged' : 'done', {
+      reason: nothing ? reasonWords('nothingNew') : null,
+      now,
+    });
+    await countRun(job.id, due.attempt, false, now);
+    counts.started += 1;
+  } catch (err) {
+    console.error('[chat/schedules] a digest failed:', err);
+    if (await moveRunRow(runRowId, 'running', 'failed', { reason: reasonWords('failed'), now })) {
+      await countRun(job.id, due.attempt, true, now);
+    }
+    counts.failed += 1;
+  }
 }
 
 /**

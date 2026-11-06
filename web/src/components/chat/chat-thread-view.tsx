@@ -199,6 +199,9 @@ export function ChatThreadView({
   pageOpen = 'ask',
   placeholder,
   onSuggestions,
+  afterLast,
+  afterTurn,
+  markedTurn = null,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
@@ -232,6 +235,16 @@ export function ChatThreadView({
   placeholder?: string;
   /** The Content Agent left suggestions in the editor beside the chat (W4-14): how many. */
   onSuggestions?: (count: number) => void;
+  /**
+   * Under the latest turn once nothing runs (the side panel's product tour
+   * chips): `send` asks Chat in this chat, as the box does; `disabled` while
+   * Chat is paused at the AI limit.
+   */
+  afterLast?: (actions: { send: (message: string) => void; disabled: boolean }) => ReactNode;
+  /** The turn (its place in the chat) `afterLast` follows instead of the latest. */
+  afterTurn?: number;
+  /** A turn shown marked for a moment (the tour's turn about the page on screen). */
+  markedTurn?: number | null;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
@@ -724,7 +737,7 @@ export function ChatThreadView({
       {turns.length === 0 && empty}
       {turns.length > 0 && (
         <ol className="m-0 flex list-none flex-col gap-5 p-0">
-          {turns.map((turn, index) =>
+          {turns.map((turn, index) => [
             turn.role === 'user' ? (
               <li key={turn.key} className="flex justify-end">
                 <div className="max-w-[80%] rounded-2xl bg-muted px-4 py-2 text-sm whitespace-pre-wrap">
@@ -733,7 +746,11 @@ export function ChatThreadView({
                 </div>
               </li>
             ) : (
-              <li key={turn.key}>
+              <li
+                key={turn.key}
+                data-marked={index === markedTurn || undefined}
+                className="rounded-xl transition-shadow duration-500 data-marked:ring-2 data-marked:ring-ring/50 data-marked:ring-offset-4 data-marked:ring-offset-background"
+              >
                 <Answer
                   turn={turn}
                   now={now}
@@ -789,10 +806,20 @@ export function ChatThreadView({
                 )}
               </li>
             ),
-          )}
+            afterLast && !working && index === Math.min(afterTurn ?? Infinity, turns.length - 1) ? (
+              <li key="after-turn" data-slot="after-turn">
+                {afterLast({
+                  send: (message) =>
+                    void send(message, { context: chips ?? [], references: [], attachments: [] }),
+                  disabled: atCap,
+                })}
+              </li>
+            ) : null,
+          ])}
         </ol>
       )}
       <div
+        data-slot="thread-composer"
         className={
           variant === 'home'
             ? 'flex flex-col gap-2'

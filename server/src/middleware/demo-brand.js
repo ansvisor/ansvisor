@@ -129,6 +129,10 @@ export const DEMO_GUARDED = [
   guard('DELETE /cms/brands/:brandId/framer', brandIn('path')),
   guard('POST /cms/brands/:brandId/wix', brandIn('path')),
   guard('DELETE /cms/brands/:brandId/wix', brandIn('path')),
+  // IndexNow (cms-indexnow.js, #2142): the demo brand's site isn't anyone's to announce.
+  guard('POST /cms/brands/:brandId/indexnow', brandIn('path')),
+  guard('POST /cms/brands/:brandId/indexnow/check', brandIn('path')),
+  guard('DELETE /cms/brands/:brandId/indexnow', brandIn('path')),
 
   // Content Editor (content-drafts.js): the draft's brand is in the body;
   // the draft itself is checked too.

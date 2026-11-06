@@ -15,7 +15,7 @@ import {
   ALWAYS_ON_SECTION,
   MENU_SECTIONS,
   hiddenMenuSections,
-  menuSectionOf,
+  menuSectionEntries,
 } from '@/lib/menu-access';
 import { useMenuSections } from '@/components/providers/menu-access-provider';
 import {
@@ -27,12 +27,7 @@ import {
 } from '@/lib/actions/menu-access';
 
 /** The menu's sections with their nav titles, in its order. */
-const SECTION_TITLES = dashboardNav
-  .flatMap((group) => group.items)
-  .flatMap((item) => {
-    const section = menuSectionOf(item.href);
-    return section ? [{ section, title: item.title }] : [];
-  });
+const SECTION_TITLES = menuSectionEntries(dashboardNav.flatMap((group) => group.items));
 
 function initials(member: MenuMember): string {
   const source = member.fullName?.trim() || member.email;

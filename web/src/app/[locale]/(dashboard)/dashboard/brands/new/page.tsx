@@ -66,7 +66,6 @@ import {
   generatePromptsFromTopics,
   suggestCompetitors,
 } from '@/lib/ai-brand-setup';
-import { DASHBOARD_HOME } from '@/config/home';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
@@ -737,7 +736,8 @@ export default function NewBrandPage() {
       await bootstrapBrandVolumes(createdBrand.id);
 
       toast.success('Brand setup complete! Tracking is starting.');
-      router.push(DASHBOARD_HOME);
+      // The person's start page: Chat Home in the free trial and the demo.
+      router.push('/dashboard');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save competitors');
       setSavingCompetitors(false);

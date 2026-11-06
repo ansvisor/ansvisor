@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [generate image, ai image, cover image, image with ai, nano banana, image model, alt text, ai-generated]
 synonyms: [make an image, create a picture, blog cover, featured image, illustration, hero image]
 plan: all
-updated: 2026-11-04
-last_checked: 2026-11-04
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -31,7 +31,7 @@ The first model is marked **Recommended**: it uses your AI limit most slowly. Ea
 
 Click **Generate 2 images** (or 3 or 4). Click the option you like, check the **Alt text** (it says what the image shows, for people who can't see it and for search), and click **Use this image**. Only that one is kept and added to the page; the other options are removed, also when you close the dialog (any still left are removed after a day). **Regenerate** makes new options and uses your AI limit again.
 
-If what's left of your monthly AI limit doesn't cover the options you chose, none is made: choose fewer. If an image is made but can't be saved, the panel says so: it still counts toward your AI limit, and you pick from the others. The demo brand makes no images.
+If what's left of your monthly AI limit doesn't cover the options you chose, none is made: choose fewer. Images count toward your workspace's storage, so with storage full none is made either: make room or get more storage. If an image is made but can't be saved, the panel says so: it still counts toward your AI limit, and you pick from the others. The demo brand makes no images.
 
 ## Where AI images count
 

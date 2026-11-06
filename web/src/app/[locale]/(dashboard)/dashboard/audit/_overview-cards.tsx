@@ -10,8 +10,8 @@ import type { AuditOverview, AuditQuota, SiteCoverage } from '@/lib/actions/audi
 import { formatNumber } from '@/lib/format';
 import { isNoPlan } from '@/lib/billing/no-plan';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
-import { MetricCard } from '../insights/_kpi-cards';
-import { upIsGood } from '../insights/kpi-format';
+import { MetricCard } from '../(brand-visibility)/insights/_kpi-cards';
+import { upIsGood } from '../(brand-visibility)/insights/kpi-format';
 import { autoSharePct, quotaShares, QuotaSegments, RunDots } from './_quota-meter';
 
 /** The Authority · E-E-A-T card's gaps: the signal, and on how many pages it fails. */

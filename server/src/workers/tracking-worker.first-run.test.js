@@ -67,6 +67,7 @@ vi.mock('../config/supabase.js', () => {
 
 let taskIds = 0;
 vi.mock('../lib/cloro-scraper.js', () => ({
+  UNAVAILABLE_PLATFORMS: ['grok-web', 'copilot-web', 'perplexity-web'],
   submitPromptTask: vi.fn(async ({ scraperId, legacy = false }) => ({
     taskId: `t${++taskIds}`,
     scraperId,

@@ -4,8 +4,8 @@ route: /dashboard/action-center/actions
 keywords: [actions, today, next 7, done this week, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -101,7 +101,7 @@ Most actions come from signals each night, but you can also send work to the Act
 - **New content**: send it to a teammate with **Send to Action Center**.
 - **Site Audit**: **Send to Action Center** on a page's audit report.
 - **AI Referral Traffic**: select pages and click **Send to Action Center**.
-- **Brand Visibility**: **Send action** on a topic in Opportunities.
+- **Visibility**: **Send action** on a topic in Opportunities.
 - **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.
 - **Prompts**: **Send Actions** on a prompt's Improve tab.
 - **Chat**: **Send to Action Center** under an answer. Its Overview links back to the chat.

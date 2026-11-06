@@ -16,6 +16,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { logger } from '../logger.js';
 import { sendEmail } from '../email.js';
 import { chatgptFanoutMode } from '../chatgpt-fanout.js';
+import { UNAVAILABLE_PLATFORMS } from '../cloro-scraper.js';
 
 /** The page reads' statement timeout, and the share of it that warns. */
 export const READ_BUDGET_S = 8;
@@ -174,6 +175,11 @@ async function checkCloro(now) {
  *    drop against the days before isn't used: a sampled day's share swings.
  *    When those days can't be read, ChatGPT alone goes unjudged that day.
  *  - `off` (the self-host default): nothing asks, so it isn't judged.
+ *
+ * A platform Cloro cannot deliver (UNAVAILABLE_PLATFORMS) runs nothing, so it
+ * isn't judged either. Copilot and Perplexity, the two FANOUT_EXPECTED names,
+ * are paused since 2026-11-06: until they come back, only ChatGPT's sample
+ * and the drop rule below can flag anything.
  */
 // `chatgpt`, the OpenAI API model's answers (the tracking worker's
 // resolveModelPlatform), isn't expected: its web_search calls carry their
@@ -261,11 +267,13 @@ async function checkFanout(now, mode = chatgptFanoutMode()) {
 
 /**
  * How a platform's fan-out is judged: 'day' when every answer may carry it,
- * 'week' for ChatGPT's sample, 'never' when nothing asks for it, or null for
- * a platform judged only on a drop. A report from before CLORO_CHATGPT_FANOUT
- * has no `chatgptFanout` and is judged as it was then.
+ * 'week' for ChatGPT's sample, 'never' when nothing asks for it or the
+ * platform is paused, or null for a platform judged only on a drop. A report
+ * from before CLORO_CHATGPT_FANOUT has no `chatgptFanout` and is judged as it
+ * was then.
  */
 function fanoutExpectation(p) {
+  if (UNAVAILABLE_PLATFORMS.includes(p.platform)) return 'never';
   if (p.platform === CHATGPT && p.chatgptFanout) {
     return { all: 'day', sample: 'week', off: 'never' }[p.chatgptFanout] ?? null;
   }

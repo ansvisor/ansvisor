@@ -99,7 +99,6 @@ const long: ReportCardPayload = {
     fit: i % 4 === 0 ? ('related' as const) : ('core' as const),
     named: {
       'chatgpt-web': 'missed',
-      'copilot-web': 'missed',
       'gemini-web': 'none',
       'google-aio': 'missed',
       'google-aimode': 'named',
@@ -161,7 +160,6 @@ describe('reportCardPdf', () => {
         fit: 'related' as const,
         named: {
           'chatgpt-web': i % 3 === 0 ? 'named' : 'missed',
-          'copilot-web': 'missed',
           'gemini-web': 'missed',
           'google-aio': 'none',
           'google-aimode': 'missed',
