@@ -4426,7 +4426,8 @@
       "type": "This file type isn't supported.",
       "size": "Files must be 10 MB or smaller.",
       "count": "You can attach up to 5 files.",
-      "failed": "Upload failed.",
+      "failed": "{name} didn't upload. Remove it or try again.",
+      "failedMany": "{count} files didn't upload. Remove them or try again.",
       "retry": "Retry"
     },
     "slash": {
@@ -4566,7 +4567,11 @@
     "noUndo": "This can’t be undone from Chat once it’s done.",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here.",
     "connectionLost": "Lost the connection to Chat. It keeps working: reload the page to see where it is.",
-    "untitledExport": "Chat"
+    "untitledExport": "Chat",
+    "sentFiles": {
+      "label": "Files you sent",
+      "open": "Open {name}"
+    }
   },
   "chatDebug": {
     "title": "Debug · staff only",

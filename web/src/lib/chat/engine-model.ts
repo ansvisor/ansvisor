@@ -294,13 +294,33 @@ export async function resolveChatModels(
 }
 
 /**
+ * A file's bytes in a prompt (an attached image or PDF) as a mark: a model
+ * counts an image by its size in pixels, never by its bytes written out, and
+ * the caller adds what files cost (attachments.ts attachmentTokens).
+ */
+const withoutBytes = (_key: string, value: unknown) =>
+  value instanceof Uint8Array ||
+  value instanceof ArrayBuffer ||
+  // A Buffer as JSON.stringify hands it over: its toJSON runs first.
+  (!!value &&
+    typeof value === 'object' &&
+    (value as { type?: unknown }).type === 'Buffer' &&
+    Array.isArray((value as { data?: unknown }).data))
+    ? '[file]'
+    : value;
+
+/**
  * A step's prompt in tokens, counted up (about 3 characters to a token, where
- * English averages 4): the budget's hold assumes the most it could be.
+ * English averages 4): the budget's hold assumes the most it could be. A
+ * file's bytes count as a mark (withoutBytes).
  */
 export function estimateInputTokens(parts: readonly unknown[]): number {
   let chars = 0;
   for (const part of parts) {
-    chars += typeof part === 'string' ? part.length : (JSON.stringify(part ?? null)?.length ?? 0);
+    chars +=
+      typeof part === 'string'
+        ? part.length
+        : (JSON.stringify(part ?? null, withoutBytes)?.length ?? 0);
   }
   return Math.ceil(chars / 3);
 }
