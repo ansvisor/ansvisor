@@ -566,6 +566,22 @@ describe('ChatThreadView', () => {
     });
   });
 
+  it('keeps the box at the bottom of the chat page, however short the chat', async () => {
+    const shortChat = {
+      conversationId: CHAT,
+      title: 'Hi',
+      brandId: null,
+      mine: true,
+      messages: [{ role: 'user', text: 'Hi', generatedAt: null, dataAsOf: null, timezone: null }],
+    } as unknown as ChatThread;
+    await render({ thread: shortChat, variant: 'dock' });
+    const composer = container.querySelector('[data-slot="thread-composer"]')!;
+    // Pushed down by mt-auto in a column at least the scroll area's height.
+    expect(composer.className).toContain('sticky');
+    expect(composer.className).toContain('mt-auto');
+    expect(composer.parentElement!.className).toContain('min-h-full');
+  });
+
   it('keeps the text when the run API refuses it', async () => {
     fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
