@@ -22,6 +22,7 @@ const empty = {
   sources: [],
   where: null,
   url: null,
+  linkTo: null,
   change: null,
   why: null,
   how: [],
@@ -324,6 +325,14 @@ describe('pageCheckable', () => {
     expect(pageCheckable({ taskKey: 'refresh_content', details: auto({ check: 'manual' }) })).toBe(
       false,
     );
+  });
+
+  it('checks an internal links task on the page its links go on (AC plan P-10)', () => {
+    expect(pageCheckable({ taskKey: 'add_internal_links', details: auto() })).toBe(true);
+    expect(parseTaskDetails({ url: '/blog/cold-brew', linkTo: ' /pricing ' })?.linkTo).toBe(
+      '/pricing',
+    );
+    expect(parseTaskDetails({ url: '/blog/cold-brew' })?.linkTo).toBeNull();
   });
 
   it('keeps Check now on a shopping links task, which has no new text (#1616)', () => {

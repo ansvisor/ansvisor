@@ -4,8 +4,8 @@ route: /dashboard/action-center/actions
 keywords: [tasks, task status, check now, regenerate tasks, done when, how we check, attached from chat, ready for review]
 synonyms: [steps, subtasks, to-do items, task checks]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-07
+last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -43,6 +43,7 @@ Automatic checks run every night, and when you click **Check now**. Only pages o
 - **Crawler access**: robots.txt lets the AI crawlers in, and the page isn't noindex. When the audit saw a CDN or firewall turn AI bots away, the page is asked as those bots again, and the task stays open while they're still turned away.
 - **Optimizing or refreshing**: the page changed by more than a date, a price or a rotating quote. Blocks that change by themselves, such as the latest posts, don't count.
 - **New text**: the task's new text is on the page, and the text it replaces is gone.
+- **Internal links**: the task's page links to the page under **Link to**, or to the action's page.
 
 A task you reopen after it passed stays open: the call is yours.
 

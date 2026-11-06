@@ -17,6 +17,9 @@
  *    changed. A call to action is confirmed by hand: a re-fetch can't tell
  *    (tasks/templates.js);
  *  - a written task's new text is on it, and the text it replaces gone;
+ *  - an internal links task's page links to the page it names (`linkTo`,
+ *    else the action's pages): an <a href> to it, on the same site, any
+ *    query or trailing slash aside (add_internal_links, AC plan P-10);
  *  - a shopping links task's page links no product that no longer sells,
  *    read as the catalog sync's shopping check reads it (shopping-check.js;
  *    Check now only: the sync checks it, not the sweep).
@@ -56,6 +59,8 @@ export const CHECKS = Object.freeze({
   refresh_content: 'changed',
   strengthen_reference_asset: 'changed',
   strengthen_entity_content: 'changed',
+  // Its page links to the page it names (AC plan P-10).
+  add_internal_links: 'links',
 });
 
 /** The most open tasks one nightly sweep checks: pages are fetched one at a time. */
@@ -181,6 +186,9 @@ export function checkKind(task) {
  */
 function uncheckable(task) {
   const d = task.details ?? {};
+  if (d.check === 'auto' && task.task_key === 'add_internal_links' && !text(d.url)) {
+    return 'no_link_source';
+  }
   if (d.check === 'auto' && !text(d.url)) return 'no_address';
   if (d.check === 'auto' && !task.task_key) return 'no_change_text';
   return 'not_checkable';
@@ -399,7 +407,8 @@ const isHtml = (body) => /^\s*(<!doctype\s+html|<html[\s>])/i.test(body ?? '');
  *   written task's change; `auditChecks`: the audit checks that raised the
  *   action on this page; `wafBlockedBots`: the AI bots its live test saw a
  *   CDN or firewall refuse there (SA-008); `domains`: the brand's, a
- *   redirect off them is off the site
+ *   redirect off them is off the site; `linkTo`: the pages an internal
+ *   links task's page must link to, as full addresses
  */
 export async function checkPage(
   kind,
@@ -411,6 +420,7 @@ export async function checkPage(
     auditChecks = [],
     wafBlockedBots = [],
     domains = null,
+    linkTo = [],
     fetch = fetchPage,
   } = {},
 ) {
@@ -492,6 +502,19 @@ export async function checkPage(
   const visible = visibleText(page.html, $);
   // An empty shell, or bot protection's page, isn't the page.
   if (wordList(visible).length < MIN_WORDS) return null;
+  if (kind === 'links') {
+    const linked = new Set();
+    $('a[href]').each((_, el) => {
+      try {
+        const key = linkKey(new URL($(el).attr('href'), page.url).href);
+        if (key) linked.add(key);
+      } catch {
+        // An href that isn't an address links nowhere.
+      }
+    });
+    const missing = linkTo.some((target) => !linked.has(linkKey(target)));
+    return { passed: !missing, missing: missing ? ['link_missing'] : [] };
+  }
   if (kind === 'text') {
     const onPage = words(visible);
     if (!onPage.includes(words(after))) return { passed: false, missing: ['change_not_found'] };
@@ -543,6 +566,48 @@ function samePage(address) {
   } catch {
     return null;
   }
+}
+
+/**
+ * A link's page as compared with a target: its host without www and its
+ * path without a trailing slash; its query and fragment aside, since a
+ * link with a campaign tag still reaches the page.
+ */
+export function linkKey(address) {
+  try {
+    const url = new URL(address);
+    if (!/^https?:$/.test(url.protocol)) return null;
+    return `${url.hostname.replace(/^www\./, '')}${url.pathname.replace(/\/+$/, '')}`.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The pages an internal links task's page must link to, as full addresses:
+ * the one it names (`linkTo`), else its action's pages (payload.pages: the
+ * page the links point to, AC-010), the task's own page left out.
+ */
+async function linkTargets(task, url, host) {
+  const named = text(task.details?.linkTo);
+  let listed = named ? [named] : [];
+  if (!named) {
+    const { data, error } = await supabaseAdmin
+      .from('actions')
+      .select('pages:payload->pages')
+      .eq('id', task.action_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    listed = (Array.isArray(data?.pages) ? data.pages : []).filter((p) => typeof p === 'string');
+  }
+  const own = linkKey(url);
+  return [
+    ...new Set(
+      listed
+        .map((page) => pageAddress(page, host))
+        .filter((address) => address && linkKey(address) && linkKey(address) !== own),
+    ),
+  ];
 }
 
 /**
@@ -669,6 +734,12 @@ export async function runTaskCheck(read, action, { fetch = fetchPage, now = new 
   const domains = await brandDomains(action.brand_id);
   const url = pageAddress(d.url, storedHost(domains[0]));
   if (!url) return { reason: 'no_address' };
+  let linkTo = [];
+  if (kind === 'links') {
+    linkTo = await linkTargets(task, url, storedHost(domains[0]));
+    // Nothing named to link to: it can't be checked on the page.
+    if (linkTo.length === 0) return { reason: 'no_link_target' };
+  }
   let auditChecks = [];
   let wafBlockedBots = [];
   if (kind === 'structuredData' || kind === 'crawlers') {
@@ -689,6 +760,7 @@ export async function runTaskCheck(read, action, { fetch = fetchPage, now = new 
         auditChecks,
         wafBlockedBots,
         domains,
+        linkTo,
         fetch,
       })
     : { passed: false, missing: ['off_site'] };

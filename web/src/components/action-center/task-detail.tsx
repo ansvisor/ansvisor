@@ -274,6 +274,7 @@ export function TaskDetailView({
               )}
             </Field>
           )}
+          {details.linkTo && <Field label={t('linkTo')}>{details.linkTo}</Field>}
           {details.where && <Field label={t('where')}>{details.where}</Field>}
           {details.why && <Field label={t('why')}>{details.why}</Field>}
           {details.change && (

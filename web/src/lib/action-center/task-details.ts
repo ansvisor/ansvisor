@@ -34,6 +34,8 @@ export interface ActionTaskDetails {
   where: string | null;
   /** The exact page the change is made on (AC-010): a path or a full URL. */
   url: string | null;
+  /** An internal links task's page to link to (AC plan P-10): a path or a full URL. */
+  linkTo: string | null;
   /** The change to make there (AC-010). */
   change: TaskChange | null;
   /** The evidence from the action's signals. */
@@ -137,6 +139,7 @@ export function parseTaskDetails(raw: unknown): ActionTaskDetails | null {
       .filter((source) => source.type && source.ref),
     where: text(r.where),
     url: text(r.url),
+    linkTo: text(r.linkTo),
     change: parseChange(r.change),
     why: text(r.why),
     how: (Array.isArray(r.how) ? r.how : [])
@@ -294,6 +297,8 @@ export const PAGE_CHECKED_TASKS: readonly string[] = [
   'refresh_content',
   'strengthen_reference_asset',
   'strengthen_entity_content',
+  // Its page links to the page it names (AC plan P-10).
+  'add_internal_links',
 ];
 
 /**
