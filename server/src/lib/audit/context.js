@@ -11,7 +11,7 @@
 import * as cheerio from 'cheerio';
 import { fetchViaScrapeDo, fetchText } from './fetcher.js';
 import { probeBotAccess } from './bot-access.js';
-import { canonicalHref, probeCanonical } from './canonical.js';
+import { canonicalHref, probeAuditCanonical } from './canonical.js';
 
 /**
  * Normalize user-supplied input into an absolute http(s) URL.
@@ -51,7 +51,7 @@ export function normalizeUrl(raw) {
  * @property {string|null} query     optional target buyer query (later phases)
  * @property {Awaited<ReturnType<typeof probeBotAccess>>} [botAccess]
  *   the live AI-bot access test (SA-008); absent for a page not fetched
- * @property {Awaited<ReturnType<typeof probeCanonical>>} [canonicalTarget]
+ * @property {Awaited<ReturnType<typeof probeAuditCanonical>>} [canonicalTarget]
  *   where the page's canonical tag points, read once when it isn't the page
  *   (AC plan P-11, canonical.js); absent for a page not fetched
  */
@@ -90,7 +90,7 @@ export async function buildAuditContext(rawUrl, { query = null } = {}) {
     fetchText(`${origin}/robots.txt`),
     fetchText(`${origin}/llms.txt`),
     probeBotAccess(url).catch(() => null),
-    probeCanonical(url, canonicalHref(read.$)).catch(() => null),
+    probeAuditCanonical(url, canonicalHref(read.$)).catch(() => null),
   ]);
 
   return { ...read, robotsTxt, llmsTxt, botAccess, canonicalTarget };

@@ -60,11 +60,16 @@ describe('buildAuditContext', () => {
 
   it('reads where the canonical tag points, and keeps it as the check’s evidence, its score as before', async () => {
     html = '<link rel="canonical" href="/plans"><h1>Pricing</h1>';
-    readPage.mockResolvedValue({
-      url: 'https://acme.com/plans',
-      status: 200,
-      html: '<meta name="robots" content="noindex">',
-    });
+    // The page ends where it was asked for; its tag's target asks not to be indexed.
+    readPage.mockImplementation(async (url) =>
+      url === 'https://acme.com/pricing'
+        ? { url, status: 200, html: '<h1>Pricing</h1>' }
+        : {
+            url: 'https://acme.com/plans',
+            status: 200,
+            html: '<meta name="robots" content="noindex">',
+          },
+    );
     const ctx = await buildAuditContext('https://acme.com/pricing');
     expect(readPage).toHaveBeenCalledWith('https://acme.com/plans', expect.any(Object));
     expect(ctx.canonicalTarget).toEqual({ state: 'noindex', target: 'https://acme.com/plans' });

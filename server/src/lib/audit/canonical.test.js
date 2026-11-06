@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio';
  */
 
 const { PageFetchError } = await import('../safe-fetch.js');
-const { canonicalHref, canonicalIssue, canonicalKey, probeCanonical } =
+const { canonicalHref, canonicalIssue, canonicalKey, probeAuditCanonical, probeCanonical } =
   await import('./canonical.js');
 
 const PAGE = 'https://www.acme.example/pricing/';
@@ -65,6 +65,46 @@ describe('probeCanonical', () => {
     expect((await answer(failing(403))).state).toBe('unreadable');
     expect((await answer(async () => Promise.reject(new Error('timeout')))).state).toBe(
       'unreadable',
+    );
+  });
+});
+
+describe('probeAuditCanonical', () => {
+  it('compares a tag with the page after its redirects, so a redirect to another site pointing to itself is right', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (url === 'https://acme.example/old') return page('https://new.example/pricing');
+      throw new Error(`unexpected read ${url}`);
+    });
+    expect(
+      await probeAuditCanonical('https://acme.example/old', 'https://new.example/pricing/', {
+        fetchImpl,
+      }),
+    ).toEqual({ state: 'self', target: 'https://new.example/pricing/' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads nothing for the requested address itself', async () => {
+    const fetchImpl = vi.fn();
+    expect(await probeAuditCanonical(PAGE, '/pricing', { fetchImpl })).toEqual({
+      state: 'self',
+      target: 'https://www.acme.example/pricing',
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('says nothing about another site when the page itself can’t be read', async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new PageFetchError('http_error', 'Forbidden', { status: 403 });
+    });
+    expect(await probeAuditCanonical(PAGE, 'https://other.example/pricing', { fetchImpl })).toEqual(
+      { state: 'unreadable', target: 'https://other.example/pricing' },
+    );
+  });
+
+  it('still flags another site when the page ends on its own site', async () => {
+    const fetchImpl = vi.fn(async (url) => page(url));
+    expect(await probeAuditCanonical(PAGE, 'https://other.example/pricing', { fetchImpl })).toEqual(
+      { state: 'other_host', target: 'https://other.example/pricing' },
     );
   });
 });

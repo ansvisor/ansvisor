@@ -109,6 +109,44 @@ export async function probeCanonical(pageUrl, href, { fetchImpl = fetchPage } = 
 }
 
 /**
+ * probeCanonical for Site Audit, whose page comes through Scrape.do without
+ * the address it ended on. A tag that isn't the requested address is
+ * compared with the page's address after its redirects, read once with the
+ * free reader: a page that redirected to another site and points to itself
+ * there is 'self', not 'other_host'. When that address can't be read, a tag
+ * on another site says nothing ('unreadable'). Never throws.
+ *
+ * @param {string} requestedUrl - the address Site Audit asked for
+ * @param {string|null} href - the page's canonical tag's href (canonicalHref)
+ */
+export async function probeAuditCanonical(requestedUrl, href, { fetchImpl = fetchPage } = {}) {
+  if (!href) return null;
+  let target;
+  try {
+    target = new URL(href, requestedUrl).href;
+  } catch {
+    return { state: 'invalid' };
+  }
+  const key = canonicalKey(target);
+  if (key && key === canonicalKey(requestedUrl)) return { state: 'self', target };
+
+  let finalUrl = null;
+  try {
+    const page = await fetchImpl(requestedUrl, {
+      timeoutMs: FETCH_TIMEOUT_MS,
+      maxBytes: MAX_BYTES,
+      truncate: true,
+    });
+    finalUrl = page.url || requestedUrl;
+  } catch {
+    finalUrl = null;
+  }
+  if (finalUrl) return probeCanonical(finalUrl, href, { fetchImpl });
+  if (key && hostOf(target) !== hostOf(requestedUrl)) return { state: 'unreadable', target };
+  return probeCanonical(requestedUrl, href, { fetchImpl });
+}
+
+/**
  * The issue the canonical signal's evidence shows, or null: a missing tag,
  * or a target in a state above that's an issue.
  *
