@@ -287,7 +287,11 @@
       "skills": [
         "setup"
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "kind": "brand_added"
+        }
+      ],
       "mode": "ask_first",
       "connections": [],
       "status": "ready",
