@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ActiveRule, RuleStatus } from '@/lib/content/rules';
 import { createFakeSupabase, type FakeSupabase } from './testing/fake-supabase';
 
@@ -37,7 +37,9 @@ vi.mock('@/lib/content/agent-write', async (importOriginal) => ({
   agentWriteRequest: (...args: unknown[]) => fake.request(...args),
 }));
 
-const { optimizeDraftHere, triedInChat, triedOf } = await import('./page-optimize');
+const { OPTIMIZE_RESERVE_MS, OPTIMIZE_WAIT_MS, optimizeDraftHere, triedInChat, triedOf } =
+  await import('./page-optimize');
+const { RUN_REQUEST_MS } = await import('./run-limits');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 const USER = '22222222-2222-4222-8222-222222222222';
@@ -137,6 +139,15 @@ beforeEach(() => {
   });
   fake.decide.mockReset().mockResolvedValue(1);
 });
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** The tool's context in a request that reaches its limit `msLeft` from now. */
+const inRequest = (msLeft: number) => ({
+  ...ctx,
+  run: { id: 'r2', agentRunId: null, scheduleId: null, endsAt: Date.now() + msLeft },
+});
 
 describe('Optimize here, no editor (W4-12b part 2)', () => {
   it('rewrites the page to its rules as the editor does, and puts it in as the next version', async () => {
@@ -215,6 +226,68 @@ describe('Optimize here, no editor (W4-12b part 2)', () => {
       reason: 'still_writing',
     });
     expect(fake.update).not.toHaveBeenCalled();
+  });
+
+  it('waits within its request only, leaving the reserve for what the save writes', async () => {
+    expect(OPTIMIZE_WAIT_MS + OPTIMIZE_RESERVE_MS).toBe(RUN_REQUEST_MS);
+    // A rewrite that never ends, 50 ms before the request's reserve: Chat stops there, not after
+    // its own 3.5 minutes, and nothing is saved.
+    fake.rewrite.mockResolvedValue({ started: true });
+    const waited = Date.now();
+    expect(
+      await optimizeDraftHere(inRequest(OPTIMIZE_RESERVE_MS + 50), DRAFT, { pollMs: 5 }),
+    ).toMatchObject({ ok: false, reason: 'still_writing' });
+    expect(Date.now() - waited).toBeLessThan(2_000);
+    expect(fake.update).not.toHaveBeenCalled();
+    expect(fake.decide).not.toHaveBeenCalled();
+  });
+
+  it('saves a rewrite read before the reserve', async () => {
+    const result = await optimizeDraftHere(inRequest(RUN_REQUEST_MS), DRAFT, { pollMs: 1 });
+    expect(result).toMatchObject({ ok: true, beforeVersionId: 'v1' });
+    expect(fake.update).toHaveBeenCalledWith(DRAFT, { bodyHtml: AFTER });
+  });
+
+  it('leaves a rewrite read past the reserve for the editor, and saves nothing', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // The rewrite ends at once, but the clock passes into the reserve as its page is read.
+    const pages: Record<string, unknown>[] = [];
+    Object.defineProperty(fake.db.tables, 'content_draft_suggestions', {
+      configurable: true,
+      get() {
+        vi.setSystemTime(Date.now() + 20_000);
+        return pages;
+      },
+    });
+    fake.rewrite.mockImplementation(async () => {
+      const now = new Date().toISOString();
+      fake.db.tables.content_agent_runs.push({
+        draft_id: DRAFT,
+        kind: 'rewrite',
+        started_at: now,
+        finished_at: now,
+        outcome: 'done',
+      });
+      pages.push({
+        id: 'sg1',
+        draft_id: DRAFT,
+        kind: 'page',
+        status: 'open',
+        after_text: AFTER,
+        created_at: now,
+      });
+      return { started: true };
+    });
+    expect(
+      await optimizeDraftHere(inRequest(OPTIMIZE_RESERVE_MS + 10_000), DRAFT, { pollMs: 1 }),
+    ).toEqual({
+      ok: false,
+      reason: 'still_writing',
+      message:
+        'The Content Agent’s rewrite came too late to put in here, so the page is as it was. Its rewrite waits in the Content Editor to compare.',
+    });
+    expect(fake.update).not.toHaveBeenCalled();
+    expect(fake.decide).not.toHaveBeenCalled();
   });
 
   it('finds nothing of a draft the person can’t read', async () => {

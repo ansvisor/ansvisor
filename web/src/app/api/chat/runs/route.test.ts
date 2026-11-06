@@ -129,6 +129,17 @@ describe('the run routes', () => {
     expect(engine.startChatRun).not.toHaveBeenCalled();
   });
 
+  it('give a run the request time its engine counts on (Optimize here waits within it)', async () => {
+    const { RUN_REQUEST_MS } = await import('@/lib/chat/run-limits');
+    const routes = await Promise.all([
+      import('./route'),
+      import('./[id]/answer/route'),
+      import('./[id]/approve/route'),
+      import('./[id]/skip/route'),
+    ]);
+    for (const route of routes) expect(route.maxDuration * 1000).toBe(RUN_REQUEST_MS);
+  });
+
   it('ask for a session', async () => {
     state.user = null;
     expect((await POST(post({ message: 'Hi' }))).status).toBe(401);

@@ -4073,6 +4073,7 @@
       "tooLong": "The page is too long to rewrite whole. Open it in the Content Editor to fix its rules.",
       "aiBudget": "The workspace’s monthly AI limit is used up.",
       "stillWriting": "The Content Agent is still rewriting the page. Its rewrite will wait in the Content Editor to compare.",
+      "tooLate": "The Content Agent’s rewrite came too late to put in here, so the page is as it was. Its rewrite waits in the Content Editor to compare.",
       "nothingChanged": "The Content Agent found nothing to change.",
       "failed": "The Content Agent couldn’t optimize the page just now. Try again."
     },

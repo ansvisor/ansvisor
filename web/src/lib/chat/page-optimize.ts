@@ -15,6 +15,7 @@ import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { withContentDom } from '@/lib/content/server-dom';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { ChatToolContext } from './registry/define-tool';
+import { RUN_REQUEST_MS } from './run-limits';
 
 /**
  * Optimize ▾ › "Optimize here, no editor" (CHAT-25 §7, W4-12b part 2; the
@@ -28,6 +29,12 @@ import type { ChatToolContext } from './registry/define-tool';
  * Undo brings it back) and its suggestion is marked accepted. No editor: no
  * Accept / Reject in between, as the spec has it.
  *
+ * The wait runs inside the request working the run (RUN_REQUEST_MS), so the
+ * page goes in only with OPTIMIZE_RESERVE_MS of it still ahead: its Undo and
+ * its version card are written right after the save, in the same step, and
+ * never cut off after it. A rewrite that comes later isn't saved here: it
+ * waits in the Content Editor to compare, and nothing changed.
+ *
  * It never sends the agent again for a rule an earlier Optimize here in this
  * chat couldn't close (`tried`, kept in the runs' progress): those are named
  * as the person's to decide, and with none left to send it doesn't run.
@@ -36,8 +43,13 @@ import type { ChatToolContext } from './registry/define-tool';
 
 export const OPTIMIZE_TOOL = 'optimize_draft';
 
-/** How long Chat waits for the rewrite: the API's longest model call, and a margin within the request. */
-export const OPTIMIZE_WAIT_MS = 240_000;
+/**
+ * What Optimize here leaves of its request once the page is saved: its Undo,
+ * the version card with its Rules and Quality reads, and the answer.
+ */
+export const OPTIMIZE_RESERVE_MS = 90_000;
+/** How long Chat waits for the rewrite at most: the request, less the reserve (3.5 minutes). */
+export const OPTIMIZE_WAIT_MS = RUN_REQUEST_MS - OPTIMIZE_RESERVE_MS;
 /** How often the run is read meanwhile. */
 const POLL_MS = 3_000;
 
@@ -226,10 +238,15 @@ export async function optimizeDraftHere(
       );
     }
 
-    const deadline = Date.now() + (wait.maxMs ?? OPTIMIZE_WAIT_MS);
+    // The page is saved by then or not at all: the request's reserve is for what follows the save.
+    const saveBy = Math.min(
+      Date.now() + (wait.maxMs ?? OPTIMIZE_WAIT_MS),
+      (ctx.run?.endsAt ?? Infinity) - OPTIMIZE_RESERVE_MS,
+    );
+    const pollMs = wait.pollMs ?? POLL_MS;
     let run: { outcome: string | null } | null = null;
-    while (!run && Date.now() < deadline) {
-      await pause(wait.pollMs ?? POLL_MS);
+    while (!run && Date.now() + pollMs <= saveBy) {
+      await pause(pollMs);
       run = await finishedRun(draft.id, since);
     }
     if (!run) return { ok: false, reason: 'still_writing', message: tWords('stillWriting') };
@@ -257,6 +274,10 @@ export async function optimizeDraftHere(
       };
     }
 
+    // Read past the reserve: the rewrite waits in the editor, and the page stays as it was.
+    if (Date.now() > saveBy) {
+      return { ok: false, reason: 'still_writing', message: tWords('tooLate') };
+    }
     const changed = await updateContentDraft(draft.id, { bodyHtml: page.after_text });
     if (!changed.ok)
       return {

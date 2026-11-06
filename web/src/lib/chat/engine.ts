@@ -153,6 +153,7 @@ import {
 import { abortDriver, publishRunEnd, registerDriver, unregisterDriver } from './run-hub';
 import {
   MAX_MODEL_STEPS,
+  RUN_REQUEST_MS,
   claimRunSlot,
   readBudget,
   readCap,
@@ -3591,7 +3592,13 @@ function toolContext(
     apiKeyId: 'agent-internal',
     // A schedule's date phrase reads on the person's clock (CHAT-12 item 2).
     timezone: rc.progress.timezone,
-    run: { id: rc.run.id, agentRunId: rc.agentRunId, scheduleId: rc.scheduleId },
+    run: {
+      id: rc.run.id,
+      agentRunId: rc.agentRunId,
+      scheduleId: rc.scheduleId,
+      // This request's limit, counted from when it took the run up (a queued run's wait too).
+      endsAt: rc.segmentStart + RUN_REQUEST_MS,
+    },
     ...(brandAccess !== undefined ? { brandAccess } : {}),
   };
 }
@@ -4005,6 +4012,10 @@ const SAID_FAILURES: Record<string, string> = {
   // Chat off for the workspace, or the server took no one to act as.
   chat_off: 'chat_off',
   acting_refused: 'acting_refused',
+  // Optimize here (W4-12b part 2), nothing changed: the rewrite outlasted Chat's wait and waits
+  // in the Content Editor, or the agent had nothing it could change.
+  still_writing: 'timeout',
+  nothing: 'nothing_to_change',
 };
 
 /**
@@ -4313,8 +4324,6 @@ async function deliver(
     ...(task ? { task } : {}),
     ...(paged ? { version: paged.version } : {}),
   };
-  if (paged && paged.version.n > 1) rc.sink.emit('deliverable.updated', card);
-  else rc.sink.emit('deliverable.created', card);
   if (paged) {
     rc.progress.pagePlaceholder = paged.version.changes.placeholders[0] ?? null;
     // A page with nothing left to fill, not Ready yet: Mark ready is a next move (W4-12b).
@@ -4323,13 +4332,20 @@ async function deliver(
     const rules = paged.version.rules;
     rc.progress.pageRulesOpen = rules ? rules.total - rules.met : 0;
   }
-  // Which History version the card's Undo puts back: kept on the server, by its file.
+  // Which History version the card's Undo puts back: kept on the server, by its file, at once,
+  // before the card shows its Undo: never left to the step's end, which a request cut off at its
+  // limit wouldn't reach after the page was saved.
   if (paged?.undoVersionId && filed.ok && made.contentDraftId) {
     rc.progress.pageUndos = {
       ...rc.progress.pageUndos,
       [filed.id]: { draftId: made.contentDraftId, versionId: paged.undoVersionId },
     };
+    await saveState(rc.run.id, { progress: rc.progress }).catch((error: unknown) =>
+      console.error("[chat] could not keep a page version's Undo:", error),
+    );
   }
+  if (paged && paged.version.n > 1) rc.sink.emit('deliverable.updated', card);
+  else rc.sink.emit('deliverable.created', card);
   return filed.ok ? filed.id : null;
 }
 
