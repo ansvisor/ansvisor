@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { AIProviderAvatar } from '@/components/ai-provider-avatar';
-import { getBrandMarketCountries } from '@/lib/actions/shopping-market';
+import { readKey } from '@/components/brand-visibility/read-cache';
+import { useBrandVisibilityShell } from '@/components/brand-visibility/shell-context';
 import {
   defaultMarket,
   isShoppingMarket,
@@ -12,8 +13,29 @@ import {
   type ShoppingMarket,
 } from '@/lib/shopping/markets';
 import { cn } from '@/lib/utils';
+import { getBrandMarketCountries } from '@/lib/visibility-reads';
 
 const storageKey = (brandId: string) => `aeo:shopping-market:${brandId}`;
+/** The brand's own market as its countries last gave it in this browser ('none' for none). */
+const defaultKey = (brandId: string) => `aeo:shopping-market-default:${brandId}`;
+
+function readKnownDefault(brandId: string): ShoppingMarket | null | undefined {
+  try {
+    const known = window.localStorage.getItem(defaultKey(brandId));
+    if (known === 'none') return null;
+    return isShoppingMarket(known) ? known : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function storeKnownDefault(brandId: string, market: ShoppingMarket | null) {
+  try {
+    window.localStorage.setItem(defaultKey(brandId), market ?? 'none');
+  } catch {
+    // Private mode: the next page load reads the countries first again.
+  }
+}
 
 function readStoredMarket(brandId: string): ShoppingMarket | null {
   try {
@@ -60,6 +82,11 @@ export interface ShoppingMarketState {
  * domains' and its prompts' locations) and the choice remembered for the
  * brand in this browser.
  *
+ * Every read waits for the market, so it doesn't wait for the countries
+ * when it needn't: the market they gave last (in this page's cache, else in
+ * this browser) is ready at once, and they are read again, quietly; only a
+ * brand never opened here waits for them. A market that changed reads again.
+ *
  * It composes with the filter bar's region rather than stacking on it: with
  * All regions the market keeps ChatGPT Shopping's cards to its regions; a
  * picked region narrows every platform on its own, and the switch shows that
@@ -73,20 +100,33 @@ export function useShoppingMarket(brandId: string | null, region: string): Shopp
     market: ShoppingMarket | null;
   } | null>(null);
 
+  const { cache } = useBrandVisibilityShell();
   useEffect(() => {
     if (!brandId) return;
     let cancelled = false;
-    getBrandMarketCountries(brandId)
-      // A failed read makes no claim: no market, no switch.
-      .then(defaultMarket, () => null)
-      .then((fallback) => {
-        if (cancelled) return;
-        setResolved({ brandId, market: fallback && (readStoredMarket(brandId) ?? fallback) });
-      });
+    const resolve = (fallback: ShoppingMarket | null) =>
+      setResolved({ brandId, market: fallback && (readStoredMarket(brandId) ?? fallback) });
+    const key = readKey('shopping', 'market', brandId);
+    const keptCountries = cache.get<string[]>(key);
+    const known = keptCountries ? defaultMarket(keptCountries) : readKnownDefault(brandId);
+    if (known !== undefined) resolve(known);
+    cache
+      .read(key, () => getBrandMarketCountries(brandId))
+      .then(
+        (countries) => {
+          const fallback = defaultMarket(countries);
+          storeKnownDefault(brandId, fallback);
+          if (!cancelled) resolve(fallback);
+        },
+        // A failed read makes no claim: no market, no switch; a market known stays.
+        () => {
+          if (!cancelled && known === undefined) resolve(null);
+        },
+      );
     return () => {
       cancelled = true;
     };
-  }, [brandId]);
+  }, [brandId, cache]);
 
   const select = useCallback(
     (next: ShoppingMarket) => {

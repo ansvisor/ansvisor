@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import messages from '../../../../../../messages/en.json';
+import messages from '../../../../../../../messages/en.json';
 import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 
 (
@@ -12,8 +12,11 @@ import { ShoppingMarketSwitch, useShoppingMarket } from './_market-switch';
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 const countriesByBrand = new Map<string, string[]>();
-vi.mock('@/lib/actions/shopping-market', () => ({
-  getBrandMarketCountries: vi.fn(async (brandId: string) => countriesByBrand.get(brandId) ?? []),
+const getBrandMarketCountries = vi.fn(
+  async (brandId: string) => countriesByBrand.get(brandId) ?? [],
+);
+vi.mock('@/lib/visibility-reads', () => ({
+  getBrandMarketCountries: (brandId: string) => getBrandMarketCountries(brandId),
 }));
 
 let container: HTMLDivElement;
@@ -76,6 +79,7 @@ const memoryStorage = {
 beforeEach(() => {
   store.clear();
   countriesByBrand.clear();
+  getBrandMarketCountries.mockClear();
   onRegionReset.mockClear();
   Object.defineProperty(window, 'localStorage', { configurable: true, value: memoryStorage });
   container = document.createElement('div');
@@ -188,5 +192,36 @@ describe('ShoppingMarketSwitch', () => {
       expect(button(name).getAttribute('type')).toBe('button');
       expect(button(name).hasAttribute('aria-pressed')).toBe(true);
     }
+  });
+
+  it('is ready at once with the market the brand had last, and reads its countries again', async () => {
+    countriesByBrand.set('b1', ['US']);
+    await render('b1');
+    expect(store.get('aeo:shopping-market-default:b1')).toBe('us');
+
+    // Opened again (a new page load): the market it had is ready before the read is back.
+    let answer: (countries: string[]) => void = () => {};
+    getBrandMarketCountries.mockImplementationOnce(
+      () => new Promise<string[]>((resolve) => (answer = resolve)),
+    );
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render('b1');
+    expect(state()).toMatchObject({ ready: 'true', market: 'us', filter: 'us' });
+
+    // The countries changed since: the market follows them, and is kept for next time.
+    await act(async () => answer(['DE']));
+    expect(state()).toMatchObject({ market: 'europe', filter: 'europe' });
+    expect(store.get('aeo:shopping-market-default:b1')).toBe('europe');
+  });
+
+  it('waits for the countries for a brand never opened here, and keeps no market when they fail', async () => {
+    getBrandMarketCountries.mockImplementationOnce(() => new Promise<string[]>(() => {}));
+    await render('b1');
+    expect(state()).toMatchObject({ ready: 'false' });
+
+    getBrandMarketCountries.mockRejectedValueOnce(new Error('down'));
+    await render('b2');
+    expect(state()).toMatchObject({ ready: 'true', market: '' });
   });
 });

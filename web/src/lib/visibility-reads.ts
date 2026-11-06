@@ -1,12 +1,16 @@
 import type * as citations from '@/lib/actions/citations';
 import type * as competitor from '@/lib/actions/competitor';
 import type * as mentions from '@/lib/actions/mentions';
+import type * as shopping from '@/lib/actions/shopping';
+import type * as shoppingMarket from '@/lib/actions/shopping-market';
+import type * as openAiIndex from '@/lib/actions/shopping-openai-index';
 import type * as topic from '@/lib/actions/topic';
 import type * as tracking from '@/lib/actions/tracking';
+import type * as shoppingPage from '@/lib/shopping/page-reads';
 
 /**
- * The Visibility tabs' reads (Overview, Mentions, Citations, and the run
- * line above them), from the browser, through one route
+ * The Visibility tabs' reads (Overview, Mentions, Citations, Product
+ * Visibility, and the run line above them), from the browser, through one route
  * (/api/visibility/read) rather than as server actions.
  *
  * Next runs a page's server actions one at a time: opening a tab sent five
@@ -31,6 +35,23 @@ export const VISIBILITY_READS = [
   'citationsOverview',
   'citationGaps',
   'hasCitations',
+  // Product Visibility (Visibility's fourth tab).
+  'shoppingMarket',
+  'shoppingFilterOptions',
+  'shoppingSources',
+  'shoppingAmazonAlert',
+  'shoppingOverview',
+  'shoppingShelf',
+  'shoppingOrders',
+  'shoppingDestinations',
+  'shoppingProducts',
+  'shoppingOwnProducts',
+  'shoppingCategories',
+  'shoppingActionResults',
+  'shoppingSearchAppearance',
+  'shoppingOpenAiIndex',
+  'shoppingCompetitorSummary',
+  'shoppingCompetitorProducts',
 ] as const;
 export type VisibilityRead = (typeof VISIBILITY_READS)[number];
 
@@ -67,3 +88,33 @@ export const getMentionsPerception =
 export const getCitationsOverview = via<typeof citations.getCitationsOverview>('citationsOverview');
 export const getCitationGaps = via<typeof citations.getCitationGaps>('citationGaps');
 export const brandHasCitations = via<typeof citations.brandHasCitations>('hasCitations');
+
+// Product Visibility.
+export const getBrandMarketCountries =
+  via<typeof shoppingMarket.getBrandMarketCountries>('shoppingMarket');
+export const getShoppingFilterOptions =
+  via<typeof shopping.getShoppingFilterOptions>('shoppingFilterOptions');
+export const getProductSources = via<typeof shoppingPage.getProductSources>('shoppingSources');
+export const getShoppingAmazonShareDropAlert =
+  via<typeof shopping.getShoppingAmazonShareDropAlert>('shoppingAmazonAlert');
+export const getShoppingOverview = via<typeof shopping.getShoppingOverview>('shoppingOverview');
+export const getShoppingShelf = via<typeof shopping.getShoppingShelf>('shoppingShelf');
+export const getShoppingAiOrders = via<typeof shopping.getShoppingAiOrders>('shoppingOrders');
+export const getShoppingDestinations =
+  via<typeof shoppingPage.getShoppingDestinations>('shoppingDestinations');
+export const getShoppingProducts = via<typeof shopping.getShoppingProducts>('shoppingProducts');
+export const getOwnProducts = via<typeof shopping.getOwnProducts>('shoppingOwnProducts');
+export const getShoppingCategories =
+  via<typeof shopping.getShoppingCategories>('shoppingCategories');
+export const getShoppingActionResults =
+  via<typeof shopping.getShoppingActionResults>('shoppingActionResults');
+export const getShoppingSearchAppearance = via<typeof shopping.getShoppingSearchAppearance>(
+  'shoppingSearchAppearance',
+);
+export const getOpenAiIndexRead = via<typeof openAiIndex.getOpenAiIndexRead>('shoppingOpenAiIndex');
+export const getCompetitorSummary = via<typeof shopping.getCompetitorSummary>(
+  'shoppingCompetitorSummary',
+);
+export const getCompetitorProducts = via<typeof shopping.getCompetitorProducts>(
+  'shoppingCompetitorProducts',
+);

@@ -106,3 +106,18 @@ export function CitationsSkeleton({ filters = true }: { filters?: boolean }) {
     </Loading>
   );
 }
+
+/** Product Visibility: its views, its filters, the Shelf's four KPI cards, then its two cards. */
+export function ProductsSkeleton() {
+  return (
+    <Loading testId="products-skeleton">
+      <Skeleton className="h-8 w-96 max-w-full" aria-hidden />
+      <Skeleton className="h-14 w-full rounded-lg" aria-hidden />
+      <KpiCardsSkeleton count={4} className="grid grid-cols-2 gap-4 lg:grid-cols-4" />
+      <div className="grid gap-4 lg:grid-cols-2" aria-hidden>
+        <Skeleton className="h-[220px] rounded-xl" />
+        <Skeleton className="h-[220px] rounded-xl" />
+      </div>
+    </Loading>
+  );
+}

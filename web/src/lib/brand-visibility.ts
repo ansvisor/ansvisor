@@ -4,27 +4,57 @@ import { PROMPT_RANGE_PRESETS } from '@/config/prompt-options';
 import { DEFAULT_MENTIONS_FILTERS } from '@/lib/mentions-filters';
 import { modelLabel } from '@/lib/model-families';
 import { POSITION_PLATFORMS } from '@/lib/prompt-positions';
+import type { Brand } from '@/types';
 
 /**
- * Brand Visibility (the owner's mockup, approved 2026-11): one page, three
- * tabs. Each tab keeps the address its page always had, so every link,
- * bookmark, e-mail and Chat card that opens one still lands on it, and the
- * menu sections named after them (menu access) stay as they are. The tabs
- * share one layout (the header, the run line and the tabs), which stays
- * mounted while the tab under it changes.
+ * Brand Visibility (the owner's mockup, approved 2026-11): one page, with
+ * Overview, Mentions and Citations, and for a brand that sells online
+ * Product Visibility (owner, 2026-11-06; hasProductVisibilityTab). Each tab
+ * keeps the address its page always had, so every link, bookmark, e-mail and
+ * Chat card that opens one still lands on it, and the menu sections named
+ * after them (menu access) stay as they are. The tabs share one layout (the
+ * header, the run line and the tabs), which stays mounted while the tab
+ * under it changes.
  */
 export const BRAND_VISIBILITY_TABS = [
   { id: 'overview', href: '/dashboard/insights' },
   { id: 'mentions', href: '/dashboard/mentions' },
   { id: 'citations', href: '/dashboard/citations' },
+  { id: 'products', href: '/dashboard/shopping' },
 ] as const;
 
 export type BrandVisibilityTab = (typeof BRAND_VISIBILITY_TABS)[number]['id'];
 
-/** The tab a pathname (without its locale) is; null off the three tabs' own routes. */
+/** The tabs that share the date range, engine, country and topic: all but Product Visibility. */
+type FilterTab = Exclude<BrandVisibilityTab, 'products'>;
+
+/** The tab a pathname (without its locale) is; null off the tabs' own routes. */
 export function brandVisibilityTabOf(pathname: string): BrandVisibilityTab | null {
   const path = pathname.replace(/\/+$/, '');
   return BRAND_VISIBILITY_TABS.find((tab) => tab.href === path)?.id ?? null;
+}
+
+/**
+ * A brand that sells online: Shopping mode on, or its site type is
+ * e-commerce (set at setup, by its catalog or by a person) with Shopping
+ * mode still off.
+ */
+export function isEcommerceBrand(
+  brand: Pick<Brand, 'shoppingModeEnabled' | 'siteType'> | null | undefined,
+): boolean {
+  return !!brand && (brand.shoppingModeEnabled || brand.siteType === 'ecommerce');
+}
+
+/**
+ * Whether Visibility shows Product Visibility as its fourth tab, and the
+ * menu its Products entry: an e-commerce brand, on a plan with Product
+ * Visibility. Other brands see neither; its address still opens the page.
+ */
+export function hasProductVisibilityTab(
+  brand: Pick<Brand, 'shoppingModeEnabled' | 'siteType'> | null | undefined,
+  canUse: (feature: 'shopping_analytics') => boolean,
+): boolean {
+  return canUse('shopping_analytics') && isEcommerceBrand(brand);
 }
 
 /** The Overview's range when its address names none: the latest run. */
@@ -37,7 +67,7 @@ export const OVERVIEW_DEFAULT_RANGE = '24h';
  * tab change translates between them.
  */
 const TAB_PARAMS: Record<
-  BrandVisibilityTab,
+  FilterTab,
   { range: string; ranges: readonly string[]; defaultRange: string; engine: string }
 > = {
   overview: {
@@ -84,7 +114,7 @@ export interface SharedFilters {
 }
 
 /** The shared filters a tab's query string holds; a range only when one was picked. */
-export function readSharedFilters(tab: BrandVisibilityTab, search: URLSearchParams): SharedFilters {
+export function readSharedFilters(tab: FilterTab, search: URLSearchParams): SharedFilters {
   const names = TAB_PARAMS[tab];
   const asked = search.get(names.range);
   const range =
@@ -131,7 +161,7 @@ export function mentionsPlatformOf(engine: string): string {
  * does; a Mentions engine reaches the Overview and Citations as one
  * platform, which they read as its family (modelFamilyValue).
  */
-export function sharedFilterQuery(tab: BrandVisibilityTab, filters: SharedFilters): string {
+export function sharedFilterQuery(tab: FilterTab, filters: SharedFilters): string {
   const names = TAB_PARAMS[tab];
   const params = new URLSearchParams();
   const range = names.ranges.includes(filters.range) ? filters.range : names.defaultRange;
@@ -152,7 +182,9 @@ export function sharedFilterQuery(tab: BrandVisibilityTab, filters: SharedFilter
  * Where a tab's link goes from the page shown: the tab with the shared
  * filters of the tab open now, so the date range, engine, country and topic
  * stay as they were. The tab open now keeps its whole address (its own
- * filters too); off Brand Visibility, a tab opens on its defaults.
+ * filters too); off Brand Visibility, a tab opens on its defaults. Product
+ * Visibility's filters are its own (its dates, shopping channels and
+ * regions): none carry to it or from it.
  */
 export function brandVisibilityTabHref(
   tab: BrandVisibilityTab,
@@ -166,5 +198,6 @@ export function brandVisibilityTabHref(
     const query = params.toString();
     return query ? `${href}?${query}` : href;
   }
+  if (tab === 'products' || current === 'products') return href;
   return `${href}${sharedFilterQuery(tab, readSharedFilters(current, params))}`;
 }

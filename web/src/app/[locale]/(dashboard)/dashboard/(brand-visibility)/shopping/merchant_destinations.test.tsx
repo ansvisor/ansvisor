@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import messages from '../../../../../../messages/en.json';
+import messages from '../../../../../../../messages/en.json';
 import { toMerchantSplit } from '@/lib/shopping-merchant-split';
 import { detectResellerPriceAlerts } from '@/lib/shopping-reseller-price-alert';
 import { MerchantSplitCard } from './merchant_split_card';
