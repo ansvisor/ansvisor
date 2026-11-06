@@ -793,12 +793,15 @@
         "prompt portfolio manager",
         "prompts to add",
         "prompts to pause",
-        "agent work",
-        "i approve first",
-        "agent starts on its own",
+        "when a brand is added",
+        "brand added",
+        "new brand trigger",
         "goal",
         "role",
-        "filter agents"
+        "filter agents",
+        "agent work",
+        "i approve first",
+        "agent starts on its own"
       ],
       "synonyms": [
         "my agents",
@@ -823,14 +826,16 @@
         "setup help",
         "new member setup",
         "what did my agent do",
-        "did my agent work"
+        "did my agent work",
+        "run an agent on a new brand",
+        "agent for new brands"
       ],
       "plan": "all",
       "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
-          "text": "An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses."
+          "text": "An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, when a brand is added, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses."
         },
         {
           "heading": "Open Agent Center",
@@ -854,7 +859,7 @@
         },
         {
           "heading": "Onboarding & Help",
-          "text": "**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**), and it has no trigger: after you turn it on, click **Run now** on its page, or add a schedule if you like. Each run says how many **Getting started** steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help."
+          "text": "**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**). It starts on **All brands** with **When a brand is added**: once it's on, each brand someone adds gets one run, which acts as the agent's owner and shows in their Inbox. You can also click **Run now** on its page. Each run says how many **Getting started** steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help."
         },
         {
           "heading": "Prompt Portfolio Manager",
@@ -898,7 +903,7 @@
         },
         {
           "heading": "When an agent runs by itself",
-          "text": "A **Schedule** trigger runs at its time on the clock of the time zone it was set in, also when summer time starts or ends. A time missed while the agent was paused isn't made up later. A **Signal** trigger runs when Action Center finds a new signal of its category, and of the definitions, pages and engines you picked. **KPI changed** and **Watch rule** triggers are saved, but don't start runs yet.\n\nSignals that come close together don't each start a run. Signals within 15 minutes join one run, a brand gets at most one signal run every 6 hours, and your plan sets how many signal runs an agent may start a day. A signal that had to wait is listed in the agent's next run, and in **Run history** as **Skipped** with the reason."
+          "text": "A **Schedule** trigger runs at its time on the clock of its time zone, summer time included. A time missed while the agent was paused isn't made up later. A **Signal** trigger runs when Action Center finds a new signal of its category, definitions, pages and engines. **When a brand is added** runs once for each brand someone adds, never the demo brand, on an agent with **All brands** whose owner can use that brand. **KPI changed** and **Watch rule** triggers are saved, but don't start runs yet.\n\nSignals within 15 minutes join one run, a brand gets at most one signal run every 6 hours, and your plan sets how many signal and new-brand runs an agent may start a day. A fire that had to wait is listed in the agent's next run, and in **Run history** as **Skipped** with the reason."
         },
         {
           "heading": "A schedule's time zone",

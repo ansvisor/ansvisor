@@ -639,6 +639,198 @@ describe('signals', () => {
   });
 });
 
+describe('a brand added (00482)', () => {
+  const BRAND_TRIGGER = 'dddddddd-0000-4000-8000-000000000004';
+  const BRAND_3 = '44444444-4444-4444-8444-444444444444';
+  const T0 = new Date('2026-11-02T10:00:00Z');
+  const claims = () => db.tables.chat_agent_trigger_claims;
+  const added = (brandId = BRAND_2, when = T0) => triggers.fireBrandAdded(brandId, when, null);
+
+  beforeEach(() => {
+    seedAgent({}, { brand_ids: undefined, all_brands: true });
+    db.tables.brands.push({ id: BRAND_3, organization_id: ORG, name: 'Brand C', is_demo: false });
+    db.tables.chat_agent_triggers.push({
+      id: BRAND_TRIGGER,
+      agent_id: AGENT,
+      kind: 'brand_added',
+      config_json: {},
+      enabled: true,
+      last_fired_at: null,
+      cooldown_until: null,
+      created_at: '2026-10-01T00:00:00.000Z',
+    });
+    db.tables.chat_agent_trigger_claims = [];
+  });
+
+  it('queues one run on the new brand, as the owner, with the brand as its evidence', async () => {
+    expect(await added()).toEqual({ fired: 1, queued: 1, coalesced: 0, skipped: 0, failed: 0 });
+    expect(queuedRuns()).toEqual([
+      expect.objectContaining({
+        brand_id: BRAND_2,
+        trigger_kind: 'brand_added',
+        trigger_id: BRAND_TRIGGER,
+        trigger_ref: BRAND_2,
+        acting_user_id: PEOPLE.manager,
+        evidence_json: {
+          fires: [{ kind: 'brand_added', ref: BRAND_2, at: T0.toISOString() }],
+          earlier: [],
+        },
+      }),
+    ]);
+    expect(claims()).toEqual([
+      expect.objectContaining({ agent_id: AGENT, kind: 'brand_added', brand_id: BRAND_2 }),
+    ]);
+    expect(db.tables.chat_agent_triggers[0].last_fired_at).toBe(T0.toISOString());
+  });
+
+  it('fires once per agent and brand: a second fire for the same brand queues nothing', async () => {
+    await added();
+    // A retry an hour later, the first run long done: the claim is taken.
+    runs()[0].status = 'done';
+    expect(await added(BRAND_2, new Date(T0.getTime() + 60 * 60_000))).toEqual({
+      fired: 0,
+      queued: 0,
+      coalesced: 0,
+      skipped: 0,
+      failed: 0,
+    });
+    expect(runs()).toHaveLength(1);
+    expect(claims()).toHaveLength(1);
+  });
+
+  it('runs on a second new brand minutes later: the cooldown reads the brand’s own runs', async () => {
+    await added(BRAND_2);
+    expect(await added(BRAND_3, new Date(T0.getTime() + 2 * 60_000))).toMatchObject({
+      fired: 1,
+      queued: 1,
+    });
+    expect(queuedRuns().map((r) => r.brand_id)).toEqual([BRAND_2, BRAND_3]);
+    expect(skipped('cooldown')).toEqual([]);
+  });
+
+  it('starts the run when a driver is given; without one it waits for the minute tick', async () => {
+    await added(BRAND_2);
+    expect(queuedRuns()).toHaveLength(1);
+    expect(driver).not.toHaveBeenCalled();
+    // With a driver, the workspace starts what it has room for: the waiting run too.
+    await triggers.fireBrandAdded(BRAND_3, T0, driver);
+    expect(driver).toHaveBeenCalledTimes(2);
+    expect(queuedRuns()).toEqual([]);
+  });
+
+  it('never fires for the demo brand, nor the demo’s sample agents, nor with Chat off', async () => {
+    db.tables.brands.find((b) => b.id === BRAND_2)!.is_demo = true;
+    expect((await added(BRAND_2)).fired).toBe(0);
+    db.tables.chat_agents[0].demo_brand_id = BRAND;
+    expect((await added(BRAND_3)).fired).toBe(0);
+    db.tables.chat_agents[0].demo_brand_id = null;
+    vi.stubEnv('CHAT_AGENTIC_ORGS', 'ffffffff-0000-4000-8000-000000000000');
+    expect((await added(BRAND_3)).fired).toBe(0);
+    expect(runs()).toEqual([]);
+    expect(claims()).toEqual([]);
+  });
+
+  it('fires nothing in a read-only workspace, for a paused agent or a trigger turned off', async () => {
+    db.tables.organizations[0].subscription_status = 'canceled';
+    expect((await added()).fired).toBe(0);
+    db.tables.organizations[0].subscription_status = 'active';
+    db.tables.chat_agents[0].status = 'paused';
+    db.tables.chat_agents[0].paused_reason = 'manual';
+    expect((await added()).fired).toBe(0);
+    db.tables.chat_agents[0].status = 'active';
+    db.tables.chat_agents[0].paused_reason = null;
+    db.tables.chat_agent_triggers[0].enabled = false;
+    expect((await added()).fired).toBe(0);
+    expect(runs()).toEqual([]);
+    expect(claims()).toEqual([]);
+  });
+
+  it('fires only for an agent on All brands: one on picked brands has none of a new one', async () => {
+    seedAgent({}, { brand_ids: [BRAND, BRAND_2] });
+    expect((await added(BRAND_2)).fired).toBe(0);
+    expect(runs()).toEqual([]);
+    expect(claims()).toEqual([]);
+  });
+
+  it('fires nothing when the owner may not use the new brand, and the agent stays on (BRAND-ACCESS)', async () => {
+    db.tables.profiles.find((p) => p.id === PEOPLE.manager)!.brand_scope = 'selected';
+    db.tables.member_brands = [{ user_id: PEOPLE.manager, organization_id: ORG, brand_id: BRAND }];
+    expect((await added(BRAND_2)).fired).toBe(0);
+    expect(runs()).toEqual([]);
+    expect(claims()).toEqual([]);
+    expect(db.tables.chat_agents[0]).toMatchObject({ status: 'active', paused_reason: null });
+    // Shared with them (the creator's grant): it fires.
+    db.tables.member_brands.push({
+      user_id: PEOPLE.manager,
+      organization_id: ORG,
+      brand_id: BRAND_3,
+    });
+    expect(await added(BRAND_3)).toMatchObject({ fired: 1, queued: 1 });
+    expect(queuedRuns()[0]).toMatchObject({ brand_id: BRAND_3, acting_user_id: PEOPLE.manager });
+  });
+
+  it('keeps a fire past the plan’s event runs a day as skipped · daily_limit', async () => {
+    db.tables.organizations[0].subscription_status = 'trialing';
+    // The trial's 2 event runs today are used, on another brand.
+    for (const [i, kind] of ['signal', 'brand_added'].entries()) {
+      runs().push({
+        id: `today${i}`,
+        agent_id: AGENT,
+        brand_id: BRAND,
+        trigger_kind: kind,
+        status: 'done',
+        skipped_reason: null,
+        queued_at: new Date(T0.getTime() - (i + 1) * 60 * 60_000).toISOString(),
+        evidence_json: {},
+      });
+    }
+    expect(await added()).toMatchObject({ fired: 1, queued: 0, skipped: 1 });
+    expect(skipped('daily_limit')).toEqual([
+      expect.objectContaining({ brand_id: BRAND_2, trigger_kind: 'brand_added' }),
+    ]);
+    // Once only: the next day's fire for that brand finds the claim taken.
+    expect((await added(BRAND_2, new Date('2026-11-03T00:30:00Z'))).fired).toBe(0);
+  });
+
+  it('pauses an agent whose monthly cap is used, or once agents used the own key’s limit, queuing nothing', async () => {
+    seedAgent({ max_month_share: 0.2 }, { brand_ids: undefined, all_brands: true });
+    fakes.shares.mockResolvedValue({
+      unlimited: false,
+      byAgent: new Map([[AGENT, { share: 0.15, ownKeyShare: 0.05, runs: 3 }]]),
+    });
+    expect(await added(BRAND_2)).toMatchObject({ fired: 1, queued: 0 });
+    expect(db.tables.chat_agents[0]).toMatchObject({ status: 'paused', paused_reason: 'cap' });
+
+    seedAgent({}, { brand_ids: undefined, all_brands: true });
+    fakes.shares.mockResolvedValue(null);
+    fakes.keyCap.mockResolvedValue({ reached: true, renewsAt: '2026-11-20T09:00:00.000Z' });
+    expect(await added(BRAND_3)).toMatchObject({ fired: 1, queued: 0 });
+    expect(db.tables.chat_agents[0]).toMatchObject({
+      status: 'paused',
+      paused_reason: 'own_key_cap',
+    });
+    expect(runs()).toEqual([]);
+  });
+
+  it('fires the other agents when one fails, and counts it', async () => {
+    const OTHER = 'abababab-0000-4000-8000-000000000002';
+    db.tables.chat_agents.push({ ...db.tables.chat_agents[0], id: OTHER, name: 'Other' });
+    db.tables.chat_agent_versions.push({ ...db.tables.chat_agent_versions[0], agent_id: OTHER });
+    db.tables.chat_agent_triggers.push({
+      ...db.tables.chat_agent_triggers[0],
+      id: 'dddddddd-0000-4000-8000-000000000005',
+      agent_id: OTHER,
+    });
+    const restore = failRunInserts((row) => row.agent_id === AGENT);
+    try {
+      expect(await added()).toEqual({ fired: 2, queued: 1, coalesced: 0, skipped: 0, failed: 1 });
+      expect(queuedRuns().map((r) => r.agent_id)).toEqual([OTHER]);
+    } finally {
+      restore();
+    }
+  });
+});
+
 describe('a run’s evidence', () => {
   it('reads what it can and leaves the rest out', () => {
     expect(triggers.evidenceOf(null)).toEqual({ fires: [], earlier: [] });

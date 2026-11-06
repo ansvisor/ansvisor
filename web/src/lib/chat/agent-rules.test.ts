@@ -15,6 +15,7 @@ import {
   modeDenial,
   monthCapDenial,
   nextVersion,
+  triggerScopeProblem,
   triggerTimeProblem,
   updateAgentInput,
   visibilityDenial,
@@ -214,6 +215,19 @@ describe('triggers', () => {
     ]) {
       expect(agentTriggersSchema.safeParse([bad]).success, JSON.stringify(bad)).toBe(false);
     }
+  });
+
+  it('takes When a brand is added with no settings, once, on All brands only (00482)', () => {
+    const added = { kind: 'brand_added', config: {} };
+    expect(agentTriggersSchema.parse([added, schedule])[0]).toEqual({ ...added, enabled: true });
+    expect(agentTriggersSchema.safeParse([added, added]).success).toBe(false);
+    expect(
+      agentTriggersSchema.safeParse([{ kind: 'brand_added', config: { brand_id: BRAND } }]).success,
+    ).toBe(false);
+    const triggers = agentTriggersSchema.parse([added]);
+    expect(triggerScopeProblem(triggers, { all_brands: true })).toBeNull();
+    expect(triggerScopeProblem(triggers, {})).toBe('brand_added_scope');
+    expect(triggerScopeProblem(agentTriggersSchema.parse([schedule]), {})).toBeNull();
   });
 
   it('keeps a one-off schedule within the coming year', () => {

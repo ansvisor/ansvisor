@@ -270,14 +270,14 @@ describe('a ready preset', () => {
     expect(chatAgents.presets['prompt-portfolio'].description).toContain('to pause');
   });
 
-  it('walks Getting started as Onboarding & Help, on Run now, asking before every change', () => {
-    // AGENTS plan §3 #11: its /setup skill, Manual only (its plan triggers, a new brand or
-    // member, aren't kinds New agent offers), and Ask me first, as Get started (/start) asks.
+  it('walks Getting started as Onboarding & Help, on a brand added, asking before every change', () => {
+    // AGENTS plan §3 #11: its /setup skill, When a brand is added (00482), and Ask me first,
+    // as Get started (/start) asks: every change is the person's click.
     const help = readyPreset('onboarding-help')!;
     expect(help).toMatchObject({
       goal: 'help',
       skills: ['setup'],
-      triggers: [],
+      triggers: [{ kind: 'brand_added' }],
       mode: 'ask_first',
       connections: [],
       needs: [],
