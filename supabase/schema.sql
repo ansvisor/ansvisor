@@ -61541,7 +61541,7 @@ comment on function public.product_page_candidates(uuid, timestamptz) is
 -- A product pages action (G21) keeps up to ten products (payload.products,
 -- best first) and works on the first 3, 5 or 10 of them: its pages, its
 -- targets and count, and its list (00244's action_entities), read again.
--- Members of the brand's organization, as the actions update policy; an
+-- People who can access the action's brand (can_access_brand, 00388); an
 -- open action only. Returns the payload, or null when nothing changed.
 create or replace function public.set_product_group_size(p_action_id uuid, p_size integer)
 returns jsonb
@@ -61567,13 +61567,9 @@ begin
   if not found then
     return null;
   end if;
-  if auth.role() is distinct from 'service_role' and not exists (
-    select 1
-    from public.brands b
-    join public.profiles p on p.organization_id = b.organization_id
-    where b.id = v_action.brand_id
-      and p.id = auth.uid()
-  ) then
+  -- Brand access (00388): a person on Selected brands changes their brands' only.
+  if auth.role() is distinct from 'service_role'
+    and not public.can_access_brand(v_action.brand_id) then
     return null;
   end if;
 
@@ -61618,7 +61614,7 @@ grant execute on function public.set_product_group_size(uuid, integer)
   to authenticated, service_role;
 
 comment on function public.set_product_group_size(uuid, integer) is
-  'AC plan P-6: a product pages action works on the first 3, 5 or 10 of its products: its pages, targets, count and list. Members of the brand''s organization; open actions only.';
+  'AC plan P-6: a product pages action works on the first 3, 5 or 10 of its products: its pages, targets, count and list. People who can access the action''s brand; open actions only.';
 
 notify pgrst, 'reload schema';
 

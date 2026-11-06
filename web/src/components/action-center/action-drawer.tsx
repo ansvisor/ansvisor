@@ -903,9 +903,11 @@ export function ActionDrawer({
                 onAdd={(title) => void mutate(() => addTask(brandId, action.id, title))}
               />
               {/* Written from the action's evidence (AC-004): not for an
-                  action a person sent, which carries its own, nor a closed one. */}
+                  action a person sent, which carries its own, nor a closed one;
+                  nor a product pages action, whose tasks are its plan's. */}
               {taskWriterEnabled() &&
                 action.kind !== 'prompt_improve' &&
+                action.kind !== 'product_pages_optimize' &&
                 !opportunityId &&
                 action.status !== 'completed' &&
                 action.status !== 'dismissed' &&

@@ -29,6 +29,7 @@ import { loadDefinitions } from '../definitions/index.js';
 import { getTask } from '../tasks/registry.js';
 import { IMPROVE_ACTION_KIND } from '../from-prompt-improve.js';
 import { OPPORTUNITY_ACTION_KIND } from '../from-opportunity.js';
+import { PRODUCT_PAGES_KIND } from '../definitions/g21-optimize-product-pages.js';
 import { buildEvidence, evidenceForPrompt, hasTargets } from './evidence.js';
 import { loadPastRounds } from './history.js';
 import {
@@ -57,8 +58,12 @@ export function taskWriterModelId() {
   );
 }
 
-/** Actions a person sent carry the tasks they were sent with. */
-const SENT_KINDS = new Set([IMPROVE_ACTION_KIND, OPPORTUNITY_ACTION_KIND]);
+/**
+ * Actions that carry their tasks: a person's sent with them, and a product
+ * pages action's (AC plan P-6), whose optimize task Start now opens its
+ * pages' drafts from.
+ */
+const SENT_KINDS = new Set([IMPROVE_ACTION_KIND, OPPORTUNITY_ACTION_KIND, PRODUCT_PAGES_KIND]);
 const CLOSED = new Set(['completed', 'dismissed']);
 
 /**
@@ -526,7 +531,7 @@ export async function sweepActionTasks({ brandId, now = new Date(), limit = SWEE
     .is('tasks_generated_at', null)
     .gte('created_at', new Date(now.getTime() - SWEEP_WINDOW_MS).toISOString())
     .not('status', 'in', '("completed","dismissed")')
-    .not('kind', 'in', `("${IMPROVE_ACTION_KIND}","${OPPORTUNITY_ACTION_KIND}")`)
+    .not('kind', 'in', `(${[...SENT_KINDS].map((kind) => `"${kind}"`).join(',')})`)
     .order('created_at', { ascending: false })
     .limit(limit);
   if (brandId) query = query.eq('brand_id', brandId);
