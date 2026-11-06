@@ -114,6 +114,12 @@ vi.mock('@/lib/actions/action-center-today', () => ({ getToday }));
 vi.mock('@/components/action-center/agent-work-gear', () => ({
   AgentWorkGear: () => <span data-testid="agent-work-gear" />,
 }));
+// A row's Start now (AC plan P-3) reads its work through content-drafts, which needs the
+// server's Supabase client; the list's rows are stubbed here.
+vi.mock('@/components/action-center/start-now', () => ({
+  useStartNow: () => ({ busy: false, start: vi.fn() }),
+}));
+vi.mock('@/lib/actions/content-drafts', () => ({ getStartNowWork: vi.fn() }));
 vi.mock('@/lib/actions/getting-started', () => ({
   getGettingStarted,
   startGettingStarted,
