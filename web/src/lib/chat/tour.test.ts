@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import messages from '../../../messages/en.json';
-import { isTourTopic, TOUR_PAGES, TOUR_TOPICS } from './tour';
+import { isTourTopic, TOUR_PAGES, TOUR_TOPICS, tourFocusOf, tourTopicsOfPath } from './tour';
 
 /**
  * The product tour's topics (owner decision 2026-11-06): the welcome card's
@@ -44,5 +44,68 @@ describe('the tour topics', () => {
     expect(isTourTopic('content')).toBe(true);
     expect(isTourTopic('everything')).toBe(false);
     expect(isTourTopic(null)).toBe(false);
+  });
+});
+
+describe('the page a tour turn is about', () => {
+  it('reads the topics of each page and the pages under it', () => {
+    expect(tourTopicsOfPath('/dashboard/insights')).toEqual(['visibility']);
+    expect(tourTopicsOfPath('/dashboard/mentions')).toEqual(['visibility']);
+    expect(tourTopicsOfPath('/dashboard/citations/domains')).toEqual(['visibility']);
+    expect(tourTopicsOfPath('/dashboard/prompts/tracked')).toEqual(['prompts', 'positions']);
+    expect(tourTopicsOfPath('/dashboard/prompts')).toEqual(['prompts', 'positions']);
+    expect(tourTopicsOfPath('/dashboard/content/plan')).toEqual(['content']);
+    expect(tourTopicsOfPath('/dashboard/content/editor/d1')).toEqual([]);
+    expect(tourTopicsOfPath('/dashboard/settings/integrations')).toEqual(['connections']);
+    expect(tourTopicsOfPath('/dashboard/settings/team')).toEqual([]);
+    expect(tourTopicsOfPath('/dashboard/insightsx')).toEqual([]);
+    expect(tourTopicsOfPath('/dashboard/audit')).toEqual([]);
+  });
+
+  it('focuses the latest turn about the page, never another page’s', () => {
+    const turns = [
+      { topic: 'visibility' as const, question: 0 },
+      { topic: 'prompts' as const, question: 2 },
+      { topic: 'visibility' as const, question: 4 },
+      { topic: 'content' as const, question: 6 },
+    ];
+    // Back on Visibility from the menu after Content: its own latest turn.
+    expect(tourFocusOf({ pathname: '/dashboard/insights', turns, current: 'content' })).toEqual({
+      kind: 'turn',
+      topic: 'visibility',
+      question: 4,
+    });
+    // Tracked Prompts is Prompts' and Positions': the latest of either.
+    expect(
+      tourFocusOf({ pathname: '/dashboard/prompts/tracked', turns, current: 'content' }),
+    ).toEqual({ kind: 'turn', topic: 'prompts', question: 2 });
+    expect(
+      tourFocusOf({
+        pathname: '/dashboard/prompts/tracked',
+        turns: [...turns, { topic: 'positions', question: 8 }],
+        current: 'positions',
+      }),
+    ).toEqual({ kind: 'turn', topic: 'positions', question: 8 });
+  });
+
+  it('offers to explain a topic page not explained yet, and keeps the newest turn elsewhere', () => {
+    const turns = [{ topic: 'visibility' as const, question: 0 }];
+    expect(
+      tourFocusOf({ pathname: '/dashboard/settings/integrations', turns, current: 'visibility' }),
+    ).toEqual({ kind: 'unexplained', topic: 'connections' });
+    // The first of the page's topics not explained.
+    expect(tourFocusOf({ pathname: '/dashboard/prompts', turns, current: 'visibility' })).toEqual({
+      kind: 'unexplained',
+      topic: 'prompts',
+    });
+    expect(tourFocusOf({ pathname: '/dashboard/audit', turns, current: 'visibility' })).toEqual({
+      kind: 'newest',
+      topic: 'visibility',
+    });
+    // A tour chat from before its turns were marked: nothing about this page in focus.
+    expect(tourFocusOf({ pathname: '/dashboard/content', turns: [], current: 'content' })).toEqual({
+      kind: 'unexplained',
+      topic: 'content',
+    });
   });
 });

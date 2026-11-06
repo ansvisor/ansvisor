@@ -36,6 +36,16 @@ The panel says where you are, such as **Ansvisor tour · 2 of 5**. Under each ex
 - **Another topic** lists the other topics to jump to.
 - **End the tour** ends it with one last line on where to find Chat from now on.
 
+## The panel on every page
+
+While the tour is on, every page you open, from the menu too, opens with Chat beside it on the tour. On a page the tour explained, the panel brings that page's explanation into view and marks it for a moment, with the tour's chips under it. On a topic's page it hasn't explained yet, **Show me this page** explains it. On other pages the panel stays on the latest explanation.
+
+If you close the panel, it stays closed on the next pages until you open Chat again or click one of the tour's chips.
+
+## While your first results come in
+
+If your brand's first tracking run is still going, each explanation ends with a line saying your first results are still coming in, with about how long is left when known. Visibility, Prompts and Content say the same where they have nothing to show yet.
+
 ## Ask your own questions
 
 You can type a question in the panel at any point of the tour. It goes to Chat like any other question, in the same chat, and uses AI as usual; on the demo brand, asking opens the plans. The tour's chips come back under the answer, so you can go on.

@@ -24,6 +24,7 @@ const {
   checkedTexts,
   endTurn,
   englishScript,
+  firstRunLine,
   jsonIn,
   scriptHash,
   topicTurn,
@@ -167,5 +168,27 @@ describe('tourTexts', () => {
 
     db.failures.chat_tour_translations = { message: 'down' };
     await expect(tourTexts('tr')).resolves.toEqual(englishScript());
+  });
+});
+
+describe('firstRunLine', () => {
+  it('says about when the first results are in, in minutes, then hours, or without a time', () => {
+    const texts = englishScript();
+    expect(texts['firstRun.minutes']).toContain('{n}');
+    expect(firstRunLine(texts, { minutes: 14.4 })).toBe(
+      'Your first results are still coming in (about 14 min); this page fills in as they arrive.',
+    );
+    expect(firstRunLine(texts, { minutes: 150 })).toBe(
+      'Your first results are still coming in (about 3 h); this page fills in as they arrive.',
+    );
+    expect(firstRunLine(texts, { minutes: null })).toBe(
+      'Your first results are still coming in; this page fills in as they arrive.',
+    );
+  });
+
+  it('keeps no translation that lost its {n}', () => {
+    const english = englishScript();
+    const lost = { ...german(), 'firstRun.minutes': 'DE ohne Zahl' };
+    expect(checkedTexts(lost, english)).toBeNull();
   });
 });

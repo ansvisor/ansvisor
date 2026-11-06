@@ -59,6 +59,7 @@ export function ChatPanelProvider({
   const before = useRef<Exclude<PanelSize, 'full'>>(setup.size === 'full' ? 'compact' : setup.size);
   const [page, setPage] = useState<ChatPageContext | null>(null);
   const [draft, setDraft] = useState<PanelDraft | null>(null);
+  const [closes, setCloses] = useState(0);
   const handoffs = useRef(0);
 
   const ask = useCallback((reference: ChatReference) => {
@@ -80,6 +81,7 @@ export function ChatPanelProvider({
 
   const close = useCallback(() => {
     setOpen(false);
+    setCloses((n) => n + 1);
     // After the panel is gone: Ask Chat on the page the person was on.
     requestAnimationFrame(() => document.querySelector<HTMLElement>(ASK_CHAT)?.focus());
   }, []);
@@ -120,6 +122,7 @@ export function ChatPanelProvider({
       size,
       toggle,
       close,
+      closes,
       resize,
       page,
       setPage,
@@ -128,7 +131,7 @@ export function ChatPanelProvider({
       fill,
       openChat,
     }),
-    [setup, available, open, size, toggle, close, resize, page, draft, ask, fill, openChat],
+    [setup, available, open, size, toggle, close, closes, resize, page, draft, ask, fill, openChat],
   );
   return (
     <ChatPageSetterContext.Provider value={setPage}>

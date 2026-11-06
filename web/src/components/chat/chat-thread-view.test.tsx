@@ -278,6 +278,46 @@ describe('ChatThreadView', () => {
     expect(container.querySelector('[data-testid="after"]')).not.toBeNull();
   });
 
+  it('puts the slot under the turn it is given, and marks a turn', async () => {
+    const m = (role: 'user' | 'assistant', text: string) => ({
+      role,
+      text,
+      generatedAt: null,
+      dataAsOf: null,
+      timezone: null,
+      run: null,
+    });
+    await render({
+      thread: {
+        conversationId: CHAT,
+        title: 'Ansvisor tour',
+        brandId: null,
+        mine: true,
+        messages: [
+          m('user', 'Show me Visibility'),
+          m('assistant', 'Visibility.'),
+          m('user', 'Next: Content'),
+          m('assistant', 'Content.'),
+        ],
+      },
+      variant: 'panel',
+      onConversation: vi.fn(),
+      afterLast: () => <span data-testid="after">after</span>,
+      afterTurn: 1,
+      markedTurn: 1,
+    });
+    const items = [...container.querySelectorAll('ol > li')];
+    expect(items.map((li) => li.getAttribute('data-slot') ?? li.textContent)).toEqual([
+      'You: Show me Visibility',
+      expect.stringContaining('Visibility.'),
+      'after-turn',
+      'You: Next: Content',
+      expect.stringContaining('Content.'),
+    ]);
+    expect(items[1].hasAttribute('data-marked')).toBe(true);
+    expect(items[4].hasAttribute('data-marked')).toBe(false);
+  });
+
   it('sends the page’s chips and the @ objects with the message, as its scope (W1-08)', async () => {
     const chart = { type: 'chart' as const, id: 'mentions-trend', label: 'Mentions over time' };
     await render({

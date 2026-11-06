@@ -46,3 +46,62 @@ export function nextTopicOf(topic: TourTopic): TourTopic | null {
  * label) is `chatTour.actions.{topic}`, and it starts a normal Chat run.
  */
 export const TOUR_ACTION_TOPICS: readonly TourTopic[] = ['prompts'];
+
+/**
+ * The tour's topics a page of the app is about, in the tour's order: the
+ * page a topic opens and the pages under it. Visibility's tabs (Mentions,
+ * Citations) are Visibility's; every Prompts page is both Topics and
+ * prompts and Positions and locations (they open the same table). None for
+ * a page no topic explains.
+ */
+export function tourTopicsOfPath(pathname: string): TourTopic[] {
+  const under = (root: string) => pathname === root || pathname.startsWith(`${root}/`);
+  if (['/dashboard/insights', '/dashboard/mentions', '/dashboard/citations'].some(under)) {
+    return ['visibility'];
+  }
+  if (under('/dashboard/prompts')) return ['prompts', 'positions'];
+  if (under('/dashboard/content') && !under('/dashboard/content/editor')) return ['content'];
+  if (under('/dashboard/settings/integrations')) return ['connections'];
+  return [];
+}
+
+/** A tour turn in the tour's chat: its topic, and where its line and its answer are. */
+export interface TourTurn {
+  topic: TourTopic;
+  /** The person's line ("Show me Visibility"), by its place in the chat. */
+  question: number;
+}
+
+/**
+ * What the side panel shows of the tour on a page (owner decision
+ * 2026-11-06), from the tour's turns in the chat (`turns`, in order):
+ *
+ *   - `turn`: the page's topic was explained: the latest turn about it, which
+ *     the panel brings into view and marks, with the chips under it (Next
+ *     from that topic).
+ *   - `unexplained`: the page is a topic not explained yet (reached from the
+ *     menu): no other page's turn in focus, "Show me this page" at the end.
+ *   - `newest`: a page no topic explains: the chat's newest turn, the chips
+ *     from the topic the tour is on.
+ */
+export type TourFocus =
+  | { kind: 'turn'; topic: TourTopic; question: number }
+  | { kind: 'unexplained'; topic: TourTopic }
+  | { kind: 'newest'; topic: TourTopic };
+
+export function tourFocusOf({
+  pathname,
+  turns,
+  current,
+}: {
+  pathname: string;
+  turns: readonly TourTurn[];
+  /** The topic the tour is on (chat_user_prefs.tour_topic). */
+  current: TourTopic;
+}): TourFocus {
+  const topics = tourTopicsOfPath(pathname);
+  if (topics.length === 0) return { kind: 'newest', topic: current };
+  const latest = [...turns].reverse().find((turn) => topics.includes(turn.topic));
+  if (latest) return { kind: 'turn', topic: latest.topic, question: latest.question };
+  return { kind: 'unexplained', topic: topics[0] };
+}

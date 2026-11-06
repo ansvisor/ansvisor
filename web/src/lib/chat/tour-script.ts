@@ -35,16 +35,22 @@ export const TOUR_SCRIPT_KEYS: readonly string[] = [
   ...TOUR_TOPICS.map((topic) => `show.${topic}`),
   ...TOUR_TOPICS.slice(1).map((topic) => `next.${topic}`),
   ...TOUR_TOPICS.map((topic) => `body.${topic}`),
+  'firstRun.soon',
+  'firstRun.minutes',
+  'firstRun.hours',
   'endAsk',
   'endLine',
 ];
 
-/** The script in English, as messages/en.json has it. */
+/** The script in English, as messages/en.json has it; `{n}` stays for the number. */
 export function englishScript(): TourTexts {
   return Object.fromEntries(
-    TOUR_SCRIPT_KEYS.map((key) => [key, t(key as Parameters<typeof t>[0])]),
+    TOUR_SCRIPT_KEYS.map((key) => [key, t(key as Parameters<typeof t>[0], { n: '{n}' })]),
   );
 }
+
+/** A text's placeholders (`{n}`), sorted: a translation keeps the same. */
+const placeholders = (text: string) => (text.match(/\{\w+\}/g) ?? []).sort().join(',');
 
 /** The English texts' sha-256 (hex): a changed text is a new translation. */
 export function scriptHash(texts: TourTexts): string {
@@ -57,7 +63,8 @@ const TEXT_MAX = 4_000;
 
 /**
  * A translation as kept: every key of the English script, each a text of
- * its own; null for anything else (a key missing or added, an empty text).
+ * its own with the English one's placeholders; null for anything else (a
+ * key missing or added, an empty text, a `{n}` lost).
  */
 export function checkedTexts(value: unknown, english: TourTexts): TourTexts | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -67,6 +74,7 @@ export function checkedTexts(value: unknown, english: TourTexts): TourTexts | nu
   for (const key of Object.keys(english)) {
     const text = texts[key];
     if (typeof text !== 'string' || !text.trim() || text.length > TEXT_MAX) return null;
+    if (placeholders(text) !== placeholders(english[key])) return null;
     out[key] = text.trim();
   }
   return out;
@@ -93,7 +101,7 @@ function instructions(language: AnswerLanguage): string {
   return [
     `Translate every value of the JSON object you are given into ${LANGUAGES[language]}.`,
     'They are the lines of a short product tour in a chat: keep them friendly, plain and as short as the English.',
-    'Keep the keys, the Markdown (bold, numbered lists, line breaks) and the numbers exactly as they are.',
+    'Keep the keys, the Markdown (bold, numbered lists, line breaks), the numbers and every {n} exactly as they are.',
     "The names of the product's pages, tabs, buttons, menus and topics stay in English, bold or not (Visibility, Prompts, Tracked Prompts, Ask Chat, Settings › Integrations…), and so do product and company names.",
     'Answer with the JSON object alone.',
   ].join(' ');
@@ -192,4 +200,23 @@ export function topicTurn(
 /** The tour's last turn: End the tour, and where Chat is from now on. */
 export function endTurn(texts: TourTexts): { question: string; answer: string } {
   return { question: texts.endAsk, answer: texts.endLine };
+}
+
+/** About when the brand's first results are in, for a turn while its first run goes on. */
+export interface FirstRunNote {
+  /** About how many minutes are left; null when not known yet. */
+  minutes: number | null;
+}
+
+/**
+ * The line a turn ends with while the brand's first run goes on: "Your
+ * first results are still coming in (about 15 min); this page fills in as
+ * they arrive." From 90 minutes on, in hours.
+ */
+export function firstRunLine(texts: TourTexts, note: FirstRunNote): string {
+  const { minutes } = note;
+  if (minutes === null || !Number.isFinite(minutes) || minutes < 1) return texts['firstRun.soon'];
+  return minutes >= 90
+    ? texts['firstRun.hours'].replace('{n}', String(Math.round(minutes / 60)))
+    : texts['firstRun.minutes'].replace('{n}', String(Math.round(minutes)));
 }

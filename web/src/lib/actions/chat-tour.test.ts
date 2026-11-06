@@ -27,6 +27,9 @@ const access = vi.hoisted(() => ({ canAccessBrand: vi.fn() }));
 vi.mock('@/lib/brand-access', () => access);
 const touched = vi.hoisted(() => ({ startTouchedBrands: vi.fn() }));
 vi.mock('@/lib/chat/touched-brands', () => touched);
+// The brand's runs: none completed and none going, unless a test says so.
+const tracking = vi.hoisted(() => ({ getTrackingWindow: vi.fn() }));
+vi.mock('@/lib/actions/tracking', () => tracking);
 const model = vi.hoisted(() => ({ generateText: vi.fn() }));
 vi.mock('ai', async (original) => ({
   ...(await original<typeof import('ai')>()),
@@ -41,6 +44,7 @@ const { englishScript, scriptHash } = await import('@/lib/chat/tour-script');
 const english = englishScript();
 const messages = () =>
   (db.tables.chat_messages ?? []).map((m) => ({ role: m.role, text: m.content_md }));
+const RUNS_DONE = { lastRunAt: '2026-11-06T08:00:00.000Z', activeRun: null };
 const prefs = () => db.tables.chat_user_prefs?.[0];
 
 beforeEach(() => {
@@ -53,6 +57,7 @@ beforeEach(() => {
   access.canAccessBrand.mockReset().mockResolvedValue(true);
   touched.startTouchedBrands.mockReset();
   model.generateText.mockReset();
+  tracking.getTrackingWindow.mockReset().mockResolvedValue(RUNS_DONE);
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -204,10 +209,89 @@ describe('prepareChatTour', () => {
 
     db.tables.chat_user_prefs = [{ user_id: 'user-1', answer_language: 'tr' }];
     model.generateText.mockResolvedValue({
-      text: JSON.stringify(Object.fromEntries(Object.keys(english).map((k) => [k, `TR ${k}`]))),
+      text: JSON.stringify(
+        Object.fromEntries(Object.entries(english).map(([k, v]) => [k, `TR ${v}`])),
+      ),
     });
     await prepareChatTour();
     expect(model.generateText).toHaveBeenCalledTimes(1);
     expect(db.tables.chat_tour_translations).toHaveLength(1);
+  });
+});
+
+describe('showTourTopic, while the first tracking run goes on', () => {
+  const RUNNING = {
+    lastRunAt: null,
+    activeRun: { startedAt: '2026-11-06T09:00:00Z', source: 'pay' },
+  };
+
+  it("marks the person's line with its topic, so the panel finds the page's turn", async () => {
+    await showTourTopic({ topic: 'content', via: 'topic', brandId: 'brand-1' });
+    expect(db.tables.chat_messages.map((m) => m.context_json ?? null)).toEqual([
+      { tour: 'content' },
+      null,
+    ]);
+    await endChatTour();
+    expect(db.tables.chat_messages.at(-2)?.context_json ?? null).toBeNull();
+  });
+
+  it('ends the turn with when the first results are in, from what the browser saw', async () => {
+    tracking.getTrackingWindow.mockResolvedValue(RUNNING);
+    await showTourTopic({
+      topic: 'visibility',
+      via: 'topic',
+      brandId: 'brand-1',
+      firstRun: { minutes: 14 },
+    });
+    expect(tracking.getTrackingWindow).toHaveBeenCalledWith('brand-1');
+    expect(messages()[1].text).toBe(
+      `${english['body.visibility']}\n\nYour first results are still coming in (about 14 min); this page fills in as they arrive.`,
+    );
+  });
+
+  it('says it without a time when the browser saw none, in hours from 90 minutes', async () => {
+    tracking.getTrackingWindow.mockResolvedValue(RUNNING);
+    await showTourTopic({ topic: 'content', via: 'topic', brandId: 'brand-1' });
+    expect(messages()[1].text).toMatch(/still coming in; this page fills in as they arrive\.$/);
+    await showTourTopic({
+      topic: 'connections',
+      via: 'next',
+      brandId: 'brand-1',
+      firstRun: { minutes: 125 },
+    });
+    expect(messages()[3].text).toMatch(/\(about 2 h\)/);
+  });
+
+  it('adds nothing once the brand has results, without a brand, or when its runs can’t be read', async () => {
+    await showTourTopic({
+      topic: 'content',
+      via: 'topic',
+      brandId: 'brand-1',
+      firstRun: { minutes: 5 },
+    });
+    expect(messages()[1].text).toBe(english['body.content']);
+    await showTourTopic({ topic: 'content', via: 'topic', firstRun: { minutes: 5 } });
+    expect(messages()[3].text).toBe(english['body.content']);
+    tracking.getTrackingWindow.mockRejectedValue(new Error('down'));
+    await showTourTopic({
+      topic: 'content',
+      via: 'topic',
+      brandId: 'brand-1',
+      firstRun: { minutes: 5 },
+    });
+    expect(messages()[5].text).toBe(english['body.content']);
+  });
+
+  it('trusts the browser only while no run completed: a queued first run counts', async () => {
+    tracking.getTrackingWindow.mockResolvedValue({ lastRunAt: null, activeRun: null });
+    await showTourTopic({ topic: 'content', via: 'topic', brandId: 'brand-1' });
+    expect(messages()[1].text).toBe(english['body.content']);
+    await showTourTopic({
+      topic: 'content',
+      via: 'topic',
+      brandId: 'brand-1',
+      firstRun: { minutes: null },
+    });
+    expect(messages()[3].text).toMatch(/still coming in; this page fills in/);
   });
 });

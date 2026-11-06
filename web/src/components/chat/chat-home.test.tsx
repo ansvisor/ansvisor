@@ -410,6 +410,7 @@ describe('ChatHome', () => {
       topic: 'content',
       via: 'topic',
       brandId: BRAND,
+      firstRun: null,
     });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/content');
     expect(openChat).toHaveBeenCalledWith('tour-1');

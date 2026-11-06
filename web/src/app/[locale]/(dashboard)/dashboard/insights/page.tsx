@@ -9,6 +9,7 @@ import { MetricBreakdownSheet, type BreakdownTab } from './_metric-breakdown-she
 import { FormulaDialog } from './_formula-dialog';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFirstRun } from '@/hooks/use-first-run';
+import { FirstRunEmptyState } from '@/components/first-run/first-run-empty-state';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import { largestMove, rangeChipLabel } from '@/lib/chat/page-context';
@@ -1223,7 +1224,10 @@ export default function InsightsPage() {
           onStop={canManage ? handleStopTracking : undefined}
         />
         {!localJobActive && <ServerRunBanner run={cronRun} firstRun={!runTimes.lastRunAt} />}
-        {!firstRun && (
+        {/* While the first run goes on, the page says its data is on the way. */}
+        {firstRun ? (
+          <FirstRunEmptyState run={firstRun} />
+        ) : (
           <EmptyState
             onRunPrompts={canManage ? runAll : undefined}
             isRunning={isRunning}
@@ -1358,7 +1362,9 @@ export default function InsightsPage() {
           </div>
         )}
         <div className={cn('space-y-6', isRefetching && 'opacity-60')}>
-          {noResults && firstRun ? null : noResults ? (
+          {noResults && firstRun ? (
+            <FirstRunEmptyState run={firstRun} />
+          ) : noResults ? (
             <NoDataForPeriod datePreset={filters.datePreset} onReset={handleResetFilters} />
           ) : (
             <>

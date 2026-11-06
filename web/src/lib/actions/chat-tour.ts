@@ -6,7 +6,14 @@ import { canAccessBrand } from '@/lib/brand-access';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { ANSWER_LANGUAGES, type AnswerLanguage } from '@/lib/chat/general-settings';
 import { isTourTopic, TOUR_PAGES, TOUR_VIAS, type TourTopic } from '@/lib/chat/tour';
-import { endTurn, topicTurn, tourTexts } from '@/lib/chat/tour-script';
+import { getTrackingWindow } from '@/lib/actions/tracking';
+import {
+  endTurn,
+  firstRunLine,
+  topicTurn,
+  tourTexts,
+  type FirstRunNote,
+} from '@/lib/chat/tour-script';
 import { startTouchedBrands } from '@/lib/chat/touched-brands';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
@@ -102,10 +109,23 @@ async function startTourChat(person: Person, brandId: string | null, topic: Tour
   return data.id;
 }
 
-/** The person's line and its answer, in one statement: they come in order (00400). */
-async function addTurn(chatId: string, turn: { question: string; answer: string }) {
+/**
+ * The person's line and its answer, in one statement: they come in order
+ * (00400). A topic's line keeps its topic as its scope (context_json), so
+ * the side panel finds the turn about the page on screen.
+ */
+async function addTurn(
+  chatId: string,
+  turn: { question: string; answer: string },
+  topic: TourTopic | null,
+) {
   const { error } = await supabaseAdmin.from('chat_messages').insert([
-    { conversation_id: chatId, role: 'user', content_md: turn.question },
+    {
+      conversation_id: chatId,
+      role: 'user',
+      content_md: turn.question,
+      context_json: topic ? { tour: topic } : null,
+    },
     { conversation_id: chatId, role: 'assistant', content_md: turn.answer },
   ]);
   if (error) throw new Error(`Could not add the tour's turn: ${error.message}`);
@@ -123,14 +143,34 @@ async function keepTour(
 }
 
 /**
+ * While the brand's first tracking run goes on, about when its first results
+ * are in; null once it has a completed run, or when none goes on. The
+ * browser says what it saw (useFirstRun's time left, which only it keeps);
+ * the brand's runs say whether it still holds. A read that fails says none.
+ */
+async function firstRunOf(
+  brandId: string | null,
+  seen: { minutes?: unknown } | null | undefined,
+): Promise<FirstRunNote | null> {
+  if (!brandId) return null;
+  const tracking = await getTrackingWindow(brandId).catch(() => null);
+  if (!tracking || tracking.lastRunAt || !(tracking.activeRun || seen)) return null;
+  const minutes = typeof seen?.minutes === 'number' ? seen.minutes : null;
+  return { minutes: minutes !== null && minutes > 0 && minutes < 10_000 ? minutes : null };
+}
+
+/**
  * A topic of the tour: its turn added to the person's tour chat (started on
- * the first one, about `brandId`), and the tour on it, not ended. Answers
- * the chat's id, which the side panel opens beside the topic's page.
+ * the first one, about `brandId`), and the tour on it, not ended. While the
+ * brand's first tracking run goes on, the turn ends with when its first
+ * results are in (`firstRun`, what the browser saw of it). Answers the
+ * chat's id, which the side panel opens beside the topic's page.
  */
 export async function showTourTopic(input: {
   topic: unknown;
   via: unknown;
   brandId?: string | null;
+  firstRun?: { minutes?: unknown } | null;
 }): Promise<ChatTourResult> {
   try {
     const topic = input?.topic;
@@ -138,11 +178,19 @@ export async function showTourTopic(input: {
     if (!isTourTopic(topic) || !via) return { ok: false };
     const person = await tourPerson();
     if (!person) return { ok: false };
-    const tour = await readTour(person);
-    const texts = await tourTexts(tour.language);
     const brandId = typeof input.brandId === 'string' ? input.brandId : null;
+    const [tour, firstRun] = await Promise.all([
+      readTour(person),
+      firstRunOf(brandId, input.firstRun),
+    ]);
+    const texts = await tourTexts(tour.language);
     const chatId = tour.chatId ?? (await startTourChat(person, brandId, topic));
-    await addTurn(chatId, topicTurn(texts, topic, via));
+    const turn = topicTurn(texts, topic, via);
+    await addTurn(
+      chatId,
+      firstRun ? { ...turn, answer: `${turn.answer}\n\n${firstRunLine(texts, firstRun)}` } : turn,
+      topic,
+    );
     await keepTour(person, { tour_chat_id: chatId, tour_topic: topic, tour_finished_at: null });
     return { ok: true, chatId };
   } catch (error) {
@@ -161,7 +209,7 @@ export async function endChatTour(): Promise<ChatTourResult> {
     const person = await tourPerson();
     if (!person) return { ok: false };
     const tour = await readTour(person);
-    if (tour.chatId) await addTurn(tour.chatId, endTurn(await tourTexts(tour.language)));
+    if (tour.chatId) await addTurn(tour.chatId, endTurn(await tourTexts(tour.language)), null);
     await keepTour(person, { tour_finished_at: new Date().toISOString() });
     return { ok: true, chatId: tour.chatId };
   } catch (error) {

@@ -4720,6 +4720,7 @@
     "chatTitle": "Ansvisor tour",
     "label": "Ansvisor tour · {n} of {total}",
     "next": "Next: {topic}",
+    "showPage": "Show me this page",
     "another": "Another topic",
     "anotherLabel": "Pick another topic",
     "end": "End the tour",
@@ -4748,6 +4749,11 @@
         "positions": "Back on **Tracked Prompts**, this time for where you stand in each answer.\n\n1. **Positions** shows your average position in AI answers and its change. Hover it for each platform, or open its chart for the positions panel.\n2. **Performance** groups prompts by where you’re named: Best, Good, Late or Missing.\n3. The **Table | Locations** switch compares each prompt across the countries, states and cities you track.\n4. **Track in more locations** adds places to your prompts. Each prompt counts once per location on your plan.\n\nClick any prompt to open its own page, with every platform’s answers.",
         "content": "This is **Opportunities**, under **Content**: what to write or change so AI answers name you where they don’t yet.\n\n1. Ansvisor suggests opportunities on its own as your tracking data comes in, each with its **Impact** and **Score**.\n2. **Write this**, in a row’s **…** menu, has the Content Agent brief and write the page for you to review.\n3. **Plan** ranks what to create, optimize or protect next.\n4. **Library** keeps your drafts, and sends a finished page to your CMS.\n\nYour first opportunities come once tracking has data.",
         "connections": "This is **Settings › Integrations**, where Ansvisor connects to your own tools.\n\n1. **Google Search Console**: your real search queries and impressions, for prompt suggestions and search-vs-AI insights.\n2. **Google Analytics**: sessions and conversions from GA4, the base of your AI traffic history.\n3. Once one is connected, pick the property each brand reads.\n4. Your CMS (Webflow, WordPress, Framer or Wix) takes pages straight from the Content Editor.\n\nOnly admins and managers can connect or change an integration."
+      },
+      "firstRun": {
+        "soon": "Your first results are still coming in; this page fills in as they arrive.",
+        "minutes": "Your first results are still coming in (about {n} min); this page fills in as they arrive.",
+        "hours": "Your first results are still coming in (about {n} h); this page fills in as they arrive."
       },
       "endAsk": "End the tour",
       "endLine": "That’s the tour. Chat is on every page: press **Ctrl J** (**⌘J** on a Mac), or click **Ask Chat** at the top right of the Execution and Analytics pages. This tour stays in your chats if you want to read it again."
