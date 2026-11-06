@@ -221,6 +221,63 @@ describe('ChatThreadView', () => {
     expect(container.textContent).not.toContain('Hi Sam');
   });
 
+  it('puts what the panel hands it under the latest turn once nothing runs, and sends from it', async () => {
+    window.history.replaceState(null, '', '/dashboard/prompts');
+    const tourThread: ChatThread = {
+      conversationId: CHAT,
+      title: 'Ansvisor tour',
+      brandId: null,
+      mine: true,
+      messages: [
+        {
+          role: 'user',
+          text: 'Show me Visibility',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: null,
+          run: null,
+        },
+        {
+          role: 'assistant',
+          text: 'I’ve opened **Visibility**.',
+          generatedAt: null,
+          dataAsOf: null,
+          timezone: null,
+          run: null,
+        },
+      ],
+    };
+    await render({
+      thread: tourThread,
+      variant: 'panel',
+      onConversation: vi.fn(),
+      chips: [{ key: 'page', label: 'Prompts' }],
+      afterLast: ({ send, disabled }) => (
+        <button
+          type="button"
+          data-testid="after"
+          disabled={disabled}
+          onClick={() => send('Suggest prompts for me')}
+        >
+          after
+        </button>
+      ),
+    });
+    const after = container.querySelector<HTMLButtonElement>('[data-testid="after"]')!;
+    expect(after).not.toBeNull();
+    // A scripted answer, with no run: no stamp.
+    expect(container.textContent).not.toContain('Generated');
+    await act(async () => after.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+    expect(JSON.parse(String(sent.init!.body))).toMatchObject({
+      message: 'Suggest prompts for me',
+      conversationId: CHAT,
+    });
+    // While the run works, and after it, as the latest turn: it comes back once it ends.
+    expect(container.querySelector('[data-testid="after"]')).not.toBeNull();
+  });
+
   it('sends the page’s chips and the @ objects with the message, as its scope (W1-08)', async () => {
     const chart = { type: 'chart' as const, id: 'mentions-trend', label: 'Mentions over time' };
     await render({

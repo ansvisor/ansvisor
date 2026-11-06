@@ -1013,6 +1013,7 @@
         "welcome card",
         "preparing your data",
         "quick tour",
+        "product tour",
         "task finisher",
         "download answer",
         "save to files",
@@ -1156,7 +1157,7 @@
         },
         {
           "heading": "The welcome card",
-          "text": "In the free trial, and while you explore the demo brand, a welcome card sits above the box on Chat Home, and Home says **Welcome** with your name. In the trial, **Preparing your data** shows your first tracking run and about how long is left, until the first results are in. Admins and managers also see **Connect Search Console** and **Connect Google Analytics**, which open their cards in **Settings › Integrations**; a button goes once its source is connected. **Want a quick tour?** lists the topics, each opening its page, and **Show me everything** starts with Visibility. **Not now** hides the card for good."
+          "text": "In the free trial, and while you explore the demo brand, a welcome card sits above the box on Chat Home, and Home says **Welcome** with your name. In the trial, **Preparing your data** shows your first tracking run and about how long is left, until the first results are in. Admins and managers also see **Connect Search Console** and **Connect Google Analytics**, which open their cards in **Settings › Integrations**; a button goes once its source is connected. **Want a quick tour?** starts the product tour on the topic you pick, or on Visibility with **Show me everything**: the page opens with Chat beside it. **Not now** hides the card for good, and it goes once the tour ends."
         },
         {
           "heading": "Ask Chat",
@@ -1343,6 +1344,8 @@
       "keywords": [
         "chat settings",
         "default mode",
+        "product tour",
+        "take the tour",
         "your focus",
         "answer language",
         "chat language",
@@ -1388,7 +1391,11 @@
         },
         {
           "heading": "Chat on every page",
-          "text": "**Open Chat on every page** shows or hides **Ask Chat** with Ctrl J in each page's header.\n\nWorkspace rules, such as which tools Chat may use on its own, are in **Tool policy**; only Admins change them."
+          "text": "**Open Chat on every page** shows or hides **Ask Chat** with Ctrl J in each page's header."
+        },
+        {
+          "heading": "Product tour",
+          "text": "**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.\n\nWorkspace rules, such as which tools Chat may use on its own, are in **Tool policy**; only Admins change them."
         }
       ]
     },

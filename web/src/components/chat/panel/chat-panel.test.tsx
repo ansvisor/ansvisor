@@ -8,6 +8,7 @@ import { PANEL_LAST_CHAT_KEY } from '@/lib/chat/panel';
 import type { ChatPageContext } from '@/lib/chat/page-context';
 import type { ChatReference } from '@/lib/chat/references';
 import type { ChatPanelSetup, PanelDraft } from './chat-panel-context';
+import type { ChatTourSetup } from '../tour/chat-tour';
 
 /**
  * Chat's side panel on every app page (CHAT-01 items 13–26): Ask Chat at
@@ -25,6 +26,12 @@ vi.mock('@/i18n/navigation', () => ({
       {children}
     </a>
   ),
+}));
+// The product tour's server actions (00486): their own tests.
+vi.mock('@/lib/actions/chat-tour', () => ({
+  showTourTopic: vi.fn(async () => ({ ok: false })),
+  endChatTour: vi.fn(async () => ({ ok: false })),
+  prepareChatTour: vi.fn(async () => undefined),
 }));
 const prefs = vi.hoisted(() => ({ saveChatPanelSize: vi.fn(async () => ({ ok: true })) }));
 vi.mock('@/lib/actions/chat-prefs', () => prefs);
@@ -47,6 +54,7 @@ vi.mock('../chat-thread-view', () => ({
     pageRoute,
     draft,
     pageOpen,
+    afterLast,
   }: {
     thread: ChatThread | null;
     variant: string;
@@ -58,6 +66,7 @@ vi.mock('../chat-thread-view', () => ({
     pageRoute?: string;
     draft?: PanelDraft | null;
     pageOpen?: string;
+    afterLast?: (actions: { send: (message: string) => void; disabled: boolean }) => ReactNode;
   }) => (
     <div
       data-testid="thread"
@@ -83,6 +92,7 @@ vi.mock('../chat-thread-view', () => ({
       {thread?.messages.map((m, i) => (
         <p key={i}>{m.text}</p>
       ))}
+      {afterLast?.({ send: () => undefined, disabled: false })}
       <textarea data-action="composer.input" />
       <button type="button" data-testid="send" onClick={() => onConversation?.('chat-new')}>
         send
@@ -187,11 +197,11 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(over: Partial<ChatPanelSetup> = {}) {
+async function render(over: Partial<ChatPanelSetup> = {}, tour?: ChatTourSetup) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <ChatPanelProvider setup={setup(over)}>
+        <ChatPanelProvider setup={setup(over)} tour={tour}>
           <ChatPanelPage className="page">
             <header>
               <h1>Mentions</h1>
@@ -376,6 +386,33 @@ describe('the panel’s chat', () => {
     await click(ask());
     expect(calls).toContain(`/api/chat/conversations/${CHAT}`);
     expect(panel()!.textContent).toContain('Why did citations drop?');
+  });
+
+  it("shows the tour's label and chips on the tour's chat while the tour is on (00486)", async () => {
+    localStorage.setItem(PANEL_LAST_CHAT_KEY, JSON.stringify({ id: CHAT, at: Date.now() }));
+    await render({}, { chatId: CHAT, topic: 'prompts', finished: false });
+    await click(ask());
+    expect(panel()!.querySelector('[data-slot="tour-label"]')?.textContent).toBe(
+      'Ansvisor tour · 2 of 5',
+    );
+    expect(panel()!.querySelector('[data-action="tour.next"]')?.textContent).toBe(
+      'Next: Positions and locations',
+    );
+  });
+
+  it('shows none on another chat, or once the tour ended', async () => {
+    localStorage.setItem(PANEL_LAST_CHAT_KEY, JSON.stringify({ id: CHAT, at: Date.now() }));
+    await render({}, { chatId: 'another', topic: 'prompts', finished: false });
+    await click(ask());
+    expect(panel()!.querySelector('[data-slot="tour-label"]')).toBeNull();
+    expect(panel()!.querySelector('[data-slot="tour-controls"]')).toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render({}, { chatId: CHAT, topic: 'prompts', finished: true });
+    await click(ask());
+    expect(panel()!.querySelector('[data-slot="tour-label"]')).toBeNull();
+    expect(panel()!.querySelector('[data-slot="tour-controls"]')).toBeNull();
   });
 
   it('starts empty after 30 minutes, and remembers a chat it starts', async () => {

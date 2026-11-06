@@ -199,6 +199,7 @@ export function ChatThreadView({
   pageOpen = 'ask',
   placeholder,
   onSuggestions,
+  afterLast,
 }: {
   thread: ChatThread | null;
   variant: ComposerVariant;
@@ -232,6 +233,12 @@ export function ChatThreadView({
   placeholder?: string;
   /** The Content Agent left suggestions in the editor beside the chat (W4-14): how many. */
   onSuggestions?: (count: number) => void;
+  /**
+   * Under the latest turn once nothing runs (the side panel's product tour
+   * chips): `send` asks Chat in this chat, as the box does; `disabled` while
+   * Chat is paused at the AI limit.
+   */
+  afterLast?: (actions: { send: (message: string) => void; disabled: boolean }) => ReactNode;
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
@@ -792,6 +799,13 @@ export function ChatThreadView({
           )}
         </ol>
       )}
+      {turns.length > 0 &&
+        !working &&
+        afterLast?.({
+          send: (message) =>
+            void send(message, { context: chips ?? [], references: [], attachments: [] }),
+          disabled: atCap,
+        })}
       <div
         className={
           variant === 'home'

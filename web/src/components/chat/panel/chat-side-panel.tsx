@@ -26,6 +26,7 @@ import { ChatActionsProvider, useChatActions } from '../chat-actions';
 import { ChatPanelMenu, RenameField } from '../chat-menus';
 import { ChatThreadView } from '../chat-thread-view';
 import { shortcutLabel, useIsMac } from '../chat-shortcuts';
+import { TourControls, TourLabel, useChatTour } from '../tour/chat-tour';
 import { useChatPanel } from './chat-panel-context';
 import { readThread } from './read-thread';
 
@@ -125,7 +126,9 @@ function SizeIcon({ size }: { size: PanelSize }) {
  * the brand, the date range and filters, following the page while it is
  * open; × keeps one off on this page until New chat. The empty panel offers
  * the page's suggestions, which fill the box; Ask about this attaches its
- * object as an @ chip.
+ * object as an @ chip. On the product tour's chat, while the tour is on,
+ * "Ansvisor tour · n of 5" sits over it and the tour's chips under its
+ * latest turn.
  */
 export function ChatSidePanel() {
   const t = useTranslations('chatPanel');
@@ -135,6 +138,7 @@ export function ChatSidePanel() {
   const pathname = usePathname();
   const brand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const isMac = useIsMac();
+  const tour = useChatTour();
   const [started, setStarted] = useState(false);
   const [view, setView] = useState<PanelView>({ kind: 'chat', key: 0, thread: null });
   const [history, setHistory] = useState<HistoryState | null>(null);
@@ -293,6 +297,11 @@ export function ChatSidePanel() {
     new Set(removed.route === pathname ? removed.keys : []),
   );
   const suggestions = (page?.suggestions ?? []).slice(0, MAX_SUGGESTIONS);
+  // The tour's chat on screen while the tour is on: its label and chips.
+  const tourTopic =
+    tour?.active && tour.topic && row && row.id === tour.chatId && view.kind === 'chat'
+      ? tour.topic
+      : null;
 
   return (
     <ChatActionsProvider
@@ -440,6 +449,7 @@ export function ChatSidePanel() {
             </nav>
           )}
           <div className={cn('flex min-h-full flex-col', history && 'hidden')}>
+            {tourTopic && <TourLabel topic={tourTopic} />}
             {view.kind === 'loading' ? (
               <div role="status" aria-label={t('loading')} className="flex flex-col gap-3 p-4">
                 <Skeleton className="ml-auto h-9 w-3/5" />
@@ -484,6 +494,13 @@ export function ChatSidePanel() {
                 pageReferences={page?.referenceables}
                 pageRoute={pathname}
                 draft={draft && draft.nonce > draftFloor ? draft : null}
+                afterLast={
+                  tourTopic
+                    ? ({ send, disabled }) => (
+                        <TourControls topic={tourTopic} send={send} disabled={disabled} />
+                      )
+                    : undefined
+                }
                 empty={
                   <div className="flex flex-col items-center gap-3 pt-6 text-center">
                     <p className="text-sm text-muted-foreground">

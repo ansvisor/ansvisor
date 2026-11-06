@@ -9,6 +9,7 @@ import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-av
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
 import { readFocusFill, readHomeShortcuts, readSinceYouLeft } from '@/lib/actions/chat-home';
+import { prepareChatTour } from '@/lib/actions/chat-tour';
 import { track } from '@/lib/analytics';
 import type { FocusArea } from '@/lib/chat/focus';
 import type { ChatStartAudience } from '@/lib/chat/start-audience';
@@ -36,6 +37,7 @@ import { useChatList } from './chat-list-provider';
 import { inboxItems, useNow } from './chat-inbox';
 import { FocusPill, useChatFocus } from './focus-picker';
 import { ForYouNow } from './for-you-now';
+import { useChatTour } from './tour/chat-tour';
 import { useChatWelcome, WelcomeCard } from './welcome-card';
 
 /** The underlined link in the greeting's line (mockup `.hlnk`). */
@@ -488,8 +490,8 @@ function useHomeSeen() {
  * "For you now" and "Since you left": a chip, Why? and Which ones? ask Chat
  * in a new chat, then open it while it works; while the workspace is
  * read-only or the demo brand is open, they open the upgrade dialog instead.
- * The free trial and the demo get the welcome card (00486); its topics open
- * their pages.
+ * The free trial and the demo get the welcome card (00486): its topics start
+ * the product tour beside their pages, and it goes once the tour ends.
  */
 export function ChatHome({
   firstName,
@@ -502,6 +504,14 @@ export function ChatHome({
   const t = useTranslations('chatShell.home');
   const router = useRouter();
   const welcome = useChatWelcome(audience);
+  const tour = useChatTour();
+  // The tour runs in the side panel; without it a topic only opens its page.
+  const tourOn = !!tour?.available;
+  const welcomeShown = welcome.shown && !tour?.finished;
+  // The tour's words in the person's language, made while the card shows.
+  useEffect(() => {
+    if (welcomeShown && tourOn) void prepareChatTour().catch(() => undefined);
+  }, [welcomeShown, tourOn]);
   const now = useNow();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const { chats } = useChatList();
@@ -659,7 +669,7 @@ export function ChatHome({
         document.querySelector<HTMLTextAreaElement>('[data-action="composer.input"]')?.focus();
       }}
       welcome={
-        welcome.shown
+        welcomeShown
           ? {
               line: welcome.run ? t('welcome.onTheirWay') : null,
               card: (
@@ -667,13 +677,16 @@ export function ChatHome({
                   trial={welcome.trial}
                   run={welcome.run}
                   connect={welcome.connect}
+                  starting={!!tour?.busy}
                   onTopic={(topic) => {
                     track('chat_welcome_topic', { topic });
-                    router.push(TOUR_PAGES[topic]);
+                    if (tour && tourOn) void tour.show(topic, 'topic');
+                    else router.push(TOUR_PAGES[topic]);
                   }}
                   onEverything={() => {
                     track('chat_welcome_topic', { topic: 'everything' });
-                    router.push(TOUR_PAGES.visibility);
+                    if (tour && tourOn) void tour.show('visibility', 'everything');
+                    else router.push(TOUR_PAGES.visibility);
                   }}
                   onDismiss={welcome.dismiss}
                 />
