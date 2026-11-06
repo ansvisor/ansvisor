@@ -4984,7 +4984,13 @@
     },
     "focus": {
       "title": "What should Chat focus on for you?",
-      "intro": "Pick one or more. Chat tailors your Home, starter questions and skills to them. You can change this anytime in Settings › General.",
+      "intro": "Start simple with just the chat box, or pick areas and Chat adds suggestions for them to your Home. You can change this anytime in Settings › General.",
+      "default": {
+        "title": "Default: simple start",
+        "note": "A clean Home: a greeting, one line on what changed and the chat box. Nothing else until you ask.",
+        "name": "Default view"
+      },
+      "orTailor": "Or tailor Home to what you work on",
       "groupLabel": "Focus areas",
       "areas": {
         "lead": {
@@ -5028,13 +5034,14 @@
           "name": "Markets and sources"
         }
       },
-      "countNone": "Pick at least one. Your access stays the same: what you can change still depends on your role.",
+      "countDefault": "Default view · your access stays the same: what you can change still depends on your role.",
       "countSome": "{count, number} selected · your access stays the same: what you can change still depends on your role.",
       "skip": "Skip for now",
       "cancel": "Cancel",
       "continue": "Continue",
       "saved": "Home focused on {label} · edit it in Settings › General",
-      "skipped": "You can choose your focus later in Settings › General",
+      "savedDefault": "Home is on the Default view · change it in Settings › General",
+      "skipped": "Home is on the Default view · pick a focus anytime in Settings › General",
       "failed": "Couldn't save your focus. Try again.",
       "label": {
         "one": "{a}",
@@ -5044,8 +5051,7 @@
       "pill": {
         "focused": "Focused on {label}",
         "edit": "Edit",
-        "none": "Get suggestions for what you work on",
-        "choose": "Choose focus"
+        "default": "Default view"
       }
     },
     "inbox": {
@@ -5304,9 +5310,9 @@
       "fullAutoAdmin": "Your Admin turned Full auto off for your role",
       "focus": {
         "label": "Your focus",
-        "note": "Pick one or more. Tailors your Home, starter questions and skill suggestions. Your access stays the same.",
+        "note": "The Default view keeps Home to a greeting, one line and the chat box. Pick areas to tailor your Home, starter questions and skill suggestions. Your access stays the same.",
         "saved": "Home focused on {label}",
-        "cleared": "Focus cleared · default Home"
+        "cleared": "Home is on the Default view"
       },
       "language": {
         "label": "Answer language",
