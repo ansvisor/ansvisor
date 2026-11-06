@@ -13,8 +13,10 @@ const listMentions = vi.fn();
 const getMentionResponse = vi.fn();
 const sendMentionsToActionCenter = vi.fn();
 const overrideMentionSentiment = vi.fn();
-vi.mock('@/lib/actions/mentions', () => ({
+vi.mock('@/lib/visibility-reads', () => ({
   listMentions: (...args: unknown[]) => listMentions(...args),
+}));
+vi.mock('@/lib/actions/mentions', () => ({
   getMentionResponse: (...args: unknown[]) => getMentionResponse(...args),
   sendMentionsToActionCenter: (...args: unknown[]) => sendMentionsToActionCenter(...args),
   overrideMentionSentiment: (...args: unknown[]) => overrideMentionSentiment(...args),

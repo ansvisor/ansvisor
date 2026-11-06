@@ -45,9 +45,6 @@ import {
   type PromptOption,
 } from '@/components/citations/filter-bar';
 import {
-  getCitationsOverview,
-  getCitationGaps,
-  brandHasCitations,
   type CitationsFilters,
   type CitationsOverview,
   type CitationDomainRow,
@@ -56,8 +53,14 @@ import {
   type CitationGaps,
   type CitationGapDomain,
 } from '@/lib/actions/citations';
-import { getTopics } from '@/lib/actions/topic';
-import { getBrandFilterOptions, getBrandPrompts } from '@/lib/actions/tracking';
+import {
+  brandHasCitations,
+  getBrandFilterOptions,
+  getBrandPrompts,
+  getCitationGaps,
+  getCitationsOverview,
+  getTopics,
+} from '@/lib/visibility-reads';
 import { isSingleModel, modelFamilies, modelFamilyValue } from '@/lib/model-families';
 import { toCsv } from '@/lib/csv';
 import type { Topic } from '@/types';
@@ -93,9 +96,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import { exportFileName } from '@/lib/white-label/export-name';
+import { readKey } from '@/components/brand-visibility/read-cache';
 import { ReadError } from '@/components/brand-visibility/read-error';
 import {
   TabHeaderActions,
+  useBrandRead,
   useBrandVisibilityShell,
 } from '@/components/brand-visibility/shell-context';
 import { CitationsSkeleton } from '@/components/brand-visibility/tab-skeleton';
@@ -113,6 +118,16 @@ const CATEGORY_COLORS: Record<SourceCategory, string> = {
   institutional: '#14b8a6',
   other: '#94a3b8',
 };
+
+/**
+ * A read's filters as picked, for the tab's kept reads: a preset's dates
+ * are worked out from the clock on each read, so only a custom range keeps
+ * its own.
+ */
+function pickedOf(filters: CitationsFilters): CitationsFilters {
+  if (filters.datePreset === 'custom') return filters;
+  return { ...filters, dateFrom: undefined, dateTo: undefined };
+}
 
 // ─── Filter types ─────────────────────────────────────────────────────────────
 
@@ -896,7 +911,7 @@ function writeFiltersToUrl(f: UIFilters) {
 export default function CitationsPage() {
   const t = useTranslations('citations');
   const tBrandVisibility = useTranslations('brandVisibility');
-  const { readSent } = useBrandVisibilityShell();
+  const { cache, shown } = useBrandVisibilityShell();
   const tCommon = useTranslations('common');
   const tChat = useTranslations('chatPanel.suggest');
   const tChatRange = useTranslations('chatPanel.range');
@@ -916,7 +931,8 @@ export default function CitationsPage() {
     if (urlRead) writeFiltersToUrl(filters);
   }, [urlRead, filters]);
   const [data, setData] = useState<CitationsOverview | null>(null);
-  const [hasAnyCitations, setHasAnyCitations] = useState<boolean | null>(null);
+  // Whether the brand has any citations at all, as last checked.
+  const [checked, setChecked] = useState<{ brandId: string; has: boolean } | null>(null);
   // The latest overview read failed: the tab says so, with Retry.
   const [loadFailed, setLoadFailed] = useState(false);
   // The "any citations at all" check failed; Retry runs it again.
@@ -943,8 +959,6 @@ export default function CitationsPage() {
   const urlPager = usePagination(filteredUrlRows.length, filterKey);
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [prompts, setPrompts] = useState<PromptOption[]>([]);
   const [availablePlatforms, setAvailablePlatforms] = useState<PlatformOption[]>([]);
   const [availableRegions, setAvailableRegions] = useState<string[]>([]);
   // The platform asked for is always one of the choices: the dropdown drops a
@@ -963,6 +977,26 @@ export default function CitationsPage() {
   const isRefetching = isLoading && data !== null;
 
   const activeBrandId = brand?.id ?? null;
+
+  // The filters' topics and prompts, read once the URL is, beside the
+  // overview's read (they are fetches, run side by side), and kept for the
+  // brand: the other tabs read the same topics.
+  const readFor = urlRead ? activeBrandId : null;
+  const keptTopics = useBrandRead('topics', readFor, getTopics);
+  const keptPrompts = useBrandRead('prompts', readFor, getBrandPrompts);
+  const topics = useMemo<Topic[]>(() => keptTopics ?? [], [keptTopics]);
+  const prompts = useMemo<PromptOption[]>(
+    () => (keptPrompts ?? []).map((r) => ({ id: r.id, text: r.text })),
+    [keptPrompts],
+  );
+  // "Any citations at all": this brand's last check, or the one kept from before.
+  const hasCitationsKey = activeBrandId ? readKey('hasCitations', activeBrandId) : null;
+  const hasAnyCitations =
+    checked && checked.brandId === activeBrandId
+      ? checked.has
+      : hasCitationsKey
+        ? (cache.get<boolean>(hasCitationsKey) ?? null)
+        : null;
 
   const [sourceTab, setSourceTab] = useState<'domains' | 'urls' | 'gaps' | 'types'>('domains');
   const [gaps, setGaps] = useState<CitationGaps | null>(null);
@@ -1015,42 +1049,9 @@ export default function CitationsPage() {
   // asks the brand's models once.
   const familyRead = useRef(new Set<string>());
 
-  const loadData = useCallback(async () => {
-    if (!activeBrandId) {
-      setIsLoading(false);
-      return;
-    }
-    const gen = ++loadGen.current;
-    const stale = () => loadGen.current !== gen;
-
-    setIsLoading(true);
-    setLoadFailed(false);
-    // A platform from an address can be one model of a family (Chat's link,
-    // platform=chatgpt-web): it reads as its family, as the dropdown sets it,
-    // so the numbers are those of picking ChatGPT there. The rows below are
-    // filtered, so the brand's models are asked for.
-    const asked = overviewFilters.platforms?.[0] ?? '';
-    if (isSingleModel(asked) && !familyRead.current.has(asked)) {
-      familyRead.current.add(asked);
-      const options = getBrandFilterOptions(activeBrandId);
-      readSent();
-      const family = await options
-        .then((options) => modelFamilyValue(asked, modelFamilies(options.models)))
-        .catch(() => asked);
-      if (stale()) return;
-      familyRead.current.add(family);
-      if (family !== asked) {
-        // The filters change, and the load they start reads the family.
-        setFilters((f) => ({ ...f, platform: family }));
-        return;
-      }
-    }
-    try {
-      const read = getCitationsOverview(activeBrandId, overviewFilters);
-      // On its way first: the run line's read, and the filters' choices, queue behind it.
-      readSent();
-      const overview = await read;
-      if (stale()) return;
+  // The overview on screen, from a read or from what the tab kept.
+  const showOverview = useCallback(
+    (overview: CitationsOverview) => {
       setData(overview);
 
       // Surface filter options from the observed models/regions.
@@ -1069,18 +1070,64 @@ export default function CitationsPage() {
           ),
         );
       }
+      shown();
+    },
+    [shown],
+  );
+
+  const loadData = useCallback(async () => {
+    if (!activeBrandId) {
+      setIsLoading(false);
+      return;
+    }
+    const gen = ++loadGen.current;
+    const stale = () => loadGen.current !== gen;
+
+    // The same brand and filters read before (this tab opened again, or a
+    // range picked again): on screen at once, read again quietly. Kept by
+    // the range picked, not its dates, which move with the clock.
+    const key = readKey('citationsOverview', activeBrandId, pickedOf(overviewFilters));
+    const kept = cache.get<CitationsOverview>(key);
+    if (kept) showOverview(kept);
+    setIsLoading(!kept);
+    setLoadFailed(false);
+    // A platform from an address can be one model of a family (Chat's link,
+    // platform=chatgpt-web): it reads as its family, as the dropdown sets it,
+    // so the numbers are those of picking ChatGPT there. The rows below are
+    // filtered, so the brand's models are asked for.
+    const asked = overviewFilters.platforms?.[0] ?? '';
+    if (isSingleModel(asked) && !familyRead.current.has(asked)) {
+      familyRead.current.add(asked);
+      const family = await cache
+        .read(readKey('filterOptions', activeBrandId), () => getBrandFilterOptions(activeBrandId))
+        .then((options) => modelFamilyValue(asked, modelFamilies(options.models)))
+        .catch(() => asked);
+      if (stale()) return;
+      familyRead.current.add(family);
+      if (family !== asked) {
+        // The filters change, and the load they start reads the family.
+        setFilters((f) => ({ ...f, platform: family }));
+        return;
+      }
+    }
+    try {
+      const overview = await getCitationsOverview(activeBrandId, overviewFilters);
+      cache.set(key, overview);
+      if (stale()) return;
+      showOverview(overview);
     } catch (err) {
       // Leaving the page aborts the in-flight request. That rejection is not a
       // failure worth reporting — and the toast is global, so it would surface
-      // on whichever page the user navigated to.
-      if (stale()) return;
+      // on whichever page the user navigated to. Nor is a quiet read's under
+      // kept figures: they stay.
+      if (stale() || kept) return;
       console.error('[citations] load failed', err);
       setLoadFailed(true);
       toast.error('Failed to load citation data');
     } finally {
       if (!stale()) setIsLoading(false);
     }
-  }, [activeBrandId, overviewFilters, readSent]);
+  }, [activeBrandId, overviewFilters, cache, showOverview]);
 
   useEffect(() => {
     if (!urlRead) return;
@@ -1098,39 +1145,22 @@ export default function CitationsPage() {
     };
   }, [loadData, urlRead]);
 
-  // The filters' choices and the "any citations at all" check, read once the
-  // URL is, after the overview's read above: server actions run one at a
-  // time, so the figures go first.
+  // The "any citations at all" check, read once the URL is, beside the
+  // overview's read, and kept for the brand.
   useEffect(() => {
-    if (!activeBrandId || !urlRead) return;
-    let active = true;
-    getTopics(activeBrandId)
-      .then((rows) => {
-        if (active) setTopics(rows);
-      })
-      .catch(() => {});
-    getBrandPrompts(activeBrandId)
-      .then((rows) => {
-        if (active) setPrompts(rows.map((r) => ({ id: r.id, text: r.text })));
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, [activeBrandId, urlRead]);
-
-  useEffect(() => {
-    if (!activeBrandId || !urlRead) return;
+    if (!activeBrandId || !urlRead || !hasCitationsKey) return;
 
     let active = true;
 
     brandHasCitations(activeBrandId)
       .then((result) => {
+        cache.set(hasCitationsKey, result);
         if (!active) return;
-        setHasAnyCitations(result);
+        setChecked({ brandId: activeBrandId, has: result });
       })
       .catch((err) => {
-        if (!active) return;
+        // A check kept from before stays.
+        if (!active || cache.get(hasCitationsKey) !== undefined) return;
         console.error('[citations] brandHasCitations failed', err);
         setCheckFailed(true);
         toast.error('Failed to check citation data');
@@ -1139,7 +1169,7 @@ export default function CitationsPage() {
     return () => {
       active = false;
     };
-  }, [activeBrandId, urlRead, checkAttempt]);
+  }, [activeBrandId, urlRead, checkAttempt, hasCitationsKey, cache]);
 
   // Retry: the overview again, and the "any citations" check if it failed.
   const retry = useCallback(() => {

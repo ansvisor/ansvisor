@@ -1,8 +1,9 @@
 'use client';
 
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { TrackingWindow } from '@/lib/actions/tracking';
+import { NO_READ_CACHE, readKey, type ReadCache } from './read-cache';
 
 /**
  * What Brand Visibility's shared layout (the header, the run line and the
@@ -31,10 +32,12 @@ export interface BrandVisibilityShell {
   /** What the Overview read: whether the brand has answers, and its newest. */
   reportData: (facts: { hasData: boolean; lastCheckedAt: string | null }) => void;
   /**
-   * The tab's first read is on its way. Server actions run one at a time, so
-   * the run line's own read waits for this: it never holds the tab's data.
+   * What the tabs last read, by brand and filters, kept while the page is
+   * open: a tab opened again shows it at once and reads again quietly.
    */
-  readSent: () => void;
+  cache: ReadCache;
+  /** The tab's first figures are on screen: the other tabs are prefetched then, not before. */
+  shown: () => void;
 }
 
 const noop = () => {};
@@ -45,13 +48,49 @@ const OUTSIDE: BrandVisibilityShell = {
   isRunning: false,
   reportRunWindow: noop,
   reportData: noop,
-  readSent: noop,
+  cache: NO_READ_CACHE,
+  shown: noop,
 };
 
 export const BrandVisibilityShellContext = createContext<BrandVisibilityShell>(OUTSIDE);
 
 export function useBrandVisibilityShell(): BrandVisibilityShell {
   return useContext(BrandVisibilityShellContext);
+}
+
+/**
+ * A read a tab keeps for the brand (the filters' choices, the topics, the
+ * Opportunities card), kept under `name`: what it brought back last shows at
+ * once when the tab opens again, and it reads again, quietly, on opening, on
+ * another brand and when `version` changes. A failed read keeps what was
+ * there. Undefined until there is something to show; no brand reads nothing.
+ */
+export function useBrandRead<T>(
+  name: string,
+  brandId: string | null | undefined,
+  read: (brandId: string) => Promise<T>,
+  version: number = 0,
+): T | undefined {
+  const { cache } = useBrandVisibilityShell();
+  const key = brandId ? readKey(name, brandId) : null;
+  const [state, setState] = useState<{ key: string; value: T } | null>(null);
+  useEffect(() => {
+    if (!key || !brandId) return;
+    let cancelled = false;
+    cache
+      .read(key, () => read(brandId))
+      .then(
+        (value) => {
+          if (!cancelled) setState({ key, value });
+        },
+        () => {},
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [key, brandId, read, version, cache]);
+  if (!key) return undefined;
+  return state?.key === key ? state.value : cache.get<T>(key);
 }
 
 /** A tab's own header actions: in the shared header, or in place outside Brand Visibility. */
