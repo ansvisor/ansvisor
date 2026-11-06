@@ -20,7 +20,7 @@ import type { AuditOpportunity, ExcludedPage, OpportunityReason } from '@/lib/ac
 import type { PageToAudit } from './_audit-confirm-dialog';
 import { formatMonthDay, formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { InfoTip } from '../insights/_kpi-cards';
+import { InfoTip } from '../(brand-visibility)/insights/_kpi-cards';
 
 /** A priority at or above this shows dark, as the mockup's high ones. */
 const HIGH_PRIORITY = 80;

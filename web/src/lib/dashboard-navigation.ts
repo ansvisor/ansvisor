@@ -1,4 +1,5 @@
 import type { BrandPrefKey, NavChild, NavItem } from '@/config/dashboard';
+import type { Feature } from '@/config/plans';
 import { menuSectionOf } from '@/lib/menu-access';
 
 type Translator = (key: string) => string;
@@ -10,7 +11,8 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   Chat: 'chat',
   'Agent Center': 'agentCenter',
   'Action Center': 'actionCenter',
-  'Answer Engine Insights': 'insights',
+  Visibility: 'insights',
+  Overview: 'overview',
   Competitors: 'competitors',
   'AI Referral Traffic': 'traffic',
   Prompts: 'prompts',
@@ -27,7 +29,9 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   'Site Audit': 'audit',
   Citations: 'citations',
   Mentions: 'mentions',
-  Shopping: 'shopping',
+  Products: 'products',
+  // Products' section where menu access lists the sections.
+  'Product Visibility': 'shopping',
   Reports: 'reports',
 };
 
@@ -70,6 +74,51 @@ export function activeChildHref(children: NavChild[], pathname: string): string 
 }
 
 /**
+ * Whether a menu item is the current page's: its route (`href`, where it
+ * links), or one of its submenu's (Brand Visibility on its Mentions and
+ * Citations tabs, whose routes aren't under its own).
+ */
+export function isNavItemActive(
+  item: Pick<NavItem, 'href' | 'children'>,
+  pathname: string,
+  href: string = item.href,
+): boolean {
+  if (item.href === '/dashboard') return pathname === '/dashboard';
+  if (pathname.startsWith(href)) return true;
+  return !!item.children?.length && activeChildHref(item.children, pathname) !== null;
+}
+
+/**
+ * What decides a gated submenu entry (Visibility's Products): the active
+ * brand's preferences and the plan's features. Without them, a gated entry
+ * is left out.
+ */
+export interface NavChildGates {
+  brandPrefs: Record<BrandPrefKey, boolean>;
+  canUse: (feature: Feature) => boolean;
+}
+
+/**
+ * The submenu entries a person's menu shows: each entry's section is its
+ * route's, so Brand Visibility's Mentions, Citations and Products go with
+ * theirs (menu access), and Prompts' and Content's with the item's own. An
+ * entry for some brands or plans only shows for them: off, it is off the
+ * menu rather than locked.
+ */
+export function visibleNavChildren(
+  item: Pick<NavItem, 'children'>,
+  hiddenSections: ReadonlySet<string> = new Set(),
+  gates?: NavChildGates,
+): NavChild[] {
+  return (item.children ?? []).filter((child) => {
+    if (child.requiresBrandPref && !gates?.brandPrefs[child.requiresBrandPref]) return false;
+    if (child.requiredFeature && !gates?.canUse(child.requiredFeature)) return false;
+    const section = menuSectionOf(child.href);
+    return !section || !hiddenSections.has(section);
+  });
+}
+
+/**
  * Where a submenu entry links: its route, or the page open under it when it
  * keeps it (the Editor, on a draft: clicking it doesn't open the draft again).
  */
@@ -88,10 +137,18 @@ export function shouldShowDashboardNavItem(
   brandPrefs: Record<BrandPrefKey, boolean>,
   hiddenSections: ReadonlySet<string> = new Set(),
   chatAgentic = false,
+  canUse?: (feature: Feature) => boolean,
 ): boolean {
   if (item.requiresChatAgentic && !chatAgentic) return false;
-  const section = menuSectionOf(item.href);
-  if (section && hiddenSections.has(section)) return false;
+  if (item.children?.length) {
+    // A submenu shows while one of its entries does: Brand Visibility with
+    // only Citations on someone's menu still shows, with Citations alone.
+    const gates = canUse ? { brandPrefs, canUse } : undefined;
+    if (visibleNavChildren(item, hiddenSections, gates).length === 0) return false;
+  } else {
+    const section = menuSectionOf(item.href);
+    if (section && hiddenSections.has(section)) return false;
+  }
   return !item.requiresBrandPref || brandPrefs[item.requiresBrandPref];
 }
 

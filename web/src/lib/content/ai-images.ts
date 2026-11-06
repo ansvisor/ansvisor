@@ -7,6 +7,7 @@ import { OwnKeyUnreadableError } from '@/lib/chat/key';
 import { createClient } from '@/lib/supabase/server';
 import { DRAFT_IMAGE_RATIOS, DRAFT_IMAGE_STYLES } from './ai-image-options';
 import { storeAiImageOptions, type StoredOption } from './ai-image-store';
+import { AI_IMAGE_BYTES, imageStorageFits } from './image-storage';
 
 /**
  * Images made in the Content Editor (CHAT-25 §9, W4-09), on the server: the
@@ -85,6 +86,8 @@ export type DraftImagesFailure =
   | { code: 'provider_off'; model: string }
   | { code: 'ai_limit'; trial: boolean }
   | { code: 'refused'; why: string }
+  // The workspace's storage has no room for them (00490): nothing made or charged.
+  | { code: 'storage_full' }
   // Made, and charged, but none could be stored: the panel says so.
   | { code: 'not_saved'; made: number };
 
@@ -103,7 +106,8 @@ export type DraftImagesResult =
  * options come back as addresses; the picked one is kept and the others
  * dropped (ai-image-store.ts). A model whose maker an Admin turned off
  * (W4-34) is refused first, as Chat refuses it: nothing held, charged or
- * sent to it.
+ * sent to it; so is a request the workspace's storage has no room for
+ * (00490, images count with Chat's files).
  */
 export async function makeDraftImages(job: {
   organizationId: string;
@@ -125,6 +129,11 @@ export async function makeDraftImages(job: {
     throw err;
   }
   if (!key) return { ok: false, code: 'unavailable' };
+
+  // Room for them before anything is made, reckoned as Chat's images are.
+  if (!(await imageStorageFits(job.organizationId, job.input.count * AI_IMAGE_BYTES))) {
+    return { ok: false, code: 'storage_full' };
+  }
 
   const held = await reserveDraftImages({
     organizationId: job.organizationId,

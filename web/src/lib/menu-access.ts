@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { dashboardNav } from '@/config/dashboard';
+import { dashboardNav, type NavItem } from '@/config/dashboard';
 import type { UserRole } from '@/types';
 
 /**
@@ -20,11 +20,42 @@ export function menuSectionOf(href: string): string | null {
   return root === 'dashboard' && section ? section : null;
 }
 
+/** A section of the left menu, with the menu entry that names it. */
+export interface MenuSectionEntry {
+  section: string;
+  /** The entry's title in config/dashboard.ts (getDashboardNavLabel names it). */
+  title: string;
+  icon: NavItem['icon'];
+}
+
+/**
+ * The sections of these menu items, in the menu's order: each item's, then
+ * those of its submenu entries that are sections of their own (Brand
+ * Visibility's Mentions, Citations and Products, items of their own before
+ * it gathered them, keep their sections and names, so menus already set
+ * keep them).
+ */
+export function menuSectionEntries(items: readonly NavItem[]): MenuSectionEntry[] {
+  const entries: MenuSectionEntry[] = [];
+  const add = (href: string, title: string, icon: NavItem['icon']) => {
+    const section = menuSectionOf(href);
+    if (section && !entries.some((entry) => entry.section === section)) {
+      entries.push({ section, title, icon });
+    }
+  };
+  for (const item of items) {
+    add(item.href, item.title, item.icon);
+    for (const child of item.children ?? []) {
+      add(child.href, child.sectionTitle ?? child.title, child.icon ?? item.icon);
+    }
+  }
+  return entries;
+}
+
 /** Every section of the left menu, in its order. */
-export const MENU_SECTIONS: string[] = dashboardNav
-  .flatMap((group) => group.items)
-  .map((item) => menuSectionOf(item.href))
-  .filter((section): section is string => section !== null);
+export const MENU_SECTIONS: string[] = menuSectionEntries(
+  dashboardNav.flatMap((group) => group.items),
+).map((entry) => entry.section);
 
 /**
  * Sections only the new Chat has (CHAT_AGENTIC): Agent Center. While it is

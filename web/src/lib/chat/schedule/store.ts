@@ -113,6 +113,8 @@ export interface NewSchedule {
   brandId: string | null;
   deliver: DeliverChoice;
   changeOnly: boolean;
+  /** whats_new: What's new for the maker's plan, with no model (W4-23, 00489). */
+  digest?: 'whats_new' | null;
 }
 
 /** Who makes it, and where. */
@@ -258,6 +260,7 @@ export async function createSchedule(
       recipient_ids: [],
       // Recurring only (the database checks it too).
       change_only: recurring && input.changeOnly,
+      digest: input.digest ?? null,
       // Auto, ask before changes; always Auto · Normal (Wave 3 decision).
       mode: 'auto',
       model: 'auto',

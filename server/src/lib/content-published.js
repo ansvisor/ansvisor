@@ -3,6 +3,7 @@ import { assertBrandAccess } from './access.js';
 import { logger } from './logger.js';
 import { onBrandDomain } from './audit/host.js';
 import { closeTakenDown, shipCmsPublish } from './impact-ledger/ship.js';
+import { announcePublishedPage } from './indexnow.js';
 
 /**
  * A sent page now live at `url` (Send to CMS #1331), as a webhook's
@@ -17,7 +18,8 @@ import { closeTakenDown, shipCmsPublish } from './impact-ledger/ship.js';
  * (the post updated in place) is the page as published again. The delivery
  * is written last: a write before it that fails throws, and the next try,
  * finding it not yet published, does it all again. Then the publish goes
- * into the impact ledger as a shipped change (shipCmsPublish).
+ * into the impact ledger as a shipped change (shipCmsPublish), and the page
+ * to IndexNow when its brand turned that on (indexnow.js, once per page).
  *
  * @param {{ id: string, draft_id: string|null, status: string, published_url: string|null }} delivery
  * @param {string} url
@@ -37,6 +39,7 @@ export async function markDeliveryPublished(delivery, url, { externalId = null }
     }
     return;
   }
+  let pagePublished = false;
   if (delivery.draft_id) {
     const { data: latest, error: latestError } = await supabaseAdmin
       .from('content_draft_deliveries')
@@ -46,7 +49,10 @@ export async function markDeliveryPublished(delivery, url, { externalId = null }
       .limit(1)
       .maybeSingle();
     if (latestError) throw new Error(latestError.message);
-    if (latest?.id === delivery.id) await markDraftPublished(delivery.draft_id, url, { at: now });
+    if (latest?.id === delivery.id) {
+      await markDraftPublished(delivery.draft_id, url, { at: now });
+      pagePublished = true;
+    }
   }
   const { error: deliveryError } = await supabaseAdmin
     .from('content_draft_deliveries')
@@ -56,6 +62,8 @@ export async function markDeliveryPublished(delivery, url, { externalId = null }
   // A shipped change for the impact ledger (CHAT-22 §2), measured at 7, 14,
   // 30 and 90 days: behind CHAT_AGENTIC, once per send, and never throws.
   await shipCmsPublish({ deliveryId: delivery.id, url, publishedAt: now });
+  // IndexNow, once per page, when the brand turned it on (#2142). Never throws.
+  if (pagePublished) await announcePublishedPage({ draftId: delivery.draft_id, url });
 }
 
 /**

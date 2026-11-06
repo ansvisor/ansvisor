@@ -5,7 +5,7 @@ Ansvisor keeps each brand's product catalog in one shape: products, variants, im
 - **A feed:** a public address read without a sign-in. The product feed URL connector (`server/src/connectors/feed-url/`) reads Google product feeds, Meta catalog CSVs and store CSV exports.
 - **A store or marketplace:** read with the brand's own sign-in, for example WooCommerce, Walmart, Trendyol or Hepsiburada.
 
-This guide is for writing a store connector. You can build and test one with no production keys and no real account.
+This guide is for writing a store connector. You can build and test one with no production keys and no real account. For any other integration (a CMS target, an AI bot log source, a data read or an export), read [Adding an integration](docs/contributing/adding-an-integration.md).
 
 ## How a connector fits
 

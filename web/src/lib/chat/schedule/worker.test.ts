@@ -47,6 +47,22 @@ vi.mock('../precedence-context', async (importOriginal) => {
   };
 });
 
+// What's new for a digest job (W4-23): unread entries, as the test sets them.
+const whatsNew = vi.hoisted(() => ({
+  items: [] as { slug: string; feature: string; lines: string[]; route: string; onPlans: null }[],
+}));
+vi.mock('../whats-new/reads', () => ({
+  UNREAD_DAYS: 90,
+  pickWhatsNew: () => ({
+    items: whatsNew.items,
+    hasUnread: whatsNew.items.length > 0,
+    more: false,
+  }),
+  readWhatsNewReads: async () => new Set<string>(),
+  markWhatsNewRead: async () => true,
+  whatsNewFlags: () => new Set<string>(),
+}));
+
 const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const worker = await import('./worker');
@@ -488,6 +504,48 @@ describe('the checks before each run', () => {
     // Skipped, not off: the job goes on at its next slot.
     expect(jobRow()).toMatchObject({ enabled: true, next_run_at: '2026-11-16T06:00:00.000Z' });
     expect(opened).toHaveLength(1);
+  });
+});
+
+describe('a What’s new digest (W4-23, 00489)', () => {
+  const digestJob = () =>
+    seedJob({
+      title: 'What’s new for my plan',
+      prompt: 'What’s new for my plan',
+      skill_name: null,
+      brand_id: null,
+      digest: 'whats_new',
+    });
+
+  it('runs with no model, even at the AI limit, and ends Done in its chat', async () => {
+    digestJob();
+    whatsNew.items = [
+      {
+        slug: 'skills',
+        feature: 'Skills',
+        lines: ['Run a skill.'],
+        route: '/dashboard/chat/skills',
+        onPlans: null,
+      },
+    ];
+    fakes.usage.mockResolvedValue({ active_plan: true, unlimited: false, percent_used: 100 });
+    expect((await worker.fireDueJobs(NOW, driver)).started).toBe(1);
+    expect(driver).not.toHaveBeenCalled();
+    expect(runsOf()[0]).toMatchObject({ status: 'done' });
+    expect(chatRun(runsOf()[0].run_id)).toMatchObject({ status: 'done' });
+    expect(jobRow()).toMatchObject({ enabled: true, next_run_at: NEXT_SLOT });
+  });
+
+  it('delivers nothing with nothing new: Unchanged, and the job goes on', async () => {
+    digestJob();
+    whatsNew.items = [];
+    await worker.fireDueJobs(NOW, driver);
+    expect(runsOf()[0]).toMatchObject({
+      status: 'unchanged',
+      reason: 'Nothing new for your plan.',
+    });
+    expect(db.tables.chat_conversations).toEqual([]);
+    expect(jobRow()).toMatchObject({ enabled: true, next_run_at: NEXT_SLOT });
   });
 });
 
