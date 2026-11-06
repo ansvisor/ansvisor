@@ -17,7 +17,7 @@ export const FEATURES = [
   // underlying tool calls run against the user's own infrastructure.
   'ai_agent',
   // Shopping analytics — the Shopping dashboard page (cards from
-  // Perplexity / AI Mode / Copilot, your products vs competitors,
+  // ChatGPT Shopping / AI Mode, your products vs competitors,
   // merchant breakdown). Free / Starter get the headline KPI only;
   // Growth+ and self-host get the full set of tabs.
   'shopping_analytics',
@@ -206,7 +206,7 @@ export const PLANS: Record<PlanId, Plan> = {
       maxStorageGb: 5,
       maxDailyOnDemand: 3,
       onDemandCooldownMinutes: 15,
-      allowedScrapers: ['chatgpt-web', 'copilot-web'],
+      allowedScrapers: ['chatgpt-web', 'gemini-web'],
       allowedModels: [],
       features: [
         'basic_insights',

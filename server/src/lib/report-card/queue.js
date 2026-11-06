@@ -20,7 +20,7 @@ export const PRUNE_SCHEDULE = '23 3 * * *';
 export const STALE_MS = 60 * 60 * 1000;
 /**
  * How long a run may ask the engines: well below STALE_MS, so a slow run
- * (125 tasks, 12 in flight, up to 15 minutes an answer) ends before the
+ * (100 tasks, 12 in flight, up to 15 minutes an answer) ends before the
  * tick takes it as lost and starts a second, paid copy next to it.
  */
 export const RUN_DEADLINE_MS = 40 * 60 * 1000;

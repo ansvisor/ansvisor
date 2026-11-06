@@ -56,6 +56,8 @@ export const SKIPPED = {
     "Files Chat filed from a person's runs and saved answers (00411): made by their own Chat work, not sample data, and Chat's precedence refuses changes on a demo brand.",
   chat_agent_go_live_events:
     'What agents published or sent on their own (00443): no agent runs for a demo brand, and nothing is ever published or sent for one.',
+  chat_agent_trigger_claims:
+    "An agent's fire once per brand, When a brand is added (00482): the demo brand is made by the API server, not added by a person, and no trigger ever fires for it.",
   chat_notices:
     "A person's notes from the system (00446): one about a brand tells of an agent going live on its own, which never happens for a demo brand.",
   chat_why_analyses:

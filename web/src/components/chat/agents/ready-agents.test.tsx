@@ -29,8 +29,10 @@ vi.hoisted(() => {
  * with its skills, triggers and mode and Use this agent, which opens New
  * agent filled with it; then the Soon cards, which say what they wait for
  * and open nothing. A mode the plan keeps closed shows its lock; readers
- * see the list's line instead of Use this agent. Filters: the goals, the
- * business types and the work areas the presets have. The packs for the
+ * see the list's line instead of Use this agent. Filters: one row of
+ * headers (Goal ▾, Business type ▾, Role ▾) for the goals, the business
+ * types and the work areas the presets have, each opening its options under
+ * it, one at a time, and naming its pick. The packs for the
  * brand's site type and the person's work areas come first, marked. The
  * tab is kept in the address.
  */
@@ -88,9 +90,30 @@ const action = (name: string) => all(`[data-action="${name}"]`);
 const cards = () => all('[data-slot="preset-card"]');
 const card = (id: string) => container.querySelector<HTMLElement>(`[data-preset="${id}"]`)!;
 const ids = () => cards().map((c) => c.getAttribute('data-preset'));
-const chips = (filter: string) =>
-  all(`[data-action="agents.readyFilter"][data-filter="${filter}"]`);
-const chip = (filter: string, label: string) => chips(filter).find((c) => c.textContent === label)!;
+/** A filter's header (Goal ▾), in the row above the cards. */
+const header = (filter: string) =>
+  container.querySelector<HTMLElement>(
+    `[data-action="agents.readyFilter"][data-filter="${filter}"]`,
+  )!;
+const headers = () => all('[data-action="agents.readyFilter"]');
+/** The open panels: they open in a layer over the page, out of the list. */
+const panels = () => [...document.querySelectorAll<HTMLElement>('[role="menu"]')];
+/** The open panel's options. */
+const options = () => [
+  ...document.querySelectorAll<HTMLElement>('[data-slot="ready-filter-option"]'),
+];
+const option = (label: string) => options().find((o) => o.textContent === label)!;
+async function press(key: string, el: Element = document.activeElement ?? document.body) {
+  await act(async () => {
+    el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  });
+  await settle();
+}
+/** Opens a filter's header and picks one of its options. */
+async function pick(filter: string, label: string) {
+  await click(header(filter));
+  await click(option(label));
+}
 /** The brand on screen, as the brand switcher keeps it. */
 function onBrand(siteType: string | undefined) {
   const brand = { id: 'brand-1', name: 'Ansvisor', siteType, shoppingModeEnabled: false } as Brand;
@@ -206,12 +229,14 @@ describe('Ready to use', () => {
       '/dashboard/agents/new?preset=fanout-gap-filler',
     );
 
-    // Onboarding & Help: its setup skill, on Run now only, asking before every change.
+    // Onboarding & Help: its setup skill, on each brand added, asking before every change.
     const help = card('onboarding-help');
     expect(help.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
       '/setupAsk me first',
     );
-    expect(help.querySelector('[data-cell="trigger"]')?.textContent).toBe('TriggerManual only');
+    expect(help.querySelector('[data-cell="trigger"]')?.textContent).toBe(
+      'TriggerWhen a brand is added',
+    );
     expect(help.querySelector('[data-action="agents.usePreset"]')?.getAttribute('href')).toBe(
       '/dashboard/agents/new?preset=onboarding-help',
     );
@@ -278,9 +303,28 @@ describe('Ready to use', () => {
     }
   });
 
-  it('filters by goal, with only the goals the agents have', async () => {
+  it('shows the filters as one row of headers, each with its arrow and its panel closed', async () => {
     await render();
-    expect(chips('goal').map((c) => c.textContent)).toEqual([
+    // Industry has no agent yet: no header for it.
+    expect(headers().map((h) => h.textContent)).toEqual(['Goal', 'Business type', 'Role']);
+    expect(headers().every((h) => h.closest('[data-slot="ready-filters"]'))).toBe(true);
+    for (const h of headers()) {
+      expect(h.tagName).toBe('BUTTON');
+      expect(h.getAttribute('aria-haspopup')).toBe('menu');
+      expect(h.getAttribute('aria-expanded')).toBe('false');
+      expect(h.querySelector('svg')).not.toBeNull();
+    }
+    expect(panels()).toHaveLength(0);
+  });
+
+  it('filters by goal from its header, with only the goals the agents have, and All resets it', async () => {
+    await render();
+    await click(header('goal'));
+    expect(header('goal').getAttribute('aria-expanded')).toBe('true');
+    expect(panels()).toHaveLength(1);
+    expect(header('goal').getAttribute('aria-controls')).toBe(panels()[0].id);
+    // Its options right under it, All picked.
+    expect(options().map((o) => o.textContent)).toEqual([
       'All',
       'Visibility',
       'Citations',
@@ -292,9 +336,14 @@ describe('Ready to use', () => {
       'Reporting',
       'Help',
     ]);
-    expect(chips('goal')[0].getAttribute('aria-pressed')).toBe('true');
+    expect(option('All').getAttribute('aria-checked')).toBe('true');
 
-    await click(chip('goal', 'Reporting'));
+    // Picking one closes the panel, and the header names it.
+    await click(option('Reporting'));
+    expect(panels()).toHaveLength(0);
+    expect(header('goal').getAttribute('aria-expanded')).toBe('false');
+    expect(header('goal').textContent).toBe('Goal: Reporting');
+    expect(header('goal').getAttribute('data-picked')).toBe('reporting');
     expect(ids()).toEqual([
       'weekly-report',
       'ceo-brief',
@@ -302,26 +351,74 @@ describe('Ready to use', () => {
       'agency-reporter',
       'ai-traffic-signups',
     ]);
-    await click(chips('goal')[0]);
+
+    await click(header('goal'));
+    expect(option('Reporting').getAttribute('aria-checked')).toBe('true');
+    await click(option('All'));
+    expect(header('goal').textContent).toBe('Goal');
+    expect(header('goal').getAttribute('data-picked')).toBeNull();
     expect(cards()).toHaveLength(39);
   });
 
-  it('filters by business type and by role beside the goal, each with the values the agents have', async () => {
+  it('opens one panel at a time, and closes it with Escape or a click outside', async () => {
     await render();
-    const groups = all('[data-slot="agent-center-ready"] [role="group"]');
-    expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual([
-      'Goal',
-      'Business type',
-      'For your role',
-    ]);
-    expect(chips('businessType').map((c) => c.textContent)).toEqual([
+    await click(header('goal'));
+    // The panel takes the focus.
+    expect(panels()[0].contains(document.activeElement)).toBe(true);
+
+    // Another header: its panel opens and the first closes.
+    await click(header('businessType'));
+    expect(header('goal').getAttribute('aria-expanded')).toBe('false');
+    expect(header('businessType').getAttribute('aria-expanded')).toBe('true');
+    expect(panels()).toHaveLength(1);
+    expect(options().map((o) => o.textContent)).toEqual([
       'All',
       'E-commerce',
       'Mobile app',
       'B2B',
       'B2C',
     ]);
-    expect(chips('role').map((c) => c.textContent)).toEqual([
+
+    // Escape closes it and gives the focus back to its header; nothing is filtered.
+    await press('Escape');
+    expect(panels()).toHaveLength(0);
+    expect(header('businessType').getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(header('businessType'));
+    expect(cards()).toHaveLength(39);
+
+    // A click outside closes it too.
+    await click(header('role'));
+    expect(panels()).toHaveLength(1);
+    await act(async () => {
+      for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) {
+        document.body.dispatchEvent(new MouseEvent(type, { bubbles: true }));
+      }
+    });
+    await settle();
+    expect(panels()).toHaveLength(0);
+    expect(header('role').getAttribute('aria-expanded')).toBe('false');
+    expect(cards()).toHaveLength(39);
+  });
+
+  it('works with the keyboard: the arrow keys open a header and move through its options', async () => {
+    await render();
+    header('goal').focus();
+    await press('ArrowDown');
+    expect(header('goal').getAttribute('aria-expanded')).toBe('true');
+    expect(document.activeElement).toBe(option('All'));
+    await press('ArrowDown');
+    expect(document.activeElement).toBe(option('Visibility'));
+    await press('Enter');
+    expect(panels()).toHaveLength(0);
+    expect(header('goal').textContent).toBe('Goal: Visibility');
+    expect(document.activeElement).toBe(header('goal'));
+    expect(ids()[0]).toBe('visibility-watch');
+  });
+
+  it('filters by business type and by role beside the goal, each with the values the agents have', async () => {
+    await render();
+    await click(header('role'));
+    expect(options().map((o) => o.textContent)).toEqual([
       'All',
       'Founders & leaders',
       'AEO/GEO & Audit',
@@ -332,21 +429,30 @@ describe('Ready to use', () => {
       'Business Development',
       'Developers',
     ]);
+    await press('Escape');
 
-    await click(chip('businessType', 'B2C'));
+    await pick('businessType', 'B2C');
+    expect(header('businessType').textContent).toBe('Business type: B2C');
     expect(ids()).toEqual(['social-proof-pages', 'reviews-ugc-watch', 'local-store-locator']);
     expect(card('reviews-ugc-watch').textContent).toContain(
       'Needs review site data and Reddit and YouTube',
     );
-    // Two filters at once keep what both match.
-    await click(chip('goal', 'Content'));
+    // Two filters at once keep what both match, and the row names both.
+    await pick('goal', 'Content');
     expect(ids()).toEqual(['social-proof-pages']);
-    await click(chips('goal')[0]);
-    await click(chips('businessType')[0]);
+    expect(headers().map((h) => h.textContent)).toEqual([
+      'Goal: Content',
+      'Business type: B2C',
+      'Role',
+    ]);
+    await pick('goal', 'All');
+    await pick('businessType', 'All');
+    expect(headers().map((h) => h.textContent)).toEqual(['Goal', 'Business type', 'Role']);
 
-    await click(chip('role', 'Content'));
+    await pick('role', 'Content');
+    expect(header('role').textContent).toBe('Role: Content');
     expect(ids()).toEqual(['content-freshness', 'content-plan-builder']);
-    await click(chip('role', 'AEO/GEO & Audit'));
+    await pick('role', 'AEO/GEO & Audit');
     expect(ids()).toEqual(['prompt-portfolio', 'technical-fixer']);
   });
 

@@ -60657,3 +60657,153 @@ comment on column public.content_draft_deliveries.via_agent_run_id is
 
 notify pgrst, 'reload schema';
 
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00481_agent_work.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00481: Agent work — who starts agent work in a workspace, and its change log
+-- ============================================================================
+-- The "Agent work" setting (AC-011, ROADMAP-plan §06; mockup screen 3): the
+-- gear on Action Center › Today and Settings › Chat, behind CHAT_AGENTIC:
+-- nothing reads it while the flag is off.
+--
+--   * chat_settings.agent_work: how far agents go without a person, for the
+--     whole workspace. 'approve_first' ("I approve first", the default, so
+--     every workspace starts on it): every change an agent's run makes waits
+--     for a person's approval card, whatever the agent's own mode (the
+--     approval precedence, web lib/chat/precedence.ts, reads it). Or
+--     'auto_start' ("Agent starts on its own"): each agent's own mode
+--     applies, Full auto still Growth and up. Going live is never affected:
+--     it stays under the go-live switches (00443) and a person's click. Only
+--     an Admin changes it; the server writes it.
+--   * setting_changes: one row per change of a workspace setting made in the
+--     app, kept with the setting's key, its value before and after, who
+--     changed it and when ("Changed by … · date"). Members of the workspace
+--     read their workspace's rows; the server writes them (service role).
+--     A row stays when the person who made it leaves (changed_by set null).
+
+alter table public.chat_settings
+  add column if not exists agent_work text not null default 'approve_first';
+
+alter table public.chat_settings drop constraint if exists chat_settings_agent_work_check;
+alter table public.chat_settings
+  add constraint chat_settings_agent_work_check
+  check (agent_work in ('approve_first', 'auto_start'));
+
+comment on column public.chat_settings.agent_work is
+  'Agent work (00481, AC-011): approve_first ("I approve first", the default) holds every change an agent''s run makes for a person''s approval, whatever the agent''s mode; auto_start ("Agent starts on its own") lets each agent''s own mode apply. Going live is never affected. Admins change it; each change is kept in setting_changes.';
+
+-- ─── The change log ─────────────────────────────────────────────────────────
+
+create table if not exists public.setting_changes (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null references public.organizations(id) on delete cascade,
+  -- The setting, by its key: 'agent_work' for now.
+  setting_key text not null check (setting_key ~ '^[a-z][a-z0-9_]{1,63}$'),
+  -- Its value before (null: it was never set, so the default applied) and after.
+  old_value text check (old_value is null or char_length(old_value) <= 200),
+  new_value text not null check (char_length(new_value) <= 200),
+  changed_by uuid references auth.users(id) on delete set null,
+  changed_at timestamptz not null default now()
+);
+
+create index if not exists setting_changes_organization_key_idx
+  on public.setting_changes (organization_id, setting_key, changed_at desc);
+
+comment on table public.setting_changes is
+  'Workspace settings (00481): each change made in the app, with its key, the value before and after, who changed it and when. Members read their workspace''s; the server writes.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.setting_changes enable row level security;
+
+revoke all on table public.setting_changes from anon, authenticated;
+grant select on table public.setting_changes to authenticated;
+grant all on table public.setting_changes to service_role;
+
+-- Members of the workspace read its changes; the server writes them.
+drop policy if exists "setting_changes: member select" on public.setting_changes;
+create policy "setting_changes: member select"
+  on public.setting_changes
+  for select
+  using (
+    organization_id in (
+      select p.organization_id from public.profiles p where p.id = auth.uid()
+    )
+  );
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00482_chat_agent_brand_added.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Chat (00482): "When a brand is added", an agent trigger that fires once
+-- per agent and brand when someone adds a brand to the workspace (AGENTS
+-- plan §3.B row 11: Onboarding & Help starts on a new brand). The web fires
+-- it once createBrand has saved the brand, never for the demo brand, for
+-- active agents whose scope is All brands; the run acts as the agent's
+-- owner, as every triggered run does (CHAT-21 §H item 38), and only when
+-- the owner may use the new brand.
+
+-- ─── The kind ───────────────────────────────────────────────────────────────
+
+-- A trigger of the new kind. Its settings are empty: it has none.
+alter table public.chat_agent_triggers
+  drop constraint if exists chat_agent_triggers_kind_check;
+alter table public.chat_agent_triggers
+  add constraint chat_agent_triggers_kind_check
+    check (kind in ('schedule', 'signal', 'kpi', 'watch_rule', 'brand_added'));
+
+-- A run it started. Every kind 00466 allows stays: 'agent' included.
+alter table public.chat_agent_runs
+  drop constraint if exists chat_agent_runs_trigger_kind_check;
+alter table public.chat_agent_runs
+  add constraint chat_agent_runs_trigger_kind_check
+    check (
+      trigger_kind in (
+        'schedule', 'signal', 'kpi', 'watch_rule', 'brand_added', 'manual', 'action', 'agent'
+      )
+    );
+
+-- ─── Once per agent and brand ───────────────────────────────────────────────
+
+-- A fire that may happen once per agent and brand claims its row first,
+-- inserted with "on conflict do nothing": a second fire for the same brand
+-- (a retry, two servers at once) finds the row taken and queues nothing.
+create table if not exists public.chat_agent_trigger_claims (
+  agent_id uuid not null references public.chat_agents(id) on delete cascade,
+  kind text not null check (kind in ('brand_added')),
+  brand_id uuid not null references public.brands(id) on delete cascade,
+  -- The trigger that fired; null once it is removed. The claim stays.
+  trigger_id uuid references public.chat_agent_triggers(id) on delete set null,
+  claimed_at timestamptz not null default now(),
+  primary key (agent_id, kind, brand_id)
+);
+
+-- A brand's claims go with it.
+create index if not exists chat_agent_trigger_claims_brand_idx
+  on public.chat_agent_trigger_claims (brand_id);
+
+comment on table public.chat_agent_trigger_claims is
+  'Chat (00482): the fires an agent''s trigger makes once per brand (brand_added: When a brand is added), one row per agent, kind and brand, so a brand never fires the same agent twice. Readable where the agent and the brand are; the server writes.';
+
+-- ─── Who reads and writes ───────────────────────────────────────────────────
+
+alter table public.chat_agent_trigger_claims enable row level security;
+
+revoke all on table public.chat_agent_trigger_claims from anon, authenticated;
+grant select on table public.chat_agent_trigger_claims to authenticated;
+grant all on table public.chat_agent_trigger_claims to service_role;
+
+-- As its trigger: where the agent is (00419, 00436), and for a brand the
+-- person may use.
+drop policy if exists "chat_agent_trigger_claims: agent select" on public.chat_agent_trigger_claims;
+create policy "chat_agent_trigger_claims: agent select"
+  on public.chat_agent_trigger_claims
+  for select
+  to authenticated
+  using (
+    agent_id in (select a.id from public.chat_agents a)
+    and brand_id in (select public.user_brand_ids())
+  );
+
