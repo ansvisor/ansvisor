@@ -116,4 +116,19 @@ describe('renderPulseEmail', () => {
     expect(html).toContain('color:#059669;">▲ 0</div>');
     expect(html).not.toContain('color:#dc2626;">▼ 0</div>');
   });
+
+  // The page is Visibility (Brand Visibility until 2026-11-06); its Overview keeps /dashboard/insights.
+  it('names the page it opens Visibility', () => {
+    const { html } = renderPulseEmail({
+      brandName: 'Acme',
+      metrics,
+      insightsUrl: 'https://app.example.com/dashboard/insights',
+      settingsUrl: 'https://example.com/settings',
+    });
+
+    expect(html).toContain('href="https://app.example.com/dashboard/insights"');
+    expect(html).toContain('>Open Visibility</a>');
+    expect(html).not.toContain('Open Insights');
+    expect(html).not.toContain('Brand Visibility');
+  });
 });

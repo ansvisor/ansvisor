@@ -15,6 +15,7 @@ import {
   plansLine,
   type ParsedEntry,
 } from './entries';
+import { pageExists } from '@/lib/app-pages';
 
 /**
  * What's new entries (W4-20, CHAT-11 §A): the team writes them in
@@ -27,21 +28,6 @@ import {
 
 const REPO = path.resolve(__dirname, '../../../../..');
 const FOLDER = path.join(REPO, 'whats-new');
-
-/** The app's page for a route: a folder per segment, or a [param] folder for any. */
-const dashboardDir = path.join(REPO, 'web/src/app/[locale]/(dashboard)');
-function pageExists(route: string): boolean {
-  let dirs = [dashboardDir];
-  for (const segment of route.split('/').filter(Boolean)) {
-    dirs = dirs.flatMap((dir) => {
-      if (!existsSync(dir)) return [];
-      return readdirSync(dir, { withFileTypes: true })
-        .filter((d) => d.isDirectory() && (d.name === segment || /^\[[^.\]]+\]$/.test(d.name)))
-        .map((d) => path.join(dir, d.name));
-    });
-  }
-  return dirs.some((dir) => existsSync(path.join(dir, 'page.tsx')));
-}
 
 const files = existsSync(FOLDER)
   ? readdirSync(FOLDER)

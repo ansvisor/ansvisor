@@ -3,12 +3,18 @@
  * provider (Cloro) documents it. The Query Fan-out page uses this to tell
  * "this engine shares its searches, but none arrived" (worth flagging) apart
  * from "this engine never shares them" (nothing to wait for). The server's
- * daily health report keeps the same sharing list, and judges ChatGPT by its
- * sampling (server/src/lib/health/report.js).
+ * daily health report expects the same: its list still names Copilot and
+ * Perplexity, but it skips the platforms Cloro can't deliver, and it judges
+ * ChatGPT by its sampling (server/src/lib/health/report.js).
  */
 
-/** Platforms whose answers come with the searches the engine ran. */
-export const FANOUT_SHARING_PLATFORMS: readonly string[] = ['copilot-web', 'perplexity-web'];
+/**
+ * Platforms whose answers come with the searches the engine ran. None today:
+ * Copilot and Perplexity did, but Ansvisor stopped tracking them on
+ * 2026-11-06 (Cloro no longer serves them). Their past answers still show
+ * their searches, as an ordinary engine's; a window without any is no news.
+ */
+export const FANOUT_SHARING_PLATFORMS: readonly string[] = [];
 
 /**
  * Platforms whose answers never come with their searches: those our provider
@@ -16,8 +22,9 @@ export const FANOUT_SHARING_PLATFORMS: readonly string[] = ['copilot-web', 'perp
  * capture (`claude`, `gemini`, see resolveModelPlatform in the tracking
  * worker).
  *
- * Two are in neither list, so a window may hold some of their searches or
- * none and neither is news: they read as ordinary engines, never flagged.
+ * The others are in neither list, so a window may hold some of their searches
+ * or none and neither is news: they read as ordinary engines, never flagged.
+ * Copilot and Perplexity, no longer tracked, read so too. And these two:
  *  - ChatGPT (`chatgpt-web`): its default interface carries no query text
  *    since 2026-09-30 (#1119); the server asks its legacy interface on one day
  *    a week per prompt (CLORO_CHATGPT_FANOUT, off unless set on self-host).

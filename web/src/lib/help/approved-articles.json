@@ -35,7 +35,7 @@
         "who starts agent work"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -83,7 +83,7 @@
         },
         {
           "heading": "Send work here from other pages",
-          "text": "Most actions come from signals each night, but you can also send work to the Action Center:\n\n- **Mentions**: select answers, or open one, and click **Send to Action Center**.\n- **Content**: **Send to Actions** on a content opportunity, or **Assign to…** on a Content Plan row.\n- **New content**: send it to a teammate with **Send to Action Center**.\n- **Site Audit**: **Send to Action Center** on a page's audit report.\n- **AI Referral Traffic**: select pages and click **Send to Action Center**.\n- **Brand Visibility**: **Send action** on a topic in Opportunities.\n- **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.\n- **Prompts**: **Send Actions** on a prompt's Improve tab.\n- **Chat**: **Send to Action Center** under an answer. Its Overview links back to the chat.\n\nSending the same thing twice doesn't create a second action: the page says it is already in the Action Center."
+          "text": "Most actions come from signals each night, but you can also send work to the Action Center:\n\n- **Mentions**: select answers, or open one, and click **Send to Action Center**.\n- **Content**: **Send to Actions** on a content opportunity, or **Assign to…** on a Content Plan row.\n- **New content**: send it to a teammate with **Send to Action Center**.\n- **Site Audit**: **Send to Action Center** on a page's audit report.\n- **AI Referral Traffic**: select pages and click **Send to Action Center**.\n- **Visibility**: **Send action** on a topic in Opportunities.\n- **Product Visibility**: pick the work in a product's plan and click **Send … actions to Action Center**.\n- **Prompts**: **Send Actions** on a prompt's Improve tab.\n- **Chat**: **Send to Action Center** under an answer. Its Overview links back to the chat.\n\nSending the same thing twice doesn't create a second action: the page says it is already in the Action Center."
         }
       ]
     },
@@ -146,11 +146,11 @@
         "home page"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. It is the first page you see after you sign in. Everything in it is per brand: switch brands to see another brand's work."
+          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. On a paid plan it is the first page you see after you sign in; in the free trial, and while you explore the demo brand, Ansvisor opens on **Chat** instead. Everything in it is per brand: switch brands to see another brand's work."
         },
         {
           "heading": "The tabs",
@@ -162,7 +162,7 @@
         },
         {
           "heading": "While the first tracking runs",
-          "text": "While a new brand's first tracking runs, one thin line sits under the tabs: **First tracking running**, how many of its checks are done and about how long is left. If another analysis is running, the line says **First tracking queued** until a slot opens. Click **Details** to read what it means and follow the run on Brand Visibility. Actions, signals and KPIs fill in once it finishes, and the line goes away. Meanwhile, a new brand starts with the **Getting started** steps on the Actions tab."
+          "text": "While a new brand's first tracking runs, one thin line sits under the tabs: **First tracking running**, how many of its checks are done and about how long is left. If another analysis is running, the line says **First tracking queued** until a slot opens. Click **Details** to read what it means and follow the run on Visibility. Actions, signals and KPIs fill in once it finishes, and the line goes away. Meanwhile, a new brand starts with the **Getting started** steps on the Actions tab."
         },
         {
           "heading": "A weekly routine",
@@ -395,7 +395,7 @@
         "onboarding"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -403,7 +403,7 @@
         },
         {
           "heading": "The four stages",
-          "text": "- **Set up**, ready now: set your KPIs, add at least 3 competitors and 3 topics, add 3 prompts per topic, connect Google Search Console and Google Analytics, and add the AI Traffic snippet.\n- **Explore**, when the first AI answers are in (usually within an hour): see where you stand in Brand Visibility, read your first AI answers, track high-value prompt suggestions, check what AI says about you, see who AI quotes and see visits from AI.\n- **Act**, when the first content suggestions are in (about 24 hours): pick content from suggestions, create your first content, optimize a page.\n- **Ready**, after every step above is done or skipped.\n\nThe high-value prompts step waits about 24 hours after you connect Search Console or Analytics."
+          "text": "- **Set up**, ready now: set your KPIs, add at least 3 competitors and 3 topics, add 3 prompts per topic, connect Google Search Console and Google Analytics, and add the AI Traffic snippet.\n- **Explore**, when the first AI answers are in (usually within an hour): see where you stand in Visibility, read your first AI answers, track high-value prompt suggestions, check what AI says about you, see who AI quotes and see visits from AI.\n- **Act**, when the first content suggestions are in (about 24 hours): pick content from suggestions, create your first content, optimize a page.\n- **Ready**, after every step above is done or skipped.\n\nThe high-value prompts step waits about 24 hours after you connect Search Console or Analytics."
         },
         {
           "heading": "Complete a step",
@@ -1010,6 +1010,10 @@
       "keywords": [
         "chat",
         "ask chat",
+        "welcome card",
+        "preparing your data",
+        "quick tour",
+        "product tour",
         "task finisher",
         "download answer",
         "save to files",
@@ -1145,15 +1149,19 @@
       "sections": [
         {
           "heading": null,
-          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Every chat is saved, so you can come back to it later and pick up where you left off."
+          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. In the free trial, and while you explore the demo brand, Ansvisor opens on Chat when you sign in. Every chat is saved, so you can come back to it later and pick up where you left off."
         },
         {
           "heading": "Chat Home",
           "text": "Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**\n\n**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.\n\n**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat."
         },
         {
+          "heading": "The welcome card",
+          "text": "In the free trial, and while you explore the demo brand, a welcome card sits above the box on Chat Home, and Home says **Welcome** with your name. In the trial, **Preparing your data** shows your first tracking run and about how long is left, until the first results are in. Admins and managers also see **Connect Search Console** and **Connect Google Analytics**, which open their cards in **Settings › Integrations**; a button goes once its source is connected. **Want a quick tour?** starts the product tour on the topic you pick, or on Visibility with **Show me everything**: the page opens with Chat beside it. **Not now** hides the card for good, and it goes once the tour ends."
+        },
+        {
           "heading": "Ask Chat",
-          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nNext to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; their box says **Read-only**, with a link to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
+          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nUnder the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; under their box it says **Read-only**, with a link to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
         },
         {
           "heading": "Chat beside any page",
@@ -1161,7 +1169,7 @@
         },
         {
           "heading": "What the panel looks at",
-          "text": "The box in the panel starts with chips for what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as the scope of your question. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.\n\nAn empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.\n\nThe speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Brand Visibility, Mentions & Sentiment, Citations, AI Referral Traffic, Prompts and Action Center."
+          "text": "The box in the panel starts with chips for what you have on screen: the page, your brand, the date range and the filters you picked. Chat takes them as the scope of your question. They follow the page while the panel is open; click **×** on one to leave it out, until you start a new chat.\n\nAn empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.\n\nThe speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Visibility's Overview, Mentions and Citations tabs, AI Referral Traffic, Prompts and Action Center."
         },
         {
           "heading": "Chats in the panel",
@@ -1257,7 +1265,7 @@
         },
         {
           "heading": "Speak your message",
-          "text": "Click the microphone beside **@** and speak. While it listens, it shows **Listening…** with a red dot; click it again, or pause, to stop. Your words go into the box in your browser's language, and nothing is sent until you send it. Using voice doesn't count toward your AI usage.\n\nYour browser turns the speech into text, not Ansvisor, and Ansvisor keeps no audio. Chrome and Edge send the audio to Google or Microsoft to do it. Firefox has no speech recognition, so there is no microphone there. If the browser asks, allow the microphone; otherwise the box says how."
+          "text": "Click the microphone next to the arrow and speak. While it listens, it shows **Listening…** with a red dot; click it again, or pause, to stop. Your words go into the box in your browser's language, and nothing is sent until you send it. Using voice doesn't count toward your AI usage.\n\nYour browser turns the speech into text, not Ansvisor, and Ansvisor keeps no audio. Chrome and Edge send the audio to Google or Microsoft to do it. Firefox has no speech recognition, so there is no microphone there. If the browser asks, allow the microphone; otherwise the box says how."
         },
         {
           "heading": "An API key in your message",
@@ -1336,6 +1344,8 @@
       "keywords": [
         "chat settings",
         "default mode",
+        "product tour",
+        "take the tour",
         "your focus",
         "answer language",
         "chat language",
@@ -1381,7 +1391,11 @@
         },
         {
           "heading": "Chat on every page",
-          "text": "**Open Chat on every page** shows or hides **Ask Chat** with Ctrl J in each page's header.\n\nWorkspace rules, such as which tools Chat may use on its own, are in **Tool policy**; only Admins change them."
+          "text": "**Open Chat on every page** shows or hides **Ask Chat** with Ctrl J in each page's header."
+        },
+        {
+          "heading": "Product tour",
+          "text": "**Take the tour**, under **Product tour**, starts the product tour again from its first topic: each page opens with Chat beside it, explaining the page in a few lines. It shows only while **Open Chat on every page** is on, since the tour runs in that side panel.\n\nWorkspace rules, such as which tools Chat may use on its own, are in **Tool policy**; only Admins change them."
         }
       ]
     },
@@ -1567,7 +1581,7 @@
         },
         {
           "heading": "Pick your focus",
-          "text": "The first time you open Chat, it asks **What should Chat focus on for you?** **Default: simple start** is picked at the top. Select **Continue** to keep it, or pick one or more of the eight areas under it and select **Continue**. Picking an area turns Default off; selecting **Default** again clears your areas.\n\n**Skip for now** also keeps the Default view. Chat asks only once, whichever you choose."
+          "text": "The first time you open Chat, it asks **What should Chat focus on for you?** **Default: simple start** is picked at the top. Select **Continue** to keep it, or pick one or more of the eight areas under it and select **Continue**. Picking an area turns Default off; selecting **Default** again clears your areas.\n\n**Skip for now** also keeps the Default view. Chat asks only once, whichever you choose.\n\nIn the free trial, and while you explore the demo brand, Chat doesn't ask: it opens on the Default view with a welcome card. Select **Edit** under the greeting to pick your focus whenever you like."
         },
         {
           "heading": "The Default view",
@@ -1969,7 +1983,7 @@
         "templates"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -1981,7 +1995,7 @@
         },
         {
           "heading": "The Skills page",
-          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Brand Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
+          "text": "Open **Skills** in the Chat menu to see every skill. **Ansvisor skills** lists Ansvisor's, and **All**, **Content**, **Visibility**, **Product Visibility**, **Technical** and **Reports** narrow them. **My skills** lists your workspace's own, with where each came from and whether it waits for review.\n\nA card shows the connections the skill uses on the brand you have open: green when connected, grey when not. **Run** starts a chat with the skill. **Schedule** opens Chat with \"Every Monday at 9:00, /skill\" in the box, to change before you send. **Create agent** starts an agent on it.\n\nAdmins turn a skill on or off for the whole workspace, and you turn your own saved skills on or off. Click a skill's name to see its details, share it with your workspace or delete it."
         },
         {
           "heading": "When Chat picks a skill",
@@ -2028,7 +2042,10 @@
         "updates",
         "show me",
         "new line",
-        "latest changes"
+        "latest changes",
+        "every month",
+        "monthly digest",
+        "what's new for my plan"
       ],
       "synonyms": [
         "release notes",
@@ -2038,7 +2055,7 @@
         "recent improvements"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -2055,12 +2072,16 @@
         {
           "heading": "When an update counts as read",
           "text": "An update counts as read once Chat shows it in an answer, or once you open its **Try it**. What you've read is yours alone, the same in the side panel and on the full page."
+        },
+        {
+          "heading": "Get it every month",
+          "text": "Ask Chat \"Send me What's new every month\" to make a scheduled job, **What's new for my plan**. It runs on the 1st of every month at 9:00 unless you pick another time on its card. You can set where results go, but there is no prompt to write.\n\nEach run lists the updates for your plan that you haven't read, up to ten, in the job's own chat, and marks them read. With nothing new, it sends nothing and its run shows as unchanged. It uses no AI usage. Find, pause or delete it on the **Scheduled** page."
         }
       ]
     },
     {
       "id": "citations/citations",
-      "title": "Citations page",
+      "title": "Visibility’s Citations tab",
       "route": "/dashboard/citations",
       "keywords": [
         "citations",
@@ -2077,22 +2098,23 @@
         "AI sources",
         "links in AI answers",
         "references in AI answers",
-        "cited pages"
+        "cited pages",
+        "citations page"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "The **Citations** page lists the domains and URLs that AI engines cited in their answers to your tracked prompts, for the brand selected in the sidebar. It shows which sources AI engines rely on when they answer questions in your category, and sorts them by source type. It reads the answers your tracking already collects."
+          "text": "The **Citations** tab of **Visibility** (it used to be the Citations page) lists the domains and URLs that AI engines cited in their answers to your tracked prompts, for the brand selected in the sidebar. Open it from the tabs under Visibility's header, or from **Visibility › Citations** in the sidebar. It shows which sources AI engines rely on when they answer questions in your category, and sorts them by source type. It reads the answers your tracking already collects."
         },
         {
           "heading": "Filters",
-          "text": "- **Date Range**: 24h (the default), 7d, 30d, 90d, All or Custom.\n- **Topic**: one topic. It's shown only when the brand has topics.\n- **Prompt**: one tracked prompt; type to search the list.\n- **Platform**: one AI platform, or all of them.\n- **Region**: one region the answers were tracked in, or all of them.\n\nThe filters are kept in the page's address, so a refresh or a shared link opens the same view. When a table is empty for the window but the brand has citations outside it, **Show all data** clears the filters and shows all dates and all sources."
+          "text": "- **Date Range**: 24h (the default), 7d, 30d, 90d, All or Custom.\n- **Topic**: one topic. It's shown only when the brand has topics.\n- **Prompt**: one tracked prompt; type to search the list.\n- **Platform**: one AI platform, or all of them.\n- **Region**: one region the answers were tracked in, or all of them.\n\nThe filters are kept in the page's address, so a refresh or a shared link opens the same view. The date range, platform, region and topic come with you from Visibility's other tabs, and go with you to them. When a table is empty for the window but the brand has citations outside it, **Show all data** clears the filters and shows all dates and all sources."
         },
         {
           "heading": "Summary cards",
-          "text": "Three cards sit at the top of the page:\n\n- **Total Citations**: every citation in the window, across the tracked results (AI answers) in it.\n- **Unique Domains**: the cited domains in the source choice you made (**Brand**, **Competitors**, **Third-Party** or **All**), with their unique URLs.\n- **Avg citations per result**: the number of links per AI answer."
+          "text": "Three cards sit at the top of the tab:\n\n- **Total Citations**: every citation in the window, across the tracked results (AI answers) in it.\n- **Unique Domains**: the cited domains in the source choice you made (**Brand**, **Competitors**, **Third-Party** or **All**), with their unique URLs.\n- **Avg citations per result**: the number of links per AI answer."
         },
         {
           "heading": "Top Sources and the source choice",
@@ -2108,7 +2130,7 @@
         },
         {
           "heading": "Export CSV",
-          "text": "**Export CSV** in the page header downloads the open tab, with the filters applied:\n\n- **Domains**: each domain with its source type, citations, the answers citing it, its usage and the AI platforms.\n- **URLs**: each page with its domain, source type, title, citations, the answers citing it and its usage.\n- **Competitor Gaps**: the gap list, with each domain's source type, competitor answers, competitors and strength.\n\n**Source Types** has no export."
+          "text": "**Export CSV**, in Visibility's header while this tab is open, downloads the open table, with the filters applied:\n\n- **Domains**: each domain with its source type, citations, the answers citing it, its usage and the AI platforms.\n- **URLs**: each page with its domain, source type, title, citations, the answers citing it and its usage.\n- **Competitor Gaps**: the gap list, with each domain's source type, competitor answers, competitors and strength.\n\n**Source Types** has no export."
         },
         {
           "heading": "Source types",
@@ -2119,7 +2141,7 @@
           "text": "The **Source Types** tab shows the cited domains in a donut chart, with each type's share of the domains, not of the citations. It covers every cited domain in the window, whatever the source choice above the tables."
         },
         {
-          "heading": "How to use the page",
+          "heading": "How to use the tab",
           "text": "- **See which of your pages AI cites**: keep **Brand**, the default, and open the **URLs** tab. It lists your own pages that AI cites, on which platforms and how often. Open a page to see the prompts it's cited for.\n- **Find the third-party sources AI trusts**: choose **Third-Party**. The top of the Domains and URLs lists are the sites AI leans on most for your prompts: places to be mentioned or cited.\n- **Watch your competitors' pages**: choose **Competitors** to see which competitor domains and pages AI cites in your answers.\n- **Find outreach targets**: the **Competitor Gaps** tab lists the third-party sites AI cites when it names a competitor and not you."
         }
       ]
@@ -2145,11 +2167,11 @@
         "page citations"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "Every URL that AI engines cite has its own page in Ansvisor. Open it from the **URLs** tab of the **Citations** page by clicking a page's title. It opens with the Citations page's date range, platform and region, but not its topic or prompt. You can change the date range and platform on the URL's page. **Citations** at the top goes back."
+          "text": "Every URL that AI engines cite has its own page in Ansvisor. Open it from the **URLs** tab of the **Top Sources** card, on Visibility's **Citations** tab, by clicking a page's title. It opens with the Citations tab's date range, platform and region, but not its topic or prompt. You can change the date range and platform on the URL's page. **Citations** at the top goes back."
         },
         {
           "heading": "The header",
@@ -2197,11 +2219,11 @@
         "sites that skip us"
       ],
       "plan": "all",
-      "updated": "2026-10-29",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "**Competitor Gaps** is a tab of the **Top Sources** card on the **Citations** page. It lists the third-party domains that AI engines cite when they name a competitor and not you. These are outreach targets: sites AI engines already trust for your prompts, where a mention or a citation of your own is missing."
+          "text": "**Competitor Gaps** is a tab of the **Top Sources** card on Visibility's **Citations** tab. It lists the third-party domains that AI engines cite when they name a competitor and not you. These are outreach targets: sites AI engines already trust for your prompts, where a mention or a citation of your own is missing."
         },
         {
           "heading": "Gap list",
@@ -2246,7 +2268,7 @@
         "find competitors"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -2254,11 +2276,11 @@
         },
         {
           "heading": "Open the Competitors page",
-          "text": "Open **Competitors** from the sidebar, or from **Brand Visibility**:\n\n- **Head-to-Head** on the **Leaderboard** card;\n- a competitor's name on the Leaderboard, which opens the page with that competitor selected;\n- **Head-to-Head Comparison**, shown in the Leaderboard's place before a brand has competitors.\n\nThe Action Center's **Add at least 3 competitors** step in Getting started opens it too.\n\nOnly admins and managers add, suggest and remove competitors; other members see the list and the comparison."
+          "text": "Open **Competitors** from the sidebar, or from **Visibility**:\n\n- **Head-to-Head** on the **Leaderboard** card;\n- a competitor's name on the Leaderboard, which opens the page with that competitor selected;\n- **Head-to-Head Comparison**, shown in the Leaderboard's place before a brand has competitors.\n\nThe Action Center's **Add at least 3 competitors** step in Getting started opens it too.\n\nOnly admins and managers add, suggest and remove competitors; other members see the list and the comparison."
         },
         {
           "heading": "Add a competitor",
-          "text": "Click **Add Competitor** and fill in:\n\n- **Name**: as AI answers write it, not the web address. Ansvisor looks for the name in every answer.\n- **Domain** (optional): Ansvisor also looks for the domain in answers, counts citations of the competitor's pages, and marks those pages **Competitor** on the **Citations** page. The card that follows the competitor's pages over time needs it too.\n\nClick **Add**."
+          "text": "Click **Add Competitor** and fill in:\n\n- **Name**: as AI answers write it, not the web address. Ansvisor looks for the name in every answer.\n- **Domain** (optional): Ansvisor also looks for the domain in answers, counts citations of the competitor's pages, and marks those pages **Competitor** on Visibility's **Citations** tab. The card that follows the competitor's pages over time needs it too.\n\nClick **Add**."
         },
         {
           "heading": "Suggest competitors",
@@ -2266,7 +2288,7 @@
         },
         {
           "heading": "Add a competitor from Citations",
-          "text": "On the **Citations** page, the **+** button (**Add as competitor**) on a cited domain that isn't yours or a tracked competitor's opens a dialog with a name taken from the domain. Edit the name and click **Add**. A cited URL's own page has **Add as competitor** too, which adds its domain."
+          "text": "On Visibility's **Citations** tab, the **+** button (**Add as competitor**) on a cited domain that isn't yours or a tracked competitor's opens a dialog with a name taken from the domain. Edit the name and click **Add**. A cited URL's own page has **Add as competitor** too, which adds its domain."
         },
         {
           "heading": "When a new competitor is counted",
@@ -2307,15 +2329,15 @@
         "competitor score"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "The **Competitors** page, right under **Reports** in the sidebar, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Brand Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand."
+          "text": "The **Competitors** page, right under **Reports** in the sidebar, compares the AI visibility of the competitors you track with yours, across your tracked prompts and AI platforms. You can also open it with **Head-to-Head** on the **Leaderboard** card of **Visibility**, or by clicking a competitor's name there. **Tracked Competitors** lists them with their visibility; select one to see it head-to-head with your brand."
         },
         {
           "heading": "Tracked Competitors",
-          "text": "The **Tracked Competitors** card lists every competitor with its domain and:\n\n- its AI Visibility Score from 0 to 100, the same score as on the Brand Visibility leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.\n- the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.\n\n**No data** means no answer in the window was measured for that competitor yet, for example one you've just added.\n\nThe **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores. **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations."
+          "text": "The **Tracked Competitors** card lists every competitor with its domain and:\n\n- its AI Visibility Score from 0 to 100, the same score as on the Visibility page's leaderboard: how often answers name it, cite its site, and how early it's named. Hover the score to see its answers, citations and position factor.\n- the prompts it's visible in, out of the prompts with answers in the window, such as 12/40 prompts.\n\n**No data** means no answer in the window was measured for that competitor yet, for example one you've just added.\n\nThe **Date Range** at the top (7d, 30d by default, 90d, All or Custom) sets the window for these scores. **Export CSV** on the card downloads your brand's and every competitor's scores, with their visible prompts, mentions and citations."
         },
         {
           "heading": "Open a head-to-head comparison",
@@ -2343,7 +2365,7 @@
         },
         {
           "heading": "Close a visibility gap",
-          "text": "1. On **Gaps**, find the prompts where the competitor leads most.\n2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on the **Citations** page lists the sources AI cites with the competitor and not with you.\n3. Create content for that prompt in **Content**.\n4. Publish it, earn placements on those sources, and watch the prompt in the comparison as new answers are tracked."
+          "text": "1. On **Gaps**, find the prompts where the competitor leads most.\n2. Open the AI answer with the eye icon: what is the competitor named or cited for? The pages-over-time card shows whether its pages changed, and **Competitor Gaps** on Visibility's **Citations** tab lists the sources AI cites with the competitor and not with you.\n3. Create content for that prompt in **Content**.\n4. Publish it, earn placements on those sources, and watch the prompt in the comparison as new answers are tracked."
         }
       ]
     },
@@ -2370,7 +2392,7 @@
         "hero image"
       ],
       "plan": "all",
-      "updated": "2026-11-04",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -2390,7 +2412,7 @@
         },
         {
           "heading": "Pick one and add it",
-          "text": "Click **Generate 2 images** (or 3 or 4). Click the option you like, check the **Alt text** (it says what the image shows, for people who can't see it and for search), and click **Use this image**. Only that one is kept and added to the page; the other options are removed, also when you close the dialog (any still left are removed after a day). **Regenerate** makes new options and uses your AI limit again.\n\nIf what's left of your monthly AI limit doesn't cover the options you chose, none is made: choose fewer. If an image is made but can't be saved, the panel says so: it still counts toward your AI limit, and you pick from the others. The demo brand makes no images."
+          "text": "Click **Generate 2 images** (or 3 or 4). Click the option you like, check the **Alt text** (it says what the image shows, for people who can't see it and for search), and click **Use this image**. Only that one is kept and added to the page; the other options are removed, also when you close the dialog (any still left are removed after a day). **Regenerate** makes new options and uses your AI limit again.\n\nIf what's left of your monthly AI limit doesn't cover the options you chose, none is made: choose fewer. Images count toward your workspace's storage, so with storage full none is made either: make room or get more storage. If an image is made but can't be saved, the panel says so: it still counts toward your AI limit, and you pick from the others. The demo brand makes no images."
         },
         {
           "heading": "Where AI images count",
@@ -2634,7 +2656,9 @@
         "export drafts",
         "made in",
         "open chat",
-        "from chat"
+        "from chat",
+        "first ai crawl",
+        "ai bot visit after publish"
       ],
       "synonyms": [
         "content list",
@@ -2643,7 +2667,7 @@
         "draft list"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -2656,6 +2680,10 @@
         {
           "heading": "Columns and filters",
           "text": "The columns are Content, Type, Method (Create or Optimize), By (you, the Content Agent or a teammate), Made in (Content Editor, Chat, Action Center, Agent or MCP), Status, Created and Updated. A draft made in your own chat has **Open chat**, and the editor shows **From chat** with its title. While the Content Agent writes a draft, its Status reads **Agent writing…**, and **Agent failed** if it couldn't finish; where your workspace has Chat, each comes with the same dot Chat shows for a run. The **Created** filter narrows the list to the last 7, 30 or 90 days, and **Made in** to one place, once drafts come from more than one. Once a page has been sent to your CMS, the **Last send** filter lists the pages by how their last send went: never sent, sending, sent, failed or published."
+        },
+        {
+          "heading": "When AI bots first visit a page",
+          "text": "A page that went live through Send to CMS shows a link icon beside its status. Point to it, or tab to it, to see when an AI bot first visited the page after it went live, for example \"First AI crawl: GPTBot, 6 hours after it went live\". It comes from the AI bot logs your brand sends in **AI Traffic**, which count only verified AI bots. Without them, the line says to connect them."
         },
         {
           "heading": "The row menu",
@@ -2692,7 +2720,7 @@
         "content suggestions"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -2745,6 +2773,10 @@
         {
           "heading": "Automatic suggestions",
           "text": "After each day's tracking run, Ansvisor writes new opportunities by itself, on a plan with an active subscription:\n\n- **Up to 3 a night**, one per topic, for groups of prompts with tracked answers and no opportunity yet. That's at most 21 a week, but only as many as there are such groups: new groups come when you add prompts.\n- **When no group is left, at most 1 a night** as another angle (at most 7 a week). It goes to the group with the most estimated AI volume whose opportunity has been done for 30 days, where your brand is still mentioned or cited in fewer than 1 in 5 answers. On many nights nothing qualifies, and nothing is written."
+        },
+        {
+          "heading": "While the first tracking runs",
+          "text": "While a new brand's first tracking run is still going, an empty list says your first answers are arriving, how many are in and about how long is left, in place of **No content opportunities yet**."
         },
         {
           "heading": "Owned and earned",
@@ -3210,19 +3242,19 @@
         "how long until results"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and the dashboard opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. If you explore the demo brand instead, your brand's first run starts when you pick a plan."
+          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. In the free trial Ansvisor opens on **Chat**; with a plan bought, on the **Action Center**. If you explore the demo brand instead, it opens on **Chat** with the demo's sample data, and your brand's first run starts when you pick a plan."
         },
         {
           "heading": "How long the first run takes",
-          "text": "The first run can take anywhere from a few minutes to one or two hours at busy times. **Brand Visibility** shows that the first tracking is in progress, and fills in with your results as they come back.\n\nYou can leave the page: the run keeps going in the background. When your workspace's first results are ready, everyone in it gets one e-mail, **Your first results are ready**, where e-mail is set up, as on the cloud. It's sent once, not for every brand you add."
+          "text": "The first run can take anywhere from a few minutes to one or two hours at busy times. **Visibility** shows that the first tracking is in progress, and fills in with your results as they come back.\n\nYou can leave the page: the run keeps going in the background. When your workspace's first results are ready, everyone in it gets one e-mail, **Your first results are ready**, where e-mail is set up, as on the cloud. It's sent once, not for every brand you add."
         },
         {
           "heading": "Where results appear first",
-          "text": "While you wait:\n\n- **Brand Visibility** fills in with your first results.\n- **Citations** fills in with the addresses of the pages AI answers cite.\n- **Prompt Suggestions**, on the **Prompts** page, offers prompt ideas to add to tracking."
+          "text": "While you wait:\n\n- **Visibility** fills in with your first results.\n- **Citations** fills in with the addresses of the pages AI answers cite.\n- **Prompt Suggestions**, on the **Prompts** page, offers prompt ideas to add to tracking."
         },
         {
           "heading": "Add another brand",
@@ -3234,7 +3266,7 @@
         },
         {
           "heading": "While the first tracking runs",
-          "text": "Brand Visibility says **First tracking in progress** at the top until its first results are in. Above the **Tracked Prompts** table, a note says \"Your first answers are arriving\", with how many are in and about how long is left, and rows still without results say **Arriving now**. Everything fills in when tracking finishes. Meanwhile, do the **Ready now** steps of **Getting started** on the Action Center. When tracking finishes, the app says **Your first results are ready**."
+          "text": "The **Visibility** page says **First tracking in progress** at the top until its first results are in. Above the **Tracked Prompts** table, a note says \"Your first answers are arriving\", with how many are in and about how long is left, and rows still without results say **Arriving now**. Everything fills in when tracking finishes. Meanwhile, do the **Ready now** steps of **Getting started** on the Action Center. When tracking finishes, the app says **Your first results are ready**."
         },
         {
           "heading": "My visibility score is 0",
@@ -3276,11 +3308,11 @@
         "words AI uses for us"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "The **Perception** tab of the Mentions & Sentiment page shows the words AI uses next to your brand, and how they compare with the words it uses for your competitors. The terms are taken from the sentences that name each brand by fixed rules, not by an AI model. A sentence that names two brands lends its words to both."
+          "text": "The **Perception** view, on Visibility's **Mentions** tab, shows the words AI uses next to your brand, and how they compare with the words it uses for your competitors. The terms are taken from the sentences that name each brand by fixed rules, not by an AI model. A sentence that names two brands lends its words to both."
         },
         {
           "heading": "What AI associates with your brand",
@@ -3317,15 +3349,15 @@
         "misclassified mention"
       ],
       "plan": "all",
-      "updated": "2026-10-29",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "Every answer that names your brand is tagged Positive, Neutral or Negative toward your brand. If an answer's tone is tagged wrongly, you can correct it from the answer's side panel on the Mentions & Sentiment page, and every figure then counts it with the new sentiment."
+          "text": "Every answer that names your brand is tagged Positive, Neutral or Negative toward your brand. If an answer's tone is tagged wrongly, you can correct it from the answer's side panel on Visibility's **Mentions** tab, and every figure then counts it with the new sentiment."
         },
         {
           "heading": "Find and open the answer",
-          "text": "On the **Mentions** tab, the table's **Sentiment** filter or the **Most negative** sort helps you find the answers to check. Click a row to open the answer in a side panel. It shows the platform and model, the country, the date, the prompt with **View prompt**, the sentiment, your position and the topic. **Mention** shows the passage around your brand, **Also named in this answer** the competitors, **Full AI response** the answer as tracking stored it, and **Citations in this answer** each cited source."
+          "text": "On the **Answers** view of Visibility's **Mentions** tab, the table's **Sentiment** filter or the **Most negative** sort helps you find the answers to check. Click a row to open the answer in a side panel. It shows the platform and model, the country, the date, the prompt with **View prompt**, the sentiment, your position and the topic. **Mention** shows the passage around your brand, **Also named in this answer** the competitors, **Full AI response** the answer as tracking stored it, and **Citations in this answer** each cited source."
         },
         {
           "heading": "Save a correction",
@@ -3356,11 +3388,11 @@
         "sentiment score"
       ],
       "plan": "all",
-      "updated": "2026-10-29",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "Each tracked answer that names your brand is tagged **Positive**, **Neutral** or **Negative** toward your brand. An answer that doesn't name you has no sentiment. Competitors have no sentiment yet, so every tone on the Mentions & Sentiment page is the tone toward your brand."
+          "text": "Each tracked answer that names your brand is tagged **Positive**, **Neutral** or **Negative** toward your brand. An answer that doesn't name you has no sentiment. Competitors have no sentiment yet, so every tone on Visibility's **Mentions** tab is the tone toward your brand."
         },
         {
           "heading": "Total mentions and mentions",
@@ -3378,7 +3410,7 @@
     },
     {
       "id": "mentions/mentions-and-sentiment",
-      "title": "Mentions & Sentiment page",
+      "title": "Visibility’s Mentions tab",
       "route": "/dashboard/mentions",
       "keywords": [
         "mentions",
@@ -3386,40 +3418,45 @@
         "brand mentions",
         "mention rate",
         "net sentiment",
-        "co-mentioned"
+        "co-mentioned",
+        "mentions tab"
       ],
       "synonyms": [
         "where AI names my brand",
         "tone of AI answers",
         "brand mentions in AI answers",
-        "how AI talks about us"
+        "how AI talks about us",
+        "mentions and sentiment page",
+        "mentions overview",
+        "mentions summary",
+        "answers view"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "The **Mentions & Sentiment** page, **Mentions** in the sidebar, shows where AI answers name your brand, in what tone, and next to which competitors. It reads the answers your tracking already stores, so opening it or changing a filter never asks an AI model again. It has three tabs: **Overview**, **Mentions** and **Perception**."
+          "text": "The **Mentions** tab of **Visibility** (it used to be the Mentions & Sentiment page) shows where AI answers name your brand, in what tone, and next to which competitors. Open it from the tabs under Visibility's header, or from **Visibility › Mentions** in the sidebar. It reads the answers your tracking already stores, so opening it or changing a filter never asks an AI model again. It has three views of its own: **Overview**, **Mentions** and **Perception**."
         },
         {
           "heading": "Filters",
-          "text": "All three tabs share one filter bar, for the brand active in the sidebar. **Date range** offers 24h, 7d, 30d (the default), 90d or Custom; a custom range is read as whole UTC days. **Platform** picks one AI platform or all of them. **Country** appears only when the brand tracks more than one country, and **Topic** only when it has topics. **Search** matches the prompts' text, also on the Perception tab, where the box reads *Search keywords…*. The tab and the filters are kept in the page's address, so a refresh or a shared link opens the same view."
+          "text": "All three views share one filter bar, for the brand active in the sidebar. **Date range** offers 24h, 7d, 30d (the default), 90d or Custom; a custom range is read as whole UTC days. **Platform** picks one AI platform or all of them. **Country** appears only when the brand tracks more than one country, and **Topic** only when it has topics. **Search** matches the prompts' text, also on the Perception view, where the box reads *Search keywords…*. The view and the filters are kept in the page's address, so a refresh or a shared link opens the same view. The date range, platform, country and topic come with you from Visibility's other tabs, and go with you to them."
         },
         {
-          "heading": "Overview tab",
-          "text": "The **Overview** opens with a summary line: net sentiment and its change, the platform behind most of that change, and the competitors AI usually names next to you. Four cards follow: **Total mentions**, **Mention rate**, **Prompts with mentions**, and **Net sentiment** with its positive, neutral and negative split. **Mentions & sentiment over time** draws one point per day; the 24h view has no trend. **By AI platform** compares the platforms and notes when two platforms' net sentiment is 40 or more points apart. **Competitor framing** shows how often AI names each competitor and, under **Also names you**, how many of those answers name you too."
+          "heading": "Summary view",
+          "text": "The **Summary** opens with a summary line: net sentiment and its change, the platform behind most of that change, and the competitors AI usually names next to you. Four cards follow: **Total mentions**, **Mention rate**, **Prompts with mentions**, and **Net sentiment** with its positive, neutral and negative split. **Mentions & sentiment over time** draws one point per day; the 24h view has no trend. **By AI platform** compares the platforms and notes when two platforms' net sentiment is 40 or more points apart. **Competitor framing** shows how often AI names each competitor and, under **Also names you**, how many of those answers name you too."
         },
         {
           "heading": "Changes from the previous period",
           "text": "Every change compares the selected period with the period of the same length just before it. It is taken only on the prompts that were answered in both periods, so adding or pausing prompts doesn't show up as a rise or a fall."
         },
         {
-          "heading": "Mentions tab",
-          "text": "The **Mentions** tab lists every answer that names your brand, 100 per page. Each row shows the prompt, the platform, the country when the brand tracks more than one, the **Mention context** around your brand, the **Sentiment**, the **Position** (#2 of 5 means named second of five brands), the **Co-mentioned** competitors, the topic and the date. The table's own controls filter by **Sentiment** and **Co-mentioned**, **Group by** prompt or platform, and **Sort** by Newest, Oldest, Most co-mentions or Most negative. Click a row to open the full answer in a side panel."
+          "heading": "Answers view",
+          "text": "The **Answers** view lists every answer that names your brand, 100 per page. Each row shows the prompt, the platform, the country when the brand tracks more than one, the **Mention context** around your brand, the **Sentiment**, the **Position** (#2 of 5 means named second of five brands), the **Co-mentioned** competitors, the topic and the date. The table's own controls filter by **Sentiment** and **Co-mentioned**, **Group by** prompt or platform, and **Sort** by Newest, Oldest, Most co-mentions or Most negative. Click a row to open the full answer in a side panel."
         },
         {
           "heading": "Copy summary and Export CSV",
-          "text": "The page header has three buttons. **Copy summary** copies the Overview as plain text: the filters, the summary line, the four figures and the period, ready to paste into a doc or a ticket. **Export CSV** downloads the answers that name your brand under the filters, one row per answer, up to 5,000 rows per file. From the Mentions tab, the file also follows the table's sentiment and co-mention filters and its sort. Lines above the rows record the filters, the period and the counts. **Reports** opens the Reports page."
+          "text": "Visibility's header has these buttons on this tab. **Copy summary** copies the Summary as plain text: the filters, the summary line, the four figures and the period, ready to paste into a doc or a ticket. **Export CSV** downloads the answers that name your brand under the filters, one row per answer, up to 5,000 rows per file. From the Mentions view, the file also follows the table's sentiment and co-mention filters and its sort. Lines above the rows record the filters, the period and the counts. **Reports** opens the Reports page."
         }
       ]
     },
@@ -3440,11 +3477,11 @@
         "create action from mentions"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "From the **Mentions** tab of the Mentions & Sentiment page, you can turn answers that name your brand into work: one Action Center action for a set of answers, or a content suggestion for an answer's prompt."
+          "text": "From the **Answers** view on Visibility's **Mentions** tab, you can turn answers that name your brand into work: one Action Center action for a set of answers, or a content suggestion for an answer's prompt."
         },
         {
           "heading": "Send answers to the Action Center",
@@ -3528,7 +3565,7 @@
         "est. ai volume"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -3556,7 +3593,7 @@
         },
         {
           "heading": "Totals, single keywords and AI guesses",
-          "text": "Some estimates are built differently, and their note says so:\n\n- **Totals and averages** (**Total Est. AI Volume**, **Avg. AI Volume**, and Similar Topics' **Est. AI Volume**): the sum of the lows to the sum of the highs; an average divides both by the prompt count. A total is high-confidence when at least 80% of its volume is, low when more than half is low-confidence, and medium otherwise. The note gives the mix.\n- **One keyword** (each row of Similar Topics): only the AI share is assumed, so it is Medium with a ±25% range, or Low when it has no volume or is over six months old.\n- **An AI's guess** (suggestions from Ansvisor Agents, the Brand Visibility page's Opportunities, and the Action Center's topic opportunities): always Low, from half to twice the guess. Track the prompt to get an estimate from its keywords' Google searches."
+          "text": "Some estimates are built differently, and their note says so:\n\n- **Totals and averages** (**Total Est. AI Volume**, **Avg. AI Volume**, and Similar Topics' **Est. AI Volume**): the sum of the lows to the sum of the highs; an average divides both by the prompt count. A total is high-confidence when at least 80% of its volume is, low when more than half is low-confidence, and medium otherwise. The note gives the mix.\n- **One keyword** (each row of Similar Topics): only the AI share is assumed, so it is Medium with a ±25% range, or Low when it has no volume or is over six months old.\n- **An AI's guess** (suggestions from Ansvisor Agents, Opportunities on Visibility's Overview, and the Action Center's topic opportunities): always Low, from half to twice the guess. Track the prompt to get an estimate from its keywords' Google searches."
         },
         {
           "heading": "A content opportunity's volume",
@@ -3683,7 +3720,7 @@
         "volume analysis"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -3699,7 +3736,7 @@
         },
         {
           "heading": "Where else estimated volumes show",
-          "text": "- **Tracked Prompts**: the **Volume** column.\n- A prompt's own page: an **AI searches a month** card, when the prompt has a volume.\n- **Prompt Suggestions**: each AI suggestion's monthly range.\n- Outside Prompts: the Action Center's affected prompts and topic opportunities, the Brand Visibility page's Opportunities, and a content opportunity's **Est. AI Volume**.\n\nExports mark estimated volumes, with their range and confidence, so a spreadsheet doesn't read them as counts."
+          "text": "- **Tracked Prompts**: the **Volume** column.\n- A prompt's own page: an **AI searches a month** card, when the prompt has a volume.\n- **Prompt Suggestions**: each AI suggestion's monthly range.\n- Outside Prompts: the Action Center's affected prompts and topic opportunities, Opportunities on Visibility's Overview, and a content opportunity's **Est. AI Volume**.\n\nExports mark estimated volumes, with their range and confidence, so a spreadsheet doesn't read them as counts."
         }
       ]
     },
@@ -3844,11 +3881,11 @@
         },
         {
           "heading": "Which engines share their searches",
-          "text": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot and Perplexity shared them, but Ansvisor no longer tracks these two engines. Searches from their past answers still show for the dates you pick."
+          "text": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot and Perplexity shared them, but Ansvisor no longer tracks these two engines. Searches from their past answers still show for the dates you pick.\n\nNew searches now come from ChatGPT only, so the tab lists fewer of them than before. A note at the top of the tab says so."
         },
         {
           "heading": "Engines",
-          "text": "Above the list, **All engines** counts the searches found in the range, and each engine that answered has a chip of its own. A chip gives the share of that engine's answers that came with searches, such as \"40% of answers\", and how many searches it ran. Click a chip to see only that engine's searches; click it again, or **All engines**, to see them all.\n\nAn engine that usually shares its searches but sent none is marked in amber, \"none since\" a date, with a note under the chips. Its answers are still tracked as usual; only the list of searches is missing. A **not shared** chip is faded and doesn't filter."
+          "text": "Above the list, **All engines** counts the searches found in the range, and each engine that answered has a chip of its own. A chip gives the share of that engine's answers that came with searches, such as \"40% of answers\", and how many searches it ran. Click a chip to see only that engine's searches; click it again, or **All engines**, to see them all.\n\nA **not shared** chip is faded and doesn't filter."
         },
         {
           "heading": "By prompt",
@@ -3891,7 +3928,7 @@
         "categories"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -3903,7 +3940,7 @@
         },
         {
           "heading": "The Topic leaderboard",
-          "text": "The **Topic leaderboard** has a row per topic:\n\n- the topic's name and how many prompts it has;\n- **Visibility**: the 0 to 100 score over the topic's answers, the same score as on **Brand Visibility**;\n- **SoV**, **Mentions** and **Citations**;\n- **Trend**: a small line and the change in points against the window of the same length just before;\n- **Top competitor**: the competitor with the largest share of voice in the topic;\n- **Last run**.\n\nClick **Prompts**, **Visibility**, **SoV**, **Mentions**, **Citations** or **Last run** to sort by it; the table opens sorted by Visibility. Click a topic to open its page."
+          "text": "The **Topic leaderboard** has a row per topic:\n\n- the topic's name and how many prompts it has;\n- **Visibility**: the 0 to 100 score over the topic's answers, the same score as on the **Visibility** page;\n- **SoV**, **Mentions** and **Citations**;\n- **Trend**: a small line and the change in points against the window of the same length just before;\n- **Top competitor**: the competitor with the largest share of voice in the topic;\n- **Last run**.\n\nClick **Prompts**, **Visibility**, **SoV**, **Mentions**, **Citations** or **Last run** to sort by it; the table opens sorted by Visibility. Click a topic to open its page."
         },
         {
           "heading": "The buttons beside the tabs",
@@ -3911,7 +3948,7 @@
         },
         {
           "heading": "A topic's page",
-          "text": "A topic's page shows all of its results, not only the date range picked on the Topics tab:\n\n- **Visibility**, **Brand mentions**, **Citations** and **Positive sentiment** for the topic;\n- **Visibility trend**: your daily visibility on the topic against the competitor average;\n- **Share of voice by platform**: you against competitors on each answer engine;\n- **Competitor comparison**: the top six brands on this topic, ranked by their score, with yours marked **YOU**;\n- **Prompt performance**: the topic's **Top performers** and the prompts under **Needs improvement**, from its last 50 runs.\n\n**View all prompt results for this topic** opens **Brand Visibility** filtered to the topic."
+          "text": "A topic's page shows all of its results, not only the date range picked on the Topics tab:\n\n- **Visibility**, **Brand mentions**, **Citations** and **Positive sentiment** for the topic;\n- **Visibility trend**: your daily visibility on the topic against the competitor average;\n- **Share of voice by platform**: you against competitors on each answer engine;\n- **Competitor comparison**: the top six brands on this topic, ranked by their score, with yours marked **YOU**;\n- **Prompt performance**: the topic's **Top performers** and the prompts under **Needs improvement**, from its last 50 runs.\n\n**View all prompt results for this topic** opens **Visibility** filtered to the topic."
         },
         {
           "heading": "Topic Suggestions",
@@ -4092,11 +4129,11 @@
         },
         {
           "heading": "Why the app shows other numbers",
-          "text": "The card asks each question once, on one day. In Ansvisor, your tracked prompts are asked every day, so the figures move from day to day. The **AI Visibility Score** on **Brand Visibility** is a score from 0 to 100 that also weighs citations and how early you're named, not only the share of answers that name you."
+          "text": "The card asks each question once, on one day. In Ansvisor, your tracked prompts are asked every day, so the figures move from day to day. The **AI Visibility Score** on the **Visibility** page is a score from 0 to 100 that also weighs citations and how early you're named, not only the share of answers that name you."
         },
         {
           "heading": "Measure your own questions every day",
-          "text": "The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Brand Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next."
+          "text": "The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next."
         },
         {
           "heading": "The value table and the revenue scenario",
@@ -4267,7 +4304,7 @@
         "credit pack"
       ],
       "plan": "starter",
-      "updated": "2026-10-30",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -4279,11 +4316,11 @@
         },
         {
           "heading": "Storage packs",
-          "text": "A storage pack adds a fixed amount of storage every month. It joins your plan's subscription: the rest of the current period is charged at once to the card on file, and it renews with your plan until it is removed. Storage packs need a plan billed monthly."
+          "text": "Your storage holds Chat's files and the images you upload or generate in the Content Editor. A storage pack adds a fixed amount of storage every month. It joins your plan's subscription: the rest of the current period is charged at once to the card on file, and it renews with your plan until it is removed. Storage packs need a plan billed monthly."
         },
         {
           "heading": "Get more from where a limit shows",
-          "text": "You don't have to go to Billing: wherever a limit shows, **Get more AI credits** or **Get more storage** opens the same window. It is in the AI usage meter's popover, on the red banner once the month's AI usage is used up, on the Files page's storage meter and its **Storage is full** line, and on an output Chat couldn't save to Files. When Chat stops at the AI limit, the window opens once by itself."
+          "text": "You don't have to go to Billing: wherever a limit shows, **Get more AI credits** or **Get more storage** opens the same window. It is in the AI usage meter's popover, on the red banner once the month's AI usage is used up, on the Files page's storage meter and its **Storage is full** line, on an output Chat couldn't save to Files, and on an image upload refused because storage is full. When Chat stops at the AI limit, the window opens once by itself."
         },
         {
           "heading": "What the Get more window shows",
@@ -4842,7 +4879,7 @@
         "my role focus"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -4850,7 +4887,7 @@
         },
         {
           "heading": "The work areas",
-          "text": "- **Founders & leaders**: Action Center, Chat, Agent Center, Brand Visibility, Mentions, AI Referral Traffic, Reports, Competitors.\n- **AEO/GEO & Audit**: Action Center, Agent Center, Content, Audit, Citations, AI Referral Traffic, Reports.\n- **Content**: Action Center, Chat, Agent Center, Content, Prompts, Citations, Reports.\n- **Brand & PR**: Action Center, Chat, Agent Center, Brand Visibility, Mentions, Citations, Reports, Competitors.\n- **Growth**: Action Center, Chat, Agent Center, Brand Visibility, Prompts, Citations, AI Referral Traffic, Reports, Competitors.\n- **Product Development**: Action Center, Chat, Agent Center, Brand Visibility, Prompts, Mentions, Product Visibility, Reports.\n- **Business Development**: Action Center, Chat, Agent Center, Brand Visibility, Prompts, Mentions, Citations, Reports, Competitors.\n- **Developers**: Action Center, Agent Center, Audit, Prompts, Citations, AI Referral Traffic, Reports.\n- **Analytics**: Action Center, Agent Center, Brand Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors."
+          "text": "- **Founders & leaders**: Action Center, Chat, Agent Center, Visibility, Mentions, AI Referral Traffic, Reports, Competitors.\n- **AEO/GEO & Audit**: Action Center, Agent Center, Content, Audit, Citations, AI Referral Traffic, Reports.\n- **Content**: Action Center, Chat, Agent Center, Content, Prompts, Citations, Reports.\n- **Brand & PR**: Action Center, Chat, Agent Center, Visibility, Mentions, Citations, Reports, Competitors.\n- **Growth**: Action Center, Chat, Agent Center, Visibility, Prompts, Citations, AI Referral Traffic, Reports, Competitors.\n- **Product Development**: Action Center, Chat, Agent Center, Visibility, Prompts, Mentions, Product Visibility, Reports.\n- **Business Development**: Action Center, Chat, Agent Center, Visibility, Prompts, Mentions, Citations, Reports, Competitors.\n- **Developers**: Action Center, Agent Center, Audit, Prompts, Citations, AI Referral Traffic, Reports.\n- **Analytics**: Action Center, Agent Center, Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors."
         },
         {
           "heading": "When you're asked",
@@ -5106,10 +5143,14 @@
     },
     {
       "id": "visibility/brand-visibility",
-      "title": "Brand Visibility page overview",
+      "title": "Visibility and its Overview tab",
       "route": "/dashboard/insights",
       "keywords": [
         "brand visibility",
+        "overview tab",
+        "mentions tab",
+        "citations tab",
+        "product visibility tab",
         "answer engine insights",
         "visibility score",
         "key metrics",
@@ -5120,6 +5161,7 @@
         "filters"
       ],
       "synonyms": [
+        "visibility page",
         "AI visibility report",
         "analytics hub",
         "insights page",
@@ -5127,15 +5169,19 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "**Brand Visibility** in the sidebar opens **Answer Engine Insights**, the main analytics page for a brand. It's your daily view of how AI answers treat your brand across your tracked prompts, and where to act next."
+          "text": "**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next."
+        },
+        {
+          "heading": "The tabs and how to reach them",
+          "text": "The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** opens and closes a group with the same entries, **Overview**, **Mentions**, **Citations** and, for an online shop on a plan with it, **Products**; it is open whenever one of them is showing.\n\nEach tab loads its own data when you open it, and shows a placeholder while it loads. The date range, AI platform, country and topic you picked stay set when you switch tabs; Mentions has no **All** range, so it opens on its 30 days instead. Product Visibility keeps its own filters. A tab whose data can't be read says so, with **Retry**, and the other tabs keep working."
         },
         {
           "heading": "The header",
-          "text": "The header shows the brand's name, when the last run finished and when the next one is due. It has these buttons:\n\n- **Formulas** explains how every number on the page is calculated.\n- **Export CSV** downloads the answers behind the page, with the current filters.\n- **Reports** opens the Reports page.\n\nA self-hosted instance also has **Test Single Prompt** and **Run All**, for admins and managers to start a run by hand."
+          "text": "The header is the same on every tab. It shows the brand's name, when the last run finished and when the next one is due. **Reports** opens the Reports page. On the Overview, **Formulas** explains how every number is calculated, and **Export CSV** downloads the answers behind the tab, with its filters.\n\nA self-hosted instance also has **Test Single Prompt** and **Run All**, for admins and managers to start a run by hand."
         },
         {
           "heading": "The summary line",
@@ -5143,7 +5189,7 @@
         },
         {
           "heading": "The key metric cards",
-          "text": "Nine cards follow. Most show their change **vs previous period** and a small daily line:\n\n- **Visibility**: your score from 0 to 100, and your rank among the tracked brands, or, before you track competitors, how many prompts you appeared in. Click it to open the **Visibility Breakdown** panel.\n- **Tracked prompts**: the prompts answered in the period. On plans with a limit, a bar shows how many prompt locations your workspace uses. Click it to open Prompts.\n- **Mentions** and **Citations**: how often answers named your brand and cited your pages. They open the Mentions and Citations pages.\n- **Net sentiment**: the positive minus the negative share of the answers that name you. It opens Mentions.\n- **Coverage**, **Share of voice**, **Avg. position** and **Citation rate**.\n\nA rate based on fewer than 20 answers says **Low sample** and shows no change."
+          "text": "Nine cards follow. Most show their change **vs previous period** and a small daily line:\n\n- **Visibility**: your score from 0 to 100, and your rank among the tracked brands, or, before you track competitors, how many prompts you appeared in. Click it to open the **Visibility Breakdown** panel.\n- **Tracked prompts**: the prompts answered in the period. On plans with a limit, a bar shows how many prompt locations your workspace uses. Click it to open Prompts.\n- **Mentions** and **Citations**: how often answers named your brand and cited your pages. They open the **Mentions** and **Citations** tabs.\n- **Net sentiment**: the positive minus the negative share of the answers that name you. It opens the **Mentions** tab.\n- **Coverage**, **Share of voice**, **Avg. position** and **Citation rate**.\n\nA rate based on fewer than 20 answers says **Low sample** and shows no change."
         },
         {
           "heading": "Visibility trend",
@@ -5175,7 +5221,7 @@
         },
         {
           "heading": "Filters and date range",
-          "text": "Under the header:\n\n- **Date Range**: **24h** (the default, the latest completed run), **7d**, **30d**, **90d**, **All** or **Custom**.\n- **Topic**: one topic, shown when the brand has topics.\n- **Region**: one region your prompts run in.\n- **AI Model**: one AI platform; versions of the same engine count as one.\n\nThe filters apply to everything on the page except **Opportunities**, which lists your stored suggestions. They're kept in the page's address, so a link you share opens with the same filters."
+          "text": "Under the tabs:\n\n- **Date Range**: **24h** (the default, the latest completed run), **7d**, **30d**, **90d**, **All** or **Custom**.\n- **Topic**: one topic, shown when the brand has topics.\n- **Region**: one region your prompts run in.\n- **AI Model**: one AI platform; versions of the same engine count as one.\n\nThe filters apply to everything on the tab except **Opportunities**, which lists your stored suggestions. They're kept in the page's address, so a link you share opens with the same filters, and the date range, AI model, region and topic carry over to the other tabs."
         },
         {
           "heading": "A weekly review",
@@ -5207,7 +5253,7 @@
         "what is share of voice"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -5215,7 +5261,7 @@
         },
         {
           "heading": "Read your visibility score",
-          "text": "Visibility is a score from 0 to 100, not a percentage. It blends how often AI answers mention your brand, how often they cite your site and how early they name you; **Formulas** on **Brand Visibility** shows the exact formula. A rough guide, not bands the app shows:\n\n- **Under 15**: cold start. AI engines barely know the brand on these prompts.\n- **15 to 35**: emerging presence. AI sometimes mentions you, but competitors dominate.\n- **35 to 60**: established. You're reliably mentioned; focus on the one or two platforms or topics still trailing.\n- **Over 60**: category leader. Your job is defending your place against new entrants.\n\nThe right threshold depends on how competitive the category is: in a crowded category, 20 can already be leadership."
+          "text": "Visibility is a score from 0 to 100, not a percentage. It blends how often AI answers mention your brand, how often they cite your site and how early they name you; **Formulas** on the **Visibility** page shows the exact formula. A rough guide, not bands the app shows:\n\n- **Under 15**: cold start. AI engines barely know the brand on these prompts.\n- **15 to 35**: emerging presence. AI sometimes mentions you, but competitors dominate.\n- **35 to 60**: established. You're reliably mentioned; focus on the one or two platforms or topics still trailing.\n- **Over 60**: category leader. Your job is defending your place against new entrants.\n\nThe right threshold depends on how competitive the category is: in a crowded category, 20 can already be leadership."
         },
         {
           "heading": "Watch the change, not the number",
@@ -5227,7 +5273,7 @@
         },
         {
           "heading": "Coverage, share of voice and the other rates",
-          "text": "The key metric cards on **Brand Visibility** also show:\n\n- **Coverage**: the share of answered prompts where you appear at least once.\n- **Share of voice**: your mentions out of all mentions of tracked brands.\n- **Avg. position**: where you're named in the answers that name you. Lower is better.\n- **Citation rate**: the share of answers that cite your domain.\n- **Net sentiment**: the positive minus the negative share of the answers that name you.\n\nA rate based on fewer than 20 answers says **Low sample** and shows no change."
+          "text": "The key metric cards on the **Visibility** page also show:\n\n- **Coverage**: the share of answered prompts where you appear at least once.\n- **Share of voice**: your mentions out of all mentions of tracked brands.\n- **Avg. position**: where you're named in the answers that name you. Lower is better.\n- **Citation rate**: the share of answers that cite your domain.\n- **Net sentiment**: the positive minus the negative share of the answers that name you.\n\nA rate based on fewer than 20 answers says **Low sample** and shows no change."
         },
         {
           "heading": "Position and Performance",
@@ -5235,7 +5281,7 @@
         },
         {
           "heading": "Mentions and citations",
-          "text": "A mention is each time an AI answer names your brand or your domain; one answer can add several. The **Mentions** card counts them. Mention detection ignores upper and lower case, so name the brand exactly as it's named in the wild, not by an abbreviation.\n\nA citation is a source page that comes with an AI answer. The **Citations** card counts how often answers cited your pages, and the **Citations** page shows which domains and pages AI engines cite for your prompts."
+          "text": "A mention is each time an AI answer names your brand or your domain; one answer can add several. The **Mentions** card counts them. Mention detection ignores upper and lower case, so name the brand exactly as it's named in the wild, not by an abbreviation.\n\nA citation is a source page that comes with an AI answer. The **Citations** card counts how often answers cited your pages, and the **Citations** tab of the **Visibility** page shows which domains and pages AI engines cite for your prompts."
         },
         {
           "heading": "Prompts that skew your metrics",
@@ -5264,11 +5310,11 @@
         "how the score works"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "The **AI Visibility Score** is a score from 0 to 100, not a percentage. It blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named. A score of 0 means no answer names or cites you; the closer every answer comes to naming you first and citing you, the closer the score gets to 100. **Formulas** on **Brand Visibility** shows the exact formula."
+          "text": "The **AI Visibility Score** is a score from 0 to 100, not a percentage. It blends three things over the answers in your date range and filters: how many answers name your brand, how many cite a page of yours, and how early you're named. A score of 0 means no answer names or cites you; the closer every answer comes to naming you first and citing you, the closer the score gets to 100. **Formulas** on the **Visibility** page shows the exact formula."
         },
         {
           "heading": "The three parts",
@@ -5288,7 +5334,7 @@
         },
         {
           "heading": "Where you see the score",
-          "text": "- **Brand Visibility**: the brand's score, its trend and the change vs the previous period.\n- **Tracked Prompts** under **Prompts**: each prompt's score.\n- **Topics** under **Prompts**: each topic's score, and **Topics vs competitors** on Brand Visibility.\n- **Competitors**: each tracked competitor's score beside yours."
+          "text": "- The **Visibility** page: the brand's score, its trend and the change vs the previous period.\n- **Tracked Prompts** under **Prompts**: each prompt's score.\n- **Topics** under **Prompts**: each topic's score, and **Topics vs competitors** on the Visibility page.\n- **Competitors**: each tracked competitor's score beside yours."
         },
         {
           "heading": "What moves your score",
@@ -5321,11 +5367,11 @@
         "score change explained"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "When your Visibility goes up or down on **Brand Visibility**, two parts of the page explain it: the **Why it changed** card and the **Visibility Breakdown** panel. Both compare the date range you picked with the period of the same length just before it."
+          "text": "When your Visibility goes up or down on the **Visibility** page, two parts of the page explain it: the **Why it changed** card and the **Visibility Breakdown** panel. Both compare the date range you picked with the period of the same length just before it."
         },
         {
           "heading": "How a change is measured",
@@ -5341,7 +5387,7 @@
         },
         {
           "heading": "Investigate a sharp drop",
-          "text": "1. Click the **Visibility** card, or the dropped row in **Why it changed**. The panel names the prompt and platform behind the biggest drop.\n2. Click the prompt to open its page and read the answers under **Platform Results**. Is your brand still mentioned but named later, or completely absent?\n3. Check the competition: the **Leaderboard** and **Topics vs competitors** show who leads where. A competitor surge is often the cause; **Head-to-Head** opens the Competitors page for a closer look.\n4. Check the sources each answer cited; the **Citations** card opens the Citations page. A retracted article or a new competitor post is often the trigger."
+          "text": "1. Click the **Visibility** card, or the dropped row in **Why it changed**. The panel names the prompt and platform behind the biggest drop.\n2. Click the prompt to open its page and read the answers under **Platform Results**. Is your brand still mentioned but named later, or completely absent?\n3. Check the competition: the **Leaderboard** and **Topics vs competitors** show who leads where. A competitor surge is often the cause; **Head-to-Head** opens the Competitors page for a closer look.\n4. Check the sources each answer cited; the **Citations** card opens the **Citations** tab. A retracted article or a new competitor post is often the trigger."
         },
         {
           "heading": "Decide what to do",

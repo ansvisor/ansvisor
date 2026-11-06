@@ -4,14 +4,14 @@ route: /dashboard/insights
 keywords: [why it changed, visibility breakdown, full breakdown, gains, drops, visibility drop, root cause]
 synonyms: [why did my score drop, why did visibility go up, what moved my score, investigate a drop, score change explained]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/answer-engine-insights.mdx, docs/concepts/visibility-scoring.mdx]
 ---
-When your Visibility goes up or down on **Brand Visibility**, two parts of the page explain it: the **Why it changed** card and the **Visibility Breakdown** panel. Both compare the date range you picked with the period of the same length just before it.
+When your Visibility goes up or down on the **Visibility** page, two parts of the page explain it: the **Why it changed** card and the **Visibility Breakdown** panel. Both compare the date range you picked with the period of the same length just before it.
 
 ## How a change is measured
 
@@ -36,7 +36,7 @@ It lists every slice under three tabs: **Prompts**, **Platforms** and **Topics**
 1. Click the **Visibility** card, or the dropped row in **Why it changed**. The panel names the prompt and platform behind the biggest drop.
 2. Click the prompt to open its page and read the answers under **Platform Results**. Is your brand still mentioned but named later, or completely absent?
 3. Check the competition: the **Leaderboard** and **Topics vs competitors** show who leads where. A competitor surge is often the cause; **Head-to-Head** opens the Competitors page for a closer look.
-4. Check the sources each answer cited; the **Citations** card opens the Citations page. A retracted article or a new competitor post is often the trigger.
+4. Check the sources each answer cited; the **Citations** card opens the **Citations** tab. A retracted article or a new competitor post is often the trigger.
 
 ## Decide what to do
 

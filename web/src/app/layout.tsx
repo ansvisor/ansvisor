@@ -35,7 +35,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Ansvisor',
     description:
-      'Track how AI search engines mention your brand — ChatGPT, Gemini, Perplexity, Claude, Copilot.',
+      'Track how AI search engines mention your brand — ChatGPT, Gemini, Google AI, Claude.',
     url: '/',
     siteName: 'Ansvisor',
     type: 'website',
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Ansvisor',
     description:
-      'Track how AI search engines mention your brand — ChatGPT, Gemini, Perplexity, Claude, Copilot.',
+      'Track how AI search engines mention your brand — ChatGPT, Gemini, Google AI, Claude.',
   },
   // The product app at app.ansvisor.com should not appear in search results;
   // ansvisor.com (the Webflow marketing site) is the indexable surface.

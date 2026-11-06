@@ -9,10 +9,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 // Reuse the insights page's Recharts trend chart (same VisibilityTrendPoint
 // shape the report payload stores), loaded client-only like insights does.
-const TrendChart = dynamic(() => import('../../insights/_charts').then((m) => m.TrendChart), {
-  ssr: false,
-  loading: () => <Skeleton className="h-48 w-full" />,
-});
+const TrendChart = dynamic(
+  () => import('../../(brand-visibility)/insights/_charts').then((m) => m.TrendChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-48 w-full" />,
+  },
+);
 import { toast } from 'sonner';
 import { getReport, type Report } from '@/lib/actions/reports';
 import { getReportBranding } from '@/lib/actions/white-label';
