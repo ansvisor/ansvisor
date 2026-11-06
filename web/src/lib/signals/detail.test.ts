@@ -665,6 +665,33 @@ describe("a technical finding with its checks' evidence", () => {
     expect(signalDetailForApi(blocked, []).where.crawlers).toEqual(['gptbot']);
   });
 
+  it('names the crawlers a CDN or firewall turned away too (SA-008)', () => {
+    const live = signal({
+      ...blocked,
+      payload: {
+        entity: 'pages',
+        targets: [
+          {
+            id: '/pricing',
+            issues: [
+              {
+                ...issue,
+                evidence: {
+                  aiBotsMentioned: ['gptbot'],
+                  blocked: false,
+                  blockedBots: [],
+                  wafBlockedBots: ['perplexitybot', 'claudebot'],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const byKey = Object.fromEntries(signalWhereFields(live).map((f) => [f.key, f.value]));
+    expect(byKey.crawlers).toEqual({ type: 'crawlers', agents: ['perplexitybot', 'claudebot'] });
+  });
+
   it("doesn't guess the crawlers from an audit that only said one was blocked", () => {
     // That audit also listed bots robots.txt allows.
     const older = signal({
