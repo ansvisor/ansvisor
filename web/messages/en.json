@@ -7394,7 +7394,8 @@
         "failed": "Something went wrong.",
         "lost": "It stopped before it could start.",
         "stopped": "It was stopped.",
-        "noAnswer": "No answer in 7 days."
+        "noAnswer": "No answer in 7 days.",
+        "nothingNew": "Nothing new for your plan."
       }
     },
     "when": {
@@ -7439,7 +7440,16 @@
       "usage": "≈ {share} of monthly AI usage per run",
       "usageUnknown": "Each run uses your monthly AI limit, like a chat",
       "ownKey": "Runs on your workspace’s own AI key",
-      "emailTo": "Email goes to you"
+      "emailTo": "Email goes to you",
+      "digest": "Lists what’s new for your plan, only when there is something new. Uses no AI."
+    },
+    "digest": {
+      "title": "What’s new for my plan",
+      "prompt": "What’s new for my plan",
+      "intro": "{count, plural, one {Here’s # update} other {Here are # updates}} for your plan that you haven’t seen yet.",
+      "onPlans": "On {plans}.",
+      "tryIt": "Try it",
+      "older": "Ask me “What’s new” for older updates."
     },
     "deliver": {
       "chat": "Chat",
