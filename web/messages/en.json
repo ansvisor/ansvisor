@@ -1305,6 +1305,10 @@
         "title": "Strong AI conversions on {targets}",
         "description": "These pages turn AI traffic into key events well above your site’s rate."
       },
+      "bridge_link_gap": {
+        "title": "Link {targets} to pages that convert",
+        "description": "AI sends readers to these pages and few of them convert. Pages on the same topic that convert have little AI traffic."
+      },
       "ai_landing_underperforming": {
         "title": "Weak engagement on {targets}",
         "description": "AI visitors engage on these pages well below your site’s rate."
@@ -1952,6 +1956,10 @@
           "url": "URL",
           "urlPlaceholder": "e.g. /blog/ai-search-tracking",
           "linkTo": "Link to",
+          "links": "Links",
+          "linkAnchor": "as “{anchor}”",
+          "linkFound": "linked",
+          "linkNotFound": "not linked yet",
           "where": "Where",
           "why": "Why",
           "change": "Change",
@@ -2155,6 +2163,30 @@
           "prompts": "Prompts it should answer",
           "promptsValue": "{count, plural, one {# prompt} other {# prompts}}"
         },
+        "bridgeLinks": {
+          "why": "AI sends readers to these pages and few of them convert. Each one gets a link to a page on its topic that does, so AI finds that page too, and readers follow the click.",
+          "sourceFigures": "{aiVisits, plural, one {# AI visit} other {# AI visits}} · {citations, plural, one {# citation} other {# citations}} in 28 days",
+          "reasons": {
+            "sells": "Sells: {count, plural, one {# order} other {# orders}} in 28 days",
+            "converts": "Converts: {count, plural, one {# key event} other {# key events}} in 28 days",
+            "new_page": "A new page on the same topic, not cited yet"
+          },
+          "salesPages": {
+            "pricing": "Your pricing page",
+            "demo": "Your demo page",
+            "product": "A product page",
+            "category": "A category page",
+            "feature": "A feature page"
+          },
+          "anchor": "Link text: “{anchor}”",
+          "none": "No links left to suggest.",
+          "copyPlan": "Copy link plan",
+          "copied": "Link plan copied",
+          "copyFailed": "Couldn’t copy the link plan",
+          "planLine": "On {from}, link to {to} with the text “{anchor}”",
+          "planLineNoAnchor": "On {from}, link to {to}",
+          "startNow": "Start now opens each page in the Content Editor, its link in Your input."
+        },
         "shoppingLinks": {
           "source": "Source",
           "sourceValue": "The catalog check after each sync",
@@ -2250,7 +2282,12 @@
         "failed": "Couldn't open the Content Editor. Try again.",
         "someFailed": "Some drafts couldn't be started. Start now again writes the rest.",
         "pageNotRead": "Couldn't read a live page, so its draft starts with its title. Paste the page into the editor.",
-        "chatFailed": "Couldn't start Chat. Try again."
+        "chatFailed": "Couldn't start Chat. Try again.",
+        "linkTable": {
+          "name": "Links to add on this page",
+          "linkTo": "Link to",
+          "anchor": "Link text"
+        }
       },
       "play": {
         "title": "{siteType, select, ecommerce {What to do for an online store} b2b {What to do for a SaaS} app {What to do for an app} b2c {What to do for a travel brand} other {What to do here}}",
@@ -2698,6 +2735,12 @@
         "description": "These sources are cited when answers discuss your brand, and could reference your own pages.",
         "goal": "Turn third-party mentions into references to your assets."
       },
+      "bridge_links": {
+        "title": "Link {targets} to pages that convert",
+        "titleGeneric": "Link AI-visited pages to pages that convert",
+        "description": "AI sends readers to these pages and few of them convert. A link to a page on the same topic that converts puts it one click away.",
+        "goal": "So AI finds these pages too, and readers follow the click."
+      },
       "protect_valuable_citations": {
         "title": "Protect citations on {targets}",
         "titleGeneric": "Protect valuable citations",
@@ -3120,6 +3163,8 @@
       "identify_inclusion_path_target": "Find a legitimate path onto {targets}",
       "prioritize_targets": "Prioritize targets by impact",
       "prioritize_targets_target": "Prioritize {targets} by impact",
+      "review_link_plan": "Review the links to add",
+      "review_link_plan_target": "Review the links to add on {targets}",
       "define_validation_baseline": "Record the baseline to measure against",
       "define_validation_baseline_target": "Record the baseline for {targets}",
       "create_content_brief": "Create a content brief",
@@ -3228,6 +3273,7 @@
       "strengthen_reference_asset": "The page is live with the facts, sources or tables added, and fetched again it has them",
       "strengthen_entity_content": "The page describes the brand as its profile does, fetched again",
       "add_internal_links": "The pages that should link to it do, fetched again",
+      "review_link_plan": "Each link and its anchor text is approved or changed: you confirm it",
       "improve_cta_path": "The call to action is live on the page: you confirm it",
       "publish_content": "The page is published at its address and answers when fetched",
       "fix_crawler_access": "robots.txt and the page let the AI crawlers in, fetched again",

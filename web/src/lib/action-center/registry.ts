@@ -60,6 +60,8 @@ export type ActionKind =
   | 'optimize_content_for_ai'
   | 'earn_third_party_presence'
   | 'earn_third_party_citations'
+  // Links from pages AI sends readers to, to pages that convert (G20, AC plan P-10).
+  | 'bridge_links'
   | 'protect_visibility'
   | 'protect_valuable_citations'
   | 'protect_ai_traffic_pages'
@@ -248,6 +250,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'optimize_content_for_ai',
   'earn_third_party_presence',
   'earn_third_party_citations',
+  'bridge_links',
   'protect_visibility',
   'protect_valuable_citations',
   'protect_ai_traffic_pages',

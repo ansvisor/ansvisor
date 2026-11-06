@@ -182,8 +182,10 @@ describe('planTasks', () => {
 });
 
 describe('the task registry', () => {
-  it('holds the specification’s sixty-two task primitives, and learning C4’s', () => {
-    expect(libraryTasks()).toHaveLength(63);
+  it('holds the specification’s sixty-two task primitives, learning C4’s and the AC plan’s', () => {
+    expect(libraryTasks()).toHaveLength(64);
+    // The bridge links' pairs, read by a person (AC plan P-10).
+    expect(TASKS.review_link_plan).toMatchObject({ mode: 'human', permission: 'read' });
     expect(TASKS.analyze_winning_pages).toMatchObject({
       mode: 'system',
       requires: ['site_audits'],

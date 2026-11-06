@@ -107,6 +107,8 @@ describe('StartNowBlock', () => {
     expect(server.startDraftFromAction).toHaveBeenCalledWith(BRAND, 'a1', 't1', {
       page: null,
       title: ACTION.title,
+      // A bridge links page's links go in Your input, in these words (AC plan P-10).
+      linkLabels: { name: 'Links to add on this page', linkTo: 'Link to', anchor: 'Link text' },
     });
     expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new?brief=build');
   });
@@ -119,10 +121,12 @@ describe('StartNowBlock', () => {
     await click(button(/Content Editor · 2 drafts/));
     // The draft already written is kept; only the other page's is written.
     expect(server.startDraftFromAction).toHaveBeenCalledTimes(1);
-    expect(server.startDraftFromAction).toHaveBeenCalledWith(BRAND, 'a1', 't2', {
-      page: PAGES[1],
-      title: ACTION.title,
-    });
+    expect(server.startDraftFromAction).toHaveBeenCalledWith(
+      BRAND,
+      'a1',
+      't2',
+      expect.objectContaining({ page: PAGES[1], title: ACTION.title }),
+    );
     expect(push).toHaveBeenCalledWith('/dashboard/content/library?action=a1');
   });
 

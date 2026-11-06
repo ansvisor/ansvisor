@@ -25,7 +25,8 @@ const TEMPLATES = Object.freeze({
   strengthen_reference_asset: { check: 'auto', page: true },
   strengthen_entity_content: { check: 'auto', page: true },
   // Its links go on other pages: the action's page is the one they point to.
-  add_internal_links: { check: 'auto', page: false },
+  // A bridge links action's pairs say which page links to which (`links`).
+  add_internal_links: { check: 'auto', page: false, links: true },
   publish_content: { check: 'auto', page: true },
   fix_crawler_access: { check: 'auto', page: true },
   fix_structured_data: { check: 'auto', page: true },
@@ -54,6 +55,8 @@ const TEMPLATES = Object.freeze({
   prepare_contribution: { check: 'manual' },
   track_third_party_status: { check: 'manual' },
   validate_third_party_presence: { check: 'manual' },
+  // The bridge links' pairs, read before they go on the pages (AC plan P-10).
+  review_link_plan: { check: 'manual' },
 });
 
 /** The task ids with a check, for the tests. */
@@ -94,5 +97,33 @@ export function templateDetails(taskKey, payload = {}) {
   const template = TEMPLATES[taskKey];
   if (!template) return null;
   const url = template.page ? onePage(payload) : null;
-  return { check: template.check, ...(url ? { url } : {}), source: 'template' };
+  const links = template.links ? linkPlan(payload) : [];
+  return {
+    check: template.check,
+    ...(url ? { url } : {}),
+    ...(links.length ? { links } : {}),
+    source: 'template',
+  };
+}
+
+/** Pairs a task's links list keeps, as a bridge links action has them. */
+export const MAX_LINK_PAIRS = 5;
+
+/**
+ * The links a bridge links action's pairs ask for (payload.linkPairs, AC
+ * plan P-10): each source page's address, the page it links to and the
+ * suggested anchor. Empty for an action without them.
+ */
+export function linkPlan(payload = {}) {
+  const pairs = Array.isArray(payload.linkPairs) ? payload.linkPairs : [];
+  return pairs
+    .filter(
+      (pair) => /^https?:\/\//i.test(pair?.from ?? '') && /^https?:\/\//i.test(pair?.to ?? ''),
+    )
+    .slice(0, MAX_LINK_PAIRS)
+    .map((pair) => ({
+      url: pair.from,
+      linkTo: pair.to,
+      anchor: typeof pair.anchor === 'string' && pair.anchor.trim() ? pair.anchor.trim() : null,
+    }));
 }

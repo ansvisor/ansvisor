@@ -28,9 +28,12 @@ import * as c from './classify.js';
 import { isTransientDbError } from '../../pulse/metrics.js';
 import { describeSignal } from '../../audit/rubric.js';
 import { TRAFFIC_WINDOW_DAYS } from '../traffic-evidence.js';
+import { chooseBridgeLinks } from '../../action-center/bridge-links.js';
 
 const { library: t } = resolve();
 const DAY_MS = 86_400_000;
+/** Every page the AI Traffic list has for the bridge links' pairs: site_pages keeps 500. */
+const BRIDGE_PAGES_LIMIT = 1000;
 
 const AI = ['ai_results'];
 const GSC = ['gsc'];
@@ -712,6 +715,51 @@ const FAMILIES = [
         });
       }
       return found;
+    },
+  },
+
+  // Links from the pages AI sends readers to that rarely convert, to the
+  // pages that convert (AC plan P-10, spec §8): one signal with the pairs,
+  // chosen by bridge-links.js. Conversions are Analytics', so it needs both.
+  {
+    name: 'bridgeLinks',
+    requires: ['ai_traffic', 'analytics'],
+    kinds: ['bridge_link_gap'],
+    async run(ctx) {
+      const [list, sitePages] = await Promise.all([
+        rpc('ai_traffic_pages', {
+          p_brand_id: ctx.brandId,
+          p_from: utcMidnight(ctx.now, t.bridgeWindowDays),
+          p_to: ctx.now.toISOString(),
+          p_tab: 'all',
+          p_limit: BRIDGE_PAGES_LIMIT,
+          p_offset: 0,
+        }),
+        selectAll(() =>
+          supabaseAdmin
+            .from('site_pages')
+            .select('url, title, h1, lastmod')
+            .eq('brand_id', ctx.brandId)
+            .order('id'),
+        ),
+      ]);
+      const { pairs, siteKeyRate } = chooseBridgeLinks(
+        { pages: list?.rows ?? [], sitePages, now: ctx.now },
+        t,
+      );
+      if (pairs.length === 0) return [];
+      return [
+        group(
+          'bridge_link_gap',
+          'pages',
+          pairs,
+          ({ from, ...pair }) => ({ id: from, label: from, ...pair }),
+          GA,
+          {
+            siteKeyRate: rounded(siteKeyRate),
+          },
+        ),
+      ];
     },
   },
 

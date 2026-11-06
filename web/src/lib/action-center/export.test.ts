@@ -453,6 +453,7 @@ describe('a task with AC-004 fields', () => {
             where: 'acme.example/blog/best-tools · 3 prompts on ChatGPT',
             url: '/blog/best-tools',
             linkTo: null,
+            links: [],
             why: 'Cited #2 until Oct 8.\nThe pages cited now have a dated table.',
             change: { before: null, after: 'A 2026 feature table.' },
             how: ['Add a feature table.', 'Put "2026" in the title.'],

@@ -48,6 +48,7 @@ export const LIBRARY_SIGNAL_KINDS = {
   cross_channel_risk: { stateKey: 'dropped', positive: false },
   visibility_traffic_loss: { stateKey: 'dropped', positive: false },
   ai_visits_weekly_drop: { stateKey: 'dropped', positive: false },
+  bridge_link_gap: { stateKey: 'opportunity', positive: false },
   broken_citation_target: { stateKey: 'issue', positive: false },
   cited_page_uncrawled: { stateKey: 'issue', positive: false },
   crawler_blocked: { stateKey: 'issue', positive: false },
