@@ -53,6 +53,7 @@ function More({ shown, total }: { shown: number; total: number }) {
 // already says, are left out.
 const EVIDENCE_KEYS = [
   'aiBotsMentioned',
+  'wafBlockedBots',
   'ageDays',
   'newest',
   'dateSignals',
@@ -81,7 +82,9 @@ const EVIDENCE_KEYS = [
   'firstPersonSentences',
   'sentences',
 ] as const;
-const HIDDEN_EVIDENCE = new Set(['model', 'blocked', 'blockedBots']);
+// The live bot test's per-bot rows and its own request (SA-008) are the
+// report's to show; the bots it found blocked are named.
+const HIDDEN_EVIDENCE = new Set(['model', 'blocked', 'blockedBots', 'bots', 'control', 'liveTest']);
 
 /**
  * An audit check's evidence as a line: "Age in days: 412 · Newest date:
@@ -103,7 +106,11 @@ function describeEvidence(
     if (Array.isArray(value)) {
       const items = value.filter((v) => typeof v === 'string' || typeof v === 'number');
       if (items.length === 0) return null;
-      return items.map((v) => (key === 'aiBotsMentioned' ? crawlerName(String(v)) : v)).join(', ');
+      return items
+        .map((v) =>
+          key === 'aiBotsMentioned' || key === 'wafBlockedBots' ? crawlerName(String(v)) : v,
+        )
+        .join(', ');
     }
     if (typeof value === 'boolean')
       return value ? t('drawer.checkEvidence.yes') : t('drawer.checkEvidence.no');

@@ -32,7 +32,13 @@ import {
   type TaskCardResult,
 } from '@/lib/actions/chat-task-card';
 import type { ChatDeliverable, ChatTaskStrip } from '@/lib/chat/events';
-import { SendPageButton, VersionDetails, VersionPills, useVersionLine } from './version-card';
+import {
+  OptimizeMenu,
+  SendPageButton,
+  VersionDetails,
+  VersionPills,
+  useVersionLine,
+} from './version-card';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 import { ImageSet } from './image-set';
@@ -91,12 +97,18 @@ export function DeliverableCard({
   deliverable,
   canChange = false,
   onTasks,
+  onAsk,
 }: {
   runId: string;
   n: number;
   deliverable: ChatDeliverable;
   canChange?: boolean;
   onTasks?: (strip: ChatTaskStrip) => void;
+  /**
+   * Sends a message in this chat as the person's: the person's own chat only.
+   * A page's Optimize ▾ asks Chat with it (W4-12b part 2).
+   */
+  onAsk?: (prompt: string) => void;
 }) {
   const t = useTranslations('chatDeliverable');
   const tFormats = useTranslations('chatAnswer.formats');
@@ -234,6 +246,17 @@ export function DeliverableCard({
         <VersionDetails version={deliverable.version} runId={runId} n={filed ? n : 0} />
       )}
       <div className="flex flex-wrap items-center gap-1 empty:hidden">
+        {/* A page made in chat: Optimize ▾ first, as the mockup has it (CHAT-25 §7, W4-12b part 2). */}
+        {filed && deliverable.version && deliverable.href && onAsk && (
+          <OptimizeMenu
+            version={deliverable.version}
+            title={deliverable.title}
+            href={deliverable.href}
+            canChange={canChange}
+            onAsk={onAsk}
+            className={ACTION}
+          />
+        )}
         {filed && !images && (
           <>
             <button

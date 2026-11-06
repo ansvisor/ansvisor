@@ -1,5 +1,5 @@
 {
-  "version": "v1.2",
+  "version": "v1.3",
   "description": "48-signal AEO/GEO scoring rubric for measuring whether a page will get cited by AI answer engines. Each signal carries an evidence level; informational signals are shown but left out of the score.",
   "totalSignals": 48,
   "categories": [
@@ -28,7 +28,7 @@
       "key": "trust",
       "label": "Trust",
       "weight": 0.1,
-      "description": "Crawl-time + share-time trust signals: HTTPS, canonical, viewport, AI-bot access via robots.txt, Twitter card, meta description. llms.txt is shown for information only.",
+      "description": "Crawl-time + share-time trust signals: HTTPS, canonical, viewport, AI-bot access via robots.txt and a live fetch as each AI bot, Twitter card, meta description. llms.txt is shown for information only.",
       "signalCount": 7
     },
     {
@@ -406,11 +406,11 @@
     {
       "key": "ai-bot-access",
       "category": "trust",
-      "label": "AI bot access (robots.txt)",
-      "what": "Whether robots.txt explicitly addresses GPTBot/ClaudeBot/PerplexityBot.",
-      "why": "Default-allow gets you crawled, but explicit allow signals intent + unlocks niche AI bots.",
-      "howToFix": "Add User-agent: GPTBot/ClaudeBot/OAI-SearchBot/PerplexityBot rules to robots.txt.",
-      "source": "OpenAI / Anthropic / Perplexity bot docs",
+      "label": "AI bot access",
+      "what": "Whether robots.txt lets the AI bots in, and whether the page answers them: it is fetched once as GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot and ClaudeBot to catch CDN or firewall blocks.",
+      "why": "A bot your CDN or firewall turns away never reads the page, whatever robots.txt says. Naming the AI bots in robots.txt shows they are welcome.",
+      "howToFix": "Allow GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended in robots.txt, and in your CDN or firewall bot rules.",
+      "source": "OpenAI / Anthropic / Perplexity / Google bot docs; live fetch by user agent",
       "impactTier": "medium",
       "evidenceLevel": "strong"
     },

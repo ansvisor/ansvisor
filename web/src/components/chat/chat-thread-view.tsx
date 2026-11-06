@@ -760,6 +760,17 @@ export function ChatThreadView({
                   onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
                   canChangeTasks={canManage && (!thread || thread.mine)}
+                  // The person's own chat: a page's Optimize ▾ asks here (W4-12b part 2).
+                  onAsk={
+                    !thread || thread.mine
+                      ? (prompt) =>
+                          void send(prompt, {
+                            context: chips ?? [],
+                            references: [],
+                            attachments: [],
+                          })
+                      : undefined
+                  }
                   onTasks={(strip) =>
                     updateRun(turn.key, (was) =>
                       was.run ? { ...was, run: { ...was.run, tasks: strip } } : was,
@@ -904,6 +915,7 @@ function Answer({
   onRetry,
   onUseAnsvisorLimit,
   onSendToActionCenter,
+  onAsk,
 }: {
   turn: Turn;
   now: number;
@@ -923,6 +935,8 @@ function Answer({
   onUseAnsvisorLimit?: () => void;
   /** Send to Action Center (CHAT-09 item 18): the latest answer, for Admins and Managers. */
   onSendToActionCenter?: () => void;
+  /** Sends a message as the person's, in their own chat: a page's Optimize ▾ (W4-12b part 2). */
+  onAsk?: (prompt: string) => void;
 }) {
   const t = useTranslations('chatPage');
   const debug = useChatDebug();
@@ -1019,6 +1033,7 @@ function Answer({
             deliverable={deliverable}
             canChange={canChangeTasks}
             onTasks={onTasks}
+            onAsk={onAsk}
           />
         ))}
       {run.sent.map((sent, i) => (

@@ -532,6 +532,8 @@ export const UNDO_RULES: Readonly<Record<string, UndoRule>> = {
   dismiss_prompt_suggestion: dismissSuggestion,
   request_access: requestAccessRule,
   update_draft: updateDraft,
+  // Optimize here (W4-12b part 2): the rewrite went in as a change, so its Undo is update_draft's.
+  optimize_draft: updateDraft,
   set_draft_ready: setDraftReady,
   ...SETUP_UNDO_RULES,
   ...ACTION_CENTER_UNDO_RULES,

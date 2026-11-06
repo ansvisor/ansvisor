@@ -934,6 +934,7 @@
           "no": "no",
           "keys": {
             "aiBotsMentioned": "In robots.txt",
+            "wafBlockedBots": "Blocked by CDN or firewall",
             "ageDays": "Age in days",
             "newest": "Newest date",
             "dateSignals": "Date signals",
@@ -3258,6 +3259,7 @@
       "structured_data_irrelevant": "the structured data has no type that describes the page",
       "no_faq_schema": "no FAQ schema with at least two questions",
       "crawlers_blocked": "robots.txt blocks AI crawlers",
+      "crawlers_firewall": "a CDN or firewall still turns away requests as AI crawlers",
       "noindex": "the page asks not to be indexed",
       "first_look": "first look kept: it passes once the page changes",
       "not_changed": "the page hasn't changed since the first look",
@@ -3610,6 +3612,7 @@
       "name": "Check pages against their rules",
       "step": "Checked the page against its rules"
     },
+    "optimizePage": { "name": "Optimize pages in chat", "step": "Optimized the page" },
     "reports": { "name": "Read reports", "step": "Read Reports" },
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
@@ -4057,7 +4060,24 @@
       "checkRules": "Check it against the rules",
       "checkRulesPrompt": "Check this page against the rules",
       "openEditor": "Open in Content Editor",
+      "optimizeHere": "Optimize here",
+      "optimizeHerePrompt": "Optimize this page here, without the editor",
       "untitled": "Untitled page"
+    },
+    "optimize": {
+      "notFound": "That draft isn’t in the Library.",
+      "allMet": "Every rule the Content Agent can fix is met already.",
+      "triedAlready": "The Content Agent already tried these rules here and couldn’t close them: {rules}. They’re yours to decide in the Content Editor.",
+      "openSuggestions": "The Content Agent’s suggestions on this page still wait for review. Accept or reject them in the editor first.",
+      "busy": "The Content Agent is already working on this page. Try again once it’s done.",
+      "notDraft": "This page is published: open it in the Content Editor to change it.",
+      "empty": "The page is empty.",
+      "tooLong": "The page is too long to rewrite whole. Open it in the Content Editor to fix its rules.",
+      "aiBudget": "The workspace’s monthly AI limit is used up.",
+      "stillWriting": "The Content Agent is still rewriting the page. Its rewrite will wait in the Content Editor to compare.",
+      "tooLate": "The Content Agent’s rewrite came too late to put in here, so the page is as it was. Its rewrite waits in the Content Editor to compare.",
+      "nothingChanged": "The Content Agent found nothing to change.",
+      "failed": "The Content Agent couldn’t optimize the page just now. Try again."
     },
     "pageCheck": {
       "todo": "Yours to do: the Content Editor’s Quality tab says how.",
@@ -4156,6 +4176,9 @@
       "usedShortcut": "Used shortcut: {title}",
       "usedMemory": "Used memory",
       "memorySubject": "Memory",
+      "editorDecisions": "Read your choices in the editor",
+      "editorAccepted": "{count} accepted",
+      "editorRejected": "{count} rejected",
       "unchanged": "No change since the last run: the data this job reads is the same, so there is nothing new to send."
     },
     "answer": {
@@ -4610,6 +4633,22 @@
       "rulesPillLabel": "{met} of {total} rules met",
       "qualityPill": "Quality {score}",
       "qualityPillLabel": "Quality {score}: {band}",
+      "optimize": {
+        "button": "Optimize",
+        "rulesOpen": "{count, plural, one {# rule open} other {# rules open}}",
+        "allMet": "All rules met",
+        "quality": "Quality {score}",
+        "here": "Optimize here, no editor",
+        "hereDetail": "The agent rewrites the page to its open rules. You get version {n} with what changed.",
+        "editor": "Optimize in Content Editor",
+        "editorDetail": "The full editor with Brief, Rules, Quality and the agent’s next steps.",
+        "prompt": "Optimize “{title}” here, without the editor",
+        "noAccess": "Admins and Managers can optimize a page.",
+        "askAdmin": "Ask your Admin",
+        "asked": "Optimize “{title}” in chat",
+        "askSent": "Sent to your Admins",
+        "askFailed": "The request couldn’t be sent. Try again."
+      },
       "questions": "{count, plural, one {# question} other {# questions}}",
       "sections": "{count, plural, one {# section} other {# sections}}",
       "whatChanged": "What changed",
@@ -6070,6 +6109,8 @@
       "taskReadyForReviewUndo": "Took {task} back from Ready for review",
       "reviseDraft": "Changed the draft “{title}”",
       "reviseDraftUndo": "Put the draft “{title}” back as it was",
+      "optimizePage": "Optimized the draft “{title}” in chat",
+      "optimizePageUndo": "Put the draft “{title}” back as it was before it was optimized",
       "markDraftReady": "Marked the draft “{title}” ready",
       "editorSuggestions": "Asked the Content Agent for suggestions on “{title}”",
       "markDraftReadyUndo": "Took the draft “{title}” back from Ready",
@@ -8254,6 +8295,18 @@
       "informational": "Hygiene / informational"
     },
     "evidenceNote": "Evidence",
+    "botAccess": {
+      "firewall": "{count, plural, one {{bots} is} other {{bots} are}} blocked by your CDN or firewall, though robots.txt lets {count, plural, one {it} other {them}} in.",
+      "robots": "robots.txt keeps out {bots}.",
+      "allLetIn": "Every AI bot tested was let in.",
+      "inconclusive": "Your site turned away Ansvisor's own request ({status}), so the bots weren't tested.",
+      "note": "Asked once as each bot, from Ansvisor's servers. A firewall that checks a crawler's own addresses can treat the real crawler differently.",
+      "cell": {
+        "robots": "robots.txt",
+        "noAnswer": "No answer",
+        "allowed": "Allowed"
+      }
+    },
     "notScored": "Not in the score",
     "formula": {
       "button": "Formula",

@@ -14,8 +14,8 @@ const levelOf = (level) =>
     .sort();
 
 describe('rubric evidence levels', () => {
-  it('is rubric v1.2 with the four levels, of which only informational is not scored', () => {
-    expect(RUBRIC_VERSION).toBe('v1.2');
+  it('is rubric v1.3 (v1.2 evidence levels, v1.3 the live bot test) with the four levels, of which only informational is not scored', () => {
+    expect(RUBRIC_VERSION).toBe('v1.3');
     expect(evidenceLevels.map((l) => [l.key, l.scored])).toEqual([
       ['strong', true],
       ['likely', true],

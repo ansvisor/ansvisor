@@ -9,7 +9,8 @@
  *  - the audit checks that raised a structured data fix pass on the page
  *    now (fix_structured_data), by the audit's own evaluators;
  *  - robots.txt lets the AI crawlers in, and the page isn't noindex
- *    (fix_crawler_access raised by the audit's ai-bot-access);
+ *    (fix_crawler_access raised by the audit's ai-bot-access); raised for
+ *    bots a CDN or firewall turned away, those bots are asked again too;
  *  - it changed since the first look, by more than a date, a price or a
  *    rotating quote moving (optimize, refresh, strengthen): the first look
  *    keeps a sketch of the page's words, and enough of them must have
@@ -37,6 +38,7 @@ import { checkShoppingDraft } from '../shopping-check.js';
 import { classIdWords, furnitureNamed } from '../page-content.js';
 import { onBrandDomain } from '../audit/host.js';
 import { aiBotAccess } from '../audit/signals/trust.js';
+import { LIVE_BOT_KEYS, probeBotAccess } from '../audit/bot-access.js';
 import {
   faqSchema,
   jsonLdPresence,
@@ -392,11 +394,12 @@ const isHtml = (body) => /^\s*(<!doctype\s+html|<html[\s>])/i.test(body ?? '');
  * @param {string} kind  checkKind's
  * @param {string} url   the page's address, on the brand's site
  * @param {{ previous?: object|null, after?: string, before?: string|null, auditChecks?: string[],
- *   domains?: string[]|null, fetch?: Function }} [options]
+ *   wafBlockedBots?: string[], domains?: string[]|null, fetch?: Function }} [options]
  *   `previous`: the last check kept on the task; `after`, `before`: a
  *   written task's change; `auditChecks`: the audit checks that raised the
- *   action on this page; `domains`: the brand's, a redirect off them is off
- *   the site
+ *   action on this page; `wafBlockedBots`: the AI bots its live test saw a
+ *   CDN or firewall refuse there (SA-008); `domains`: the brand's, a
+ *   redirect off them is off the site
  */
 export async function checkPage(
   kind,
@@ -406,6 +409,7 @@ export async function checkPage(
     after = '',
     before = null,
     auditChecks = [],
+    wafBlockedBots = [],
     domains = null,
     fetch = fetchPage,
   } = {},
@@ -466,7 +470,22 @@ export async function checkPage(
     }
     const missing = [];
     if (aiBotAccess.evaluate({ robotsTxt }).status === 'fail') missing.push('crawlers_blocked');
+    // Raised for bots a CDN or firewall turned away (SA-008): robots.txt
+    // can't say that's fixed, so the page is asked as those bots again, as
+    // the audit asked it. Still refused, the task stays open. No answer
+    // either way (its own request refused, a bot timed out, the server
+    // failing) concludes nothing.
+    const asked = wafBlockedBots.filter((key) => LIVE_BOT_KEYS.includes(key));
+    let unsure = false;
+    if (asked.length > 0) {
+      const live = await probeBotAccess(page.url, { fetchImpl: fetch }).catch(() => null);
+      const answers = new Map((live?.tested ? live.bots : []).map((b) => [b.key, b.live]));
+      const found = asked.map((key) => answers.get(key));
+      if (found.includes('blocked')) missing.push('crawlers_firewall');
+      else unsure = !found.every((answer) => answer === 'ok');
+    }
     if (noindex($)) missing.push('noindex');
+    if (unsure && missing.length === 0) return null;
     return { passed: missing.length === 0, missing };
   }
 
@@ -527,12 +546,14 @@ function samePage(address) {
 }
 
 /**
- * The audit checks the task's page failed when its action was raised
- * (payload.targets[].checks): the page's own target (http or https, www or
- * not, a trailing slash or not), else the action's only one, else every
- * target's together (the stricter side).
+ * What the audit found on the task's page when its action was raised
+ * (payload.targets): the checks it failed (`checks`), and the AI bots its
+ * live test saw a CDN or firewall refuse (`wafBlockedBots`, from the AI bot
+ * access issue's evidence, SA-008). The page's own target (http or https,
+ * www or not, a trailing slash or not), else the action's only one, else
+ * every target's together (the stricter side).
  */
-async function auditChecksFor(actionId, url) {
+async function auditFindingsFor(actionId, url) {
   const { data, error } = await supabaseAdmin
     .from('actions')
     .select('targets:payload->targets')
@@ -543,13 +564,17 @@ async function auditChecksFor(actionId, url) {
   const page = samePage(url);
   const own = targets.find((t) => typeof t.id === 'string' && samePage(t.id) === page);
   const read = own ? [own] : targets;
-  return [
-    ...new Set(
+  const listed = (value) => (Array.isArray(value) ? value : []);
+  const strings = (values) => [...new Set(values.filter((v) => typeof v === 'string'))];
+  return {
+    checks: strings(read.flatMap((t) => listed(t.checks))),
+    wafBlockedBots: strings(
       read
-        .flatMap((t) => (Array.isArray(t.checks) ? t.checks : []))
-        .filter((c) => typeof c === 'string'),
+        .flatMap((t) => listed(t.issues))
+        .filter((issue) => issue?.check === 'ai-bot-access')
+        .flatMap((issue) => listed(issue.evidence?.wafBlockedBots)),
     ),
-  ];
+  };
 }
 
 /**
@@ -645,8 +670,9 @@ export async function runTaskCheck(read, action, { fetch = fetchPage, now = new 
   const url = pageAddress(d.url, storedHost(domains[0]));
   if (!url) return { reason: 'no_address' };
   let auditChecks = [];
+  let wafBlockedBots = [];
   if (kind === 'structuredData' || kind === 'crawlers') {
-    auditChecks = await auditChecksFor(task.action_id, url);
+    ({ checks: auditChecks, wafBlockedBots } = await auditFindingsFor(task.action_id, url));
     // Raised from the bot logs (a cited page crawlers never read): robots.txt
     // can't say it's fixed. Its try is kept (the claim), so the sweep goes on to others.
     if (kind === 'crawlers' && !auditChecks.includes('ai-bot-access')) {
@@ -661,6 +687,7 @@ export async function runTaskCheck(read, action, { fetch = fetchPage, now = new 
         after: d.change?.after,
         before: d.change?.before,
         auditChecks,
+        wafBlockedBots,
         domains,
         fetch,
       })

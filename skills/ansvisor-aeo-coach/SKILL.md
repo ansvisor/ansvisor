@@ -213,8 +213,10 @@ answers; no LLM is called.
   of the account: an active prompt uses one slot per location it
   targets, a paused one uses none, and resuming a paused prompt needs
   free slots like adding one. Slots left = `locationLimit −
-  locationsUsed` (never below 0). Use for "how many prompts can we
-  still add?".
+  locationsUsed` (never below 0). When `plan.ended` is true the
+  workspace's plan has ended: `plan` is the one it was on, `plan.cta`
+  is `choose_plan`, and **0 slots are left** whatever the limit says,
+  until a plan is chosen. Use for "how many prompts can we still add?".
 - **`list_topic_suggestions`** — pending AI topic suggestions.
   **`accept_topic_suggestion`** / **`dismiss_topic_suggestion`** act on
   one *(writes)*.
@@ -229,7 +231,10 @@ answers; no LLM is called.
   on the platforms and models of the brand's latest active prompt
   (ChatGPT when there is none) that the plan allows, in the brand's own
   location. It uses one prompt location: with none left it fails with
-  the plan-limit message *(write)*.
+  the plan-limit message *(write)*. Prompts are grouped under topics, so
+  a brand with **no topic yet** is refused: accept a topic first
+  (`accept_topic_suggestion`), or the user adds one in Ansvisor under
+  **Prompts → Topics**, then accept the prompt suggestion again.
 - **`dismiss_prompt_suggestion`** — hides one from future suggestion
   lists *(write)*.
 
@@ -356,8 +361,12 @@ accepts it.
     behind it;
   - `used_by_actions`: the actions built on it.
 - **`list_action_history`** — closed actions with their measured
-  `outcome` (improved, no_meaningful_change, declined, not_measurable,
-  pending_measurement) and before/after `results`.
+  `outcome` (improved, mixed, no_meaningful_change, declined,
+  not_measurable, pending_measurement) and before/after `results`. An
+  action is read 7, 14 and 30 days after it closed: `reading_day` is the
+  day of the latest reading (7, 14 or 30; null before the first), and
+  `final` is true once day 30 is read. Until then the outcome is **a
+  reading so far**, not the result.
 - **`update_task_status`** — record that a task is `in_progress`,
   `completed`, `skipped` (with `skip_reason`) or `failed` *(write)*.
 - **`create_improve_action`** — send a prompt's Improve suggestions to
@@ -528,8 +537,12 @@ or any "do I have gaps" question:
    no limit (self-hosted, or an Enterprise account whose limit isn't
    set yet): skip the check. Otherwise, if none are left (or fewer than
    you'd suggest), say so: pausing low-value prompts frees their slots,
-   and `plan.cta` names the next step (`upgrade_growth`, `upgrade` or
-   `contact`).
+   and `plan.cta` names the next step (`upgrade_growth`, `upgrade`,
+   `contact`, or `choose_plan` when `plan.ended` is true: the plan has
+   ended, and nothing can be added until an admin chooses a plan in
+   **Settings → Billing**).
+7. A prompt always sits under a topic: on a brand with no topics,
+   suggest adding a topic before any prompt.
 
 ### 6. Prompt deep-dive
 
@@ -605,9 +618,11 @@ work:
 2. For each closed action, report the `outcome` and the before/after
    from `results` in one line. `pending_measurement` means the
    after-window is still open — say when to check back, don't judge
-   early.
+   early. Until `final` is true, say it is a reading so far ("day 14 of
+   30: improved so far") and that the final reading comes on day 30.
 3. Summarise: how many improved, how many didn't move, and what the
-   improved ones had in common.
+   improved ones had in common. Count readings so far apart from final
+   results.
 
 ### 10. Mentions & sentiment ("how is AI talking about us?")
 
@@ -663,7 +678,9 @@ When the user asks how AI describes the brand, why sentiment moved
 4. Act only on the suggestions the user names, after they confirm:
    `accept_prompt_suggestion` starts tracking one,
    `dismiss_prompt_suggestion` hides it *(writes)*. If an accept fails
-   with the plan-limit message, relay it as it is.
+   with the plan-limit message, relay it as it is. If it fails because
+   the brand has no topic yet, offer to accept a topic suggestion first
+   (`list_topic_suggestions`), then accept the prompt again.
 5. Report the prompts added (`prompt_text`).
 
 ### 12. Content Editor drafts ("what's waiting in the editor?")
