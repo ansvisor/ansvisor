@@ -204,13 +204,13 @@ describe('query fan-out', () => {
     db.rpc.mockImplementation(
       coverage(
         [
+          { platform: 'chatgpt', answers: 200, answers_with_fanout: 40 },
           { platform: 'chatgpt-web', answers: 200, answers_with_fanout: 0 },
-          { platform: 'copilot-web', answers: 200, answers_with_fanout: 40 },
           { platform: 'gemini-web', answers: 200, answers_with_fanout: 0 },
         ],
         [
+          { platform: 'chatgpt', answers: 1400, answers_with_fanout: 280 },
           { platform: 'chatgpt-web', answers: 1400, answers_with_fanout: 350 },
-          { platform: 'copilot-web', answers: 1400, answers_with_fanout: 280 },
           { platform: 'gemini-web', answers: 1400, answers_with_fanout: 0 },
         ],
       ),
@@ -226,11 +226,11 @@ describe('query fan-out', () => {
       p_until: hoursAgo(24),
     });
     expect(report.fanout.platforms).toEqual([
+      expect.objectContaining({ platform: 'chatgpt', rate: 0.2, baselineRate: 0.2 }),
       expect.objectContaining({ platform: 'chatgpt-web', rate: 0, baselineRate: 0.25 }),
-      expect.objectContaining({ platform: 'copilot-web', rate: 0.2, baselineRate: 0.2 }),
       expect.objectContaining({ platform: 'gemini-web', rate: 0, baselineRate: 0 }),
     ]);
-    // ChatGPT stopped; Copilot held; Gemini never fans out, so it isn't news.
+    // ChatGPT stopped; the API model held; Gemini never fans out, so it isn't news.
     expect(findIssues(report).filter((i) => i.includes('fan-out'))).toEqual([
       'chatgpt-web returned no query fan-out on any of its 200 answers in the last 24h (25% the days before) — check what Cloro returns',
     ]);
@@ -248,22 +248,21 @@ describe('query fan-out', () => {
   it('keeps flagging an engine that should fan out, however long it has been silent', () => {
     // Nothing for two weeks, so the days before are empty too.
     const silent = {
-      platform: 'copilot-web',
+      platform: 'chatgpt-web',
       answers: 400,
       withFanout: 0,
       rate: 0,
       baselineAnswers: 1200,
       baselineRate: 0,
     };
-    expect(fanoutDropped(silent)).toBe(true);
+    // When every ChatGPT task asks for it, a silent ChatGPT is news.
+    expect(fanoutDropped({ ...silent, chatgptFanout: 'all' })).toBe(true);
     // Gemini documents no fan-out, so a silent day is normal for it.
     expect(fanoutDropped({ ...silent, platform: 'gemini-web' })).toBe(false);
     // Nor is it news on ChatGPT, whose default interface carries none (#1119),
     // when nothing asks for its legacy one, or in a report from before it did.
-    expect(fanoutDropped({ ...silent, platform: 'chatgpt-web' })).toBe(false);
-    expect(fanoutDropped({ ...silent, platform: 'chatgpt-web', chatgptFanout: 'off' })).toBe(false);
-    // When every ChatGPT task asks, it should fan out like Copilot.
-    expect(fanoutDropped({ ...silent, platform: 'chatgpt-web', chatgptFanout: 'all' })).toBe(true);
+    expect(fanoutDropped(silent)).toBe(false);
+    expect(fanoutDropped({ ...silent, chatgptFanout: 'off' })).toBe(false);
     // The OpenAI API model may search rarely or not at all, so a silent day
     // is no news for it either...
     expect(fanoutDropped({ ...silent, platform: 'chatgpt' })).toBe(false);
@@ -280,6 +279,21 @@ describe('query fan-out', () => {
     ).toEqual([
       "chatgpt query fan-out fell to 1% of answers (30% the days before) — check what OpenAI's web_search returns",
     ]);
+  });
+
+  it('never judges a paused platform, which runs nothing', () => {
+    // Copilot and Perplexity, which documented fan-out, are paused since
+    // 2026-11-06, and Grok before them: neither silence nor a fall is news.
+    const quiet = {
+      answers: 400,
+      withFanout: 0,
+      rate: 0,
+      baselineAnswers: 1200,
+      baselineRate: 0.3,
+    };
+    for (const platform of ['copilot-web', 'perplexity-web', 'grok-web']) {
+      expect(fanoutDropped({ ...quiet, platform })).toBe(false);
+    }
   });
 
   describe("ChatGPT's sample, one day a week per prompt", () => {
@@ -376,7 +390,9 @@ describe('query fan-out', () => {
         if (args.p_since === hoursAgo(24 * 7)) {
           return Promise.resolve({ data: null, error: { message: 'timeout' } });
         }
+        const recent = args.p_since === hoursAgo(24);
         const rows = [
+          { platform: 'chatgpt', answers: 200, answers_with_fanout: recent ? 0 : 60 },
           { platform: 'chatgpt-web', answers: 300, answers_with_fanout: 0 },
           { platform: 'copilot-web', answers: 200, answers_with_fanout: 0 },
         ];
@@ -385,13 +401,14 @@ describe('query fan-out', () => {
       const report = await collectHealthReport(NOW);
 
       expect(report.fanout.error).toBeUndefined();
-      expect(report.fanout.platforms[0]).toMatchObject({
+      expect(report.fanout.platforms[1]).toMatchObject({
         platform: 'chatgpt-web',
         weekError: 'timeout',
       });
+      // The API model is still judged on its fall; Copilot, paused, isn't.
       expect(findIssues(report).filter((i) => i.includes('fan-out'))).toEqual([
         'chatgpt-web query fan-out could not be checked: timeout',
-        'copilot-web returned no query fan-out on any of its 200 answers in the last 24h (0% the days before) — check what Cloro returns',
+        "chatgpt returned no query fan-out on any of its 200 answers in the last 24h (30% the days before) — check what OpenAI's web_search returns",
       ]);
       expect(renderHealthEmail(report).html).toContain('7 days, sampled: could not check');
     });

@@ -117,7 +117,8 @@ describe('planCardOf', () => {
       priceDiff: 200,
       afterTrial: false,
       benefits: [
-        { key: 'morePlatforms', count: 6 },
+        // ChatGPT and Gemini, then Google AI Overviews and AI Mode on Growth.
+        { key: 'morePlatforms', count: 2 },
         { key: 'fullAuto' },
         { key: 'mcpWrite' },
         { key: 'aiLimit', times: 5 },
@@ -127,6 +128,7 @@ describe('planCardOf', () => {
 
   it("offers Enterprise's Claude tracking and contract from Growth, at a contract price", () => {
     const growth = card('growth');
+    expect(chip(growth, 'platforms')).toEqual({ key: 'platforms', count: 4, locked: null });
     expect(chip(growth, 'fullAuto')?.locked).toBeNull();
     expect(chip(growth, 'mcp')).toEqual({ key: 'mcp', access: 'read_write', locked: null });
     expect(chip(growth, 'claude')?.locked).toBe('enterprise');
@@ -135,6 +137,7 @@ describe('planCardOf', () => {
     expect(growth.next).toMatchObject({
       planId: 'enterprise',
       priceDiff: null,
+      // Enterprise tracks Growth's engines, so no "more AI platforms" line.
       benefits: [{ key: 'claude' }, { key: 'ownKeys' }, { key: 'contract' }],
     });
   });
