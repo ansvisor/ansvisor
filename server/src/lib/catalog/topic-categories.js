@@ -10,13 +10,16 @@ import { CategoryPageError, wordsOf } from './category-pages.js';
  * category is a topic's when every word of its own name (the last step,
  * "Cold Brew"), or of a step above it ("Whole Bean"), is in the topic's
  * name, or in at least two of its prompts (its one prompt, for a topic with
- * one). Its own name's match ranks first; three at most per topic. A
- * person's decision (topic_catalog_categories) replaces it: linked, or
- * taken away.
+ * one). A top step over most of the categories (a coffee shop's "Coffee")
+ * links nothing; a topic its categories' own names match takes only those;
+ * three at most per topic. A person's decision (topic_catalog_categories)
+ * replaces it: linked, or taken away.
  */
 
 /** Categories a topic is linked to by the words, at most. */
 export const MAX_AUTO_CATEGORIES = 3;
+/** A top step over more than this share of the categories doesn't link a topic. */
+const MAX_TOP_SHARE = 0.5;
 /** Prompts naming a category that link it to their topic, at least. */
 const MIN_PROMPTS = 2;
 /** Rows read from a table at once. */
@@ -46,20 +49,30 @@ const stepsOf = (name) =>
  * @returns {Map<string, string[]>} category ids by topic id
  */
 export function autoTopicCategories({ topics = [], categories = [] }) {
-  const read = categories
-    .map((category) => {
-      const steps = stepsOf(category.name);
-      return {
-        id: category.id,
-        steps: steps
-          .map((step, i) => ({
-            words: [...new Set(wordsOf(step))],
-            depth: i + 1,
-            own: i === steps.length - 1,
-          }))
-          .filter((step) => step.words.length > 0),
-      };
-    })
+  const named = categories.map((category) => ({ id: category.id, steps: stepsOf(category.name) }));
+  // How many categories sit under each top step ("Coffee"): a store's main
+  // department, under most of its categories, says nothing of a topic.
+  const under = new Map();
+  for (const { steps } of named) {
+    if (steps.length > 1) {
+      const top = steps[0].toLowerCase();
+      under.set(top, (under.get(top) ?? 0) + 1);
+    }
+  }
+  const tooBroad = (step, i) =>
+    i === 0 && (under.get(step.toLowerCase()) ?? 0) > named.length * MAX_TOP_SHARE;
+  const read = named
+    .map(({ id, steps }) => ({
+      id,
+      steps: steps
+        .map((step, i) => ({
+          words: [...new Set(wordsOf(step))],
+          depth: i + 1,
+          own: i === steps.length - 1,
+          broad: i < steps.length - 1 && tooBroad(step, i),
+        }))
+        .filter((step) => step.words.length > 0 && !step.broad),
+    }))
     .filter((category) => category.steps.length > 0);
   const linked = new Map();
   for (const topic of topics) {
@@ -69,6 +82,7 @@ export function autoTopicCategories({ topics = [], categories = [] }) {
     const found = [];
     for (const category of read) {
       let best = null;
+      let own = false;
       for (const step of category.steps) {
         const inName = step.words.every((w) => named.has(w));
         const asking = prompts.filter((words) => step.words.every((w) => words.has(w))).length;
@@ -80,13 +94,18 @@ export function autoTopicCategories({ topics = [], categories = [] }) {
           step.words.length * 3 +
           step.depth * 2;
         if (!best || score > best) best = score;
+        if (step.own) own = true;
       }
-      if (best !== null) found.push({ id: category.id, score: best });
+      if (best !== null) found.push({ id: category.id, score: best, own });
     }
-    found.sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : 1));
+    // A topic its categories' own names match takes those only: a step
+    // above adds nothing then.
+    const ownFound = found.filter((f) => f.own);
+    const kept = ownFound.length ? ownFound : found;
+    kept.sort((a, b) => b.score - a.score || (a.id < b.id ? -1 : 1));
     linked.set(
       topic.id,
-      found.slice(0, MAX_AUTO_CATEGORIES).map((f) => f.id),
+      kept.slice(0, MAX_AUTO_CATEGORIES).map((f) => f.id),
     );
   }
   return linked;
