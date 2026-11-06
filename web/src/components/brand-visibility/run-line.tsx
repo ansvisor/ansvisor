@@ -54,10 +54,11 @@ export function RunLine({
 
   if (loading) {
     return (
-      <p className="text-muted-foreground flex items-center gap-2 text-sm" aria-busy>
+      // A div, not a p: the skeleton is a div, and a p can't hold one.
+      <div className="text-muted-foreground flex items-center gap-2 text-sm" aria-busy>
         {brandName}
         <Skeleton className="h-3.5 w-48" data-testid="run-line-loading" />
-      </p>
+      </div>
     );
   }
 

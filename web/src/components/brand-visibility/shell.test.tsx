@@ -166,6 +166,8 @@ describe('Visibility’s header and tabs', () => {
     expect(container.textContent).toContain('TAB CONTENT');
     expect(container.textContent).toContain('Brewline Coffee');
     expect(container.querySelector('[data-testid="run-line-loading"]')).not.toBeNull();
+    // The skeleton is a div: no p may hold it (a hydration error in the browser).
+    expect(container.querySelector('p [data-testid="run-line-loading"]')).toBeNull();
     expect(container.textContent).not.toContain('Answer Engine Insights');
     expect(container.textContent).not.toContain('Brand Visibility');
   });
