@@ -15,6 +15,7 @@ const actions = vi.hoisted(() => ({
   setManagerExecute: vi.fn(),
   setAutoGoLive: vi.fn(),
   setModelProvider: vi.fn(),
+  setAgentWork: vi.fn(),
   removeAutoChoice: vi.fn(),
 }));
 vi.mock('@/lib/actions/chat-settings', () => actions);
@@ -95,6 +96,7 @@ const view = (over: Partial<ChatSettingsView> = {}): ChatSettingsView => ({
     { id: 'google', name: 'Google', on: true, locked: false },
     { id: 'deepseek', name: 'DeepSeek', on: false, locked: false },
   ],
+  agentWork: { value: 'approve_first', canChange: true, lastChange: null },
   ...over,
 });
 
@@ -261,6 +263,52 @@ describe('agents that publish on their own (AUTONOMOUS-GO-LIVE §7.1)', () => {
     });
     await render();
     expect(goLiveSwitch()).toBeNull();
+  });
+});
+
+describe('Agent work (AC-011)', () => {
+  const radio = (value: string) =>
+    container.querySelector<HTMLInputElement>(`input[type="radio"][value="${value}"]`)!;
+
+  it('starts on I approve first, and lets an Admin switch it, saved and read again', async () => {
+    actions.getChatSettingsView.mockResolvedValue({ ok: true, view: view() });
+    actions.setAgentWork.mockResolvedValue({ ok: true });
+    await render();
+    expect(text()).toContain('Who starts agent work?');
+    expect(text()).toContain('Not changed yet: every workspace starts on I approve first.');
+    expect(radio('approve_first').checked).toBe(true);
+    // Nothing to save until the choice changes.
+    expect(button('Save')!.disabled).toBe(true);
+    await act(async () => radio('auto_start').click());
+    await act(async () => button('Save')!.click());
+    expect(actions.setAgentWork).toHaveBeenCalledWith('auto_start');
+    expect(toast.success).toHaveBeenCalledWith('Agent work saved');
+    expect(actions.getChatSettingsView).toHaveBeenCalledTimes(2);
+  });
+
+  it('says who changed it last and when, and is read-only for anyone but an Admin', async () => {
+    actions.getChatSettingsView.mockResolvedValue({
+      ok: true,
+      view: view({
+        role: 'manager',
+        agentWork: {
+          value: 'auto_start',
+          canChange: false,
+          lastChange: {
+            byName: 'Cihan Geyik',
+            at: '2026-10-22T10:14:00Z',
+            from: 'approve_first',
+            to: 'auto_start',
+          },
+        },
+      }),
+    });
+    await render();
+    expect(text()).toContain('Changed by Cihan Geyik · Oct 22, 2026');
+    expect(radio('auto_start').checked).toBe(true);
+    expect(radio('approve_first').disabled).toBe(true);
+    expect(button('Save')).toBeUndefined();
+    expect(text()).toContain('Only Admins change this.');
   });
 });
 
