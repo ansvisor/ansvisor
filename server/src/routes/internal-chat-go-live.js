@@ -67,7 +67,6 @@
  */
 
 import { Router } from 'express';
-import * as cheerio from 'cheerio';
 import { z } from 'zod';
 import supabaseAdmin from '../config/supabase.js';
 import { isCloud } from '../config/plans.js';
@@ -76,17 +75,10 @@ import { autoGoLiveEnabled, chatAgenticEnabled } from '../lib/chat-flag.js';
 import { DeliveryError, deliveryPage, sendContentPages } from '../lib/content-delivery.js';
 import { publishContentPage } from '../lib/cms-publish.js';
 import { isDemoBrand } from '../middleware/demo-brand.js';
-import { ChatBudgetError, agentRunReserve } from '../lib/chat-budget.js';
-import { readBrandFacts } from '../lib/brand-facts.js';
+import { agentRunReserve } from '../lib/chat-budget.js';
 import { tellWentLive } from '../lib/chat-notices/go-live.js';
-import { pageReadContext } from '../lib/content-page-context.js';
-import { qualityPhase } from '../lib/content-quality.js';
-import { readDraftClaims } from '../lib/content-quality-claims.js';
-import { readPage } from '../lib/content-quality-page.js';
-import { MAX_SOURCE_SITES, linkedSites, readSourceClasses } from '../lib/content-source-class.js';
-import { checkLinks, reserveReads } from '../lib/link-check.js';
-import { PlanLimitError } from '../lib/plan-guard.js';
-import { readSiteTrust } from '../lib/site-trust.js';
+import { readQuality } from '../lib/content-quality-reads.js';
+import { MAX_SOURCE_SITES } from '../lib/content-source-class.js';
 import { webhookSecretsMatch } from '../lib/webhook-secret.js';
 import logger from '../lib/logger.js';
 
@@ -413,25 +405,6 @@ async function checkReads(body) {
   return draft;
 }
 
-/** One read's answer: its value, or why it couldn't be read. */
-async function settle(read) {
-  try {
-    return { ok: true, value: await read() };
-  } catch (err) {
-    if (err instanceof ChatBudgetError && err.code === 'run_cap') {
-      return { ok: false, code: 'run_cap' };
-    }
-    if (err instanceof PlanLimitError) return { ok: false, code: 'ai_budget' };
-    logger.warn(
-      { err: { name: err?.name, message: err?.message } },
-      '[go-live] a quality read failed',
-    );
-    return { ok: false, code: 'failed' };
-  }
-}
-
-const OFF = { ok: false, code: 'off' };
-
 router.post('/quality-reads', async (req, res) => {
   const parsed = readsSchema.safeParse(req.body ?? {});
   if (!parsed.success) {
@@ -449,55 +422,15 @@ router.post('/quality-reads', async (req, res) => {
     req.log.error({ err }, 'internal go-live reads check error');
     return res.status(500).json({ success: false, code: 'failed', message: 'Internal error' });
   }
-
-  const html = draft.body_html ?? '';
-  const $ = cheerio.load(html);
-  const hrefs = $('a[href]')
-    .map((_, el) => $(el).attr('href'))
-    .get();
-  const reserve = agentRunReserve(body.orgId, {
-    runId: body.runId,
-    agentRunId: body.agentRunId,
+  const reads = await readQuality({
+    orgId: body.orgId,
+    actingUserId: body.actingUserId,
+    draft,
+    sites: body.sites,
+    reserve: agentRunReserve(body.orgId, { runId: body.runId, agentRunId: body.agentRunId }),
+    log: req.log,
   });
-  const phase2 = qualityPhase() >= 2;
-  // Only sites the draft links, and not one whose every link the person kept.
-  const linked = linkedSites(hrefs);
-  const kept = new Set(draft.kept_sources ?? []);
-  const sites = [...new Set(body.sites)].filter(
-    (site) => linked.has(site) && !linked.get(site).every((href) => kept.has(href)),
-  );
-  const common = { orgId: body.orgId, draftId: body.draftId };
-  const [links, claims, page, classes, facts, siteTrust] = await Promise.all([
-    settle(() =>
-      checkLinks(hrefs, {
-        reserve: (wanted) => reserveReads(body.actingUserId, wanted),
-        log: req.log,
-      }).then(({ reads, skipped }) => ({
-        links: [...reads].map(([href, read]) => ({ href, ...read })),
-        skipped,
-      })),
-    ),
-    phase2 ? settle(() => readDraftClaims({ ...common, html, reserve })) : OFF,
-    phase2
-      ? settle(async () =>
-          readPage({
-            ...common,
-            html,
-            pageType: draft.page_type,
-            ...(await pageReadContext(draft.brand_id)),
-            reserve,
-          }),
-        )
-      : OFF,
-    phase2
-      ? sites.length
-        ? settle(() => readSourceClasses({ ...common, sites, reserve }))
-        : { ok: true, value: { classes: [], limited: false } }
-      : OFF,
-    phase2 ? settle(() => readBrandFacts(draft.brand_id, { orgId: body.orgId })) : OFF,
-    settle(() => readSiteTrust(draft.brand_id, { refresh: false, keptOnly: false })),
-  ]);
-  return res.json({ success: true, links, claims, page, classes, facts, siteTrust });
+  return res.json({ success: true, ...reads });
 });
 
 export default router;

@@ -329,6 +329,13 @@ export interface ChatPageVersion {
   };
   sections: ChatPageSection[];
   canUndo?: boolean;
+  /**
+   * The page's rules as the Content Editor counts them, "Rules {met}/{total}"
+   * (W4-12b part 2): none for a page with no rules, or whose rules couldn't be read.
+   */
+  rules?: { met: number; total: number };
+  /** The editor's Quality figure for the page (W4-12b part 2): none while Quality is off or unread. */
+  quality?: number;
 }
 
 /**
@@ -342,6 +349,11 @@ export interface ChatNextMove {
   prompt: string;
   /** It continues this run's object: the first one shows as the composer's ghost text. */
   ghost?: boolean;
+  /**
+   * A move that opens a page instead of sending: Open in Content Editor after
+   * a page's check (W4-12b part 2). Its prompt is what the card says.
+   */
+  href?: ChatHref;
 }
 
 /** The workspace's monthly AI usage, as a percent of its limit (CHAT-04, DECISIONS R). */

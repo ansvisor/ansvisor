@@ -206,27 +206,31 @@ function needed<T>(read: GateRead, answer: Answer<T>): T {
   return answer.value;
 }
 
-/** The server's reads for the gate (CRON_SECRET), the run's own steps where new ones are made. */
-async function serverReads(input: GateInput, sites: string[]): Promise<ServerReads> {
+/** The server's reads (CRON_SECRET) from one of its endpoints, the run's own steps where new ones are made. */
+async function serverReads(path: string, body: Record<string, unknown>): Promise<ServerReads> {
   const secret = process.env.CRON_SECRET;
   if (!secret) throw new Unread('links', 'no_secret');
-  const res = await fetch(`${API_BASE_URL}/api/internal/chat/go-live/quality-reads`, {
+  const res = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` },
-    body: JSON.stringify({
-      orgId: input.organizationId,
-      agentRunId: input.agentRunId,
-      runId: input.runId,
-      actingUserId: input.actingUserId,
-      draftId: input.draftId,
-      sites,
-    }),
+    body: JSON.stringify(body),
     cache: 'no-store',
   });
-  const body = (await res.json().catch(() => null)) as (ServerReads & { code?: string }) | null;
-  if (!res.ok || !body) throw new Unread('links', body?.code ?? `http_${res.status}`);
-  return body;
+  const answer = (await res.json().catch(() => null)) as (ServerReads & { code?: string }) | null;
+  if (!res.ok || !answer) throw new Unread('links', answer?.code ?? `http_${res.status}`);
+  return answer;
 }
+
+/** An agent's go-live gate's reads (internal-chat-go-live.js): within its run's cap. */
+const goLiveReads = (input: GateInput) => (sites: string[]) =>
+  serverReads('/api/internal/chat/go-live/quality-reads', {
+    orgId: input.organizationId,
+    agentRunId: input.agentRunId,
+    runId: input.runId,
+    actingUserId: input.actingUserId,
+    draftId: input.draftId,
+    sites,
+  });
 
 export interface GateInput {
   organizationId: string;
@@ -319,6 +323,46 @@ async function gate(input: GateInput, phase: number): Promise<GateResult> {
     return { pass: false, hold: packaged.problem === 'placeholders' ? 'placeholders' : 'fields' };
   }
 
+  const open = await dbRead('draft', () =>
+    supabaseAdmin
+      .from('content_draft_suggestions')
+      .select('id')
+      .eq('draft_id', input.draftId)
+      .eq('status', 'open')
+      .limit(1),
+  );
+  if ((open ?? []).length > 0) return { pass: false, hold: 'suggestions' };
+  const { state, facts, sentences } = await readDraftQuality(input, phase, goLiveReads(input));
+  return gateVerdict({ state, facts, sentences });
+}
+
+/** Who a Quality read is for: the workspace, the draft, and the person the run acts as. */
+export interface QualityReadFor {
+  organizationId: string;
+  draftId: string;
+  actingUserId: string;
+  actingRole: string;
+}
+
+/** The draft scored as the editor scores it, with what the verdict and the words need. */
+export interface DraftQuality {
+  state: QualityState;
+  facts: BrandFact[];
+  sentences: string[];
+  brandName: string;
+}
+
+/**
+ * The draft as saved, read and scored as the Content Editor scores it
+ * (qualityState, from the same reads): the server's reads come from
+ * `fetchReads`, given the sites the rules can't place. Throws Unread for a
+ * read it needs that couldn't be made.
+ */
+async function readDraftQuality(
+  input: QualityReadFor,
+  phase: number,
+  fetchReads: (sites: string[]) => Promise<ServerReads>,
+): Promise<DraftQuality> {
   const draft = await dbRead('draft', () =>
     supabaseAdmin
       .from('content_drafts')
@@ -337,16 +381,6 @@ async function gate(input: GateInput, phase: number): Promise<GateResult> {
     industry: string | null;
     shopping_mode_enabled: boolean | null;
   };
-
-  const open = await dbRead('draft', () =>
-    supabaseAdmin
-      .from('content_draft_suggestions')
-      .select('id')
-      .eq('draft_id', input.draftId)
-      .eq('status', 'open')
-      .limit(1),
-  );
-  if ((open ?? []).length > 0) return { pass: false, hold: 'suggestions' };
 
   await withContentDom();
   const html = draft.body_html ?? '';
@@ -416,7 +450,7 @@ async function gate(input: GateInput, phase: number): Promise<GateResult> {
         kept: new Set(keptSources),
       })
     : [];
-  const reads = await serverReads(input, sites);
+  const reads = await fetchReads(sites);
   const linkList = needed('links', reads.links);
   const linkChecks = new Map(linkList.links.map((link) => [link.href, link]));
 
@@ -540,9 +574,68 @@ async function gate(input: GateInput, phase: number): Promise<GateResult> {
     catalog,
     now: Date.now(),
   });
-  return gateVerdict({
+  return {
     state,
     facts,
     sentences: blocks.flatMap((b) => sentencesOf(b.text)),
-  });
+    brandName: authors.brands.find((b) => b.id === draft.brand_id)?.name ?? brand.name,
+  };
+}
+
+/** A page's Quality in Chat: its score, and what it was read from. */
+export interface PageQuality extends DraftQuality {
+  /** The Quality figure the editor's header shows: the scores read, averaged; null with none. */
+  score: number | null;
+}
+
+/**
+ * A page's Quality in Chat (CHAT-25 §6, W4-12b part 2): the editor's
+ * scores, read as the go-live gate reads them (the owner's 2026-11-05
+ * decision), for a page's version card and check_draft_rules. The reads are
+ * the run's own (internal-chat-quality.js): `spend` for a new version, where
+ * a read the draft hasn't kept is the run's step (Quality's phase 2 on);
+ * check_draft_rules spends nothing and takes only kept reads. Null while
+ * Content Quality is off, or when a read it needs couldn't be made: no
+ * figure is ever guessed.
+ */
+export async function readPageQuality(
+  input: QualityReadFor & {
+    runId: string;
+    agentRunId?: string | null;
+    scheduleId?: string | null;
+    spend: boolean;
+  },
+): Promise<PageQuality | null> {
+  const phase = qualityPhase();
+  if (phase < 1) return null;
+  try {
+    const read = await readDraftQuality(input, phase, (sites) =>
+      serverReads('/api/internal/chat/quality/reads', {
+        orgId: input.organizationId,
+        runId: input.runId,
+        actingUserId: input.actingUserId,
+        draftId: input.draftId,
+        sites,
+        spend: input.spend,
+        ...(input.agentRunId ? { agentRunId: input.agentRunId } : {}),
+        ...(input.scheduleId ? { scheduleId: input.scheduleId } : {}),
+      }),
+    );
+    const { eeatScore, trustScore, readable } = read.state;
+    return {
+      ...read,
+      score: qualityAverage([
+        eeatScore?.score ?? null,
+        trustScore?.score ?? null,
+        readable?.score ?? null,
+      ]),
+    };
+  } catch (err) {
+    if (err instanceof Unread) {
+      console.warn(`[chat/quality] the page's Quality wasn't read: ${err.message}`);
+      return null;
+    }
+    console.error('[chat/quality] the page’s Quality read failed:', err);
+    return null;
+  }
 }

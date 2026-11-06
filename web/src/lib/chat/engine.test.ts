@@ -236,6 +236,18 @@ vi.mock('./model-providers', async (importOriginal) => {
 });
 // Step 4b's guards' facts, as their reads would give them (go-live-facts.test.ts reads them).
 vi.mock('./go-live-facts', () => ({ readGoLiveFacts: fakes.goLiveFacts }));
+// A page's Rules and Quality (W4-12b part 2), as their reads would give them: none unless a test says.
+const pageReads = vi.hoisted(() => ({
+  rules: vi.fn(async (..._args: unknown[]): Promise<unknown> => null),
+  quality: vi.fn(async (..._args: unknown[]): Promise<unknown> => null),
+}));
+vi.mock('@/lib/content/draft-rules-read', () => ({
+  readDraftRules: (...args: unknown[]) => pageReads.rules(...args),
+}));
+vi.mock('@/lib/content/go-live-gate', () => ({
+  readPageQuality: (...args: unknown[]) => pageReads.quality(...args),
+  goLiveGate: vi.fn(),
+}));
 // fetch_page as it is, opening pages through a fake of the API's internal route.
 vi.mock('@/lib/mcp/pages', () => ({ openPageFor: fakes.openPage }));
 // explain_change as it is, reading through a fake of its data layer.
@@ -326,7 +338,12 @@ vi.mock('./registry/tools', async (importOriginal) => {
     // The same read as one of the workspace's own drafts (WORKSPACE_READS): scanned, never tainting.
     { ...readVisibility, name: 'get_draft' },
     ...real.CHAT_TOOLS.filter(
-      (t) => t.class !== 'read' || t.name === 'fetch_page' || t.name === 'explain_change',
+      (t) =>
+        t.class !== 'read' ||
+        t.name === 'fetch_page' ||
+        t.name === 'explain_change' ||
+        // A page checked against its rules, read through the faked reads (W4-12b part 2).
+        t.name === 'check_draft_rules',
     ),
     publishPage,
   ];
@@ -662,6 +679,7 @@ describe('a turn', () => {
       'list_citations',
       'list_site_audit_issues',
       'get_draft',
+      'check_draft_rules',
       'fetch_page',
       'explain_change',
     ]);
@@ -8024,6 +8042,10 @@ describe('images in Chat (W4-08, CHAT-15 §E)', () => {
 
 describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
   const BEFORE = '99999999-9999-4999-8999-000000000412';
+  afterEach(() => {
+    pageReads.rules.mockClear().mockResolvedValue(null);
+    pageReads.quality.mockClear().mockResolvedValue(null);
+  });
   const PAGE = [
     '<h1>Pricing FAQ</h1>',
     '<h2>Which AI platforms does it track?</h2><p>Six of them.</p>',
@@ -8128,6 +8150,97 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
     );
     const again = await turn(ADMIN, 'Add a line', 'full_auto');
     expect((await firstMove(again)).map(([label]) => label)).not.toContain('Mark ready');
+  });
+
+  it('shows the version’s Rules and Quality, and checks open rules before Mark ready (W4-12b part 2)', async () => {
+    const DONE = PAGE.replace('[REFUND PERIOD]', '30 days');
+    pageReads.rules.mockResolvedValue({ title: 'Pricing FAQ', checked: [], met: 10, total: 12 });
+    pageReads.quality.mockResolvedValue({ score: 82 });
+    useModels(
+      [READY],
+      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: DONE })), text('Done.')],
+    );
+    const runId = await turn(ADMIN, 'Fill the refund period', 'full_auto');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const [card] = ofType(events, 'deliverable.updated').map((e) => e.data);
+    expect(card.version).toMatchObject({ n: 2, rules: { met: 10, total: 12 }, quality: 82 });
+    // The run's own reads: a Quality read the draft hasn't kept is this run's step.
+    expect(pageReads.quality).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: DRAFT, runId, spend: true }),
+    );
+    const moves = db.tables.chat_next_moves
+      .filter((m) => m.run_id === runId)
+      .sort((a, b) => (a.rank as number) - (b.rank as number))
+      .map((m) => [m.label, m.prompt, m.class]);
+    const check = moves.findIndex(([label]) => label === 'Check it against the rules');
+    const ready = moves.findIndex(([label]) => label === 'Mark ready');
+    expect(moves[check]).toEqual([
+      'Check it against the rules',
+      'Check this page against the rules',
+      'read',
+    ]);
+    expect(check).toBeGreaterThanOrEqual(0);
+    expect(check).toBeLessThan(ready);
+    // Every rule met: no check move.
+    pageReads.rules.mockResolvedValue({ title: 'Pricing FAQ', checked: [], met: 12, total: 12 });
+    useModels(
+      [READY],
+      [
+        calls(
+          toolCall('w2', 'update_draft', { draft_id: DRAFT, body_html: `${DONE}<p>More.</p>` }),
+        ),
+        text('Done.'),
+      ],
+    );
+    const again = await turn(ADMIN, 'Add a line', 'full_auto');
+    expect(
+      db.tables.chat_next_moves.filter((m) => m.run_id === again).map((m) => m.label),
+    ).not.toContain('Check it against the rules');
+  });
+
+  it('checks a page against its rules for free, then offers Open in Content Editor (W4-12b part 2)', async () => {
+    pageReads.rules.mockResolvedValue({
+      title: 'Pricing FAQ',
+      met: 11,
+      total: 12,
+      checked: [
+        {
+          rule: {
+            key: 'faq',
+            group: 'structure',
+            kind: 'number',
+            value: '5',
+            check: 'page',
+            on: true,
+            current: '5',
+            changed: false,
+            unit: 'questions',
+          },
+          status: { state: 'bad', code: 'partOf', count: 3, of: 5 },
+        },
+      ],
+    });
+    pageReads.quality.mockResolvedValue(null);
+    vi.stubEnv('NEXT_PUBLIC_CONTENT_QUALITY_PHASE', '1');
+    useModels(
+      [calls(toolCall('r1', 'check_draft_rules', { draft_id: DRAFT })), READY],
+      [text('One rule is open: the FAQ block has 3 of 5 questions.')],
+    );
+    const runId = await turn(ANALYST, 'Check this page against the rules');
+    expect(runRow(runId).status).toBe('done');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const [moves] = ofType(events, 'next_moves').map((e) => e.data.moves);
+    expect(moves).toContainEqual({
+      label: 'Open in Content Editor',
+      prompt: 'Open in Content Editor',
+      href: `/dashboard/content/editor/${DRAFT}`,
+    });
+    // Free: Quality from the kept reads only, and an Analyst may run it.
+    expect(pageReads.quality).toHaveBeenCalledWith(
+      expect.objectContaining({ draftId: DRAFT, spend: false }),
+    );
   });
 
   it('still files an untitled page when its version can’t be read, as a plain card', async () => {
