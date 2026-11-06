@@ -157,6 +157,23 @@ describe('ChatHomeView', () => {
     }
   });
 
+  it('welcomes the person beside the welcome card, with its line, right above the box', async () => {
+    await render(
+      view({
+        focus: { areas: [], onEdit: () => undefined },
+        welcome: { line: 'Your first results are on their way.', card: <div data-slot="card" /> },
+      }),
+    );
+    expect(host.querySelector('h1')?.textContent).toBe('Welcome, Alex');
+    expect(host.querySelector('p')?.textContent).toBe('Your first results are on their way.');
+    // The card closes Home's top: the box follows it.
+    expect(host.firstElementChild?.lastElementChild?.getAttribute('data-slot')).toBe('card');
+
+    await render(view({ firstName: null, welcome: { line: null, card: null } }));
+    expect(host.querySelector('h1')?.textContent).toBe('Welcome');
+    expect(host.querySelector('p')?.textContent).toBe('All caught up.');
+  });
+
   it('greets without a name, and not at all until the clock is known', async () => {
     await render(view({ firstName: null }));
     expect(host.querySelector('h1')?.textContent).toBe('Good afternoon');

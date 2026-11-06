@@ -1010,6 +1010,9 @@
       "keywords": [
         "chat",
         "ask chat",
+        "welcome card",
+        "preparing your data",
+        "quick tour",
         "task finisher",
         "download answer",
         "save to files",
@@ -1150,6 +1153,10 @@
         {
           "heading": "Chat Home",
           "text": "Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**\n\n**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.\n\n**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat."
+        },
+        {
+          "heading": "The welcome card",
+          "text": "In the free trial, and while you explore the demo brand, a welcome card sits above the box on Chat Home, and Home says **Welcome** with your name. In the trial, **Preparing your data** shows your first tracking run and about how long is left, until the first results are in. Admins and managers also see **Connect Search Console** and **Connect Google Analytics**, which open their cards in **Settings › Integrations**; a button goes once its source is connected. **Want a quick tour?** lists the topics, each opening its page, and **Show me everything** starts with Visibility. **Not now** hides the card for good."
         },
         {
           "heading": "Ask Chat",
@@ -1567,7 +1574,7 @@
         },
         {
           "heading": "Pick your focus",
-          "text": "The first time you open Chat, it asks **What should Chat focus on for you?** **Default: simple start** is picked at the top. Select **Continue** to keep it, or pick one or more of the eight areas under it and select **Continue**. Picking an area turns Default off; selecting **Default** again clears your areas.\n\n**Skip for now** also keeps the Default view. Chat asks only once, whichever you choose."
+          "text": "The first time you open Chat, it asks **What should Chat focus on for you?** **Default: simple start** is picked at the top. Select **Continue** to keep it, or pick one or more of the eight areas under it and select **Continue**. Picking an area turns Default off; selecting **Default** again clears your areas.\n\n**Skip for now** also keeps the Default view. Chat asks only once, whichever you choose.\n\nIn the free trial, and while you explore the demo brand, Chat doesn't ask: it opens on the Default view with a welcome card. Select **Edit** under the greeting to pick your focus whenever you like."
         },
         {
           "heading": "The Default view",

@@ -3964,6 +3964,30 @@ export type Database = {
           },
         ]
       }
+      chat_tour_translations: {
+        Row: {
+          created_at: string
+          lang: string
+          model: string | null
+          source_hash: string
+          texts: Json
+        }
+        Insert: {
+          created_at?: string
+          lang: string
+          model?: string | null
+          source_hash: string
+          texts: Json
+        }
+        Update: {
+          created_at?: string
+          lang?: string
+          model?: string | null
+          source_hash?: string
+          texts?: Json
+        }
+        Relationships: []
+      }
       chat_uploads: {
         Row: {
           conversation_id: string | null
@@ -4050,9 +4074,13 @@ export type Database = {
           panel_size: string
           rail_open: boolean
           show_thought: boolean
+          tour_chat_id: string | null
+          tour_finished_at: string | null
+          tour_topic: string | null
           updated_at: string
           usage_notice_period: string | null
           user_id: string
+          welcome_dismissed_at: string | null
         }
         Insert: {
           answer_language?: string | null
@@ -4072,9 +4100,13 @@ export type Database = {
           panel_size?: string
           rail_open?: boolean
           show_thought?: boolean
+          tour_chat_id?: string | null
+          tour_finished_at?: string | null
+          tour_topic?: string | null
           updated_at?: string
           usage_notice_period?: string | null
           user_id: string
+          welcome_dismissed_at?: string | null
         }
         Update: {
           answer_language?: string | null
@@ -4094,11 +4126,23 @@ export type Database = {
           panel_size?: string
           rail_open?: boolean
           show_thought?: boolean
+          tour_chat_id?: string | null
+          tour_finished_at?: string | null
+          tour_topic?: string | null
           updated_at?: string
           usage_notice_period?: string | null
           user_id?: string
+          welcome_dismissed_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "chat_user_prefs_tour_chat_id_fkey"
+            columns: ["tour_chat_id"]
+            isOneToOne: false
+            referencedRelation: "chat_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chat_whats_new_reads: {
         Row: {

@@ -4737,6 +4737,15 @@
       "all": "All time"
     }
   },
+  "chatTour": {
+    "topics": {
+      "visibility": "Visibility",
+      "prompts": "Topics and prompts",
+      "positions": "Positions and locations",
+      "content": "Content",
+      "connections": "Connections"
+    }
+  },
   "chatShell": {
     "unavailable": {
       "title": "This chat isn't available.",
@@ -4867,6 +4876,25 @@
       "needsYou": "{count, plural, one {# thing needs you} other {# things need you}}",
       "caughtUp": "All caught up.",
       "startFailed": "Couldn't start that. Try again.",
+      "welcome": {
+        "greeting": "Welcome, {name}",
+        "greetingNoName": "Welcome",
+        "onTheirWay": "Your first results are on their way.",
+        "preparing": "Preparing your data",
+        "queued": "starts as soon as a slot opens",
+        "etaMinutes": "first results in about {minutes} min",
+        "etaHours": "{hours, plural, one {first results in about # hour} other {first results in about # hours}}",
+        "progress": "{current} of {total} checks",
+        "connectWhileRuns": "While it runs, connect {missing, select, gsc {Google Search Console} ga {Google Analytics} other {Google Search Console and Google Analytics}}. Ansvisor then works from your own data too: your real clicks and AI visits.",
+        "connect": "Connect {missing, select, gsc {Google Search Console} ga {Google Analytics} other {Google Search Console and Google Analytics}}. Ansvisor then works from your own data too: your real clicks and AI visits.",
+        "connectGsc": "Connect Search Console",
+        "connectGa": "Connect Google Analytics",
+        "tourTitle": "Want a quick tour?",
+        "tourBody": "Pick what you’d like to see. I’ll open the page and explain it right beside you.",
+        "everything": "Show me everything",
+        "notNow": "Not now",
+        "dismissFailed": "Couldn’t hide the card. Try again."
+      },
       "forYou": {
         "title": "For you now",
         "askAnything": "Ask anything",
