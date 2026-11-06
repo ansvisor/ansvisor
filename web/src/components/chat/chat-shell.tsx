@@ -420,7 +420,12 @@ function ChatShellFrame({
             {current && <ChatHeaderMenu chat={current} />}
           </div>
         </header>
-        <div className={cn('chat-scroll min-h-0 flex-1 overflow-y-auto', padded && 'p-6')}>
+        {/* Positioned, so absolute children (screen-reader text in long answers)
+            stay inside the scroll area instead of stretching the whole page. */}
+        <div
+          data-slot="chat-scroll"
+          className={cn('chat-scroll relative min-h-0 flex-1 overflow-y-auto', padded && 'p-6')}
+        >
           <ChatCrumbContext.Provider value={setCrumbTail}>{children}</ChatCrumbContext.Provider>
         </div>
       </div>

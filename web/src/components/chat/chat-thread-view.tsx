@@ -731,7 +731,8 @@ export function ChatThreadView({
           ? 'mx-auto flex w-full max-w-[720px] flex-col gap-5 px-5 pb-6'
           : variant === 'panel'
             ? 'flex w-full flex-1 flex-col gap-4 px-4 pt-4'
-            : 'mx-auto flex w-full max-w-[760px] flex-col gap-5 px-5 py-6'
+            : // The chat page: full height, so the box stays at the bottom of a short chat.
+              'mx-auto flex min-h-full w-full max-w-[760px] flex-col gap-5 px-5 py-6'
       }
     >
       {turns.length === 0 && empty}
@@ -836,7 +837,7 @@ export function ChatThreadView({
             ? 'flex flex-col gap-2'
             : variant === 'panel'
               ? 'sticky bottom-0 mt-auto flex flex-col gap-2 bg-background pt-1 pb-3'
-              : 'sticky bottom-0 flex flex-col gap-2 bg-background pt-1 pb-2'
+              : 'sticky bottom-0 mt-auto flex flex-col gap-2 bg-background pt-1 pb-2'
         }
       >
         {(!thread || thread.mine) && (
