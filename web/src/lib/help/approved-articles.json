@@ -1574,7 +1574,7 @@
         },
         {
           "heading": "Pick your focus",
-          "text": "The first time you open Chat, it asks **What should Chat focus on for you?** **Default: simple start** is picked at the top. Select **Continue** to keep it, or pick one or more of the eight areas under it and select **Continue**. Picking an area turns Default off; selecting **Default** again clears your areas.\n\n**Skip for now** also keeps the Default view. Chat asks only once, whichever you choose."
+          "text": "The first time you open Chat, it asks **What should Chat focus on for you?** **Default: simple start** is picked at the top. Select **Continue** to keep it, or pick one or more of the eight areas under it and select **Continue**. Picking an area turns Default off; selecting **Default** again clears your areas.\n\n**Skip for now** also keeps the Default view. Chat asks only once, whichever you choose.\n\nIn the free trial, and while you explore the demo brand, Chat doesn't ask: it opens on the Default view with a welcome card. Select **Edit** under the greeting to pick your focus whenever you like."
         },
         {
           "heading": "The Default view",

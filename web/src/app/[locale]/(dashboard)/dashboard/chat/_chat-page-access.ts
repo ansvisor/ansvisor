@@ -139,7 +139,12 @@ export interface ChatFocusState {
   focus: FocusArea[] | null;
   /** Home's view (00485): the Default view, or the one the focus tailors. */
   view: HomeView;
-  /** The picker opens by itself: never answered and never shown (it shows once). */
+  /**
+   * The picker opens by itself: never answered and never shown (it shows
+   * once). Never for the free trial and the demo (owner decision 2026-11-06):
+   * they land on the Default view with the welcome card, and pick a focus
+   * later from the pill.
+   */
   ask: boolean;
 }
 
@@ -148,7 +153,9 @@ const NO_FOCUS: ChatFocusState = { focus: null, view: 'default', ask: false };
 /**
  * The person's focus, Home's view and whether the picker should open by
  * itself. A read that fails opens Home on the Default view, without the
- * picker.
+ * picker. Who the workspace is to Chat's start (ChatStartAudience) is read
+ * only for someone the picker would open for: once, on the first visit; a
+ * read of it that fails leaves the picker as it was.
  */
 export async function chatFocusState(): Promise<ChatFocusState> {
   const supabase = await createClient();
@@ -163,11 +170,31 @@ export async function chatFocusState(): Promise<ChatFocusState> {
     .maybeSingle();
   if (prefs.error) return NO_FOCUS;
   const focus = focusOf(prefs.data?.focus);
+  const firstVisit = focus === null && !prefs.data?.focus_prompted_at;
   return {
     focus,
     view: homeViewOf(prefs.data?.home_view),
-    ask: focus === null && !prefs.data?.focus_prompted_at,
+    ask: firstVisit && !(await startsOnWelcome(supabase, user.id)),
   };
+}
+
+/** The free trial or the demo (ChatStartAudience): Home opens on its welcome card, not the picker. */
+async function startsOnWelcome(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<boolean> {
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('organization_id')
+      .eq('id', userId)
+      .maybeSingle();
+    if (!profile?.organization_id) return false;
+    return (await readChatStartAudience(supabase, profile.organization_id)) !== null;
+  } catch (error) {
+    console.error('[chat] could not read who Chat starts:', error);
+    return false;
+  }
 }
 
 /**
