@@ -8,6 +8,8 @@ import {
   BRAND_VISIBILITY_TABS,
   brandVisibilityTabHref,
   brandVisibilityTabOf,
+  hasProductVisibilityTab,
+  isEcommerceBrand,
   mentionsPlatformOf,
   OVERVIEW_DEFAULT_RANGE,
   readSharedFilters,
@@ -15,25 +17,27 @@ import {
 } from './brand-visibility';
 
 /**
- * Brand Visibility (the owner's mockup): one page, three tabs on the routes
- * their pages always had, and the filters the three share kept from tab to
+ * Brand Visibility (the owner's mockup): one page, its tabs on the routes
+ * their pages always had (Product Visibility for brands that sell online),
+ * and the filters Overview, Mentions and Citations share kept from tab to
  * tab.
  */
 
 const GROUP = path.resolve(__dirname, '../app/[locale]/(dashboard)/dashboard/(brand-visibility)');
 
 describe('the tabs and their routes', () => {
-  it('are Overview, Mentions and Citations, on the old pages’ addresses', () => {
+  it('are Overview, Mentions, Citations and Product Visibility, on the old pages’ addresses', () => {
     expect(BRAND_VISIBILITY_TABS).toEqual([
       { id: 'overview', href: '/dashboard/insights' },
       { id: 'mentions', href: '/dashboard/mentions' },
       { id: 'citations', href: '/dashboard/citations' },
+      { id: 'products', href: '/dashboard/shopping' },
     ]);
   });
 
   it('each has its own route under the shared layout, with its own loading and error states', () => {
     expect(existsSync(path.join(GROUP, 'layout.tsx'))).toBe(true);
-    for (const folder of ['insights', 'mentions', 'citations']) {
+    for (const folder of ['insights', 'mentions', 'citations', 'shopping']) {
       for (const file of ['page.tsx', 'loading.tsx', 'error.tsx']) {
         expect(existsSync(path.join(GROUP, folder, file)), `${folder}/${file}`).toBe(true);
       }
@@ -42,12 +46,17 @@ describe('the tabs and their routes', () => {
     const dashboard = path.dirname(GROUP);
     expect(existsSync(path.join(dashboard, 'insights/[id]/page.tsx'))).toBe(true);
     expect(existsSync(path.join(dashboard, 'citations/url/page.tsx'))).toBe(true);
+    // So does a product's page, under Product Visibility's address.
+    expect(existsSync(path.join(dashboard, 'shopping/products/[productId]/page.tsx'))).toBe(true);
+    expect(existsSync(path.join(dashboard, 'shopping/page.tsx'))).toBe(false);
   });
 
   it('knows the tab an address opens, and nothing else', () => {
     expect(brandVisibilityTabOf('/dashboard/insights')).toBe('overview');
     expect(brandVisibilityTabOf('/dashboard/mentions/')).toBe('mentions');
     expect(brandVisibilityTabOf('/dashboard/citations')).toBe('citations');
+    expect(brandVisibilityTabOf('/dashboard/shopping')).toBe('products');
+    expect(brandVisibilityTabOf('/dashboard/shopping/products/p1')).toBeNull();
     expect(brandVisibilityTabOf('/dashboard/insights/r1')).toBeNull();
     expect(brandVisibilityTabOf('/dashboard/citations/url')).toBeNull();
     expect(brandVisibilityTabOf('/dashboard/prompts/insights')).toBeNull();
@@ -188,8 +197,47 @@ describe('a tab’s link', () => {
     );
     expect(brandVisibilityTabHref('citations', null, '?range=7d')).toBe('/dashboard/citations');
   });
+
+  it('carries no filter to Product Visibility or from it, and keeps its own view', () => {
+    expect(brandVisibilityTabHref('products', 'overview', '?range=7d&region=us')).toBe(
+      '/dashboard/shopping',
+    );
+    expect(brandVisibilityTabHref('overview', 'products', '?tab=categories')).toBe(
+      '/dashboard/insights',
+    );
+    expect(brandVisibilityTabHref('products', 'products', '?tab=readiness')).toBe(
+      '/dashboard/shopping?tab=readiness',
+    );
+  });
+});
+
+describe('Product Visibility as the fourth tab', () => {
+  const plan = (has: boolean) => (feature: string) => has && feature === 'shopping_analytics';
+
+  it('counts a brand as selling online by its Shopping mode or its e-commerce site type', () => {
+    expect(isEcommerceBrand({ shoppingModeEnabled: true })).toBe(true);
+    expect(isEcommerceBrand({ shoppingModeEnabled: false, siteType: 'ecommerce' })).toBe(true);
+    expect(isEcommerceBrand({ shoppingModeEnabled: false, siteType: 'b2b' })).toBe(false);
+    expect(isEcommerceBrand({ shoppingModeEnabled: false })).toBe(false);
+    expect(isEcommerceBrand(null)).toBe(false);
+  });
+
+  it('shows for an e-commerce brand on a plan with Product Visibility, and for no other', () => {
+    const shop = { shoppingModeEnabled: true };
+    const store = { shoppingModeEnabled: false, siteType: 'ecommerce' };
+    const saas = { shoppingModeEnabled: false, siteType: 'b2b' };
+    expect(hasProductVisibilityTab(shop, plan(true))).toBe(true);
+    expect(hasProductVisibilityTab(store, plan(true))).toBe(true);
+    expect(hasProductVisibilityTab(saas, plan(true))).toBe(false);
+    expect(hasProductVisibilityTab(shop, plan(false))).toBe(false);
+    expect(hasProductVisibilityTab(store, plan(false))).toBe(false);
+    expect(hasProductVisibilityTab(undefined, plan(true))).toBe(false);
+  });
 });
 
 const TAB_DEFAULTS = Object.fromEntries(
-  BRAND_VISIBILITY_TABS.map(({ id }) => [id, readSharedFilters(id, new URLSearchParams()).range]),
+  (['overview', 'mentions', 'citations'] as const).map((id) => [
+    id,
+    readSharedFilters(id, new URLSearchParams()).range,
+  ]),
 );

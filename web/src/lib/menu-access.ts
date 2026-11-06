@@ -31,8 +31,9 @@ export interface MenuSectionEntry {
 /**
  * The sections of these menu items, in the menu's order: each item's, then
  * those of its submenu entries that are sections of their own (Brand
- * Visibility's Mentions and Citations, items of their own before it
- * gathered them, keep their sections, so menus already set keep them).
+ * Visibility's Mentions, Citations and Products, items of their own before
+ * it gathered them, keep their sections and names, so menus already set
+ * keep them).
  */
 export function menuSectionEntries(items: readonly NavItem[]): MenuSectionEntry[] {
   const entries: MenuSectionEntry[] = [];
@@ -44,7 +45,9 @@ export function menuSectionEntries(items: readonly NavItem[]): MenuSectionEntry[
   };
   for (const item of items) {
     add(item.href, item.title, item.icon);
-    for (const child of item.children ?? []) add(child.href, child.title, child.icon ?? item.icon);
+    for (const child of item.children ?? []) {
+      add(child.href, child.sectionTitle ?? child.title, child.icon ?? item.icon);
+    }
   }
   return entries;
 }

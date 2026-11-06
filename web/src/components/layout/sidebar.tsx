@@ -22,7 +22,7 @@ import {
   shouldShowDashboardNavItem,
   visibleNavChildren,
 } from '@/lib/dashboard-navigation';
-import { brandVisibilityTabOf } from '@/lib/brand-visibility';
+import { brandVisibilityTabOf, isEcommerceBrand } from '@/lib/brand-visibility';
 import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
@@ -190,10 +190,11 @@ export function Sidebar() {
   // derived brand keeps this reactive: switching brands via BrandSwitcher or
   // toggling the flag in Brand Settings flips the gate without a route change.
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
-  // Map from a NavItem.requiresBrandPref key to the active brand's value.
-  // Sidebar hides the item entirely when this returns false — see #155/#170
-  // for why Shopping uses this on top of the existing plan-feature gate.
-  const brandPrefs = { shoppingModeEnabled: !!activeBrand?.shoppingModeEnabled };
+  // Map from a requiresBrandPref key to the active brand's value. The
+  // sidebar hides the entry entirely when it is false — Visibility's
+  // Products shows for brands that sell online (#155/#170, 2026-11-06).
+  const brandPrefs = { ecommerce: isEcommerceBrand(activeBrand) };
+  const childGates = { brandPrefs, canUse };
   // The items the viewer sees, and the groups that keep one: a group whose
   // sections are all off their menu goes, title and all.
   const hiddenSections = useHiddenMenuSections();
@@ -201,7 +202,7 @@ export function Sidebar() {
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
-        shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic),
+        shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic, canUse),
       ),
     }))
     .filter((group) => group.items.length > 0);
@@ -484,7 +485,7 @@ export function Sidebar() {
                     const isActive = isNavItemActive(item, pathname, href);
                     const label = getDashboardNavLabel(item.title, t);
                     // The entries this person's menu shows (menu access).
-                    const children = visibleNavChildren(item, hiddenSections);
+                    const children = visibleNavChildren(item, hiddenSections, childGates);
 
                     // Chat's own badge: "Set up" when the org has no provider key for
                     // it (cloud only, never with the new Chat on).

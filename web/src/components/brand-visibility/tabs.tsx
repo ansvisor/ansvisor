@@ -2,14 +2,24 @@
 
 import { useEffect, useState, type ComponentProps, type MouseEvent } from 'react';
 import { useTranslations } from 'next-intl';
+import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import {
   BRAND_VISIBILITY_TABS,
   brandVisibilityTabHref,
   brandVisibilityTabOf,
+  hasProductVisibilityTab,
   type BrandVisibilityTab,
 } from '@/lib/brand-visibility';
 import { cn } from '@/lib/utils';
+import { useBrandStore } from '@/stores/use-brand-store';
+
+/** Whether the active brand has Product Visibility as Visibility's fourth tab (hasProductVisibilityTab). */
+export function useProductVisibilityTab(): boolean {
+  const brand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
+  const { canUse } = useFeatureGate();
+  return hasProductVisibilityTab(brand, canUse);
+}
 
 /**
  * A link to one of Brand Visibility's tabs that keeps the filters the tabs
@@ -51,10 +61,11 @@ export function BrandVisibilityTabLink({
 }
 
 /**
- * The three tabs under the header: Overview, Mentions, Citations. Each is
- * its own route, so a tab loads its own data only when it is opened, and
+ * The tabs under the header: Overview, Mentions, Citations, and Product
+ * Visibility for a brand that sells online (useProductVisibilityTab). Each
+ * is its own route, so a tab loads its own data only when it is opened, and
  * the header above stays as it is. With `prefetch` (once the open tab's
- * figures are on screen) the other two are prefetched whole, so a switch
+ * figures are on screen) the others are prefetched whole, so a switch
  * doesn't wait for the server to draw the tab; before that nothing is
  * prefetched, so it doesn't compete with the open tab's reads.
  */
@@ -66,9 +77,11 @@ export function BrandVisibilityTabs({
   prefetch?: boolean;
 }) {
   const t = useTranslations('brandVisibility.tabs');
+  const products = useProductVisibilityTab();
+  const tabs = BRAND_VISIBILITY_TABS.filter(({ id }) => id !== 'products' || products);
   return (
     <nav aria-label={t('label')} className="flex gap-6 overflow-x-auto border-b">
-      {BRAND_VISIBILITY_TABS.map(({ id }) => {
+      {tabs.map(({ id }) => {
         const active = id === current;
         return (
           <BrandVisibilityTabLink

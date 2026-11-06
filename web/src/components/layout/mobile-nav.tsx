@@ -15,7 +15,7 @@ import {
   shouldShowDashboardNavItem,
   visibleNavChildren,
 } from '@/lib/dashboard-navigation';
-import { brandVisibilityTabOf } from '@/lib/brand-visibility';
+import { brandVisibilityTabOf, isEcommerceBrand } from '@/lib/brand-visibility';
 import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
@@ -47,7 +47,8 @@ export function MobileNav() {
   const chatSetUp = agentKeyMissing ? t('chatSetUp') : null;
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
-  const brandPrefs = { shoppingModeEnabled: !!activeBrand?.shoppingModeEnabled };
+  const brandPrefs = { ecommerce: isEcommerceBrand(activeBrand) };
+  const childGates = { brandPrefs, canUse };
   const hiddenSections = useHiddenMenuSections();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -113,7 +114,9 @@ export function MobileNav() {
             )}
             {dashboardNav.flatMap((group) =>
               group.items.map((item) => {
-                if (!shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic)) {
+                if (
+                  !shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic, canUse)
+                ) {
                   return null;
                 }
 
@@ -121,7 +124,7 @@ export function MobileNav() {
                 const isActive = isNavItemActive(item, pathname, href);
                 const label = getDashboardNavLabel(item.title, t);
                 // The entries this person's menu shows (menu access).
-                const children = visibleNavChildren(item, hiddenSections);
+                const children = visibleNavChildren(item, hiddenSections, childGates);
 
                 // Chat's own badge: "Set up" when the org has no provider key for
                 // it (cloud only, never with the new Chat on).

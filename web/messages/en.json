@@ -529,6 +529,7 @@
     "citations": "Citations",
     "mentions": "Mentions",
     "shopping": "Product Visibility",
+    "products": "Products",
     "reports": "Reports",
     "settings": "Settings",
     "execution": "Execution",
@@ -562,7 +563,8 @@
       "label": "Visibility",
       "overview": "Overview",
       "mentions": "Mentions",
-      "citations": "Citations"
+      "citations": "Citations",
+      "products": "Product Visibility"
     },
     "pageName": {
       "mentions": "Visibility · Mentions",
@@ -580,6 +582,7 @@
       "overview": "Couldn't load the overview",
       "mentions": "Couldn't load the mentions",
       "citations": "Couldn't load the citations",
+      "products": "Couldn't load Product Visibility",
       "competitors": "Couldn't load the competitor comparison",
       "trend": "Couldn't load the visibility trend",
       "gaps": "Couldn't load the competitor gaps",
@@ -13652,6 +13655,16 @@
     "emptyDescription": "ChatGPT Shopping and Google AI Mode return shopping cards on commercial-intent prompts (\"best running shoes for marathon training\"). Once tracking runs against a card-eligible prompt, results show up here.",
     "lockedTitle": "Upgrade for full shopping analytics",
     "lockedDescription": "Growth unlocks your AI shelf, your products and categories on it, where AI sends shoppers, and what it sells.",
+    "views": "Product Visibility views",
+    "off": {
+      "title": "Shopping mode is off for {brand}",
+      "body": "Turn it on to track ChatGPT Shopping on every prompt of this brand and see which of your products AI puts on its shelf.",
+      "turnOn": "Turn on Shopping mode",
+      "managersOnly": "Admins and managers can turn it on in the brand's settings.",
+      "on": "Shopping mode on",
+      "onWithPrompts": "Shopping mode on: {count, plural, one {# prompt} other {# prompts}} updated",
+      "failed": "Couldn't turn on Shopping mode"
+    },
     "tabShelf": "Shelf",
     "tabCategories": "Categories",
     "tabReadiness": "Readiness",

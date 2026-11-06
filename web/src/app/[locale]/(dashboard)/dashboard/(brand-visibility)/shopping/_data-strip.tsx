@@ -1,19 +1,19 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { formatRelative } from '@/lib/format-relative';
-import { listCatalogSources } from '@/lib/actions/catalog';
-import { getMerchantCenterOffered } from '@/lib/actions/integrations';
-import { getTrafficSources, type TrafficSources } from '@/lib/actions/traffic';
+import type { TrafficSources } from '@/lib/actions/traffic';
 import type { CatalogSource } from '@/lib/catalog';
 import { CATALOG_SETTINGS_PATH } from '@/lib/content/feed-match';
-import { SourceCard } from '../traffic/_source-card';
-import { GoogleSource } from '../traffic/_sources-strip';
+import { getProductSources } from '@/lib/visibility-reads';
+import { SourceCard } from '../../traffic/_source-card';
+import { GoogleSource } from '../../traffic/_sources-strip';
+import { useKeyedRead } from './use_keyed_read';
 
 /** What feeds Product Visibility: the brand's catalog sources, and Google Analytics and Search Console. */
 export interface ProductSources {
@@ -27,37 +27,29 @@ export interface ProductSources {
   merchantCenterOffered: boolean;
 }
 
-/** The brand's sources, read once per brand and again after a connection made on the page. */
+/**
+ * The brand's sources, read once per brand (in one read) and again after a
+ * connection made on the page; kept in Visibility's cache, so the tab
+ * opened again shows them at once.
+ */
 export function useProductSources(brandId: string | null) {
-  const [sources, setSources] = useState<ProductSources & { brandId: string | null }>({
-    brandId: null,
-    catalog: null,
-    google: null,
-    merchantCenterOffered: false,
-  });
   const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    if (!brandId) return;
-    let cancelled = false;
-    void Promise.all([
-      listCatalogSources(brandId).catch(() => null),
-      getTrafficSources(brandId).catch(() => null),
-      getMerchantCenterOffered(),
-    ]).then(([catalog, google, merchantCenterOffered]) => {
-      if (!cancelled) setSources({ brandId, catalog, google, merchantCenterOffered });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, attempt]);
+  const read = useKeyedRead(
+    !!brandId,
+    'sources',
+    brandId ?? '',
+    () => getProductSources(brandId!),
+    "the brand's product sources",
+    attempt,
+  );
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
-  // A read for another brand (just switched) counts as still loading.
-  const current =
-    sources.brandId === brandId
-      ? sources
+  // A read that failed as a whole: each source as when its own read failed.
+  const current: ProductSources =
+    read && read !== 'failed'
+      ? read
       : { catalog: null, google: null, merchantCenterOffered: false };
   return {
-    loaded: sources.brandId === brandId,
+    loaded: read !== undefined,
     catalog: current.catalog,
     google: current.google,
     merchantCenterOffered: current.merchantCenterOffered,
