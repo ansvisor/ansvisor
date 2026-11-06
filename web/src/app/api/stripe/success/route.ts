@@ -5,18 +5,24 @@ import { alignPromptsToPlanForOrg } from '@/lib/plan-engines';
 import { periodEndIso } from '@/lib/billing/period-end';
 import { startFirstTrackingRun } from '@/lib/billing/first-run';
 import { hideDemoBrandAfterPurchase } from '@/lib/demo/hide-after-purchase';
-import { DASHBOARD_HOME } from '@/config/home';
+import { landingPageFor } from '@/config/home';
+import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { chatStartAudience } from '@/lib/chat/start-audience';
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const sessionId = searchParams.get('session_id');
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+  // Without a checkout to read, /dashboard opens the person's start page.
   if (!sessionId) {
-    return NextResponse.redirect(`${appUrl}${DASHBOARD_HOME}`);
+    return NextResponse.redirect(`${appUrl}/dashboard`);
   }
 
   let trackingJobId: string | null = null;
+  // Where the person lands once the plan is written: their start page by the
+  // new subscription (Chat Home in the free trial), else /dashboard picks it.
+  let landing = '/dashboard';
 
   try {
     // Retrieve and validate the Stripe checkout session
@@ -59,6 +65,18 @@ export async function GET(req: NextRequest) {
           console.error('[stripe/success] DB update error:', updateError);
         } else {
           console.log('[stripe/success] DB updated for org:', orgId);
+          landing = landingPageFor({
+            chatOn: chatAgenticEnabled(orgId),
+            audience: chatStartAudience({
+              org: {
+                plan: planId || 'starter',
+                subscription_status: subscription?.status ?? 'trialing',
+                stripe_subscription_id: subscriptionId,
+              },
+              // The demo brand steps aside with the plan (below).
+              demoShown: false,
+            }),
+          });
 
           // Align onboarding-created prompts to the just-confirmed plan's
           // engine set. Onboarding saves prompts at step 4 with the default
@@ -98,7 +116,7 @@ export async function GET(req: NextRequest) {
 
   // The first tracking run's id rides along: TrackingJobHandoff keeps it for
   // Visibility's progress bar.
-  const redirectUrl = new URL(`${appUrl}${DASHBOARD_HOME}`);
+  const redirectUrl = new URL(`${appUrl}${landing}`);
   if (trackingJobId) {
     redirectUrl.searchParams.set('jobId', trackingJobId);
   }
