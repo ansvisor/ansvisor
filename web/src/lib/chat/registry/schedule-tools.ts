@@ -51,8 +51,17 @@ const makerOf = (ctx: ChatToolContext) => ({
   runId: ctx.chat?.runId ?? null,
 });
 
-/** The card's lines under its fields: the model it runs on, and about what a run uses. */
-async function cardNotes(organizationId: string, deliver: DeliverChoice): Promise<string[]> {
+/**
+ * The card's lines under its fields: the model it runs on, and about what a
+ * run uses; a What's new digest (W4-23) uses no AI.
+ */
+async function cardNotes(
+  organizationId: string,
+  deliver: DeliverChoice,
+  digest: boolean,
+): Promise<string[]> {
+  const emailTo = deliver === 'chat' ? null : t('card.emailTo');
+  if (digest) return [t('card.digest'), emailTo].filter((note): note is string => !!note);
   const estimate = await readRunEstimate(organizationId);
   const usage =
     estimate.kind === 'share'
@@ -62,9 +71,7 @@ async function cardNotes(organizationId: string, deliver: DeliverChoice): Promis
         : estimate.kind === 'unknown'
           ? t('card.usageUnknown')
           : null;
-  return [t('card.model'), usage, deliver === 'chat' ? null : t('card.emailTo')].filter(
-    (note): note is string => !!note,
-  );
+  return [t('card.model'), usage, emailTo].filter((note): note is string => !!note);
 }
 
 /** A form value as text, or the input's own when it isn't one. */
@@ -76,7 +83,7 @@ export const SCHEDULE_TOOLS = [
     class: 'write',
     area: 'scheduling',
     description:
-      'Schedule work for Chat to do by itself, in a chat of its own: once at a time, ready by a time (it starts now), or on repeat, at most once a day. Only when the person asked for scheduled or repeated work. The person checks and edits it on a card before it is made; results go to the job’s chat and Inbox, and by email when asked.',
+      'Schedule work for Chat to do by itself, in a chat of its own: once at a time, ready by a time (it starts now), or on repeat, at most once a day. Only when the person asked for scheduled or repeated work. The person checks and edits it on a card before it is made; results go to the job’s chat and Inbox, and by email when asked. For What’s new each month, set whats_new.',
     // A card in every mode; an Admin may turn it off (Never), never on by itself (CHAT-12 item 8).
     defaultPolicy: 'ask',
     maxPolicy: 'ask',
@@ -110,6 +117,8 @@ export const SCHEDULE_TOOLS = [
         const when = reading.ok ? whenPhrase(reading.when, ctx.timezone) : input.when;
         const hint = whenHint(when, ctx.timezone, ctx.now, whenT);
         const recurring = reading.ok && reading.when.kind === 'recurring';
+        // A digest asks nothing and sends only what's new: no prompt, no "only if changed".
+        const digest = input.whats_new;
         return {
           kind: 'schedule',
           zone: ctx.timezone,
@@ -123,15 +132,19 @@ export const SCHEDULE_TOOLS = [
               maxLength: 120,
               required: true,
             },
-            {
-              name: 'prompt',
-              kind: 'textarea',
-              label: t('card.prompt'),
-              value: input.prompt ?? '',
-              maxLength: PROMPT_MAX,
-              required: !input.skill,
-              ...(input.skill ? { hint: `/${input.skill}` } : {}),
-            },
+            ...(digest
+              ? []
+              : [
+                  {
+                    name: 'prompt',
+                    kind: 'textarea' as const,
+                    label: t('card.prompt'),
+                    value: input.prompt ?? '',
+                    maxLength: PROMPT_MAX,
+                    required: !input.skill,
+                    ...(input.skill ? { hint: `/${input.skill}` } : {}),
+                  },
+                ]),
             {
               name: 'when',
               kind: 'text',
@@ -151,15 +164,19 @@ export const SCHEDULE_TOOLS = [
                 label: deliverWords(choice),
               })),
             },
-            {
-              name: 'changeOnly',
-              kind: 'toggle',
-              label: t('card.changeOnly'),
-              value: recurring && input.change_only,
-              hint: t('card.changeOnlyHint'),
-            },
+            ...(digest
+              ? []
+              : [
+                  {
+                    name: 'changeOnly',
+                    kind: 'toggle' as const,
+                    label: t('card.changeOnly'),
+                    value: recurring && input.change_only,
+                    hint: t('card.changeOnlyHint'),
+                  },
+                ]),
           ],
-          notes: await cardNotes(ctx.organizationId, input.deliver_to),
+          notes: await cardNotes(ctx.organizationId, input.deliver_to, digest),
         };
       },
       apply(input, values: CardFormValues, ctx) {

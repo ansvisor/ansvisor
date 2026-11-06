@@ -67,6 +67,29 @@ describe('the schedule card’s form', () => {
     expect(clientEventProblems(event)).toEqual([]);
   });
 
+  // W4-23: What's new for the plan asks nothing, sends only what's new and uses no AI.
+  it('asks no prompt or "only if changed" for a What’s new digest, and says it uses no AI', async () => {
+    const digest = tool.inputSchema.parse({
+      title: 'What’s new for my plan',
+      when: '1st of every month at 9:00',
+      whats_new: true,
+    }) as Record<string, unknown>;
+    const { form } = await cardFormOf(tool, digest, ctx);
+    expect(form!.fields.map((f) => f.name)).toEqual(['title', 'when', 'deliver']);
+    expect(form!.notes).toEqual([
+      'Lists what’s new for your plan, only when there is something new. Uses no AI.',
+    ]);
+    const { newSchedule } = await import('./schedule/input');
+    expect(newSchedule(digest as never)).toMatchObject({
+      prompt: 'What’s new for my plan',
+      brandId: null,
+      changeOnly: false,
+      digest: 'whats_new',
+    });
+    // Any other job still asks something.
+    expect(() => tool.inputSchema.parse({ title: 'Report', when: 'every Monday' })).toThrow();
+  });
+
   it('says a run is on the workspace’s own key, or uses the limit, when there is no figure', async () => {
     estimate.value = { kind: 'own_key' };
     expect((await cardFormOf(tool, asked, ctx)).form!.notes).toContain(
