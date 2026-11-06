@@ -8380,6 +8380,19 @@ describe('the page open in the Content Editor beside the chat (CHAT-25 §4–§5
       return first;
     }
 
+    /** Whom can_access_brand (00388) was asked about: the page's brand, for the run's person. */
+    let askedAbout: unknown[];
+    beforeEach(() => {
+      askedAbout = [];
+      db.rpcs.can_access_brand = ({ p_brand_id, p_user_id }) => {
+        askedAbout.push(p_user_id);
+        const brand = db.tables.brands.find((b) => b.id === p_brand_id);
+        const person = db.tables.profiles.find((p) => p.id === p_user_id);
+        if (!brand || !person || person.organization_id !== brand.organization_id) return false;
+        return person.role === 'admin' || person.brand_scope === 'all';
+      };
+    });
+
     it('tells the next run what went in and what didn’t, with a step and suggestion.resolved', async () => {
       useModels([READY], suggesting());
       const first = await suggestedThenDecided();
@@ -8400,6 +8413,8 @@ describe('the page open in the Content Editor beside the chat (CHAT-25 §4–§5
       expect(prompt).toContain('Drop the refund line');
       expect(prompt).not.toContain('Shorter title');
       expect(prompt).not.toContain('An older change');
+      // Read only once the person was found to see the page's brand.
+      expect(askedAbout).toEqual([ADMIN.userId]);
     });
 
     it('tells nothing without the page open beside the chat, or on the chat’s first message', async () => {

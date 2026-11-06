@@ -1654,6 +1654,7 @@ async function noteEditorDecisions(rc: RunContext): Promise<void> {
   if (!rc.openDraft || rc.progress.editorDecisions !== undefined) return;
   const decisions = await readEditorDecisions({
     organizationId: rc.actor.organizationId,
+    userId: rc.actor.userId,
     draftId: rc.openDraft,
     conversationId: rc.run.conversationId,
     runId: rc.run.id,

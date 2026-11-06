@@ -1,3 +1,4 @@
+import { canAccessBrand } from '@/lib/brand-access';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { CHAT_RULE_KEY } from '@/lib/content/suggestions';
 import { dataBlock } from './untrusted';
@@ -45,8 +46,18 @@ async function previousRunAt(conversationId: string, runId: string): Promise<str
   return typeof at === 'string' ? at : null;
 }
 
-/** Whether the draft is one of the workspace's: the chip is only the page's word. */
-async function draftInWorkspace(draftId: string, organizationId: string): Promise<boolean> {
+/**
+ * Whether the person may see the draft now: its brand is the workspace's and
+ * theirs to see (BRAND-ACCESS, 00388 can_access_brand), as the draft tools
+ * ask (actor/drafts.ts). The chip is only the page's word, and the
+ * suggestions are read with the service role, so a draft of another
+ * workspace, or of a brand not shared with a Selected-brands person, isn't
+ * there for them.
+ */
+async function draftVisibleTo(
+  draftId: string,
+  person: { userId: string; organizationId: string },
+): Promise<boolean> {
   const { data: draft, error } = await supabaseAdmin
     .from('content_drafts')
     .select('brand_id')
@@ -55,29 +66,24 @@ async function draftInWorkspace(draftId: string, organizationId: string): Promis
   if (error) throw new Error(`Chat could not read the open page: ${error.message}`);
   const brandId = (draft as { brand_id?: string } | null)?.brand_id;
   if (!brandId) return false;
-  const { data: brand, error: brandError } = await supabaseAdmin
-    .from('brands')
-    .select('organization_id')
-    .eq('id', brandId)
-    .maybeSingle();
-  if (brandError) throw new Error(`Chat could not read the page's brand: ${brandError.message}`);
-  return (brand as { organization_id?: string } | null)?.organization_id === organizationId;
+  return canAccessBrand(person.userId, brandId, person.organizationId);
 }
 
 /**
  * The open draft's suggestions from chat decided since the chat's previous
  * run started, the newest first, at most MAX_DECISIONS. Null when none
- * were: the chat's first run, a draft outside the person's workspace, or
- * nothing decided since.
+ * were: the chat's first run, a draft the person may not see (another
+ * workspace's, or a brand not shared with them), or nothing decided since.
  */
 export async function readEditorDecisions(job: {
   organizationId: string;
+  userId: string;
   draftId: string;
   conversationId: string;
   runId: string;
 }): Promise<EditorDecisions | null> {
   const since = await previousRunAt(job.conversationId, job.runId);
-  if (!since || !(await draftInWorkspace(job.draftId, job.organizationId))) return null;
+  if (!since || !(await draftVisibleTo(job.draftId, job))) return null;
   const { data, error } = await supabaseAdmin
     .from('content_draft_suggestions')
     .select('status, reason, rule_keys, decided_at')
