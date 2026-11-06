@@ -53,9 +53,18 @@ export function BrandVisibilityTabLink({
 /**
  * The three tabs under the header: Overview, Mentions, Citations. Each is
  * its own route, so a tab loads its own data only when it is opened, and
- * the header above stays as it is.
+ * the header above stays as it is. With `prefetch` (once the open tab's
+ * figures are on screen) the other two are prefetched whole, so a switch
+ * doesn't wait for the server to draw the tab; before that nothing is
+ * prefetched, so it doesn't compete with the open tab's reads.
  */
-export function BrandVisibilityTabs({ current }: { current: BrandVisibilityTab | null }) {
+export function BrandVisibilityTabs({
+  current,
+  prefetch = false,
+}: {
+  current: BrandVisibilityTab | null;
+  prefetch?: boolean;
+}) {
   const t = useTranslations('brandVisibility.tabs');
   return (
     <nav aria-label={t('label')} className="flex gap-6 overflow-x-auto border-b">
@@ -66,6 +75,7 @@ export function BrandVisibilityTabs({ current }: { current: BrandVisibilityTab |
             key={id}
             tab={id}
             aria-current={active ? 'page' : undefined}
+            prefetch={prefetch && !active}
             className={cn(
               '-mb-px shrink-0 border-b-2 pb-2 text-sm font-medium whitespace-nowrap transition-colors',
               active

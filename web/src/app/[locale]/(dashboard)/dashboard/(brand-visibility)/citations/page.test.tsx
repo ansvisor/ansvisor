@@ -17,13 +17,11 @@ const { getCitationsOverview, getBrandFilterOptions, getCitationGaps } = vi.hois
   getBrandFilterOptions: vi.fn(),
   getCitationGaps: vi.fn(),
 }));
-vi.mock('@/lib/actions/citations', () => ({
+vi.mock('@/lib/visibility-reads', () => ({
   getCitationsOverview,
   getCitationGaps,
   brandHasCitations: vi.fn(async () => true),
-}));
-vi.mock('@/lib/actions/topic', () => ({ getTopics: vi.fn(async () => []) }));
-vi.mock('@/lib/actions/tracking', () => ({
+  getTopics: vi.fn(async () => []),
   getBrandPrompts: vi.fn(async () => []),
   getBrandFilterOptions,
 }));

@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUserRole } from '@/hooks/use-user-role';
-import { listMentions } from '@/lib/actions/mentions';
 import { mentionsQuery, type MentionsFilters } from '@/lib/mentions-filters';
 import {
   DEFAULT_MENTIONS_TABLE,
@@ -23,6 +22,7 @@ import {
 } from '@/lib/mentions-list';
 import { writeUrlParams } from '@/lib/url-state';
 import { cn } from '@/lib/utils';
+import { listMentions } from '@/lib/visibility-reads';
 import type { Competitor } from '@/types';
 import { FilterSelect } from './_filter-bar';
 import type { MentionNames } from './_mention-parts';
@@ -31,6 +31,7 @@ import { ResponseDrawer } from './_response-drawer';
 import { useMentionActions } from './_use-mention-actions';
 import type { useMentionsExport } from './_use-mentions-export';
 import { scheduleRead } from './_read-delay';
+import { readKey } from '@/components/brand-visibility/read-cache';
 import { ReadError } from '@/components/brand-visibility/read-error';
 import { useBrandVisibilityShell } from '@/components/brand-visibility/shell-context';
 
@@ -102,28 +103,42 @@ export function MentionsListTab({
   const key =
     query && urlRead ? JSON.stringify([brandId, query, table, pager.page, version]) : null;
 
-  const { readSent } = useBrandVisibilityShell();
+  const { cache, shown } = useBrandVisibilityShell();
+  // Kept by the filters, not the query: a range's query moves with the clock.
+  const keptKey = readKey('mentionsList', brandId, filters, table, pager.page);
   const first = useRef(true);
   useEffect(() => {
     if (!key || !query) return;
     let cancelled = false;
+    // The page read before for these filters (the tab opened again): on
+    // screen at once, read again quietly; a failed read leaves it there.
+    const kept = cache.get<MentionsList | null>(keptKey);
+    if (kept !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- the kept page, until the read is back
+      setLoaded({ brandId, key, status: 'ok', list: kept });
+      setTotal(kept?.total ?? 0);
+    }
     const cancelRead = scheduleRead(first, () => {
       listMentions(brandId, query, table, pager.page)
         .then((list) => {
+          cache.set(keptKey, list);
           if (cancelled) return;
           setLoaded({ brandId, key, status: 'ok', list });
           setTotal(list?.total ?? 0);
         })
         .catch(() => {
-          if (!cancelled) setLoaded({ brandId, key, status: 'error' });
+          if (!cancelled && kept === undefined) setLoaded({ brandId, key, status: 'error' });
         });
-      readSent();
     });
     return () => {
       cancelled = true;
       cancelRead();
     };
-  }, [brandId, key, query, table, pager.page, readSent]);
+  }, [brandId, key, keptKey, query, table, pager.page, cache]);
+  const showing = loaded?.status === 'ok' && loaded.brandId === brandId;
+  useEffect(() => {
+    if (showing) shown();
+  }, [showing, shown]);
 
   const [open, setOpen] = useState<MentionRow | null>(null);
   const actions = useMentionActions(brandId);
@@ -134,6 +149,14 @@ export function MentionsListTab({
     setOpen((row) => (row && row.id === id ? { ...row, sentiment } : row));
     // Filtered by another sentiment, the row no longer belongs: read the page again.
     if (table.sentiment && table.sentiment !== sentiment) setVersion((v) => v + 1);
+    // The kept page too, so the tab opened again shows the correction.
+    const kept = cache.get<MentionsList | null>(keptKey);
+    if (kept) {
+      cache.set(keptKey, {
+        ...kept,
+        rows: kept.rows.map((r) => (r.id === id ? { ...r, sentiment } : r)),
+      });
+    }
     setLoaded((prev) =>
       prev?.status === 'ok' && prev.list
         ? {

@@ -12,7 +12,7 @@ import { OverviewKpis } from './_overview-kpis';
 import { PlatformTable } from './_platform-table';
 
 const getMentionsOverview = vi.fn();
-vi.mock('@/lib/actions/mentions', () => ({
+vi.mock('@/lib/visibility-reads', () => ({
   getMentionsOverview: (...args: unknown[]) => getMentionsOverview(...args),
 }));
 // The chart is loaded on demand and measured; its card is not what these tests read.
