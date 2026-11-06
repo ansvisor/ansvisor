@@ -6,9 +6,12 @@ import { TOUR_TARGETS, type TourTopic } from '@/lib/chat/tour';
 /** How long the explained element stays outlined. */
 export const TOUR_HIGHLIGHT_MS = 4000;
 
-/** How often, and how many times, a page still drawing its data is looked at again. */
+/**
+ * How often, and how many times, a page still drawing its data is looked at
+ * again: about 8 seconds, for a page whose list waits for its reads.
+ */
 const RETRY_MS = 300;
-const RETRIES = 10;
+const RETRIES = 27;
 
 /**
  * The outline: amber, as the app's notices, with its dark-theme pair. Kept

@@ -955,7 +955,7 @@ export default function InsightsPage() {
               />
 
               {/* KPI cards (VIS-003): today's five, then the new rates. */}
-              <div data-tour="visibility">
+              <div data-tour="visibility" className="rounded-xl">
                 <KpiRows
                   summary={summary!}
                   trend={rateTrend}
