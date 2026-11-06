@@ -74,7 +74,7 @@ beforeEach(async () => {
     domainHost: 'www.acme.example',
   };
   assertBrandAccess.mockReset().mockResolvedValue({ orgId: 'o1' });
-  checkKeyFile.mockReset().mockResolvedValue('ok');
+  checkKeyFile.mockReset().mockResolvedValue({ state: 'ok', host: 'www.acme.example' });
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -152,7 +152,7 @@ describe('a brand’s IndexNow', () => {
 
   it('is checked once its file is at its address, and says what it found otherwise', async () => {
     Object.assign(state, { key: KEY, host: 'www.acme.example' });
-    checkKeyFile.mockResolvedValueOnce('not_found');
+    checkKeyFile.mockResolvedValueOnce({ state: 'not_found', host: 'www.acme.example' });
     let res = await call('POST', '/check');
     expect(res.status).toBe(422);
     expect((await res.json()).code).toBe('not_found');
@@ -162,6 +162,15 @@ describe('a brand’s IndexNow', () => {
     expect(res.status).toBe(200);
     expect(checkKeyFile).toHaveBeenLastCalledWith('www.acme.example', KEY);
     expect(written[0].fields.indexnow_verified_at).toEqual(expect.any(String));
+    expect(written[0].fields.indexnow_host).toBe('www.acme.example');
+  });
+
+  it('keeps the host the file loaded from, so pages on www are announced', async () => {
+    Object.assign(state, { key: KEY, host: 'acme.example' });
+    checkKeyFile.mockResolvedValueOnce({ state: 'ok', host: 'www.acme.example' });
+    const res = await call('POST', '/check');
+    expect(res.status).toBe(200);
+    expect(written[0].fields.indexnow_host).toBe('www.acme.example');
   });
 
   it('can’t be checked before it is on, and turns off with its key', async () => {

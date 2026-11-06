@@ -79,26 +79,42 @@ export async function readIndexNow(brandId, { db = supabaseAdmin } = {}) {
   };
 }
 
+/** A host without its leading www., to tell example.com and www.example.com apart from another site. */
+const bareHost = (host) => host.replace(/^www\./, '');
+
 /**
- * Whether the key's file is at its address: 'ok', 'mismatch' (a file, but
- * not the key), 'not_found' or 'unreachable'.
+ * Whether the key's file is at its address: `state` is 'ok', 'mismatch' (a
+ * file, but not the key), 'not_found' or 'unreachable'. `host` is the host
+ * the file finally loaded from: a redirect between example.com and
+ * www.example.com moves it there, and pages are announced on that host, as
+ * IndexNow takes only pages on the key file's own host. A redirect to
+ * another site isn't the brand's file.
  */
 export async function checkKeyFile(host, key, { fetch = fetchPage } = {}) {
   try {
-    const { status, html } = await fetch(keyFileUrl(host, key), {
+    const { url, status, html } = await fetch(keyFileUrl(host, key), {
       types: /^text\/plain\b/i,
       accept: 'text/plain',
       maxBytes: KEY_FILE_MAX_BYTES,
       truncate: true,
       timeoutMs: CALL_TIMEOUT_MS,
     });
-    if (status < 200 || status > 299) return 'not_found';
-    return html.trim() === key ? 'ok' : 'mismatch';
+    if (status < 200 || status > 299) return { state: 'not_found', host };
+    let loadedFrom = host;
+    try {
+      loadedFrom = new URL(url).host.toLowerCase();
+    } catch {
+      // No address after redirects: the one asked for.
+    }
+    if (bareHost(loadedFrom) !== bareHost(host)) return { state: 'not_found', host };
+    return { state: html.trim() === key ? 'ok' : 'mismatch', host: loadedFrom };
   } catch (err) {
     if (err instanceof PageFetchError) {
-      return err.code === 'http_error' || err.code === 'not_html' ? 'not_found' : 'unreachable';
+      const state =
+        err.code === 'http_error' || err.code === 'not_html' ? 'not_found' : 'unreachable';
+      return { state, host };
     }
-    return 'unreachable';
+    return { state: 'unreachable', host };
   }
 }
 

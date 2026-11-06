@@ -96,7 +96,7 @@ describe('the key and its file', () => {
 
   it('is found when the file holds the key, as plain text, through safe-fetch', async () => {
     const fetch = vi.fn(async () => ({ status: 200, html: `${KEY}\n` }));
-    expect(await checkKeyFile(HOST, KEY, { fetch })).toBe('ok');
+    expect(await checkKeyFile(HOST, KEY, { fetch })).toEqual({ state: 'ok', host: HOST });
     expect(fetch).toHaveBeenCalledWith(
       `https://${HOST}/${KEY}.txt`,
       expect.objectContaining({ accept: 'text/plain', types: /^text\/plain\b/i }),
@@ -105,15 +105,45 @@ describe('the key and its file', () => {
 
   it('says what it found otherwise: another text, no file, or no answer', async () => {
     expect(
-      await checkKeyFile(HOST, KEY, { fetch: async () => ({ status: 200, html: 'hi' }) }),
+      (await checkKeyFile(HOST, KEY, { fetch: async () => ({ status: 200, html: 'hi' }) })).state,
     ).toBe('mismatch');
     const refusing = (code) => async () => {
       throw new PageFetchError(code, 'no');
     };
-    expect(await checkKeyFile(HOST, KEY, { fetch: refusing('http_error') })).toBe('not_found');
+    expect((await checkKeyFile(HOST, KEY, { fetch: refusing('http_error') })).state).toBe(
+      'not_found',
+    );
     // A page in its place (a CMS's 404 page served as HTML) isn't the file.
-    expect(await checkKeyFile(HOST, KEY, { fetch: refusing('not_html') })).toBe('not_found');
-    expect(await checkKeyFile(HOST, KEY, { fetch: refusing('blocked') })).toBe('unreachable');
+    expect((await checkKeyFile(HOST, KEY, { fetch: refusing('not_html') })).state).toBe(
+      'not_found',
+    );
+    expect((await checkKeyFile(HOST, KEY, { fetch: refusing('blocked') })).state).toBe(
+      'unreachable',
+    );
+  });
+
+  it('keeps the host the file loaded from after a www redirect, and refuses another site', async () => {
+    const redirected = (to) => async () => ({
+      url: `https://${to}/${KEY}.txt`,
+      status: 200,
+      html: KEY,
+    });
+    expect(
+      await checkKeyFile('acme.example', KEY, { fetch: redirected('www.acme.example') }),
+    ).toEqual({
+      state: 'ok',
+      host: 'www.acme.example',
+    });
+    expect(
+      await checkKeyFile('www.acme.example', KEY, { fetch: redirected('acme.example') }),
+    ).toEqual({
+      state: 'ok',
+      host: 'acme.example',
+    });
+    expect(
+      (await checkKeyFile('acme.example', KEY, { fetch: redirected('parked.other.example') }))
+        .state,
+    ).toBe('not_found');
   });
 });
 

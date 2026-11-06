@@ -89,10 +89,14 @@ router.post('/brands/:brandId/indexnow/check', cmsLimiter, async (req, res) => {
       return res.status(409).json({ error: 'IndexNow isn’t on for this brand.', code: 'off' });
     }
     const found = await checkKeyFile(now.host, now.key);
-    if (found !== 'ok') {
-      return res.status(422).json({ error: 'The key’s file wasn’t found.', code: found });
+    if (found.state !== 'ok') {
+      return res.status(422).json({ error: 'The key’s file wasn’t found.', code: found.state });
     }
-    await writeBrand(id, { indexnow_verified_at: new Date().toISOString() });
+    // The host the file loaded from (example.com → www.example.com): its pages are announced.
+    await writeBrand(id, {
+      indexnow_host: found.host,
+      indexnow_verified_at: new Date().toISOString(),
+    });
     return res.json({ indexnow: await readIndexNow(id) });
   } catch (err) {
     return fail(req, res, err, 'cms indexnow check error');
