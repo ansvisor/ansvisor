@@ -54,7 +54,7 @@ describe('the audits family', () => {
         issues: [
           {
             check: 'ai-bot-access',
-            label: 'AI bot access (robots.txt)',
+            label: 'AI bot access',
             evidence: { aiBotsMentioned: ['gptbot'], blocked: true, blockedBots: ['gptbot'] },
           },
         ],
