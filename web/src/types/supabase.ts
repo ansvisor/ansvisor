@@ -2127,6 +2127,52 @@ export type Database = {
           },
         ]
       }
+      chat_agent_trigger_claims: {
+        Row: {
+          agent_id: string
+          brand_id: string
+          claimed_at: string
+          kind: string
+          trigger_id: string | null
+        }
+        Insert: {
+          agent_id: string
+          brand_id: string
+          claimed_at?: string
+          kind: string
+          trigger_id?: string | null
+        }
+        Update: {
+          agent_id?: string
+          brand_id?: string
+          claimed_at?: string
+          kind?: string
+          trigger_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_agent_trigger_claims_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_trigger_claims_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_agent_trigger_claims_trigger_id_fkey"
+            columns: ["trigger_id"]
+            isOneToOne: false
+            referencedRelation: "chat_agent_triggers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_agent_triggers: {
         Row: {
           agent_id: string

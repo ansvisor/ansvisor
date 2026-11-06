@@ -17,26 +17,26 @@ describe('isCountryCode and countryName', () => {
 describe('missingEngines', () => {
   it('names the engines a country is not answered by', () => {
     const all = [
-      { code: 'US', models: ['chatgpt', 'copilot', 'aimode'] },
+      { code: 'US', models: ['chatgpt', 'gemini', 'aimode'] },
       { code: 'KE', models: ['chatgpt', 'aimode'] },
     ];
-    expect(missingEngines(all[1], all)).toEqual(['copilot']);
+    expect(missingEngines(all[1], all)).toEqual(['gemini']);
     expect(missingEngines(all[0], all)).toEqual([]);
   });
 });
 
 describe('answersFrom', () => {
   const countries = [
-    { code: 'TR', models: ['chatgpt', 'copilot', 'aimode'] },
+    { code: 'TR', models: ['chatgpt', 'aimode', 'aioverview'] },
     { code: 'KE', models: ['chatgpt', 'aimode'] },
-    { code: 'US', models: ['chatgpt', 'copilot', 'aimode', 'aioverview'] },
+    { code: 'US', models: ['chatgpt', 'aimode', 'aioverview'] },
   ];
   const country = (code: string) => ({ country: code, state: null });
 
   it("says whether any of the prompt's engines answers from the country", () => {
-    expect(answersFrom({ platforms: ['copilot-web'] }, country('KE'), countries)).toBe(false);
+    expect(answersFrom({ platforms: ['google-aio'] }, country('KE'), countries)).toBe(false);
     expect(
-      answersFrom({ platforms: ['copilot-web', 'chatgpt-web'] }, country('KE'), countries),
+      answersFrom({ platforms: ['google-aio', 'chatgpt-web'] }, country('KE'), countries),
     ).toBe(true);
     // A country no engine lists.
     expect(answersFrom({ platforms: ['chatgpt-web'] }, country('BO'), countries)).toBe(false);
@@ -62,7 +62,7 @@ describe('answersFrom', () => {
   });
 
   it('restricts nothing without the lists, or for an engine the provider does not list', () => {
-    expect(answersFrom({ platforms: ['copilot-web'] }, country('KE'), [])).toBe(true);
+    expect(answersFrom({ platforms: ['google-aio'] }, country('KE'), [])).toBe(true);
     expect(answersFrom({ platforms: ['grok-web'] }, country('KE'), countries)).toBe(true);
   });
 

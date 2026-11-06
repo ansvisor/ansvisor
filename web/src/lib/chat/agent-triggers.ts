@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { readBrandAccess } from '@/lib/brand-access';
+import { hasBrandAccess, readBrandAccess } from '@/lib/brand-access';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
@@ -22,9 +22,11 @@ import { planFactsFromOrgRow, type OrgPlanRow, type PlanFacts } from './plan-fac
 
 /**
  * What starts an agent by itself (CHAT-21 §E): its Schedule triggers, fired
- * by the server's minute cron through the web's internal endpoint, and its
+ * by the server's minute cron through the web's internal endpoint, its
  * Signal triggers, fired when Action Center's signal pass finds new signals
- * (the server's hook). A fire queues one run per brand of the agent's scope
+ * (the server's hook), and its When a brand is added triggers, fired once
+ * per brand when someone adds one (createBrand; 00482). A fire queues one
+ * run per brand of the agent's scope
  * that the fire is about, acting as the agent's owner (§H item 38), with
  * what fired it as the run's evidence (§E item 23); the agent run driver
  * then starts it when the workspace has room (§M). No model is called here.
@@ -34,8 +36,9 @@ import { planFactsFromOrgRow, type OrgPlanRow, type PlanFacts } from './plan-fac
  *   - a fire within 15 minutes of a triggered run still waiting joins it
  *     (its evidence is added), or, once that run started, is kept as
  *     skipped · coalesced;
- *   - an event (Signal) fires at most once per 6 hours: later fires are kept
- *     as skipped · cooldown;
+ *   - an event (Signal, a brand added) fires at most once per 6 hours: later
+ *     fires are kept as skipped · cooldown. It reads the agent's runs on
+ *     that brand only, so a second new brand is never held by it;
  *   - an agent has at most the plan's event-triggered runs a day (UTC):
  *     more are kept as skipped · daily_limit;
  *   - at most 3 runs wait (§M item 58): more join the last.
@@ -72,9 +75,9 @@ const MAX_FIRES = 50;
 const MAX_WAITING = 3;
 
 /** Triggers that start a run by themselves: they act as the agent's owner (§H item 38). */
-const TRIGGERED_KINDS = ['schedule', 'signal', 'kpi', 'watch_rule'] as const;
+const TRIGGERED_KINDS = ['schedule', 'signal', 'kpi', 'watch_rule', 'brand_added'] as const;
 /** Triggers that count toward the daily limit and the cooldown (§E item 24). */
-const EVENT_KINDS = ['signal', 'kpi', 'watch_rule'] as const;
+const EVENT_KINDS = ['signal', 'kpi', 'watch_rule', 'brand_added'] as const;
 
 /** Whether a run's trigger started it by itself, not a person (Run now, Run agent). */
 export const isTriggered = (kind: string) => (TRIGGERED_KINDS as readonly string[]).includes(kind);
@@ -84,8 +87,8 @@ const isEvent = (kind: string) => (EVENT_KINDS as readonly string[]).includes(ki
 
 /** One fire, as a run's evidence lists it (chat_agent_runs.evidence_json). */
 const fireSchema = z.object({
-  kind: z.enum(['schedule', 'signal', 'kpi', 'watch_rule']),
-  /** What fired: a signal's id, a schedule's slot. */
+  kind: z.enum(['schedule', 'signal', 'kpi', 'watch_rule', 'brand_added']),
+  /** What fired: a signal's id, a schedule's slot, the brand added. */
   ref: z.string().max(200),
   at: z.string(),
   /** A signal's kind and its Action Center definitions. */
@@ -235,7 +238,7 @@ async function activeAgents(ids: readonly string[]): Promise<Map<string, FiringA
  * doesn't read is left out.
  */
 async function enabledTriggers(
-  kind: 'schedule' | 'signal',
+  kind: 'schedule' | 'signal' | 'brand_added',
   agentIds?: readonly string[],
 ): Promise<(TriggerRow & { input: AgentTriggerInput })[]> {
   const page = (slice: string[] | null) =>
@@ -267,6 +270,29 @@ async function enabledTriggers(
     });
     return parsed.success ? [{ ...row, input: parsed.data }] : [];
   });
+}
+
+/** The workspace's active agents, by id: every one, in pages of PostgREST's 1000. */
+async function activeAgentIds(organizationId: string): Promise<string[]> {
+  try {
+    return (
+      await readAllRpcRows<{ id: string }>(
+        (from, to) =>
+          supabaseAdmin
+            .from('chat_agents')
+            .select('id')
+            .eq('organization_id', organizationId)
+            .eq('status', 'active')
+            .order('id', { ascending: true })
+            .range(from, to) as unknown as PromiseLike<{
+            data: { id: string }[] | null;
+            error: { message: string } | null;
+          }>,
+      )
+    ).map((a) => a.id);
+  } catch (err) {
+    throw new Error(`Could not read the agents: ${(err as Error).message}`);
+  }
 }
 
 /**
@@ -783,26 +809,7 @@ export async function fireSignals(
   const org = (await readArmedOrgs([brandRow.organization_id])).get(brandRow.organization_id);
   if (!org) return counts;
 
-  let ids: string[];
-  try {
-    ids = (
-      await readAllRpcRows<{ id: string }>(
-        (from, to) =>
-          supabaseAdmin
-            .from('chat_agents')
-            .select('id')
-            .eq('organization_id', brandRow.organization_id)
-            .eq('status', 'active')
-            .order('id', { ascending: true })
-            .range(from, to) as unknown as PromiseLike<{
-            data: { id: string }[] | null;
-            error: { message: string } | null;
-          }>,
-      )
-    ).map((a) => a.id);
-  } catch (err) {
-    throw new Error(`Could not read the agents: ${(err as Error).message}`);
-  }
+  const ids = await activeAgentIds(brandRow.organization_id);
   if (ids.length === 0) return counts;
   const triggers = await enabledTriggers('signal', ids);
   if (triggers.length === 0) return counts;
@@ -846,6 +853,120 @@ export async function fireSignals(
     } catch (err) {
       counts.failed += 1;
       console.error('[chat/agents] a signal trigger failed:', err);
+    }
+  }
+  if (queued) {
+    try {
+      await startQueuedAgentRuns(brandRow.organization_id, org.limits.runsAtOnce, driver);
+    } catch (err) {
+      console.error('[chat/agents] could not start a workspace’s runs:', err);
+    }
+  }
+  return counts;
+}
+
+// ─── A brand added ───────────────────────────────────────────────────────────
+
+/**
+ * Claims a fire that happens once per agent and brand (00482): its row in
+ * chat_agent_trigger_claims, inserted with "on conflict do nothing". True
+ * for the one fire that inserted it; a retry, or a second server at once,
+ * finds it taken.
+ */
+async function claimOnce(
+  agentId: string,
+  kind: 'brand_added',
+  brandId: string,
+  triggerId: string,
+  now: Date,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_agent_trigger_claims')
+    .upsert(
+      {
+        agent_id: agentId,
+        kind,
+        brand_id: brandId,
+        trigger_id: triggerId,
+        claimed_at: now.toISOString(),
+      },
+      { onConflict: 'agent_id,kind,brand_id', ignoreDuplicates: true },
+    )
+    .select('agent_id');
+  if (error) throw new Error(`Could not claim the fire: ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
+/**
+ * Fires the When a brand is added triggers (00482) for a brand someone
+ * just added (createBrand, once its answer has gone): each enabled one of
+ * an active agent whose scope is All brands, in a workspace where Chat is
+ * on and that isn't read-only, once per agent and brand (claimOnce); never
+ * for the demo brand, nor the demo's sample agents. The run acts as the
+ * agent's owner, so it fires only when the owner may use the new brand: an
+ * owner with Selected brands it wasn't shared with gets nothing, and the
+ * agent stays on. An agent with no owner, or one gone from the workspace,
+ * queues as fireBrands does, and its run pauses it (owner_role). The caps,
+ * the daily limit and the AI limit apply as for any event; the cooldown
+ * reads the agent's runs on this brand alone, so a brand just added is
+ * never held by it. Then the workspace starts what it has room for, with a
+ * driver; without one the runs wait for the minute tick.
+ */
+export async function fireBrandAdded(
+  brandId: string,
+  now: Date,
+  driver: AgentRunDriver | null,
+): Promise<FireCounts> {
+  const counts = noFires();
+  const { data: brand, error } = await supabaseAdmin
+    .from('brands')
+    .select('id, organization_id, is_demo')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the brand: ${error.message}`);
+  const brandRow = brand as { id: string; organization_id: string; is_demo: boolean } | null;
+  if (!brandRow || brandRow.is_demo) return counts;
+  const org = (await readArmedOrgs([brandRow.organization_id])).get(brandRow.organization_id);
+  if (!org) return counts;
+
+  const ids = await activeAgentIds(brandRow.organization_id);
+  if (ids.length === 0) return counts;
+  const triggers = await enabledTriggers('brand_added', ids);
+  if (triggers.length === 0) return counts;
+  const agents = await activeAgents(triggers.map((t) => t.agent_id));
+
+  let queued = false;
+  for (const trigger of triggers) {
+    const agent = agents.get(trigger.agent_id);
+    // All brands only: an agent on brands someone picked has none of a new one.
+    if (!agent || trigger.input.kind !== 'brand_added' || agent.data.scope.all_brands !== true) {
+      continue;
+    }
+    // One trigger's failure is its own: the others still fire.
+    try {
+      const access = agent.ownerId
+        ? ((await readBrandAccess(agent.ownerId, agent.organizationId)) ?? 'all')
+        : 'all';
+      if (!hasBrandAccess(access, brandRow.id)) continue;
+      if (!(await claimOnce(agent.id, 'brand_added', brandRow.id, trigger.id, now))) continue;
+      counts.fired += 1;
+      if ((await keyCapUsed(agent)) || (await monthCapUsed(agent))) continue;
+      const outcome = await queueTriggeredRun(
+        agent,
+        brandRow.id,
+        { id: trigger.id, kind: 'brand_added' },
+        [{ kind: 'brand_added', ref: brandRow.id, at: now.toISOString() }],
+        org.limits,
+        now,
+      );
+      count(counts, outcome);
+      if (outcome.kind === 'queued') {
+        queued = true;
+        await markFired(trigger.id, 'brand_added', now);
+      }
+    } catch (err) {
+      counts.failed += 1;
+      console.error('[chat/agents] a brand-added trigger failed:', err);
     }
   }
   if (queued) {

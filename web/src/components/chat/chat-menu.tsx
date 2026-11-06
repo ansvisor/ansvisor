@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { ChevronDown } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
 import { NewPill } from '@/components/agentic/new-pill';
@@ -239,8 +238,8 @@ export interface ChatMenuViewProps {
  * whose title or messages match, in place of the days; Ctrl K opens the
  * palette under it), Pinned, then by day, and All chats and Archived at the
  * end. Items whose pages aren't built yet stay out (Skills, Integrations). Sections fold, remembered in this
- * browser; Governance folds under its title with the main menu's chevron,
- * closed until opened and open on one of its pages.
+ * browser; Governance folds with the same ▴ / ▾, closed until opened and
+ * open on one of its pages.
  */
 export function ChatMenuView({
   status,
@@ -261,7 +260,7 @@ export function ChatMenuView({
   const tAttention = useTranslations('agentic.attention');
   const isMac = useIsMac();
   const [folded, setFolded] = useState<Record<Section, boolean>>(FOLDED);
-  // Governance folds under its title as the main menu's groups do: open on
+  // Governance folds as the other sections do, with one difference: open on
   // one of its pages, without remembering that, and otherwise as the person
   // left it, closed at first.
   const onGovernancePage = GOVERNANCE_PAGES.includes(pathname);
@@ -467,26 +466,17 @@ export function ChatMenuView({
         </div>
       )}
 
-      {/* Governance folds under its title, the chevron on the right, as the
-          main menu's groups (Execution, Analytics) do. */}
+      {/* Governance folds under its title with the ▴ / ▾ on the right, as Menu
+          and Chats do. */}
       <SectionHead>
-        <button
-          type="button"
-          data-action="chatMenu.toggleGovernance"
-          aria-expanded={governanceOpen}
-          aria-controls={governanceOpen ? 'chat-menu-governance' : undefined}
+        {t('governance')}
+        <FoldButton
+          folded={!governanceOpen}
+          label={t('toggleGovernance')}
+          controls="chat-menu-governance"
+          action="chatMenu.toggleGovernance"
           onClick={toggleGovernance}
-          className="-mx-1 flex flex-1 items-center justify-between rounded-md px-1 tracking-[.4px] uppercase outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          {t('governance')}
-          <ChevronDown
-            aria-hidden
-            className={cn(
-              'h-3.5 w-3.5 shrink-0 transition-transform',
-              !governanceOpen && '-rotate-90',
-            )}
-          />
-        </button>
+        />
       </SectionHead>
       {governanceOpen && (
         <div id="chat-menu-governance" className="flex flex-col gap-0.5">

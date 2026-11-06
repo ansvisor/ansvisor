@@ -793,12 +793,15 @@
         "prompt portfolio manager",
         "prompts to add",
         "prompts to pause",
-        "agent work",
-        "i approve first",
-        "agent starts on its own",
+        "when a brand is added",
+        "brand added",
+        "new brand trigger",
         "goal",
         "role",
-        "filter agents"
+        "filter agents",
+        "agent work",
+        "i approve first",
+        "agent starts on its own"
       ],
       "synonyms": [
         "my agents",
@@ -823,14 +826,16 @@
         "setup help",
         "new member setup",
         "what did my agent do",
-        "did my agent work"
+        "did my agent work",
+        "run an agent on a new brand",
+        "agent for new brands"
       ],
       "plan": "all",
       "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
-          "text": "An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses."
+          "text": "An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, when a brand is added, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses."
         },
         {
           "heading": "Open Agent Center",
@@ -854,7 +859,7 @@
         },
         {
           "heading": "Onboarding & Help",
-          "text": "**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**), and it has no trigger: after you turn it on, click **Run now** on its page, or add a schedule if you like. Each run says how many **Getting started** steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help."
+          "text": "**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**). It starts on **All brands** with **When a brand is added**: once it's on, each brand someone adds gets one run, which acts as the agent's owner and shows in their Inbox. You can also click **Run now** on its page. Each run says how many **Getting started** steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help."
         },
         {
           "heading": "Prompt Portfolio Manager",
@@ -898,7 +903,7 @@
         },
         {
           "heading": "When an agent runs by itself",
-          "text": "A **Schedule** trigger runs at its time on the clock of the time zone it was set in, also when summer time starts or ends. A time missed while the agent was paused isn't made up later. A **Signal** trigger runs when Action Center finds a new signal of its category, and of the definitions, pages and engines you picked. **KPI changed** and **Watch rule** triggers are saved, but don't start runs yet.\n\nSignals that come close together don't each start a run. Signals within 15 minutes join one run, a brand gets at most one signal run every 6 hours, and your plan sets how many signal runs an agent may start a day. A signal that had to wait is listed in the agent's next run, and in **Run history** as **Skipped** with the reason."
+          "text": "A **Schedule** trigger runs at its time on the clock of its time zone, summer time included. A time missed while the agent was paused isn't made up later. A **Signal** trigger runs when Action Center finds a new signal of its category, definitions, pages and engines. **When a brand is added** runs once for each brand someone adds, never the demo brand, on an agent with **All brands** whose owner can use that brand. **KPI changed** and **Watch rule** triggers are saved, but don't start runs yet.\n\nSignals within 15 minutes join one run, a brand gets at most one signal run every 6 hours, and your plan sets how many signal and new-brand runs an agent may start a day. A fire that had to wait is listed in the agent's next run, and in **Run history** as **Skipped** with the reason."
         },
         {
           "heading": "A schedule's time zone",
@@ -1136,7 +1141,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -1288,7 +1293,7 @@
         },
         {
           "heading": "Open and close Governance",
-          "text": "Click **Governance** in the chat menu to show or hide **Activity**, **What Chat can do** and **Tool policy**. Its arrow points down while it is open, as in the groups of the main menu. It stays closed until you open it, and it opens by itself while you are on **Activity** or **What Chat can do**. Chat remembers whether you left it open or closed, in this browser."
+          "text": "Click the **▾** beside **Governance** in the chat menu to show or hide **Activity**, **What Chat can do** and **Tool policy**, as beside **Menu** and **Chats**. It turns to **▴** while Governance is open. It stays closed until you open it, and it opens by itself while you are on **Activity** or **What Chat can do**. Chat remembers whether you left it open or closed, in this browser."
         },
         {
           "heading": "Hide the chat menu",
@@ -3718,7 +3723,7 @@
         "stop tracking a location"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -3742,7 +3747,7 @@
         },
         {
           "heading": "Which engines answer from a state or city",
-          "text": "**US states** are asked by every engine from the state itself. Google's engines asked a state country-wide until October 2026, so their answers from before then stay in the country's column.\n\n**Cities** are asked only by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Perplexity, Copilot, Gemini and Grok answer per country, so they skip a city and their answers stay in the country's column; track the country too to see them. A city column says **AI Mode · AIO · APIs**. A city counts as one location on your plan, like a country."
+          "text": "**US states** are asked by every engine from the state itself. Google's engines asked a state country-wide until October 2026, so their answers from before then stay in the country's column.\n\n**Cities** are asked only by the engines that can answer from a city: Google AI Mode, Google AI Overview and the API models (OpenAI, Claude). ChatGPT, Gemini and Grok answer per country, so they skip a city and their answers stay in the country's column; track the country too to see them. A city column says **AI Mode · AIO · APIs**. A city counts as one location on your plan, like a country."
         },
         {
           "heading": "What a new location shows",
@@ -3831,7 +3836,7 @@
         "not shared"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -3839,7 +3844,7 @@
         },
         {
           "heading": "Which engines share their searches",
-          "text": "Copilot and Perplexity share the searches behind their answers. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them."
+          "text": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot and Perplexity shared them, but Ansvisor no longer tracks these two engines. Searches from their past answers still show for the dates you pick."
         },
         {
           "heading": "Engines",
@@ -4059,15 +4064,15 @@
         "free ai report"
       ],
       "plan": "all",
-      "updated": "2026-11-04",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 25 that match what you sell best and that people search for most, asks each one once in ChatGPT, Microsoft Copilot, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once."
+          "text": "The free AI visibility report card is a one-time snapshot you can ask for on the Ansvisor website with your work e-mail. Ansvisor finds your main products or categories on your home page, writes the questions your buyers ask about them, keeps the 25 that match what you sell best and that people search for most, asks each one once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode in your target country and its language, and e-mails you a four-page PDF. One card is made per company every 30 days: a colleague who asks within that time is sent the same card, and each address gets it once."
         },
         {
           "heading": "What the card measured",
-          "text": "- **AI visibility**: the share of ChatGPT's and Microsoft Copilot's answers that name your brand or your site. These are the engines Ansvisor Starter tracks. Gemini, Google AI Overviews and Google AI Mode, which Growth adds, are shown apart in an \"In Ansvisor Growth\" band. Competitors, cited sites and your citations count the same answers.\n- The same share for each engine.\n- The competitors the answers named most, and the sites they cite, with yours, your competitors' and marketplaces marked."
+          "text": "- **AI visibility**: the share of ChatGPT's and Gemini's answers that name your brand or your site. These are the engines Ansvisor Starter tracks. Google AI Overviews and Google AI Mode, which Growth adds, are shown apart in an \"In Ansvisor Growth\" band. A card made before Ansvisor stopped tracking Microsoft Copilot counts ChatGPT and Copilot instead. Competitors, cited sites and your citations count the same answers.\n- The same share for each engine.\n- The competitors the answers named most, and the sites they cite, with yours, your competitors' and marketplaces marked."
         },
         {
           "heading": "The four pages",
@@ -4091,7 +4096,7 @@
         },
         {
           "heading": "Measure your own questions every day",
-          "text": "The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Microsoft Copilot. **Brand Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next."
+          "text": "The card asks its questions once. To measure them every day, and questions of your own, start the free trial: add your brand in the setup wizard, then add the card's questions and yours as prompts in **Tracked Prompts**, in the same country. Starter tracks 50 prompts a day in ChatGPT and Gemini. **Brand Visibility**, **Competitors** and **Citations** then show the same kind of figures for every day, and the **Action Center** ranks what to do next."
         },
         {
           "heading": "The value table and the revenue scenario",

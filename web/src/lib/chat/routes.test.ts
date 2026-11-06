@@ -79,11 +79,11 @@ describe('routeRegistry', () => {
   it('sets only the filters a page keeps, with the values it takes', () => {
     const insights = routeById('insights')!;
     const citations = routeById('citations')!;
-    expect(hrefWithFilters(citations, { range: '30d', platform: 'perplexity-web' })).toEqual({
-      href: '/dashboard/citations?preset=30d&platform=perplexity-web',
+    expect(hrefWithFilters(citations, { range: '30d', platform: 'gemini-web' })).toEqual({
+      href: '/dashboard/citations?preset=30d&platform=gemini-web',
       applied: [
         { key: 'range', value: '30d' },
-        { key: 'platform', value: 'perplexity-web' },
+        { key: 'platform', value: 'gemini-web' },
       ],
     });
     // Insights' `model` filter holds the answers' model slugs, not platform
@@ -150,11 +150,11 @@ describe('routeRequest', () => {
     // A filter it can't set.
     expect(to('Show me the Content drafts under Quality 60')).toBeNull();
     // A filter the page doesn't keep.
-    expect(to('Open Competitors for Perplexity')).toBeNull();
-    expect(to('Open Visibility for Perplexity, last 30 days')).toBeNull();
+    expect(to('Open Competitors for Gemini')).toBeNull();
+    expect(to('Open Visibility for Gemini, last 30 days')).toBeNull();
     // A question, or no navigation verb.
     expect(to('Why did my visibility drop?')).toBeNull();
-    expect(to('visibility for perplexity')).toBeNull();
+    expect(to('visibility for gemini')).toBeNull();
     expect(to('open the thing I looked at yesterday')).toBeNull();
   });
 });
