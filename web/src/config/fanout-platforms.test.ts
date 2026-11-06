@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { fanoutSharing } from './fanout-platforms';
+import { FANOUT_SHARING_PLATFORMS, fanoutSharing } from './fanout-platforms';
 
 /** How the Query Fan-out page reads each engine's searches (#332). */
 describe('fanoutSharing', () => {
-  it('expects searches from the engines that send them with their answers', () => {
-    expect(fanoutSharing('copilot-web')).toBe('shares');
-    expect(fanoutSharing('perplexity-web')).toBe('shares');
+  it('expects searches from no engine now that Copilot and Perplexity are no longer tracked', () => {
+    // They shared theirs; their past answers read as an ordinary engine's,
+    // so a window without their searches is never flagged.
+    expect(fanoutSharing('copilot-web')).toBe('unknown');
+    expect(fanoutSharing('perplexity-web')).toBe('unknown');
+    expect(FANOUT_SHARING_PLATFORMS).toEqual([]);
   });
 
   it('reads the engines that never send them, or whose searches we miss, as not shared', () => {

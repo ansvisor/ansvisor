@@ -1153,7 +1153,7 @@
         },
         {
           "heading": "Ask Chat",
-          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nNext to the arrow, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; their box says **Read-only**, with a link to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
+          "text": "Type in the box at the bottom and press Enter, or click the arrow. Shift+Enter adds a line. The arrow stays off while the box is empty.\n\nUnder the box, pick how much Chat does on its own: **Ask me first** asks before every step; **Auto, ask before changes** reads freely and asks before every change; **Full auto** makes changes without asking. In your own chats nothing is published or sent without your click. Agents an Admin allows can publish on their own (see **Agents**). Every change is logged in **Activity**. **Full auto** needs the Growth plan, and an Admin can turn it off for everyone but Admins in **Settings › Chat**.\n\nAnalysts and Agency partners only read; under their box it says **Read-only**, with a link to their role.\n\nThe demo brand has sample chats to open. There and in a read-only workspace, sending opens the plan dialog."
         },
         {
           "heading": "Chat beside any page",
@@ -1257,7 +1257,7 @@
         },
         {
           "heading": "Speak your message",
-          "text": "Click the microphone beside **@** and speak. While it listens, it shows **Listening…** with a red dot; click it again, or pause, to stop. Your words go into the box in your browser's language, and nothing is sent until you send it. Using voice doesn't count toward your AI usage.\n\nYour browser turns the speech into text, not Ansvisor, and Ansvisor keeps no audio. Chrome and Edge send the audio to Google or Microsoft to do it. Firefox has no speech recognition, so there is no microphone there. If the browser asks, allow the microphone; otherwise the box says how."
+          "text": "Click the microphone next to the arrow and speak. While it listens, it shows **Listening…** with a red dot; click it again, or pause, to stop. Your words go into the box in your browser's language, and nothing is sent until you send it. Using voice doesn't count toward your AI usage.\n\nYour browser turns the speech into text, not Ansvisor, and Ansvisor keeps no audio. Chrome and Edge send the audio to Google or Microsoft to do it. Firefox has no speech recognition, so there is no microphone there. If the browser asks, allow the microphone; otherwise the box says how."
         },
         {
           "heading": "An API key in your message",
@@ -2378,7 +2378,7 @@
         "hero image"
       ],
       "plan": "all",
-      "updated": "2026-11-04",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -2398,7 +2398,7 @@
         },
         {
           "heading": "Pick one and add it",
-          "text": "Click **Generate 2 images** (or 3 or 4). Click the option you like, check the **Alt text** (it says what the image shows, for people who can't see it and for search), and click **Use this image**. Only that one is kept and added to the page; the other options are removed, also when you close the dialog (any still left are removed after a day). **Regenerate** makes new options and uses your AI limit again.\n\nIf what's left of your monthly AI limit doesn't cover the options you chose, none is made: choose fewer. If an image is made but can't be saved, the panel says so: it still counts toward your AI limit, and you pick from the others. The demo brand makes no images."
+          "text": "Click **Generate 2 images** (or 3 or 4). Click the option you like, check the **Alt text** (it says what the image shows, for people who can't see it and for search), and click **Use this image**. Only that one is kept and added to the page; the other options are removed, also when you close the dialog (any still left are removed after a day). **Regenerate** makes new options and uses your AI limit again.\n\nIf what's left of your monthly AI limit doesn't cover the options you chose, none is made: choose fewer. Images count toward your workspace's storage, so with storage full none is made either: make room or get more storage. If an image is made but can't be saved, the panel says so: it still counts toward your AI limit, and you pick from the others. The demo brand makes no images."
         },
         {
           "heading": "Where AI images count",
@@ -3860,11 +3860,11 @@
         },
         {
           "heading": "Which engines share their searches",
-          "text": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot and Perplexity shared them, but Ansvisor no longer tracks these two engines. Searches from their past answers still show for the dates you pick."
+          "text": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode, Gemini and the Claude and Gemini API models don't share them: their chips say **not shared**, and a note under the chips names them. Copilot and Perplexity shared them, but Ansvisor no longer tracks these two engines. Searches from their past answers still show for the dates you pick.\n\nNew searches now come from ChatGPT only, so the tab lists fewer of them than before. A note at the top of the tab says so."
         },
         {
           "heading": "Engines",
-          "text": "Above the list, **All engines** counts the searches found in the range, and each engine that answered has a chip of its own. A chip gives the share of that engine's answers that came with searches, such as \"40% of answers\", and how many searches it ran. Click a chip to see only that engine's searches; click it again, or **All engines**, to see them all.\n\nAn engine that usually shares its searches but sent none is marked in amber, \"none since\" a date, with a note under the chips. Its answers are still tracked as usual; only the list of searches is missing. A **not shared** chip is faded and doesn't filter."
+          "text": "Above the list, **All engines** counts the searches found in the range, and each engine that answered has a chip of its own. A chip gives the share of that engine's answers that came with searches, such as \"40% of answers\", and how many searches it ran. Click a chip to see only that engine's searches; click it again, or **All engines**, to see them all.\n\nA **not shared** chip is faded and doesn't filter."
         },
         {
           "heading": "By prompt",
@@ -4283,7 +4283,7 @@
         "credit pack"
       ],
       "plan": "starter",
-      "updated": "2026-10-30",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -4295,11 +4295,11 @@
         },
         {
           "heading": "Storage packs",
-          "text": "A storage pack adds a fixed amount of storage every month. It joins your plan's subscription: the rest of the current period is charged at once to the card on file, and it renews with your plan until it is removed. Storage packs need a plan billed monthly."
+          "text": "Your storage holds Chat's files and the images you upload or generate in the Content Editor. A storage pack adds a fixed amount of storage every month. It joins your plan's subscription: the rest of the current period is charged at once to the card on file, and it renews with your plan until it is removed. Storage packs need a plan billed monthly."
         },
         {
           "heading": "Get more from where a limit shows",
-          "text": "You don't have to go to Billing: wherever a limit shows, **Get more AI credits** or **Get more storage** opens the same window. It is in the AI usage meter's popover, on the red banner once the month's AI usage is used up, on the Files page's storage meter and its **Storage is full** line, and on an output Chat couldn't save to Files. When Chat stops at the AI limit, the window opens once by itself."
+          "text": "You don't have to go to Billing: wherever a limit shows, **Get more AI credits** or **Get more storage** opens the same window. It is in the AI usage meter's popover, on the red banner once the month's AI usage is used up, on the Files page's storage meter and its **Storage is full** line, on an output Chat couldn't save to Files, and on an image upload refused because storage is full. When Chat stops at the AI limit, the window opens once by itself."
         },
         {
           "heading": "What the Get more window shows",

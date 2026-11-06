@@ -127,11 +127,11 @@ async function chatScripts({ brandId, now }) {
     actions.find((a) => a.kind === kind && actionTitle(a)) ??
     null;
 
-  // ── 1. How visible are we this week? (with a follow-up on Perplexity) ──────
-  const perplexity = 'perplexity-web';
-  const perplexityByPrompt = [
+  // ── 1. How visible are we this week? (with a follow-up on Gemini) ──────────
+  const gemini = 'gemini-web';
+  const geminiByPrompt = [
     ...S.groupBy(
-      last.filter((r) => r.model_used === perplexity),
+      last.filter((r) => r.model_used === gemini),
       'prompt_id',
     ),
   ]
@@ -141,8 +141,8 @@ async function chatScripts({ brandId, now }) {
       answers: rows.map((r) => r.id),
     }))
     .sort((a, b) => Number(a.named) - Number(b.named));
-  const missed = perplexityByPrompt.filter((p) => !p.named);
-  // The sites Perplexity's answers to them cite most.
+  const missed = geminiByPrompt.filter((p) => !p.named);
+  // The sites Gemini's answers to them cite most.
   const missedAnswers = new Set(missed.flatMap((p) => p.answers));
   const missedCited = new Map();
   for (const c of citations) {
@@ -199,30 +199,30 @@ async function chatScripts({ brandId, now }) {
         ],
       },
       {
-        question: 'And on Perplexity?',
+        question: 'And on Gemini?',
         at: followAt,
         workingMs: 9_700,
         dataAsOf: asOf(last),
         steps: [
           read('Read Prompt performance', {
             dateRange: 'Latest check',
-            platforms: [platformName(perplexity)],
-            rows: perplexityByPrompt.length,
+            platforms: [platformName(gemini)],
+            rows: geminiByPrompt.length,
             tool: 'get_prompt_performance',
           }),
         ],
         answer: [
-          `On Perplexity, Brewline is named in ${perplexityByPrompt.length - missed.length} of the ${perplexityByPrompt.length} tracked prompts (${pct(byPlatform.find((p) => p.id === perplexity).now)} of its answers).`,
+          `On Gemini, Brewline is named in ${geminiByPrompt.length - missed.length} of the ${geminiByPrompt.length} tracked prompts (${pct(byPlatform.find((p) => p.id === gemini).now)} of its answers).`,
           '',
           missed.length > 0
             ? `It isn't named for:\n${missed.map((p) => `- ${p.text}`).join('\n')}`
             : 'It is named for every tracked prompt.',
           '',
           missedSites.length > 0
-            ? `Perplexity's answers to them cite ${missedSites.join(' and ')} most, so a page of yours that answers the question directly gives it one of yours to cite.`
-            : 'A page of yours that answers these questions directly gives Perplexity one of yours to cite.',
+            ? `Gemini's answers to them cite ${missedSites.join(' and ')} most, so a page of yours that answers the question directly gives it one of yours to cite.`
+            : 'A page of yours that answers these questions directly gives Gemini one of yours to cite.',
         ].join('\n'),
-        sources: [{ label: 'Prompt performance', count: perplexityByPrompt.length }],
+        sources: [{ label: 'Prompt performance', count: geminiByPrompt.length }],
       },
     ],
     moves: [

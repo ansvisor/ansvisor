@@ -4411,12 +4411,13 @@
       "sent": "Sent: {text}",
       "steered": "Stopped the run and sent: {text}",
       "stopped": "Stopped · done steps stay",
-      "homeGhost": "Why did our Perplexity citations drop this week?",
+      "homeGhost": "Why did our Gemini citations drop this week?",
       "dockGhost": "Start task 2: comparison page",
-      "panelGhost": "Show which pages Perplexity cites most"
+      "panelGhost": "Show which pages Gemini cites most"
     },
     "mode": {
       "label": "Run mode",
+      "current": "Run mode: {mode}",
       "ask_first": "Ask me first",
       "auto": "Auto, ask before changes",
       "full_auto": "Full auto",
@@ -4623,7 +4624,7 @@
     "zipFailed": "Couldn't download the files. Try again.",
     "storage": "Storage {used} of {limit} GB",
     "storageNoLimit": "Storage {used} GB",
-    "storageTip": "Files are kept for 1 year",
+    "storageTip": "Counts Chat's files and the Content Editor's images. Files are kept for 1 year.",
     "storageFull": "Storage is full. New work still shows in its chat, but isn't saved to Files.",
     "storageFullGetMore": "Storage is full. Get more storage to keep filing new work.",
     "getMoreStorage": "Get more storage",
@@ -8100,7 +8101,7 @@
       "eyebrow": "AI visibility platform",
       "titleLead": "Improve AI Visibility and",
       "titleAccent": "Drive Growth.",
-      "subtitle": "Track your brand's presence across ChatGPT, Google AI, Perplexity and more.",
+      "subtitle": "Track your brand's presence across ChatGPT, Gemini, Google AI and more.",
       "features": {
         "monitor": {
           "title": "Monitor brand mentions and citations",
@@ -9576,6 +9577,7 @@
             "ai_limit": "What's left of your monthly AI limit doesn't cover {count} images, so none was made.",
             "refused": "The image model didn't make an image for this description: {why} Try describing it another way.",
             "demo": "The demo brand makes no images. Switch to your brand to generate one.",
+            "storage_full": "Your workspace's storage is full, so the images would have nowhere to go. None was made. Make room or get more storage first.",
             "not_saved": "{count, plural, one {The image was} other {The # images were}} made, and count toward your AI limit, but couldn't be saved. Try again.",
             "failed": "Couldn't generate images. Try again.",
             "upload": "Couldn't add the image. Try again."
@@ -11241,8 +11243,10 @@
         "size": "That image is over 5 MB. Use a smaller one.",
         "plan": "Uploads come with an active plan. Paste the image's address instead.",
         "limit": "That's today's uploads for your workspace. Paste the image's address, or upload again tomorrow.",
+        "storage": "Your workspace's storage is full. Make room or get more storage, or paste the image's address instead.",
         "failed": "Couldn't upload the image. Try again."
-      }
+      },
+      "getMoreStorage": "Get more storage"
     },
     "title": "Content Opportunities",
     "description": "AI-powered content recommendations to improve your visibility in AI-generated answers.",
@@ -12559,6 +12563,7 @@
       "enginesLegend": "Coloured: shared searches for this prompt in the window. Faded: tracked, but shared none.",
       "engineEmptyTitle": "No {engine} searches in the {range}",
       "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
+      "sourceNote": "Copilot and Perplexity are no longer tracked, so these searches come from ChatGPT only, which shares them on some days. There are fewer of them than before.",
       "emptyTitle": "No fan-out captured yet",
       "emptyBody": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
       "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
@@ -15578,7 +15583,7 @@
     "hero": {
       "badge": "Open Source Ansops Platform",
       "title": "Your Brand in Every AI Answer",
-      "subtitle": "Monitor, analyze, and optimize your brand's visibility across ChatGPT, Perplexity, Gemini, Claude, and more.",
+      "subtitle": "Monitor, analyze, and optimize your brand's visibility across ChatGPT, Gemini, Google AI, Claude, and more.",
       "cta": "Get Started for Free",
       "secondaryCta": "View on GitHub"
     },

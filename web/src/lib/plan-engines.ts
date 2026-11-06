@@ -41,7 +41,7 @@ export function getActiveEngineIdsForPlan(planId: PlanId | string | null | undef
  * `models` arrays match what the given plan allows. Handles both directions:
  *
  *   - **Expansion** (Starter → Growth): Growth has no `allowedScrapers`,
- *     so every prompt's platforms array becomes all 8 engine ids. Without
+ *     so every prompt's platforms array becomes every engine id. Without
  *     this an upgraded Growth customer keeps tracking only 2 engines (#79).
  *   - **Contraction** (Growth → Starter on downgrade / cancellation):
  *     Starter restricts to `['chatgpt-web', 'gemini-web']`, so prompts

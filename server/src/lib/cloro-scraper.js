@@ -22,6 +22,34 @@ export const SCRAPER_TASK_TYPES = {
   'gemini-web': 'GEMINI',
 };
 
+/**
+ * Platforms Cloro cannot currently deliver, dropped before anything is
+ * submitted.
+ *
+ * Grok started answering every task with a 500 on 2026-08-18. Leaving it in
+ * the run would submit a paid task per prompt per region, hold the drain open
+ * waiting for results that never arrive, and record nothing — so the platform
+ * is removed up front rather than failing task by task.
+ *
+ * Deliberately a run-time filter and nothing else. Dropping Grok from the
+ * engine picker would also drop it from `ALL_SCRAPERS`, which
+ * `filterByPlan` and `alignPromptsToPlanForOrg` use as the allow-set when
+ * writing prompts — so every prompt edit and every plan change would quietly
+ * strip the stored id, and restoring Grok would need a data repair rather
+ * than a revert. Empty this list when Cloro reports Grok healthy again and
+ * every prompt that still lists it resumes on the next run.
+ *
+ * Copilot and Perplexity are no longer offered: both block logged-out
+ * sessions, and Cloro rejects their tasks (400 MODEL_UNAVAILABLE). Prompts
+ * saved with them keep the ids, so the tracking worker skips them
+ * (runnablePlatforms), and the prompt's other engines still run.
+ *
+ * A paused platform's answers stop, so the daily pulse's outage guard and the
+ * health report's fan-out check leave it out: its volume falling to none is
+ * the pause, not an incident.
+ */
+export const UNAVAILABLE_PLATFORMS = ['grok-web', 'copilot-web', 'perplexity-web'];
+
 const DEFAULT_MAX_WAIT_MS = 30 * 60 * 1000; // 30 minutes
 const DEFAULT_POLL_INTERVAL_MS = 10000; // 10 seconds
 
