@@ -39,11 +39,11 @@ describe('autoTopicCategories', () => {
     });
     // In the name: the longer, deeper name first.
     expect(linked.get('t-cold')).toEqual(['c-cold', 'c-coffee']);
-    // Two prompts name grinders; one names a kettle, not enough for its own
-    // name, but "Equipment" above it is in the topic's name.
-    expect(linked.get('t-gear')).toEqual(['c-grinders', 'c-kettles']);
-    // A topic with one prompt: that one is enough; "Coffee" above Cold Brew too, after its own.
-    expect(linked.get('t-one')).toEqual(['c-gifts', 'c-coffee', 'c-cold']);
+    // Two prompts name grinders; one names a kettle: not enough. "Equipment"
+    // above Kettles is in the topic's name, but its own names matched Grinders.
+    expect(linked.get('t-gear')).toEqual(['c-grinders']);
+    // A topic with one prompt: that one is enough.
+    expect(linked.get('t-one')).toEqual(['c-gifts', 'c-coffee']);
   });
 
   it('matches a step above a category’s own name, its own name’s match first', () => {
@@ -69,8 +69,31 @@ describe('autoTopicCategories', () => {
         { id: 'c-decaf', name: 'Coffee > Whole Bean > Decaf' },
       ],
     });
-    // Its own name's match ranks above a step above's.
-    expect(own.get('t')).toEqual(['c-decaf', 'c-blends']);
+    // Its own name's match takes it alone.
+    expect(own.get('t')).toEqual(['c-decaf']);
+  });
+
+  it('links nothing through a store’s main department, over most of its categories', () => {
+    // Brewline on dev: "Coffee" is above four of its seven categories.
+    const linked = autoTopicCategories({
+      topics: [
+        { id: 't-buying', name: 'Buying better coffee', prompts: [] },
+        { id: 't-subs', name: 'Coffee subscriptions', prompts: [] },
+        { id: 't-whole', name: 'Whole bean coffee', prompts: [] },
+      ],
+      categories: [
+        { id: 'c-equipment', name: 'Brewing Equipment' },
+        { id: 'c-blends', name: 'Coffee > Whole Bean > Blends' },
+        { id: 'c-decaf', name: 'Coffee > Whole Bean > Decaf' },
+        { id: 'c-espresso', name: 'Coffee > Whole Bean > Espresso' },
+        { id: 'c-single', name: 'Coffee > Whole Bean > Single Origin' },
+        { id: 'c-gifts', name: 'Gifts' },
+        { id: 'c-subs', name: 'Subscriptions' },
+      ],
+    });
+    expect(linked.get('t-buying')).toEqual([]);
+    expect(linked.get('t-subs')).toEqual(['c-subs']);
+    expect(linked.get('t-whole')).toEqual(['c-blends', 'c-decaf', 'c-espresso']);
   });
 
   it('keeps three at most', () => {
