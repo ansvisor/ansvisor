@@ -5,7 +5,7 @@ Sentiment is **not** part of the visibility score (see
 [`visibility-scoring.md`](visibility-scoring.md)), but it's the loudest
 **signal** about why a number changed.
 
-## Net sentiment (Mentions & Sentiment)
+## Net sentiment (Visibility › Mentions)
 
 The Mentions tools add up the tags over the responses that name the
 brand:

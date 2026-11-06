@@ -80,6 +80,15 @@ vi.mock('./impact-ledger/ship.js', () => ({
   },
 }));
 
+// IndexNow (#2142): told once a page went live; what it does is indexnow.test.js's.
+const announced = [];
+vi.mock('./indexnow.js', () => ({
+  announcePublishedPage: async (page) => {
+    announced.push(page);
+    return 'pinged';
+  },
+}));
+
 const {
   liveAddress,
   markDeliveryPublished,
@@ -400,6 +409,31 @@ describe('markDeliveryPublished', () => {
     expect(tables.actions[0].payload.publishedPages).toEqual({ dr1: LIVE });
     expect(tables.action_tasks[0].status).toBe('completed');
     expect(tables.action_events[0].actor_id).toBeNull();
+  });
+
+  it('tells IndexNow of the page once it is published, never for an older send or a repeat (#2142)', async () => {
+    announced.length = 0;
+    // The page's latest send first, as its newest-first read answers.
+    tables.content_draft_deliveries = [
+      { id: 'x1', draft_id: 'dr1', status: 'sent', created_at: '2026-10-02T00:00:00Z' },
+      { id: 'x0', draft_id: 'dr1', status: 'sent', created_at: '2026-10-01T00:00:00Z' },
+    ];
+    await markDeliveryPublished(
+      { id: 'x1', draft_id: 'dr1', status: 'sent', published_url: null },
+      LIVE,
+    );
+    expect(announced).toEqual([{ draftId: 'dr1', url: LIVE }]);
+    // An older send's late word moves nothing: no announcement either.
+    await markDeliveryPublished(
+      { id: 'x0', draft_id: 'dr1', status: 'sent', published_url: null },
+      LIVE,
+    );
+    // The same send confirmed again at the same address.
+    await markDeliveryPublished(
+      { id: 'x1', draft_id: 'dr1', status: 'published', published_url: LIVE },
+      LIVE,
+    );
+    expect(announced).toHaveLength(1);
   });
 
   it('puts the publish into the impact ledger once the delivery is published, and not again', async () => {

@@ -15,19 +15,14 @@ import {
   MENU_SECTIONS,
   WORK_AREA_IDS,
   hiddenWithWorkAreas,
-  menuSectionOf,
+  menuSectionEntries,
   type WorkAreaId,
 } from '@/lib/menu-access';
 import { useMenuSections } from '@/components/providers/menu-access-provider';
 import { getMyMenu, setMyWorkAreas, type MyMenu } from '@/lib/actions/menu-access';
 
 /** The menu's sections with their icons and nav titles, in its order. */
-const SECTIONS = dashboardNav
-  .flatMap((group) => group.items)
-  .flatMap((item) => {
-    const section = menuSectionOf(item.href);
-    return section ? [{ section, title: item.title, icon: item.icon }] : [];
-  });
+const SECTIONS = menuSectionEntries(dashboardNav.flatMap((group) => group.items));
 
 /**
  * The menu with other work areas: what the admin takes off stays off, and the

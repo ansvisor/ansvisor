@@ -140,14 +140,14 @@ mirrors the MCP tool of the same purpose and returns the same data.
 
 **Mentions & sentiment**
 
-These take the Mentions page's filters: `brand_id`, `date_from` /
+These take the filters of Visibility's Mentions tab: `brand_id`, `date_from` /
 `date_to` (the last 30 days when left out), `platform` (e.g.
 `gemini-web`), `region`, `topic_id` and `search` over the prompts'
 text. They read the stored answers; no LLM is called.
 
 | Endpoint | Query / body | Returns |
 | --- | --- | --- |
-| `GET /mentions/summary` | the filters | the Overview: `current` and `previous` (times named, mentions, mention rate, prompts with mentions, average position, `sentiment` with `net` and `lowSample`), `changes` with their `basis`, `headline` (the platform that moved net sentiment most, competitors named beside the brand), `platforms[]`, `daily[]` |
+| `GET /mentions/summary` | the filters | the Mentions tab's Summary view: `current` and `previous` (times named, mentions, mention rate, prompts with mentions, average position, `sentiment` with `net` and `lowSample`), `changes` with their `basis`, `headline` (the platform that moved net sentiment most, competitors named beside the brand), `platforms[]`, `daily[]` |
 | `GET /mentions` | the filters, `sentiment`, `competitor_id` (`none` = no competitor), `sort` (`newest`/`oldest`/`co_mentions`/`negative`), `page` | `{ total, prompts, page, pageSize, mentions: [...] }`: 100 a page, each with sentiment, position, competitors in the same response and an `excerpt` |
 | `GET /mentions/{id}` | — | one response in full: text, citations, competitors named, sentiment, latest correction |
 | `GET /mentions/competitors` | the filters | each competitor's mentions, share of responses, change, and `sameResponseAsYou` |

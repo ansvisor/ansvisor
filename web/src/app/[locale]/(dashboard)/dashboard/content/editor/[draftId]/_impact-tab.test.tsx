@@ -190,7 +190,9 @@ describe('the Live page tab', () => {
   it('names the brand’s other pages cited for the same prompts', async () => {
     getContentImpact.mockResolvedValue(impact());
     await render();
-    expect(container.textContent).toContain('The only page cited for its prompt · no overlap');
+    expect(container.textContent).toContain('The only page of yours cited for its prompt');
+    // Pages cited for the same prompts aren't a problem (2026-11-06): no "overlap" words.
+    expect(container.textContent).not.toContain('overlap');
 
     getContentImpact.mockResolvedValue(
       impact({ overlap: [{ page: 'https://acme.example.com/blog/crm-guide', prompts: 1 }] }),

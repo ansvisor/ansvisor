@@ -8,6 +8,7 @@ Thank you for your interest in contributing to Ansvisor! This guide will help yo
 - **Feature requests** — have an idea? Start a discussion or open an issue.
 - **Code contributions** — fix a bug or implement a feature via pull request.
 - **Store connectors** — bring a store's or marketplace's products into the catalog; see [CONNECTORS.md](CONNECTORS.md).
+- **Integrations** — a CMS target for Send to CMS, an AI bot log source, a data read or an export; see [Adding an integration](docs/contributing/adding-an-integration.md).
 - **Documentation** — improve guides, fix typos, add examples.
 
 ## Prerequisites

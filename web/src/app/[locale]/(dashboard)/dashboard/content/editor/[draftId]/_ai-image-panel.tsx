@@ -36,6 +36,7 @@ type Failure =
   | 'ai_limit'
   | 'refused'
   | 'demo'
+  | 'storage_full'
   | 'not_saved'
   | 'failed'
   | 'upload';
@@ -184,6 +185,7 @@ export function AiImagePanel({
           'ai_limit',
           'refused',
           'demo',
+          'storage_full',
           'not_saved',
         ] as const
       ).find((c) => c === body?.code);

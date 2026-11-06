@@ -2,9 +2,10 @@ import type { ReportCardEngine, ReportCardPayload } from './payload';
 
 /**
  * A made-up card for tests and the sample PDF: a coffee shop that sells
- * online, asked in the United States, as a v5 card makes it (25 questions
- * by product, five engines, Starter's two heading it). Every name and site
- * is invented, and the sites are on the reserved .example domain.
+ * online, asked in the United States, as a card makes it since Copilot was
+ * dropped (25 questions by product, four engines, Starter's two, ChatGPT and
+ * Gemini, heading it). Every name and site is invented, and the sites are on
+ * the reserved .example domain.
  */
 
 /** The sample's questions: [text, product, searches a month, fit]. */
@@ -36,24 +37,24 @@ const QUESTIONS: [string, number, number | null, 'core' | 'related'][] = [
   ['coffee sampler gift box', 2, null, 'core'],
 ];
 
+const ENGINES = [
+  'chatgpt-web',
+  'gemini-web',
+  'google-aio',
+  'google-aimode',
+] as const satisfies readonly ReportCardEngine[];
+type SampleEngine = (typeof ENGINES)[number];
+
 /** Questions each engine named Brewline in (by index). */
-const NAMED: Record<ReportCardEngine, number[]> = {
+const NAMED: Record<SampleEngine, number[]> = {
   'chatgpt-web': [0, 1, 14, 20, 21, 2],
-  'copilot-web': [14, 20],
-  'gemini-web': [0, 2, 15, 22],
+  'gemini-web': [14, 20],
   'google-aio': [1, 3, 14, 20, 9],
   'google-aimode': [21, 15],
 };
 /** Google gave no AI Overview for these. */
 const NO_OVERVIEW = [12, 18, 24];
 const INSTEAD = ['Ridgeline Roasters', 'Copper Kettle Coffee', 'Harborline Beans', 'Sunday Grind'];
-const ENGINES: ReportCardEngine[] = [
-  'chatgpt-web',
-  'copilot-web',
-  'gemini-web',
-  'google-aio',
-  'google-aimode',
-];
 
 const questionRows = QUESTIONS.map(([text, product, volume, fit], i) => ({
   text,
@@ -70,11 +71,11 @@ const questionRows = QUESTIONS.map(([text, product, volume, fit], i) => ({
           ? 'named'
           : 'missed',
     ]),
-  ) as Record<ReportCardEngine, 'named' | 'missed' | 'none'>,
+  ) as Record<SampleEngine, 'named' | 'missed' | 'none'>,
   instead: INSTEAD[i % INSTEAD.length],
 }));
 
-const engineRow = (engine: ReportCardEngine) => ({
+const engineRow = (engine: SampleEngine) => ({
   engine,
   answers: questionRows.filter((row) => row.named[engine] !== 'none').length,
   named: NAMED[engine].length,
@@ -99,7 +100,7 @@ export const SAMPLE_REPORT_CARD: ReportCardPayload = {
     { name: 'Gift boxes', nameEn: null, url: null },
   ],
   engines: ENGINES.map(engineRow),
-  mainEngines: ['chatgpt-web', 'copilot-web'],
+  mainEngines: ['chatgpt-web', 'gemini-web'],
   // Counted over Starter's 50 answers, as the headline (analyze.js summarize).
   competitors: [
     { name: 'Ridgeline Roasters', answers: 21 },

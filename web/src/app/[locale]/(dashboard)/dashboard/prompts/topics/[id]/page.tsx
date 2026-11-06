@@ -29,7 +29,7 @@ import {
   Zap,
   Users,
 } from 'lucide-react';
-import { ShareOfVoicePlatformChart } from '../../../insights/_charts';
+import { ShareOfVoicePlatformChart } from '../../../(brand-visibility)/insights/_charts';
 import { cn } from '@/lib/utils';
 import { formatNumber } from '@/lib/format';
 import dynamic from 'next/dynamic';

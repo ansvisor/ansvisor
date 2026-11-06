@@ -4,14 +4,14 @@ route: /dashboard/mentions
 keywords: [send to action center, suggest content, act on mentions, negative mentions]
 synonyms: [improve how AI describes us, fix negative answers, turn mentions into tasks, create action from mentions]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/mentions.mdx]
 ---
-From the **Mentions** tab of the Mentions & Sentiment page, you can turn answers that name your brand into work: one Action Center action for a set of answers, or a content suggestion for an answer's prompt.
+From the **Answers** view on Visibility's **Mentions** tab, you can turn answers that name your brand into work: one Action Center action for a set of answers, or a content suggestion for an answer's prompt.
 
 ## Send answers to the Action Center
 
