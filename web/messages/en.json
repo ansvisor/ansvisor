@@ -4381,9 +4381,9 @@
       "sent": "Sent: {text}",
       "steered": "Stopped the run and sent: {text}",
       "stopped": "Stopped · done steps stay",
-      "homeGhost": "Why did our Perplexity citations drop this week?",
+      "homeGhost": "Why did our Gemini citations drop this week?",
       "dockGhost": "Start task 2: comparison page",
-      "panelGhost": "Show which pages Perplexity cites most"
+      "panelGhost": "Show which pages Gemini cites most"
     },
     "mode": {
       "label": "Run mode",
@@ -8054,7 +8054,7 @@
       "eyebrow": "AI visibility platform",
       "titleLead": "Improve AI Visibility and",
       "titleAccent": "Drive Growth.",
-      "subtitle": "Track your brand's presence across ChatGPT, Google AI, Perplexity and more.",
+      "subtitle": "Track your brand's presence across ChatGPT, Gemini, Google AI and more.",
       "features": {
         "monitor": {
           "title": "Monitor brand mentions and citations",
@@ -15522,7 +15522,7 @@
     "hero": {
       "badge": "Open Source Ansops Platform",
       "title": "Your Brand in Every AI Answer",
-      "subtitle": "Monitor, analyze, and optimize your brand's visibility across ChatGPT, Perplexity, Gemini, Claude, and more.",
+      "subtitle": "Monitor, analyze, and optimize your brand's visibility across ChatGPT, Gemini, Google AI, Claude, and more.",
       "cta": "Get Started for Free",
       "secondaryCta": "View on GitHub"
     },
