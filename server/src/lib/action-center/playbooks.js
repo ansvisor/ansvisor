@@ -76,7 +76,17 @@ export const PLAYS = Object.freeze([
   },
 ]);
 
-const PLAY_IDS = new Set(PLAYS.map((play) => play.id));
+/**
+ * A store's topic whose category page is live (AC plan P-7, spec §6.2):
+ * that page, optimized, rather than a new one. Picked on the catalog, not
+ * the prompts' intents (category-play.js), so it isn't in PLAYS.
+ */
+export const CATEGORY_PAGE_PLAY = Object.freeze({
+  id: 'category_page',
+  assetType: 'category_page',
+});
+
+const PLAY_IDS = new Set([...PLAYS.map((play) => play.id), CATEGORY_PAGE_PLAY.id]);
 
 /** Whether a play id is one the chooser picks (the drawer names only those). */
 export function isPlayId(id) {
@@ -137,6 +147,40 @@ export function rankPlays(prompts) {
   }
   // Best first; on a tie, in PLAYS' order.
   return ranked.sort((a, b) => b.score - a.score || PLAYS.indexOf(a.play) - PLAYS.indexOf(b.play));
+}
+
+/**
+ * The category page play for a store's topic action (above), as the
+ * payload keeps it: the category and its page as the reason, and the plays
+ * its prompts qualify for as the ones also worth doing.
+ *
+ * @param {{ siteType: string, category: { name: string, url: string, inStock: number },
+ *   prompts: Array<{ id: string, intent: string|null, volume: number|null }> }} input
+ */
+export function categoryPagePlay({ siteType, category, prompts = [] }) {
+  return {
+    version: PLAY_VERSION,
+    id: CATEGORY_PAGE_PLAY.id,
+    assetType: CATEGORY_PAGE_PLAY.assetType,
+    siteType,
+    reasons: [
+      {
+        kind: 'category',
+        category: category.name,
+        page: category.url,
+        inStock: category.inStock,
+      },
+    ],
+    supporting: rankPlays(prompts)
+      .slice(0, MAX_SUPPORTING)
+      .map((entry) => ({
+        id: entry.play.id,
+        assetType: entry.play.assetType,
+        prompts: entry.prompts,
+        of: entry.of,
+        share: entry.share,
+      })),
+  };
 }
 
 /**
