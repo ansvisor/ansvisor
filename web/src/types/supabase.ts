@@ -988,6 +988,9 @@ export type Database = {
           gsc_shopping_synced_at: string | null
           id: string
           industry: string | null
+          indexnow_host: string | null
+          indexnow_key: string | null
+          indexnow_verified_at: string | null
           insights_pinned_competitors: string[]
           is_active: boolean
           is_demo: boolean
@@ -1030,6 +1033,9 @@ export type Database = {
           gsc_shopping_synced_at?: string | null
           id?: string
           industry?: string | null
+          indexnow_host?: string | null
+          indexnow_key?: string | null
+          indexnow_verified_at?: string | null
           insights_pinned_competitors?: string[]
           is_active?: boolean
           is_demo?: boolean
@@ -1072,6 +1078,9 @@ export type Database = {
           gsc_shopping_synced_at?: string | null
           id?: string
           industry?: string | null
+          indexnow_host?: string | null
+          indexnow_key?: string | null
+          indexnow_verified_at?: string | null
           insights_pinned_competitors?: string[]
           is_active?: boolean
           is_demo?: boolean
@@ -4495,6 +4504,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          indexnow_pinged_at: string | null
           kept_sources: string[]
           method: string
           meta_description: string | null
@@ -4540,6 +4550,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          indexnow_pinged_at?: string | null
           kept_sources?: string[]
           method?: string
           meta_description?: string | null
@@ -4585,6 +4596,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          indexnow_pinged_at?: string | null
           kept_sources?: string[]
           method?: string
           meta_description?: string | null
