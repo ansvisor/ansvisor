@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
-import { focusFromWorkAreas, focusOf, type FocusArea } from '@/lib/chat/focus';
+import { focusOf, homeViewOf, type FocusArea, type HomeView } from '@/lib/chat/focus';
 import { skillsByFocus } from '@/lib/chat/focus-home';
 import { firstNameOf } from '@/lib/chat/home';
 import { importLegacyChats } from '@/lib/chat/legacy-import';
@@ -100,18 +100,18 @@ export async function chatFirstName(): Promise<string | null> {
 export interface ChatFocusState {
   /** The picked areas, in order; empty when skipped or cleared; null when never asked. */
   focus: FocusArea[] | null;
+  /** Home's view (00485): the Default view, or the one the focus tailors. */
+  view: HomeView;
   /** The picker opens by itself: never answered and never shown (it shows once). */
   ask: boolean;
-  /** The picks the picker starts with when there are none: from the person's work areas. */
-  prefill: FocusArea[];
 }
 
-const NO_FOCUS: ChatFocusState = { focus: null, ask: false, prefill: [] };
+const NO_FOCUS: ChatFocusState = { focus: null, view: 'default', ask: false };
 
 /**
- * The person's focus, whether the picker should open by itself, and the
- * picks their work areas (Settings › Menu access) suggest. A read that
- * fails opens Home as it is, without the picker.
+ * The person's focus, Home's view and whether the picker should open by
+ * itself. A read that fails opens Home on the Default view, without the
+ * picker.
  */
 export async function chatFocusState(): Promise<ChatFocusState> {
   const supabase = await createClient();
@@ -119,20 +119,17 @@ export async function chatFocusState(): Promise<ChatFocusState> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NO_FOCUS;
-  const [profile, prefs] = await Promise.all([
-    supabase.from('profiles').select('work_areas').eq('id', user.id).maybeSingle(),
-    supabase
-      .from('chat_user_prefs')
-      .select('focus, focus_prompted_at')
-      .eq('user_id', user.id)
-      .maybeSingle(),
-  ]);
+  const prefs = await supabase
+    .from('chat_user_prefs')
+    .select('focus, focus_prompted_at, home_view')
+    .eq('user_id', user.id)
+    .maybeSingle();
   if (prefs.error) return NO_FOCUS;
   const focus = focusOf(prefs.data?.focus);
   return {
     focus,
+    view: homeViewOf(prefs.data?.home_view),
     ask: focus === null && !prefs.data?.focus_prompted_at,
-    prefill: focusFromWorkAreas(profile.data?.work_areas ?? null),
   };
 }
 
