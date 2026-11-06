@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ComponentProps, type MouseEvent } from 'react';
 import { useTranslations } from 'next-intl';
+import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { Link, usePathname, useRouter } from '@/i18n/navigation';
 import {
   BRAND_VISIBILITY_TABS,
@@ -9,6 +10,7 @@ import {
   brandVisibilityTabOf,
   type BrandVisibilityTab,
 } from '@/lib/brand-visibility';
+import { menuSectionOf } from '@/lib/menu-access';
 import { cn } from '@/lib/utils';
 
 /**
@@ -53,10 +55,12 @@ export function BrandVisibilityTabLink({
 /**
  * The three tabs under the header: Overview, Mentions, Citations. Each is
  * its own route, so a tab loads its own data only when it is opened, and
- * the header above stays as it is. With `prefetch` (once the open tab's
- * figures are on screen) the other two are prefetched whole, so a switch
- * doesn't wait for the server to draw the tab; before that nothing is
- * prefetched, so it doesn't compete with the open tab's reads.
+ * the header above stays as it is. A tab whose section the person's menu
+ * hides (menu access) is left off, as the menu leaves it off. With
+ * `prefetch` (once the open tab's figures are on screen) the others are
+ * prefetched whole, so a switch doesn't wait for the server to draw the
+ * tab; before that nothing is prefetched, so it doesn't compete with the
+ * open tab's reads.
  */
 export function BrandVisibilityTabs({
   current,
@@ -66,9 +70,14 @@ export function BrandVisibilityTabs({
   prefetch?: boolean;
 }) {
   const t = useTranslations('brandVisibility.tabs');
+  const hiddenSections = useHiddenMenuSections();
+  const tabs = BRAND_VISIBILITY_TABS.filter(({ href }) => {
+    const section = menuSectionOf(href);
+    return !section || !hiddenSections.has(section);
+  });
   return (
     <nav aria-label={t('label')} className="flex gap-6 overflow-x-auto border-b">
-      {BRAND_VISIBILITY_TABS.map(({ id }) => {
+      {tabs.map(({ id }) => {
         const active = id === current;
         return (
           <BrandVisibilityTabLink
