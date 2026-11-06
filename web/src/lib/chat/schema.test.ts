@@ -1219,3 +1219,47 @@ describe('a notice when an agent needs its person (00474)', () => {
     expect(sql).toMatch(/drop constraint if exists chat_notices_kind_check/);
   });
 });
+
+describe('When a brand is added (00482)', () => {
+  const sql = migration('00482');
+
+  it('adds brand_added to the triggers and to the runs, keeping every kind before it', () => {
+    expect(allowed(constraint(sql, 'chat_agent_triggers_kind_check'), 'kind')).toEqual([
+      'schedule',
+      'signal',
+      'kpi',
+      'watch_rule',
+      'brand_added',
+    ]);
+    expect(allowed(constraint(sql, 'chat_agent_runs_trigger_kind_check'), 'trigger_kind')).toEqual([
+      'schedule',
+      'signal',
+      'kpi',
+      'watch_rule',
+      'brand_added',
+      'manual',
+      'action',
+      'agent',
+    ]);
+    expect(sql).toMatch(/drop constraint if exists chat_agent_triggers_kind_check/);
+    expect(sql).toMatch(/drop constraint if exists chat_agent_runs_trigger_kind_check/);
+  });
+
+  it('claims a fire once per agent, kind and brand, for the server alone to write', () => {
+    const claims = sql.match(
+      /create table if not exists public\.chat_agent_trigger_claims \(([\s\S]*?)\n\);/,
+    )![1];
+    expect(claims).toMatch(/primary key \(agent_id, kind, brand_id\)/);
+    expect(claims).toMatch(/references public\.chat_agents\(id\) on delete cascade/);
+    expect(claims).toMatch(/references public\.brands\(id\) on delete cascade/);
+    expect(allowed(claims, 'kind')).toEqual(['brand_added']);
+    expect(sql).toMatch(/alter table public\.chat_agent_trigger_claims enable row level security/);
+    expect(sql).toMatch(
+      /revoke all on table public\.chat_agent_trigger_claims from anon, authenticated/,
+    );
+    expect(sql).not.toMatch(/grant (insert|update|delete|all)[^;]*to authenticated/);
+    expect(policy('chat_agent_trigger_claims: agent select', sql)).toContain(
+      'brand_id in (select public.user_brand_ids())',
+    );
+  });
+});

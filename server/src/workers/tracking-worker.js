@@ -47,8 +47,13 @@ function resolveModelPlatform(model) {
  * strip the stored id, and restoring Grok would need a data repair rather
  * than a revert. Empty this list when Cloro reports Grok healthy again and
  * every prompt that still lists it resumes on the next run.
+ *
+ * Copilot and Perplexity are no longer offered: both block logged-out
+ * sessions, and Cloro rejects their tasks (400 MODEL_UNAVAILABLE). Prompts
+ * saved with them keep the ids, so they are skipped here, and the prompt's
+ * other engines still run.
  */
-export const UNAVAILABLE_PLATFORMS = ['grok-web'];
+export const UNAVAILABLE_PLATFORMS = ['grok-web', 'copilot-web', 'perplexity-web'];
 
 /**
  * The platforms a prompt should actually be run against.

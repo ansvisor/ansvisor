@@ -160,7 +160,7 @@ export function renderReportCardEmail({
   origin,
 }) {
   const t = emailCopy(payload.country?.code);
-  // The headline is Starter's engines (ChatGPT and Microsoft Copilot); a
+  // The headline is Starter's engines (ChatGPT and Gemini); a
   // card made before they were split counts every engine. The competitors
   // and own citations are counted over the same answers (analyze.js
   // summarize), so the three figures share one base.

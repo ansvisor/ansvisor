@@ -26,6 +26,13 @@ import {
 import { planCardOf, type PlanCard } from '@/lib/chat/access';
 import { qualityPhase } from '@/lib/content/quality';
 import { GO_LIVE_GROUPS, GO_LIVE_TERMS } from '@/lib/chat/go-live';
+import {
+  AGENT_WORK_KEY,
+  isAgentWork,
+  parseAgentWork,
+  type AgentWorkChange,
+  type AgentWorkView,
+} from '@/lib/chat/agent-work';
 import { logActivity } from '@/lib/chat/activity';
 import { readProviderChoices } from '@/lib/chat/model-menu';
 import {
@@ -38,8 +45,9 @@ import {
 /**
  * Settings › Chat (CHAT-20 §5, §8b; mockup #g-policy), behind CHAT_AGENTIC:
  * the tool policy per tool, Full auto for members, "Don't ask again", the
- * go-live groups Managers may click through, and the person's own "Don't
- * ask again" ticks. Everyone reads the rules Chat follows for them; only an
+ * go-live groups Managers may click through, Agent work (AC-011, also on
+ * Action Center › Today's gear), and the person's own "Don't ask again"
+ * ticks. Everyone reads the rules Chat follows for them; only an
  * Admin changes the workspace's, and only within what each tool and the
  * plan allow (policyChoices, policyChoiceLock), checked here again. The
  * person removes their own ticks.
@@ -89,6 +97,8 @@ export interface ChatSettingsView {
   goLive: GoLiveView | null;
   /** The model providers Chat may use (W4-34): on or off, Anthropic locked on. */
   modelProviders: { id: ModelProvider; name: string; on: boolean; locked: boolean }[];
+  /** Who starts agent work (AC-011), with its last change. */
+  agentWork: AgentWorkView;
 }
 
 /** The workspace switch for agents going live on their own, as Settings › Chat shows it. */
@@ -175,6 +185,7 @@ export async function getChatSettingsView(): Promise<
         // Hidden while staff haven't turned the feature on (CHAT_AUTO_GO_LIVE).
         goLive: autoGoLiveEnabled(me.organizationId) ? await readGoLive(me.organizationId) : null,
         modelProviders: await readModelProviders(me.organizationId),
+        agentWork: agentWorkView(me, await readAgentWorkChange(me.organizationId)),
       },
     };
   } catch {
@@ -256,19 +267,7 @@ async function readGoLive(organizationId: string): Promise<GoLiveView | null> {
   if (beforeGoLive(settings.error)) return null;
   if (settings.error) throw new Error(settings.error.message);
   const row = settings.data;
-  let byName: string | null = null;
-  if (row?.auto_go_live_by) {
-    const { data: profile } = await supabaseAdmin
-      .from('profiles')
-      .select('full_name')
-      .eq('id', row.auto_go_live_by)
-      .maybeSingle();
-    byName = profile?.full_name?.trim() || null;
-    if (!byName) {
-      const { data } = await supabaseAdmin.auth.admin.getUserById(row.auto_go_live_by);
-      byName = data?.user?.email ?? null;
-    }
-  }
+  const byName = row?.auto_go_live_by ? await personName(row.auto_go_live_by) : null;
   return {
     on: GO_LIVE_GROUPS.every((group) => (row?.auto_go_live_groups ?? []).includes(group)),
     since: row?.auto_go_live_at ?? null,
@@ -313,6 +312,117 @@ export async function setAutoGoLive(on: boolean, terms: number): Promise<Setting
     );
     if (beforeGoLive(error)) return { ok: false, failure: 'unavailable' };
     return error ? { ok: false, failure: 'failed' } : { ok: true };
+  } catch {
+    return { ok: false, failure: 'failed' };
+  }
+}
+
+/** A person's name as a settings line says it: their full name, else their e-mail. */
+async function personName(userId: string): Promise<string | null> {
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('full_name')
+    .eq('id', userId)
+    .maybeSingle();
+  const name = profile?.full_name?.trim();
+  if (name) return name;
+  const { data } = await supabaseAdmin.auth.admin.getUserById(userId);
+  return data?.user?.email ?? null;
+}
+
+// ─── Agent work (AC-011) ────────────────────────────────────────────────────
+
+/** A table or column 00481 adds, missing: the web ahead of its migration. */
+const beforeAgentWork = (error: { code?: string } | null) =>
+  !!error && ['42P01', 'PGRST205', '42703', 'PGRST204'].includes(error.code ?? '');
+
+/** Agent work's last change, with who made it; null when nobody changed it yet, or before 00481. */
+async function readAgentWorkChange(organizationId: string): Promise<AgentWorkChange | null> {
+  const { data, error } = await supabaseAdmin
+    .from('setting_changes')
+    .select('old_value, new_value, changed_by, changed_at')
+    .eq('organization_id', organizationId)
+    .eq('setting_key', AGENT_WORK_KEY)
+    .order('changed_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (beforeAgentWork(error)) return null;
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  return {
+    byName: data.changed_by ? await personName(data.changed_by) : null,
+    at: data.changed_at,
+    from: isAgentWork(data.old_value) ? data.old_value : null,
+    to: parseAgentWork(data.new_value),
+  };
+}
+
+function agentWorkView(me: Who, lastChange: AgentWorkChange | null): AgentWorkView {
+  return {
+    value: parseAgentWork(me.ctx.settings.agentWork),
+    // An ended plan is the save's to say (read_only), with the plan to choose.
+    canChange: me.ctx.role === 'admin',
+    lastChange,
+  };
+}
+
+/**
+ * Agent work for the gear on Action Center › Today: every member reads it,
+ * with its last change; chat_off while Chat is off (its agents are Chat's).
+ */
+export async function getAgentWorkView(): Promise<
+  { ok: true; view: AgentWorkView } | { ok: false; failure: 'chat_off' | 'failed' }
+> {
+  try {
+    const me = await who();
+    if (!me) return { ok: false, failure: 'chat_off' };
+    return { ok: true, view: agentWorkView(me, await readAgentWorkChange(me.organizationId)) };
+  } catch {
+    return { ok: false, failure: 'failed' };
+  }
+}
+
+/**
+ * Sets Agent work (AC-011): Admins only, while the plan is active. The
+ * change is kept with the value before and after, who made it and when
+ * (setting_changes, 00481); one that can't be kept is undone, so the
+ * setting never moves without its record. It counts from every agent run's
+ * next change: the precedence reads it fresh for each call.
+ */
+export async function setAgentWork(value: string): Promise<SettingsResult> {
+  try {
+    const admin = await asAdmin();
+    if (!admin.ok) return admin;
+    if (!isAgentWork(value)) return { ok: false, failure: 'invalid' };
+    const { me } = admin;
+    // Null: never set (no row), so the default applied.
+    const before = me.ctx.settings.agentWork ?? null;
+    if (parseAgentWork(before) === value) return { ok: true };
+
+    const write = (agentWork: string) =>
+      supabaseAdmin
+        .from('chat_settings')
+        .upsert(
+          { organization_id: me.organizationId, agent_work: agentWork, updated_by: me.userId },
+          { onConflict: 'organization_id' },
+        );
+    const saved = await write(value);
+    if (beforeAgentWork(saved.error)) return { ok: false, failure: 'unavailable' };
+    if (saved.error) return { ok: false, failure: 'failed' };
+
+    const logged = await supabaseAdmin.from('setting_changes').insert({
+      organization_id: me.organizationId,
+      setting_key: AGENT_WORK_KEY,
+      old_value: before,
+      new_value: value,
+      changed_by: me.userId,
+    });
+    if (logged.error) {
+      // Never a change without its record: the value before goes back.
+      await write(parseAgentWork(before));
+      return { ok: false, failure: beforeAgentWork(logged.error) ? 'unavailable' : 'failed' };
+    }
+    return { ok: true };
   } catch {
     return { ok: false, failure: 'failed' };
   }
