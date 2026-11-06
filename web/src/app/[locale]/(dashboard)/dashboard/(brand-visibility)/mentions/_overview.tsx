@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { ReadError } from '@/components/brand-visibility/read-error';
+import { useBrandVisibilityShell } from '@/components/brand-visibility/shell-context';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getMentionsOverview } from '@/lib/actions/mentions';
@@ -12,10 +14,8 @@ import { CompetitorTable } from './_competitor-table';
 import { Headline } from './_headline';
 import { OverviewKpis } from './_overview-kpis';
 import { PlatformTable } from './_platform-table';
+import { scheduleRead } from './_read-delay';
 import { TrendCard } from './_trend-card';
-
-/** Typing in the search box reads once it pauses, not on every key. */
-const READ_DELAY_MS = 250;
 
 type Loaded =
   | { brandId: string; key: string; status: 'ok'; overview: MentionsOverview | null }
@@ -47,14 +47,18 @@ export function MentionsOverviewTab({
   filters: MentionsFilters;
 }) {
   const t = useTranslations('mentions.overview');
+  const { readSent } = useBrandVisibilityShell();
   const query = useMemo(() => mentionsQuery(filters), [filters]);
   const key = query ? JSON.stringify([brandId, query]) : null;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // Retry reads the same filters once more.
+  const [attempt, setAttempt] = useState(0);
+  const first = useRef(true);
 
   useEffect(() => {
     if (!key || !query) return;
     let cancelled = false;
-    const timer = setTimeout(() => {
+    const cancelRead = scheduleRead(first, () => {
       getMentionsOverview(brandId, query)
         .then((overview) => {
           if (!cancelled) setLoaded({ brandId, key, status: 'ok', overview });
@@ -62,19 +66,30 @@ export function MentionsOverviewTab({
         .catch(() => {
           if (!cancelled) setLoaded({ brandId, key, status: 'error' });
         });
-    }, READ_DELAY_MS);
+      readSent();
+    });
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      cancelRead();
     };
-  }, [brandId, key, query]);
+  }, [brandId, key, query, attempt, readSent]);
 
   if (!query) return <Message>{t('pickDates')}</Message>;
   // Another brand's figures are never shown under this one's name.
   if (!loaded || loaded.brandId !== brandId) return <OverviewSkeleton />;
   if (loaded.status === 'error') {
     // A failed read gives way to the skeleton once a newer one is on its way.
-    return loaded.key === key ? <Message>{t('loadError')}</Message> : <OverviewSkeleton />;
+    return loaded.key === key ? (
+      <ReadError
+        title={t('loadError')}
+        onRetry={() => {
+          setLoaded(null);
+          setAttempt((n) => n + 1);
+        }}
+      />
+    ) : (
+      <OverviewSkeleton />
+    );
   }
   if (!loaded.overview) return <Message>{t('unavailable')}</Message>;
 

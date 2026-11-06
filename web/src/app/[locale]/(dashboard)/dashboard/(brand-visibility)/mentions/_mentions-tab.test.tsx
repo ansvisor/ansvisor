@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import messages from '../../../../../../messages/en.json';
+import messages from '../../../../../../../messages/en.json';
 import { DEFAULT_MENTIONS_FILTERS } from '@/lib/mentions-filters';
 import { DEFAULT_MENTIONS_TABLE, type MentionRow, type MentionsList } from '@/lib/mentions-list';
 import type { Competitor } from '@/types';
@@ -521,10 +521,23 @@ describe('MentionsListTab', () => {
     });
     expect(listMentions).toHaveBeenCalledTimes(2);
     expect(listMentions.mock.calls[1][3]).toBe(1);
-    expect(container.textContent).toContain("Couldn't load the mentions.");
+    expect(container.textContent).toContain("Couldn't load the mentions");
+    // Not "No mentions match": the read failed, and Retry is offered.
+    expect(container.textContent).not.toContain('No mentions match');
     // No silent jump back to the first page.
     await settle();
     expect(listMentions).toHaveBeenCalledTimes(2);
+
+    // Retry reads the same page again.
+    listMentions.mockResolvedValueOnce(list({ total: 250 }));
+    const retry = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Retry')!;
+    await act(async () => {
+      retry.click();
+      await vi.advanceTimersByTimeAsync(300);
+    });
+    expect(listMentions).toHaveBeenCalledTimes(3);
+    expect(listMentions.mock.calls[2][3]).toBe(1);
+    expect(container.textContent).not.toContain("Couldn't load the mentions");
   });
 
   it('says when nothing matches, and asks for dates on an empty custom range', async () => {

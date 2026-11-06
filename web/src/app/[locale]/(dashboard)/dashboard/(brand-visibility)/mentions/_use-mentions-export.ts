@@ -64,7 +64,7 @@ async function copyText(text: Promise<string>) {
 }
 
 /**
- * Export CSV and Copy summary for the Mentions & Sentiment page (MS-13).
+ * Export CSV and Copy summary for Brand Visibility's Mentions tab (MS-13).
  * Both read what they need when clicked, under the page's filters, and say
  * which filters and how many responses and mentions they rest on (spec §16).
  */
@@ -84,7 +84,7 @@ export function useMentionsExport({
   competitors: Competitor[];
 }) {
   const t = useTranslations('mentions.export');
-  const tMentions = useTranslations('mentions');
+  const tBrandVisibility = useTranslations('brandVisibility');
   const tFilters = useTranslations('mentions.filters');
   const tTable = useTranslations('mentions.table');
   const tSentiment = useTranslations('mentions.overview.sentiment');
@@ -142,7 +142,7 @@ export function useMentionsExport({
           ? tTable('noCompetitor')
           : (competitors.find((c) => c.id === table.competitor)?.name ?? table.competitor);
       const facts: ExportFact[] = [
-        { label: tMentions('title'), value: brand },
+        { label: tBrandVisibility('pageName.mentions'), value: brand },
         { label: t('facts.period'), value: period(overview.window) },
         { label: tFilters('platform'), value: values.platform },
         { label: tFilters('country'), value: values.country },

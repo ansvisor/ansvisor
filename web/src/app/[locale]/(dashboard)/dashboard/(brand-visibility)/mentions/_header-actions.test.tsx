@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import messages from '../../../../../../messages/en.json';
+import messages from '../../../../../../../messages/en.json';
 import {
   DEFAULT_MENTIONS_FILTERS,
   type MentionsFilters,
@@ -207,7 +207,7 @@ describe('MentionsHeaderActions', () => {
     expect(getMentionsOverview).toHaveBeenCalledWith('b1', expect.objectContaining({}));
     expect(writeText.mock.calls[0][0]).toBe(
       [
-        'Mentions & Sentiment · Acme Coffee',
+        'Visibility · Mentions · Acme Coffee',
         'All platforms · All countries · All topics',
         'Net sentiment is +34 (↓ 6 vs the previous 30 days). AI usually names Acme Coffee next to Crema Club.',
         // Total mentions counts every time a response names the brand, as the card does.
@@ -301,7 +301,7 @@ describe('MentionsHeaderActions', () => {
     expect(saved[0].name).toMatch(/^ansvisor_acme-coffee_mentions_\d{4}-\d{2}-\d{2}\.csv$/);
     const lines = (await savedText()).split('\n');
     expect(lines.slice(0, 11)).toEqual([
-      'Mentions & Sentiment,Acme Coffee',
+      'Visibility · Mentions,Acme Coffee',
       'Period,"2026-09-18 – 2026-10-17 (30 days, UTC)"',
       'Platform,All platforms',
       'Country,All countries',
@@ -358,11 +358,12 @@ describe('MentionsHeaderActions', () => {
     );
   });
 
-  it('waits for dates on a custom range, and links Reports', () => {
+  it('waits for dates on a custom range, and leaves Reports to the shared header', () => {
     render('overview', { ...DEFAULT_MENTIONS_FILTERS, range: 'custom' });
     expect(button('Copy summary')!.disabled).toBe(true);
     expect(button('Export CSV')!.disabled).toBe(true);
     expect(button('Export CSV')!.parentElement!.title).toBe('Choose a start or end date first.');
-    expect(container.querySelector('a[href="/dashboard/reports"]')?.textContent).toBe('Reports');
+    // Brand Visibility's header links Reports once for every tab.
+    expect(container.querySelector('a[href="/dashboard/reports"]')).toBeNull();
   });
 });

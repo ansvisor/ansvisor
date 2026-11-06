@@ -60,7 +60,7 @@ describe('WorkAreasStep', () => {
     await render(<WorkAreasStep title="What do you work on?" lede="Pick." onDone={onDone} />);
     expect(container.querySelectorAll('button[aria-pressed]')).toHaveLength(9);
     expect(button('Founders & leaders').textContent).toContain(
-      'Action Center · Chat · Brand Visibility · Competitors · Mentions · AI Referral Traffic · Reports',
+      'Action Center · Chat · Visibility · Competitors · Mentions · AI Referral Traffic · Reports',
     );
     expect(container.textContent).toContain('12 of 12 sections');
     // No Agent Center while the new Chat is off (and outside the dashboard).
@@ -74,7 +74,7 @@ describe('WorkAreasStep', () => {
       </ChatAgenticProvider>,
     );
     expect(button('Founders & leaders').textContent).toContain(
-      'Action Center · Chat · Agent Center · Brand Visibility',
+      'Action Center · Chat · Agent Center · Visibility',
     );
     expect(container.textContent).toContain('13 of 13 sections');
     // Developers keeps Agent Center without Chat, right after Action Center.

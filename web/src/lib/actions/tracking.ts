@@ -776,9 +776,29 @@ export interface InsightsData {
    * before the backfill, or when the read failed.
    */
   topicCompetitors: TopicCompetitors[] | null;
+  /**
+   * The sections whose read failed and stand in empty above (lenient mode):
+   * the page says they couldn't load, with Retry, rather than showing their
+   * empty shapes as "no competitors" or "no trend". Absent from a result
+   * cached before it was added, which had none.
+   */
+  failedSections?: InsightsSection[];
   /** The run ledger, when the 24h window was anchored to it (`anchor24h`). */
   trackingWindow: TrackingWindow | null;
 }
+
+/** The Insights sections read leniently: a failed one costs only itself. */
+export type InsightsSection =
+  | 'competitors'
+  | 'sov'
+  | 'trend'
+  | 'comparison'
+  | 'coverage'
+  | 'kpiSeries'
+  | 'platforms'
+  | 'whyChanged'
+  | 'trendMarkers'
+  | 'topicCompetitors';
 
 export interface TrackingWindow {
   /**
@@ -914,6 +934,7 @@ type WindowedInsights = Pick<
   | 'whyChanged'
   | 'trendMarkers'
   | 'topicCompetitors'
+  | 'failedSections'
 >;
 
 type InsightsFilterArgs = {
@@ -949,11 +970,18 @@ async function loadWindowedInsights(
   filterOpts: InsightsFilterArgs,
   { strict }: { strict: boolean },
 ): Promise<WindowedInsights> {
-  const lenient = <T>(promise: Promise<T>, fallback: T, label: string): Promise<T> =>
+  const failedSections: InsightsSection[] = [];
+  const lenient = <T>(
+    promise: Promise<T>,
+    fallback: T,
+    label: string,
+    section: InsightsSection,
+  ): Promise<T> =>
     strict
       ? promise
       : promise.catch((err) => {
           console.error(`[insights] ${label} failed`, err);
+          failedSections.push(section);
           return fallback;
         });
 
@@ -976,22 +1004,34 @@ async function loadWindowedInsights(
       getCompetitorComparison(brandId, filterOpts),
       EMPTY_COMPETITORS,
       'competitor comparison',
+      'competitors',
     ),
-    lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice'),
+    lenient(getShareOfVoiceData(brandId, filterOpts), EMPTY_SOV, 'share of voice', 'sov'),
     getInsightsFilterOptions(brandId),
     // The chart follows the same window as every other number on the page.
     lenient<VisibilityRateTrendData | null>(
       getVisibilityRateTrend(brandId, filterOpts),
       null,
       'visibility trend',
+      'trend',
     ),
-    lenient(getSamePromptComparison(brandId, filterOpts), null, 'same-prompt comparison'),
-    lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage'),
-    lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines'),
-    lenient(getPlatformData(brandId, filterOpts), null, 'platforms'),
-    lenient(getChangeDrivers(brandId, filterOpts), null, 'why it changed'),
-    lenient(getTrendMarkers(brandId, filterOpts), null, 'trend markers'),
-    lenient(getTopicCompetitors(brandId, filterOpts), null, 'topics vs competitors'),
+    lenient(
+      getSamePromptComparison(brandId, filterOpts),
+      null,
+      'same-prompt comparison',
+      'comparison',
+    ),
+    lenient(getCoverageKpi(brandId, filterOpts), null, 'coverage', 'coverage'),
+    lenient(getKpiSeries(brandId, filterOpts), null, 'KPI sparklines', 'kpiSeries'),
+    lenient(getPlatformData(brandId, filterOpts), null, 'platforms', 'platforms'),
+    lenient(getChangeDrivers(brandId, filterOpts), null, 'why it changed', 'whyChanged'),
+    lenient(getTrendMarkers(brandId, filterOpts), null, 'trend markers', 'trendMarkers'),
+    lenient(
+      getTopicCompetitors(brandId, filterOpts),
+      null,
+      'topics vs competitors',
+      'topicCompetitors',
+    ),
   ]);
   const windowed = {
     ...(comparisonWindows(filterOpts).prev ? { summary, sov } : withoutChanges(summary, sov)),
@@ -1014,6 +1054,7 @@ async function loadWindowedInsights(
       whyChanged(drivers, resolveProvider, { samePrompts: filterOpts.samePrompts !== false }),
     trendMarkers,
     topicCompetitors,
+    failedSections,
   };
   return withPromptComparison(windowed, same, filterOpts.samePrompts !== false);
 }

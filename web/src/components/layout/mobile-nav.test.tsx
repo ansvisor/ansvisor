@@ -138,6 +138,12 @@ describe('MobileNav', () => {
     expect(link('/dashboard/brands/brand-1/prompts')).toBeNull();
   });
 
+  it('opens Visibility on its first shown tab when Overview is hidden, as the desktop menu does', async () => {
+    await open(['insights']);
+    expect(link('/dashboard/insights')).toBeNull();
+    expect(link('/dashboard/mentions')).not.toBeNull();
+  });
+
   it('lists Agent Center under Chat with the new Chat on', async () => {
     await open([], true);
     expect(link('/dashboard/chat')).not.toBeNull();

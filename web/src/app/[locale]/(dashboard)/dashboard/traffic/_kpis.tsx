@@ -32,9 +32,9 @@ import {
 } from '@/lib/traffic-kpis';
 import { getPlatformName, isNamedPlatform } from '@/lib/traffic-platforms';
 import { googleSourceStatus, TRAFFIC_SECTION_SOURCES } from '@/lib/traffic-sources';
-import { MetricCard } from '../insights/_kpi-cards';
+import { MetricCard } from '../(brand-visibility)/insights/_kpi-cards';
 import { SummaryLine } from './_summary-line';
-import type { Change } from '../insights/kpi-format';
+import type { Change } from '../(brand-visibility)/insights/kpi-format';
 import { SourceKpiCard } from './_source-gate';
 import { getTrafficGoogleTotals } from '@/lib/traffic-reads';
 import { useRangeReady } from './_range-ready';

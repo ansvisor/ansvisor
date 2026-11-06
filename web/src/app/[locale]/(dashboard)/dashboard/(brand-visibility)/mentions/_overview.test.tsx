@@ -2,7 +2,7 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import messages from '../../../../../../messages/en.json';
+import messages from '../../../../../../../messages/en.json';
 import { DEFAULT_MENTIONS_FILTERS } from '@/lib/mentions-filters';
 import type { MentionPlatformRow, MentionsOverview, MentionTotals } from '@/lib/mentions-overview';
 import { CompetitorTable } from './_competitor-table';
@@ -299,22 +299,37 @@ describe('CompetitorTable', () => {
 });
 
 describe('MentionsOverviewTab', () => {
-  it('reads the overview once the filters settle and shows it', async () => {
+  // Brand Visibility: the tab's first read goes at once (nothing to wait
+  // for on opening); a filter changed after waits for typing to pause.
+  it('reads the overview at once on opening, then once the filters settle, and shows it', async () => {
     vi.useFakeTimers();
     getMentionsOverview.mockResolvedValue(overview);
     render(
       <MentionsOverviewTab brandId="b1" brand="Ansvisor" filters={DEFAULT_MENTIONS_FILTERS} />,
     );
-    expect(getMentionsOverview).not.toHaveBeenCalled();
+    expect(getMentionsOverview).toHaveBeenCalledTimes(1);
+    expect(getMentionsOverview.mock.calls[0][0]).toBe('b1');
+    // The skeleton until it is back, never an empty state.
+    expect(container.textContent).toBe('');
+    expect(container.querySelector('[aria-hidden]')).not.toBeNull();
+    await act(async () => {});
+    expect(container.textContent).toContain('Net sentiment is +34');
+
+    render(
+      <MentionsOverviewTab
+        brandId="b1"
+        brand="Ansvisor"
+        filters={{ ...DEFAULT_MENTIONS_FILTERS, q: 'espresso' }}
+      />,
+    );
+    expect(getMentionsOverview).toHaveBeenCalledTimes(1);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(250);
     });
-    expect(getMentionsOverview).toHaveBeenCalledTimes(1);
-    expect(getMentionsOverview.mock.calls[0][0]).toBe('b1');
-    expect(container.textContent).toContain('Net sentiment is +34');
+    expect(getMentionsOverview).toHaveBeenCalledTimes(2);
   });
 
-  it('says a read failed, and shows the skeleton again once a newer one is on its way', async () => {
+  it('says a read failed, with Retry, and shows the skeleton again once a newer one is on its way', async () => {
     vi.useFakeTimers();
     getMentionsOverview.mockRejectedValueOnce(new Error('offline'));
     render(
@@ -323,7 +338,35 @@ describe('MentionsOverviewTab', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(250);
     });
-    expect(container.textContent).toBe("Couldn't load the overview. Try again in a moment.");
+    expect(container.textContent).toBe(
+      "Couldn't load the overviewThe read failed or took too long. Nothing is lost: try again.Retry",
+    );
+    expect(container.textContent).not.toContain('No tracked responses');
+
+    // Retry reads the same filters again, with the skeleton meanwhile.
+    getMentionsOverview.mockResolvedValueOnce(overview);
+    const retry = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Retry')!;
+    await act(async () => retry.click());
+    expect(container.querySelector('[aria-hidden]')).not.toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(getMentionsOverview).toHaveBeenCalledTimes(2);
+    expect(getMentionsOverview.mock.calls[1]).toEqual(getMentionsOverview.mock.calls[0]);
+    expect(container.textContent).toContain('Net sentiment is +34');
+
+    getMentionsOverview.mockRejectedValueOnce(new Error('offline'));
+    render(
+      <MentionsOverviewTab
+        brandId="b1"
+        brand="Ansvisor"
+        filters={{ ...DEFAULT_MENTIONS_FILTERS, range: '90d' }}
+      />,
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    expect(container.textContent).toContain("Couldn't load the overview");
 
     render(
       <MentionsOverviewTab

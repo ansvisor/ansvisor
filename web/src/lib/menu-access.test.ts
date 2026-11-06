@@ -46,6 +46,20 @@ describe('MENU_SECTIONS', () => {
     );
   });
 
+  // Brand Visibility gathered Mentions and Citations as its tabs; each keeps
+  // its section, so menus set before (and the work areas naming them) stand.
+  it('keeps Mentions and Citations as sections of their own, right after Brand Visibility', () => {
+    const at = MENU_SECTIONS.indexOf('insights');
+    expect(MENU_SECTIONS.slice(at, at + 4)).toEqual([
+      'insights',
+      'mentions',
+      'citations',
+      'prompts',
+    ]);
+    expect(cleanMenuSections(['citations', 'mentions'])).toEqual(['mentions', 'citations']);
+    expect(hidden({ roleHidden: ['mentions'] })).toEqual(['mentions']);
+  });
+
   it('lists Competitors right after Reports, so roles and people can hide it', () => {
     expect(MENU_SECTIONS.indexOf('competitors')).toBe(MENU_SECTIONS.indexOf('reports') + 1);
     expect(cleanMenuSections(['competitors'])).toEqual(['competitors']);
@@ -203,8 +217,8 @@ describe('hiddenWithWorkAreas', () => {
     expect(hiddenWithWorkAreas(['mentions'], ['brand'])).toEqual([
       'content',
       'audit',
-      'prompts',
       'mentions',
+      'prompts',
       'shopping',
       'traffic',
     ]);
@@ -224,7 +238,7 @@ describe('menuOfProfile', () => {
 
   it('builds the menu from the profile and the role’s row', () => {
     expect(menuOfProfile(profile, ['citations'])).toEqual({
-      hidden: ['content', 'audit', 'prompts', 'citations', 'shopping', 'traffic'],
+      hidden: ['content', 'audit', 'citations', 'prompts', 'shopping', 'traffic'],
       hiddenByAdmin: ['citations'],
       workAreas: ['brand'],
       workAreasAsked: false,

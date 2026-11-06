@@ -43,7 +43,7 @@ The box in the panel starts with chips for what you have on screen: the page, yo
 
 An empty panel offers a few questions about the page, some from what the page shows, such as the platform that moved most. Click one to put it in the box, then edit it or send it.
 
-The speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Brand Visibility, Mentions & Sentiment, Citations, AI Referral Traffic, Prompts and Action Center.
+The speech bubble icon next to a table's or chart's title, on a tracked prompt and on an Action Center action opens the panel with it attached, so you can ask about it directly. You find it on Visibility's Overview, Mentions and Citations tabs, AI Referral Traffic, Prompts and Action Center.
 
 ## Chats in the panel
 
