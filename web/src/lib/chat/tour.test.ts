@@ -12,12 +12,20 @@ import { isTourTopic, TOUR_PAGES, TOUR_TOPICS } from './tour';
 
 const APP = path.join(__dirname, '../../app/[locale]/(dashboard)');
 
-/** Whether a route is a page of the app: a folder per segment, or a [param] folder. */
+/** A folder and the (group) folders inside it, which add nothing to the address. */
+function withGroups(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  const groups = readdirSync(dir)
+    .filter((entry) => /^\(.+\)$/.test(entry))
+    .flatMap((entry) => withGroups(path.join(dir, entry)));
+  return [dir, ...groups];
+}
+
+/** Whether a route is a page of the app: a folder per segment, or a [param] folder, through (group) folders. */
 function pageExists(route: string): boolean {
   let dirs = [APP];
   for (const segment of route.split('/').filter(Boolean)) {
-    dirs = dirs.flatMap((dir) => {
-      if (!existsSync(dir)) return [];
+    dirs = dirs.flatMap(withGroups).flatMap((dir) => {
       const named = path.join(dir, segment);
       const params = readdirSync(dir)
         .filter((entry) => /^\[[^.\]]+\]$/.test(entry))
@@ -25,7 +33,7 @@ function pageExists(route: string): boolean {
       return [...(existsSync(named) ? [named] : []), ...params];
     });
   }
-  return dirs.some((dir) => existsSync(path.join(dir, 'page.tsx')));
+  return dirs.flatMap(withGroups).some((dir) => existsSync(path.join(dir, 'page.tsx')));
 }
 
 describe('the tour topics', () => {
