@@ -15097,7 +15097,7 @@
     },
     "indexnow": {
       "title": "IndexNow",
-      "description": "Tells Bing, Yandex and other search engines when a page of {brand} goes live through Send to CMS, so they don't wait for a crawl. Bing's index feeds Microsoft Copilot.",
+      "description": "Tells Bing, Yandex and other search engines when a page of {brand} goes live through Send to CMS, so they don't wait for a crawl.",
       "noBrand": "Pick a brand to set up IndexNow.",
       "on": "On",
       "waiting": "Waiting for the file",

@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: false
 sources: [docs/guides/send-to-cms.mdx]
 ---
-**IndexNow** tells Bing, Yandex and other search engines that share it when a page of your brand goes live through **Send to CMS**, so they don't wait for their next crawl. Bing's index feeds Microsoft Copilot. It is free, uses no AI and never holds up a publish.
+**IndexNow** tells Bing, Yandex and other search engines that share it when a page of your brand goes live through **Send to CMS**, so they don't wait for their next crawl. It is free, uses no AI and never holds up a publish.
 
 ## Set it up
 
