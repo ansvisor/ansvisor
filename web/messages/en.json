@@ -4159,6 +4159,7 @@
       "factsMatch": "Every figure matches the data",
       "factsRemoved": "{count, plural, one {# figure wasn't in the data, so it was left out} other {# figures weren't in the data, so they were left out}}",
       "readHelp": "Read Ansvisor Help",
+      "readFiles": "Read your attached files",
       "ask": "Waiting for your answer",
       "askSkipped": "Skipped · used {option}",
       "askStopped": "Question skipped",

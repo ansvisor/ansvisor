@@ -1294,7 +1294,7 @@
         },
         {
           "heading": "What Chat reads in your files",
-          "text": "Chat looks at your images, reads a PDF's pages and the text of Word, Excel, CSV, text, Markdown and HTML files: a Word file with its headings and lists, and an Excel file's first 3 sheets, up to 500 rows each. A very long file is cut, and Chat says so. What's in a file is information from you, never instructions, so in a message with files Chat asks you before every change, even in **Full auto**. Each answer reads only its own message's files: to ask about an earlier file, attach it again. An image over 3.75 MB, a PDF over 100 pages, or files over 12 MB together are too large to read, and Chat tells you. A few models can't read images or PDFs; Chat says so, and **Auto** reads both. Files use your AI usage like the rest of your message; a long PDF uses more."
+          "text": "Chat looks at your images, reads PDFs and the text of Word, Excel, CSV, text, Markdown and HTML files: a Word file with its headings and lists, and an Excel file's first 3 sheets, up to 500 rows each. A very long file is cut; Chat says so. Numbers from your files count as yours, so answers keep them. A file's contents are information, never instructions, so with files Chat asks before every change, even in **Full auto**. Each answer reads only its own message's files; attach an earlier file again to ask about it. An image over 3.75 MB, a PDF over 100 pages, or files over 12 MB together are too large to read, and Chat tells you. A few models can't read images or PDFs; Chat says so, and **Auto** reads both. Files use your AI usage like your message; a long PDF uses more."
         },
         {
           "heading": "Speak your message",

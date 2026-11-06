@@ -24,11 +24,18 @@ import { approvalFor, type ActivityApproval } from './activity';
 import { loadRunAttachments, readSentUploads, type SentUpload } from './attachment-store';
 import {
   ATTACHMENTS_ONLY,
+  ATTACHMENT_SOURCE,
+  TRANSCRIBE_READ,
+  TRANSCRIBE_SYSTEM,
+  TRANSCRIPT_CHARS,
   attachmentParts,
-  attachmentTexts,
+  attachmentFacts,
   attachmentTokens,
   earlierFilesLine,
   modelReads,
+  textFigures,
+  transcribeParts,
+  visualFiles,
   type ModelReads,
   type RunAttachment,
 } from './attachments';
@@ -73,7 +80,7 @@ import {
   type ChatStepScope,
 } from './events';
 import { HOLD_MAX, checkFigures, figureHold, figuresOfRun, type KnownFigures } from './facts';
-import { fitResult, toJson } from './fit';
+import { cutText, fitResult, toJson } from './fit';
 import { historyMessages, planHistory, type HistoryPlan, type HistoryRow } from './history';
 import { fitImageParts } from './images/chat-images';
 import {
@@ -957,6 +964,8 @@ type Progress = RunProgress & {
   scope?: MessageScope;
   /** How many files the question was sent with (00409): its run can't go on without them. */
   attachments?: number;
+  /** Its images and PDFs were written out for the fact check, or that was tried (readAttachedFiles). */
+  filesRead?: boolean;
   /** The picked model was checked against the catalog once (W4-03). */
   modelChecked?: boolean;
   /**
@@ -1143,6 +1152,8 @@ export async function driveRun(
     // as after a read, every change shows a card and no skill loads at the model's pick (CHAT-20
     // §16a). The person's own /name was loaded above, before them.
     if (rc.attachments.length > 0) rc.progress.tainted = true;
+    // Their images and PDFs written out once, so the fact check knows their figures.
+    if ((await readAttachedFiles(rc)) === 'ended') return;
     await modelLoop(rc);
   } catch (err) {
     console.error('[chat/engine] a run failed:', err);
@@ -1717,6 +1728,124 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
   });
   await finish(rc);
   return 'ended';
+}
+
+// ─── Attached files ─────────────────────────────────────────────────────────
+
+/**
+ * The question's images and PDFs written out (owner decision 2026-11-07):
+ * once a run, before its first reading step, the read model writes out
+ * their visible text and numbers (attachments.ts TRANSCRIBE_SYSTEM). It
+ * goes in the read log as untrusted data from source 'attachment', so the
+ * writer reads it as any read and the fact check knows its figures: a
+ * number in the person's own screenshot isn't masked. Held and charged on
+ * the AI budget as every step, and shown as a step. When it fails, or its
+ * hold is refused (the next step's says why), the run goes on as before,
+ * their figures unknown. 'ended' when the person stopped the run.
+ */
+async function readAttachedFiles(rc: RunContext): Promise<'none' | 'ended'> {
+  if (rc.progress.filesRead !== undefined) return 'none';
+  const choice = rc.models.pick('read');
+  const files = visualFiles(rc.attachments, modelReads(choice.budgetModel));
+  if (files.length === 0) return 'none';
+  rc.progress.filesRead = false;
+  const names = files.map((file) => file.name).join(' · ');
+  const started = Date.now();
+  let row = await insertStep(rc.run.id, {
+    position: ++rc.progress.steps,
+    kind: 'read',
+    status: 'running',
+    label: t('step.readFiles'),
+    detail: names,
+  });
+  rc.sink.emit('step.started', { step: clientStep(row) });
+  const endStep = async (patch: Parameters<typeof updateStep>[1]) => {
+    row = await updateStep(row.id, { measure: { latencyMs: Date.now() - started }, ...patch });
+    rc.sink.emit('step.finished', { step: clientStep(row) });
+  };
+  const messages: ModelMessage[] = [{ role: 'user', content: transcribeParts(files) }];
+  const reservation = await reserveChatStep({
+    organizationId: rc.run.organizationId,
+    runId: rc.run.id,
+    ...meteredAs(rc),
+    model: choice.budgetModel,
+    inputTokens:
+      estimateInputTokens([TRANSCRIBE_SYSTEM, messages]) +
+      attachmentTokens(files, modelReads(choice.budgetModel)),
+    maxOutputTokens: choice.maxOutputTokens,
+    source: rc.models.source,
+  });
+  if (!reservation.ok) {
+    await endStep({ status: 'skipped', detail: t('step.skipped') });
+    return 'none';
+  }
+  const { budget } = reservation;
+  const called = Date.now();
+  let written = '';
+  try {
+    const result = streamText({
+      model: choice.model,
+      system: TRANSCRIBE_SYSTEM,
+      messages,
+      maxOutputTokens: choice.maxOutputTokens,
+      providerOptions: choice.providerOptions,
+      abortSignal: rc.signal,
+    });
+    for await (const part of result.fullStream) {
+      if (part.type === 'text-delta') written += part.text;
+      else if (part.type === 'error') throw part.error;
+    }
+    if (rc.signal.aborted) {
+      budget.keep();
+      await stopNow(rc);
+      return 'ended';
+    }
+    await budget.charge(stepUsage(await result.usage), Date.now() - called);
+    await keyAnswered(rc);
+  } catch (err) {
+    if (rc.signal.aborted) {
+      budget.keep();
+      await stopNow(rc);
+      return 'ended';
+    }
+    await budget.release();
+    const failure = stepFailure(rc.models, choice.budgetModel, err);
+    // The own key failed: every step after it runs on the same key.
+    if (failure instanceof KeyFailureError) throw failure;
+    console.error(
+      "[chat/engine] the attached files couldn't be written out; their figures stay unchecked:",
+      err,
+    );
+    await endStep({ status: 'error', detail: t('step.readFailed') });
+    return 'none';
+  } finally {
+    await budget.release();
+  }
+  // Outside text (§16a): hidden text goes, an attempt to instruct is marked, as a read's.
+  const guarded = guardData(cutText(written.trim(), TRANSCRIPT_CHARS));
+  if (guarded.injection) rc.progress.injection = true;
+  const transcript = String(guarded.value);
+  if (!transcript) {
+    console.error(
+      '[chat/engine] the attached files were written out empty; their figures stay unchecked',
+    );
+    await endStep({ status: 'error', detail: t('step.readFailed') });
+    return 'none';
+  }
+  rc.progress.filesRead = true;
+  rc.progress.readLog.push({
+    tool: TRANSCRIBE_READ,
+    input: { files: files.map((file) => file.name) },
+    result: transcript,
+    source: ATTACHMENT_SOURCE,
+    untrusted: true,
+  });
+  await endStep({
+    status: 'done',
+    detail: names,
+    measure: { latencyMs: Date.now() - started, resultTokens: tokensOf(transcript.length) },
+  });
+  return 'none';
 }
 
 // ─── Memory ─────────────────────────────────────────────────────────────────
@@ -2443,8 +2572,15 @@ function runFigures(rc: RunContext): KnownFigures {
     question: `${rc.progress.question ?? ''}\n${todayLine()}`,
     history: [rc.history.summary ?? '', ...rc.history.recent.map((m) => toJson(m.content))],
     reads: [...rc.progress.readLog.map((read) => toJson(read)), ...results],
-    // A figure in a file the person attached is theirs, as one in their message.
-    given: [rc.progress.scope ?? null, ...attachmentTexts(rc.attachments)],
+    // A figure in a file the person attached is theirs, as one in their message: its text's,
+    // and what was written out of its images and PDFs (readAttachedFiles), cell by cell too.
+    given: [
+      rc.progress.scope ?? null,
+      ...attachmentFacts(rc.attachments),
+      ...rc.progress.readLog
+        .filter((read) => read.source === ATTACHMENT_SOURCE && typeof read.result === 'string')
+        .flatMap((read) => textFigures(read.result as string, false)),
+    ],
     skills: loadedSkillList(rc).map((skill) => skill.body),
     periods: APP_PERIODS,
   });

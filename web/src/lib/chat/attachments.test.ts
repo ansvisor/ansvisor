@@ -11,6 +11,7 @@ const {
   FILE_TEXT_CHARS,
   IMAGE_TOKENS,
   PDF_PAGE_TOKENS,
+  attachmentFacts,
   attachmentParts,
   attachmentTokens,
   earlierFilesLine,
@@ -19,6 +20,7 @@ const {
   pdfPages,
 } = await import('./attachments');
 const { estimateInputTokens } = await import('./engine-model');
+const { checkFigures, figuresOfRun } = await import('./facts');
 const { OFFERED_MODELS } = await import('./models');
 type RunAttachment = import('./attachments').RunAttachment;
 
@@ -181,5 +183,54 @@ describe('earlierFilesLine', () => {
     expect(earlierFilesLine(['chart.png', 'brief.pdf'])).toBe(
       '[Files attached to this message: "chart.png", "brief.pdf". Only the current message\'s files are sent to you; ask the person to attach one again if you need to read it.]',
     );
+  });
+});
+
+describe('the fact check on attached files (CHAT-05 item 11)', () => {
+  const TRAFFIC = 'month,visits,signups\nAug,1200,40\nSep,1500,55\nOct,2100,81';
+  const ANSWER =
+    'Visits went from 1,200 in Aug to 1,500 in Sep and 2,100 in Oct, up 75%; signups were 40, 55 and 81.';
+  const knownFrom = (given: unknown[]) =>
+    figuresOfRun({ question: 'How is traffic?', history: [], reads: [], given });
+
+  it('knows every number of a CSV, written with thousands separators, and the changes in a column', () => {
+    // Read as one text, "1500,55" is one number with a decimal comma: why most were masked.
+    expect(checkFigures(ANSWER, knownFrom([TRAFFIC])).replaced).toEqual([
+      '1,500',
+      '2,100',
+      '75%',
+      '40',
+      '55',
+      '81',
+    ]);
+    const checked = checkFigures(ANSWER, knownFrom(attachmentFacts([{ ...csv, text: TRAFFIC }])));
+    expect(checked.replaced).toEqual([]);
+    expect(checked.text).toBe(ANSWER);
+  });
+
+  it('knows the numbers of JSON, Markdown, Word and Excel text', () => {
+    const files: RunAttachment[] = [
+      { ...csv, name: 'a.json', mimeType: 'application/json', text: '{"rows":[{"visits":3456}]}' },
+      {
+        ...csv,
+        name: 'b.md',
+        mimeType: 'text/markdown',
+        text: '| month | visits |\n|---|---|\n| Nov | 2345 |',
+      },
+      {
+        ...csv,
+        name: 'c.docx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        text: '# Brief\n\nTarget: 9,870 sessions, 12,5% conversion.',
+      },
+      {
+        ...csv,
+        name: 'd.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        text: '# Q4\nweek,orders\n1,640\n2,712',
+      },
+    ];
+    const answer = 'Visits 3,456 and 2,345; 9,870 sessions at 12,5%; orders 640 then 712.';
+    expect(checkFigures(answer, knownFrom(attachmentFacts(files))).replaced).toEqual([]);
   });
 });
