@@ -70,6 +70,7 @@ vi.mock('@/lib/actions/chat-prefs', () => ({
   skipChatFocus: vi.fn(),
   markFocusPrompted: vi.fn(),
   dismissAgentsForYou: forYou.dismiss,
+  dismissChatWelcome: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: { activeBrandId: string }) => unknown) =>
@@ -980,6 +981,28 @@ describe('Agents for you (AGENTS plan §8, #11)', () => {
     );
     expect(section()).toBeNull();
     expect(forYou.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits while the welcome card shows, and follows once it is gone (owner, 2026-11-06)', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false })),
+    ) as unknown as typeof fetch;
+    forYou.read.mockResolvedValue({ ok: true, agents: AGENTS, canTurnOn: true });
+    homeFocus.areas = [];
+    await render(<ChatHome firstName="Alex" welcome="demo" newMember />);
+    await act(async () => undefined);
+    // One card at a time: the tour first.
+    expect(host.querySelector('[data-slot="chat-welcome"]')).not.toBeNull();
+    expect(forYou.read).not.toHaveBeenCalled();
+    expect(section()).toBeNull();
+
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="welcome.notNow"]')!.click(),
+    );
+    await act(async () => undefined);
+    expect(host.querySelector('[data-slot="chat-welcome"]')).toBeNull();
+    expect(forYou.read).toHaveBeenCalledWith(BRAND);
+    expect(cards()).toHaveLength(3);
   });
 
   it('is not read on anyone else’s Default view (00485), and is where Home has a focus', async () => {

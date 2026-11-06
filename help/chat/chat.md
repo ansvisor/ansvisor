@@ -25,11 +25,11 @@ Chat opens on **Home**: a greeting by name at your time of day, then a link to y
 
 In your first 14 days in a workspace, once you've answered or skipped **What do you work on?**, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.
 
-It shows on the **Default view** too, under the greeting, and with Home's other sections when Home has a focus. Everyone else's Default view stays as it is.
+It shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.
 
-Admins and Managers click an agent to open its card in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.
+Admins and Managers click an agent to open it in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.
 
-Click **×** (**Hide Agents for you**) to hide the section. It stays hidden on all your devices.
+Click **×** (**Hide Agents for you**) to hide it on all your devices.
 
 ## The welcome card
 

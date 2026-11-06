@@ -640,7 +640,9 @@ export function ChatHome({
 
   // Agents for you (AGENTS plan §8, #11): for the open brand, while it is open for the
   // person. The Default view (00485) reads it for a new member only (owner, 2026-11-06).
-  const agentsShown = !plain || newMember;
+  // While the welcome card shows (the trial, the demo), the tour comes first: one card
+  // at a time, and Agents for you follows once the card is gone (owner, 2026-11-06).
+  const agentsShown = (!plain || newMember) && !welcomeShown;
   useEffect(() => {
     if (!agentsShown || !brandId) return;
     let current = true;
