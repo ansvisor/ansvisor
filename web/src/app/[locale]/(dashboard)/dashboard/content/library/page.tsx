@@ -50,6 +50,7 @@ import { readFirstAiCrawls } from '@/lib/content/first-ai-crawl';
 import {
   AGENT_POLL_MS,
   CREATED_RANGES,
+  LIBRARY_ACTION_PARAM,
   LIBRARY_TABS,
   MADE_IN_FILTERS,
   SEND_FILTERS,
@@ -58,6 +59,7 @@ import {
   draftsInTab,
   draftsLastSent,
   draftsMadeIn,
+  draftsOfAction,
   type ContentDraftListItem,
   type CreatedRange,
   type DraftStatus,
@@ -113,6 +115,8 @@ export default function ContentLibraryPage() {
   const [sent, setSent] = useState<SendFilter>('all');
   // Which shopping paths are listed, on an online shop: ?shopping=attention.
   const [shoppingFilter, setShoppingFilter] = useState<ShoppingFilter>('all');
+  // One Action Center action's drafts, as its Start now's several pages open: ?action=<id>.
+  const [actionFilter, setActionFilter] = useState<string | null>(null);
   const [read, setRead] = useState<LibraryRead | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [starting, setStarting] = useState(false);
@@ -157,6 +161,7 @@ export default function ContentLibraryPage() {
     setMadeIn(readUrlChoice('madeIn', MADE_IN_FILTERS, 'all'));
     setSent(readUrlChoice('sent', SEND_FILTERS, 'all'));
     setShoppingFilter(readUrlChoice('shopping', SHOPPING_FILTERS, 'all'));
+    setActionFilter(readUrlParam(LIBRARY_ACTION_PARAM) || null);
     // Once: closed, it doesn't open again on a reload. Read-only, it doesn't open.
     if (readUrlParam('new') === '1') {
       if (!isLocked) setStarting(true);
@@ -444,7 +449,12 @@ export default function ContentLibraryPage() {
   const drafts = current?.drafts ?? null;
   const counts = current?.counts ?? null;
   const inTab = drafts ? draftsInTab(drafts, tab) : [];
-  const createdIn = draftsMadeIn(draftsCreatedIn(inTab, created), madeIn);
+  const ofAction = draftsOfAction(inTab, actionFilter);
+  const createdIn = draftsMadeIn(draftsCreatedIn(ofAction, created), madeIn);
+  // The action's number, as its drafts name it; none listed yet, none shown.
+  const actionNo = actionFilter
+    ? (drafts?.find((draft) => draft.action?.id === actionFilter)?.action?.number ?? null)
+    : null;
   // Made in shows once the brand's drafts come from more than one place, or while the URL names one.
   const anyMadeElsewhere = !!drafts?.some((draft) => draft.origin !== 'editor');
   // Shopping paths are an online shop's (shopping path, 00351).
@@ -507,6 +517,26 @@ export default function ContentLibraryPage() {
         siteType={siteTypeOf(activeBrand ?? {})}
         onSent={() => setAttempt((n) => n + 1)}
       />
+
+      {actionFilter && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+          <span className="text-muted-foreground">
+            {actionNo !== null ? t('actionFilter.of', { no: actionNo }) : t('actionFilter.one')}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => {
+              setActionFilter(null);
+              clearPicked();
+              writeUrlParams({ [LIBRARY_ACTION_PARAM]: null });
+            }}
+          >
+            {t('actionFilter.showAll')}
+          </Button>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <Tabs value={tab} onValueChange={(v) => changeTab(v as LibraryTab)}>
@@ -666,11 +696,13 @@ export default function ContentLibraryPage() {
           ) : listed.length === 0 && inTab.length > 0 ? (
             <p className="px-6 py-12 text-center text-sm text-muted-foreground">
               {t(
-                createdIn.length === 0
-                  ? 'created.empty'
-                  : shopped.length === 0
-                    ? 'shopping.empty'
-                    : 'lastSend.empty',
+                ofAction.length === 0
+                  ? 'actionFilter.empty'
+                  : createdIn.length === 0
+                    ? 'created.empty'
+                    : shopped.length === 0
+                      ? 'shopping.empty'
+                      : 'lastSend.empty',
               )}
             </p>
           ) : (

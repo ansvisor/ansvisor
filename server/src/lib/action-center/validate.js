@@ -324,7 +324,7 @@ const TARGET_BASKETS = new Set(['prompts', 'pages']);
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The brand's primary domain as a host, for a page target written as a path. */
-async function primaryHost(brandId, { db = supabaseAdmin } = {}) {
+export async function primaryHost(brandId, { db = supabaseAdmin } = {}) {
   const { data, error } = await db
     .from('brand_domains')
     .select('domain')

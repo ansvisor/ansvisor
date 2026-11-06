@@ -184,6 +184,35 @@ describe('ActionTable row menu', () => {
     expect(onDelete).not.toHaveBeenCalled();
   });
 
+  it('starts an open writing action in the Content Editor (AC plan P-3)', async () => {
+    const onStartNow = vi.fn();
+    const writing = { ...action, startNow: 'create' as const };
+    render({ actions: [writing], onStartNow });
+    const items = await openMenu();
+    expect(items[0].textContent).toBe('Start in Content Editor');
+    await act(async () => items[0].click());
+    expect(onStartNow).toHaveBeenCalledWith(writing);
+    expect(onSelect).not.toHaveBeenCalled();
+
+    // Not for work that isn't writing, nor a closed action.
+    render({ onStartNow });
+    expect((await openMenu()).map((item) => item.textContent)).not.toContain(
+      'Start in Content Editor',
+    );
+    render({ actions: [{ ...writing, status: 'completed' }], onStartNow });
+    expect((await openMenu()).map((item) => item.textContent)).not.toContain(
+      'Start in Content Editor',
+    );
+  });
+
+  it('starts nothing on a read-only workspace: the upgrade dialog instead', async () => {
+    const onStartNow = vi.fn();
+    render({ actions: [{ ...action, startNow: 'optimize' }], onStartNow }, true);
+    await act(async () => (await openMenu())[0].click());
+    expect(openUpgrade).toHaveBeenLastCalledWith(expect.stringMatching(/needs a plan/));
+    expect(onStartNow).not.toHaveBeenCalled();
+  });
+
   it("keeps Delete off for members who can't delete", async () => {
     render({ canDelete: false });
     const items = await openMenu();

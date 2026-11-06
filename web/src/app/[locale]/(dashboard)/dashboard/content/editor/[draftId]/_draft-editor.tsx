@@ -227,6 +227,7 @@ import { FlashBlock, findBlock, flashKey } from './_flash-block';
 import { PlaceholderMarks, placeholderRanges, selectPlaceholder } from './_placeholder-marks';
 import { useAgentRun } from './_use-agent-run';
 import { useAutoHandOff } from './_use-auto-hand-off';
+import { useStartBrief } from './_use-start-brief';
 import { useLinkChecks } from './_use-link-checks';
 import { WorkingDots } from './_working-dots';
 import { DropOverlay, useAttachments } from './_attach';
@@ -3705,6 +3706,8 @@ export function DraftEditor({
         return;
     }
   };
+  // Started from the Action Center's Start now: its brief built once, as Build brief builds it.
+  useStartBrief({ hasBrief: nextState.hasBrief, build: () => runNext('buildBrief') });
 
   /**
    * Ready, clicked (Next step spec §3b): the page goes back to review, while

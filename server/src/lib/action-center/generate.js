@@ -54,6 +54,7 @@ import { planTasks } from './tasks/plan.js';
 import { orderByPriority, scoreCandidate } from './candidates.js';
 import { priorityColumns, promptIdsOf, scorePriority } from './priority.js';
 import { kindTrackOrNone, loadPromptDemand } from './priority-data.js';
+import { withWorkScope } from './work-scope.js';
 
 const DAY_MS = 86_400_000;
 
@@ -122,16 +123,34 @@ function startOfUtcDay(now) {
   return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
 }
 
+/**
+ * The payload with the prompts and pages its work is about (work-scope.js),
+ * so a draft started from it opens with them. Best effort: a failed read
+ * opens the action as the night found it.
+ */
+async function scopedPayload(brandId, definitionId, payload) {
+  try {
+    return await withWorkScope(brandId, payload);
+  } catch (err) {
+    logger.warn(
+      { brandId, definitionId, err: err.message },
+      "[actions] work's prompts and pages not read",
+    );
+    return payload;
+  }
+}
+
 async function openCycle({
   brandId,
   definition,
   signals,
   impact,
   available,
-  payload,
+  payload: found,
   priority,
   now,
 }) {
+  const payload = await scopedPayload(brandId, definition.id, found);
   const { data: inserted, error } = await supabaseAdmin
     .from('actions')
     .insert({
