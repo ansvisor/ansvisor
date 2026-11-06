@@ -89,6 +89,7 @@ export async function createChatSchedule(
     skill: raw.skill,
     deliver_to: raw.deliver,
     change_only: raw.changeOnly,
+    whats_new: raw.digest === 'whats_new',
   });
   const where = placeSchema.safeParse(place);
   if (!parsed.success || !where.success) {

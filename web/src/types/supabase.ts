@@ -3371,6 +3371,7 @@ export type Database = {
           created_by: string | null
           created_via: string
           deliver_to: string[]
+          digest: string | null
           due_at: string | null
           effort: string
           enabled: boolean
@@ -3408,6 +3409,7 @@ export type Database = {
           created_by?: string | null
           created_via?: string
           deliver_to?: string[]
+          digest?: string | null
           due_at?: string | null
           effort?: string
           enabled?: boolean
@@ -3445,6 +3447,7 @@ export type Database = {
           created_by?: string | null
           created_via?: string
           deliver_to?: string[]
+          digest?: string | null
           due_at?: string | null
           effort?: string
           enabled?: boolean

@@ -60837,6 +60837,38 @@ comment on column public.chat_user_prefs.home_view is
   'Chat Home''s view: default (the greeting, one line and the box) or focus (tailored to the focus areas). Everyone starts on default; focus stays kept for the picker.';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00489_chat_schedules_digest.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00489: a scheduled job that sends What's new for the person's plan
+-- ============================================================================
+-- Chat Wave 4 W4-23: "What's new for my plan, 1st of every month". There is
+-- no such job until a person sets one up on the schedule card (owner
+-- decision 14): nothing is written for anyone in advance. Its runs call no
+-- model and use none of the AI limit. The worker lists the creator's unread
+-- What's new entries for their plan in the job's chat and marks them read.
+-- A run with nothing new delivers nothing (its run row is `unchanged`).
+--
+--   * chat_schedules.digest: the kind of digest a job sends; null for any
+--     other job, which asks Chat its prompt or skill as before. A digest is
+--     about the workspace, never one brand, runs no skill, and is never a
+--     follow-up check. Its prompt is the words its chat shows as the message.
+
+alter table public.chat_schedules
+  add column if not exists digest text check (digest in ('whats_new'));
+
+alter table public.chat_schedules
+  drop constraint if exists chat_schedules_digest_shape;
+alter table public.chat_schedules
+  add constraint chat_schedules_digest_shape check (
+    digest is null
+    or (skill_name is null and brand_id is null and kind <> 'followup_check')
+  );
+
+comment on column public.chat_schedules.digest is
+  'W4-23 (00489): whats_new: each run lists the creator''s unread What''s new entries for their plan in the job''s chat, with no model and no AI use, and delivers nothing when none are new. Null: a job that asks Chat its prompt or skill.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00491_indexnow.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -60882,6 +60914,70 @@ comment on column public.brands.indexnow_verified_at is
   'IndexNow (00491): when Check found the key file; null: nothing is announced.';
 comment on column public.content_drafts.indexnow_pinged_at is
   'IndexNow (00491): when the page, live through Send to CMS, was announced; once per page.';
+
+-- ----------------------------------------------------------------------------
+-- When a page was announced is the server's, as published_at is: 00289's
+-- guard, with indexnow_pinged_at, so a member can't clear it (announcing the
+-- page again) or set it ahead (never announcing it).
+-- ----------------------------------------------------------------------------
+create or replace function public.guard_content_draft_server_columns()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  -- A role that bypasses RLS is server-side (service role, migrations).
+  if (select rolbypassrls from pg_catalog.pg_roles where rolname = current_user) then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.score_before is not null or new.score_after is not null then
+      raise exception 'content draft scores are set server-side'
+        using errcode = '42501';
+    end if;
+    if new.action_id is not null then
+      raise exception 'content draft action is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.agent_state is not null or new.agent_state_at is not null
+       or new.agent_run is not null then
+      raise exception 'content draft agent state is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.published_url is not null or new.published_at is not null then
+      raise exception 'content draft live address is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.restored_at is not null then
+      raise exception 'content draft restore time is set server-side'
+        using errcode = '42501';
+    end if;
+    if new.indexnow_pinged_at is not null then
+      raise exception 'content draft IndexNow time is set server-side'
+        using errcode = '42501';
+    end if;
+  elsif new.brand_id is distinct from old.brand_id
+     or new.author is distinct from old.author
+     or new.created_by is distinct from old.created_by
+     or new.created_at is distinct from old.created_at
+     or new.score_before is distinct from old.score_before
+     or new.score_after is distinct from old.score_after
+     or new.action_id is distinct from old.action_id
+     or new.agent_state is distinct from old.agent_state
+     or new.agent_state_at is distinct from old.agent_state_at
+     or new.agent_run is distinct from old.agent_run
+     or new.published_url is distinct from old.published_url
+     or new.published_at is distinct from old.published_at
+     or new.restored_at is distinct from old.restored_at
+     or new.indexnow_pinged_at is distinct from old.indexnow_pinged_at
+  then
+    raise exception 'content draft column is managed server-side'
+      using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
 
 notify pgrst, 'reload schema';
 
