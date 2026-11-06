@@ -120,4 +120,27 @@ describe('ScorecardTable', () => {
 
     expect(document.body.textContent).toContain('Nothing to score in this range');
   });
+
+  it('names each play, by play (AC plan P-4)', async () => {
+    await render(
+      <ScorecardTable
+        by="play"
+        rows={[
+          row({ kind: 'comparison', completed: 4, improved: 3, declined: 1, medianChange: 0.2 }),
+          row({ kind: 'pricing', dismissed: 1 }),
+        ]}
+      />,
+    );
+
+    expect(document.body.querySelector('thead')!.textContent).toContain('Play');
+    expect(document.body.textContent).toContain('Only actions opened with a play count here.');
+    expect(cells(0)[0]).toBe('Write a comparison page');
+    expect(cells(0)[3]).toBe('75%');
+    // A play this build has no words for: its id.
+    expect(cells(1)[0]).toBe('pricing');
+
+    act(() => root?.unmount());
+    await render(<ScorecardTable rows={[]} by="play" />);
+    expect(document.body.textContent).toContain('No plays to score in this range');
+  });
 });

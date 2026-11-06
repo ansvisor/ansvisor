@@ -7,6 +7,8 @@ import { Send, Undo2 } from 'lucide-react';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import type { ChatPageVersion } from '@/lib/chat/events';
 import { CONTENT_EDITOR_PATH } from '@/lib/content/drafts';
+import { BAND_CLASSES, qualityBand } from '@/lib/content/quality';
+import { cn } from '@/lib/utils';
 
 // The Send dialog and its reads load on the click: the card itself never pulls them in.
 const VersionSendDialog = lazy(() =>
@@ -28,6 +30,54 @@ export function useVersionLine() {
           : t('sections', { count: version.counts.sections }),
       characters: version.counts.characters,
     });
+}
+
+const PILL =
+  'inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full border px-2 text-[11px] font-medium tabular-nums';
+
+/**
+ * A version's Rules and Quality pills (CHAT-25 §6, mockup #e-chat; W4-12b
+ * part 2), as the Content Editor's header shows them: "Rules {met}/{total}",
+ * green with every rule met and amber with some open, and "Quality {score}"
+ * in its band's colours. A pill whose read wasn't made isn't shown.
+ */
+export function VersionPills({ version }: { version: ChatPageVersion }) {
+  const t = useTranslations('chatDeliverable.version');
+  const tBands = useTranslations('contentEditor.editor.quality.bands');
+  const { rules, quality } = version;
+  if (!rules && quality === undefined) return null;
+  return (
+    <span data-slot="version-pills" className="inline-flex flex-wrap items-center gap-1.5">
+      {rules && (
+        <span
+          data-slot="version-rules"
+          aria-label={t('rulesPillLabel', { met: rules.met, total: rules.total })}
+          className={cn(
+            PILL,
+            rules.met === rules.total
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300'
+              : 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+          )}
+        >
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
+          {t('rulesPill', { met: rules.met, total: rules.total })}
+        </span>
+      )}
+      {quality !== undefined && (
+        <span
+          data-slot="version-quality"
+          aria-label={t('qualityPillLabel', {
+            score: quality,
+            band: tBands(qualityBand(quality)),
+          })}
+          className={cn(PILL, BAND_CLASSES[qualityBand(quality)])}
+        >
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />
+          {t('qualityPill', { score: quality })}
+        </span>
+      )}
+    </span>
+  );
 }
 
 /**

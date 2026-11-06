@@ -80,6 +80,10 @@ vi.mock('@/lib/mcp/whats-new', async (importOriginal) =>
 vi.mock('@/lib/mcp/ready-agents', async (importOriginal) =>
   tracked.all('mcp/ready-agents', await importOriginal<Record<string, unknown>>()),
 );
+// A page's check against its rules (W4-12b part 2): Chat's own, over the editor's rule functions.
+vi.mock('@/lib/chat/page-check', async (importOriginal) =>
+  tracked.all('chat/page-check', await importOriginal<Record<string, unknown>>()),
+);
 // No app page makes images yet: the image rows call Chat's own image functions (W4-08).
 vi.mock('@/lib/chat/images/chat-images', () => ({
   imageModelQuestion: tracked.track('chat/images.imageModelQuestion'),
@@ -238,6 +242,9 @@ beforeEach(() => {
   calls.length = 0;
 });
 
+/** The rows of a page's version in Chat that call Chat's own functions (W4-12b part 2). */
+const CHAT_PAGE_ROWS = new Set(['check_draft_rules']);
+
 describe('the Chat tool registry', () => {
   it('has a label and a valid fixture on every row', () => {
     const problems = CHAT_TOOLS.flatMap((tool) =>
@@ -297,6 +304,10 @@ describe('the Chat tool registry', () => {
       if (tool.area === 'images') {
         // Chat's own image functions, with the member's context.
         expect(calls[0].from).toMatch(/^chat\/images\./);
+        expect(calls[0].args[0]).toBe(ctx);
+      } else if (CHAT_PAGE_ROWS.has(tool.name)) {
+        // A page's version in Chat (W4-12b part 2): Chat's own, with the member's context.
+        expect(calls[0].from).toMatch(/^chat\/page-/);
         expect(calls[0].args[0]).toBe(ctx);
       } else if (tool.class === 'read') {
         // The MCP data functions, scoped to the signed-in member's organization.

@@ -603,6 +603,38 @@ describe('loadChatThread, next moves', () => {
     expect(JSON.stringify(thread)).not.toContain('"class"');
   });
 
+  it('keeps the link of a move that opens a page, from the run’s moves event (W4-12b part 2)', async () => {
+    const href = '/dashboard/content/editor/44444444-4444-4444-8444-444444444444';
+    fake.db.tables.chat_next_moves.push({
+      run_id: 'r1',
+      rank: 3,
+      label: 'Open in Content Editor',
+      prompt: 'Open in Content Editor',
+      class: 'read',
+      ghost_ok: false,
+    });
+    fake.db.tables.chat_run_events = [
+      {
+        run_id: 'r1',
+        seq: 4,
+        type: 'next_moves',
+        data: {
+          moves: [
+            { label: 'Open in Content Editor', prompt: 'Open in Content Editor', href },
+            { label: 'Elsewhere', prompt: 'Elsewhere', href: 'https://evil.example' },
+          ],
+        },
+      },
+    ];
+    const run = (await loadChatThread(CHAT))!.messages[1].run!;
+    expect(run.nextMoves[2]).toEqual({
+      label: 'Open in Content Editor',
+      prompt: 'Open in Content Editor',
+      href,
+    });
+    expect(run.nextMoves[0]).not.toHaveProperty('href');
+  });
+
   it('opens the chat without moves when they can’t be read', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
     fake.db.failures.chat_next_moves = { message: 'relation does not exist' };

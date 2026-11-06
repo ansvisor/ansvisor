@@ -20,12 +20,14 @@ let levelReads = [];
 let levelsFail = false;
 let rpcCalls = [];
 let rpcResult = { data: [], error: null };
+let rpcByPlay = null;
 
 vi.mock('../../config/supabase.js', () => ({
   default: {
     rpc: async (fn, args) => {
       rpcCalls.push([fn, args]);
-      return rpcResult;
+      // The scorecard by play (AC plan P-4, 00484) answers from rpcByPlay when a test sets it.
+      return args?.p_by === 'play' && rpcByPlay ? rpcByPlay : rpcResult;
     },
     from: (table) => {
       let ids = [];
@@ -110,6 +112,7 @@ beforeEach(() => {
   levelsFail = false;
   rpcCalls = [];
   rpcResult = { data: [], error: null };
+  rpcByPlay = null;
   // Newest first, as the read orders them.
   rows = [
     { prompt_id: 'p1', est_ai_volume: 300, intent: 'comparison', fetched_at: '2026-10-10' },
@@ -184,13 +187,31 @@ describe('loadKindTrack', () => {
       error: null,
     };
 
+    rpcByPlay = {
+      data: [{ kind: 'comparison', improved: 1, mixed: 0, no_change: 1, declined: 0 }],
+      error: null,
+    };
+
     const track = await loadKindTrack('b1', new Date('2026-10-15T00:00:00Z'));
 
     expect(rpcCalls).toEqual([
       ['action_scorecard', { p_brand_id: 'b1', p_since: '2026-04-18T00:00:00.000Z' }],
+      ['action_scorecard', { p_brand_id: 'b1', p_since: '2026-04-18T00:00:00.000Z', p_by: 'play' }],
     ]);
     expect(track.get('recover_lost_citations')).toEqual({ improved: 2, results: 5 });
     expect(track.get('fix_low_scores')).toEqual({ improved: 0, results: 0 });
+    // Each play's under its own key (AC plan P-4).
+    expect(track.get('play:comparison')).toEqual({ improved: 1, results: 2 });
+  });
+
+  it("keeps the kinds' track when the plays' can't be read", async () => {
+    rpcResult = {
+      data: [{ kind: 'fix_low_scores', improved: 1, mixed: 0, no_change: 0, declined: 0 }],
+      error: null,
+    };
+    rpcByPlay = { data: null, error: { message: 'function does not exist' } };
+    const track = await loadKindTrack('b1', new Date('2026-10-15T00:00:00Z'));
+    expect([...track.keys()]).toEqual(['fix_low_scores']);
   });
 });
 
@@ -224,7 +245,8 @@ describe('priorityOnCreate', () => {
       error: null,
     };
     const withTrack = await priorityOnCreate({ ...improve, brand_id: 'b1' }, NOW);
-    expect(rpcCalls).toHaveLength(1);
+    // By kind, and by play.
+    expect(rpcCalls).toHaveLength(2);
     expect(withTrack.priority_reason.pastSuccess).toEqual({
       improved: 3,
       results: 3,
@@ -278,8 +300,9 @@ describe('rescoreBrandActions', () => {
     // The signals, the demand and the track are read once for the brand, not per action.
     expect(queries.filter((q) => q.table === 'signals')).toHaveLength(1);
     expect(reads).toEqual([['p1']]);
-    expect(rpcCalls.map(([fn, args]) => [fn, args.p_brand_id])).toEqual([
-      ['action_scorecard', 'b1'],
+    expect(rpcCalls.map(([fn, args]) => [fn, args.p_brand_id, args.p_by])).toEqual([
+      ['action_scorecard', 'b1', undefined],
+      ['action_scorecard', 'b1', 'play'],
     ]);
 
     const byId = Object.fromEntries(saved.map(({ id, row }) => [id, row]));

@@ -25,7 +25,16 @@ export interface AuditSignal {
   why: string | null;
   howToFix: string | null;
   impactTier: 'high' | 'medium' | 'standard' | null;
+  /**
+   * How strong the evidence behind the signal is (SA-010). An informational
+   * signal (llms.txt) is shown but left out of the score.
+   */
+  evidenceLevel?: AuditEvidenceLevel | null;
+  /** A short note on that evidence, for an informational signal. */
+  evidenceNote?: string | null;
 }
+
+export type AuditEvidenceLevel = 'strong' | 'likely' | 'hygiene' | 'informational';
 
 export interface CategoryScore {
   score: number | null;

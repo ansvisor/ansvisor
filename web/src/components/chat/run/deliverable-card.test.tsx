@@ -559,4 +559,31 @@ describe('DeliverableCard for a page’s version (CHAT-25 §6, W4-12a)', () => {
     expect(container.textContent).toContain('Document · Not saved to Files · Storage is full');
     expect(action('version.undo')).toBeNull();
   });
+
+  it('shows its Rules and Quality pills as the editor’s header does (W4-12b part 2)', async () => {
+    await render(versionCard(2, { rules: { met: 11, total: 12 }, quality: 82 }));
+    const rules = container.querySelector('[data-slot="version-rules"]')!;
+    expect(rules.textContent).toBe('Rules 11/12');
+    expect(rules.getAttribute('aria-label')).toBe('11 of 12 rules met');
+    expect(rules.className).toContain('amber');
+    const quality = container.querySelector('[data-slot="version-quality"]')!;
+    expect(quality.textContent).toBe('Quality 82');
+    expect(quality.getAttribute('aria-label')).toBe('Quality 82: Strong');
+    await render(versionCard(2, { rules: { met: 12, total: 12 }, quality: 55 }));
+    expect(container.querySelector('[data-slot="version-rules"]')!.className).toContain('emerald');
+    expect(container.querySelector('[data-slot="version-quality"]')!.className).toContain('amber');
+  });
+
+  it('shows no pill whose read wasn’t made, nor any on a page not saved to Files', async () => {
+    await render(versionCard(2, { quality: 70 }));
+    expect(container.querySelector('[data-slot="version-rules"]')).toBeNull();
+    expect(container.querySelector('[data-slot="version-quality"]')).not.toBeNull();
+    await render(versionCard());
+    expect(container.querySelector('[data-slot="version-pills"]')).toBeNull();
+    await render({
+      ...versionCard(2, { rules: { met: 1, total: 2 } }),
+      filed: 'storage_full',
+    });
+    expect(container.querySelector('[data-slot="version-pills"]')).toBeNull();
+  });
 });

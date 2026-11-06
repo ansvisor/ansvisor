@@ -1218,7 +1218,7 @@ export default function ContentPage() {
             />
           </div>
 
-          <Card>
+          <Card data-tour="content">
             <CardHeader className="pb-3">
               {/* The search sits on the title's line, right-aligned and larger,
                   so the filters below keep a line of their own. */}

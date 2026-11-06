@@ -1,11 +1,19 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  MAX_ACTION_PROMPTS,
+  MAX_START_DRAFTS,
   actionPages,
+  actionPromptIds,
+  actionTopicIds,
   completeDraftTasks,
   draftMethodForTask,
   findActionDraft,
+  playAssetType,
   reopenDraftTasks,
+  startNowDrafts,
+  startNowPages,
+  startNowWork,
   unpublishDraftWork,
   type ActionDraft,
 } from './action-drafts';
@@ -88,6 +96,86 @@ describe('actionPages and findActionDraft', () => {
     expect(findActionDraft(drafts, 'optimize', 'https://a.example/other')).toBeNull();
     expect(findActionDraft(drafts, 'optimize', null)?.id).toBe('pricing');
     expect(findActionDraft(drafts, 'create', null)?.id).toBe('new');
+  });
+});
+
+const P1 = '11111111-1111-4111-8111-111111111111';
+const P2 = '22222222-2222-4222-8222-222222222222';
+
+describe('Start now (AC plan P-3)', () => {
+  const task = (id: string, taskKey: string | null, status = 'todo') => ({ id, taskKey, status });
+  const pages = ['https://a.example/x', 'https://a.example/y'];
+
+  it("starts a new page's work first, in the tasks' order", () => {
+    expect(
+      startNowWork([task('t1', 'optimize_content'), task('t2', 'create_content_draft')], { pages }),
+    ).toEqual({ taskId: 't2', method: 'create', pages: [] });
+  });
+
+  it("starts an existing page's work on each page the action names", () => {
+    expect(
+      startNowWork(
+        [task('t1', 'create_content_draft', 'completed'), task('t2', 'refresh_content')],
+        { pages },
+      ),
+    ).toEqual({ taskId: 't2', method: 'optimize', pages });
+    const many = Array.from({ length: 15 }, (_, i) => `https://a.example/${i}`);
+    expect(startNowWork([task('t1', 'optimize_content')], { pages: many })?.pages).toHaveLength(
+      MAX_START_DRAFTS,
+    );
+  });
+
+  it("has none when the action's work isn't writing, or is done", () => {
+    expect(startNowWork([task('t1', 'prepare_outreach')], {})).toBeNull();
+    expect(startNowWork([task('t1', 'create_content_draft', 'skipped')], {})).toBeNull();
+  });
+
+  it('writes one draft per page, or one new page', () => {
+    expect(startNowPages({ taskId: 't', method: 'optimize', pages })).toEqual(pages);
+    expect(startNowPages({ taskId: 't', method: 'optimize', pages: [] })).toEqual([null]);
+    expect(startNowPages({ taskId: 't', method: 'create', pages: [] })).toEqual([null]);
+  });
+
+  it('finds the drafts written once every page has one', () => {
+    const work = { taskId: 't', method: 'optimize' as const, pages };
+    const first: ActionDraft = {
+      id: 'd1',
+      method: 'optimize',
+      sourceUrl: pages[0],
+      status: 'draft',
+    };
+    expect(startNowDrafts(work, [first])).toBeNull();
+    const second = { ...first, id: 'd2', sourceUrl: pages[1] };
+    expect(startNowDrafts(work, [second, first])?.map((d) => d.id)).toEqual(['d1', 'd2']);
+  });
+
+  it("reads the action's prompts: listed, else the prompts it targets", () => {
+    expect(actionPromptIds({ promptIds: [P1, 'x', P1] })).toEqual([P1]);
+    expect(
+      actionPromptIds({ targetEntity: 'prompts', targets: [{ id: P1 }], targetIds: [P1, P2] }),
+    ).toEqual([P1, P2]);
+    expect(actionPromptIds({ targetEntity: 'pages', targets: [{ id: P1 }] })).toEqual([]);
+    const many = Array.from(
+      { length: 60 },
+      (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+    );
+    expect(actionPromptIds({ promptIds: many })).toHaveLength(MAX_ACTION_PROMPTS);
+  });
+
+  it('reads the topics an action targets or was sent for', () => {
+    expect(
+      actionTopicIds({ targetEntity: 'topics', targets: [{ id: P1, label: 'Boots' }] }),
+    ).toEqual([P1]);
+    expect(actionTopicIds({ topicId: P2 })).toEqual([P2]);
+    expect(actionTopicIds({ targetEntity: 'prompts', targets: [{ id: P1 }] })).toEqual([]);
+  });
+
+  it('reads the asset its play picked, when it has one', () => {
+    expect(playAssetType({ play: { id: 'alternatives', assetType: 'alternatives' } })).toBe(
+      'alternatives',
+    );
+    expect(playAssetType({ play: 'x' })).toBeNull();
+    expect(playAssetType({})).toBeNull();
   });
 });
 

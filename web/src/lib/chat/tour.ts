@@ -27,6 +27,23 @@ export const TOUR_PAGES: Readonly<Record<TourTopic, `/dashboard/${string}`>> = {
   connections: '/dashboard/settings/integrations',
 };
 
+/**
+ * The element each topic's turn explains, outlined on its page while the
+ * panel shows that turn (useTourHighlight): a `data-tour` mark on the
+ * element, or Settings › Integrations' Search Console card by its anchor.
+ */
+export const TOUR_TARGETS: Readonly<Record<TourTopic, string>> = {
+  // Visibility's KPI cards: the score, the rank and what changed.
+  visibility: '[data-tour="visibility"]',
+  // The Prompts section's tabs: Prompts, Topics, Query Fan-Out, Insights.
+  prompts: '[data-tour="prompts"]',
+  // Tracked Prompts' table, with its Positions column.
+  positions: '[data-tour="positions"]',
+  // Content's Opportunities list.
+  content: '[data-tour="content"]',
+  connections: '#google-search-console',
+};
+
 /** Whether a value is one of the tour's topics. */
 export function isTourTopic(value: unknown): value is TourTopic {
   return typeof value === 'string' && (TOUR_TOPICS as readonly string[]).includes(value);

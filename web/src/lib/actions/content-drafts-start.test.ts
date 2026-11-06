@@ -920,6 +920,87 @@ describe('startDraftFromAction', () => {
     expect(admin.inserts).toEqual([]);
   });
 
+  it('takes the prompts it targets, or its topic’s, when it lists none (AC plan P-3)', async () => {
+    reads = {
+      actions: action({
+        promptIds: undefined,
+        pages: [],
+        targetEntity: 'prompts',
+        targets: [{ id: PROMPT, label: 'best crm' }],
+      }),
+      action_tasks: { id: TASK, task_key: 'create_content_draft', status: 'todo' },
+      content_drafts: [],
+      brands: null,
+      prompts: [{ id: PROMPT }],
+      content_opportunities: null,
+    };
+    await expect(start(null)).resolves.toMatchObject({ created: true });
+    expect(calls.find((call) => call.table === 'prompts')!.filters).toEqual([
+      ['eq', 'prompt_sets.brand_id', BRAND],
+      ['in', 'id', [PROMPT]],
+    ]);
+    expect(admin.inserts[0].value).toMatchObject({ prompt_ids: [PROMPT] });
+
+    // G16 and C09 opened before the night kept their prompts: the topic's.
+    calls = [];
+    admin.inserts = [];
+    reads.actions = action({
+      promptIds: undefined,
+      pages: [],
+      targetEntity: 'topics',
+      targets: [{ id: TOPIC, label: 'Forecasting' }],
+    });
+    await expect(start(null)).resolves.toMatchObject({ created: true });
+    expect(calls.find((call) => call.table === 'prompts')!.filters).toEqual([
+      ['eq', 'prompt_sets.brand_id', BRAND],
+      ['in', 'topic_id', [TOPIC]],
+    ]);
+    expect(admin.inserts[0].value).toMatchObject({ prompt_ids: [PROMPT] });
+  });
+
+  it('gives a new page its play’s type, and on a shop locks the action’s product into its path', async () => {
+    reads = {
+      actions: action({
+        pages: [],
+        play: { id: 'buying_guide', assetType: 'buying_guide' },
+        target: { type: 'product', id: 'prod-1', name: 'Trail boot' },
+      }),
+      action_tasks: { id: TASK, task_key: 'create_content_draft', status: 'todo' },
+      content_drafts: [],
+      brands: { site_type: 'ecommerce', industry: null, shopping_mode_enabled: true },
+      prompts: [],
+      content_opportunities: null,
+    };
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ path: null, reason: 'no_match' })),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const DRAFT = 'abababab-abab-4bab-8bab-abababababab';
+    admin.result = { data: { id: DRAFT }, error: null };
+    await expect(start(null)).resolves.toMatchObject({ created: true });
+    expect(admin.inserts[0].value).toMatchObject({
+      page_type: 'buying_guide',
+      shopping_path: expect.objectContaining({
+        pageType: 'buying_guide',
+        locked: ['prod-1'],
+        added: ['prod-1'],
+      }),
+    });
+    // The path built around it, as Pick again builds it.
+    expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toMatch(
+      new RegExp(`/api/content-drafts/${DRAFT}/shopping-path$`),
+    );
+
+    // Not a shop: no path, and nothing built.
+    admin.inserts = [];
+    fetchMock.mockClear();
+    reads.brands = { site_type: 'b2b', industry: null, shopping_mode_enabled: false };
+    await expect(start(null)).resolves.toMatchObject({ created: true });
+    expect(admin.inserts[0].value).not.toHaveProperty('shopping_path');
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   // The work's draft was archived: the read skips it (as the DB's filter
   // does) and the one-per-work key counts only drafts not archived (00233),
   // so Start writes a new one rather than fail on the archived one's key.
