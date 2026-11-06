@@ -71,6 +71,7 @@ import { ActionCenterTabs } from '@/components/action-center/action-center-tabs'
 import { ActionTable } from '@/components/action-center/action-table';
 import { ActionDrawer } from '@/components/action-center/action-drawer';
 import { TodayCard } from '@/components/action-center/today-card';
+import { AgentWorkGear } from '@/components/action-center/agent-work-gear';
 import {
   GettingStartedTable,
   arrivingStep,
@@ -892,6 +893,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           showStepsCategory();
           openStep(step);
         }}
+        gear={<AgentWorkGear />}
       />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {startedActive && gettingStarted && (

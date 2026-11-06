@@ -187,7 +187,7 @@ export const percent = (part: number, whole: number): number =>
   whole > 0 ? Math.round((part / whole) * 100) : 0;
 
 /** Ansvisor Starter's engines: a card's main result (owner decision 2026-11-04). */
-export const STARTER_ENGINES: readonly ReportCardEngine[] = ['chatgpt-web', 'copilot-web'];
+export const STARTER_ENGINES: readonly ReportCardEngine[] = ['chatgpt-web', 'gemini-web'];
 
 type EngineRow = ReportCardPayload['engines'][number];
 
@@ -205,7 +205,7 @@ export function growthEngineRows(card: ReportCardPayload): EngineRow[] {
   return card.engines.filter((e) => !main.includes(e.engine));
 }
 
-/** "ChatGPT and Microsoft Copilot", in the card's language. */
+/** "ChatGPT and Gemini", in the card's language. */
 export const engineList = (rows: readonly EngineRow[], t: CardCopy = cardCopy()): string =>
   t.list(rows.map((e) => engineLabel(e.engine)));
 
@@ -225,7 +225,7 @@ export function totals(card: ReportCardPayload): Totals {
 
 /**
  * The headline: the share of the main engines' answers that name the
- * company (Starter's, ChatGPT and Microsoft Copilot). Every figure the card
+ * company (Starter's, ChatGPT and Gemini). Every figure the card
  * states beside it (the findings, the competitors, the sites and the
  * e-mail) counts these same answers: the server counts the competitors,
  * sites and own citations over the main engines too.

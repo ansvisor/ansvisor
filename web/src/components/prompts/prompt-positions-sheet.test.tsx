@@ -72,8 +72,8 @@ function data({ locked = false, unanswered = false } = {}): PromptPositionsData 
       ...(unanswered
         ? [
             {
-              id: 'copilot-web' as const,
-              label: 'Microsoft Copilot',
+              id: 'gemini-web' as const,
+              label: 'Gemini',
               access: { state: 'included' as const },
             },
           ]
@@ -215,7 +215,7 @@ describe('PromptPositionsSheet', () => {
     getPromptPositions.mockResolvedValue(data({ unanswered: true }));
     await open('24h');
     const rows = [...document.querySelectorAll<HTMLElement>('[data-platform]')];
-    expect(rows.map((r) => r.dataset.platform)).toEqual(['chatgpt-web', 'copilot-web']);
+    expect(rows.map((r) => r.dataset.platform)).toEqual(['chatgpt-web', 'gemini-web']);
 
     // The latest answer (Oct 9) named and cited nothing; the one before did.
     const blocks = [...rows[0].querySelectorAll('dl > div')].map((b) => b.textContent);
