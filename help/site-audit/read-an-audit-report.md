@@ -79,7 +79,7 @@ A bot robots.txt keeps out, by name or with "User-agent: *", fails the check. A 
 
 ## Main text without JavaScript
 
-**Main text without JavaScript** checks how much of the page's main text is in the HTML an AI bot gets before any JavaScript runs. AI crawlers such as GPTBot, ClaudeBot and PerplexityBot don't run JavaScript, so text that only appears once it runs is text they never see. It compares the page as a browser shows it with the HTML the first AI bot let in got during **AI bot access**, so a site that prerenders pages for bots is read as the bots get it. Menus and footers don't count. 10% or less missing passes, up to 30% raises a warning, and more fails. Open it to see the share and the first passages missing. When no AI bot was let in, it shows n/a.
+**Main text without JavaScript** checks how much of the page's main text is in the HTML an AI bot gets before any JavaScript runs. AI crawlers such as GPTBot, ClaudeBot and PerplexityBot don't run JavaScript, so text that only appears once it runs is text they never see. It compares the page as a browser shows it with the HTML the first AI bot let in got during **AI bot access**, so a site that prerenders pages for bots is read as the bots get it. Menus and footers don't count. 10% or less missing passes, up to 30% raises a warning, and more fails. Open it to see the share and the first passages missing. When no AI bot was let in, or the bot got a bot-protection check such as "Checking your browser" instead of the page, it shows n/a.
 
 ## Authority links
 

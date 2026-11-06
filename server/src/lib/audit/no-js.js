@@ -18,6 +18,9 @@
  *   there as written.
  * - The share hidden is the words of the blocks that aren't there, out of
  *   all the main text's words. The thresholds are in NO_JS.
+ * - Bot protection's own page, served with a 200 in place of the page, isn't
+ *   compared (botProtectionPage): nearly all the main text would read as
+ *   JavaScript's.
  */
 
 import * as cheerio from 'cheerio';
@@ -33,7 +36,31 @@ export const NO_JS = Object.freeze({
   /** Blocks named as examples, and the characters each is cut to. */
   examples: 3,
   exampleChars: 100,
+  /**
+   * A raw page holding under this share of the rendered page's words is
+   * much shorter than it (botProtectionPage): a page served whole holds
+   * about as many words before JavaScript as after, a challenge page a few
+   * dozen against the page's hundreds.
+   */
+  challengeShare: 0.5,
 });
+
+/**
+ * Markers of bot protection's challenge or block page itself, in its HTML:
+ * not the scripts a vendor adds to every page it serves (Cloudflare's
+ * /cdn-cgi/challenge-platform/scripts/), which a real page carries too.
+ */
+const CHALLENGE_MARKERS = [
+  // Cloudflare's challenge ("Just a moment...") and block ("Attention Required!") pages.
+  /_cf_chl_opt|\/cdn-cgi\/challenge-platform\/h\/|<title>\s*(?:just a moment|attention required)/i,
+  // Imperva (Incapsula), DataDome, HUMAN (PerimeterX), Sucuri, AWS WAF.
+  /_incapsula_resource|incapsula incident id|captcha-delivery\.com|px-captcha|_pxcaptcha/i,
+  /sucuri_cloudproxy|sucuri website firewall|awswafintegration|\.awswaf\.com/i,
+  // Vercel, DDoS-Guard, Akamai.
+  /vercel security checkpoint|ddos-guard|errors\.edgesuite\.net/i,
+  // What their pages say.
+  /verify(?:ing)? (?:that )?you are (?:a )?human|checking your browser|enable javascript and cookies to continue/i,
+];
 
 /** Lower case, letters and digits only, one space between words. */
 function wordsOf(text) {
@@ -89,6 +116,25 @@ export function rawWords(html) {
     if (edge) parts.push(' ');
   }
   return wordsOf(parts.join(''));
+}
+
+/**
+ * Whether the HTML a bot got is bot protection's own page served with a 200
+ * (a challenge, a "checking your browser" or a block page) in place of the
+ * page. Told by both: it carries a challenge or block page's marker, and it
+ * is much shorter than the rendered page (NO_JS.challengeShare). Shortness
+ * alone isn't enough: an app's empty shell, filled in by JavaScript, is
+ * short too, and that is what the check is for. A marker alone isn't
+ * either: a page served whole that names a vendor (a CAPTCHA on its form)
+ * is compared.
+ *
+ * @param {string} rawHtml the HTML the bot got, before JavaScript
+ * @param {string} renderedHtml the page as a browser renders it
+ */
+export function botProtectionPage(rawHtml, renderedHtml) {
+  const html = String(rawHtml ?? '');
+  if (!CHALLENGE_MARKERS.some((marker) => marker.test(html))) return false;
+  return rawWords(html).length < NO_JS.challengeShare * rawWords(renderedHtml).length;
 }
 
 /**

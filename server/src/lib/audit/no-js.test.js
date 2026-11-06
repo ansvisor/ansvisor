@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NO_JS, compareNoJs, rawWords } from './no-js.js';
+import { NO_JS, botProtectionPage, compareNoJs, rawWords } from './no-js.js';
 import { auditContextOf } from './context.js';
 import { noJsContent } from './signals/structure.js';
 
@@ -87,6 +87,29 @@ describe('compareNoJs', () => {
   });
 });
 
+/** Cloudflare's managed challenge, as a bot gets it with a 200: a few dozen words of its own. */
+const challenge = `<!DOCTYPE html><html lang="en-US"><head><title>Just a moment...</title></head><body><div class="main-wrapper" role="main"><noscript><span id="challenge-error-text">Enable JavaScript and cookies to continue</span></noscript><h1 class="zone-name-title h1">beans.example</h1><h2 id="challenge-body-text">Verifying you are human. This may take a few seconds.</h2></div><script>(function(){window._cf_chl_opt={cvId:'3',cZone:'beans.example',cType:'managed'};var s=document.createElement('script');s.src='/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=8a1b2c3d';document.head.appendChild(s);}());</script><div class="footer">Ray ID: <code>8a1b2c3d</code> Performance &amp; security by Cloudflare</div></body></html>`;
+/** DataDome's, told only by where its CAPTCHA comes from. */
+const dataDome = `<html><head><title>beans.example</title></head><body><p>Please enable JS and disable any ad blocker</p><script>var dd={'rt':'c','host':'geo.captcha-delivery.com'}</script><script src="https://ct.captcha-delivery.com/c.js"></script></body></html>`;
+/** The script Cloudflare adds to every page it serves: on a real page, not a challenge. */
+const cfScript = '<script src="/cdn-cgi/challenge-platform/scripts/jsd/main.js"></script>';
+
+describe('botProtectionPage', () => {
+  it("tells bot protection's page served in place of the page", () => {
+    expect(botProtectionPage(challenge, rendered)).toBe(true);
+    expect(botProtectionPage(dataDome, rendered)).toBe(true);
+  });
+
+  it('takes neither a short page without a marker nor a whole page with one for it', () => {
+    // An app's empty shell is short, but it's what the check is for.
+    expect(botProtectionPage(page('<div id="app"></div>'), rendered)).toBe(false);
+    expect(botProtectionPage(page(`<div id="app"></div>${cfScript}`), rendered)).toBe(false);
+    // A page served whole that names a vendor (a CAPTCHA on its form) is the page.
+    const whole = rendered.replace('</body>', '<form><p>Verify you are human</p></form></body>');
+    expect(botProtectionPage(whole, rendered)).toBe(false);
+  });
+});
+
 describe('noJsContent', () => {
   it('passes a page whose main text is all in the HTML a bot gets', () => {
     expect(noJsContent.evaluate(ctxOf(rendered))).toMatchObject({
@@ -113,6 +136,27 @@ describe('noJsContent', () => {
     expect(evidence.hiddenPercent).toBeGreaterThan(NO_JS.passUpTo * 100);
     expect(evidence.hiddenPercent).toBeLessThanOrEqual(NO_JS.warnUpTo * 100);
     expect(status).toBe('warn');
+  });
+
+  it("doesn't compare bot protection's page served with a 200: n/a, not JavaScript's text", () => {
+    for (const raw of [challenge, dataDome]) {
+      const { status, score, evidence } = noJsContent.evaluate(ctxOf(raw));
+      expect({ status, score }).toEqual({ status: 'na', score: null });
+      expect(evidence.compared).toBe(false);
+      expect(evidence.reason).toMatch(/bot-protection page/);
+      expect(evidence).not.toHaveProperty('hiddenPercent');
+    }
+  });
+
+  it("still flags an app shell's JavaScript-only text, on Cloudflare too", () => {
+    const shell = page(
+      `<div id="app"></div>${cfScript}<noscript>You need to enable JavaScript.</noscript>`,
+    );
+    expect(noJsContent.evaluate(ctxOf(shell))).toMatchObject({
+      status: 'fail',
+      score: 0,
+      evidence: { hiddenPercent: 100 },
+    });
   });
 
   it('says nothing without the HTML a bot got, or with too little main text', () => {

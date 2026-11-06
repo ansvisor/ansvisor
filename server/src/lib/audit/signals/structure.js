@@ -12,7 +12,7 @@
 
 import { jsonLd, typesOf, classifyLinks, metaContent } from './helpers.js';
 import { pageProse } from './readability.js';
-import { NO_JS, compareNoJs } from '../no-js.js';
+import { NO_JS, botProtectionPage, compareNoJs } from '../no-js.js';
 
 // schema.org types that signal a specific, AI-citable content intent.
 const HIGH_VALUE_TYPES = new Set([
@@ -317,13 +317,27 @@ export const openGraph = {
  * Main text without JavaScript (SA-009, audit/no-js.js): the share of the
  * page's main text that isn't in the HTML an AI bot gets before JavaScript
  * runs. Read only where the live bot test let a bot in (ctx.rawPage); a
- * draft, the demo brand's pages, a page no bot was let into, or one with
- * too little main text has nothing to compare (n/a).
+ * draft, the demo brand's pages, a page no bot was let into, one with too
+ * little main text, or one whose bot got bot protection's page instead has
+ * nothing to compare (n/a).
  */
 export const noJsContent = {
   key: 'no-js-content',
   evaluate(ctx) {
     if (!ctx.rawPage) return { status: 'na', score: null, evidence: { compared: false } };
+    // Bot protection's page served with a 200 isn't the page: compared, nearly
+    // all the main text would read as JavaScript's.
+    if (botProtectionPage(ctx.rawPage.html, ctx.html)) {
+      return {
+        status: 'na',
+        score: null,
+        evidence: {
+          compared: false,
+          reason:
+            'the AI bot got a bot-protection page instead of this page, so there is nothing to compare',
+        },
+      };
+    }
     const { blocks } = pageProse(ctx);
     const { words, hiddenWords, hiddenShare, hidden } = compareNoJs(blocks, ctx.rawPage.html);
     if (words < NO_JS.minWords) {
