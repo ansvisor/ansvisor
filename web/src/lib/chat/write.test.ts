@@ -241,7 +241,9 @@ beforeEach(() => {
   vi.mocked(suggestDraftChanges).mockImplementation(async () => ({ ok: true, count: 2 }));
   vi.mocked(optimizeDraftHere).mockImplementation(async (_ctx, id) => {
     const changed = await fakeUpdateContentDraft(db)(id, { bodyHtml: '<h1>FAQ</h1>' });
-    if (!changed.ok) return { ok: false, reason: 'not_found', message: changed.message };
+    // The fake's `ok` is a plain boolean, so it doesn't narrow the result: check the version too.
+    if (!changed.ok || changed.beforeVersionId === undefined)
+      return { ok: false, reason: 'not_found', message: changed.message ?? '' };
     return {
       ok: true,
       title: 'Pricing FAQ',
