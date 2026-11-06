@@ -233,23 +233,24 @@ describe('ChatMenuView', () => {
       await render(menu([], { pathname }));
     }
 
-    it('folds under its title with the main menu’s chevron, closed until opened', async () => {
+    it('folds with the ▴ / ▾ Menu and Chats have, closed until opened', async () => {
       await render(menu([]));
       const head = toggle();
       expect(head.tagName).toBe('BUTTON');
       expect(head.getAttribute('type')).toBe('button');
-      expect(head.textContent).toBe('Governance');
+      // The same button as Menu's and Chats', beside the title.
+      expect(head.className).toBe(action('chatMenu.toggleMenuSection')[0].className);
+      expect(head.parentElement?.textContent).toBe('Governance▾');
+      expect(head.getAttribute('aria-label')).toBe('Show or hide Governance');
+      expect(head.textContent).toBe('▾');
       expect(head.getAttribute('aria-expanded')).toBe('false');
-      expect(head.getAttribute('aria-controls')).toBeNull();
-      // The chevron points right while closed, down while open, as in the main menu.
-      expect(head.querySelector('svg')?.getAttribute('class')).toContain('-rotate-90');
+      expect(head.getAttribute('aria-controls')).toBe('chat-menu-governance');
       expect(items()).toBeNull();
       expect(action('chatMenu.openActivity')).toHaveLength(0);
 
       await act(async () => head.click());
       expect(head.getAttribute('aria-expanded')).toBe('true');
-      expect(head.getAttribute('aria-controls')).toBe('chat-menu-governance');
-      expect(head.querySelector('svg')?.getAttribute('class')).not.toContain('-rotate-90');
+      expect(head.textContent).toBe('▴');
       expect(
         [...items()!.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]),
       ).toEqual([
