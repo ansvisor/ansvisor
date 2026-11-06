@@ -28,7 +28,7 @@ import {
   ALWAYS_ON_SECTION,
   MENU_SECTIONS,
   WORK_AREAS,
-  menuSectionOf,
+  menuSectionEntries,
   workAreaSections,
 } from '@/lib/menu-access';
 import {
@@ -45,10 +45,7 @@ const MENU_ROLES: MenuRole[] = ['manager', 'analyst', 'agency_partner'];
 /** The menu's sections, by its groups, as the role table lists them. */
 const GROUPS = dashboardNav.map((group) => ({
   title: group.title,
-  items: group.items.flatMap((item) => {
-    const section = menuSectionOf(item.href);
-    return section ? [{ section, title: item.title, icon: item.icon }] : [];
-  }),
+  items: menuSectionEntries(group.items),
 }));
 
 /** What a ready-made set hides: every section it doesn't name; none for Everything. */

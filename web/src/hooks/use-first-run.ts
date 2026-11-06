@@ -176,6 +176,15 @@ export function onFirstRunFinished(listener: (brandId: string) => void) {
 }
 
 /**
+ * The brand's first tracking run as a page watching it last read it, without
+ * reading or watching: null when no page watches it, or none goes on. For a
+ * one-off look at a click (the product tour's turn), which adds no read.
+ */
+export function currentFirstRun(brandId: string | null): FirstRun | null {
+  return (brandId && watches.get(brandId)?.run) || null;
+}
+
+/**
  * The active brand's first tracking run while it goes on, or null: before
  * the first read, when no run is under way, and once the brand has a
  * completed run. Another brand's run never shows under this one. With

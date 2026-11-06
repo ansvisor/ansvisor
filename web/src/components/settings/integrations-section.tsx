@@ -49,6 +49,7 @@ import { MERCHANT_CENTER_LABEL } from '@/lib/catalog';
 import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-card';
 import { CatalogCategoryPages } from './catalog-category-pages';
 import { FramerCard } from './framer-card';
+import { IndexNowCard } from './indexnow-card';
 import { GoogleAccountsOverview } from '@/components/settings/google-accounts-overview';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
@@ -199,6 +200,11 @@ export function IntegrationsSection() {
 
           <div id="wix" className="scroll-mt-4">
             <WixCard />
+          </div>
+
+          {/* Pages that go live through Send to CMS, announced to search engines (#2142). */}
+          <div id="indexnow" className="scroll-mt-4">
+            <IndexNowCard />
           </div>
           {isDemo &&
             upcomingDemoIntegrations('cms').map((id) => (

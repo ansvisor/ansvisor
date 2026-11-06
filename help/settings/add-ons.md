@@ -4,8 +4,8 @@ route: /dashboard/settings/billing
 keywords: [add-ons, AI credits, buy credits, storage pack, extra storage, AI limit used up, get more, storage full]
 synonyms: [get more AI usage, top up credits, more storage, buy more AI, credit pack]
 plan: starter
-updated: 2026-10-30
-last_checked: 2026-10-30
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -21,11 +21,11 @@ Credits are used only once the month's included AI usage is spent, the oldest pa
 
 ## Storage packs
 
-A storage pack adds a fixed amount of storage every month. It joins your plan's subscription: the rest of the current period is charged at once to the card on file, and it renews with your plan until it is removed. Storage packs need a plan billed monthly.
+Your storage holds Chat's files and the images you upload or generate in the Content Editor. A storage pack adds a fixed amount of storage every month. It joins your plan's subscription: the rest of the current period is charged at once to the card on file, and it renews with your plan until it is removed. Storage packs need a plan billed monthly.
 
 ## Get more from where a limit shows
 
-You don't have to go to Billing: wherever a limit shows, **Get more AI credits** or **Get more storage** opens the same window. It is in the AI usage meter's popover, on the red banner once the month's AI usage is used up, on the Files page's storage meter and its **Storage is full** line, and on an output Chat couldn't save to Files. When Chat stops at the AI limit, the window opens once by itself.
+You don't have to go to Billing: wherever a limit shows, **Get more AI credits** or **Get more storage** opens the same window. It is in the AI usage meter's popover, on the red banner once the month's AI usage is used up, on the Files page's storage meter and its **Storage is full** line, on an output Chat couldn't save to Files, and on an image upload refused because storage is full. When Chat stops at the AI limit, the window opens once by itself.
 
 ## What the Get more window shows
 

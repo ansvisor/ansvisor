@@ -47,19 +47,18 @@ const card = (patch: Partial<ReportCardPayload> = {}): ReportCardPayload => ({
 
 describe('totals', () => {
   it('counts every engine’s answers, and Starter’s for the headline', () => {
-    expect(totals(SAMPLE_REPORT_CARD)).toEqual({ answers: 122, named: 19, visibility: 16 });
-    // ChatGPT 6 of 25 and Microsoft Copilot 2 of 25.
+    expect(totals(SAMPLE_REPORT_CARD)).toEqual({ answers: 97, named: 15, visibility: 15 });
+    // ChatGPT 6 of 25 and Google Gemini 2 of 25.
     expect(mainTotals(SAMPLE_REPORT_CARD)).toEqual({ answers: 50, named: 8, visibility: 16 });
     expect(mainEngineRows(SAMPLE_REPORT_CARD).map((e) => e.engine)).toEqual([
       'chatgpt-web',
-      'copilot-web',
+      'gemini-web',
     ]);
     expect(growthEngineRows(SAMPLE_REPORT_CARD).map((e) => e.engine)).toEqual([
-      'gemini-web',
       'google-aio',
       'google-aimode',
     ]);
-    expect(engineList(mainEngineRows(SAMPLE_REPORT_CARD))).toBe('ChatGPT and Microsoft Copilot');
+    expect(engineList(mainEngineRows(SAMPLE_REPORT_CARD))).toBe('ChatGPT and Google Gemini');
   });
 
   it('heads with every engine on a card made before the engines were split', () => {
@@ -142,9 +141,9 @@ describe('quickWins', () => {
   it('names the weakest of Starter’s engines, only when they differ', () => {
     const lean = { missedQuestions: [], citedSites: [], ownCitations: 60 };
     const wins = quickWins(card({ ...lean, competitors: [] }));
-    expect(wins[0].title).toBe('Look at what Microsoft Copilot says about your market');
+    expect(wins[0].title).toBe('Look at what Google Gemini says about your market');
     expect(wins[0].detail).toBe(
-      'It names you in 2 of 25 answers, the fewest of ChatGPT and Microsoft Copilot.',
+      'It names you in 2 of 25 answers, the fewest of ChatGPT and Google Gemini.',
     );
     const alike = card({
       ...lean,
@@ -185,7 +184,7 @@ describe('page 1', () => {
 describe('page 2', () => {
   it('sums up the main engines’ answers', () => {
     expect(questionSummary(SAMPLE_REPORT_CARD)).toBe(
-      'Named in 6 of the 25 questions: in 8 of the 50 answers from ChatGPT and Microsoft Copilot.',
+      'Named in 6 of the 25 questions: in 8 of the 50 answers from ChatGPT and Google Gemini.',
     );
     const none = card({
       questionRows: SAMPLE_REPORT_CARD.questionRows?.map((row) => ({
@@ -194,7 +193,7 @@ describe('page 2', () => {
       })),
     });
     expect(questionSummary(none)).toBe(
-      'Brewline Coffee wasn’t named in any of the 25 questions: 50 answers from ChatGPT and Microsoft Copilot (25 questions × 2 engines).',
+      'Brewline Coffee wasn’t named in any of the 25 questions: 50 answers from ChatGPT and Google Gemini (25 questions × 2 engines).',
     );
   });
 
@@ -213,10 +212,10 @@ describe('page 2', () => {
         })),
       });
     expect(questionSummary(unanswered(1))).toBe(
-      'Brewline Coffee wasn’t named in any of the 25 questions: 49 answers from ChatGPT and Microsoft Copilot (1 question got no answer from one engine).',
+      'Brewline Coffee wasn’t named in any of the 25 questions: 49 answers from ChatGPT and Google Gemini (1 question got no answer from one engine).',
     );
     expect(questionSummary(unanswered(2))).toBe(
-      'Brewline Coffee wasn’t named in any of the 25 questions: 48 answers from ChatGPT and Microsoft Copilot (an engine gave no answer 2 times).',
+      'Brewline Coffee wasn’t named in any of the 25 questions: 48 answers from ChatGPT and Google Gemini (an engine gave no answer 2 times).',
     );
   });
 });
@@ -324,15 +323,15 @@ describe('copy', () => {
   });
 
   it('spells the headline’s base as questions × engines only when every question was answered', () => {
-    const engines = 'ChatGPT and Microsoft Copilot';
+    const engines = 'ChatGPT and Google Gemini';
     expect(en.status.kpiVisibilitySub(engines, 8, 50, 25, 2)).toBe(
-      'named in 8 of 50 answers: 25 questions × 2 engines (ChatGPT and Microsoft Copilot)',
+      'named in 8 of 50 answers: 25 questions × 2 engines (ChatGPT and Google Gemini)',
     );
     expect(en.status.kpiVisibilitySub(engines, 8, 49, 25, 2)).toBe(
-      'named in 8 of 49 answers from ChatGPT and Microsoft Copilot (1 question got no answer from one engine)',
+      'named in 8 of 49 answers from ChatGPT and Google Gemini (1 question got no answer from one engine)',
     );
     expect(en.status.kpiVisibilitySub(engines, 8, 47, 25, 2)).toBe(
-      'named in 8 of 47 answers from ChatGPT and Microsoft Copilot (an engine gave no answer 3 times)',
+      'named in 8 of 47 answers from ChatGPT and Google Gemini (an engine gave no answer 3 times)',
     );
     expect(en.status.kpiVisibilitySub(engines, 8, 49, 25, 2)).not.toContain('×');
   });
@@ -608,26 +607,26 @@ describe('the card’s language', () => {
       'coffeereview.example sitesinde Brewline Coffee markasını listeletin',
     );
     expect(questionSummary(turkish, tr)).toBe(
-      '25 sorunun 6 tanesinde adınız geçti: ChatGPT ve Microsoft Copilot motorlarının 50 yanıtından 8 tanesinde.',
+      '25 sorunun 6 tanesinde adınız geçti: ChatGPT ve Google Gemini motorlarının 50 yanıtından 8 tanesinde.',
     );
   });
 
   it('prints soru × motor only when every question was answered, in Turkish too', () => {
-    const engines = 'ChatGPT ve Microsoft Copilot';
+    const engines = 'ChatGPT ve Google Gemini';
     expect(tr.status.kpiVisibilitySub(engines, 8, 50, 25, 2)).toBe(
-      '50 yanıtın 8 tanesinde adınız geçiyor: 25 soru × 2 motor (ChatGPT ve Microsoft Copilot)',
+      '50 yanıtın 8 tanesinde adınız geçiyor: 25 soru × 2 motor (ChatGPT ve Google Gemini)',
     );
     expect(tr.status.kpiVisibilitySub(engines, 8, 49, 25, 2)).toBe(
-      'ChatGPT ve Microsoft Copilot motorlarının 49 yanıtından 8 tanesinde adınız geçiyor (1 soruya bir motordan yanıt gelmedi)',
+      'ChatGPT ve Google Gemini motorlarının 49 yanıtından 8 tanesinde adınız geçiyor (1 soruya bir motordan yanıt gelmedi)',
     );
     expect(tr.status.kpiVisibilitySub(engines, 8, 47, 25, 2)).toBe(
-      'ChatGPT ve Microsoft Copilot motorlarının 47 yanıtından 8 tanesinde adınız geçiyor (3 kez yanıt gelmedi)',
+      'ChatGPT ve Google Gemini motorlarının 47 yanıtından 8 tanesinde adınız geçiyor (3 kez yanıt gelmedi)',
     );
     expect(tr.questions.summaryNone('Brewline Coffee', 49, 25, engines, 2)).toBe(
-      'Brewline Coffee markası 25 sorunun hiçbirinde anılmadı: ChatGPT ve Microsoft Copilot motorlarından 49 yanıt (1 soruya bir motordan yanıt gelmedi).',
+      'Brewline Coffee markası 25 sorunun hiçbirinde anılmadı: ChatGPT ve Google Gemini motorlarından 49 yanıt (1 soruya bir motordan yanıt gelmedi).',
     );
     expect(tr.questions.summaryNone('Brewline Coffee', 50, 25, engines, 2)).toBe(
-      'Brewline Coffee markası 25 sorunun hiçbirinde anılmadı: ChatGPT ve Microsoft Copilot motorlarından 50 yanıt (25 soru × 2 motor).',
+      'Brewline Coffee markası 25 sorunun hiçbirinde anılmadı: ChatGPT ve Google Gemini motorlarından 50 yanıt (25 soru × 2 motor).',
     );
   });
 

@@ -36,7 +36,8 @@ describe('uploadContentImage', () => {
   it('sends the image to the one-time address the app gives, and gives its address', async () => {
     const shot = file('image/png');
     const result = await uploadContentImage(shot);
-    expect(prepareImageUpload).toHaveBeenCalledWith('image/png');
+    // Its size goes with it, for the workspace's storage (00490).
+    expect(prepareImageUpload).toHaveBeenCalledWith('image/png', shot.size);
     expect(uploadToSignedUrl).toHaveBeenCalledWith('content-images', TICKET.path, 'tok', shot, {
       contentType: 'image/png',
       cacheControl: '31536000',
