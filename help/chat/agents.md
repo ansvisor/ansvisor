@@ -1,7 +1,7 @@
 ---
 title: See and run your agents in Agent Center
 route: /dashboard/agents
-keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook, what this agent did, agent impact, changes shipped by an agent, agent results, onboarding, onboarding & help, onboarding agent, help agent, setup guide, /setup, recommended agents, which agents should i use]
+keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook, what this agent did, agent impact, changes shipped by an agent, agent results, onboarding, onboarding & help, onboarding agent, help agent, setup guide, /setup, recommended agents, which agents should i use, fan-out gap filler, fan-out gaps, prompt portfolio manager, prompts to add, prompts to pause, agent work, i approve first, agent starts on its own, goal, role, filter agents]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent, agents for me, agent recommendations, setup help, new member setup, what did my agent do, did my agent work]
 plan: all
 updated: 2026-11-05
@@ -27,11 +27,17 @@ Type in **Search by name or skill** to find an agent by its name or by a skill i
 
 ## Ready-to-use agents
 
-**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back**, **Weekly Report** and **Onboarding & Help**, and agents made for a kind of site or a team, such as **Product Answer Pages** for e-commerce or **CEO Brief** for founders. Each card says what the agent does, its skills, what starts it and its mode. Filter them by **Goal**, **Business type** and **For your role**.
+**Ready to use** shows agents set up for common jobs, such as **Visibility Watch**, **Citation Win-back**, **Weekly Report** and **Onboarding & Help**, and agents made for a kind of site or a team, such as **Product Answer Pages** for e-commerce or **CEO Brief** for founders. Each card says what the agent does, its skills, what starts it and its mode.
 
 Admins and Managers click **Use this agent**. **New agent** opens with its skills, triggers, mode and connections filled in, for the brand you have open. Change what you like, then click **Save as draft** or **Turn on**. Nothing turns on by itself.
 
 If your plan doesn't include an agent's mode, its card says which plan does, and the agent opens on **Auto, ask before changes**. Cards marked **Soon** say what they're waiting for and can't be used yet.
+
+## Fan-out Gap Filler
+
+**Fan-out Gap Filler** runs every Monday at 09:00 on **Auto, ask before changes**. It reads the sub-questions AI engines searched while answering your tracked prompts, finds the ones where no answer named your brand, and drafts an answer-first section for each in a Content draft, which **Answer-first rewrite** then goes over. Its answer lists each sub-question with the engines that searched it and the competitors named instead. Sending the draft to your CMS and publishing it stay yours. In Chat, the same skill is **/fanout**.
+## Filter ready-to-use agents
+Above the cards, **Goal**, **Business type** and **Role** sit side by side, each with an arrow. Click one to open its list right under it, then pick an option: the list closes and only the matching agents show. The header then shows your pick, such as **Goal: Content**, so you can see what is filtered. Filters add up: **Goal: Content** with **Business type: B2C** shows the agents that match both. Pick **All** to clear that filter. One list is open at a time; press Esc or click elsewhere to close it. A filter shows once an agent has one of its options.
 
 ## Agents for your site and your work
 
@@ -40,6 +46,10 @@ Agents made for the site type of the brand you have open are marked **For your s
 ## Onboarding & Help
 
 **Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**), and it has no trigger: after you turn it on, click **Run now** on its page, or add a schedule if you like. Each run says how many **Getting started** steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help.
+
+## Prompt Portfolio Manager
+
+**Prompt Portfolio Manager** runs every Monday at 09:00 on **Ask me first**. It is made for the **AEO/GEO & Audit** work area. It proposes prompts to track, from your prompt suggestions, the sub-questions AI engines searched and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each proposal shows its evidence and is a card: nothing is added or paused until you approve it, and the **Activity** log can undo each change. A prompt counts as out of scope only when you say so. Search Console is optional. In Chat, the same skill is **/prompts**.
 
 ## What each card shows
 
@@ -143,6 +153,15 @@ In **Run history**, its run shows **Called by** and the first agent. The first r
 ## When a run asks before a change
 
 A **Run now** that starts as you click it follows the agent's mode, so in **Full auto** it makes changes without asking. A run that starts without you, from a trigger or after waiting for a free slot, asks before most changes, whatever its mode. Some still follow the mode, with the role and access of the person the run acts as: creating and changing Content drafts, reviewing or dismissing content opportunities, dismissing prompt suggestions, **Send to Action Center** and setting an Action Center task **Ready for review**. In **Full auto** the run makes them without asking; in **Ask me first** it asks. The run reads the agent's mode again before each change. Every change is in the **Activity** log, with **Undo**. When a change needs approval, the run shows **Needs you** and waits. After 7 days without an answer it stops with **No answer in 7 days**.
+
+## Agent work: who starts agent work
+
+Your workspace's **Agent work** setting decides whether an agent's mode counts. An Admin sets it from the gear on Action Center's **Today** card or in **Settings › Chat**.
+
+- **I approve first**, where every workspace starts: every change an agent's run makes asks first, in any mode, even a change **Full auto** or a tool set to **Always** would make on its own. The run shows **Needs you** and waits.
+- **Agent starts on its own**: each agent's mode applies, as above.
+
+Going live isn't affected: **Let an agent publish on its own** below works the same with either choice.
 
 ## When outside text makes a run ask
 

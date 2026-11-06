@@ -32,7 +32,7 @@ import {
   type ActionItem,
 } from '@/lib/actions/action-center';
 import { getToday } from '@/lib/actions/action-center-today';
-import type { TodayRead } from '@/lib/action-center/today';
+import { patchToday, todayAction, type TodayRead } from '@/lib/action-center/today';
 import { viewerTimeZone } from '@/lib/time-zone';
 import { listBrandMembers, type TeamMember } from '@/lib/actions/team';
 import {
@@ -71,6 +71,7 @@ import { ActionCenterTabs } from '@/components/action-center/action-center-tabs'
 import { ActionTable } from '@/components/action-center/action-table';
 import { ActionDrawer } from '@/components/action-center/action-drawer';
 import { TodayCard } from '@/components/action-center/today-card';
+import { AgentWorkGear } from '@/components/action-center/agent-work-gear';
 import {
   GettingStartedTable,
   arrivingStep,
@@ -406,12 +407,17 @@ function ActionsContent({ brand }: { brand: Brand }) {
   };
   const closeStep = useCallback(() => setStepKey(null), []);
 
+  // Today (AC-011, below): its items carry their own actions.
+  const [today, setToday] = useState<TodayRead | null>(null);
+
   // A change made in the drawer, shown in its row at once: reading the whole
-  // list again after each one held the drawer for seconds.
+  // list again after each one held the drawer for seconds. On Today's own
+  // copy too, as the drawer shows that one for an action the list doesn't hold.
   const patchAction = useCallback((id: string, patch: Partial<ActionItem>) => {
     setActions((prev) =>
       prev ? prev.map((action) => (action.id === id ? { ...action, ...patch } : action)) : prev,
     );
+    setToday((prev) => prev && patchToday(prev, id, patch));
   }, []);
 
   useEffect(() => {
@@ -470,15 +476,20 @@ function ActionsContent({ brand }: { brand: Brand }) {
     void runRowChange(action, () => deleteAction(action.id), t('rowMenu.deleted'));
   };
 
+  // The list's copy, else Today's own: the list holds at most 1000 actions,
+  // and an item on Today it doesn't hold still opens.
   const selected = useMemo(
-    () => (actions ?? []).find((action) => action.id === selectedId) ?? null,
-    [actions, selectedId],
+    () =>
+      (actions ?? []).find((action) => action.id === selectedId) ?? todayAction(today, selectedId),
+    [actions, selectedId, today],
   );
 
   // Today (AC-011): its order is read on its own, so a slow or failed read
   // never holds the list, and again whenever an action's status, assignee
-  // or tasks change here, as the order and first steps follow them.
-  const [today, setToday] = useState<TodayRead | null>(null);
+  // or tasks change in the list, as the order and first steps follow them.
+  // A change to one only Today holds shows on its copy (patchAction) and
+  // waits for that: reading the order again could drop it, and close its
+  // drawer, while the person is still in it.
   const [todayLoading, setTodayLoading] = useState(true);
   const listed = actions !== null;
   const todayKey = useMemo(
@@ -882,6 +893,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
           showStepsCategory();
           openStep(step);
         }}
+        gear={<AgentWorkGear />}
       />
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {startedActive && gettingStarted && (
