@@ -116,12 +116,25 @@ export async function saveHomeSeen(): Promise<ChatPrefResult> {
 /**
  * What Chat focuses on for the person (CHAT-24 §3: the picker on first
  * open, Settings › General › Your focus, the Home pill), in the order
- * picked. Empty clears it: Home goes back to the default.
+ * picked. Home follows it (home_view, 00485). Empty clears it: Home goes
+ * back to the Default view.
  */
 export async function saveChatFocus(areas: unknown): Promise<ChatPrefResult> {
   const parsed = focusPicks.safeParse(areas);
   if (!parsed.success) return { ok: false };
-  return keepPref({ focus: parsed.data }, 'the focus');
+  return keepPref(
+    { focus: parsed.data, home_view: parsed.data.length ? 'focus' : 'default' },
+    'the focus',
+  );
+}
+
+/**
+ * Default in the focus picker or Settings (home_view, 00485): Home shows
+ * the greeting, one line and the box. The focus is kept, so the picker
+ * opens with it ticked next time.
+ */
+export async function saveDefaultHome(): Promise<ChatPrefResult> {
+  return keepPref({ home_view: 'default' }, 'the Default view');
 }
 
 /** "Skip for now" in the focus picker: no focus, and the picker doesn't open by itself again. */
