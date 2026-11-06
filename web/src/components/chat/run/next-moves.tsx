@@ -1,8 +1,12 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import type { ChatNextMove } from '@/lib/chat/events';
 import { cn } from '@/lib/utils';
+
+const MOVE =
+  'rounded-[14px] border bg-card px-3 py-2.5 text-left text-[13px] shadow-[0_1px_2px_rgba(10,10,10,.04)] transition-[transform,box-shadow] duration-200 ease-out outline-none [overflow-wrap:anywhere] hover:-translate-y-px hover:shadow-[0_4px_14px_rgba(10,10,10,.06)] focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:translate-y-0';
 
 /**
  * Next moves under the latest answer (CHAT-07 §C, mockup `#s-done` "Next
@@ -10,7 +14,8 @@ import { cn } from '@/lib/utils';
  * (CHAT-03 item 12f). A card shows the very text a click sends as the next
  * message, never a label that could say something else; it never changes
  * anything by itself (a change still shows its card). Three across, one
- * under another in the side panel (`narrow`) or a narrow page.
+ * under another in the side panel (`narrow`) or a narrow page. A move with
+ * a link opens that page instead (Open in Content Editor, W4-12b part 2).
  */
 export function NextMoves({
   moves,
@@ -42,18 +47,29 @@ export function NextMoves({
           !narrow && moves.length >= 3 && 'sm:grid-cols-3',
         )}
       >
-        {moves.map((move, i) => (
-          <button
-            key={`${i}-${move.prompt}`}
-            type="button"
-            data-action="nextMove.send"
-            disabled={disabled}
-            onClick={() => onPick(move)}
-            className="rounded-[14px] border bg-card px-3 py-2.5 text-left text-[13px] shadow-[0_1px_2px_rgba(10,10,10,.04)] transition-[transform,box-shadow] duration-200 ease-out outline-none [overflow-wrap:anywhere] hover:-translate-y-px hover:shadow-[0_4px_14px_rgba(10,10,10,.06)] focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-          >
-            {move.prompt}
-          </button>
-        ))}
+        {moves.map((move, i) =>
+          move.href ? (
+            <Link
+              key={`${i}-${move.prompt}`}
+              href={move.href}
+              data-action="nextMove.open"
+              className={MOVE}
+            >
+              {move.prompt}
+            </Link>
+          ) : (
+            <button
+              key={`${i}-${move.prompt}`}
+              type="button"
+              data-action="nextMove.send"
+              disabled={disabled}
+              onClick={() => onPick(move)}
+              className={MOVE}
+            >
+              {move.prompt}
+            </button>
+          ),
+        )}
       </div>
     </section>
   );

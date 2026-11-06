@@ -10,6 +10,13 @@
 
 import { ACTION_DISMISS_REASONS, type ActionDismissReason } from './registry';
 
+/**
+ * What the scorecard sums by: the kind of action, or the play it was
+ * opened with (AC-ACTION-PLAN spec §11, P-4), whichever kind opened it.
+ */
+export const SCORECARD_BY = ['kind', 'play'] as const;
+export type ScorecardBy = (typeof SCORECARD_BY)[number];
+
 /** Results with a verdict a kind needs before its success rate is shown. */
 export const MIN_SCORECARD_VERDICTS = 3;
 

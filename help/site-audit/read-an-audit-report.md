@@ -1,8 +1,8 @@
 ---
 title: Read a site audit report
 route: /dashboard/audit
-keywords: [audit report, audit score, signals, audit categories, grade, readability, first person, score range]
-synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed, plus or minus, score margin]
+keywords: [audit report, audit score, signals, audit categories, grade, readability, first person, score range, evidence level, formula, llms.txt]
+synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed, plus or minus, score margin, strong evidence, likely helps, hygiene, informational, category weights, how the score is calculated, llms.txt score]
 plan: all
 updated: 2026-11-05
 last_checked: 2026-11-05
@@ -25,13 +25,17 @@ The gauge shows the page's score out of 100 and a grade: **Good** (70 and above)
 - **Content** (25%): whether the page answers its question directly and completely.
 - **Authority** (20%): whether it reads as expert and sourced, such as author byline, citations, statistics and freshness.
 - **E-E-A-T** (20%): experience, expertise and trust, such as case studies and author credentials.
-- **Trust** (10%): crawl-time basics such as AI bot access in robots.txt, llms.txt, HTTPS, canonical URL and meta description.
+- **Trust** (10%): crawl-time basics such as AI bot access in robots.txt, HTTPS, canonical URL and meta description. **llms.txt presence** is listed here for information only.
 
 ## How the score is worked out
 
-A category's score is the average of its signals, and the total is the weighted average of the categories. A signal that couldn't be evaluated, shown as n/a, is left out, so it never lowers the score.
+A category's score is the average of its signals, each counting the same, and the total is the weighted average of the categories. A signal that couldn't be evaluated, shown as n/a, is left out, so it never lowers the score. **Formula**, beside **Category breakdown**, shows the weights and these rules.
 
 Most signals are read straight from the page, its robots.txt and its llms.txt. Thirteen, such as **Direct answer to query** and **Case study evidence**, are judged by an AI model that first works out what the page itself is about, so a page is never judged against a topic it isn't trying to cover. **Brand entity in Wikidata** looks your brand up in Wikidata.
+
+## llms.txt
+
+**llms.txt presence** doesn't count toward the score. There's little evidence it helps: most llms.txt files are never requested by AI crawlers, and Google says it has no effect. The report still shows whether your site has one.
 
 ## Same page, same score
 
@@ -45,9 +49,13 @@ Once a page has three audits, the gauge shows its score with a range, such as **
 
 The same range comes with an audit wherever else you read it: in Chat, on the audit's card under the answer, in AI assistants connected over MCP, and in a report's **Site Audit Score**, from the page's audits up to the report's end date.
 
+## When the scoring changes
+
+A change to how the score is worked out counts like a change to the page. Since llms.txt left the score, a page's next audit can move by a point or two with no change to the page. Its range and its change badge show that move until the older scores leave the last five.
+
 ## Signals
 
-The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact: **high**, **medium** or **standard**. **Issues only** hides the passing ones. Open a signal to see:
+The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its evidence level: **Strong evidence** (studies tie it to AI citations or crawling), **Likely helps** (plausible, with weaker evidence) or **Hygiene / informational** (basic page health, or little evidence it moves AI citations). The level explains a signal; it doesn't change its weight. A check left out of the score says **Not in the score**. **Issues only** hides the passing ones. Open a signal to see:
 
 - the **Finding**: what this audit saw on the page, when the check reports it;
 - what the signal measures, and **Why** it matters to AI engines;

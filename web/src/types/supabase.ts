@@ -8383,7 +8383,7 @@ export type Database = {
         }[]
       }
       action_scorecard: {
-        Args: { p_brand_id: string; p_since?: string | null }
+        Args: { p_brand_id: string; p_since?: string | null; p_by?: string }
         Returns: {
           completed: number
           declined: number

@@ -551,6 +551,27 @@ describe('past success', () => {
     expect(worked.reason.pastSuccess).toEqual({ improved: 3, results: 3, points: 3.75 });
   });
 
+  it("reads its play's track first, once the play has a result here (AC plan P-4)", () => {
+    const signals = [signal()];
+    const played = action({ payload: { play: { id: 'comparison' } } });
+    const track = new Map([
+      ['recover_lost_citations', { improved: 0, results: 3 }],
+      ['play:comparison', { improved: 3, results: 3 }],
+    ]);
+    const byPlay = scorePriority({ action: played, signals, track }, NOW);
+    expect(byPlay.reason.pastSuccess).toEqual({
+      improved: 3,
+      results: 3,
+      points: 3.75,
+      play: 'comparison',
+    });
+
+    // No result for the play yet: the kind's.
+    track.set('play:comparison', { improved: 0, results: 0 });
+    const byKind = scorePriority({ action: played, signals, track }, NOW);
+    expect(byKind.reason.pastSuccess).toEqual({ improved: 0, results: 3, points: -3.75 });
+  });
+
   it("reads only its own kind's track", () => {
     const signals = [signal()];
     const other = scorePriority(

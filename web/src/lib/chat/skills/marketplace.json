@@ -38,7 +38,7 @@
     {
       "id": "addyosmani/agent-skills/shipping-and-launch",
       "name": "Shipping and launch",
-      "description": "Prepares production launches.",
+      "description": "Prepares production launches. Use when preparing to deploy to production, or when asking what needs to be in place before shipping.",
       "repo": "addyosmani/agent-skills",
       "topics": [
         "growth"
@@ -1147,7 +1147,7 @@
     {
       "id": "alirezarezvani/claude-skills/social-media-manager",
       "name": "Social media manager",
-      "description": "Provides senior-level guidance for social media strategist who has grown accounts from zero to six figures across every major platform.",
+      "description": "When the user wants to develop social media strategy, plan content calendars, manage community engagement, or grow their social presence across platforms.",
       "repo": "alirezarezvani/claude-skills",
       "topics": [
         "social"
@@ -1179,7 +1179,7 @@
     {
       "id": "andymccutcheon/skills/wrap-it-up",
       "name": "Wrap it up",
-      "description": "Session conclusion and handoff generator.",
+      "description": "Session conclusion and handoff generator. Use when the user signals the end of a working session.",
       "repo": "andymccutcheon/skills",
       "topics": [],
       "stars": 0,
@@ -1229,7 +1229,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-architecture",
       "name": "Brand architecture",
-      "description": "Provides brand architecture strategist.",
+      "description": "Define how multiple brands, sub-brands, and product lines relate to each other under one organization.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand"
@@ -1246,7 +1246,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-audit",
       "name": "Brand audit",
-      "description": "Provides brand strategist conducting a brand health assessment.",
+      "description": "Assess the health and consistency of an existing brand — identity, messaging, voice, positioning, and market perception.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand"
@@ -1280,7 +1280,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-identity",
       "name": "Brand identity",
-      "description": "Provides senior-level guidance for brand identity strategist and creative director.",
+      "description": "Create a visual identity brief for a brand — logo direction, color palette, typography, imagery style, and design system foundations.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand"
@@ -1297,7 +1297,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-launch",
       "name": "Brand launch",
-      "description": "Provides brand launch strategist.",
+      "description": "Plan and execute a new brand launch — from internal rollout to public debut.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand",
@@ -1315,7 +1315,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-manifesto",
       "name": "Brand manifesto",
-      "description": "Provides brand writer and strategist.",
+      "description": "Write a brand manifesto — a bold, belief-driven declaration of what the brand stands for, fights against, and exists to change.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand"
@@ -1332,7 +1332,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-measurement",
       "name": "Brand measurement",
-      "description": "Provides brand strategist and measurement specialist.",
+      "description": "Define KPIs, metrics, and tracking systems to measure brand health, awareness, perception, and equity over time.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand"
@@ -1349,7 +1349,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-messaging",
       "name": "Brand messaging",
-      "description": "Provides brand messaging strategist.",
+      "description": "Build a brand's messaging hierarchy — taglines, value propositions, key messages, and proof points for each audience.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand",
@@ -1367,7 +1367,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-naming",
       "name": "Brand naming",
-      "description": "Provides cting as a Brand Naming Strategist — a sharp, honest creative partner who thinks like a brand strategist, naming consultant, verbal identity expert, copywriter, and.",
+      "description": "Full brand naming workflow for founders, agencies, and businesses.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand"
@@ -1384,7 +1384,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-packaging",
       "name": "Brand packaging",
-      "description": "Provides senior-level guidance for brand and packaging strategist.",
+      "description": "Create a packaging design brief — structure, visual direction, hierarchy, materials, and unboxing experience.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand"
@@ -1401,7 +1401,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-partnerships",
       "name": "Brand partnerships",
-      "description": "Provides brand partnership strategist.",
+      "description": "Build brand partnership strategy — co-branding campaigns, brand collaborations, licensing deals, partner brand alignment, and joint marketing.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand",
@@ -1419,7 +1419,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-positioning",
       "name": "Brand positioning",
-      "description": "Provides brand strategist specializing in positioning and competitive differentiation.",
+      "description": "Define and sharpen a brand's market positioning — where it sits relative to competitors, what it owns, and how it differentiates.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand"
@@ -1436,7 +1436,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-story",
       "name": "Brand story",
-      "description": "Provides brand storyteller and narrative strategist.",
+      "description": "Craft a brand's origin story, founder narrative, and \"why we exist\" statement.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand"
@@ -1453,7 +1453,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/brand-strategy",
       "name": "Brand strategy",
-      "description": "Provides senior-level guidance for brand strategist.",
+      "description": "Full brand strategy workflow for agencies and brand consultants.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand"
@@ -1487,7 +1487,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/competitor-branding",
       "name": "Competitor branding",
-      "description": "Provides competitive brand intelligence analyst.",
+      "description": "Analyze how competitors present their brand — identity, messaging, positioning, voice, and visual style — to find gaps and opportunities.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "brand",
@@ -1575,7 +1575,7 @@
     {
       "id": "arnabbagxd/brand-building-skills/ugc-strategy",
       "name": "UGC strategy",
-      "description": "Provides UGC strategist.",
+      "description": "Build a User Generated Content (UGC) strategy — getting customers to create content, review generation, UGC briefs for creators, social campaigns and contest mechanics.",
       "repo": "arnabbagxd/brand-building-skills",
       "topics": [
         "content"
@@ -1695,7 +1695,7 @@
     {
       "id": "athina-ai/goose-skills/linkedin-outreach",
       "name": "LinkedIn outreach",
-      "description": "The LinkedIn counterpart to cold-email-outreach.",
+      "description": "End-to-end LinkedIn outreach campaign builder. Takes leads from Supabase, upstream skills, or CSV.",
       "repo": "athina-ai/goose-skills",
       "topics": [
         "social",
@@ -2246,7 +2246,7 @@
     {
       "id": "coreyhaines31/marketingskills/ads",
       "name": "Ads",
-      "description": "Provides expert guidance for performance marketer with direct access to ad platform accounts.",
+      "description": "When the user wants help with paid advertising campaigns on Google Ads, Meta (Facebook/Instagram), LinkedIn, Twitter/X, or other ad platforms.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [],
       "stars": 55303,
@@ -2261,7 +2261,7 @@
     {
       "id": "coreyhaines31/marketingskills/ai-seo",
       "name": "AI SEO",
-      "description": "Provides expert guidance for guidance for AI search optimization — the practice of making content discoverable, extractable, and citable by AI systems including Google AI Overviews, ChatGPT.",
+      "description": "When the user wants to optimize content for AI search engines, get cited by LLMs, or appear in AI-generated answers.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "seo"
@@ -2281,7 +2281,7 @@
     {
       "id": "coreyhaines31/marketingskills/analytics",
       "name": "Analytics",
-      "description": "Provides expert guidance for guidance for analytics implementation and measurement.",
+      "description": "When the user wants to set up, improve, or audit analytics tracking and measurement.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "analytics"
@@ -2315,7 +2315,7 @@
     {
       "id": "coreyhaines31/marketingskills/churn-prevention",
       "name": "Churn prevention",
-      "description": "Provides expert guidance for guidance for SaaS retention and churn prevention.",
+      "description": "When the user wants to reduce churn, build cancellation flows, set up save offers, recover failed payments, or implement retention strategies.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2332,7 +2332,7 @@
     {
       "id": "coreyhaines31/marketingskills/co-marketing",
       "name": "Co marketing",
-      "description": "Provides co-marketing strategist who helps SaaS companies identify ideal partners and brainstorm high-impact joint campaigns.",
+      "description": "When the user wants to find co-marketing partners, plan joint campaigns, or brainstorm partnership opportunities.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2349,7 +2349,7 @@
     {
       "id": "coreyhaines31/marketingskills/cold-email",
       "name": "Cold email",
-      "description": "Provides expert guidance for cold email writer.",
+      "description": "Write and run B2B cold outbound that gets replies, from cold emails and follow-ups to sending setup, LinkedIn, multichannel cadences, and reply handling.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "email"
@@ -2366,7 +2366,7 @@
     {
       "id": "coreyhaines31/marketingskills/community-marketing",
       "name": "Community marketing",
-      "description": "Provides expert guidance for community builder and community-led growth strategist.",
+      "description": "Build and leverage online communities to drive product growth and brand loyalty.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "social",
@@ -2384,7 +2384,7 @@
     {
       "id": "coreyhaines31/marketingskills/competitor-profiling",
       "name": "Competitor profiling",
-      "description": "Provides expert guidance for competitive intelligence analyst.",
+      "description": "When the user wants to research, profile, or analyze competitors from their URLs.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2401,7 +2401,7 @@
     {
       "id": "coreyhaines31/marketingskills/competitors",
       "name": "Competitors",
-      "description": "Provides expert guidance for guidance for creating competitor comparison and alternative pages.",
+      "description": "When the user wants to create competitor comparison or alternative pages for SEO and buyer-facing use.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2418,7 +2418,7 @@
     {
       "id": "coreyhaines31/marketingskills/content-strategy",
       "name": "Content strategy",
-      "description": "Provides content strategist.",
+      "description": "When the user wants to plan a content strategy, decide what content to create, or figure out what topics to cover.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "content"
@@ -2435,7 +2435,7 @@
     {
       "id": "coreyhaines31/marketingskills/copy-editing",
       "name": "Copy editing",
-      "description": "Provides expert guidance for copy editor specializing in marketing and conversion copy.",
+      "description": "When the user wants to edit, review, or improve existing marketing copy, or refresh outdated content.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "content"
@@ -2452,7 +2452,7 @@
     {
       "id": "coreyhaines31/marketingskills/cro",
       "name": "CRO",
-      "description": "Provides conversion rate optimization expert.",
+      "description": "When the user wants to optimize, improve, or increase conversions on any marketing page or form, such as the homepage, landing pages, pricing pages or lead capture forms.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "cro"
@@ -2469,7 +2469,7 @@
     {
       "id": "coreyhaines31/marketingskills/customer-research",
       "name": "Customer research",
-      "description": "Provides expert guidance for customer researcher.",
+      "description": "When the user wants to conduct, analyze, or synthesize customer research.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2486,7 +2486,7 @@
     {
       "id": "coreyhaines31/marketingskills/directory-submissions",
       "name": "Directory submissions",
-      "description": "Provides expert guidance for guidance for directory-driven distribution for software products.",
+      "description": "When the user wants to submit their product to startup, SaaS, AI, agent, MCP, no-code, or review directories for backlinks, domain rating, and discovery.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "seo"
@@ -2503,7 +2503,7 @@
     {
       "id": "coreyhaines31/marketingskills/emails",
       "name": "Emails",
-      "description": "Provides expert guidance for guidance for email marketing and automation.",
+      "description": "When the user wants to create or optimize an email sequence, drip campaign, automated email flow, or lifecycle email program.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "email"
@@ -2537,7 +2537,7 @@
     {
       "id": "coreyhaines31/marketingskills/image",
       "name": "Image",
-      "description": "Provides expert guidance for visual content producer who helps create marketing images using AI generation models, design tools, and optimization best practices.",
+      "description": "When the user wants to create, generate, edit, or optimize images for marketing — blog heroes, social graphics, product mockups, profile banners, listing visuals, or brand assets.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "content"
@@ -2572,7 +2572,7 @@
     {
       "id": "coreyhaines31/marketingskills/launch",
       "name": "Launch",
-      "description": "Provides expert guidance for guidance for SaaS product launches and feature announcements.",
+      "description": "When the user wants to plan a product launch, feature announcement, or release strategy.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "growth"
@@ -2589,7 +2589,7 @@
     {
       "id": "coreyhaines31/marketingskills/lead-magnets",
       "name": "Lead magnets",
-      "description": "Provides expert guidance for guidance for lead magnet strategy.",
+      "description": "When the user wants to create, plan, or optimize a lead magnet for email capture or lead generation.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "growth",
@@ -2624,7 +2624,7 @@
     {
       "id": "coreyhaines31/marketingskills/marketing-ideas",
       "name": "Marketing ideas",
-      "description": "Provides marketing strategist with a library of 139 proven marketing ideas.",
+      "description": "When the user needs marketing ideas, inspiration, or strategies for their SaaS or software product.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2659,7 +2659,7 @@
     {
       "id": "coreyhaines31/marketingskills/marketing-plan",
       "name": "Marketing plan",
-      "description": "Provides expert guidance for marketing strategist operating at fCMO (fractional CMO) level.",
+      "description": "When the user needs a comprehensive marketing plan for a client, a company they advise, or their own product.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2676,7 +2676,7 @@
     {
       "id": "coreyhaines31/marketingskills/marketing-psychology",
       "name": "Marketing psychology",
-      "description": "Provides expert guidance for guidance for applying psychological principles and mental models to marketing.",
+      "description": "When the user wants to apply psychological principles, mental models, or behavioral science to marketing.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "brand",
@@ -2694,7 +2694,7 @@
     {
       "id": "coreyhaines31/marketingskills/pricing",
       "name": "Pricing",
-      "description": "Provides expert guidance for guidance for SaaS pricing and monetization strategy.",
+      "description": "When the user wants help with pricing decisions, packaging, or monetization strategy.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2728,7 +2728,7 @@
     {
       "id": "coreyhaines31/marketingskills/programmatic-seo",
       "name": "Programmatic SEO",
-      "description": "Provides expert guidance for guidance for programmatic SEO—building SEO-optimized pages at scale using templates and data.",
+      "description": "When the user wants to create SEO-driven pages at scale using templates and data.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "seo",
@@ -2746,7 +2746,7 @@
     {
       "id": "coreyhaines31/marketingskills/prospecting",
       "name": "Prospecting",
-      "description": "Provides expert guidance for at building qualified prospect lists across three motions: B2B SaaS, general B2B, and local small businesses.",
+      "description": "When the user wants to find, qualify, and build a list of prospects to reach out to, across B2B SaaS, general B2B, or local small businesses.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2763,7 +2763,7 @@
     {
       "id": "coreyhaines31/marketingskills/referrals",
       "name": "Referrals",
-      "description": "Provides expert guidance for guidance for viral growth and referral marketing.",
+      "description": "When the user wants to create, optimize, or analyze a referral program, affiliate program, or word-of-mouth strategy.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "growth"
@@ -2780,7 +2780,7 @@
     {
       "id": "coreyhaines31/marketingskills/revops",
       "name": "RevOps",
-      "description": "Provides expert guidance for guidance for revenue operations.",
+      "description": "When the user wants help with revenue operations, lead lifecycle management, or marketing-to-sales handoff processes.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2797,7 +2797,7 @@
     {
       "id": "coreyhaines31/marketingskills/sales-enablement",
       "name": "Sales enablement",
-      "description": "Provides expert guidance for guidance for B2B sales enablement.",
+      "description": "When the user wants to create sales collateral, pitch decks, one-pagers, objection handling docs, or demo scripts.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "gtm"
@@ -2814,7 +2814,7 @@
     {
       "id": "coreyhaines31/marketingskills/schema",
       "name": "Schema",
-      "description": "Provides expert guidance for guidance for structured data and schema markup.",
+      "description": "When the user wants to add, fix, or optimize schema markup and structured data on their site.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "seo"
@@ -2831,7 +2831,7 @@
     {
       "id": "coreyhaines31/marketingskills/seo-audit",
       "name": "SEO audit",
-      "description": "Provides expert guidance for guidance for search engine optimization.",
+      "description": "When the user wants to audit, review, or diagnose SEO issues on their site.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "seo"
@@ -2848,7 +2848,7 @@
     {
       "id": "coreyhaines31/marketingskills/site-architecture",
       "name": "Site architecture",
-      "description": "Provides information architecture expert.",
+      "description": "When the user wants to plan, map, or restructure their website's page hierarchy, navigation, URL structure, or internal linking.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "seo"
@@ -2865,7 +2865,7 @@
     {
       "id": "coreyhaines31/marketingskills/social",
       "name": "Social",
-      "description": "Provides expert guidance for social media strategist.",
+      "description": "When the user wants help creating, scheduling, or optimizing social media content for LinkedIn, Twitter/X, Instagram, TikTok, or Facebook.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "social"
@@ -2882,7 +2882,7 @@
     {
       "id": "coreyhaines31/marketingskills/video",
       "name": "Video",
-      "description": "Provides expert guidance for video producer who helps create marketing videos using AI generation models, AI avatars, and programmatic video frameworks.",
+      "description": "When the user wants to create, generate, or produce video content using AI tools or programmatic frameworks.",
       "repo": "coreyhaines31/marketingskills",
       "topics": [
         "content"
@@ -3072,7 +3072,7 @@
     {
       "id": "dembrandt/dembrandt-skills/brand-visual-language",
       "name": "Brand visual language",
-      "description": "Visual shape communicates personality.",
+      "description": "Shape language across type, radius and icons carries brand personality. Use when starting a design system, picking icons or radius tokens, or reviewing visual consistency.",
       "repo": "dembrandt/dembrandt-skills",
       "topics": [
         "brand"
@@ -3123,7 +3123,7 @@
     {
       "id": "dembrandt/dembrandt-skills/micro-interactions",
       "name": "Micro interactions",
-      "description": "A micro-interaction is a moment.",
+      "description": "Small purposeful animations — toggles, animated icons, success moments. Use when designing interactive feedback, success states or loaders.",
       "repo": "dembrandt/dembrandt-skills",
       "topics": [
         "cro"
@@ -3277,7 +3277,7 @@
     {
       "id": "eronred/aso-skills/android-aso",
       "name": "Android ASO",
-      "description": "Provides Google Play ASO expert.",
+      "description": "When the user wants to optimize their Google Play Store listing — title, short description, full description, keywords, ratings, or Play Store-specific features.",
       "repo": "eronred/aso-skills",
       "topics": [
         "gtm"
@@ -3294,7 +3294,7 @@
     {
       "id": "eronred/aso-skills/app-analytics",
       "name": "App analytics",
-      "description": "Provides expert guidance for guidance for mobile app analytics and measurement strategy.",
+      "description": "When the user wants to set up, interpret, or improve their app analytics and tracking.",
       "repo": "eronred/aso-skills",
       "topics": [
         "analytics"
@@ -3328,7 +3328,7 @@
     {
       "id": "eronred/aso-skills/app-launch",
       "name": "App launch",
-      "description": "Provides expert guidance for guidance for mobile app launches with experience across indie apps and top-charting products.",
+      "description": "When the user wants to plan a launch strategy for a new app or major update.",
       "repo": "eronred/aso-skills",
       "topics": [
         "growth",
@@ -3346,7 +3346,7 @@
     {
       "id": "eronred/aso-skills/app-marketing-context",
       "name": "App marketing context",
-      "description": "Provides expert guidance for mobile app marketing strategist.",
+      "description": "When the user wants to create or update their app marketing context document.",
       "repo": "eronred/aso-skills",
       "topics": [
         "gtm"
@@ -3363,7 +3363,7 @@
     {
       "id": "eronred/aso-skills/app-preview-video",
       "name": "App preview video",
-      "description": "Provides App Store Preview video specialist.",
+      "description": "When the user wants to plan, script, produce, or optimize App Store Preview videos or Google Play promo videos.",
       "repo": "eronred/aso-skills",
       "topics": [
         "content"
@@ -3380,7 +3380,7 @@
     {
       "id": "eronred/aso-skills/app-store-featured",
       "name": "App store featured",
-      "description": "Provides expert guidance for guidance for Apple's App Store editorial process and featuring strategy.",
+      "description": "When the user wants to get featured on the App Store or understand the editorial process.",
       "repo": "eronred/aso-skills",
       "topics": [
         "gtm"
@@ -3397,7 +3397,7 @@
     {
       "id": "eronred/aso-skills/apple-search-ads",
       "name": "Apple search ads",
-      "description": "Provides specialist in Apple Search Ads (ASA) — the only ad platform that places ads natively within the App Store.",
+      "description": "When the user wants to set up, optimize, or scale Apple Search Ads (ASA) campaigns, including keyword bidding, match types and campaign structure.",
       "repo": "eronred/aso-skills",
       "topics": [
         "paid-ads"
@@ -3500,7 +3500,7 @@
     {
       "id": "eronred/aso-skills/creator-ugc-marketing",
       "name": "Creator UGC marketing",
-      "description": "Provides app creator-marketing specialist.",
+      "description": "When the user wants to plan, brief, source, or measure organic creator, influencer or UGC marketing for their app.",
       "repo": "eronred/aso-skills",
       "topics": [
         "content",
@@ -3519,7 +3519,7 @@
     {
       "id": "eronred/aso-skills/custom-product-pages",
       "name": "Custom product pages",
-      "description": "Provides Apple Custom Product Pages specialist.",
+      "description": "When the user wants to design, deploy, or measure Apple Custom Product Pages (CPP), the alternate App Store product pages.",
       "repo": "eronred/aso-skills",
       "topics": [
         "gtm"
@@ -3622,7 +3622,7 @@
     {
       "id": "eronred/aso-skills/monetization-strategy",
       "name": "Monetization strategy",
-      "description": "Provides expert guidance for guidance for mobile app monetization with deep knowledge of subscription economics, paywall psychology, and pricing strategy.",
+      "description": "When the user wants to design or optimize their app's monetization — pricing, paywalls, subscriptions, or in-app purchases.",
       "repo": "eronred/aso-skills",
       "topics": [
         "growth",
@@ -3691,7 +3691,7 @@
     {
       "id": "eronred/aso-skills/retention-optimization",
       "name": "Retention optimization",
-      "description": "Provides expert guidance for guidance for mobile app retention and engagement strategy.",
+      "description": "When the user wants to reduce churn, improve user engagement, or increase lifetime value.",
       "repo": "eronred/aso-skills",
       "topics": [
         "growth"
@@ -3776,7 +3776,7 @@
     {
       "id": "eronred/aso-skills/ua-campaign",
       "name": "UA campaign",
-      "description": "Provides expert guidance for guidance for mobile app user acquisition across all major ad platforms.",
+      "description": "When the user wants to plan or optimize paid user acquisition campaigns.",
       "repo": "eronred/aso-skills",
       "topics": [
         "gtm"
@@ -3793,7 +3793,7 @@
     {
       "id": "eronred/aso-skills/web-to-app-funnel",
       "name": "Web to app funnel",
-      "description": "Provides web-to-app conversion specialist.",
+      "description": "When the user wants to design or optimize the funnel that takes web visitors into installing and onboarding the app.",
       "repo": "eronred/aso-skills",
       "topics": [
         "cro"
@@ -3879,7 +3879,7 @@
     {
       "id": "fearofsnakes/pmm-skillset/messaging-hierarchy",
       "name": "Messaging hierarchy",
-      "description": "Provides expert guidance for product marketing strategist specializing in B2B SaaS messaging architecture.",
+      "description": "Use when a PMM needs to build a structured messaging document from positioning.",
       "repo": "fearofsnakes/pmm-skillset",
       "topics": [
         "gtm"
@@ -3896,7 +3896,7 @@
     {
       "id": "fearofsnakes/pmm-skillset/positioning-audit",
       "name": "Positioning audit",
-      "description": "Provides expert guidance for product marketing strategist specializing in B2B SaaS positioning.",
+      "description": "Use when a PMM needs to define, audit, or fix their product positioning.",
       "repo": "fearofsnakes/pmm-skillset",
       "topics": [
         "brand"
@@ -4272,7 +4272,7 @@
     {
       "id": "github/awesome-copilot/gtm-ai-gtm",
       "name": "GTM AI GTM",
-      "description": "Go-to-market strategy for AI products.",
+      "description": "Go-to-market strategy for AI products. Use when positioning AI products, handling \"who is responsible when it breaks\" objections, or pricing variable-cost AI.",
       "repo": "github/awesome-copilot",
       "topics": [
         "gtm"
@@ -7568,7 +7568,7 @@
     {
       "id": "nexscope-ai/ecommerce-skills/competitor-price-analysis",
       "name": "Competitor price analysis",
-      "description": "Strategic competitor pricing intelligence.",
+      "description": "Competitor pricing strategy analysis and market positioning. Price mapping, pricing gaps identification, elasticity signals evaluation, and strategic pricing optimization.",
       "repo": "nexscope-ai/ecommerce-skills",
       "topics": [
         "gtm"
@@ -7637,7 +7637,7 @@
     {
       "id": "nexscope-ai/ecommerce-skills/ecommerce-competitor-analysis",
       "name": "Ecommerce competitor analysis",
-      "description": "Comprehensive cross-platform competitor intelligence.",
+      "description": "Cross-platform ecommerce competitor analysis and strategic intelligence. Multi-channel presence evaluation, strategy assessment, positioning analysis, and competitive benchmarking.",
       "repo": "nexscope-ai/ecommerce-skills",
       "topics": [
         "gtm"
@@ -7895,7 +7895,7 @@
     {
       "id": "nexscope-ai/ecommerce-skills/tiktok-creator-marketplace",
       "name": "TikTok creator marketplace",
-      "description": "Master the TikTok Creator Marketplace.",
+      "description": "TikTok Creator Marketplace strategy and campaign management. Finding creators, negotiation tactics, campaign execution, performance tracking, and relationship building.",
       "repo": "nexscope-ai/ecommerce-skills",
       "topics": [
         "social"
@@ -7930,7 +7930,7 @@
     {
       "id": "nexscope-ai/ecommerce-skills/tiktok-shop-ads",
       "name": "TikTok shop ads",
-      "description": "Master TikTok Shop advertising.",
+      "description": "TikTok Shop advertising strategy and campaign management. Product Shopping Ads, Video Shopping Ads, Live Shopping Ads, bidding optimization, and performance tracking.",
       "repo": "nexscope-ai/ecommerce-skills",
       "topics": [
         "social",
@@ -8019,7 +8019,7 @@
     {
       "id": "nexscope-ai/ecommerce-skills/tiktok-shop-content-strategy",
       "name": "TikTok shop content strategy",
-      "description": "Create viral content that converts.",
+      "description": "TikTok Shop content creation strategy and planning. Trending formats, viral hooks, product showcasing, hashtag strategy, and content calendar development.",
       "repo": "nexscope-ai/ecommerce-skills",
       "topics": [
         "content",
@@ -8072,7 +8072,7 @@
     {
       "id": "nexscope-ai/ecommerce-skills/tiktok-shop-cross-border",
       "name": "TikTok shop cross border",
-      "description": "Expand internationally with TikTok Shop.",
+      "description": "Cross-border selling on TikTok Shop. Market selection, logistics setup, localization strategy, compliance requirements, and international expansion.",
       "repo": "nexscope-ai/ecommerce-skills",
       "topics": [
         "social",
@@ -8782,7 +8782,7 @@
     {
       "id": "ominou5/funnel-architect-plugin/evergreen-webinar-funnel",
       "name": "Evergreen webinar funnel",
-      "description": "Automated evergreen webinar funnel.",
+      "description": "Automated evergreen webinar funnel. Simulates a \"live\" experience on-demand so leads can register and watch immediately (or at scheduled slots).",
       "repo": "ominou5/funnel-architect-plugin",
       "topics": [
         "cro"
@@ -9059,7 +9059,7 @@
     {
       "id": "onvoyage-ai/gtm-engineer-skills/improve-aeo-geo",
       "name": "Improve AEO GEO",
-      "description": "Provides expert guidance for at AI Engine Optimization (AEO) and Generative Engine Optimization (GEO).",
+      "description": "Audits a website codebase and makes code changes so AI engines (ChatGPT, Claude, Perplexity, Google AI Overviews) can better discover, parse, quote, and cite the site.",
       "repo": "onvoyage-ai/gtm-engineer-skills",
       "topics": [
         "seo"
@@ -9145,7 +9145,7 @@
     {
       "id": "openclaudia/openclaudia-skills/growth-strategy",
       "name": "Growth strategy",
-      "description": "Provides growth strategist.",
+      "description": "Build a growth strategy with frameworks, metrics, and experimentation.",
       "repo": "openclaudia/openclaudia-skills",
       "topics": [
         "growth"
@@ -9871,7 +9871,7 @@
     {
       "id": "realjaymes/marketingagentskills/product-messaging",
       "name": "Product messaging",
-      "description": "Provides product marketing strategist who specializes in developing clear, detailed messaging frameworks for products.",
+      "description": "Creates complete messaging frameworks for products, such as value propositions, taglines and elevator pitches.",
       "repo": "realjaymes/marketingagentskills",
       "topics": [
         "gtm"
@@ -9906,7 +9906,7 @@
     {
       "id": "realjaymes/marketingagentskills/product-positioning",
       "name": "Product positioning",
-      "description": "Provides strategic positioning consultant who specializes in developing clear, detailed positioning frameworks for products.",
+      "description": "Creates complete positioning frameworks for products, including competitive positioning.",
       "repo": "realjaymes/marketingagentskills",
       "topics": [
         "brand"
@@ -10213,7 +10213,7 @@
     {
       "id": "samber/cc-skills/copywriting-prose-creator",
       "name": "Copywriting prose creator",
-      "description": "Provides prose engineer.",
+      "description": "Codifies how a person or brand writes — lexicon, syntax, rhythm, structure, signature moves — into a PROSE.md guide, independent of emotional tone.",
       "repo": "samber/cc-skills",
       "topics": [
         "content",
@@ -10231,7 +10231,7 @@
     {
       "id": "samber/cc-skills/copywriting-tone-of-voice-creator",
       "name": "Copywriting tone of voice creator",
-      "description": "Provides senior-level guidance for brand voice strategist.",
+      "description": "Builds a brand tone of voice guide (TONE.md) — voice attributes with do's/don'ts, NN/g positioning, tone modulation matrix, lexicon, channel rules — for downstream content skills to consume.",
       "repo": "samber/cc-skills",
       "topics": [
         "content",
@@ -10628,7 +10628,7 @@
     {
       "id": "sickn33/antigravity-awesome-skills/copywriting-psychologist",
       "name": "Copywriting psychologist",
-      "description": "Provides Consumer Psychologist and Persuasion Scientist.",
+      "description": "Write or revise conversion copy using audience awareness, motivations, and credible proof when ads, landing pages, or sales messages feel generic.",
       "repo": "sickn33/antigravity-awesome-skills",
       "topics": [
         "content"
@@ -10750,7 +10750,7 @@
     {
       "id": "skenetechnologies/plg-skills/growth-experimentation",
       "name": "Growth experimentation",
-      "description": "Provides growth experimentation specialist.",
+      "description": "When the user wants to design, prioritize, or analyze growth experiments -- including A/B tests, hypothesis frameworks, ICE/RICE scoring, or growth sprints.",
       "repo": "skenetechnologies/plg-skills",
       "topics": [
         "cro",
@@ -10975,7 +10975,7 @@
     {
       "id": "tech-leads-club/agent-skills/ai-pricing",
       "name": "AI pricing",
-      "description": "Provides AI product pricing strategist.",
+      "description": "When the user wants to price an AI product, choose a charge metric, design pricing tiers, or optimize margins.",
       "repo": "tech-leads-club/agent-skills",
       "topics": [
         "gtm"
@@ -10992,7 +10992,7 @@
     {
       "id": "tech-leads-club/agent-skills/ai-ugc-ads",
       "name": "AI UGC ads",
-      "description": "Provides UGC growth strategist who builds repeatable systems for creator recruitment, AI-powered UGC production, creative testing, and paid amplification.",
+      "description": "When the user wants to create UGC ad campaigns, recruit UGC creators, generate AI UGC content, or scale with user-generated content.",
       "repo": "tech-leads-club/agent-skills",
       "topics": [
         "content",
@@ -11010,7 +11010,7 @@
     {
       "id": "tech-leads-club/agent-skills/expansion-retention",
       "name": "Expansion retention",
-      "description": "Provides GTM strategist specializing in post-sale revenue growth, churn prevention, and net revenue retention optimization.",
+      "description": "When the user wants to reduce churn, build expansion revenue, automate customer success, or optimize net revenue retention.",
       "repo": "tech-leads-club/agent-skills",
       "topics": [
         "growth"
@@ -11167,7 +11167,7 @@
     {
       "id": "thecraighewitt/skills/referral-intro",
       "name": "Referral intro",
-      "description": "Provides expert guidance for guidance for warm introductions and referral-based selling.",
+      "description": "When the user wants to ask for a warm introduction, build a referral program, or systematize their referral channel.",
       "repo": "thecraighewitt/skills",
       "topics": [
         "growth"
@@ -11184,7 +11184,7 @@
     {
       "id": "thecraighewitt/skills/retention-editing",
       "name": "Retention editing",
-      "description": "Provides YouTube editing strategist who has directed edits on hundreds of videos and analyzed thousands of retention curves.",
+      "description": "When the user wants editing guidance for YouTube retention, pattern interrupt techniques, pacing direction, or re-engagement strategies.",
       "repo": "thecraighewitt/skills",
       "topics": [
         "growth"
@@ -11253,7 +11253,7 @@
     {
       "id": "twilio/ai/twilio-messaging-channel-advisor",
       "name": "Twilio messaging channel advisor",
-      "description": "Provides Messaging Channel Advisor.",
+      "description": "Planning skill that helps the developer pick the right Twilio messaging channel — SMS, MMS, RCS, or WhatsApp — for a given use case.",
       "repo": "twilio/ai",
       "topics": [
         "gtm"
@@ -11389,7 +11389,7 @@
     {
       "id": "varnan-tech/opendirectory/linkedin-post-generator",
       "name": "LinkedIn post generator",
-      "description": "Provides content strategist who specialises in technical and founder LinkedIn content.",
+      "description": "Converts any content, blog post URL, pasted article, GitHub PR description, or a description of something built, into a formatted LinkedIn post with proper hook, story arc, and formatting.",
       "repo": "varnan-tech/opendirectory",
       "topics": [
         "social"
@@ -11441,7 +11441,7 @@
     {
       "id": "vyralcontent/content-skills/viral-tiktok-content",
       "name": "Viral TikTok content",
-      "description": "!Stop guessing what to post.",
+      "description": "Write a tiktok script, a tiktok hook, or a fresh tiktok video idea shaped for how the FYP actually ranks content.",
       "repo": "vyralcontent/content-skills",
       "topics": [
         "content",
@@ -11823,7 +11823,7 @@
     {
       "id": "zubair-trabzada/geo-seo-claude/geo",
       "name": "GEO-SEO analysis tool — Claude code skill (february 2026)",
-      "description": "GEO-first SEO analysis tool.",
+      "description": "GEO-first SEO analysis tool. Optimizes websites for AI-powered search engines (ChatGPT, Claude, Perplexity, Gemini, Google AI Overviews) while maintaining traditional SEO foundations.",
       "repo": "zubair-trabzada/geo-seo-claude",
       "topics": [
         "seo"
@@ -11878,7 +11878,7 @@
     {
       "id": "zubair-trabzada/geo-seo-claude/geo-citability",
       "name": "AI citability scoring skill",
-      "description": "AI citability scoring and optimization.",
+      "description": "AI citability scoring and optimization. Analyzes web page content to determine how likely AI systems (ChatGPT, Claude, Perplexity, Gemini) are to cite or quote passages from the page.",
       "repo": "zubair-trabzada/geo-seo-claude",
       "topics": [
         "seo"
@@ -11930,7 +11930,7 @@
     {
       "id": "zubair-trabzada/geo-seo-claude/geo-crawlers",
       "name": "AI crawler access analysis skill",
-      "description": "AI crawler access analysis.",
+      "description": "AI crawler access analysis. Checks robots.txt, meta tags, and HTTP headers to determine which AI crawlers can access the site.",
       "repo": "zubair-trabzada/geo-seo-claude",
       "topics": [
         "seo"

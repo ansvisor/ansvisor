@@ -111,9 +111,11 @@ Once a page has three audits, the gauge shows its score with a range, such as **
 | **Content** | 25% | Whether the page answers its question directly and completely | Direct answer, BLUF, sub-query coverage, in-line definitions, readability |
 | **Authority** | 20% | Whether the page reads as expert and sourced | Author byline, citations, statistics, quotations, freshness |
 | **E-E-A-T** | 20% | Experience, expertise and trust signals | First-person evidence, case studies, author credentials, your brand in Wikidata, privacy and contact pages |
-| **Trust** | 10% | Crawl-time and share-time basics | AI bot access in robots.txt, llms.txt, HTTPS, canonical URL, meta description |
+| **Trust** | 10% | Crawl-time and share-time basics | AI bot access in robots.txt, HTTPS, canonical URL, meta description (llms.txt is shown for information only) |
 
-A category's score is the average of its signals; the total is the weighted average of the categories. A signal that couldn't be evaluated (**n/a**) is left out, so it never lowers the score.
+A category's score is the average of its signals, each counting the same; the total is the weighted average of the categories. A signal that couldn't be evaluated (**n/a**) is left out, so it never lowers the score. **Formula**, beside **Category breakdown**, shows the weights.
+
+**llms.txt presence** doesn't count toward the score: there's little evidence it helps (most llms.txt files are never requested by AI crawlers, and Google says it has no effect). The report still shows whether the site has one.
 
 On a product page (one with Product structured data), **Product description opening** checks that the description's first 40 words, or 250 characters, name the product type and at least two key attributes: a measure such as 268 g, a material, a fit or a use. ChatGPT appears to read only about that much of a description when it matches products to a shopping question. The finding shows where the opening ends. Other pages show this signal as n/a.
 
@@ -123,7 +125,7 @@ The AI keeps its verdict on each of its thirteen signals until the part of the p
 
 ### Signals
 
-The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its impact (**high**, **medium** or **standard**). **Issues only** hides the passing ones. Open a signal to see:
+The **Signals** section lists every check by category, each with a pass, warning, fail or n/a icon and its evidence level: **Strong evidence**, **Likely helps** or **Hygiene / informational**. The level explains a signal; it doesn't change its weight. **Issues only** hides the passing ones. Open a signal to see:
 
 - **Finding** — what this audit saw on the page, when the check reports it;
 - what the signal measures, and **Why** it matters to AI engines;

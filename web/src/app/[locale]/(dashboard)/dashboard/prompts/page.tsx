@@ -2014,7 +2014,7 @@ export default function PromptsPage() {
 
       <Tabs value={tab} onValueChange={(v) => showSection(v as TabId, view)}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <TabsList>
+          <TabsList data-tour="prompts">
             <TabsTrigger value="all">Prompts</TabsTrigger>
             <TabsTrigger value="topics">{tNav('topics')}</TabsTrigger>
             <TabsTrigger value="fanout">Query Fan-out</TabsTrigger>
@@ -3888,7 +3888,7 @@ function AllPromptsTab({
   };
 
   return (
-    <Card>
+    <Card data-tour="positions">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">

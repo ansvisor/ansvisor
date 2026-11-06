@@ -17,7 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { getActionHistory } from '@/lib/actions/action-history';
 import { getActionScorecard } from '@/lib/actions/action-scorecard';
-import type { ScorecardRow } from '@/lib/action-center/scorecard';
+import { SCORECARD_BY, type ScorecardBy, type ScorecardRow } from '@/lib/action-center/scorecard';
 import { readUrlChoice, readUrlParam, writeUrlParams } from '@/lib/url-state';
 import { actionTexts } from '@/lib/action-center/display';
 import {
@@ -93,6 +93,8 @@ export default function ActionCenterHistoryPage() {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<ActionHistoryItem | null>(null);
   const [scorecard, setScorecard] = useState<ScorecardRow[] | null>(null);
+  // By kind of action, or by the play it was opened with (AC plan P-4): ?by=play.
+  const [scorecardBy, setScorecardBy] = useState<ScorecardBy>('kind');
   const [scorecardFailed, setScorecardFailed] = useState(false);
 
   // Filters, sort and search live in the URL (#896) so a refresh keeps them
@@ -109,6 +111,7 @@ export default function ActionCenterHistoryPage() {
     );
     setSource(readUrlChoice<SignalSource | 'all'>('source', ['all', ...SIGNAL_SOURCES], 'all'));
     setSort(readUrlChoice('sort', HISTORY_SORTS, 'newest'));
+    setScorecardBy(readUrlChoice('by', SCORECARD_BY, 'kind'));
     setSearch(readUrlParam('q'));
     setUrlRead(true);
   }, []);
@@ -119,8 +122,9 @@ export default function ActionCenterHistoryPage() {
     const timer = setTimeout(
       () =>
         writeUrlParams(
-          { view, range, status, type, priority, source, sort, q: search.trim() },
+          { view, range, status, type, priority, source, sort, by: scorecardBy, q: search.trim() },
           {
+            by: 'kind',
             view: 'actions',
             range: DEFAULT_RANGE[view],
             status: 'all',
@@ -133,7 +137,7 @@ export default function ActionCenterHistoryPage() {
       300,
     );
     return () => clearTimeout(timer);
-  }, [urlRead, view, range, status, type, priority, source, sort, search]);
+  }, [urlRead, view, range, status, type, priority, source, sort, scorecardBy, search]);
 
   const load = useCallback(async () => {
     if (!brandId) {
@@ -166,11 +170,11 @@ export default function ActionCenterHistoryPage() {
     try {
       const days = RANGE_DAYS[range];
       const from = days ? new Date(Date.now() - days * 86_400_000).toISOString() : undefined;
-      setScorecard(await getActionScorecard(brandId, { from }));
+      setScorecard(await getActionScorecard(brandId, { from, by: scorecardBy }));
     } catch {
       setScorecardFailed(true);
     }
-  }, [brandId, range]);
+  }, [brandId, range, scorecardBy]);
 
   useEffect(() => {
     if (urlRead && view === 'scorecard') void loadScorecard();
@@ -345,6 +349,30 @@ export default function ActionCenterHistoryPage() {
                 </button>
               ))}
             </div>
+            {view === 'scorecard' && (
+              <div
+                role="group"
+                aria-label={t('scorecard.by.label')}
+                className="inline-flex overflow-hidden rounded-md border"
+              >
+                {SCORECARD_BY.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    aria-pressed={scorecardBy === option}
+                    onClick={() => setScorecardBy(option)}
+                    className={cn(
+                      'px-3 py-1.5 text-xs font-medium transition-colors',
+                      scorecardBy === option
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-card text-foreground hover:bg-muted',
+                    )}
+                  >
+                    {t(`scorecard.by.${option}`)}
+                  </button>
+                ))}
+              </div>
+            )}
             {view === 'actions' && (
               <>
                 <FilterSelect
@@ -418,7 +446,7 @@ export default function ActionCenterHistoryPage() {
                 </Button>
               </div>
             ) : scorecard ? (
-              <ScorecardTable rows={scorecard} />
+              <ScorecardTable rows={scorecard} by={scorecardBy} />
             ) : (
               <div className="space-y-2">
                 {[0, 1, 2, 3].map((i) => (

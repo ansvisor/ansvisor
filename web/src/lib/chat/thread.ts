@@ -2,8 +2,10 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import {
   isChatEventType,
+  isChatHref,
   maskIds,
   type ChatDeliverable,
+  type ChatHref,
   type ChatNextMove,
   type ChatPageVersion,
   type ChatRunSummary,
@@ -127,6 +129,8 @@ const REMEMBER_EVENT = 'remember.offered';
 const WHATS_NEW_EVENT = 'whats_new.ready';
 /** The Site Audits a run read, as their cards. */
 const AUDIT_EVENT = 'audit.ready';
+/** A run's next moves as the browser got them: a move that opens a page keeps its link only here. */
+const MOVES_EVENT = 'next_moves';
 /** A run's deliverables, read back for their page versions (W4-12a), which Files doesn't keep. */
 const DELIVERABLE_EVENTS = ['deliverable.created', 'deliverable.updated'];
 /** Where a page's card links: the editor. */
@@ -143,6 +147,8 @@ interface RunEnd {
   versions: (ChatPageVersion | null)[];
   whatsNew: ChatWhatsNewEntry[];
   audits: ChatAuditCard[];
+  /** The links of its moves that open a page, by the move's prompt (W4-12b part 2). */
+  moveHrefs: Map<string, ChatHref>;
 }
 const ENDED: readonly string[] = ['done', 'stopped', 'error', 'paused_cap'];
 
@@ -166,6 +172,7 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
       REMEMBER_EVENT,
       WHATS_NEW_EVENT,
       AUDIT_EVENT,
+      MOVES_EVENT,
       ...DELIVERABLE_EVENTS,
     ])
     .order('seq', { ascending: true });
@@ -189,7 +196,19 @@ async function readRunEnds(runIds: string[]): Promise<Map<string, RunEnd>> {
       versions: [],
       whatsNew: [],
       audits: [],
+      moveHrefs: new Map<string, ChatHref>(),
     };
+    if (row.type === MOVES_EVENT) {
+      const moves = (row.data as { moves?: unknown }).moves;
+      const hrefs = new Map<string, ChatHref>();
+      for (const move of Array.isArray(moves) ? (moves as Partial<ChatNextMove>[]) : []) {
+        if (typeof move?.prompt === 'string' && isChatHref(move.href)) {
+          hrefs.set(move.prompt, move.href);
+        }
+      }
+      ends.set(row.run_id, { ...kept, moveHrefs: hrefs });
+      continue;
+    }
     if (DELIVERABLE_EVENTS.includes(row.type)) {
       // Only a page that reached Files has a file to take its version.
       const made = row.data as ChatDeliverable;
@@ -361,7 +380,13 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
   }
   const movesByRun = new Map<string, ChatNextMove[]>();
   for (const m of (moves.error ? [] : (moves.data ?? [])) as NextMoveRow[]) {
-    const move = clientMove({ label: m.label, prompt: m.prompt, ghostOk: m.ghost_ok });
+    const href = ends.get(m.run_id)?.moveHrefs.get(m.prompt);
+    const move = clientMove({
+      label: m.label,
+      prompt: m.prompt,
+      ghostOk: m.ghost_ok,
+      ...(href ? { href } : {}),
+    });
     movesByRun.set(m.run_id, [...(movesByRun.get(m.run_id) ?? []), move]);
   }
   // An answer saved to Files names its message; what a run made doesn't.

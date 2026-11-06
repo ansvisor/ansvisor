@@ -183,6 +183,16 @@ export interface RunProgress {
   pagePlaceholder?: string | null;
   /** The run's last page version left nothing to fill and isn't Ready yet: a Mark ready move (W4-12b). */
   pageMayBeReady?: boolean;
+  /**
+   * The rules the run's last page version leaves open, as the editor counts
+   * them: a "Check it against the rules" move before Mark ready (W4-12b part 2).
+   */
+  pageRulesOpen?: number;
+  /**
+   * The page the run checked against its rules (check_draft_rules, W4-12b
+   * part 2): its editor link and the rules still open, for the moves after it.
+   */
+  pageChecked?: { href: `/dashboard/content/editor/${string}`; open: number } | null;
   /** By the file a page version was filed as: the draft and the History version its Undo puts back (W4-12a). */
   pageUndos?: Record<string, { draftId: string; versionId: string }>;
   /**

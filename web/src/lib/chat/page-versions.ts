@@ -1,5 +1,7 @@
 import { restoreDraftVersion } from '@/lib/actions/content-drafts';
 import { supabaseAdmin } from '@/lib/supabase/admin';
+import { readDraftRules, type DraftRulesRead } from '@/lib/content/draft-rules-read';
+import { readPageQuality, type PageQuality } from '@/lib/content/go-live-gate';
 import {
   cutSection,
   pageChanges,
@@ -22,6 +24,20 @@ export interface PageVersionRead {
 }
 
 /**
+ * The run a version was made in, for its page's Rules and Quality (W4-12b
+ * part 2): the workspace, the run and the person it acts as, and whose
+ * budget a Quality read the draft hasn't kept is held on.
+ */
+export interface VersionRun {
+  organizationId: string;
+  runId: string;
+  userId: string;
+  role: string;
+  agentRunId?: string | null;
+  scheduleId?: string | null;
+}
+
+/**
  * A page's version in a chat (CHAT-25 §6, W4-12a), read as the write that
  * made it ends: its number (1 + the versions of it this chat already filed:
  * the page Chat made is 1), its counts, what changed since the page before
@@ -29,14 +45,20 @@ export interface PageVersionRead {
  * none, only its placeholders), and its sections. Read with the service
  * role: the run already wrote the draft. A change to a page this chat
  * didn't make counts that page as version 1. Null when it can't be read.
+ *
+ * With its run (W4-12b part 2), the page's rules as the Content Editor counts
+ * them (draft-rules-read.ts) and its Quality figure, read as the go-live gate
+ * reads it, the run's own reads (the owner's 2026-11-05 decision): a pill
+ * that can't be read is left out, never guessed.
  */
 export async function readPageVersion(input: {
   draftId: string;
   conversationId: string;
   beforeVersionId?: string | null;
+  run?: VersionRun;
 }): Promise<PageVersionRead | null> {
-  const { draftId, conversationId, beforeVersionId } = input;
-  const [draft, filed, before] = await Promise.all([
+  const { draftId, conversationId, beforeVersionId, run } = input;
+  const [draft, filed, before, rules, quality] = await Promise.all([
     supabaseAdmin
       .from('content_drafts')
       .select('title, body_html, status')
@@ -55,6 +77,19 @@ export async function readPageVersion(input: {
           .eq('draft_id', draftId)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    run ? rulesOf(run.organizationId, draftId) : null,
+    run
+      ? readPageQuality({
+          organizationId: run.organizationId,
+          draftId,
+          runId: run.runId,
+          actingUserId: run.userId,
+          actingRole: run.role,
+          agentRunId: run.agentRunId ?? null,
+          scheduleId: run.scheduleId ?? null,
+          spend: true,
+        })
+      : null,
   ]);
   for (const read of [draft, filed, before]) {
     if (read.error) {
@@ -75,9 +110,29 @@ export async function readPageVersion(input: {
         : { shortened: [], added: [], placeholders: pagePlaceholders(body) },
       sections: pageSections(body).slice(0, VERSION_SECTIONS).map(cutSection),
       ...(beforeVersionId ? { canUndo: true } : {}),
+      ...pillsOf(rules, quality),
     },
     undoVersionId: beforeVersionId ?? null,
     done: draft.data.status === 'ready' || draft.data.status === 'published',
+  };
+}
+
+/** A draft's rules for its card; a read that fails leaves its pill out. */
+function rulesOf(organizationId: string, draftId: string): Promise<DraftRulesRead | null> {
+  return readDraftRules({ organizationId, draftId }).catch((err: unknown) => {
+    console.error('[chat/versions] could not read a page’s rules:', err);
+    return null;
+  });
+}
+
+/** A version's pills: Rules with any rule counted, Quality with a figure read. */
+export function pillsOf(
+  rules: Pick<DraftRulesRead, 'met' | 'total'> | null,
+  quality: Pick<PageQuality, 'score'> | null,
+): Pick<ChatPageVersion, 'rules' | 'quality'> {
+  return {
+    ...(rules && rules.total > 0 ? { rules: { met: rules.met, total: rules.total } } : {}),
+    ...(quality && quality.score !== null ? { quality: quality.score } : {}),
   };
 }
 

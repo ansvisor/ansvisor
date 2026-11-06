@@ -136,13 +136,17 @@ function auditFrom(
   return { pages, audited: Number(a?.audited) || 0, passed: Number(a?.passed) || 0 };
 }
 
-/** The prompts or pages it was measured on, when it was measured on its own targets. */
+/**
+ * The prompts or pages it was measured on, when it was measured on its own
+ * targets; a topic's prompts for one about a topic (AC plan P-4).
+ */
 function measuredOnFrom(
   validation: ValidationSnapshot | null,
-): { entity: 'prompts' | 'pages'; count: number } | null {
+): { entity: 'prompts' | 'pages' | 'topics'; count: number } | null {
   const scope = validation?.scope;
   if (scope?.kind !== 'targets') return null;
-  const entity = scope.entity === 'pages' ? 'pages' : 'prompts';
+  const entity =
+    scope.entity === 'pages' ? 'pages' : scope.entity === 'topics' ? 'topics' : 'prompts';
   const count = Number(entity === 'pages' ? scope.pages : scope.prompts) || 0;
   return count > 0 ? { entity, count } : null;
 }
