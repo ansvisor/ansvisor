@@ -12498,8 +12498,8 @@
       "engineEmptyTitle": "No {engine} searches in the {range}",
       "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
       "emptyTitle": "No fan-out captured yet",
-      "emptyBody": "Copilot and Perplexity share the searches behind their answers; ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
-      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. Copilot and Perplexity share them, ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
+      "emptyBody": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
+      "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
     },
     "bulkDelete": {
       "progress": "Deleting {done} of {total} prompts…",
@@ -12605,7 +12605,7 @@
         "city": "City"
       },
       "cityEngines": "AI Mode · AIO · APIs",
-      "cityEnginesTip": "Google AI Mode, AI Overview and the API models answer from this city. ChatGPT, Perplexity, Copilot, Gemini and Grok answer per country.",
+      "cityEnginesTip": "Google AI Mode, AI Overview and the API models answer from this city. ChatGPT, Gemini and Grok answer per country.",
       "weakest": "Weakest location",
       "weakestBody": "Visibility, against {overall} across all locations · {untracked, plural, =0 {every prompt tracked there} one {# prompt not tracked there} other {# prompts not tracked there}}",
       "strongest": "Strongest location",
@@ -13619,7 +13619,7 @@
     "noBrandTitle": "No brand selected",
     "noBrandDescription": "Select or create a brand to see shopping card analytics for it.",
     "emptyTitle": "No shopping cards yet",
-    "emptyDescription": "Perplexity, Google AI Mode, and Microsoft Copilot return shopping cards on commercial-intent prompts (\"best running shoes for marathon training\"). Once tracking runs against a card-eligible prompt, results show up here.",
+    "emptyDescription": "ChatGPT Shopping and Google AI Mode return shopping cards on commercial-intent prompts (\"best running shoes for marathon training\"). Once tracking runs against a card-eligible prompt, results show up here.",
     "lockedTitle": "Upgrade for full shopping analytics",
     "lockedDescription": "Growth unlocks your AI shelf, your products and categories on it, where AI sends shoppers, and what it sells.",
     "tabShelf": "Shelf",
@@ -14501,13 +14501,13 @@
     "planCards": {
       "starter": {
         "tagline": "For small teams getting started with AI visibility monitoring and optimization.",
-        "engines": "ChatGPT & Microsoft Copilot tracking",
+        "engines": "ChatGPT & Gemini tracking",
         "extras": ["MCP & API access"],
         "extrasChat": ["Chat and Agent Center"]
       },
       "growth": {
         "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
-        "engines": "ChatGPT, Perplexity, Gemini, Microsoft Copilot, Google AI Mode and Google AI Overviews tracking",
+        "engines": "ChatGPT, Gemini, Google AI Mode and Google AI Overviews tracking",
         "extras": ["Multi-region tracking", "White-label reports & exports", "Looker Studio"],
         "extrasChat": ["Chat and Agent Center", "Full auto, with agents that publish on their own"]
       },

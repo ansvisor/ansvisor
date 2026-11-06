@@ -132,6 +132,13 @@ describe('what a new agent may hold', () => {
       createAgentInput.safeParse({ ...base, scope: { brand_ids: [BRAND], engines: ['bard'] } })
         .success,
     ).toBe(false);
+    // No longer tracked, but a saved scope that names them still parses.
+    expect(
+      createAgentInput.safeParse({
+        ...base,
+        scope: { brand_ids: [BRAND], engines: ['copilot-web', 'perplexity-web'] },
+      }).success,
+    ).toBe(true);
     expect(
       createAgentInput.safeParse({ ...base, scope: { brand_ids: [BRAND], urls: ['ftp://x.y'] } })
         .success,
@@ -432,12 +439,12 @@ describe('what the plan allows', () => {
   });
 
   it('keeps engines to the plan’s: Starter’s two platforms, Claude on Enterprise', () => {
-    expect(enginesDenial(plan('starter'), ['chatgpt-web', 'copilot-web'])).toBeNull();
-    expect(enginesDenial(plan('starter'), ['perplexity-web'])?.denial).toEqual({
+    expect(enginesDenial(plan('starter'), ['chatgpt-web', 'gemini-web'])).toBeNull();
+    expect(enginesDenial(plan('starter'), ['google-aio'])?.denial).toEqual({
       code: 'plan_locked',
       needs: 'growth',
     });
-    expect(enginesDenial(plan('growth'), ['perplexity-web'])).toBeNull();
+    expect(enginesDenial(plan('growth'), ['google-aio'])).toBeNull();
     expect(enginesDenial(plan('growth'), ['claude-sonnet-5'])?.denial).toEqual({
       code: 'plan_locked',
       needs: 'enterprise',
