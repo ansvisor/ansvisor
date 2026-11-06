@@ -137,6 +137,14 @@ export async function saveDefaultHome(): Promise<ChatPrefResult> {
   return keepPref({ home_view: 'default' }, 'the Default view');
 }
 
+/**
+ * "Not now" on Chat Home's welcome card (chat_user_prefs.welcome_dismissed_at,
+ * 00486): it stays hidden for good, on every device.
+ */
+export async function dismissChatWelcome(): Promise<ChatPrefResult> {
+  return keepPref({ welcome_dismissed_at: new Date().toISOString() }, 'the welcome card');
+}
+
 /** "Skip for now" in the focus picker: no focus, and the picker doesn't open by itself again. */
 export async function skipChatFocus(): Promise<ChatPrefResult> {
   return keepPref({ focus: [] }, 'a skipped focus');

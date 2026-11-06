@@ -120,12 +120,7 @@ export const RUN_STEPS = {
   done: [
     step(1, 'done', 'Thinking · 3s', '3 tasks are due this week.', 'thinking'),
     step(2, 'done', 'Read Action Center', '4 tasks due this week'),
-    step(
-      3,
-      'done',
-      'Read Citations',
-      'Pricing prompts · Last 30 days · ChatGPT, Perplexity · 42 rows',
-    ),
+    step(3, 'done', 'Read Citations', 'Pricing prompts · Last 30 days · ChatGPT, Gemini · 42 rows'),
     step(4, 'done', 'Opened ansvisor.com/pricing', undefined, 'open_page'),
     step(5, 'done', 'Read Prompts', '12 prompts'),
     step(6, 'done', 'Checked facts', 'Plan names and prices match your Billing page', 'check'),
@@ -133,7 +128,7 @@ export const RUN_STEPS = {
   ],
   single: [
     {
-      ...step(1, 'done', 'Read Citations', 'Perplexity · Last 30 days'),
+      ...step(1, 'done', 'Read Citations', 'Gemini · Last 30 days'),
       rowCount: 18,
     },
   ],
@@ -156,11 +151,11 @@ export const APPROVAL_HEAD = {
 export const APPROVAL = {
   title: 'Change a cited passage on /pricing',
   badge: 'Cited 12× last month',
-  why: 'ChatGPT cites this passage, but it says “7 platforms” on Starter. Your pricing page says Starter covers ChatGPT and Copilot.',
+  why: 'ChatGPT cites this passage, but it says “7 platforms” on Starter. Your pricing page says Starter covers ChatGPT and Gemini.',
   change: {
     before: 'Every plan tracks all 7 AI platforms, including Claude.',
     after:
-      'Starter tracks ChatGPT and Copilot. Growth adds Gemini, Perplexity, AI Overviews and AI Mode. Claude is on Enterprise.',
+      'Starter tracks ChatGPT and Gemini. Growth adds AI Overviews and AI Mode. Claude is on Enterprise.',
   },
   sources: [
     'Brand fact · Plans (approved)',
@@ -198,7 +193,7 @@ const FAQ_PAGE: Omit<ChatDeliverable, 'version'> = {
 const FAQ_SECTIONS = [
   {
     heading: 'Which AI platforms does it track?',
-    text: 'Starter: ChatGPT and Copilot. Growth: six platforms. Enterprise adds Claude.',
+    text: 'Starter: ChatGPT and Gemini. Growth: four platforms. Enterprise adds Claude.',
   },
   { heading: 'Can I change plans?', text: 'Yes, any time from Billing.' },
   { heading: 'Is there a free trial?', text: 'Yes, every plan starts with a free trial.' },
@@ -380,7 +375,7 @@ export const DENIALS = {
       label: 'Growth adds',
       items: [
         { title: 'Full auto', detail: 'agents apply changes for you, logged and undoable' },
-        { title: '4 more AI platforms', detail: 'Gemini, Perplexity, AI Overviews, AI Mode' },
+        { title: '2 more AI platforms', detail: 'AI Overviews, AI Mode' },
         {
           title: 'Open pull request and MCP write',
           detail: 'ship fixes as PRs, act from Claude, ChatGPT, Cursor',

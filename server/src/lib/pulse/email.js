@@ -163,7 +163,7 @@ export function renderPulseEmail({ brandName, metrics, insightsUrl, settingsUrl 
   }
 
   <div style="margin:28px 0;">
-    <a href="${escapeHtml(insightsUrl)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">Open Insights</a>
+    <a href="${escapeHtml(insightsUrl)}" style="background:#111827;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-size:14px;display:inline-block;">Open Visibility</a>
   </div>
 
   <p style="font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:16px;">

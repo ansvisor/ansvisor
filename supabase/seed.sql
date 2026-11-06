@@ -126,12 +126,10 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.brand_platforms (id, brand_id, platform, is_enabled, check_frequency, api_model) VALUES
   ('55555555-5555-5555-5555-555555555501', '33333333-3333-3333-3333-333333333333', 'chatgpt-web',    true, 'daily', NULL),
   ('55555555-5555-5555-5555-555555555502', '33333333-3333-3333-3333-333333333333', 'claude',         true, 'daily', 'claude-sonnet-4-6'),
-  ('55555555-5555-5555-5555-555555555503', '33333333-3333-3333-3333-333333333333', 'copilot-web',    true, 'daily', NULL),
   ('55555555-5555-5555-5555-555555555504', '33333333-3333-3333-3333-333333333333', 'gemini-web',     true, 'daily', NULL),
   ('55555555-5555-5555-5555-555555555505', '33333333-3333-3333-3333-333333333333', 'google-aimode',  true, 'daily', NULL),
   ('55555555-5555-5555-5555-555555555506', '33333333-3333-3333-3333-333333333333', 'google-aio',     true, 'daily', NULL),
-  ('55555555-5555-5555-5555-555555555507', '33333333-3333-3333-3333-333333333333', 'grok-web',       true, 'daily', NULL),
-  ('55555555-5555-5555-5555-555555555508', '33333333-3333-3333-3333-333333333333', 'perplexity-web', true, 'daily', NULL)
+  ('55555555-5555-5555-5555-555555555507', '33333333-3333-3333-3333-333333333333', 'grok-web',       true, 'daily', NULL)
 ON CONFLICT (id) DO NOTHING;
 
 -- ─── Prompt set + topics + prompts ───────────────────────────────────────────
@@ -150,38 +148,38 @@ INSERT INTO public.prompts (
 ) VALUES
   ('88888888-8888-8888-8888-888888888801', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
    'What are the best coffee subscription services in 2026?',
-   ARRAY['chatgpt-web','claude','copilot-web','gemini-web','google-aimode','google-aio','grok-web','perplexity-web'],
+   ARRAY['chatgpt-web','claude','gemini-web','google-aimode','google-aio','grok-web'],
    ARRAY['US','GB','DE','TR'],
    ARRAY['claude-sonnet-4-6'], true),
   ('88888888-8888-8888-8888-888888888802', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
    'Which specialty coffee subscriptions ship internationally?',
-   ARRAY['chatgpt-web','claude','perplexity-web','gemini-web'],
+   ARRAY['chatgpt-web','claude','gemini-web'],
    ARRAY['US','GB','DE'],
    ARRAY['claude-sonnet-4-6'], true),
   ('88888888-8888-8888-8888-888888888803', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777701',
    'Best monthly coffee bean subscription for offices',
-   ARRAY['chatgpt-web','claude','copilot-web'],
+   ARRAY['chatgpt-web','claude','gemini-web'],
    ARRAY['US','TR'],
    ARRAY['claude-sonnet-4-6'], true),
   ('88888888-8888-8888-8888-888888888804', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777702',
    'Best espresso machines under $500?',
-   ARRAY['chatgpt-web','claude','copilot-web','gemini-web','google-aimode','grok-web','perplexity-web'],
+   ARRAY['chatgpt-web','claude','gemini-web','google-aimode','grok-web'],
    ARRAY['US','GB','DE','FR','TR'],
    ARRAY['claude-sonnet-4-6'], true),
   ('88888888-8888-8888-8888-888888888805', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777702',
    'Compare home espresso machines for beginners',
-   ARRAY['chatgpt-web','claude','perplexity-web','google-aio'],
+   ARRAY['chatgpt-web','claude','google-aio'],
    ARRAY['US','GB'],
    ARRAY['claude-sonnet-4-6'], true),
   ('88888888-8888-8888-8888-888888888806', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777702',
    'Manual vs automatic espresso machine for home use',
-   ARRAY['chatgpt-web','claude','copilot-web','gemini-web','grok-web'],
+   ARRAY['chatgpt-web','claude','gemini-web','grok-web'],
    ARRAY['US','TR','DE'],
    ARRAY['claude-sonnet-4-6'], true),
-  -- Tracked ONLY on engines that never fan out, and factual enough that they
-  -- answer it from parametric knowledge. It is the Query Fan-out tab's
-  -- zero-coverage case: many tracked answers, not one live search. See the
-  -- "Zero fan-out coverage" block at the end of this file.
+  -- Tracked only on ChatGPT and Claude, and factual enough that they answer
+  -- it from parametric knowledge, so no searches are seeded for it. It is the
+  -- Query Fan-out tab's zero-coverage case: many tracked answers, not one live
+  -- search. See the "Zero fan-out coverage" block at the end of this file.
   ('88888888-8888-8888-8888-888888888807', '66666666-6666-6666-6666-666666666601', '77777777-7777-7777-7777-777777777702',
    'How much caffeine is in a double espresso?',
    ARRAY['chatgpt-web','claude'],
@@ -262,12 +260,10 @@ WITH platform_models AS (
     ('chatgpt-web'::text,    'gpt-5-5'::text),
     ('chatgpt-web',          'gpt-5-3-mini'),
     ('claude',               'claude-sonnet-4-6'),
-    ('copilot-web',          'copilot-web'),
     ('gemini-web',           'gemini-web'),
     ('google-aimode',        'google-aimode'),
     ('google-aio',           'google-aio'),
-    ('grok-web',             'grok-3'),
-    ('perplexity-web',       'perplexity-web')
+    ('grok-web',             'grok-3')
   ) AS t(platform, model_used)
 ),
 regions_list AS (
@@ -313,30 +309,27 @@ SELECT
     jsonb_build_object('name', 'Fixture Roasters', 'domain', 'fixture-roasters.example.com','competitor_id', '99999999-9999-9999-9999-999999999902', 'mention_count', (n % 3),     'citation_count', (n % 2),     'visibility_score', round(((n % 55))::numeric, 2)),
     jsonb_build_object('name', 'Sample Beans',     'domain', 'sample-beans.example.com',    'competitor_id', '99999999-9999-9999-9999-999999999903', 'mention_count', ((n + 1) % 3), 'citation_count', ((n + 1) % 2), 'visibility_score', round((((n + 5) % 60))::numeric, 2))
   ) AS competitor_mentions,
-  -- Raw provider-shape shopping cards. Only three platforms surface cards in
-  -- the wild (Perplexity = snake_case, Google AI Mode / Copilot = camelCase),
-  -- and only on prompt 801 — mirroring the normalized
-  -- prompt_result_shopping_cards rows seeded below so the two layers agree.
-  -- shopping.ts only checks these for non-emptiness (card-rate KPI + the
-  -- per-platform bar chart); the analytics read the normalized table.
+  -- Raw provider-shape shopping cards. Of the engines tracked here only
+  -- Google AI Mode surfaces cards (camelCase; Perplexity and Copilot did too,
+  -- but are no longer tracked), and only on prompt 801 — mirroring the
+  -- normalized prompt_result_shopping_cards rows seeded below so the two
+  -- layers agree. shopping.ts only checks these for non-emptiness (card-rate
+  -- KPI + the per-platform bar chart); the analytics read the normalized table.
   CASE
     WHEN prompt_id = '88888888-8888-8888-8888-888888888801'::uuid
-         AND platform = 'perplexity-web' AND region = 'US' THEN jsonb_build_array(
-      jsonb_build_object('product_title', 'Acme Organic Coffee Subscription', 'brand', 'Acme Coffee', 'price', '$18.99', 'currency', 'USD', 'image_url', 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=150', 'merchant_url', 'https://acme-coffee.example.com/subscriptions/organic', 'rating', 4.8, 'review_count', 124),
-      jsonb_build_object('product_title', 'Demo Signature Subscription Blend', 'brand', 'Demo Coffee Co', 'price', '$24.99', 'currency', 'USD', 'image_url', 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=150', 'merchant_url', 'https://demo-coffee.example.com/subscribe', 'rating', 4.6, 'review_count', 152),
-      jsonb_build_object('product_title', 'Fixture Light Roast Brew Kit', 'brand', 'Fixture Roasters', 'price', '$19.50', 'currency', 'USD', 'image_url', 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=150', 'merchant_url', 'https://fixture-roasters.example.com/brew-kit', 'rating', 4.3, 'review_count', 45)
-    )
-    WHEN prompt_id = '88888888-8888-8888-8888-888888888801'::uuid
-         AND platform = 'perplexity-web' AND region = 'GB' THEN jsonb_build_array(
-      jsonb_build_object('product_title', 'Acme Organic Coffee Subscription', 'brand', 'Acme Coffee', 'price', '$18.99', 'currency', 'USD', 'image_url', 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=150', 'merchant_url', 'https://acme-coffee.example.com/subscriptions/organic', 'rating', 4.8, 'review_count', 124),
-      jsonb_build_object('product_title', 'Sample House Single Origin', 'brand', 'Sample Beans', 'price', '$16.00', 'currency', 'USD', 'image_url', 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=150', 'merchant_url', 'https://sample-beans.example.com/house-blend', 'rating', 4.7, 'review_count', 320)
-    )
-    WHEN prompt_id = '88888888-8888-8888-8888-888888888801'::uuid
          AND platform = 'google-aimode' AND region = 'US' THEN jsonb_build_array(
-      jsonb_build_object('productTitle', 'Acme Dark Roast Coffee Blend', 'brand', 'Acme Coffee', 'price', '$14.50', 'currency', 'USD', 'imageUrl', 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=150', 'merchantUrl', 'https://acme-coffee.example.com/products/dark-roast', 'rating', 4.5, 'reviewCount', 89)
+      jsonb_build_object('productTitle', 'Acme Dark Roast Coffee Blend', 'brand', 'Acme Coffee', 'price', '$14.50', 'currency', 'USD', 'imageUrl', 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=150', 'merchantUrl', 'https://acme-coffee.example.com/products/dark-roast', 'rating', 4.5, 'reviewCount', 89),
+      jsonb_build_object('productTitle', 'Acme Organic Coffee Subscription', 'brand', 'Acme Coffee', 'price', '$18.99', 'currency', 'USD', 'imageUrl', 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=150', 'merchantUrl', 'https://acme-coffee.example.com/subscriptions/organic', 'rating', 4.8, 'reviewCount', 124),
+      jsonb_build_object('productTitle', 'Demo Signature Subscription Blend', 'brand', 'Demo Coffee Co', 'price', '$24.99', 'currency', 'USD', 'imageUrl', 'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=150', 'merchantUrl', 'https://demo-coffee.example.com/subscribe', 'rating', 4.6, 'reviewCount', 152),
+      jsonb_build_object('productTitle', 'Fixture Light Roast Brew Kit', 'brand', 'Fixture Roasters', 'price', '$19.50', 'currency', 'USD', 'imageUrl', 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?w=150', 'merchantUrl', 'https://fixture-roasters.example.com/brew-kit', 'rating', 4.3, 'reviewCount', 45)
     )
     WHEN prompt_id = '88888888-8888-8888-8888-888888888801'::uuid
-         AND platform = 'copilot-web' AND region = 'US' THEN jsonb_build_array(
+         AND platform = 'google-aimode' AND region = 'GB' THEN jsonb_build_array(
+      jsonb_build_object('productTitle', 'Acme Organic Coffee Subscription', 'brand', 'Acme Coffee', 'price', '$18.99', 'currency', 'USD', 'imageUrl', 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=150', 'merchantUrl', 'https://acme-coffee.example.com/subscriptions/organic', 'rating', 4.8, 'reviewCount', 124),
+      jsonb_build_object('productTitle', 'Sample House Single Origin', 'brand', 'Sample Beans', 'price', '$16.00', 'currency', 'USD', 'imageUrl', 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=150', 'merchantUrl', 'https://sample-beans.example.com/house-blend', 'rating', 4.7, 'reviewCount', 320)
+    )
+    WHEN prompt_id = '88888888-8888-8888-8888-888888888801'::uuid
+         AND platform = 'google-aimode' AND region = 'DE' THEN jsonb_build_array(
       jsonb_build_object('productTitle', 'Acme Espresso Roast Whole Beans', 'brand', 'Acme Coffee', 'price', '$22.00', 'currency', 'USD', 'imageUrl', 'https://images.unsplash.com/photo-1511920170033-f8396924c348?w=150', 'merchantUrl', 'https://acme-coffee.example.com/products/espresso-beans', 'rating', 4.9, 'reviewCount', 210)
     )
     ELSE '[]'::jsonb
@@ -392,12 +385,12 @@ INSERT INTO public.prompt_result_shopping_cards (
   price_amount, price_currency, image_url, merchant_url, merchant_domain,
   rating, review_count, raw, matched_brand_id, matched_brand_role, platform, region, created_at
 ) VALUES
--- Perplexity - US
+-- Google AI Mode - US
 (
   'e0000000-0000-0000-0000-000000000001',
-  md5('pr|88888888-8888-8888-8888-888888888801|perplexity-web|perplexity-web|US')::uuid,
+  md5('pr|88888888-8888-8888-8888-888888888801|google-aimode|google-aimode|US')::uuid,
   '33333333-3333-3333-3333-333333333333',
-  0,
+  1,
   'Acme Organic Coffee Subscription',
   'Acme Coffee',
   18.99,
@@ -410,14 +403,14 @@ INSERT INTO public.prompt_result_shopping_cards (
   '{"title": "Acme Organic Coffee Subscription", "price": "$18.99", "rating": 4.8, "reviews": 124}'::jsonb,
   '33333333-3333-3333-3333-333333333333',
   'own',
-  'perplexity-web',
+  'google-aimode',
   'US',
-  now() - interval '2 days'
+  now() - interval '1 day'
 ),
--- Perplexity - GB
+-- Google AI Mode - GB
 (
   'e0000000-0000-0000-0000-000000000002',
-  md5('pr|88888888-8888-8888-8888-888888888801|perplexity-web|perplexity-web|GB')::uuid,
+  md5('pr|88888888-8888-8888-8888-888888888801|google-aimode|google-aimode|GB')::uuid,
   '33333333-3333-3333-3333-333333333333',
   0,
   'Acme Organic Coffee Subscription',
@@ -432,7 +425,7 @@ INSERT INTO public.prompt_result_shopping_cards (
   '{"title": "Acme Organic Coffee Subscription", "price": "$18.99", "rating": 4.8, "reviews": 124}'::jsonb,
   '33333333-3333-3333-3333-333333333333',
   'own',
-  'perplexity-web',
+  'google-aimode',
   'GB',
   now() - interval '3 days'
 ),
@@ -458,10 +451,10 @@ INSERT INTO public.prompt_result_shopping_cards (
   'US',
   now() - interval '1 day'
 ),
--- Copilot - US
+-- Google AI Mode - DE
 (
   'e0000000-0000-0000-0000-000000000004',
-  md5('pr|88888888-8888-8888-8888-888888888801|copilot-web|copilot-web|US')::uuid,
+  md5('pr|88888888-8888-8888-8888-888888888801|google-aimode|google-aimode|DE')::uuid,
   '33333333-3333-3333-3333-333333333333',
   0,
   'Acme Espresso Roast Whole Beans',
@@ -476,8 +469,8 @@ INSERT INTO public.prompt_result_shopping_cards (
   '{"title": "Acme Espresso Roast Whole Beans", "price": "$22.00", "rating": 4.9, "reviews": 210}'::jsonb,
   '33333333-3333-3333-3333-333333333333',
   'own',
-  'copilot-web',
-  'US',
+  'google-aimode',
+  'DE',
   now() - interval '5 hours'
 );
 
@@ -487,12 +480,12 @@ INSERT INTO public.prompt_result_shopping_cards (
   price_amount, price_currency, image_url, merchant_url, merchant_domain,
   rating, review_count, raw, matched_brand_id, matched_brand_role, platform, region, created_at
 ) VALUES
--- Demo Coffee Co (Competitor 1) - Perplexity US
+-- Demo Coffee Co (Competitor 1) - Google AI Mode US
 (
   'e0000000-0000-0000-0000-000000000005',
-  md5('pr|88888888-8888-8888-8888-888888888801|perplexity-web|perplexity-web|US')::uuid,
+  md5('pr|88888888-8888-8888-8888-888888888801|google-aimode|google-aimode|US')::uuid,
   '33333333-3333-3333-3333-333333333333',
-  1,
+  2,
   'Demo Signature Subscription Blend',
   'Demo Coffee Co',
   24.99,
@@ -505,16 +498,16 @@ INSERT INTO public.prompt_result_shopping_cards (
   '{"title": "Demo Signature Subscription Blend", "price": "$24.99", "rating": 4.6, "reviews": 152}'::jsonb,
   '99999999-9999-9999-9999-999999999901',
   'competitor',
-  'perplexity-web',
+  'google-aimode',
   'US',
-  now() - interval '2 days'
+  now() - interval '1 day'
 ),
--- Fixture Roasters (Competitor 2) - Perplexity US
+-- Fixture Roasters (Competitor 2) - Google AI Mode US
 (
   'e0000000-0000-0000-0000-000000000006',
-  md5('pr|88888888-8888-8888-8888-888888888801|perplexity-web|perplexity-web|US')::uuid,
+  md5('pr|88888888-8888-8888-8888-888888888801|google-aimode|google-aimode|US')::uuid,
   '33333333-3333-3333-3333-333333333333',
-  2,
+  3,
   'Fixture Light Roast Brew Kit',
   'Fixture Roasters',
   19.50,
@@ -527,14 +520,14 @@ INSERT INTO public.prompt_result_shopping_cards (
   '{"title": "Fixture Light Roast Brew Kit", "price": "$19.50", "rating": 4.3, "reviews": 45}'::jsonb,
   '99999999-9999-9999-9999-999999999902',
   'competitor',
-  'perplexity-web',
+  'google-aimode',
   'US',
-  now() - interval '2 days'
+  now() - interval '1 day'
 ),
--- Sample Beans (Competitor 3) - Perplexity GB
+-- Sample Beans (Competitor 3) - Google AI Mode GB
 (
   'e0000000-0000-0000-0000-000000000007',
-  md5('pr|88888888-8888-8888-8888-888888888801|perplexity-web|perplexity-web|GB')::uuid,
+  md5('pr|88888888-8888-8888-8888-888888888801|google-aimode|google-aimode|GB')::uuid,
   '33333333-3333-3333-3333-333333333333',
   1,
   'Sample House Single Origin',
@@ -549,94 +542,73 @@ INSERT INTO public.prompt_result_shopping_cards (
   '{"title": "Sample House Single Origin", "price": "$16.00", "rating": 4.7, "reviews": 320}'::jsonb,
   '99999999-9999-9999-9999-999999999903',
   'competitor',
-  'perplexity-web',
+  'google-aimode',
   'GB',
   now() - interval '3 days'
 )
 ON CONFLICT (id) DO NOTHING;
 
 -- ─── Query Fan-out seed data ──────────────────────────────────────────────────
--- Populates search_queries on copilot-web and perplexity-web prompt_results so
--- the Query Fan-out tab has data to display locally. Each item mirrors the real
--- shape: { query, engine?, source_platform }.
+-- Populates search_queries on chatgpt-web prompt_results so the Query Fan-out
+-- tab has data to display locally. ChatGPT is the one tracked engine that
+-- shares the searches behind its answers, and only on some days (sampled), so
+-- only part of its answers carry them: here its gpt-5-5 ones. Copilot and
+-- Perplexity shared theirs too, but are no longer tracked. Each item mirrors
+-- the real shape: { query, engine?, source_platform }.
 
 -- Prompt 801: "What are the best coffee subscription services in 2026?"
 UPDATE public.prompt_results
 SET search_queries = '[
-  {"query": "best coffee subscription services 2026", "source_platform": "copilot-web"},
-  {"query": "coffee subscription box comparison", "source_platform": "copilot-web"},
-  {"query": "top rated coffee subscription 2026", "source_platform": "copilot-web"}
+  {"query": "best coffee subscription services 2026", "source_platform": "chatgpt-web"},
+  {"query": "coffee subscription box comparison", "source_platform": "chatgpt-web"},
+  {"query": "top rated coffee subscription 2026", "source_platform": "chatgpt-web"},
+  {"query": "top rated monthly coffee boxes", "source_platform": "chatgpt-web"}
 ]'::jsonb
-WHERE prompt_id = '88888888-8888-8888-8888-888888888801' AND platform = 'copilot-web';
-
-UPDATE public.prompt_results
-SET search_queries = '[
-  {"query": "best coffee subscription services 2026", "engine": "web", "source_platform": "perplexity-web"},
-  {"query": "top rated monthly coffee boxes", "engine": "web", "source_platform": "perplexity-web"}
-]'::jsonb
-WHERE prompt_id = '88888888-8888-8888-8888-888888888801' AND platform = 'perplexity-web';
+WHERE prompt_id = '88888888-8888-8888-8888-888888888801' AND platform = 'chatgpt-web' AND model_used = 'gpt-5-5';
 
 -- Prompt 802: "Which specialty coffee subscriptions ship internationally?"
 UPDATE public.prompt_results
 SET search_queries = '[
-  {"query": "international coffee subscription shipping", "source_platform": "copilot-web"},
-  {"query": "specialty coffee worldwide delivery", "source_platform": "copilot-web"}
+  {"query": "international coffee subscription shipping", "source_platform": "chatgpt-web"},
+  {"query": "specialty coffee worldwide delivery", "source_platform": "chatgpt-web"},
+  {"query": "worldwide coffee delivery subscription", "source_platform": "chatgpt-web"}
 ]'::jsonb
-WHERE prompt_id = '88888888-8888-8888-8888-888888888802' AND platform = 'copilot-web';
-
-UPDATE public.prompt_results
-SET search_queries = '[
-  {"query": "international coffee subscription shipping", "engine": "web", "source_platform": "perplexity-web"},
-  {"query": "worldwide coffee delivery subscription", "engine": "web", "source_platform": "perplexity-web"}
-]'::jsonb
-WHERE prompt_id = '88888888-8888-8888-8888-888888888802' AND platform = 'perplexity-web';
+WHERE prompt_id = '88888888-8888-8888-8888-888888888802' AND platform = 'chatgpt-web' AND model_used = 'gpt-5-5';
 
 -- Prompt 803: "Best monthly coffee bean subscription for offices"
 UPDATE public.prompt_results
 SET search_queries = '[
-  {"query": "office coffee subscription plans", "source_platform": "copilot-web"},
-  {"query": "bulk coffee beans subscription for teams", "source_platform": "copilot-web"}
+  {"query": "office coffee subscription plans", "source_platform": "chatgpt-web"},
+  {"query": "bulk coffee beans subscription for teams", "source_platform": "chatgpt-web"}
 ]'::jsonb
-WHERE prompt_id = '88888888-8888-8888-8888-888888888803' AND platform = 'copilot-web';
+WHERE prompt_id = '88888888-8888-8888-8888-888888888803' AND platform = 'chatgpt-web' AND model_used = 'gpt-5-5';
 
 -- Prompt 804: "Best espresso machines under $500?"
 UPDATE public.prompt_results
 SET search_queries = '[
-  {"query": "best espresso machine under 500", "source_platform": "copilot-web"},
-  {"query": "home espresso machine reviews 2026", "source_platform": "copilot-web"}
+  {"query": "best espresso machine under 500", "source_platform": "chatgpt-web"},
+  {"query": "home espresso machine reviews 2026", "source_platform": "chatgpt-web"},
+  {"query": "affordable espresso machine comparison", "source_platform": "chatgpt-web"}
 ]'::jsonb
-WHERE prompt_id = '88888888-8888-8888-8888-888888888804' AND platform = 'copilot-web';
-
-UPDATE public.prompt_results
-SET search_queries = '[
-  {"query": "best espresso machine under 500", "engine": "web", "source_platform": "perplexity-web"},
-  {"query": "affordable espresso machine comparison", "engine": "web", "source_platform": "perplexity-web"}
-]'::jsonb
-WHERE prompt_id = '88888888-8888-8888-8888-888888888804' AND platform = 'perplexity-web';
+WHERE prompt_id = '88888888-8888-8888-8888-888888888804' AND platform = 'chatgpt-web' AND model_used = 'gpt-5-5';
 
 -- Prompt 805: "Compare home espresso machines for beginners"
 -- "best espresso machine under 500" is shared with prompt 804 — demonstrates
 -- the cross-prompt grouping the "By prompt" view is designed to show.
 UPDATE public.prompt_results
 SET search_queries = '[
-  {"query": "best espresso machine for beginners", "source_platform": "copilot-web"},
-  {"query": "best espresso machine under 500", "source_platform": "copilot-web"}
+  {"query": "best espresso machine for beginners", "source_platform": "chatgpt-web"},
+  {"query": "best espresso machine under 500", "source_platform": "chatgpt-web"}
 ]'::jsonb
-WHERE prompt_id = '88888888-8888-8888-8888-888888888805' AND platform = 'copilot-web';
-
-UPDATE public.prompt_results
-SET search_queries = '[
-  {"query": "best espresso machine for beginners", "engine": "web", "source_platform": "perplexity-web"}
-]'::jsonb
-WHERE prompt_id = '88888888-8888-8888-8888-888888888805' AND platform = 'perplexity-web';
+WHERE prompt_id = '88888888-8888-8888-8888-888888888805' AND platform = 'chatgpt-web' AND model_used = 'gpt-5-5';
 
 -- Prompt 806: "Manual vs automatic espresso machine for home use"
 UPDATE public.prompt_results
 SET search_queries = '[
-  {"query": "manual vs automatic espresso machine", "source_platform": "copilot-web"},
-  {"query": "home espresso machine comparison 2026", "source_platform": "copilot-web"}
+  {"query": "manual vs automatic espresso machine", "source_platform": "chatgpt-web"},
+  {"query": "home espresso machine comparison 2026", "source_platform": "chatgpt-web"}
 ]'::jsonb
-WHERE prompt_id = '88888888-8888-8888-8888-888888888806' AND platform = 'copilot-web';
+WHERE prompt_id = '88888888-8888-8888-8888-888888888806' AND platform = 'chatgpt-web' AND model_used = 'gpt-5-5';
 
 -- ─── Zero fan-out coverage (prompt 807) ──────────────────────────────────────
 -- Deliberately NOT given any search_queries: prompt 807 is tracked only on

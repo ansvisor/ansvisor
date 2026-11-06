@@ -1,23 +1,23 @@
 ---
-title: "Mentions & Sentiment"
+title: "Visibility: Mentions"
 description: "Where AI answers name your brand, how they describe it, and what to do about it."
 ---
 
 ## What it shows
 
-The **Mentions & Sentiment** page (`/dashboard/mentions`, **Mentions** in the sidebar) reads the AI answers your tracking already stores and shows where they name your brand, in what tone, and next to which competitors. Opening the page or changing a filter never calls an LLM.
+The **Mentions** tab of [Visibility](/guides/answer-engine-insights) (`/dashboard/mentions`, **Visibility › Mentions** in the sidebar; it was the Mentions & Sentiment page) reads the AI answers your tracking already stores and shows where they name your brand, in what tone, and next to which competitors. Opening the tab or changing a filter never calls an LLM.
 
-It has three tabs:
+It has three views of its own:
 
-- **Overview** — the headline numbers, the trend, each AI platform, and how often AI names your competitors
-- **Mentions** — every answer that names your brand, one row each
+- **Summary** — the headline numbers, the trend, each AI platform, and how often AI names your competitors
+- **Answers** — every answer that names your brand, one row each
 - **Perception** — the words AI uses next to your brand, compared with your top competitors
 
-The tab and the filters live in the URL, so a refresh or a shared link opens the same view. The **Mentions** and **Net sentiment** cards on [Answer Engine Insights](/guides/answer-engine-insights) open this page over the same dates.
+The view and the filters live in the URL, so a refresh or a shared link opens the same view. The date range, platform, country and topic come with you from Visibility's other tabs, and the **Mentions** and **Net sentiment** cards on its Overview open this tab over the same dates.
 
 ## Filters
 
-All three tabs share one filter bar. The brand is the active brand in the sidebar.
+All three views share one filter bar. The brand is the active brand in the sidebar.
 
 | Filter | What it does |
 |---|---|
@@ -27,15 +27,15 @@ All three tabs share one filter bar. The brand is the active brand in the sideba
 | **Topic** | One topic. Shown only when the brand has topics. |
 | **Search** | Matches the prompts' text. On the Perception tab the box reads *Search keywords…*, but it still searches the prompts. |
 
-The page header has three buttons:
+Visibility's header has these buttons while this tab is open:
 
-- **Copy summary** — copies the Overview as plain text: the filters, the summary line, the four KPIs with the number of responses behind each, and the period. Paste it into a doc, a ticket or a chat.
+- **Copy summary** — copies the Summary as plain text: the filters, the summary line, the four KPIs with the number of responses behind each, and the period. Paste it into a doc, a ticket or a chat.
 - **Export CSV** — downloads the answers that name your brand under the filters, one row per answer, up to 5,000 rows per file. From the Mentions tab, the file also follows the table's sentiment and co-mention filters and its sort. Lines above the rows record the filters, the period and the counts, so the file still says what it covers when it is read later.
-- **Reports** — opens the [Reports](/guides/reports) page.
+- **Reports** — opens the [Reports](/guides/reports) page (on every tab).
 
 The CSV's columns are `date_utc`, `prompt`, `topic`, `platform`, `model`, `country`, `sentiment`, `times_named`, `position`, `brands_named`, `co_mentioned` and `excerpt`. Dates are in UTC.
 
-## Overview
+## Summary
 
 <CardGroup cols={2}>
   <Card title="Summary line" icon="align-left">
@@ -57,7 +57,7 @@ The CSV's columns are `date_utc`, `prompt`, `topic`, `platform`, `model`, `count
 
 Every change compares the selected period with the period of the same length just before it. It is taken only on the prompts that were answered in both periods, so adding or pausing prompts doesn't show up as a rise or a fall.
 
-## Mentions
+## Answers
 
 The **Mentions** tab lists every answer that names your brand, 100 per page.
 
@@ -171,7 +171,7 @@ AI assistants can read the same figures through the [MCP server](/guides/mcp-ser
 
 | Tool | What it returns |
 |---|---|
-| `get_mentions_summary` | The Overview: times named, mentions, mention rate, prompts with mentions, sentiment, each platform and each day |
+| `get_mentions_summary` | The Summary view: times named, mentions, mention rate, prompts with mentions, sentiment, each platform and each day |
 | `list_mentions` | The Mentions table, 100 rows per page, with the sentiment, co-mention and sort options |
 | `get_mention` | One answer in full, with its citations and latest sentiment correction |
 | `get_mention_competitors` | Competitor framing |

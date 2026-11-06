@@ -87,7 +87,7 @@ const PLAN: PlanCard = {
   planName: 'Growth',
   priceMonthly: 249,
   isTrial: false,
-  chips: [{ key: 'platforms', count: 8, locked: null }],
+  chips: [{ key: 'platforms', count: 4, locked: null }],
   next: {
     planId: 'enterprise',
     planName: 'Enterprise',

@@ -1,15 +1,28 @@
 ---
-title: "Answer Engine Insights"
-description: "Brand Visibility is your daily view of how AI answers treat your brand."
+title: "Visibility"
+description: "The Visibility page is your daily view of how AI answers treat your brand."
 ---
 
 ## What you see
 
-**Brand Visibility** in the sidebar opens the **Answer Engine Insights** page (`/dashboard/insights`), the main analytics hub for a brand. From top to bottom:
+**Visibility** is the main analytics hub for a brand (it was called Brand Visibility, and before that Answer Engine Insights). It has three tabs, and a fourth for brands that sell online, each on its own address:
+
+| Tab | Address | What it shows |
+|---|---|---|
+| **Overview** | `/dashboard/insights` | Everything on this page |
+| **Mentions** | `/dashboard/mentions` | [Mentions & sentiment](/guides/mentions) |
+| **Citations** | `/dashboard/citations` | [The sources AI cites](/guides/citations) |
+| **Product Visibility** | `/dashboard/shopping` | Your products on AI shopping shelves: its Shelf, Categories, Products, Readiness and Competitors views |
+
+**Product Visibility** shows for a brand with Shopping mode on, or whose site type is an online store, on a plan with Product Visibility (Growth and Enterprise). It was a page of its own in the sidebar; its address and its `?tab=` views (`shelf`, `categories`, `products`, `readiness`, `competitors`) still open it. When the site is an online store but Shopping mode is off, the tab says so and offers admins and managers **Turn on Shopping mode**. It keeps its own filters (date range, platform, region and the ChatGPT Shopping market).
+
+The tabs sit under the page's header. In the sidebar, **Visibility** under **Analytics** is a group with the same entries (Product Visibility is **Products** there), open whenever one of them is showing. Each tab loads its own data only when you open it, and shows a skeleton until it arrives: a tab never says there is no data before its read is back, and a read that fails says so with **Retry**, without touching the other tabs. A date range you picked, and the AI platform, region and topic, stay set from tab to tab. Without a picked range each tab opens on its own default (the latest run on the Overview and Citations, 30 days on Mentions), and Mentions, which has no **All**, opens its 30 days for it.
+
+The Overview, from top to bottom:
 
 <Steps>
   <Step title="Header">
-    The brand's name, when the last run finished and when the next one is due. **Formulas** explains how every number on the page is calculated, **Export CSV** downloads the answers behind the page with the current filters (up to 50,000 rows), and **Reports** opens Reports. Self-hosted instances also have **Test Single Prompt** and **Run All** to start a run by hand.
+    The same on every tab: the brand's name, when the last run finished and when the next one is due (read on its own, so it never holds the tab up), **Reports**, and on self-hosted instances **Test Single Prompt** and **Run All** to start a run by hand. On the Overview, **Formulas** explains how every number is calculated and **Export CSV** downloads the answers behind the tab with its filters (up to 50,000 rows).
   </Step>
   <Step title="Summary line">
     One line with your Visibility score and its change, your rank and the gap to the brand next to you, and the platforms that moved most. The copy button puts the line on your clipboard.
@@ -19,8 +32,8 @@ description: "Brand Visibility is your daily view of how AI answers treat your b
 
     - **Visibility** — your score from 0 to 100, and your rank among the tracked brands. Click it to open the breakdown panel.
     - **Tracked prompts** — prompts answered in the period. On plans with a limit, a bar shows how many prompt locations your workspace uses. Click it to open Prompts.
-    - **Mentions** and **Citations** — how often answers named your brand and cited your pages. They open the Mentions and Citations pages.
-    - **Net sentiment** — the positive minus the negative share of the answers that name you. It opens Mentions.
+    - **Mentions** and **Citations** — how often answers named your brand and cited your pages. They open the **Mentions** and **Citations** tabs.
+    - **Net sentiment** — the positive minus the negative share of the answers that name you. It opens the **Mentions** tab.
     - **Coverage** — the share of answered prompts where you appear at least once.
     - **Share of voice** — your mentions out of all mentions of tracked brands.
     - **Avg. position** — where you're named in the answers that name you. Lower is better.
@@ -104,7 +117,7 @@ When a metric drops dramatically:
     The **Leaderboard** and **Topics vs competitors** show who leads where. A competitor surge is often the cause; **Head-to-Head** opens Competitors for a closer look.
   </Step>
   <Step title="Check the sources">
-    Each answer lists the sources it cited, and the **Citations** card opens the Citations page. A retracted article or a new competitor blog post is often the trigger.
+    Each answer lists the sources it cited, and the **Citations** card opens the **Citations** tab. A retracted article or a new competitor blog post is often the trigger.
   </Step>
   <Step title="Decide remediation">
     Either: ship a content piece targeting the prompt (Content Optimization), or earn a placement (PR), or accept it as a one-time blip.
@@ -113,14 +126,14 @@ When a metric drops dramatically:
 
 ## Filters and date range
 
-Under the header:
+Under the tabs:
 
 - **Date Range** — **24h** (the default: the latest completed run), **7d**, **30d**, **90d**, **All** or **Custom**
 - **Topic** — narrow to one topic (shown when the brand has topics)
 - **Region** — narrow to one region your prompts run in
 - **AI Model** — narrow to one AI platform; versions of the same engine count as one
 
-Filters apply to everything on the page except **Opportunities**, which lists your stored suggestions. They're kept in the page's address, so a link you share opens with the same filters.
+Filters apply to everything on the tab except **Opportunities**, which lists your stored suggestions. They're kept in the page's address, so a link you share opens with the same filters, and the date range, AI model, region and topic carry over to the Mentions and Citations tabs.
 
 <Card title="Continue: Topics" icon="arrow-right" href="/guides/topics">
   Drill into topic clusters to find which themes you own and which you're losing.
