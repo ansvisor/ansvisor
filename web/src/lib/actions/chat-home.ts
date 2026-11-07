@@ -22,14 +22,27 @@ import { LEFT_OUT_PLATFORMS } from '@/lib/mcp/why';
  *   - Win back citations: the pages the brand's open lost-citation signals
  *     name (their AC-001 evidence; one without evidence names none).
  *   - Ready to publish: the brand's drafts marked ready, not archived.
+ *   - Weekly report: when the person's own Weekly report job for the brand
+ *     (a recurring scheduled job running /report, CHAT-12; W3-01) runs
+ *     next, within the next 7 days; on, not paused.
  * A job whose menu section an Admin took off the person's menu (Menu access,
  * 00374) isn't counted: its chip doesn't show. Read as the person, once,
  * then the counts together. Behind CHAT_AGENTIC; never throws (#1777):
  * counts that can't be read hide the chips.
+ *
+ * Quality pass (mockup: "3 drafts under 60") still waits: drafts' Quality
+ * scores are worked out in the editor and not kept, so nothing counts them.
  */
 
 export type HomeShortcuts =
-  | { ok: true; dueTasks: number; lostPages: number; readyDrafts: number }
+  | {
+      ok: true;
+      dueTasks: number;
+      lostPages: number;
+      readyDrafts: number;
+      /** The Weekly report job's next run (ISO), or null with none this coming week. */
+      nextReport: string | null;
+    }
   | { ok: false };
 
 /** The Action Center statuses still open. */
@@ -40,7 +53,13 @@ const JOB_SECTIONS = {
   dueTasks: 'action-center',
   lostPages: 'citations',
   readyDrafts: 'content',
+  nextReport: 'reports',
 } as const;
+
+/** The skill a Weekly report job runs (skills/report). */
+const REPORT_SKILL = 'report';
+/** How far ahead the Weekly report chip looks: its next run within a week. */
+const REPORT_AHEAD_MS = 7 * 24 * 60 * 60_000;
 
 /** Signals read a page at a time; a brand has one per prompt at most. */
 const SIGNAL_PAGE = 1000;
@@ -84,6 +103,34 @@ async function countLostPages(supabase: Client, brandId: string): Promise<number
   return pages.size;
 }
 
+/**
+ * When the person's own Weekly report job for the brand runs next, if it
+ * does within REPORT_AHEAD_MS of now: a recurring /report job that is on.
+ * A job about the whole workspace (no brand) isn't the brand's.
+ */
+async function nextReportRun(
+  supabase: Client,
+  userId: string,
+  brandId: string,
+  now: Date,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('chat_schedules')
+    .select('next_run_at')
+    .eq('created_by', userId)
+    .eq('brand_id', brandId)
+    .eq('skill_name', REPORT_SKILL)
+    .eq('kind', 'recurring')
+    .eq('enabled', true)
+    .gte('next_run_at', now.toISOString())
+    .lte('next_run_at', new Date(now.getTime() + REPORT_AHEAD_MS).toISOString())
+    .order('next_run_at')
+    .limit(1);
+  if (error) throw new Error(`chat_schedules: ${error.message}`);
+  const next = (data?.[0] as { next_run_at?: unknown } | undefined)?.next_run_at;
+  return typeof next === 'string' ? next : null;
+}
+
 async function countOf(
   query: PromiseLike<{ count: number | null; error: { message: string } | null }>,
   what: string,
@@ -117,7 +164,7 @@ export async function readHomeShortcuts(brandId: string, through: string): Promi
     const shown = (job: keyof typeof JOB_SECTIONS) => !hidden.has(JOB_SECTIONS[job]);
 
     const { brandId: brand, through: weekEnd } = parsed.data;
-    const [dueTasks, lostPages, readyDrafts] = await Promise.all([
+    const [dueTasks, lostPages, readyDrafts, nextReport] = await Promise.all([
       shown('dueTasks')
         ? countOf(
             supabase
@@ -141,8 +188,9 @@ export async function readHomeShortcuts(brandId: string, through: string): Promi
             'content_drafts',
           )
         : 0,
+      shown('nextReport') ? nextReportRun(supabase, user.id, brand, new Date()) : null,
     ]);
-    return { ok: true, dueTasks, lostPages, readyDrafts };
+    return { ok: true, dueTasks, lostPages, readyDrafts, nextReport };
   } catch (error) {
     console.error('[chat-home] could not count the shortcuts:', error);
     return { ok: false };

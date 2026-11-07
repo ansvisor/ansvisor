@@ -71,6 +71,7 @@ vi.mock('sonner', () => ({ toast }));
 
 const { ChatThreadView } = await import('./chat-thread-view');
 const { PageChipContext } = await import('./page-chip');
+const { uploadChatFile } = await import('@/lib/chat/upload-client');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -204,6 +205,74 @@ describe('ChatThreadView', () => {
     // Stamped in the person's own time zone.
     expect(container.textContent).toContain('Generated Oct 30, 2026 · ');
     expect(window.location.pathname).toBe(`/dashboard/chat/${CHAT}`);
+  });
+
+  it('shows the files a question was sent with: an image as a thumbnail, another as a chip', async () => {
+    const message = (role: 'user' | 'assistant', text: string, extra: object = {}) => ({
+      role,
+      text,
+      generatedAt: null,
+      dataAsOf: null,
+      timezone: null,
+      run: null,
+      ...extra,
+    });
+    await render({
+      variant: 'dock',
+      thread: {
+        conversationId: CHAT,
+        title: 'chart.png',
+        brandId: null,
+        mine: true,
+        messages: [
+          message('user', '', {
+            resendable: false,
+            attachments: [
+              { id: 'u1', name: 'chart.png', mimeType: 'image/png', sizeBytes: 2048 },
+              { id: 'u2', name: 'brief.pdf', mimeType: 'application/pdf', sizeBytes: 4096 },
+            ],
+          }),
+          message('assistant', 'A chart and a brief.'),
+          message('user', 'And this one?', {
+            resendable: false,
+            attachments: [{ id: 'u3', name: 'data.csv', mimeType: 'text/csv', sizeBytes: 10 }],
+          }),
+          message('assistant', 'A table.'),
+        ],
+      },
+    });
+    const [filesOnly, , withText] = [...container.querySelectorAll('ol > li')];
+    const image = filesOnly.querySelector<HTMLImageElement>('[data-slot="sent-files"] img')!;
+    expect(image.getAttribute('src')).toBe('/api/chat/uploads/u1');
+    expect(image.alt).toBe('chart.png');
+    expect(image.closest('a')!.getAttribute('aria-label')).toBe('Open chart.png');
+    expect(image.closest('a')!.getAttribute('target')).toBe('_blank');
+    expect(filesOnly.querySelector('[data-kind="file"]')!.textContent).toBe('PDFbrief.pdf');
+    // Files alone: no empty bubble under them.
+    expect(filesOnly.querySelector('.rounded-2xl')).toBeNull();
+    expect(withText.querySelector('[data-kind="file"]')!.textContent).toBe('CSVdata.csv');
+    expect(withText.querySelector('.rounded-2xl')!.textContent).toBe('You: And this one?');
+  });
+
+  it('sends an image with no text, and shows it in the question at once', async () => {
+    const UPLOAD = '55555555-5555-4555-8555-555555555555';
+    vi.mocked(uploadChatFile).mockResolvedValueOnce({ ok: true, id: UPLOAD });
+    await render({ variant: 'dock' });
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const png = new File(['x'], 'chart.png', { type: 'image/png' });
+    Object.defineProperty(input, 'files', { configurable: true, value: [png] });
+    await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })));
+    await enter();
+    const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+    expect(JSON.parse(String(sent.init!.body))).toMatchObject({
+      message: '',
+      attachmentIds: [UPLOAD],
+    });
+    const question = container.querySelector('ol > li')!;
+    expect(
+      question.querySelector<HTMLImageElement>('[data-slot="sent-files"] img')!.getAttribute('src'),
+    ).toBe(`/api/chat/uploads/${UPLOAD}`);
+    expect(question.querySelector('.rounded-2xl')).toBeNull();
   });
 
   it('in the side panel, keeps the page’s address and tells the panel the chat', async () => {

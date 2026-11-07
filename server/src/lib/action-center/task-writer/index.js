@@ -30,6 +30,7 @@ import { getTask } from '../tasks/registry.js';
 import { IMPROVE_ACTION_KIND } from '../from-prompt-improve.js';
 import { OPPORTUNITY_ACTION_KIND } from '../from-opportunity.js';
 import { BRIDGE_LINKS_KIND } from '../definitions/g20-bridge-links.js';
+import { PRODUCT_PAGES_KIND } from '../definitions/g21-optimize-product-pages.js';
 import { buildEvidence, evidenceForPrompt, hasTargets } from './evidence.js';
 import { loadPastRounds } from './history.js';
 import {
@@ -59,10 +60,18 @@ export function taskWriterModelId() {
 }
 
 /**
- * Actions that carry their tasks: a person's sent with them, and a bridge
- * links action's from its pairs (AC plan P-10), each page and link named.
+/**
+ * Actions that carry their tasks: a person's sent with them, a bridge links
+ * action's from its pairs (AC plan P-10), each page and link named, and a
+ * product pages action's (AC plan P-6), whose optimize task Start now opens
+ * its pages' drafts from.
  */
-const SENT_KINDS = new Set([IMPROVE_ACTION_KIND, OPPORTUNITY_ACTION_KIND, BRIDGE_LINKS_KIND]);
+const SENT_KINDS = new Set([
+  IMPROVE_ACTION_KIND,
+  OPPORTUNITY_ACTION_KIND,
+  BRIDGE_LINKS_KIND,
+  PRODUCT_PAGES_KIND,
+]);
 const CLOSED = new Set(['completed', 'dismissed']);
 
 /**

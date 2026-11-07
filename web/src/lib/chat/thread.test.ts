@@ -24,7 +24,7 @@ vi.mock('@/lib/supabase/admin', () => ({
   },
 }));
 
-const { loadChatThread } = await import('./thread');
+const { loadChatThread, readSentImage } = await import('./thread');
 
 const USER = '11111111-1111-4111-8111-111111111111';
 const CHAT = '33333333-3333-4333-8333-333333333333';
@@ -544,6 +544,71 @@ describe('loadChatThread', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect((await loadChatThread(CHAT))!.messages[0].resendable).toBe(false);
     error.mockRestore();
+  });
+
+  it('gives each question the files it was sent with, in order, and reads only those it should', async () => {
+    seed([
+      { id: 'run-1', status: 'done' },
+      { id: 'run-2', status: 'done' },
+    ]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    const file = (id: string, name: string, mime: string, at: string) => ({
+      id,
+      message_id: 'q-run-2',
+      name,
+      mime_type: mime,
+      size_bytes: 2048,
+      created_at: `2026-11-06T10:00:0${at}.000Z`,
+    });
+    fake.db.tables.chat_uploads = [
+      file('u2', 'brief.pdf', 'application/pdf', '2'),
+      file('u1', 'chart.png', 'image/png', '1'),
+    ];
+    const messages = (await loadChatThread(CHAT))!.messages;
+    expect(messages[0].attachments).toBeUndefined();
+    expect(messages[1].attachments).toBeUndefined();
+    expect(messages[2].attachments).toEqual([
+      { id: 'u1', name: 'chart.png', mimeType: 'image/png', sizeBytes: 2048 },
+      { id: 'u2', name: 'brief.pdf', mimeType: 'application/pdf', sizeBytes: 2048 },
+    ]);
+    // Never where the file lives.
+    expect(JSON.stringify(messages)).not.toContain('storage_path');
+  });
+
+  it("reads a sent image for its thumbnail: the workspace's, ready and an image only", async () => {
+    const ORG = '55555555-5555-4555-8555-555555555555';
+    const actor = { userId: USER, email: null, organizationId: ORG };
+    const row = (id: string, over: Record<string, unknown> = {}) => ({
+      id,
+      organization_id: ORG,
+      storage_path: `${ORG}/${id}`,
+      mime_type: 'image/png',
+      status: 'ready',
+      ...over,
+    });
+    fake.db.tables.chat_uploads = [
+      row('img'),
+      row('pdf', { mime_type: 'application/pdf' }),
+      row('other', { organization_id: 'elsewhere' }),
+      row('pending', { status: 'pending' }),
+      row('swept'),
+    ];
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    Object.assign(fake.db, {
+      storage: {
+        from: () => ({
+          download: async (path: string) =>
+            path.endsWith('/swept')
+              ? { data: null, error: { message: 'not found' } }
+              : { data: new Blob([bytes]), error: null },
+        }),
+      },
+    });
+    expect(await readSentImage(actor, 'img')).toEqual({ bytes, mimeType: 'image/png' });
+    for (const id of ['pdf', 'other', 'pending', 'swept', 'missing']) {
+      expect(await readSentImage(actor, id)).toBeNull();
+    }
   });
 
   it("never carries a step's tool, its debug record or its measure, even from a full row", async () => {

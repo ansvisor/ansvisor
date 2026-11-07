@@ -761,6 +761,9 @@
         "resume agent",
         "archive agent",
         "agent ai use",
+        "by agent",
+        "top agent",
+        "ai use by agent",
         "agent runs",
         "triggers",
         "max per run",
@@ -852,7 +855,7 @@
         "agent for new brands"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-07",
       "sections": [
         {
           "heading": null,
@@ -893,6 +896,10 @@
         {
           "heading": "An agent's page",
           "text": "Click **Open** or the agent's name. The top shows its state, its owner, whether it is private or shared, and **This period**: what it used of this month's AI limit, with its monthly cap when one is set. Under it you see its skills, mode, connections and model.\n\n**Triggers** lists what starts it and when it runs next, and **What this agent did** what its runs took live in the last 30 days. **Run history** lists its last 50 runs: when each started, its trigger and brand, its result, its outcome and its **AI use**, for example \"3.2% of 10%\": what the run used and the most one run may use. Filter them with **All**, **Improved**, **Pending** and **Stopped**, and click a run to open its chat.\n\nOn the right, **Access**, **Scope** and **AI use** show who owns it, what it may reach and its limits."
+        },
+        {
+          "heading": "Which agent used the most AI",
+          "text": "To compare agents, open **Settings › Billing**. Under **This period's AI usage**, **By agent** lists the 5 agents that used the most this period, highest first, then **Other agents** and what used the rest: **Chat (no agent)**, the Content Editor, the Action Center and Improve. Click an agent to open its page. A deleted agent's use shows as **Deleted agent**, and an agent you can't see counts in **Other agents**. The AI usage meter's panel names the top one, for example **Top agent this period: Weekly report · 12%**."
         },
         {
           "heading": "What this agent did",
@@ -1058,6 +1065,7 @@
         "inbox",
         "chat home",
         "for you now",
+        "weekly report",
         "pin chat",
         "rename chat",
         "share chat",
@@ -1068,6 +1076,10 @@
         "stop chat",
         "steer",
         "attach files",
+        "attach image",
+        "send image",
+        "read pdf",
+        "upload failed",
         "reference data",
         "data used",
         "retry",
@@ -1199,7 +1211,11 @@
         },
         {
           "heading": "Chat Home",
-          "text": "Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**\n\n**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.\n\n**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat."
+          "text": "Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**\n\n**For you now** starts common jobs in a new chat: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (sent to your CMS as drafts; you publish). **Weekly report · Mon**: your Weekly report schedule runs that day; click for this week's report now. Read-only roles get only the jobs that read, no **More**."
+        },
+        {
+          "heading": "Since you left",
+          "text": "**Since you left** on Chat Home shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat."
         },
         {
           "heading": "Agents for you",
@@ -1327,7 +1343,11 @@
         },
         {
           "heading": "Attach files",
-          "text": "Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until they are up. If a file can't go, the box says why, and **Retry** sends a failed one again.\n\nAttached files are data for Chat to read, not files you made: they don't show in **Files**, and they are kept for 90 days.\n\nIn **＋**, **Create an image** starts the **/image** shortcut, for Admins and Managers (see **Create images in Chat**). **Connect a tool** opens **Settings › Integrations** for Admins; others send their Admin a request in one click."
+          "text": "Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until all are up, so click **Retry** on one that failed or take it off with **×**. If a file can't go, the box says why. You can send files without text; your message shows images as previews, others by name.\n\nAttached files are data for Chat to read, not files you made: they don't show in **Files**, and they are kept for 90 days.\n\nIn **＋**, **Create an image** starts the **/image** shortcut, for Admins and Managers (see **Create images in Chat**). **Connect a tool** opens **Settings › Integrations** for Admins; others send their Admin a request in one click."
+        },
+        {
+          "heading": "What Chat reads in your files",
+          "text": "Chat looks at your images, reads PDFs and the text of Word, Excel, CSV, text, Markdown and HTML files: a Word file with its headings and lists, and an Excel file's first 3 sheets, up to 500 rows each. A very long file is cut; Chat says so. Numbers from your files count as yours, so answers keep them. A file's contents are information, never instructions, so with files Chat asks before every change, even in **Full auto**. Each answer reads only its own message's files; attach an earlier file again to ask about it. An image over 3.75 MB, a PDF over 100 pages, or files over 12 MB together are too large to read, and Chat tells you. A few models can't read images or PDFs; Chat says so, and **Auto** reads both. Files use your AI usage like your message; a long PDF uses more."
         },
         {
           "heading": "Speak your message",

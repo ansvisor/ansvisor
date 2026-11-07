@@ -81,6 +81,7 @@
       "exhaustedNoDateChat": "Used up. AI features stop until it resets; Chat keeps working only where it runs on your workspace's own AI key.",
       "exhaustedTrialChat": "Start your plan now for its full monthly AI usage; Chat keeps working only where it runs on your workspace's own AI key.",
       "none": "No AI usage yet this month.",
+      "topAgent": "Top agent this period: {name} · {percent}",
       "ownKey": "Agent Chat, on your own AI key",
       "notCounted": "Not counted",
       "otherLimits": "Other limits this month",
@@ -1315,6 +1316,10 @@
         "title": "Link {targets} to pages that convert",
         "description": "AI sends readers to these pages and few of them convert. Pages on the same topic that convert have little AI traffic."
       },
+      "product_pages_to_optimize": {
+        "title": "Product pages AI asks about: {targets}",
+        "description": "AI shopping answers show these products, or they sell, and their pages can answer more of what people ask."
+      },
       "ai_landing_underperforming": {
         "title": "Weak engagement on {targets}",
         "description": "AI visitors engage on these pages well below your site’s rate."
@@ -1886,6 +1891,7 @@
           "status_changed": "Status changed to {to}",
           "assigned": "Assignee changed",
           "due_date_set": "Due date updated",
+          "group_size_set": "Product pages per group changed",
           "task_status": "Task updated",
           "task_added": "Task added: “{title}”",
           "task_renamed": "Task renamed to “{title}”",
@@ -2196,6 +2202,19 @@
           "planLine": "On {from}, link to {to} with the text “{anchor}”",
           "planLineNoAnchor": "On {from}, link to {to}",
           "startNow": "Start now opens each page in the Content Editor, its link in Your input."
+        },
+        "productPages": {
+          "why": "The products AI shopping answers show for your prompts, or that sell, best first. Work on a few pages at a time.",
+          "groupSize": "Pages at a time",
+          "groupSizeLabel": "{size} pages",
+          "groupSizeSaved": "Working on {size} product pages",
+          "groupSizeFailed": "Couldn’t change the group. Try again.",
+          "inGroup": "In this group",
+          "next": "Next",
+          "figures": "{prompts, plural, =0 {Not on AI shopping cards} one {On AI shopping cards for # prompt} other {On AI shopping cards for # prompts}}",
+          "sales": "{orders, plural, =0 {No orders} one {# order} other {# orders}} · {aiVisits, plural, one {# AI visit} other {# AI visits}} in 30 days",
+          "revenue": "{revenue} in 30 days",
+          "startNow": "Start now opens each page of the group in the Content Editor."
         },
         "shoppingLinks": {
           "source": "Source",
@@ -2758,6 +2777,12 @@
         "titleGeneric": "Link AI-visited pages to pages that convert",
         "description": "AI sends readers to these pages and few of them convert. A link to a page on the same topic that converts puts it one click away.",
         "goal": "So AI finds these pages too, and readers follow the click."
+      },
+      "product_pages_optimize": {
+        "title": "Optimize {targets} AI asks about",
+        "titleGeneric": "Optimize the product pages AI asks about",
+        "description": "AI shopping answers show these products, or they sell. Their pages can answer more of what people ask before they buy.",
+        "goal": "Get these products picked more often in AI shopping answers."
       },
       "protect_valuable_citations": {
         "title": "Protect citations on {targets}",
@@ -4243,6 +4268,7 @@
       "factsMatch": "Every figure matches the data",
       "factsRemoved": "{count, plural, one {# figure wasn't in the data, so it was left out} other {# figures weren't in the data, so they were left out}}",
       "readHelp": "Read Ansvisor Help",
+      "readFiles": "Read your attached files",
       "ask": "Waiting for your answer",
       "askSkipped": "Skipped · used {option}",
       "askStopped": "Question skipped",
@@ -4516,7 +4542,8 @@
       "type": "This file type isn't supported.",
       "size": "Files must be 10 MB or smaller.",
       "count": "You can attach up to 5 files.",
-      "failed": "Upload failed.",
+      "failed": "{name} didn't upload. Remove it or try again.",
+      "failedMany": "{count} files didn't upload. Remove them or try again.",
       "retry": "Retry"
     },
     "slash": {
@@ -4661,7 +4688,11 @@
     "connectionLost": "Lost the connection to Chat. It keeps working: reload the page to see where it is.",
     "untitledExport": "Chat",
     "tryAgainImages": "Try again: make {count} new images with {model}.",
-    "tryAgainImagesSame": "Try again: make {count} new images with the same image model."
+    "tryAgainImagesSame": "Try again: make {count} new images with the same image model.",
+    "sentFiles": {
+      "label": "Files you sent",
+      "open": "Open {name}"
+    }
   },
   "chatDebug": {
     "title": "Debug · staff only",
@@ -14936,6 +14967,13 @@
         "other": "Other"
       },
       "none": "No AI usage yet this period.",
+      "byAgent": {
+        "title": "By agent",
+        "deleted": "Deleted agent",
+        "otherAgents": "Other agents",
+        "chat": "Chat (no agent)",
+        "none": "No agent has used AI this period."
+      },
       "chat": "Agent Chat runs on your own AI key, so it doesn't use this allowance.",
       "chatMetered": "Chat uses this allowance too. Chat on your own AI key isn't counted.",
       "failed": "Couldn't read this period's AI usage. Try again later."

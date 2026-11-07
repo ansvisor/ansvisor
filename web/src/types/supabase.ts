@@ -9502,6 +9502,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      set_product_group_size: {
+        Args: { p_action_id: string; p_size: number }
+        Returns: Json
+      }
       share_of_voice_aggregates: {
         Args: {
           p_brand_id: string

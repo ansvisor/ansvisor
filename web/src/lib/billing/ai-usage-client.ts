@@ -2,6 +2,7 @@ import { BROWSER_API_BASE_URL } from '@/config/api';
 import { createClient } from '@/lib/supabase/client';
 import type { PromptUsageSummary } from '@/lib/prompt-usage-summary';
 import { aiUsageFromApi, type AiUsage, type UsageLimits } from './ai-usage';
+import { nameAgents } from './ai-usage-agents';
 
 /**
  * The header meter's reads (AI usage spec §3.1), from the browser through
@@ -26,7 +27,8 @@ async function accessToken(): Promise<string | null> {
 
 /**
  * This period's AI usage for the member's workspace (GET /api/billing/ai-usage,
- * the Billing page's figures). Null without an active plan (a new workspace,
+ * the Billing page's figures), with the names of the agents they may see for
+ * the popover's Top agent line. Null without an active plan (a new workspace,
  * past due, canceled): there is no allowance to meter. Throws when it can't
  * be read.
  */
@@ -43,7 +45,7 @@ export async function readAiUsage(): Promise<AiUsage | null> {
     if (body.error === 'plan_limit') return null;
     throw new Error(body.message || body.error || `Server error: ${res.status}`);
   }
-  return aiUsageFromApi((await res.json()) as AiUsage);
+  return nameAgents(createClient(), aiUsageFromApi((await res.json()) as AiUsage));
 }
 
 async function readJson<T>(url: string, init?: RequestInit): Promise<T | null> {

@@ -23,8 +23,10 @@ import { isTourTopic, type TourTopic } from './tour';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
 import { readDeliverableTasks, readStrips, weekEndIn, type DeliverableTask } from './task-strip';
+import { CHAT_UPLOAD_BUCKET, isImageUpload, isUploadType, type SentFile } from './uploads';
 import type { WhyResult } from './why/explain';
 import { whyView, type ChatWhy } from './why/view';
+import type { ChatActor } from './engine';
 
 /**
  * A saved chat as its page opens it (CHAT-01, CHAT-03 item 21): its
@@ -102,6 +104,13 @@ export interface ThreadMessage {
    * and @ references stay on the server). Questions only.
    */
   resendable?: boolean;
+  /**
+   * The files the question was sent with (00409), in the order they were
+   * attached; none without. An image shows as a thumbnail read through its
+   * route (readSentImage), any other file as a chip with its name.
+   * Questions only.
+   */
+  attachments?: SentFile[];
   /**
    * The product tour's topic a line of the tour is about (its context_json,
    * 00486), so the side panel finds the turn about the page on screen.
@@ -314,7 +323,11 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
 
   const questionIds = (messages.data ?? []).filter((m) => m.role === 'user').map((m) => m.id);
   const uploads = questionIds.length
-    ? await supabase.from('chat_uploads').select('message_id').in('message_id', questionIds)
+    ? await supabase
+        .from('chat_uploads')
+        .select('id, message_id, name, mime_type, size_bytes, created_at')
+        .in('message_id', questionIds)
+        .order('created_at', { ascending: true })
     : { data: [], error: null };
   // Unread, every question counts as having files: Retry stays off rather than send it short.
   if (uploads.error)
@@ -324,6 +337,15 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       ? questionIds
       : (uploads.data ?? []).map((row) => row.message_id).filter((id): id is string => !!id),
   );
+  // Each question's files, as its bubble shows them: a failed read shows none.
+  const filesOf = new Map<string, SentFile[]>();
+  for (const row of uploads.error ? [] : (uploads.data ?? [])) {
+    if (!row.message_id || !row.name || !isUploadType(row.mime_type)) continue;
+    filesOf.set(row.message_id, [
+      ...(filesOf.get(row.message_id) ?? []),
+      { id: row.id, name: row.name, mimeType: row.mime_type, sizeBytes: row.size_bytes },
+    ]);
+  }
 
   const runIds = (runs.data ?? []).map((run) => run.id);
   const endedIds = (runs.data ?? []).filter((run) => ENDED.includes(run.status)).map((r) => r.id);
@@ -497,6 +519,9 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       ...(message.role === 'user'
         ? { resendable: !message.context_json && !withFiles.has(message.id) }
         : {}),
+      ...(message.role === 'user' && filesOf.has(message.id)
+        ? { attachments: filesOf.get(message.id)! }
+        : {}),
       ...(message.role === 'user' && tourTopicOf(message.context_json)
         ? { tour: tourTopicOf(message.context_json)! }
         : {}),
@@ -605,4 +630,31 @@ function tourTopicOf(context: unknown): TourTopic | null {
   const topic =
     context && typeof context === 'object' ? (context as { tour?: unknown }).tour : null;
   return isTourTopic(topic) ? topic : null;
+}
+
+/**
+ * An image a message was sent with, for its thumbnail (GET
+ * /api/chat/uploads/{id}): read as the person, so it is their own or one of
+ * a chat they can read (00409's policy), in their workspace, up and an
+ * image; its bytes from the private bucket. Null for anything else.
+ */
+export async function readSentImage(
+  actor: ChatActor,
+  uploadId: string,
+): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
+  const { data, error } = await (await createClient())
+    .from('chat_uploads')
+    .select('storage_path, mime_type')
+    .eq('id', uploadId)
+    .eq('organization_id', actor.organizationId)
+    .eq('status', 'ready')
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the file: ${error.message}`);
+  if (!data || !isImageUpload(data.mime_type)) return null;
+  const { data: blob, error: readError } = await supabaseAdmin.storage
+    .from(CHAT_UPLOAD_BUCKET)
+    .download(data.storage_path);
+  // Gone from the bucket (the 90-day sweep): as a file that isn't there.
+  if (readError || !blob) return null;
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), mimeType: data.mime_type };
 }

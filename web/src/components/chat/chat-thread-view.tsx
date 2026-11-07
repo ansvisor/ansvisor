@@ -44,6 +44,7 @@ import {
 import type { ChatReadyBy, ChatThread } from '@/lib/chat/thread';
 import { CONTENT_EDITOR_PATH } from '@/lib/content/drafts';
 import { dropChatUpload, uploadChatFile } from '@/lib/chat/upload-client';
+import type { SentFile } from '@/lib/chat/uploads';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { ChatReference } from '@/lib/chat/references';
 import {
@@ -75,11 +76,14 @@ import { usePageChip } from './page-chip';
 import type { FailingKey } from '@/lib/chat/key-health';
 import { ChatKeyNotice } from './own-key-notice';
 import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
+import { SentFiles } from './sent-files';
 
 interface Turn {
   key: string;
   role: 'user' | 'assistant';
   text: string;
+  /** The files a question was sent with, shown above its words. */
+  files?: SentFile[];
   /** An answer's run: its handle and what its events built. */
   runId?: string | null;
   run?: ClientRun;
@@ -121,7 +125,12 @@ const SETTLING = new Set<string>([
 
 function turnsOf(thread: ChatThread | null): Turn[] {
   return (thread?.messages ?? []).map((message, i) => {
-    const turn: Turn = { key: `saved-${i}`, role: message.role, text: message.text };
+    const turn: Turn = {
+      key: `saved-${i}`,
+      role: message.role,
+      text: message.text,
+      ...(message.attachments?.length ? { files: message.attachments } : {}),
+    };
     // A saved question goes again only as it was: without files or a scope.
     if (message.role === 'user') {
       turn.resend = message.resendable === false ? null : { context: [], references: [] };
@@ -572,6 +581,7 @@ export function ChatThreadView({
         key: questionKey,
         role: 'user',
         text: message,
+        ...(sent.files?.length ? { files: sent.files } : {}),
         resend:
           sent.attachments.length > 0
             ? null
@@ -830,11 +840,15 @@ export function ChatThreadView({
         <ol className="m-0 flex list-none flex-col gap-5 p-0">
           {turns.map((turn, index) => [
             turn.role === 'user' ? (
-              <li key={turn.key} className="flex justify-end">
-                <div className="max-w-[80%] rounded-2xl bg-muted px-4 py-2 text-sm whitespace-pre-wrap">
-                  <span className="sr-only">{t('you')}: </span>
-                  {turn.text}
-                </div>
+              <li key={turn.key} className="flex flex-col items-end gap-1.5">
+                {turn.files && turn.files.length > 0 && <SentFiles files={turn.files} />}
+                {/* Files alone: no empty bubble under them. */}
+                {(turn.text.trim() || !turn.files?.length) && (
+                  <div className="max-w-[80%] rounded-2xl bg-muted px-4 py-2 text-sm whitespace-pre-wrap">
+                    <span className="sr-only">{t('you')}: </span>
+                    {turn.text}
+                  </div>
+                )}
               </li>
             ) : (
               <li
