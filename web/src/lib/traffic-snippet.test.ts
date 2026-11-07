@@ -55,6 +55,23 @@ describe('readSnippet', () => {
     expect(read).toEqual({ lastVisitAt: null, foundAt: null, checkedAt: null });
   });
 
+  it('reads the visits alone when PostgREST answers PGRST204 for the check', async () => {
+    const read = await readSnippet(
+      clientOf(
+        { data: null, error: null },
+        {
+          data: null,
+          error: {
+            code: 'PGRST204',
+            message: "Could not find the 'snippet_found_at' column of 'brands' in the schema cache",
+          },
+        },
+      ),
+      'b1',
+    );
+    expect(read).toEqual({ lastVisitAt: null, foundAt: null, checkedAt: null });
+  });
+
   it('fails on any other error', async () => {
     await expect(
       readSnippet(
