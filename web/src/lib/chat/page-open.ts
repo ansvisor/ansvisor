@@ -2,13 +2,13 @@ import type { ChatDeliverable } from './events';
 
 /**
  * Where a page Chat writes opens (CHAT-25 §3, §12; 00400's page_open):
- * ask each time, keep working in chat, or the Content Editor. "Open here"
- * (the editor inside Chat, W4-15) isn't offered yet: a saved `here` asks.
+ * ask each time, keep working in chat, beside the chat (Open here, W4-15),
+ * or the Content Editor.
  */
-export const PAGE_OPENS = ['ask', 'chat', 'editor'] as const;
+export const PAGE_OPENS = ['ask', 'chat', 'here', 'editor'] as const;
 export type PageOpen = (typeof PAGE_OPENS)[number];
 
-/** A saved page_open as Chat reads it now: anything it doesn't offer asks. */
+/** A saved page_open as Chat reads it: anything it doesn't offer asks. */
 export const pageOpenOf = (value: unknown): PageOpen =>
   PAGE_OPENS.find((p) => p === value) ?? 'ask';
 
@@ -41,7 +41,7 @@ export function pageChoiceMade(runId: string): boolean {
 }
 
 /** Keeps that the card of a run was answered, and how. */
-export function keepPageChoice(runId: string, where: 'chat' | 'editor'): void {
+export function keepPageChoice(runId: string, where: Exclude<PageOpen, 'ask'>): void {
   try {
     window.localStorage.setItem(KEY + runId, where);
   } catch {

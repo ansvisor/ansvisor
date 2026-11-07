@@ -10,6 +10,7 @@ import {
   setCategoryPage,
 } from '../lib/catalog/category-pages.js';
 import { matchBrandLater } from '../lib/catalog/card-match.js';
+import { setTopicCategory, topicCategories } from '../lib/catalog/topic-categories.js';
 import { credentialsConfigured } from '../lib/catalog/credentials.js';
 import { syncSource } from '../lib/catalog/sources.js';
 import {
@@ -46,6 +47,10 @@ import { catalogCategoryLimiter, catalogLimiter } from '../middleware/rate-limit
  *   - PUT /api/catalog/categories { brandId, category, url }: a category's
  *     page set by hand (url), or set to none (null); DELETE with
  *     ?brandId=…&category=… puts it back to the automatic match;
+ *   - GET /api/catalog/topic-categories?brandId=…: each topic's catalog
+ *     categories, worked out or a person's (AC plan P-7); PUT { brandId,
+ *     topicId, categoryId, linked } links one by hand or takes one away,
+ *     DELETE puts it back to the worked-out link;
  *   - DELETE /api/catalog/sources/:id: a store removed, with its sign-in and
  *     its products.
  *
@@ -293,6 +298,63 @@ router.delete('/categories', catalogCategoryLimiter, async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     return fail(req, res, err, 'catalog category page error', CATEGORY_PAGES_FAILED);
+  }
+});
+
+const CHANGE_TOPIC_CATEGORIES = "change the topics' categories";
+const TOPIC_CATEGORIES_FAILED = "Failed to change the topics' categories";
+
+// GET /api/catalog/topic-categories?brandId=… — each topic's categories, and
+// the catalog's to pick from (AC plan P-7, 00494).
+router.get('/topic-categories', async (req, res) => {
+  const parsed = z.object({ brandId: z.guid() }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertBrandAccess(parsed.data.brandId, req.user.id);
+    return res.json(await topicCategories(parsed.data.brandId));
+  } catch (err) {
+    return fail(
+      req,
+      res,
+      err,
+      'catalog topic categories error',
+      "Failed to read the topics' categories",
+    );
+  }
+});
+
+const topicCategoryBody = z.object({
+  brandId: z.guid(),
+  topicId: z.guid(),
+  categoryId: z.guid(),
+  linked: z.boolean(),
+});
+
+// PUT /api/catalog/topic-categories — a topic's category linked by hand, or
+// a worked-out one taken away (linked false).
+router.put('/topic-categories', catalogCategoryLimiter, async (req, res) => {
+  const parsed = topicCategoryBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertWriter(parsed.data.brandId, req.user.id, CHANGE_TOPIC_CATEGORIES);
+    await setTopicCategory({ ...parsed.data, userId: req.user.id });
+    return res.json({ ok: true });
+  } catch (err) {
+    return fail(req, res, err, 'catalog topic category error', TOPIC_CATEGORIES_FAILED);
+  }
+});
+
+// DELETE /api/catalog/topic-categories?brandId=…&topicId=…&categoryId=… — back
+// to the worked-out link.
+router.delete('/topic-categories', catalogCategoryLimiter, async (req, res) => {
+  const parsed = topicCategoryBody.omit({ linked: true }).safeParse(req.query);
+  if (!parsed.success) return res.status(400).json({ error: 'invalid', code: 'invalid' });
+  try {
+    await assertWriter(parsed.data.brandId, req.user.id, CHANGE_TOPIC_CATEGORIES);
+    await setTopicCategory({ ...parsed.data, linked: undefined, userId: req.user.id });
+    return res.json({ ok: true });
+  } catch (err) {
+    return fail(req, res, err, 'catalog topic category error', TOPIC_CATEGORIES_FAILED);
   }
 });
 

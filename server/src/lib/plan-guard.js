@@ -646,6 +646,11 @@ const tenths = (n) => Math.round(n * 10) / 10;
  * `estimates` (ai-estimates.js aiEstimateCosts) are typical costs in USD of
  * work a page asks about before it runs: each comes back as its share of the
  * budget, to a tenth (Write this, customer priorities item 9).
+ * `byAgent` (CHAT-27 item 27), with Chat metered and outside the trial (its
+ * shares aren't shown): each agent's share, highest first, from the Agents
+ * pages' own read (agentSharesSince), scaled as the features are; a null
+ * agentId is the deleted agents' runs together. `chat` is what Chat used
+ * outside any agent's run: Chat's features less the agents' share.
  */
 export async function getAiUsage(orgId, { estimates = {} } = {}) {
   const plan = await resolveOrgPlanByOrgId(orgId);
@@ -662,15 +667,30 @@ export async function getAiUsage(orgId, { estimates = {} } = {}) {
   const budget = plan.limits.improveMonthlyBudgetUsd ?? -1;
   if (budget === -1) return { ...base, unlimited: true, percentUsed: null, features: [] };
 
-  const { data, error } = await supabaseAdmin.rpc('ai_usage_by_feature', {
-    p_organization_id: orgId,
-    p_since: base.periodStart,
-  });
+  const byAgentShown = base.chatMetered && !base.trial && budget > 0;
+  const [{ data, error }, agentShares] = await Promise.all([
+    supabaseAdmin.rpc('ai_usage_by_feature', {
+      p_organization_id: orgId,
+      p_since: base.periodStart,
+    }),
+    byAgentShown ? agentSharesSince(orgId, base.periodStart, budget) : null,
+  ]);
   if (error) throw new Error(error.message);
   const spentOn = new Map((data ?? []).map((r) => [r.feature, Number(r.cost_usd) || 0]));
   const spent = [...spentOn.values()].reduce((a, b) => a + b, 0);
   const scale = budget > 0 && spent > budget ? budget / spent : 1;
   const percentOf = (usd) => (budget > 0 ? tenths((usd * scale * 100) / budget) : 0);
+  let byAgent;
+  if (agentShares) {
+    // Only what spent on the budget: an agent on the workspace's own key alone has no row.
+    const agents = agentShares.filter((a) => a.share > 0).sort((a, b) => b.share - a.share);
+    const agentsUsd = agents.reduce((usd, a) => usd + a.share * budget, 0);
+    const chatUsd = CHAT_AI_FEATURES.reduce((usd, f) => usd + (spentOn.get(f) ?? 0), 0);
+    byAgent = {
+      agents: agents.map((a) => ({ agentId: a.agentId, percent: percentOf(a.share * budget) })),
+      chat: percentOf(Math.max(0, chatUsd - agentsUsd)),
+    };
+  }
   const shares = Object.entries(estimates).map(([key, usd]) => [
     key,
     budget > 0 ? tenths((usd * 100) / budget) : 0,
@@ -691,8 +711,34 @@ export async function getAiUsage(orgId, { estimates = {} } = {}) {
     percentUsed:
       budget <= 0 || spent >= budget ? 100 : Math.min(99.9, tenths((spent * 100) / budget)),
     features,
+    ...(byAgent ? { byAgent } : {}),
     ...(shares.length ? { estimates: Object.fromEntries(shares) } : {}),
   };
+}
+
+/**
+ * Each agent's share of `budgetUsd` since `since` (chat_agent_usage_shares,
+ * 00419; CHAT-27 item 30): what its runs spent on the budget, and on the
+ * workspace's own key, over it, and how many runs spent anything. A
+ * subtask's steps are its parent run's (reserve_chat_ai_usage names them
+ * with the chat's agent run), so a part counts for its parent's agent. A
+ * null agentId is the deleted agents' runs together. The one read behind
+ * the Agents pages (agentUsageShares) and Billing's By agent list
+ * (getAiUsage), so they show the same shares.
+ */
+export async function agentSharesSince(orgId, since, budgetUsd) {
+  const { data, error } = await supabaseAdmin.rpc('chat_agent_usage_shares', {
+    p_organization_id: orgId,
+    p_since: since,
+    p_budget: budgetUsd,
+  });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => ({
+    agentId: row.agent_id ?? null,
+    share: Number(row.share) || 0,
+    ownKeyShare: Number(row.own_key_share) || 0,
+    runs: Number(row.runs) || 0,
+  }));
 }
 
 /**

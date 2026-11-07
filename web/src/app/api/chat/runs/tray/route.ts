@@ -107,6 +107,8 @@ async function chatRuns(
     .from('chat_runs')
     .select('id, conversation_id, status, created_at, finished_at')
     .in('conversation_id', [...titles.keys()])
+    // A run's parts (CHAT-27) show in its steps, not as runs of their own.
+    .is('parent_run_id', null)
     .order('created_at', { ascending: false })
     .limit(RUNS_LIMIT);
   if (runsError) {

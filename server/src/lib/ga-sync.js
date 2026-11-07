@@ -532,6 +532,21 @@ async function syncBrand(brand, { aiHistory = false } = {}) {
       '[ga-sync] item report unavailable — property has no ecommerce data',
     );
   }
+  // The items matched to the brand's catalog again (AC plan P-6, 00493):
+  // product pages to optimize weigh their GA revenue. Best effort.
+  if (itemRows > 0) {
+    try {
+      const { error } = await supabaseAdmin.rpc('refresh_catalog_item_matches', {
+        p_brand_id: brand.id,
+      });
+      if (error) throw new Error(error.message);
+    } catch (err) {
+      logger.warn(
+        { brandId: brand.id, err: err.message },
+        '[ga-sync] items not matched to the catalog',
+      );
+    }
+  }
 
   // Source discovery: one cheap call (no page dimension) over the same window
   // so a newly popular assistant shows up in the logs instead of silently

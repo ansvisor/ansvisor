@@ -88,7 +88,9 @@ async function render(
   props: {
     canChange?: boolean;
     onTasks?: (strip: ChatTaskStrip) => void;
+    onTryAgain?: () => void;
     onAsk?: (prompt: string) => void;
+    onOpenHere?: (href: string) => void;
   } = {},
 ) {
   await act(async () => {
@@ -432,6 +434,31 @@ describe('DeliverableCard for a set of images (W4-08, CHAT-15 items 21–22)', (
     expect(toast).toHaveBeenCalledWith('Downloaded cover-image-geo-strategies.jpg');
   });
 
+  it('offers Try again before PNG when the chat hands it, in the person’s own chat (W4-08b)', async () => {
+    serve({ count: 4, selected: 1, mine: true });
+    await render(images);
+    await settle();
+    // No Try again unless the chat offers it (an older answer, a run under way).
+    expect(action('deliverable.tryAgain')).toBeNull();
+
+    const onTryAgain = vi.fn();
+    await render(images, { onTryAgain });
+    await settle();
+    const buttons = [...container.querySelectorAll('[data-slot="image-set"] [data-action]')].map(
+      (el) => el.getAttribute('data-action'),
+    );
+    expect(buttons).toEqual(['deliverable.tryAgain', 'deliverable.png']);
+    await click(action('deliverable.tryAgain')!);
+    expect(onTryAgain).toHaveBeenCalledOnce();
+  });
+
+  it('offers no Try again on a teammate’s shared chat (W4-08b)', async () => {
+    serve({ count: 4, selected: 1, mine: false });
+    await render(images, { onTryAgain: vi.fn() });
+    await settle();
+    expect(action('deliverable.tryAgain')).toBeNull();
+  });
+
   it('says the images are in Files when it can’t show them', async () => {
     serve(null);
     await render(images);
@@ -556,22 +583,34 @@ describe('DeliverableCard for a page’s version (CHAT-25 §6, W4-12a)', () => {
 
   describe('Optimize ▾ (CHAT-25 §7, W4-12b part 2)', () => {
     const onAsk = vi.fn();
+    const onOpenHere = vi.fn();
 
     beforeEach(() => {
       onAsk.mockReset();
+      onOpenHere.mockReset();
       router.push.mockReset();
       access.requestAccess.mockReset().mockResolvedValue({ ok: true });
     });
 
-    it('is headed by the rules open and Quality, with two equal ways, and asks Chat here', async () => {
+    it('is headed by the rules open and Quality, with three equal ways, and asks Chat here', async () => {
       await render(versionCard(2, { rules: { met: 11, total: 12 }, quality: 90 }), {
         canChange: true,
         onAsk,
+        onOpenHere,
       });
       await click(action('version.optimize')!);
       expect(document.querySelector('[data-slot="optimize-heading"]')!.textContent).toBe(
         '1 rule open · Quality 90',
       );
+      expect(
+        [...document.querySelectorAll('[role="menuitem"]')].map((item) =>
+          item.getAttribute('data-action'),
+        ),
+      ).toEqual([
+        'version.optimizeHere',
+        'version.optimizeInEditorHere',
+        'version.optimizeInEditor',
+      ]);
       const here = document.querySelector('[data-action="version.optimizeHere"]')!;
       expect(here.textContent).toContain('Optimize here, no editor');
       expect(here.textContent).toContain('You get version 3 with what changed.');
@@ -592,6 +631,22 @@ describe('DeliverableCard for a page’s version (CHAT-25 §6, W4-12a)', () => {
       );
       await click(document.querySelector('[data-action="version.optimizeInEditor"]')!);
       expect(router.push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+    });
+
+    it('opens the page in the editor beside the chat (Open here, W4-15c)', async () => {
+      // Read-only roles too: the page opens read-only there, as in the full editor.
+      await render(versionCard(2, { rules: { met: 11, total: 12 } }), { onAsk, onOpenHere });
+      await click(action('version.optimize')!);
+      const besideIt = document.querySelector('[data-action="version.optimizeInEditorHere"]')!;
+      expect(besideIt.textContent).toContain('Optimize in the editor here');
+      expect(besideIt.textContent).toContain('Opens next to this chat.');
+      await click(besideIt);
+      expect(onOpenHere).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+      expect(router.push).not.toHaveBeenCalled();
+      // Nowhere to open it beside: not offered.
+      await render(versionCard(2), { canChange: true, onAsk });
+      await click(action('version.optimize')!);
+      expect(document.querySelector('[data-action="version.optimizeInEditorHere"]')).toBeNull();
     });
 
     it('gives an Analyst, or a read-only workspace, Ask your Admin in place of Optimize here', async () => {

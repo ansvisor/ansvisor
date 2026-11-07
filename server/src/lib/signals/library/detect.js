@@ -27,10 +27,19 @@ import { resolveBrandSources } from '../../action-center/sources.js';
 import * as c from './classify.js';
 import { isTransientDbError } from '../../pulse/metrics.js';
 import { describeSignal } from '../../audit/rubric.js';
+import { canonicalIssue } from '../../audit/canonical.js';
 import { TRAFFIC_WINDOW_DAYS } from '../traffic-evidence.js';
+import { chooseBridgeLinks } from '../../action-center/bridge-links.js';
+import { chooseProductPages } from '../../action-center/product-page-groups.js';
+import { pageKey } from '../../audit/history.js';
+import { siteTypeOf } from '../../content-page-types.js';
 
 const { library: t } = resolve();
 const DAY_MS = 86_400_000;
+/** Every page the AI Traffic list has for the bridge links' pairs: site_pages keeps 500. */
+const BRIDGE_PAGES_LIMIT = 1000;
+/** Days of shopping cards, AI visits and sales the product pages are chosen on. */
+const PRODUCT_PAGES_DAYS = 30;
 
 const AI = ['ai_results'];
 const GSC = ['gsc'];
@@ -715,6 +724,110 @@ const FAMILIES = [
     },
   },
 
+  // Links from the pages AI sends readers to that rarely convert, to the
+  // pages that convert (AC plan P-10, spec §8): one signal with the pairs,
+  // chosen by bridge-links.js. Conversions are Analytics', so it needs both.
+  {
+    name: 'bridgeLinks',
+    requires: ['ai_traffic', 'analytics'],
+    kinds: ['bridge_link_gap'],
+    async run(ctx) {
+      const [list, sitePages] = await Promise.all([
+        rpc('ai_traffic_pages', {
+          p_brand_id: ctx.brandId,
+          p_from: utcMidnight(ctx.now, t.bridgeWindowDays),
+          p_to: ctx.now.toISOString(),
+          p_tab: 'all',
+          p_limit: BRIDGE_PAGES_LIMIT,
+          p_offset: 0,
+        }),
+        selectAll(() =>
+          supabaseAdmin
+            .from('site_pages')
+            .select('url, title, h1, lastmod')
+            .eq('brand_id', ctx.brandId)
+            .order('id'),
+        ),
+      ]);
+      const { pairs, siteKeyRate } = chooseBridgeLinks(
+        { pages: list?.rows ?? [], sitePages, now: ctx.now },
+        t,
+      );
+      if (pairs.length === 0) return [];
+      return [
+        group(
+          'bridge_link_gap',
+          'pages',
+          pairs,
+          ({ from, ...pair }) => ({ id: from, label: from, ...pair }),
+          GA,
+          {
+            siteKeyRate: rounded(siteKeyRate),
+          },
+        ),
+      ];
+    },
+  },
+
+  // An online store's product pages worth optimizing (AC plan P-6, spec
+  // §6.1): one signal with up to ten products, best first, chosen by
+  // product-page-groups.js. Only on a store: its site type says so.
+  {
+    name: 'productPages',
+    requires: ['tracking'],
+    kinds: ['product_pages_to_optimize'],
+    async run(ctx) {
+      const { data: brand, error } = await supabaseAdmin
+        .from('brands')
+        .select('site_type, industry, shopping_mode_enabled')
+        .eq('id', ctx.brandId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      const siteType = siteTypeOf({
+        siteType: brand?.site_type,
+        industry: brand?.industry,
+        shoppingModeEnabled: brand?.shopping_mode_enabled,
+      });
+      if (siteType !== 'ecommerce') return [];
+      const since = new Date(ctx.now.getTime() - PRODUCT_PAGES_DAYS * DAY_MS).toISOString();
+      const candidates = await rpc('product_page_candidates', {
+        p_brand_id: ctx.brandId,
+        p_from: since,
+      });
+      if (!candidates?.length) return [];
+      const [prompts, drafts] = await Promise.all([
+        ctx.prompts(),
+        selectAll(() =>
+          supabaseAdmin
+            .from('content_drafts')
+            .select('source_url')
+            .eq('brand_id', ctx.brandId)
+            .eq('method', 'optimize')
+            .in('status', ['ready', 'published'])
+            .gte('updated_at', since)
+            .not('source_url', 'is', null)
+            .order('id'),
+        ),
+      ]);
+      const products = chooseProductPages({
+        candidates,
+        volumes: new Map((prompts ?? []).map((p) => [p.prompt_id, p.volume ?? null])),
+        optimized: new Set(drafts.map((d) => pageKey(d.source_url)?.key).filter(Boolean)),
+      });
+      if (products.length === 0) return [];
+      return [
+        group(
+          'product_pages_to_optimize',
+          'pages',
+          products,
+          // The score only orders them.
+          ({ url, title, score: _score, ...figures }) => ({ id: url, label: title, ...figures }),
+          AI,
+        ),
+      ];
+    },
+  },
+
   // AI Traffic Analytics' alerts (AT-013, spec §3.8). A new platform sending
   // visits is good news with no work behind it, so it is a recorder kind of
   // its own (signals/traffic-platforms.js), not a library one.
@@ -893,6 +1006,7 @@ const FAMILIES = [
       'weak_entity',
       'weak_internal_links',
       'content_gap',
+      'canonical_issue',
     ],
     async run(ctx) {
       const since = new Date(ctx.now.getTime() - 90 * DAY_MS).toISOString();
@@ -939,7 +1053,7 @@ const FAMILIES = [
         });
         set.set(page, entry);
       }
-      return Object.entries(groups).map(([kind, pages]) =>
+      const found = Object.entries(groups).map(([kind, pages]) =>
         group(
           kind,
           'pages',
@@ -948,6 +1062,39 @@ const FAMILIES = [
           AUDIT,
         ),
       );
+
+      // The canonical tag (AC plan P-11): missing, or pointing to another
+      // site, a redirect, a noindex or a missing page, as the audit read it.
+      // Passing the score, it's still read: a wrong tag scores as present.
+      const canonicals = await selectAll(() =>
+        supabaseAdmin
+          .from('audit_signal_results')
+          .select('audit_id, evidence')
+          .in('audit_id', ids)
+          .eq('signal_key', 'canonical'),
+      );
+      const wrong = canonicals
+        .map((r) => ({ page: pageOf.get(r.audit_id), evidence: r.evidence ?? {} }))
+        .map((e) => ({ ...e, issue: canonicalIssue(e.evidence) }))
+        .filter((e) => e.page && e.issue);
+      if (wrong.length) {
+        found.push(
+          group(
+            'canonical_issue',
+            'pages',
+            wrong,
+            (e) => ({
+              id: e.page,
+              label: e.page,
+              issue: e.issue,
+              canonical: e.evidence.canonical ?? null,
+              ...(e.evidence.target?.to ? { to: e.evidence.target.to } : {}),
+            }),
+            AUDIT,
+          ),
+        );
+      }
+      return found;
     },
   },
 ];

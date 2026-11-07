@@ -5,8 +5,16 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
+import { DRAFT_CHIP } from '@/lib/chat/editor-page';
 import type { PageOpen } from '@/lib/chat/page-open';
 import { keepPageChoice, pageChoiceMade, pageHrefOf } from '@/lib/chat/page-open';
+import {
+  chatWithPageHref,
+  draftOfEditorHref,
+  openPageOf,
+  PAGE_PARAM,
+  withOpenPage,
+} from '@/lib/chat/page-pane';
 import { ApprovalCard } from '@/components/agentic/approval-card';
 import { FormCard, type FormCardValues } from '@/components/agentic/form-card';
 import { DenialCard } from '@/components/agentic/denial-card';
@@ -23,6 +31,7 @@ import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import { ghostOf } from '@/lib/chat/next-moves';
 import type { ChatEvent, ChatTaskStrip } from '@/lib/chat/events';
+import { CHAT_IMAGE_VARIANTS, imageModelNamed } from '@/lib/chat/images/models';
 import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
@@ -32,8 +41,10 @@ import {
   type ClientRun,
   type ClientRunStatus,
 } from '@/lib/chat/run-state';
-import type { ChatThread } from '@/lib/chat/thread';
+import type { ChatReadyBy, ChatThread } from '@/lib/chat/thread';
+import { CONTENT_EDITOR_PATH } from '@/lib/content/drafts';
 import { dropChatUpload, uploadChatFile } from '@/lib/chat/upload-client';
+import type { SentFile } from '@/lib/chat/uploads';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { ChatReference } from '@/lib/chat/references';
 import {
@@ -45,6 +56,7 @@ import {
 } from './composer/chat-composer';
 import { useUserRole } from '@/hooks/use-user-role';
 import { ActionSentCard } from './run/action-sent-card';
+import { ReadyByLine } from './run/ready-by-line';
 import { TaskStrip } from './run/task-strip';
 import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
@@ -60,14 +72,18 @@ import { RememberThis } from './run/remember-this';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
 import { useChatDebug } from './chat-debug';
+import { usePageChip } from './page-chip';
 import type { FailingKey } from '@/lib/chat/key-health';
 import { ChatKeyNotice } from './own-key-notice';
 import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
+import { SentFiles } from './sent-files';
 
 interface Turn {
   key: string;
   role: 'user' | 'assistant';
   text: string;
+  /** The files a question was sent with, shown above its words. */
+  files?: SentFile[];
   /** An answer's run: its handle and what its events built. */
   runId?: string | null;
   run?: ClientRun;
@@ -76,6 +92,8 @@ interface Turn {
   /** Its answer in Files (Save to Files). */
   fileId?: string | null;
   timezone?: string | null;
+  /** A job with a due time's line under its tasks (W4-30), as the chat was read. */
+  readyBy?: ChatReadyBy | null;
   /**
    * A question as it was sent, for Retry to send it again: its page chips,
    * @ references and the page they came from. Null when it can't go again
@@ -107,7 +125,12 @@ const SETTLING = new Set<string>([
 
 function turnsOf(thread: ChatThread | null): Turn[] {
   return (thread?.messages ?? []).map((message, i) => {
-    const turn: Turn = { key: `saved-${i}`, role: message.role, text: message.text };
+    const turn: Turn = {
+      key: `saved-${i}`,
+      role: message.role,
+      text: message.text,
+      ...(message.attachments?.length ? { files: message.attachments } : {}),
+    };
     // A saved question goes again only as it was: without files or a scope.
     if (message.role === 'user') {
       turn.resend = message.resendable === false ? null : { context: [], references: [] };
@@ -116,6 +139,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
       turn.runId = message.run.runId;
       turn.timezone = message.timezone;
       turn.fileId = message.run.fileId;
+      turn.readyBy = message.run.readyBy ?? null;
       turn.run = {
         ...emptyRun(message.run.status as ClientRunStatus),
         steps: message.run.steps,
@@ -188,17 +212,17 @@ export function ChatThreadView({
   onConversation,
   empty,
   usageNoticeSeen = null,
-  chips,
-  onRemoveChip,
+  chips: ownChips,
+  onRemoveChip: ownRemoveChip,
   pageReferences,
-  pageRoute,
+  pageRoute: ownRoute,
   draft,
   onOwnKey = false,
   keyFailure = null,
   skills,
   pageOpen = 'ask',
   placeholder,
-  onSuggestions,
+  onSuggestions: ownSuggestions,
   afterLast,
   afterTurn,
   markedTurn = null,
@@ -248,6 +272,22 @@ export function ChatThreadView({
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
+  // A page open beside the chat on its own page (Open here, W4-15c): its chip
+  // is the box's, sent from the page's editor as the Content Editor's Chat
+  // sends "This draft", so a request comes back as suggestions there (W4-14).
+  const beside = usePageChip();
+  const besideChip = ownChips ? null : (beside?.chip ?? null);
+  const chips = ownChips ?? (besideChip ? [besideChip] : undefined);
+  const onRemoveChip =
+    ownRemoveChip ??
+    (besideChip
+      ? (key: string) => {
+          if (key === DRAFT_CHIP) beside?.removeChip();
+        }
+      : undefined);
+  const pageRoute =
+    ownRoute ?? (besideChip ? `${CONTENT_EDITOR_PATH}/${besideChip.value}` : undefined);
+  const onSuggestions = ownSuggestions ?? beside?.suggested;
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { isLocked, openUpgrade } = useUpgradeGate();
   // At the AI limit, Chat pauses: the composer is off (CHAT-04 item 17).
@@ -287,13 +327,29 @@ export function ChatThreadView({
   const brandId = thread?.brandId ?? activeBrandId ?? null;
   // On Chat Home, what its page put in the box (What's new's Show me).
   const homeDraft = useHomeDraft();
+  // What this chat puts in its own box (an image set's Try again), while the page hands
+  // nothing newer: a page's new hand-off takes the box again. Its nonces are negative,
+  // so they never match one of the page's.
+  const pageDraft = homeDraft ?? draft ?? null;
+  const [ownDraft, setOwnDraft] = useState<{
+    draft: ComposerDraft;
+    over: ComposerDraft | null;
+  } | null>(null);
+  const boxDraft = ownDraft && ownDraft.over === pageDraft ? ownDraft.draft : pageDraft;
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
+  // The image model the latest answer picked or made images with (CHAT-15 item 18): the
+  // model button reads "Image · {model}" until a request that isn't for images, or until
+  // the person picks a chat model in the menu.
+  const [imageLabelOff, setImageLabelOff] = useState<string | null>(null);
+  const lastImageModel = last?.run ? imageModelNamed(last.run.steps) : null;
+  const imageModel = lastImageModel && imageLabelOff !== last?.key ? lastImageModel : null;
 
   // Where a page Chat writes opens (CHAT-25 §3, W4-11): the card asks under
   // the latest answer once, in the person's own chat; "Don't ask again" keeps
-  // the choice, and a saved Content Editor opens it as its run ends here.
+  // the choice, and a saved Open here or Content Editor opens it as its run
+  // ends here.
   const router = useRouter();
   const tPage = useTranslations('chatRun.openPage');
   const [pagePref, setPagePref] = useState<PageOpen>(pageOpen);
@@ -309,6 +365,29 @@ export function ChatThreadView({
     if (!lastRunId || !pageChoiceMade(lastRunId)) return;
     setPageAnswered((was) => new Set(was).add(lastRunId));
   }, [lastRunId]);
+  /**
+   * Open here (CHAT-25 §4, W4-15b): the page beside this chat. On the chat's
+   * own page its address gains `?page`, as Close takes it out (W4-15a), so
+   * nothing reloads and the run stays; anywhere else (the side panel) the
+   * chat's full page opens with the page beside it.
+   */
+  const openBeside = useCallback(
+    (href: string) => {
+      const draftId = draftOfEditorHref(href);
+      if (!draftId || !conversationId) {
+        router.push(href);
+        return;
+      }
+      const { pathname: path, search, hash } = window.location;
+      if (!path.endsWith(`/dashboard/chat/${conversationId}`)) {
+        router.push(chatWithPageHref(conversationId, draftId, pageRoute && pageRoute + search));
+        return;
+      }
+      if (openPageOf(new URLSearchParams(search).get(PAGE_PARAM)) === draftId) return;
+      window.history.pushState(null, '', `${path}${withOpenPage(search, draftId)}${hash}`);
+    },
+    [conversationId, pageRoute, router],
+  );
   const liveRuns = useRef(new Set<string>());
   useEffect(() => {
     const runId = last?.runId;
@@ -318,10 +397,12 @@ export function ChatThreadView({
       return;
     }
     if (!liveRuns.current.delete(runId)) return;
-    // Ended here, not opened ended: a saved Content Editor opens the page it wrote.
+    // Ended here, not opened ended: a saved Open here or Content Editor opens the page it wrote.
     const href = last.run.status === 'done' ? pageHrefOf(last.run.deliverables) : null;
-    if (href && pagePref === 'editor' && ownChat) router.push(href);
-  }, [last, pagePref, ownChat, router]);
+    if (!href || !ownChat) return;
+    if (pagePref === 'editor') router.push(href);
+    else if (pagePref === 'here') openBeside(href);
+  }, [last, pagePref, ownChat, router, openBeside]);
 
   async function choosePage(runId: string, href: string, where: OpenPageChoice, remember: boolean) {
     let kept = false;
@@ -340,6 +421,7 @@ export function ChatThreadView({
     keepPageChoice(runId, where);
     setPageAnswered((was) => new Set(was).add(runId));
     if (where === 'editor') router.push(href);
+    else if (where === 'here') openBeside(href);
     // The side panel's setup is the layout's, read once: read again, so its next chat has the choice.
     if (kept) router.refresh();
   }
@@ -499,6 +581,7 @@ export function ChatThreadView({
         key: questionKey,
         role: 'user',
         text: message,
+        ...(sent.files?.length ? { files: sent.files } : {}),
         resend:
           sent.attachments.length > 0
             ? null
@@ -706,6 +789,23 @@ export function ChatThreadView({
   }
 
   /**
+   * Try again on the latest answer's images (CHAT-15 item 22, W4-08b): a
+   * request for new images with the model that made them goes in the box,
+   * for the person to add a change to and send; its card shows before any
+   * image is made. Admins and Managers, in their own chat, while nothing
+   * else runs and Chat isn't paused at the AI limit.
+   */
+  function tryAgainOf(index: number): (() => void) | undefined {
+    if (!canManage || index !== turns.length - 1) return undefined;
+    if ((thread && !thread.mine) || working || atCap) return undefined;
+    const model = turns[index].run ? imageModelNamed(turns[index].run.steps) : null;
+    const text = model
+      ? t('tryAgainImages', { count: CHAT_IMAGE_VARIANTS, model })
+      : t('tryAgainImagesSame', { count: CHAT_IMAGE_VARIANTS });
+    return () => setOwnDraft({ draft: { nonce: -Date.now(), text: `${text} ` }, over: pageDraft });
+  }
+
+  /**
    * Send to Action Center on the latest answer (CHAT-09 item 18): Chat
    * proposes the finding as an action, on its card. Admins and Managers, in
    * their own chat, while nothing else runs.
@@ -740,11 +840,15 @@ export function ChatThreadView({
         <ol className="m-0 flex list-none flex-col gap-5 p-0">
           {turns.map((turn, index) => [
             turn.role === 'user' ? (
-              <li key={turn.key} className="flex justify-end">
-                <div className="max-w-[80%] rounded-2xl bg-muted px-4 py-2 text-sm whitespace-pre-wrap">
-                  <span className="sr-only">{t('you')}: </span>
-                  {turn.text}
-                </div>
+              <li key={turn.key} className="flex flex-col items-end gap-1.5">
+                {turn.files && turn.files.length > 0 && <SentFiles files={turn.files} />}
+                {/* Files alone: no empty bubble under them. */}
+                {(turn.text.trim() || !turn.files?.length) && (
+                  <div className="max-w-[80%] rounded-2xl bg-muted px-4 py-2 text-sm whitespace-pre-wrap">
+                    <span className="sr-only">{t('you')}: </span>
+                    {turn.text}
+                  </div>
+                )}
               </li>
             ) : (
               <li
@@ -761,6 +865,7 @@ export function ChatThreadView({
                   onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
                   canChangeTasks={canManage && (!thread || thread.mine)}
+                  onOpenHere={openBeside}
                   // The person's own chat: a page's Optimize ▾ asks here (W4-12b part 2).
                   onAsk={
                     !thread || thread.mine
@@ -780,6 +885,7 @@ export function ChatThreadView({
                   onRetry={retryOf(index)}
                   onUseAnsvisorLimit={ansvisorRetryOf(index)}
                   onSendToActionCenter={sendToActionCenterOf(index)}
+                  onTryAgain={tryAgainOf(index)}
                 />
                 {turn === last && askPage && lastPage && (
                   <OpenPageCard
@@ -861,14 +967,19 @@ export function ChatThreadView({
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : placeholder}
           usage={<ComposerUsageMeter />}
           modelChoice={modelChoice}
-          onModelChoice={setModelChoice}
+          onModelChoice={(choice) => {
+            setModelChoice(choice);
+            // A chat model picked: the button names it again, not the images' model.
+            if (last) setImageLabelOff(last.key);
+          }}
+          imageModel={imageModel}
           keyForm
           // An answer is its text only: no page chips, @ data or files go with it.
           chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}
           references={asking ? undefined : pageReferences}
           skills={skills}
-          draft={homeDraft ?? draft}
+          draft={boxDraft}
           onSend={(message, sent) =>
             asking && last
               ? answerQuestion(last, composerAnswer(asking, message), 'composer')
@@ -916,7 +1027,9 @@ function Answer({
   onRetry,
   onUseAnsvisorLimit,
   onSendToActionCenter,
+  onTryAgain,
   onAsk,
+  onOpenHere,
 }: {
   turn: Turn;
   now: number;
@@ -936,8 +1049,12 @@ function Answer({
   onUseAnsvisorLimit?: () => void;
   /** Send to Action Center (CHAT-09 item 18): the latest answer, for Admins and Managers. */
   onSendToActionCenter?: () => void;
+  /** Its images' Try again (W4-08b): the latest answer, for Admins and Managers. */
+  onTryAgain?: () => void;
   /** Sends a message as the person's, in their own chat: a page's Optimize ▾ (W4-12b part 2). */
   onAsk?: (prompt: string) => void;
+  /** Opens a page beside the chat (Open here): Optimize ▾'s "in the editor here" (W4-15c). */
+  onOpenHere?: (href: string) => void;
 }) {
   const t = useTranslations('chatPage');
   const debug = useChatDebug();
@@ -953,7 +1070,15 @@ function Answer({
 
   const cards = (
     <>
-      {run.tasks && <TaskStrip strip={run.tasks} ended={!OPEN.includes(run.status)} />}
+      {run.tasks && (
+        <TaskStrip
+          strip={run.tasks}
+          ended={!OPEN.includes(run.status)}
+          readyBy={turn.readyBy}
+          now={now}
+        />
+      )}
+      {turn.readyBy && !run.tasks?.total && <ReadyByLine readyBy={turn.readyBy} now={now} />}
       {run.denials.map((denial, i) => (
         <DenialCard
           key={i}
@@ -1034,7 +1159,9 @@ function Answer({
             deliverable={deliverable}
             canChange={canChangeTasks}
             onTasks={onTasks}
+            onTryAgain={onTryAgain}
             onAsk={onAsk}
+            onOpenHere={onOpenHere}
           />
         ))}
       {run.sent.map((sent, i) => (

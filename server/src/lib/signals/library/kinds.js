@@ -95,12 +95,21 @@ export const LIBRARY_KINDS = Object.freeze({
   // the pages AI visitors landed on that don't exist (AT-012), and the cited
   // pages no AI search bot read in 30 days (AT-011).
   ai_visits_weekly_drop: meta('traffic', 'high', ['ai_referral_traffic']),
+  // Pages AI sends readers to that rarely convert, to link to pages that do
+  // (AC plan P-10, spec §8).
+  bridge_link_gap: meta('traffic', 'medium', ['ai_referral_traffic']),
+  // An online store's product pages worth optimizing, best first (AC plan
+  // P-6, spec §6.1).
+  product_pages_to_optimize: meta('visibility', 'medium', ['ai_visibility']),
   broken_citation_target: meta('technical', 'high', ['ai_referral_traffic', 'citations']),
   cited_page_uncrawled: meta('technical', 'medium', ['citations']),
 
   // ── Site Audit findings ───────────────────────────────────────────────────
   crawler_blocked: meta('technical', 'high', []),
   structured_data_issue: meta('technical', 'medium', []),
+  // A page's canonical tag missing, or pointing where it shouldn't (AC plan
+  // P-11, spec §9): read by Site Audit (audit/canonical.js).
+  canonical_issue: meta('technical', 'medium', ['citations']),
   outdated_content: meta('technical', 'medium', ['ai_visibility']),
   weak_entity: meta('technical', 'medium', ['mentions']),
   weak_internal_links: meta('technical', 'low', []),

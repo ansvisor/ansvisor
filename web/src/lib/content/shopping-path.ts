@@ -17,6 +17,8 @@ import type { SiteType } from '@/lib/content/page-types';
  */
 export const PRODUCTS_FOR: Record<string, number> = {
   best_of: 8,
+  // A category page links its best sellers (AC plan P-7).
+  category_page: 8,
   buying_guide: 5,
   comparison: 4,
   alternatives: 4,

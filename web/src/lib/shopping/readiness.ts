@@ -246,13 +246,16 @@ export function copyValues(item: ReadinessItem): Record<string, string | number>
   return values;
 }
 
-/** The AI channels a shop sells through, in the spec's priority order. */
+/**
+ * The AI channels a shop sells through, in the spec's priority order.
+ * Microsoft Copilot is left out while Cloro doesn't serve it (#2181): it
+ * would always read "Not tracked".
+ */
 export const READINESS_CHANNELS = [
   'chatgpt-shopping',
   'google-aio',
   'google-aimode',
   'gemini-web',
-  'copilot-web',
 ] as const;
 
 export type ChannelState = 'showing' | 'notShowing' | 'notTracked';

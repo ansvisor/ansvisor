@@ -70,6 +70,8 @@ const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success:
 vi.mock('sonner', () => ({ toast }));
 
 const { ChatThreadView } = await import('./chat-thread-view');
+const { PageChipContext } = await import('./page-chip');
+const { uploadChatFile } = await import('@/lib/chat/upload-client');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -203,6 +205,74 @@ describe('ChatThreadView', () => {
     // Stamped in the person's own time zone.
     expect(container.textContent).toContain('Generated Oct 30, 2026 · ');
     expect(window.location.pathname).toBe(`/dashboard/chat/${CHAT}`);
+  });
+
+  it('shows the files a question was sent with: an image as a thumbnail, another as a chip', async () => {
+    const message = (role: 'user' | 'assistant', text: string, extra: object = {}) => ({
+      role,
+      text,
+      generatedAt: null,
+      dataAsOf: null,
+      timezone: null,
+      run: null,
+      ...extra,
+    });
+    await render({
+      variant: 'dock',
+      thread: {
+        conversationId: CHAT,
+        title: 'chart.png',
+        brandId: null,
+        mine: true,
+        messages: [
+          message('user', '', {
+            resendable: false,
+            attachments: [
+              { id: 'u1', name: 'chart.png', mimeType: 'image/png', sizeBytes: 2048 },
+              { id: 'u2', name: 'brief.pdf', mimeType: 'application/pdf', sizeBytes: 4096 },
+            ],
+          }),
+          message('assistant', 'A chart and a brief.'),
+          message('user', 'And this one?', {
+            resendable: false,
+            attachments: [{ id: 'u3', name: 'data.csv', mimeType: 'text/csv', sizeBytes: 10 }],
+          }),
+          message('assistant', 'A table.'),
+        ],
+      },
+    });
+    const [filesOnly, , withText] = [...container.querySelectorAll('ol > li')];
+    const image = filesOnly.querySelector<HTMLImageElement>('[data-slot="sent-files"] img')!;
+    expect(image.getAttribute('src')).toBe('/api/chat/uploads/u1');
+    expect(image.alt).toBe('chart.png');
+    expect(image.closest('a')!.getAttribute('aria-label')).toBe('Open chart.png');
+    expect(image.closest('a')!.getAttribute('target')).toBe('_blank');
+    expect(filesOnly.querySelector('[data-kind="file"]')!.textContent).toBe('PDFbrief.pdf');
+    // Files alone: no empty bubble under them.
+    expect(filesOnly.querySelector('.rounded-2xl')).toBeNull();
+    expect(withText.querySelector('[data-kind="file"]')!.textContent).toBe('CSVdata.csv');
+    expect(withText.querySelector('.rounded-2xl')!.textContent).toBe('You: And this one?');
+  });
+
+  it('sends an image with no text, and shows it in the question at once', async () => {
+    const UPLOAD = '55555555-5555-4555-8555-555555555555';
+    vi.mocked(uploadChatFile).mockResolvedValueOnce({ ok: true, id: UPLOAD });
+    await render({ variant: 'dock' });
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const png = new File(['x'], 'chart.png', { type: 'image/png' });
+    Object.defineProperty(input, 'files', { configurable: true, value: [png] });
+    await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })));
+    await enter();
+    const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+    expect(JSON.parse(String(sent.init!.body))).toMatchObject({
+      message: '',
+      attachmentIds: [UPLOAD],
+    });
+    const question = container.querySelector('ol > li')!;
+    expect(
+      question.querySelector<HTMLImageElement>('[data-slot="sent-files"] img')!.getAttribute('src'),
+    ).toBe(`/api/chat/uploads/${UPLOAD}`);
+    expect(question.querySelector('.rounded-2xl')).toBeNull();
   });
 
   it('in the side panel, keeps the page’s address and tells the panel the chat', async () => {
@@ -393,7 +463,8 @@ describe('ChatThreadView', () => {
   });
 
   describe('where the page it wrote opens (CHAT-25 §3, W4-11)', () => {
-    const pageThread = (mine = true) =>
+    const DRAFT = 'aaaaaaaa-1111-4111-8111-111111111111';
+    const pageThread = (mine = true, href = '/dashboard/content/editor/d1') =>
       ({
         conversationId: CHAT,
         title: 'Pricing FAQ',
@@ -418,7 +489,7 @@ describe('ChatThreadView', () => {
                   type: 'document',
                   formats: ['html'],
                   status: 'draft',
-                  href: '/dashboard/content/editor/d1',
+                  href,
                 },
               ],
             },
@@ -483,13 +554,128 @@ describe('ChatThreadView', () => {
       expect(pageCard()).toBeNull();
     });
 
+    it('opens the page beside the chat on its own page, and keeps Open here (W4-15b)', async () => {
+      window.history.replaceState(null, '', `/dashboard/chat/${CHAT}?from=%2Fdashboard%2Fmentions`);
+      await render({
+        thread: pageThread(true, `/dashboard/content/editor/${DRAFT}`),
+        variant: 'dock',
+      });
+      expect(pick('here').textContent).toContain('Open here');
+      await act(async () => pick('dontAskAgain').click());
+      await act(async () => pick('here').click());
+      expect(prefs.saveGeneral).toHaveBeenCalledWith({ pageOpen: 'here' });
+      expect(toast).toHaveBeenCalledWith(
+        'Your choice is saved. Change it anytime in Settings › Chat.',
+      );
+      // Its address names the page, the rest kept; nothing navigates away or reloads.
+      expect(window.location.pathname).toBe(`/dashboard/chat/${CHAT}`);
+      expect(window.location.search).toBe(`?from=%2Fdashboard%2Fmentions&page=${DRAFT}`);
+      expect(nav.push).not.toHaveBeenCalled();
+      expect(nav.refresh).toHaveBeenCalled();
+      expect(pageCard()).toBeNull();
+    });
+
+    it('opens the page beside the chat once, without a choice kept', async () => {
+      window.history.replaceState(null, '', `/dashboard/chat/${CHAT}`);
+      const entries = window.history.length;
+      await render({
+        thread: pageThread(true, `/dashboard/content/editor/${DRAFT}`),
+        variant: 'dock',
+      });
+      await act(async () => pick('here').click());
+      expect(prefs.saveGeneral).not.toHaveBeenCalled();
+      expect(window.location.search).toBe(`?page=${DRAFT}`);
+      // A step back closes it again.
+      expect(window.history.length).toBe(entries + 1);
+      expect(nav.refresh).not.toHaveBeenCalled();
+    });
+
+    it('goes from the side panel to the chat’s full page with the page beside it', async () => {
+      window.history.replaceState(null, '', '/dashboard/mentions?range=7d');
+      await render({
+        thread: pageThread(true, `/dashboard/content/editor/${DRAFT}`),
+        variant: 'panel',
+        pageRoute: '/dashboard/mentions',
+      });
+      await act(async () => pick('here').click());
+      expect(nav.push).toHaveBeenCalledWith(
+        `/dashboard/chat/${CHAT}?from=%2Fdashboard%2Fmentions%3Frange%3D7d&page=${DRAFT}`,
+      );
+      expect(window.location.pathname).toBe('/dashboard/mentions');
+    });
+
+    it('opens the page beside the chat from Optimize ▾’s “in the editor here” (W4-15c)', async () => {
+      window.history.replaceState(null, '', `/dashboard/chat/${CHAT}`);
+      const thread = pageThread(true, `/dashboard/content/editor/${DRAFT}`);
+      const [, answer] = thread.messages as unknown as {
+        run: { deliverables: Record<string, unknown>[] };
+      }[];
+      Object.assign(answer.run.deliverables[0], {
+        filed: 'in_files',
+        version: {
+          n: 1,
+          counts: { questions: 3, sections: 3, characters: 900 },
+          changes: { shortened: [], added: [], placeholders: [] },
+          sections: [],
+        },
+      });
+      await render({ thread, variant: 'dock' });
+      const item = (name: string) =>
+        document.querySelector<HTMLElement>(`[data-action="version.${name}"]`)!;
+      await act(async () => {
+        item('optimize').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        item('optimize').click();
+      });
+      expect(item('optimizeInEditorHere').textContent).toContain('Optimize in the editor here');
+      await act(async () => item('optimizeInEditorHere').click());
+      // The editor's own Optimize, beside the chat: its address names the page, nothing reloads.
+      expect(window.location.pathname).toBe(`/dashboard/chat/${CHAT}`);
+      expect(window.location.search).toBe(`?page=${DRAFT}`);
+      expect(nav.push).not.toHaveBeenCalled();
+    });
+
+    it('opens the page beside the chat by itself as a run it watched ends, with Open here saved', async () => {
+      fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        return new Response(
+          stream([
+            chatEvent('text.delta', 1, { text: 'Here is the FAQ.' }),
+            chatEvent('deliverable.created', 2, {
+              title: 'Pricing FAQ',
+              type: 'document',
+              formats: ['html'],
+              status: 'draft',
+              href: `/dashboard/content/editor/${DRAFT}`,
+            }),
+            ...finished.slice(1).map((e) => ({ ...e, seq: 3 })),
+          ]),
+          { status: 200, headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN } },
+        );
+      });
+      await render({ pageOpen: 'here' });
+      await type('Write an FAQ');
+      await enter();
+      expect(pageCard()).toBeNull();
+      expect(window.location.pathname).toBe(`/dashboard/chat/${CHAT}`);
+      expect(window.location.search).toBe(`?page=${DRAFT}`);
+      expect(nav.push).not.toHaveBeenCalled();
+    });
+
     it('doesn’t ask with a saved choice, nor on a teammate’s chat', async () => {
       await render({ thread: pageThread(), variant: 'dock', pageOpen: 'chat' });
       expect(pageCard()).toBeNull();
-      // A finished answer read back doesn't open the editor by itself.
+      // A finished answer read back doesn't open the editor, or the page beside it, by itself.
       await render({ thread: pageThread(), variant: 'dock', pageOpen: 'editor' });
       expect(pageCard()).toBeNull();
       expect(nav.push).not.toHaveBeenCalled();
+      window.history.replaceState(null, '', `/dashboard/chat/${CHAT}`);
+      await render({
+        thread: pageThread(true, `/dashboard/content/editor/${DRAFT}`),
+        variant: 'dock',
+        pageOpen: 'here',
+      });
+      expect(pageCard()).toBeNull();
+      expect(window.location.search).toBe('');
       act(() => root.unmount());
       root = createRoot(container);
       await render({ thread: pageThread(false), variant: 'dock' });
@@ -1457,5 +1643,192 @@ describe('ChatThreadView in the Content Editor’s Chat (W4-16)', () => {
     await type('Make answer 3 shorter');
     await enter();
     expect(onSuggestions).toHaveBeenCalledExactlyOnceWith(2);
+  });
+});
+
+describe('ChatThreadView beside a page open in the editor (Open here, W4-15c)', () => {
+  const DRAFT = 'aaaaaaaa-1111-4111-8111-111111111111';
+  const chip = { key: 'draft', label: 'Page: Pricing FAQ', value: DRAFT };
+  const removeChip = vi.fn();
+  const suggested = vi.fn();
+  const ownThread = {
+    conversationId: CHAT,
+    title: 'Pricing FAQ',
+    brandId: null,
+    mine: true,
+    messages: [],
+  } as unknown as ChatThread;
+
+  async function renderBeside(page: { chip: typeof chip | null } | null) {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <RoleProvider role="admin">
+            <PageChipContext.Provider value={page && { ...page, removeChip, suggested }}>
+              <ChatThreadView
+                thread={ownThread}
+                variant="dock"
+                defaultMode="ask_first"
+                fullAutoOpen={false}
+              />
+            </PageChipContext.Provider>
+          </RoleProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+  const shownChips = () =>
+    [...container.querySelectorAll('[data-action="composer.removeChip"]')].map((x) =>
+      x.parentElement!.firstChild!.textContent!.trim(),
+    );
+
+  beforeEach(() => {
+    removeChip.mockReset();
+    suggested.mockReset();
+    window.history.replaceState(null, '', `/dashboard/chat/${CHAT}?page=${DRAFT}`);
+  });
+
+  it('carries the page as a chip: a request goes to the editor’s bridge for that draft, and its suggestions to the editor', async () => {
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        stream([
+          chatEvent('text.delta', 1, { text: 'Two suggestions wait in the page.' }),
+          chatEvent('suggestion.created', 2, { count: 2 }),
+          ...finished.slice(1).map((e) => ({ ...e, seq: 3 })),
+        ]),
+        { status: 200, headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN } },
+      );
+    });
+    await renderBeside({ chip });
+    expect(shownChips()).toEqual(['Page: Pricing FAQ']);
+
+    await type('Make answer 3 shorter');
+    await enter();
+    const sent = JSON.parse(
+      String(calls.find((c) => c.url === '/api/chat/runs')!.init!.body),
+    ) as Record<string, unknown>;
+    // As the Content Editor's Chat sends "This draft" (W4-14): from the draft's editor, by its id.
+    expect(sent).toMatchObject({
+      message: 'Make answer 3 shorter',
+      conversationId: CHAT,
+      context: { route: `/dashboard/content/editor/${DRAFT}`, chips: [chip] },
+    });
+    expect(sent.origin).toBeUndefined();
+    expect(suggested).toHaveBeenCalledExactlyOnceWith(2);
+  });
+
+  it('takes the chip out with ×, and sends nothing about the page without it', async () => {
+    await renderBeside({ chip });
+    await act(async () =>
+      container.querySelector<HTMLElement>('[data-action="composer.removeChip"]')!.click(),
+    );
+    expect(removeChip).toHaveBeenCalledTimes(1);
+
+    // The shell's chip gone (× or Close): the box has none, and a message no page context.
+    await renderBeside({ chip: null });
+    expect(shownChips()).toEqual([]);
+    await type('What changed this week?');
+    await enter();
+    const sent = JSON.parse(
+      String(calls.find((c) => c.url === '/api/chat/runs')!.init!.body),
+    ) as Record<string, unknown>;
+    expect(sent.context).toBeUndefined();
+  });
+});
+
+describe('ChatThreadView: images (W4-08b, CHAT-15 items 18 and 22)', () => {
+  const imagesThread = (steps: object[], mine = true) =>
+    ({
+      conversationId: CHAT,
+      title: 'Cover',
+      brandId: null,
+      mine,
+      messages: [
+        { role: 'user', text: 'Create a cover', generatedAt: null, dataAsOf: null, timezone: null },
+        {
+          role: 'assistant',
+          text: 'Here are four covers.',
+          generatedAt: '2026-11-05T09:14:00.000Z',
+          dataAsOf: null,
+          timezone: 'UTC',
+          run: {
+            runId: RUN,
+            status: 'done',
+            steps,
+            fileId: null,
+            deliverables: [
+              {
+                title: 'Cover image · GEO',
+                type: 'image',
+                formats: ['jpg'],
+                status: 'draft',
+                filed: 'in_files',
+              },
+            ],
+          },
+        },
+      ],
+    }) as unknown as ChatThread;
+  const PICKED = [
+    {
+      n: 1,
+      kind: 'ask',
+      status: 'done',
+      label: 'Which image model should I use?',
+      detail: 'Nano Banana 2 Lite',
+    },
+    {
+      n: 2,
+      kind: 'write',
+      status: 'done',
+      label: 'Created images',
+      detail: '4 images · Nano Banana 2 Lite · about 0.6% of your monthly AI limit',
+    },
+  ];
+  const model = () => container.querySelector('[data-action="model.openMenu"]')!.textContent;
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+
+  beforeEach(() => {
+    // The set's own route: four images, the person's own chat.
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) =>
+      url.endsWith('/images')
+        ? new Response(JSON.stringify({ ok: true, count: 4, selected: 1, mine: true }))
+        : runApi(url, init),
+    );
+  });
+
+  it('names the image model on the model button after an image request', async () => {
+    await render({ thread: imagesThread(PICKED), variant: 'dock' });
+    expect(model()).toBe('Image · Nano Banana 2 Lite ▾');
+  });
+
+  it('names the chat model when the latest answer wasn’t for images', async () => {
+    await render({ thread: imagesThread([]), variant: 'dock' });
+    expect(model()).toBe('Auto · Haiku reads, Sonnet writes ▾');
+  });
+
+  it('puts a request for new images with the same model in the box on Try again', async () => {
+    await render({ thread: imagesThread(PICKED), variant: 'dock' });
+    await settle();
+    await act(async () =>
+      container.querySelector<HTMLElement>('[data-action="deliverable.tryAgain"]')!.click(),
+    );
+    expect(box().value).toBe('Try again: make 4 new images with Nano Banana 2 Lite. ');
+    // Nothing is sent: the person adds a change, then sends.
+    expect(calls.some((c) => c.url === '/api/chat/runs')).toBe(false);
+    await type('Try again: make 4 new images with Nano Banana 2 Lite. Make it blue.');
+    await enter();
+    const sent = calls.find((c) => c.url === '/api/chat/runs')!;
+    expect(JSON.parse(String(sent.init!.body)).message).toBe(
+      'Try again: make 4 new images with Nano Banana 2 Lite. Make it blue.',
+    );
+  });
+
+  it('offers no Try again on a teammate’s shared chat', async () => {
+    await render({ thread: imagesThread(PICKED, false), variant: 'dock' });
+    await settle();
+    expect(container.querySelector('[data-slot="image-set"]')).not.toBeNull();
+    expect(container.querySelector('[data-action="deliverable.tryAgain"]')).toBeNull();
   });
 });

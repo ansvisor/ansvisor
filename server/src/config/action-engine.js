@@ -252,6 +252,19 @@ export const ENGINE_THRESHOLDS = Object.freeze({
      *  winning page; engagement below `underperform` of it is a weak one. */
     landingWinnerMultiple: 1.5,
     landingUnderperformMultiple: 0.6,
+
+    // Bridge links (AC plan P-10, spec §8)
+    /** Days of AI visits, citations and conversions the link pairs are chosen on. */
+    bridgeWindowDays: 28,
+    /** A page AI sends this many visits to, or cites this often, can be a link's source… */
+    bridgeSourceMinAiVisits: 10,
+    bridgeSourceMinCitations: 10,
+    /** …when its key events per session are below this share of the site's. */
+    bridgeSourceMaxKeyRate: 0.5,
+    /** A page converting at `landingWinnerMultiple` of the site's rate, on this many sessions, is a target. */
+    bridgeTargetMinSessions: 20,
+    /** A page the sitemap dates within this many days, not cited or visited from AI yet, is a target too. */
+    bridgeNewPageDays: 60,
   }),
 
   /** Guards against the engine talking over itself. */

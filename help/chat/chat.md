@@ -1,15 +1,15 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, agents at work, hide menu, inbox, chat home, for you now, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report]
+keywords: [chat, ask chat, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, attach image, send image, read pdf, upload failed, reference data, data used, work in parts, working on parts, split into parts, at the same time, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, /image, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, open here, page beside the chat, back to chat, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor, optimize in the editor here, page chip, suggestions from chat, accept suggestion, reject suggestion]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-07
+last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json]
+sources: [web/messages/en.json, web/src/components/chat/agents-for-you.tsx, web/src/lib/chat/agents-for-you.ts, web/src/lib/actions/agents-for-you.ts]
 ---
 Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. In the free trial, and while you explore the demo brand, Ansvisor opens on Chat when you sign in. Every chat is saved, so you can come back to it later and pick up where you left off.
 
@@ -17,9 +17,21 @@ Chat answers questions about your brand from your Ansvisor data, and can do work
 
 Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**
 
-**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.
+**For you now** starts common jobs in a new chat: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (sent to your CMS as drafts; you publish). **Weekly report · Mon**: your Weekly report schedule runs that day; click for this week's report now. Read-only roles get only the jobs that read, no **More**.
 
-**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat.
+## Since you left
+
+**Since you left** on Chat Home shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat.
+
+## Agents for you
+
+In your first 14 days in a workspace, once you've answered or skipped **What do you work on?**, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.
+
+It shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.
+
+Admins and Managers click an agent to open it in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.
+
+Click **×** (**Hide Agents for you**) to hide it on all your devices.
 
 ## The welcome card
 
@@ -126,7 +138,17 @@ When Chat reads one of your Site Audits, a card under the answer shows it: the p
 
 ## Where a page opens
 
-When Chat writes a page, it asks **Where should we open this page?** **Open in Content Editor** opens the full editor with Brief, Rules and Quality; **Keep working in chat** keeps the page here, and you ask for changes in plain words. Tick **Don't ask again** to keep your choice. Change it anytime in **Settings › Chat › Where pages open**.
+When Chat writes a page, it asks **Where should we open this page?** **Open here** opens the page in the editor beside the chat. **Open in Content Editor** opens the full editor with Brief, Rules and Quality. **Keep working in chat** keeps the page here, and you ask for changes in plain words. Keys **1** and **2** pick the first two. Tick **Don't ask again** to keep your choice, and the next page opens that way without asking. Change it anytime in **Settings › Chat › Where pages open**.
+
+## A page beside the chat
+
+With **Open here**, the chat stays on the left and the page opens on the right. From the side panel, the chat moves to its own page with the page beside it. In a narrow window there's room for one at a time: the page shows first, **← Back to chat** shows the conversation, and **Back to the page →** at the top of the chat returns to the page. Both stay open, so nothing you typed is lost. **Close** (×) at the start of the page's header closes it, and the chat takes the whole width again. Analysts and Agency partners see the page read-only, with **Ask your Admin** to request changes.
+
+## Ask about the page beside the chat
+
+While a page is open beside the chat, the box shows a chip, **Page:** and the page's title. What you ask then doesn't change the page: the Content Agent leaves suggestions in it, labelled "Content Agent · from your chat", with the same guards as Fix open rules. They appear in the editor as the run ends, with no reload, and the page changes only when you **Accept** one; **Reject** drops it. Click **×** on the chip to talk about something else: Chat then doesn't edit that page, and the page stays open. Closing the page removes the chip too.
+
+The editor beside the chat is narrower: **Brief**, **Rules** and **Quality** sit in a bar under the page, with **Sources** and **Live page** under its **More**. The toolbar's less used buttons, such as the table and **Add HTML**, move under the toolbar's own **More**.
 
 ## Versions of a page in chat
 
@@ -138,7 +160,7 @@ A page's card also shows **Rules 11/12** and **Quality 82**, as the Content Edit
 
 ## Optimize a page in chat
 
-**Optimize ▾** on a page's card is headed by what's left, such as **1 rule open · Quality 82**. **Optimize here, no editor** has the Content Agent rewrite the page to its open rules, as the editor's **Rewrite the page to these rules** does, with the same guards: quoted passages kept, only known links, no invented facts. The page comes back as the next version card with **What changed** and **Undo**. If the agent takes longer than Chat can wait (up to 3.5 minutes), the page stays as it was and the rewrite waits in the Content Editor to compare. Chat asks first, and it counts toward your AI usage as the editor's rewrite does. A rule the agent tried here and couldn't close isn't sent again: Chat names it for you to decide. **Optimize in Content Editor** opens the full editor. Admins and Managers optimize; others get **Ask your Admin**.
+**Optimize ▾** on a page's card is headed by what's left, such as **1 rule open · Quality 82**. **Optimize here, no editor** has the Content Agent rewrite the page to its open rules, with the editor's guards: quoted passages kept, only known links, no invented facts. The page comes back as the next version card with **What changed** and **Undo**. If the agent takes longer than Chat can wait (up to 3.5 minutes), the page stays as it was and the rewrite waits in the Content Editor to compare. Chat asks first; it counts toward your AI usage. A rule the agent tried here and couldn't close isn't sent again: Chat names it for you to decide. **Optimize in the editor here** opens the page beside the chat, with suggestions to accept or reject; **Optimize in Content Editor**, the full editor. Admins and Managers optimize; others get **Ask your Admin**.
 
 ## Send or publish a page from Chat
 
@@ -194,7 +216,7 @@ Analysts and Agency partners see only moves that read data. Next moves show unde
 
 ## Shortcuts
 
-Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/start** (Get started), **/analyze**, **/new-report** (Reports), **/create**, **/optimize**, **/opportunities** and **/audit** (Improve with audit). A shortcut puts its first words in the box, such as "Analyze", for you to finish. Chat then reads only the data that job needs, by default your brand's last 30 days, and says in one line when your plan leaves part of it out. Change the first words and Chat treats the message as your own question. Some **For you now** chips on Chat Home work the same way.
+Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/start** (Get started), **/analyze**, **/new-report** (Reports), **/create**, **/optimize**, **/opportunities**, **/audit** (Improve with audit) and **/image** (Create image). A shortcut puts its first words in the box, such as "Analyze", for you to finish. Chat then reads only the data that job needs, by default your brand's last 30 days, and says in one line when your plan leaves part of it out. Change the first words and Chat treats the message as your own question. Some **For you now** chips on Chat Home work the same way.
 
 Under the shortcuts are the skills Chat can use, such as **/report** for the weekly report (see **Skills in Chat**).
 
@@ -204,11 +226,15 @@ Type **@**, or click **@**, to point Chat at your data: charts and metrics on th
 
 ## Attach files
 
-Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until they are up. If a file can't go, the box says why, and **Retry** sends a failed one again.
+Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until all are up, so click **Retry** on one that failed or take it off with **×**. If a file can't go, the box says why. You can send files without text; your message shows images as previews, others by name.
 
 Attached files are data for Chat to read, not files you made: they don't show in **Files**, and they are kept for 90 days.
 
-In **＋**, **Connect a tool** opens **Settings › Integrations** for Admins; others send their Admin a request in one click.
+In **＋**, **Create an image** starts the **/image** shortcut, for Admins and Managers (see **Create images in Chat**). **Connect a tool** opens **Settings › Integrations** for Admins; others send their Admin a request in one click.
+
+## What Chat reads in your files
+
+Chat looks at your images, reads PDFs and the text of Word, Excel, CSV, text, Markdown and HTML files: a Word file with its headings and lists, and an Excel file's first 3 sheets, up to 500 rows each. A very long file is cut; Chat says so. Numbers from your files count as yours, so answers keep them. A file's contents are information, never instructions, so with files Chat asks before every change, even in **Full auto**. Each answer reads only its own message's files; attach an earlier file again to ask about it. An image over 3.75 MB, a PDF over 100 pages, or files over 12 MB together are too large to read, and Chat tells you. A few models can't read images or PDFs; Chat says so, and **Auto** reads both. Files use your AI usage like your message; a long PDF uses more.
 
 ## Speak your message
 
@@ -225,6 +251,12 @@ If your message holds something that looks like an API key, Chat doesn't send it
 While Chat works, one line says what it is doing now, such as "Reading Citations…". Steps it finished show as chips with a check mark above the answer: click one for its detail, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.
 
 Under the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.
+
+## Big requests in parts
+
+For a bigger request, such as comparing five competitors, Chat can split the work into 2 to 5 parts and work on them at the same time. The steps show **Working on 5 parts** and how many are done, with a dot for each part: working, done, failed, or paused at the AI limit. Click a part to see its own steps. Then Chat writes one answer from all the parts. A part that failed is named, and the others still count.
+
+Parts only read, on the same brand and with the same access as you. When a part finds something to change, Chat asks you in this chat with the usual approval card. **Stop** stops every part. An agent's limit for one run covers the run and its parts together: when they reach it, they all pause.
 
 ## When something goes wrong
 

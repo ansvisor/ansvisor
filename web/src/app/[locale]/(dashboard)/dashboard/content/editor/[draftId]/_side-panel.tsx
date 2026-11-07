@@ -1,8 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
+import { ChevronDown, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { rulesForBrief, useRuleDescriber } from '@/lib/content/agent-write';
 import { isPageType, type ContentDraft, type DraftConversation } from '@/lib/content/drafts';
@@ -78,6 +86,11 @@ export type InstructionSegment = (typeof SEGMENTS)[number];
 export type PanelTarget = PanelTab | InstructionSegment;
 const isSegment = (target: PanelTarget): target is InstructionSegment =>
   (SEGMENTS as readonly string[]).includes(target);
+/** What the bottom bar opens (CHAT-25 §4): Instructions' segments, then More's tabs. */
+type BarItem = InstructionSegment | 'sources' | 'impact';
+/** A bottom bar's item: the segment control's look, as a button. */
+const BAR_ITEM =
+  'group inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none aria-expanded:bg-muted aria-expanded:text-foreground';
 
 /**
  * The panel's tabs while it is closed, down the editor's right edge, so the
@@ -123,6 +136,13 @@ export function EditorPanelRail({
  * it was. The brief and the sources are the editor's one read
  * (useDraftReads), which the rules check against too: Sources' "Rebuild with
  * selection" and Impact's "Use lost prompts" rebuild the brief, and open it.
+ *
+ * `layout="bar"`, in a narrow, embedded editor (Chat's Open here, CHAT-25 §4):
+ * the same parts, from a bar under the page instead of beside it: Brief ▾ ·
+ * Rules · {n} open ▾ · Quality {score} ▾ · More ▾ (Sources, Live page). Each
+ * opens as a panel above the bar, one at a time; the item again, its ×, or
+ * Esc closes it. A request from the page (the header's chips, Next step,
+ * Quality's to-dos) opens its part there.
  */
 export function EditorSidePanel({
   draft,
@@ -166,6 +186,7 @@ export function EditorSidePanel({
   auditEstimate = null,
   onShoppingPathChange,
   chat,
+  layout = 'side',
 }: {
   draft: ContentDraft;
   /**
@@ -268,6 +289,8 @@ export function EditorSidePanel({
    * suggestions in the page.
    */
   chat?: { conversation: DraftConversation | null; onSuggestions: (count: number) => void };
+  /** `bar`: a bottom bar in place of the side panel (embedded in Chat, CHAT-25 §4). */
+  layout?: 'side' | 'bar';
 }) {
   const t = useTranslations('contentEditor.editor.panel');
   const tEditor = useTranslations('contentEditor.editor');
@@ -279,6 +302,11 @@ export function EditorSidePanel({
   const [opened, setOpened] = useState<Set<PanelTarget>>(
     () => new Set(['instructions', 'rules', ...(ownChat ? (['chat'] as const) : [])]),
   );
+  // The bottom bar's panel: open on what it (or a request) last opened, or closed.
+  const bar = layout === 'bar';
+  const [barOpen, setBarOpen] = useState(false);
+  const barRef = useRef<HTMLElement>(null);
+  const barPanelId = useId();
   const describeRule = useRuleDescriber();
   // A read-only workspace (plan not active): Your input's changes open the
   // upgrade dialog instead (the tabs gate their own actions).
@@ -299,6 +327,7 @@ export function EditorSidePanel({
     setOpened((prev) =>
       prev.has(next) && prev.has(nextTab) ? prev : new Set([...prev, next, nextTab]),
     );
+    setBarOpen(true);
   };
   // None said while the count is still read (the header's chip says so).
   const rulesOpen = rules.settled === false ? 0 : Math.max(0, rules.total - rules.met);
@@ -308,6 +337,34 @@ export function EditorSidePanel({
     .every(({ rule }) => agentFix?.tried?.has(rule.key) || agentFix?.held?.has(rule.key));
   // Quality shows once its first phase is live (NEXT_PUBLIC_CONTENT_QUALITY_PHASE).
   const segments = SEGMENTS.filter((value) => value !== 'quality' || qualityPhase() >= 1);
+  // The rules open and the quality score, on Rules and Quality: the segments' and the bar's.
+  const rulesBadge = rulesOpen > 0 && (
+    <span
+      className={cn(
+        'rounded-md px-1.5 text-[10.5px] font-medium',
+        // Red only for what blocks: open rules don't (editor UX review 2026-11-03).
+        rulesYours
+          ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
+          : 'border border-amber-200 text-amber-700 dark:border-amber-900 dark:text-amber-300',
+      )}
+    >
+      {t('segments.open', { count: rulesOpen })}
+    </span>
+  );
+  const qualityBadge = qualityScore !== null && (
+    <span
+      className={cn(
+        'rounded-md border px-1.5 text-[10.5px] font-medium tabular-nums',
+        BAND_CLASSES[qualityBand(qualityScore)],
+      )}
+    >
+      {qualityScore}
+      <span className="sr-only">
+        {' · '}
+        {tEditor(`quality.bands.${qualityBand(qualityScore)}`)}
+      </span>
+    </span>
+  );
 
   // The sources the agent writes from, as the Sources tab keeps them (v1.1
   // CE-032/034): counted under each Run Agent and on the tab, so turning one
@@ -394,46 +451,93 @@ export function EditorSidePanel({
     return () => onBriefRebuilding?.(false, false);
   }, [rebuilding, onServer, onBriefRebuilding]);
 
+  // The bar's part open (or last open), and its name: never Chat, which is beside the editor.
+  const current: BarItem = tab === 'instructions' || tab === 'chat' ? segment : tab;
+  const barName = isSegment(current) ? t(`segments.${current}`) : t(`tabs.${current}`);
+  /** Closes the bar's panel, the focus back on the item that opened it (its ×, Esc). */
+  const closeBar = () => {
+    setBarOpen(false);
+    barRef.current
+      ?.querySelector<HTMLElement>(`[data-bar-item="${isSegment(current) ? current : 'more'}"]`)
+      ?.focus();
+  };
+
   return (
-    <aside aria-label={t('label')} className="flex w-[400px] shrink-0 flex-col border-l bg-card">
-      <Tabs
-        value={tab}
-        onValueChange={(value) => open(value as PanelTab)}
-        className="border-b px-3 pt-1.5"
-      >
-        <TabsList variant="line">
-          {tabsOf(!!chat).map((value) => (
-            <TabsTrigger key={value} value={value}>
-              {t(`tabs.${value}`)}
-              {/* The rules still open, on the tab that holds them. */}
-              {value === 'instructions' && rulesOpen > 0 && (
-                <>
-                  <span
-                    aria-hidden
-                    className="rounded-md bg-amber-50 px-1.5 text-[10.5px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
-                  >
-                    {rulesOpen}
-                  </span>
-                  <span className="sr-only">{t('openRules', { count: rulesOpen })}</span>
-                </>
-              )}
-              {/* The sources in use (CE-034), the number in full on hover. */}
-              {value === 'sources' && !!sourcesInUse && (
-                <>
-                  <span
-                    aria-hidden
-                    title={t('sourcesInUse', { count: sourcesInUse })}
-                    className="rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground"
-                  >
-                    {formatNumber(sourcesInUse)}
-                  </span>
-                  <span className="sr-only">{t('sourcesInUse', { count: sourcesInUse })}</span>
-                </>
-              )}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+    <aside
+      ref={barRef}
+      aria-label={bar ? t('bar.label') : t('label')}
+      data-slot={bar ? 'editor-bottom-bar' : undefined}
+      // Esc closes the bar's panel; in a field it only leaves the field, as in Rules.
+      onKeyDown={
+        bar
+          ? (e) => {
+              const target = e.target as HTMLElement;
+              if (e.key !== 'Escape' || !barOpen || !e.currentTarget.contains(target)) return;
+              if (target.closest('input, textarea, select, [contenteditable="true"]')) return;
+              e.preventDefault();
+              closeBar();
+            }
+          : undefined
+      }
+      className={
+        bar
+          ? 'flex max-h-[60%] shrink-0 flex-col border-t bg-card'
+          : 'flex w-[400px] shrink-0 flex-col border-l bg-card'
+      }
+    >
+      {bar ? (
+        <div hidden={!barOpen} className="flex items-center gap-2 border-b py-1 pr-2 pl-4">
+          <h2 className="min-w-0 flex-1 truncate text-[13px] font-medium">{barName}</h2>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('bar.close', { name: barName })}
+            title={t('bar.close', { name: barName })}
+            onClick={closeBar}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : (
+        <Tabs
+          value={tab}
+          onValueChange={(value) => open(value as PanelTab)}
+          className="border-b px-3 pt-1.5"
+        >
+          <TabsList variant="line">
+            {tabsOf(!!chat).map((value) => (
+              <TabsTrigger key={value} value={value}>
+                {t(`tabs.${value}`)}
+                {/* The rules still open, on the tab that holds them. */}
+                {value === 'instructions' && rulesOpen > 0 && (
+                  <>
+                    <span
+                      aria-hidden
+                      className="rounded-md bg-amber-50 px-1.5 text-[10.5px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                    >
+                      {rulesOpen}
+                    </span>
+                    <span className="sr-only">{t('openRules', { count: rulesOpen })}</span>
+                  </>
+                )}
+                {/* The sources in use (CE-034), the number in full on hover. */}
+                {value === 'sources' && !!sourcesInUse && (
+                  <>
+                    <span
+                      aria-hidden
+                      title={t('sourcesInUse', { count: sourcesInUse })}
+                      className="rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground"
+                    >
+                      {formatNumber(sourcesInUse)}
+                    </span>
+                    <span className="sr-only">{t('sourcesInUse', { count: sourcesInUse })}</span>
+                  </>
+                )}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      )}
       {/* Chat keeps its own scroll, its box at the bottom (W4-16); mounted once opened. */}
       {chat && opened.has('chat') && (
         <div hidden={tab !== 'chat'} className="min-h-0 flex-1 px-3 py-3">
@@ -446,14 +550,17 @@ export function EditorSidePanel({
       )}
       {/* The panel's own scroll: a part shown in it scrolls here, never the page (scrollInPanel). */}
       <div
+        id={barPanelId}
         data-panel-scroll
-        hidden={tab === 'chat'}
+        hidden={tab === 'chat' || (bar && !barOpen)}
         className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
       >
         <div hidden={tab !== 'instructions'} className="space-y-4">
           <DataNote />
           <div
             role="radiogroup"
+            // The bar picks them itself.
+            hidden={bar}
             aria-label={t(segments.length > 2 ? 'segmentsLabelQuality' : 'segmentsLabel')}
             className="flex rounded-[10px] border bg-muted p-[3px]"
             // Arrow keys move between them, as in any radio group.
@@ -482,33 +589,8 @@ export function EditorSidePanel({
                 )}
               >
                 {t(`segments.${value}`)}
-                {value === 'rules' && rulesOpen > 0 && (
-                  <span
-                    className={cn(
-                      'rounded-md px-1.5 text-[10.5px] font-medium',
-                      // Red only for what blocks: open rules don't (editor UX review 2026-11-03).
-                      rulesYours
-                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
-                        : 'border border-amber-200 text-amber-700 dark:border-amber-900 dark:text-amber-300',
-                    )}
-                  >
-                    {t('segments.open', { count: rulesOpen })}
-                  </span>
-                )}
-                {value === 'quality' && qualityScore !== null && (
-                  <span
-                    className={cn(
-                      'rounded-md border px-1.5 text-[10.5px] font-medium tabular-nums',
-                      BAND_CLASSES[qualityBand(qualityScore)],
-                    )}
-                  >
-                    {qualityScore}
-                    <span className="sr-only">
-                      {' · '}
-                      {tEditor(`quality.bands.${qualityBand(qualityScore)}`)}
-                    </span>
-                  </span>
-                )}
+                {value === 'rules' && rulesBadge}
+                {value === 'quality' && qualityBadge}
               </button>
             ))}
           </div>
@@ -647,6 +729,58 @@ export function EditorSidePanel({
           </div>
         )}
       </div>
+      {bar && (
+        <div className={cn('flex flex-wrap items-center gap-1 px-2 py-1', barOpen && 'border-t')}>
+          {segments.map((value) => (
+            <button
+              key={value}
+              type="button"
+              data-bar-item={value}
+              aria-expanded={barOpen && current === value}
+              aria-controls={barPanelId}
+              onClick={() => (barOpen && current === value ? setBarOpen(false) : open(value))}
+              className={BAR_ITEM}
+            >
+              {t(`segments.${value}`)}
+              {value === 'rules' && rulesBadge}
+              {value === 'quality' && qualityBadge}
+              <ChevronDown
+                aria-hidden
+                className="h-3.5 w-3.5 transition-transform group-aria-expanded:rotate-180"
+              />
+            </button>
+          ))}
+          {/* Sources and Live page, less used while writing: under More, opened the same way. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              data-bar-item="more"
+              title={t('bar.moreHint')}
+              className={cn(BAR_ITEM, barOpen && !isSegment(current) && 'bg-muted text-foreground')}
+            >
+              {t('bar.more')}
+              <ChevronDown aria-hidden className="h-3.5 w-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-auto min-w-44">
+              {(['sources', 'impact'] as const).map((value) => (
+                <DropdownMenuItem key={value} onClick={() => open(value)}>
+                  {t(`tabs.${value}`)}
+                  {value === 'sources' && !!sourcesInUse && (
+                    <>
+                      <span
+                        aria-hidden
+                        className="ml-auto rounded-md bg-muted px-1.5 text-[10.5px] font-medium text-muted-foreground"
+                      >
+                        {formatNumber(sourcesInUse)}
+                      </span>
+                      <span className="sr-only">{t('sourcesInUse', { count: sourcesInUse })}</span>
+                    </>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
     </aside>
   );
 }

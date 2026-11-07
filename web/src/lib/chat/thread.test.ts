@@ -24,7 +24,7 @@ vi.mock('@/lib/supabase/admin', () => ({
   },
 }));
 
-const { loadChatThread } = await import('./thread');
+const { loadChatThread, readSentImage } = await import('./thread');
 
 const USER = '11111111-1111-4111-8111-111111111111';
 const CHAT = '33333333-3333-4333-8333-333333333333';
@@ -160,6 +160,65 @@ describe('loadChatThread', () => {
       ready: 2,
       total: 2,
     });
+  });
+
+  it('puts a job’s due line under the latest task strip, in the person’s time zone (W4-30)', async () => {
+    seed([
+      { id: 'run-1', status: 'done' },
+      { id: 'run-2', status: 'done' },
+    ]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    fake.db.tables.chat_task_state = [
+      {
+        conversation_id: CHAT,
+        action_task_id: 't1',
+        position: 1,
+        chat_status: 'queued',
+        run_id: 'run-1',
+      },
+    ];
+    fake.db.tables.action_tasks = [
+      { id: 't1', task_key: null, title: 'Add FAQ block', title_params: null, status: 'todo' },
+    ];
+    fake.db.tables.profiles = [{ id: USER, time_zone: 'America/New_York' }];
+    const job = {
+      id: 'job-1',
+      created_by: USER,
+      kind: 'once',
+      run_mode: 'ready_by',
+      due_at: '2099-01-05T06:00:00.000Z',
+      next_run_at: '2099-01-05T06:00:00.000Z',
+      timezone: 'Europe/Istanbul',
+      conversation_id: null,
+      set_by_run_id: 'run-2',
+      enabled: true,
+      paused_reason: null,
+      created_at: '2026-10-30T09:02:00.000Z',
+    };
+    fake.db.tables.chat_schedules = [job];
+    const runs = async () => (await loadChatThread(CHAT))!.messages.map((m) => m.run?.readyBy);
+    expect(await runs()).toEqual([
+      undefined,
+      {
+        dueAt: '2099-01-05T06:00:00.000Z',
+        timeZone: 'America/New_York',
+        href: '/dashboard/chat/scheduled/job-1#schedule-when',
+      },
+      undefined,
+      undefined,
+    ]);
+    // Delivered, or turned off: no line.
+    fake.db.tables.chat_schedules = [{ ...job, next_run_at: null }];
+    expect((await runs()).filter(Boolean)).toEqual([]);
+    fake.db.tables.chat_schedules = [{ ...job, enabled: false, paused_reason: 'manual' }];
+    expect((await runs()).filter(Boolean)).toEqual([]);
+    // Paused at the AI limit it still goes on: the line stays, under the job's chat's last run.
+    fake.db.tables.chat_task_state = [];
+    fake.db.tables.chat_schedules = [
+      { ...job, set_by_run_id: null, conversation_id: CHAT, enabled: false, paused_reason: 'cap' },
+    ];
+    expect((await runs())[3]).toMatchObject({ dueAt: job.due_at });
   });
 
   it('reads a task an ended run still has Writing as Queued, and keeps a running run’s Writing', async () => {
@@ -485,6 +544,71 @@ describe('loadChatThread', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     expect((await loadChatThread(CHAT))!.messages[0].resendable).toBe(false);
     error.mockRestore();
+  });
+
+  it('gives each question the files it was sent with, in order, and reads only those it should', async () => {
+    seed([
+      { id: 'run-1', status: 'done' },
+      { id: 'run-2', status: 'done' },
+    ]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    const file = (id: string, name: string, mime: string, at: string) => ({
+      id,
+      message_id: 'q-run-2',
+      name,
+      mime_type: mime,
+      size_bytes: 2048,
+      created_at: `2026-11-06T10:00:0${at}.000Z`,
+    });
+    fake.db.tables.chat_uploads = [
+      file('u2', 'brief.pdf', 'application/pdf', '2'),
+      file('u1', 'chart.png', 'image/png', '1'),
+    ];
+    const messages = (await loadChatThread(CHAT))!.messages;
+    expect(messages[0].attachments).toBeUndefined();
+    expect(messages[1].attachments).toBeUndefined();
+    expect(messages[2].attachments).toEqual([
+      { id: 'u1', name: 'chart.png', mimeType: 'image/png', sizeBytes: 2048 },
+      { id: 'u2', name: 'brief.pdf', mimeType: 'application/pdf', sizeBytes: 2048 },
+    ]);
+    // Never where the file lives.
+    expect(JSON.stringify(messages)).not.toContain('storage_path');
+  });
+
+  it("reads a sent image for its thumbnail: the workspace's, ready and an image only", async () => {
+    const ORG = '55555555-5555-4555-8555-555555555555';
+    const actor = { userId: USER, email: null, organizationId: ORG };
+    const row = (id: string, over: Record<string, unknown> = {}) => ({
+      id,
+      organization_id: ORG,
+      storage_path: `${ORG}/${id}`,
+      mime_type: 'image/png',
+      status: 'ready',
+      ...over,
+    });
+    fake.db.tables.chat_uploads = [
+      row('img'),
+      row('pdf', { mime_type: 'application/pdf' }),
+      row('other', { organization_id: 'elsewhere' }),
+      row('pending', { status: 'pending' }),
+      row('swept'),
+    ];
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    Object.assign(fake.db, {
+      storage: {
+        from: () => ({
+          download: async (path: string) =>
+            path.endsWith('/swept')
+              ? { data: null, error: { message: 'not found' } }
+              : { data: new Blob([bytes]), error: null },
+        }),
+      },
+    });
+    expect(await readSentImage(actor, 'img')).toEqual({ bytes, mimeType: 'image/png' });
+    for (const id of ['pdf', 'other', 'pending', 'swept', 'missing']) {
+      expect(await readSentImage(actor, id)).toBeNull();
+    }
   });
 
   it("never carries a step's tool, its debug record or its measure, even from a full row", async () => {

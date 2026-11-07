@@ -111,8 +111,7 @@ describe('generalFromRow', () => {
         answer_language: 'xx',
         notify_via: 'pager',
         show_thought: null,
-        // Open here isn't offered yet (W4-15): it asks.
-        page_open: 'here',
+        page_open: 'nowhere',
       }),
     ).toEqual(general.DEFAULT_CHAT_GENERAL);
   });
@@ -139,10 +138,13 @@ describe('generalPatchRefusal and generalPatchRow', () => {
       answer_language: null,
       panel_on_pages: true,
     });
-    // Where pages open (W4-11): any role picks it; Open here isn't a choice yet.
+    // Where pages open (W4-11): any role picks it, Open here too (W4-15b).
     expect(general.generalPatchRow({ pageOpen: 'editor' })).toEqual({ page_open: 'editor' });
     expect(general.generalPatchRefusal({ pageOpen: 'chat' }, { ...open, modes: false })).toBeNull();
-    expect(general.generalPatch.safeParse({ pageOpen: 'here' }).success).toBe(false);
+    expect(general.generalPatch.safeParse({ pageOpen: 'here' }).success).toBe(true);
+    expect(general.generalPatchRow({ pageOpen: 'here' })).toEqual({ page_open: 'here' });
+    expect(general.generalPatchRefusal({ pageOpen: 'here' }, { ...open, modes: false })).toBeNull();
+    expect(general.generalPatch.safeParse({ pageOpen: 'nowhere' }).success).toBe(false);
   });
 });
 

@@ -27,6 +27,8 @@ export interface ForYouNowProps {
   lostPages: number | null;
   /** Drafts marked ready to publish; null until read. */
   readyDrafts: number | null;
+  /** When the person's Weekly report job for the brand runs next (ISO), this coming week; null for none. */
+  nextReport?: string | null;
   /** The person may change things (Admin, Manager): the jobs that write, and More. */
   canChange: boolean;
   /** A chat is starting: the chips wait. */
@@ -59,19 +61,23 @@ interface Job {
  * "For you now" on Chat Home (CHAT-08 v2, mockup #s-home `.scut`): Ask
  * anything first, then the jobs that have something to do, each with its
  * count from the brand's data — Complete tasks · 4 due, Win back citations
- * · 2 pages, Ready to publish · 2 — then More ▾, the composer's / menu. A
- * job with nothing to do has no chip. Each asks in its skill's words
- * (W2-04's /tasks, /winback, /publish): Chat prepares, the person closes
- * the tasks, and going live is always their click. Someone who can't change
- * things (Analyst, Agency partner) gets the jobs that only read — Win back
- * as "which pages, and what AI cites instead" — and no More, as their
- * composer has no / menu. Quality pass and Weekly report wait for their
- * data: drafts' quality scores aren't kept, and schedules come in Wave 3.
+ * · 2 pages, Ready to publish · 2, Weekly report · Mon — then More ▾, the
+ * composer's / menu. A job with nothing to do has no chip. Each asks in its
+ * skill's words (W2-04's /tasks, /winback, /publish, /report): Chat
+ * prepares, the person closes the tasks, and going live is always their
+ * click. Weekly report shows the day the person's own Weekly report job
+ * (Scheduled, CHAT-12) runs next, within the week; it asks for this week's
+ * report now. Someone who can't change things (Analyst, Agency partner)
+ * gets the jobs that only read — Win back as "which pages, and what AI
+ * cites instead", and Weekly report — and no More, as their composer has
+ * no / menu. Quality pass waits for its data: drafts' quality scores
+ * aren't kept.
  *
  * With a focus picked (CHAT-24 §4), the chips are its areas' shortcuts,
  * taken in turn so every area shows (CHAT-08 v2's six chips, Ask anything
- * included). The three jobs keep their counts and their rules; the other
- * shortcuts carry no count, as nothing counts them yet. A shortcut with a
+ * included). The jobs keep their counts and their rules; Weekly report
+ * shows as a shortcut without its day when no job is due this week; the
+ * other shortcuts carry no count, as nothing counts them yet. A shortcut with a
  * skill asks with its /name; one whose job is a / menu shortcut's (CHAT-08)
  * sends that shortcut's id, so the run reads its data plan (W2-09).
  */
@@ -79,6 +85,7 @@ export function ForYouNow({
   dueTasks,
   lostPages,
   readyDrafts,
+  nextReport = null,
   canChange,
   starting,
   onAsk,
@@ -117,6 +124,16 @@ export function ForYouNow({
           message: t('publishMessage', { count: readyDrafts }),
         }
       : null;
+  // Its day, in the person's own time: "Mon".
+  const report: Job | null = nextReport
+    ? {
+        key: 'weeklyReport',
+        skill: 'report',
+        label: tf('weeklyReport'),
+        count: new Date(nextReport).toLocaleDateString('en-US', { weekday: 'short' }),
+        message: tf('weeklyReportMessage'),
+      }
+    : null;
   /** A focus shortcut's chip, or null for a job with nothing to do. */
   const shortcutJob = (shortcut: FocusShortcut, area: FocusArea): Job | null => {
     const job =
@@ -126,13 +143,15 @@ export function ForYouNow({
           ? winBack
           : shortcut === 'publish'
             ? publish
-            : {
-                key: shortcut,
-                skill: SHORTCUT_SKILL[shortcut] ?? shortcut,
-                label: tf(shortcut),
-                message: tf(`${shortcut}Message`),
-                shortcutId: SHORTCUT_PLAYBOOK[shortcut],
-              };
+            : shortcut === 'weeklyReport' && report
+              ? report
+              : {
+                  key: shortcut,
+                  skill: SHORTCUT_SKILL[shortcut] ?? shortcut,
+                  label: tf(shortcut),
+                  message: tf(`${shortcut}Message`),
+                  shortcutId: SHORTCUT_PLAYBOOK[shortcut],
+                };
     return job && { ...job, area };
   };
   // Ask anything, and What's new when it shows, take their places among the six.
@@ -148,7 +167,7 @@ export function ForYouNow({
           room,
           (job) => job.key,
         )
-      : [tasks, winBack, publish].filter((job) => job !== null).slice(0, room);
+      : [tasks, winBack, publish, report].filter((job) => job !== null).slice(0, room);
 
   return (
     <div className="mb-4">

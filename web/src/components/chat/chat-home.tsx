@@ -8,9 +8,12 @@ import { Link, useRouter } from '@/i18n/navigation';
 import { AIProviderAvatar, resolveAIProvider } from '@/components/ai-provider-avatar';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
+import { readAgentsForYou } from '@/lib/actions/agents-for-you';
 import { readFocusFill, readHomeShortcuts, readSinceYouLeft } from '@/lib/actions/chat-home';
+import { dismissAgentsForYou } from '@/lib/actions/chat-prefs';
 import { prepareChatTour } from '@/lib/actions/chat-tour';
 import { track } from '@/lib/analytics';
+import type { AgentForYou } from '@/lib/chat/agents-for-you';
 import type { FocusArea } from '@/lib/chat/focus';
 import type { ChatStartAudience } from '@/lib/chat/start-audience';
 import { TOUR_PAGES } from '@/lib/chat/tour';
@@ -36,6 +39,7 @@ import { useFillHomeDraft } from './home-draft';
 import { useChatList } from './chat-list-provider';
 import { inboxItems, useNow } from './chat-inbox';
 import { FocusPill, useChatFocus } from './focus-picker';
+import { AgentsForYou } from './agents-for-you';
 import { ForYouNow } from './for-you-now';
 import { useChatTour } from './tour/chat-tour';
 import { useChatWelcome, WelcomeCard } from './welcome-card';
@@ -59,6 +63,8 @@ export interface ChatHomeViewProps {
   /** Pages whose citations the brand lost, and drafts ready to publish; null until read. */
   lostPages: number | null;
   readyDrafts: number | null;
+  /** When the person's Weekly report job runs next (ISO), this coming week; null for none or until read. */
+  nextReport?: string | null;
   /** The person may change things: the jobs that write show, and More. */
   canChange: boolean;
   /**
@@ -84,6 +90,14 @@ export interface ChatHomeViewProps {
   whatsNew?: WhatsNewHome | null;
   /** Show me: puts the update's question in the box, unsent. */
   onShowMe?: (feature: string) => void;
+  /**
+   * Agents for you (AGENTS plan §8, #11): the ready-to-use agents for a
+   * person new to the workspace, and whether they may turn one on; null
+   * while it isn't shown. The Default view shows it too (owner, 2026-11-06).
+   */
+  agentsForYou?: { agents: AgentForYou[]; canTurnOn: boolean } | null;
+  /** Hide on Agents for you: it stays hidden. */
+  onHideAgents?: () => void;
   /**
    * The welcome card for the free trial and the demo (00486), right above
    * the box, with "Welcome, {name}" in place of the time of day and its own
@@ -329,7 +343,9 @@ function SinceBlock({
  * Alex" by the person's own clock; one line under it — what needs them, as
  * a link to the Inbox, or "All caught up."; "Since you left" (CHAT-22 §1)
  * when citations moved since the person last left Home; then "For you now"
- * (CHAT-08 v2), this week's Action Center tasks one of its chips. The
+ * (CHAT-08 v2), this week's Action Center tasks one of its chips; for a
+ * person new to the workspace, "Agents for you" (AGENTS plan §8, #11)
+ * before New for you, off the Default view as the other blocks. The
  * composer follows.
  */
 export function ChatHomeView({
@@ -340,6 +356,7 @@ export function ChatHomeView({
   dueTasks,
   lostPages,
   readyDrafts,
+  nextReport = null,
   canChange,
   onAsk,
   starting,
@@ -348,6 +365,8 @@ export function ChatHomeView({
   words = null,
   whatsNew = null,
   onShowMe,
+  agentsForYou = null,
+  onHideAgents,
   welcome = null,
 }: ChatHomeViewProps) {
   const t = useTranslations('chatShell.home');
@@ -368,12 +387,22 @@ export function ChatHomeView({
         ] as const
       ).filter((block): block is ['drop' | 'win', SinceMove] => block[1] !== null)
     : [];
+  // Agents for you: with Home's blocks on a focused Home, and on its own under the
+  // greeting on the Default view, where only a new member gets it (owner, 2026-11-06).
+  const agents =
+    agentsForYou && agentsForYou.agents.length > 0 && onHideAgents ? (
+      <AgentsForYou
+        agents={agentsForYou.agents}
+        canTurnOn={agentsForYou.canTurnOn}
+        onHide={onHideAgents}
+      />
+    ) : null;
   return (
     <div className="mx-auto w-full max-w-[720px] px-5">
       <div
         className={cn(
           'mb-[18px] text-center',
-          plain ? (welcome ? 'mt-[12vh]' : 'mt-[20vh]') : 'mt-[34px]',
+          plain ? (welcome || agents ? 'mt-[12vh]' : 'mt-[20vh]') : 'mt-[34px]',
         )}
       >
         <h1
@@ -438,6 +467,7 @@ export function ChatHomeView({
             dueTasks={dueTasks}
             lostPages={lostPages}
             readyDrafts={readyDrafts}
+            nextReport={nextReport}
             canChange={canChange}
             starting={starting}
             onAsk={onAsk}
@@ -448,9 +478,11 @@ export function ChatHomeView({
           {areas.length > 0 && words && (
             <StartWithQuestion areas={areas} fill={words.fill} starting={starting} onAsk={onAsk} />
           )}
+          {agents}
           <NewForYou areas={areas} starting={starting} onAsk={onAsk} />
         </>
       )}
+      {plain && agents}
       {welcome?.card}
     </div>
   );
@@ -496,10 +528,16 @@ function useHomeSeen() {
 export function ChatHome({
   firstName,
   welcome: audience = null,
+  newMember = false,
 }: {
   firstName: string | null;
   /** Who the welcome card greets (00486); null for no card. */
   welcome?: ChatStartAudience | null;
+  /**
+   * Agents for you is open for the person (readAgentsForYouOpen): the
+   * Default view shows it, and reads it, for them only (owner, 2026-11-06).
+   */
+  newMember?: boolean;
 }) {
   const t = useTranslations('chatShell.home');
   const router = useRouter();
@@ -523,6 +561,7 @@ export function ChatHome({
     dueTasks: number;
     lostPages: number;
     readyDrafts: number;
+    nextReport: string | null;
   } | null>(null);
   const [since, setSince] = useState<{ brandId: string; since: SinceYouLeft } | null>(null);
   const [words, setWords] = useState<{
@@ -531,6 +570,12 @@ export function ChatHome({
     rivalMove: RivalMove | null;
   } | null>(null);
   const [starting, setStarting] = useState(false);
+  const [forYou, setForYou] = useState<{
+    brandId: string;
+    agents: AgentForYou[];
+    canTurnOn: boolean;
+  } | null>(null);
+  const [agentsHidden, setAgentsHidden] = useState(false);
   // The Default view (00485) reads only its line, from the Competitors area.
   const plain = focusCtx !== null && focusCtx.focus.length === 0;
   const focusKey = plain ? DEFAULT_LINE.join(',') : (focusCtx?.focus.join(',') ?? '');
@@ -552,6 +597,7 @@ export function ChatHome({
                 dueTasks: result.dueTasks,
                 lostPages: result.lostPages,
                 readyDrafts: result.readyDrafts,
+                nextReport: result.nextReport,
               }
             : null,
         );
@@ -597,6 +643,32 @@ export function ChatHome({
       current = false;
     };
   }, [brandId, focusKey]);
+
+  // Agents for you (AGENTS plan §8, #11): for the open brand, while it is open for the
+  // person. The Default view (00485) reads it for a new member only (owner, 2026-11-06).
+  // While the welcome card shows (the trial, the demo), the tour comes first: one card
+  // at a time, and Agents for you follows once the card is gone (owner, 2026-11-06).
+  const agentsShown = (!plain || newMember) && !welcomeShown;
+  useEffect(() => {
+    if (!agentsShown || !brandId) return;
+    let current = true;
+    void readAgentsForYou(brandId)
+      .then((result) => {
+        if (current) {
+          setForYou(
+            result.ok && result.agents.length > 0
+              ? { brandId, agents: result.agents, canTurnOn: result.canTurnOn }
+              : null,
+          );
+        }
+      })
+      .catch(() => {
+        if (current) setForYou(null);
+      });
+    return () => {
+      current = false;
+    };
+  }, [agentsShown, brandId]);
 
   useHomeSeen();
 
@@ -656,6 +728,7 @@ export function ChatHome({
       dueTasks={mine ? mine.dueTasks : null}
       lostPages={mine ? mine.lostPages : null}
       readyDrafts={mine ? mine.readyDrafts : null}
+      nextReport={mine ? mine.nextReport : null}
       canChange={canManage}
       onAsk={(message, shortcutId) => void startChat(message, shortcutId)}
       starting={starting}
@@ -667,6 +740,14 @@ export function ChatHome({
         track('chat_whats_new_show_me', { feature });
         fillBox?.(t('whatsNew.showMeMessage', { feature }));
         document.querySelector<HTMLTextAreaElement>('[data-action="composer.input"]')?.focus();
+      }}
+      agentsForYou={
+        agentsShown && !agentsHidden && forYou && forYou.brandId === brandId ? forYou : null
+      }
+      onHideAgents={() => {
+        // Hidden at once; kept for every device. One that didn't save shows again next visit.
+        setAgentsHidden(true);
+        void dismissAgentsForYou().catch(() => undefined);
       }}
       welcome={
         welcomeShown

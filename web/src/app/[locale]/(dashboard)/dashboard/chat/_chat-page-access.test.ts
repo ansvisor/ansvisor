@@ -232,6 +232,8 @@ describe('chatComposerSetup', () => {
     db.prefs = { default_mode: 'auto', page_open: 'editor' };
     expect((await chatComposerSetup()).pageOpen).toBe('editor');
     db.prefs = { default_mode: 'auto', page_open: 'here' };
+    expect((await chatComposerSetup()).pageOpen).toBe('here');
+    db.prefs = { default_mode: 'auto', page_open: 'nowhere' };
     expect((await chatComposerSetup()).pageOpen).toBe('ask');
   });
 

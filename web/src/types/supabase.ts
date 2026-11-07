@@ -4066,6 +4066,7 @@ export type Database = {
       }
       chat_user_prefs: {
         Row: {
+          agents_for_you_dismissed_at: string | null
           answer_language: string | null
           default_mode: string
           effort: string | null
@@ -4092,6 +4093,7 @@ export type Database = {
           welcome_dismissed_at: string | null
         }
         Insert: {
+          agents_for_you_dismissed_at?: string | null
           answer_language?: string | null
           default_mode?: string
           effort?: string | null
@@ -4118,6 +4120,7 @@ export type Database = {
           welcome_dismissed_at?: string | null
         }
         Update: {
+          agents_for_you_dismissed_at?: string | null
           answer_language?: string | null
           default_mode?: string
           effort?: string | null
@@ -9501,6 +9504,10 @@ export type Database = {
           p_provider: string
         }
         Returns: boolean
+      }
+      set_product_group_size: {
+        Args: { p_action_id: string; p_size: number }
+        Returns: Json
       }
       share_of_voice_aggregates: {
         Args: {

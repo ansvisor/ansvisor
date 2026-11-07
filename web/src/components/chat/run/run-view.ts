@@ -67,7 +67,11 @@ export interface DataUsedChip {
  */
 export function dataUsed(steps: readonly ChatStep[]): DataUsedChip[] {
   const chips = new Map<string, DataUsedChip>();
-  for (const step of [...steps].sort((a, b) => a.n - b.n)) {
+  // What a run's parts read is its own (CHAT-27 item 9): each source once.
+  const all = [...steps]
+    .sort((a, b) => a.n - b.n)
+    .flatMap((step) => [step, ...(step.parts ?? []).flatMap((part) => part.steps)]);
+  for (const step of all) {
     if (step.status !== 'done') continue;
     if (step.kind === 'open_page') {
       const page = openedPage(step.label);

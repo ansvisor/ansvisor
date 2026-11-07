@@ -188,6 +188,8 @@ async function itemsOf(reader: Reader, actor: ChatActor, chats: ChatRow[]) {
       .from('chat_runs')
       .select('id, conversation_id, status, created_at, finished_at')
       .in('conversation_id', ids)
+      // A run's parts (CHAT-27) are its own: never a chat's newest run.
+      .is('parent_run_id', null)
       .order('created_at', { ascending: false })
       .limit(ids.length * 4),
     brandIds.length

@@ -18,6 +18,7 @@ import { activeRules, ruleSet } from '@/lib/content/rules';
 import { CLAIMS_EVERY_MS } from './_use-claims';
 import { PROOF_READ_EVERY_MS, PROOF_READ_SLACK_MS } from './_use-page-read';
 import ContentEditorPage from './page';
+import { ContentEditorSurface } from './_editor-surface';
 
 const getContentDraft = vi.fn();
 const markContentDraftReady = vi.fn();
@@ -9212,5 +9213,297 @@ describe('the editor on a read-only workspace (plan not active)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// Chat's Open here (CHAT-25 §4, W4-13a): the same editor inside Chat, beside the conversation.
+describe('the editor embedded in Chat', () => {
+  const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+  const panel = () => container.querySelector('aside');
+  const rail = () => container.querySelector('nav[aria-label="Side panel"]');
+  const libraryLink = () => container.querySelector('a[href="/dashboard/content/library"]');
+  const closeButton = () =>
+    container.querySelector<HTMLButtonElement>('header button[aria-label="Close"]');
+  const innerWidth = window.innerWidth;
+  // Brief, Rules and Quality in a bar under the page (CHAT-25 §4, W4-13b).
+  const bottomBar = () => container.querySelector<HTMLElement>('[data-slot="editor-bottom-bar"]');
+  const barItems = () => [
+    ...bottomBar()!.querySelectorAll<HTMLButtonElement>('button[data-bar-item]'),
+  ];
+  /** A bar item by its name (Rules carries its open count after it). */
+  const barItem = (name: string) => barItems().find((b) => b.textContent?.startsWith(name));
+  /** The part open above the bar, by its name, or null while none is. */
+  const barPart = () => {
+    const scroll = bottomBar()!.querySelector<HTMLElement>('[data-panel-scroll]')!;
+    return scroll.hidden ? null : bottomBar()!.querySelector('h2')!.textContent;
+  };
+  /** What the bar's panel shows: its text outside the hidden parts. */
+  const barShows = () => {
+    const shown = (el: Element): string =>
+      el instanceof HTMLElement && el.hidden
+        ? ''
+        : el.children.length === 0
+          ? (el.textContent ?? '')
+          : [...el.childNodes]
+              .map((node) =>
+                node instanceof Element ? shown(node) : node.nodeType === 3 ? node.textContent : '',
+              )
+              .join('');
+    return shown(bottomBar()!.querySelector('[data-panel-scroll]')!);
+  };
+  const escape = (el: Element) =>
+    act(async () => {
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+
+  async function renderSurface(
+    props: { embedded?: boolean; onClose?: () => void; suggestedAt?: number } = {},
+  ) {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <ChatAgenticProvider enabled>
+            <RoleProvider role="admin">
+              <ContentEditorSurface draftId="d1" {...props} />
+            </RoleProvider>
+          </ChatAgenticProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+    // The editor mounts on the client after the first render.
+    await act(async () => {});
+  }
+
+  beforeEach(() => {
+    // The new Chat on, with the panel's setup: the editor's own page has its Chat tab.
+    chatPanel.value = { setup: { enabled: true } };
+    routerPush.mockReset();
+    getContentDraft.mockResolvedValue(
+      draft({ conversation: { id: CHAT, title: 'Pricing FAQ', mine: true } }),
+    );
+  });
+  afterEach(() => {
+    chatPanel.value = null;
+    window.innerWidth = innerWidth;
+  });
+
+  it('puts Close in the Library link’s place, and Close hands the editor back', async () => {
+    const onClose = vi.fn();
+    await renderSurface({ embedded: true, onClose });
+
+    const header = container.querySelector('header')!;
+    expect(header.querySelector('h1')!.textContent).toBe('Pipeline forecasting');
+    expect(libraryLink()).toBeNull();
+    expect(closeButton()!.getAttribute('title')).toBe('Close');
+    await act(async () => closeButton()!.click());
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(routerPush).not.toHaveBeenCalled();
+  });
+
+  it('puts Brief, Rules and More in a bar under the page: no side panel, rail or Chat, and Ctrl J doesn’t ask for it', async () => {
+    // The page's own choice, an open panel, isn't the pane's.
+    localStorage.setItem('aeo:content-editor-panel', '1');
+    await renderSurface({ embedded: true, onClose: vi.fn() });
+
+    expect(container.querySelector('aside[aria-label="Side panel"]')).toBeNull();
+    expect(rail()).toBeNull();
+    expect(button('Hide side panel')).toBeUndefined();
+    expect(button('Show side panel')).toBeUndefined();
+    expect(container.querySelector('[role="tab"]')).toBeNull();
+    expect(bottomBar()!.getAttribute('aria-label')).toBe('Brief, rules and quality');
+    // Under the page, in the editor's column.
+    expect(bottomBar()!.previousElementSibling!.querySelector('[role="toolbar"]')).not.toBeNull();
+    expect(barItems().map((b) => b.textContent?.replace(/\d+ open$/, ''))).toEqual([
+      'Brief',
+      'Rules',
+      'More',
+    ]);
+    // The bar picks the part: no Brief | Rules control in it.
+    expect(bottomBar()!.querySelector('[role="radiogroup"]')!.hasAttribute('hidden')).toBe(true);
+    // Closed until one is picked.
+    expect(barPart()).toBeNull();
+    expect(barItems().every((b) => b.getAttribute('aria-expanded') !== 'true')).toBe(true);
+
+    // Even on a draft the member's own chat made: the chat is beside the editor already.
+    expect(container.querySelector('[data-slot="editor-chat"]')).toBeNull();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', ctrlKey: true }));
+    });
+    expect(barPart()).toBeNull();
+    expect(container.querySelector('[data-slot="editor-chat"]')).toBeNull();
+  });
+
+  it('opens each part above the bar, one at a time, and closes it with the item again, its × or Esc', async () => {
+    await renderSurface({ embedded: true, onClose: vi.fn() });
+
+    await act(async () => barItem('Brief')!.click());
+    expect(barPart()).toBe('Brief');
+    expect(barItem('Brief')!.getAttribute('aria-expanded')).toBe('true');
+    expect(barItem('Brief')!.getAttribute('aria-controls')).toBe(
+      bottomBar()!.querySelector('[data-panel-scroll]')!.id,
+    );
+    expect(barShows()).toContain('Page type');
+
+    // One at a time: Rules takes Brief's place.
+    await act(async () => barItem('Rules')!.click());
+    expect(barPart()).toBe('Rules');
+    expect(barItem('Brief')!.getAttribute('aria-expanded')).toBe('false');
+    expect(barItem('Rules')!.getAttribute('aria-expanded')).toBe('true');
+    expect(barShows()).not.toContain('Page type');
+
+    // The item again closes it.
+    await act(async () => barItem('Rules')!.click());
+    expect(barPart()).toBeNull();
+
+    // Its ×, the focus back on the item.
+    await act(async () => barItem('Brief')!.click());
+    await act(async () => button('Close Brief')!.click());
+    expect(barPart()).toBeNull();
+    expect(document.activeElement).toBe(barItem('Brief'));
+
+    // Esc in a field only leaves the field (Rules' own edits); elsewhere in it, it closes.
+    await act(async () => barItem('Rules')!.click());
+    const scroll = bottomBar()!.querySelector('[data-panel-scroll]')!;
+    const field = document.createElement('input');
+    scroll.appendChild(field);
+    await escape(field);
+    expect(barPart()).toBe('Rules');
+    field.remove();
+    await escape(scroll);
+    expect(barPart()).toBeNull();
+    expect(document.activeElement).toBe(barItem('Rules'));
+  });
+
+  it('opens Sources and Live page from More, in the same place', async () => {
+    await renderSurface({ embedded: true, onClose: vi.fn() });
+    const menuItems = () => [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+
+    await act(async () => barItem('More')!.click());
+    expect(menuItems().map((i) => i.textContent)).toEqual(['Sources', 'Live page']);
+    await act(async () => menuItems()[0].click());
+    expect(barPart()).toBe('Sources');
+
+    await act(async () => barItem('More')!.click());
+    await act(async () => menuItems()[1].click());
+    expect(barPart()).toBe('Live page');
+    // A new page has nothing to measure yet: the tab's own word for it.
+    expect(barShows()).toContain('Mark it published with its live address');
+    // Esc puts the focus back on More.
+    await escape(bottomBar()!.querySelector('[data-panel-scroll]')!);
+    expect(barPart()).toBeNull();
+    expect(document.activeElement).toBe(barItem('More'));
+  });
+
+  it('opens what the page asks for there (the header’s Rules chip), and leaves the page’s panel choice as it was', async () => {
+    localStorage.setItem('aeo:content-editor-panel', '0');
+    await renderSurface({ embedded: true, onClose: vi.fn() });
+
+    const chip = container.querySelector<HTMLButtonElement>('header button[aria-label^="Rules "]')!;
+    await act(async () => chip.click());
+    expect(barPart()).toBe('Rules');
+    expect(barItem('Rules')!.getAttribute('aria-expanded')).toBe('true');
+    expect(localStorage.getItem('aeo:content-editor-panel')).toBe('0');
+    expect(rail()).toBeNull();
+  });
+
+  it('shows Quality in the bar once it is on, and opens it there', async () => {
+    process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE = '1';
+    try {
+      await renderSurface({ embedded: true, onClose: vi.fn() });
+      expect(barItems().map((b) => b.textContent?.replace(/\d+ open$/, ''))).toEqual([
+        'Brief',
+        'Rules',
+        expect.stringMatching(/^Quality/),
+        'More',
+      ]);
+      await act(async () => barItem('Quality')!.click());
+      expect(barPart()).toBe('Quality');
+      expect(barItem('Quality')!.getAttribute('aria-expanded')).toBe('true');
+      expect(barItem('Rules')!.getAttribute('aria-expanded')).toBe('false');
+    } finally {
+      delete process.env.NEXT_PUBLIC_CONTENT_QUALITY_PHASE;
+    }
+  });
+
+  it('keeps the header in a narrow pane: the title ends in “…” with all of it on hover, the buttons wrap under it, Mark ready is ✓', async () => {
+    await renderSurface({ embedded: true, onClose: vi.fn() });
+
+    const [row, tags] = [...container.querySelector('header')!.children] as HTMLElement[];
+    expect(row.className).toContain('flex-wrap');
+    expect(tags.className).toContain('flex-wrap');
+    const title = row.querySelector('h1 button')!;
+    expect(title.className).toContain('truncate');
+    expect(title.getAttribute('title')).toBe(
+      'Pipeline forecasting · click to rename it in the page',
+    );
+    const markReady = button('Mark ready')!;
+    expect(markReady.querySelector('svg')!.getAttribute('class')).not.toContain('lg:hidden');
+    expect(markReady.querySelector('span')!.className).toBe('hidden');
+  });
+
+  it('shows the suggestions a request in the chat beside it left, as the run leaves them (W4-15c)', async () => {
+    const onClose = vi.fn();
+    await renderSurface({ embedded: true, onClose, suggestedAt: 0 });
+    const card = () => container.querySelector<HTMLElement>('.ProseMirror [data-suggestion="s1"]');
+    expect(card()).toBeNull();
+
+    getDraftSuggestions.mockClear().mockResolvedValue([
+      {
+        id: 's1',
+        batchId: 'b1',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace',
+        blockText: 'Teams trust it.',
+        beforeText: 'Teams trust it.',
+        afterText: 'Teams trust it each week.',
+        reason: 'shorten answer 3',
+        ruleKeys: ['chat'],
+        status: 'open',
+      } as DraftSuggestion,
+    ]);
+    // The chat's run left them: the pane tells the editor, which reads them with no reload.
+    await renderSurface({ embedded: true, onClose, suggestedAt: 1 });
+    await act(async () => {});
+    expect(getDraftSuggestions).toHaveBeenCalledExactlyOnceWith('d1');
+    expect(card()!.textContent).toContain('Content Agent · from your chat · shorten answer 3');
+    expect(
+      [...card()!.querySelectorAll('button')].map((b) => b.textContent).filter(Boolean),
+    ).toEqual(expect.arrayContaining(['Accept', 'Reject']));
+    // Rendered again with nothing new: not read again.
+    await renderSurface({ embedded: true, onClose, suggestedAt: 1 });
+    expect(getDraftSuggestions).toHaveBeenCalledTimes(1);
+  });
+
+  it('puts Close in the Library link’s place while the Content Agent writes the page too', async () => {
+    const onClose = vi.fn();
+    getContentDraft.mockResolvedValue(
+      draft({ status: 'draft', agentState: 'writing', agentSince: new Date().toISOString() }),
+    );
+    await renderSurface({ embedded: true, onClose });
+
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    expect(libraryLink()).toBeNull();
+    await act(async () => closeButton()!.click());
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the Library link and the Chat tab on the editor’s own page', async () => {
+    localStorage.setItem('aeo:content-editor-panel', '1');
+    await renderSurface();
+
+    expect(libraryLink()!.getAttribute('aria-label')).toBe('Back to the Library');
+    expect(closeButton()).toBeNull();
+    const tabs = [...panel()!.querySelectorAll('[role="tab"]')].map(tabName);
+    expect(tabs).toEqual(['Chat', 'Instructions', 'Sources', 'Live page']);
+    expect(selectedTab()).toBe('Chat');
+    // The side panel as it was: no bottom bar, the show/hide button, the header's one row.
+    expect(bottomBar()).toBeNull();
+    expect(panel()!.getAttribute('aria-label')).toBe('Side panel');
+    expect(button('Hide side panel')).toBeDefined();
+    expect(container.querySelector('header')!.firstElementChild!.className).toBe(
+      'flex items-center gap-2.5',
+    );
+    expect(button('Mark ready')!.querySelector('span')!.className).toBe('hidden lg:inline');
   });
 });

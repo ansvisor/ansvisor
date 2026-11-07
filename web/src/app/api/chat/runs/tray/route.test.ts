@@ -26,7 +26,7 @@ const db = vi.hoisted(() => ({
 const get = (row: Row, path: string): unknown =>
   path.split('.').reduce<unknown>((v, k) => (v as Row | null)?.[k], row);
 
-/** Just enough of PostgREST: select, eq, in, order, limit, single. Row policies aren't modelled. */
+/** Just enough of PostgREST: select, eq, in, is, order, limit, single. Row policies aren't modelled. */
 function query(table: string) {
   const filters: ((row: Row) => boolean)[] = [];
   let order: { key: string; ascending: boolean } | null = null;
@@ -52,6 +52,10 @@ function query(table: string) {
     },
     in: (key: string, values: unknown[]) => {
       filters.push((row) => values.includes(get(row, key)));
+      return q;
+    },
+    is: (key: string, value: null) => {
+      filters.push((row) => (get(row, key) ?? null) === value);
       return q;
     },
     order: (key: string, opts: { ascending: boolean }) => {
