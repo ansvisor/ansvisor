@@ -1,3 +1,4 @@
+import { parseSkillFile } from './format';
 import { MAX_FILES, MAX_UPLOAD, type ImportFile } from './import';
 
 /**
@@ -23,6 +24,8 @@ export const GITHUB_HOSTS: ReadonlySet<string> = new Set([
 /** The most folders read for the file list, and the largest LICENSE read. */
 const MAX_FOLDERS = 20;
 const MAX_LICENSE_BYTES = 200 * 1024;
+/** The largest repository file list read to find a skill's folder. */
+const MAX_TREE_BYTES = 8 * 1024 * 1024;
 const TIMEOUT_MS = 10_000;
 
 export type GithubRefusalCode =
@@ -34,7 +37,8 @@ export type GithubRefusalCode =
   | 'too_large'
   | 'too_many_files'
   | 'symlink'
-  | 'no_skill_file';
+  | 'no_skill_file'
+  | 'skill_not_in_repo';
 
 export type GithubRefusal = { code: GithubRefusalCode; detail?: Record<string, string | number> };
 
@@ -312,4 +316,86 @@ export async function readGithubSkill(
       commitSha: sha,
     },
   };
+}
+
+/** A skill's name, as a folder in its repository can be named. */
+const SKILL_FOLDER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+
+/** Whether a contents listing holds a SKILL.md file. */
+function holdsSkillFile(bytes: Uint8Array): boolean {
+  try {
+    const entries = JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+    return (
+      Array.isArray(entries) &&
+      (entries as ContentEntry[]).some((e) => e.name === 'SKILL.md' && e.type === 'file')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The folder of the skill named `name` in a repository (a skills.sh page's,
+ * W4-29), as a github.com link pinned to the repository's commit: its
+ * `skills/{name}` folder when it holds a SKILL.md, else the shallowest
+ * `{name}` folder holding one at any depth, else the repository's own
+ * SKILL.md when its front matter names the skill. Read with the import's
+ * own requests (the contents API, the git tree, the raw file), on GitHub's
+ * hosts only. Refusals as values: 'skill_not_in_repo' when no folder holds it.
+ */
+export async function findSkillFolder(
+  link: string,
+  name: string,
+  options: GithubOptions = {},
+): Promise<{ ok: true; url: string } | { ok: false; refusal: GithubRefusal }> {
+  const repo = parseGithubUrl(link);
+  if (!repo) return refused('github_url');
+  if (!SKILL_FOLDER.test(name)) return refused('skill_not_in_repo', { name });
+  const commit = await commitOf(repo, options);
+  if (!commit.ok) return commit;
+  const { sha } = commit;
+  const at = (path: string) => ({
+    ok: true as const,
+    url: `https://github.com/${repo.owner}/${repo.repo}/tree/${sha}${path ? `/${encodePath(path)}` : ''}`,
+  });
+
+  const preferred = `skills/${name}`;
+  const listed = await get(
+    api(repo, `/contents/${encodePath(preferred)}?ref=${sha}`),
+    'application/vnd.github+json',
+    MAX_UPLOAD,
+    options,
+  );
+  if (listed.ok && holdsSkillFile(listed.bytes)) return at(preferred);
+  if (!listed.ok && listed.refusal.code !== 'github_not_found') return listed;
+
+  const tree = await get(
+    api(repo, `/git/trees/${sha}?recursive=1`),
+    'application/vnd.github+json',
+    MAX_TREE_BYTES,
+    options,
+  );
+  if (!tree.ok) return tree;
+  let files: string[];
+  try {
+    const body = JSON.parse(new TextDecoder().decode(tree.bytes)) as { tree?: unknown };
+    files = (Array.isArray(body.tree) ? (body.tree as ContentEntry[]) : [])
+      .filter((e) => e.type === 'blob' && typeof e.path === 'string')
+      .map((e) => e.path as string);
+  } catch {
+    return refused('github_failed');
+  }
+  const depth = (path: string) => path.split('/').length;
+  const folder = files
+    .filter((path) => path === `${name}/SKILL.md` || path.endsWith(`/${name}/SKILL.md`))
+    .map((path) => path.slice(0, -'/SKILL.md'.length))
+    .sort((a, b) => depth(a) - depth(b) || a.localeCompare(b))[0];
+  if (folder) return at(folder);
+
+  if (files.includes('SKILL.md')) {
+    const got = await raw(repo, sha, 'SKILL.md', MAX_UPLOAD, options);
+    if (!got.ok) return got;
+    if (parseSkillFile(new TextDecoder().decode(got.bytes)).skill.name === name) return at('');
+  }
+  return refused('skill_not_in_repo', { name });
 }

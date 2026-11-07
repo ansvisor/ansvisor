@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Check, Copy, Loader2, TriangleAlert } from 'lucide-react';
+import { Check, Copy, Loader2, TriangleAlert, Upload } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -33,10 +33,32 @@ import {
 } from '@/lib/actions/ai-bots';
 import { SourceCard } from './_source-card';
 import { getBotConnections } from '@/lib/traffic-reads';
+import {
+  BOT_LOG_UPLOAD_ACCEPT,
+  BOT_LOG_UPLOAD_MAX_BYTES,
+  BOT_LOG_UPLOAD_MAX_LINES,
+  uploadBotLog,
+  type BotLogUploadResult,
+} from '@/lib/bot-log-upload';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { usePlanContext } from '@/components/providers/plan-provider';
 
-const KINDS: BotConnectionKind[] = ['cloudflare_worker', 'cloudflare_logpush', 'vercel_drain'];
+const KINDS: BotConnectionKind[] = [
+  'cloudflare_worker',
+  'cloudflare_logpush',
+  'vercel_drain',
+  'log_webhook',
+];
+
+/** A JSON line a generic webhook sends (#2170): the documented fields. */
+const WEBHOOK_EXAMPLE = JSON.stringify({
+  user_agent: 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2)',
+  ip: '20.171.207.12',
+  url: 'https://www.example.com/pricing',
+  status: 200,
+  time: '2026-11-06T09:15:02Z',
+  country: 'US',
+});
 
 /** Where Upgrade goes, as on the Prompts page's usage cards. */
 const PLAN_PAGE = '/dashboard/settings?tab=billing';
@@ -82,7 +104,7 @@ function CopyBlock({
   );
 }
 
-/** What to do in Cloudflare or Vercel with the new connection's secret, shown once. */
+/** What to do in Cloudflare, Vercel or a log shipper with the new connection's secret, shown once. */
 function SetupSteps({ created }: { created: NewBotConnection }) {
   const t = useTranslations('traffic.bots');
   const kind = created.connection.kind;
@@ -120,6 +142,13 @@ function SetupSteps({ created }: { created: NewBotConnection }) {
           />
         </>
       )}
+      {kind === 'log_webhook' && (
+        <>
+          <CopyBlock label={t('copyEndpoint')} value={created.endpoint} />
+          <CopyBlock label={t('copyHeader')} value={`Authorization: Bearer ${created.secret}`} />
+          <CopyBlock label={t('copyExample')} value={WEBHOOK_EXAMPLE} code />
+        </>
+      )}
       {kind === 'vercel_drain' && created.vercelDrain && (
         <>
           <CopyBlock label={t('copyEndpoint')} value={created.vercelDrain.endpoint} />
@@ -133,12 +162,116 @@ function SetupSteps({ created }: { created: NewBotConnection }) {
   );
 }
 
+/** Where the dialog's upload stands: picking, reading a file, or what the last one came to. */
+type UploadState =
+  | { phase: 'idle' }
+  | { phase: 'uploading'; name: string }
+  | { phase: 'done'; name: string; result: BotLogUploadResult };
+
+/**
+ * Or upload a log file (#2170): an access log from any server, read once
+ * for the brand, against the month's raw-record cap. Admins and managers,
+ * as for a connection; a read-only workspace gets the upgrade dialog. What
+ * the file came to, or why it wasn't read, stays under the button.
+ */
+function UploadLog({
+  brandId,
+  canUpload,
+  onChanged,
+}: {
+  brandId: string;
+  canUpload: boolean;
+  /** A file was read: the report and this month's use read again. */
+  onChanged: () => void;
+}) {
+  const t = useTranslations('traffic.bots.upload');
+  // A read-only workspace (plan not active): the upgrade dialog, not the picker.
+  const { isLocked, openUpgrade } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  const input = useRef<HTMLInputElement>(null);
+  const [state, setState] = useState<UploadState>({ phase: 'idle' });
+  const limits = {
+    mb: BOT_LOG_UPLOAD_MAX_BYTES / (1024 * 1024),
+    lines: formatNumber(BOT_LOG_UPLOAD_MAX_LINES),
+  };
+
+  const upload = async (file: File | undefined) => {
+    if (!file) return;
+    setState({ phase: 'uploading', name: file.name });
+    const result = await uploadBotLog(brandId, file);
+    // The same file can be picked again after a failure.
+    if (input.current) input.current.value = '';
+    if (!result.ok && result.code === 'subscription') {
+      setState({ phase: 'idle' });
+      openUpgrade(tActions('uploadBotLogs'));
+      return;
+    }
+    setState({ phase: 'done', name: file.name, result });
+    if (result.ok && !result.duplicate) onChanged();
+  };
+
+  const uploading = state.phase === 'uploading';
+  const outcome = (() => {
+    if (state.phase === 'uploading') {
+      return <p className="text-muted-foreground">{t('uploading', { name: state.name })}</p>;
+    }
+    if (state.phase !== 'done') return null;
+    const { name, result } = state;
+    if (!result.ok) {
+      return <p className="text-destructive">{t(`errors.${result.code}`, limits)}</p>;
+    }
+    if (result.duplicate) return <p>{t('duplicate', { name })}</p>;
+    if (result.rawCapped) return <p>{t('rawCapped', { name })}</p>;
+    return (
+      <>
+        <p>{t('done', { name, records: result.records, bots: result.bots })}</p>
+        {result.leftOut > 0 && (
+          <p className="text-muted-foreground">{t('leftOut', { count: result.leftOut })}</p>
+        )}
+      </>
+    );
+  })();
+
+  return (
+    <section className="space-y-2 border-t pt-4">
+      <h3 className="text-xs font-semibold">{t('title')}</h3>
+      <p className="text-xs text-muted-foreground">{t('what', limits)}</p>
+      <input
+        ref={input}
+        type="file"
+        accept={BOT_LOG_UPLOAD_ACCEPT}
+        hidden
+        aria-label={t('button')}
+        onChange={(e) => void upload(e.target.files?.[0])}
+      />
+      <Button
+        variant="outline"
+        size="sm"
+        className="gap-1.5"
+        disabled={!canUpload || uploading}
+        onClick={() => {
+          if (isLocked) openUpgrade(tActions('uploadBotLogs'));
+          else input.current?.click();
+        }}
+      >
+        {uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+        {t('button')}
+      </Button>
+      {/* A file's name can be one long word: it wraps rather than widening the dialog. */}
+      <div role="status" aria-live="polite" className="min-w-0 space-y-0.5 break-words text-xs">
+        {outcome}
+      </div>
+    </section>
+  );
+}
+
 /**
  * Connect or manage the brand's AI-bot senders (AT-010, spec §6.1, §6.4):
- * pick a Cloudflare Worker, a Logpush job or a Vercel drain, with what each
- * costs on the customer's own bill said before connecting; then copy the
- * settings, with the secret in them once. Existing connections can be
- * revoked; the month's use shows, and when the cap paused detailed rows.
+ * pick a Cloudflare Worker, a Logpush job, a Vercel drain or a generic
+ * webhook (#2170), with what each costs on the customer's own bill said
+ * before connecting; then copy the settings, with the secret in them once.
+ * Or upload an access log (#2170). Existing connections can be revoked; the
+ * month's use shows, and when the cap paused detailed rows.
  */
 export function BotsDialog({
   brandId,
@@ -352,6 +485,8 @@ export function BotsDialog({
                 {t('create')}
               </Button>
             </div>
+
+            <UploadLog brandId={brandId} canUpload={canConnect} onChanged={onChanged} />
           </div>
         )}
       </DialogContent>

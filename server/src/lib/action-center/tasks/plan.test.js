@@ -182,8 +182,10 @@ describe('planTasks', () => {
 });
 
 describe('the task registry', () => {
-  it('holds the specification’s sixty-two task primitives, and learning C4’s', () => {
-    expect(libraryTasks()).toHaveLength(63);
+  it('holds the specification’s sixty-two task primitives, learning C4’s and the AC plan’s', () => {
+    expect(libraryTasks()).toHaveLength(64);
+    // A canonical tag fixed, checked on its page (AC plan P-11).
+    expect(TASKS.fix_canonical).toMatchObject({ mode: 'human', permission: 'write' });
     expect(TASKS.analyze_winning_pages).toMatchObject({
       mode: 'system',
       requires: ['site_audits'],
