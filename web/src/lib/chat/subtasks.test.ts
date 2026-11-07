@@ -385,6 +385,18 @@ describe('run_subtasks', () => {
     ]);
   });
 
+  it('starts no part when one could not be made', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    db.failures.chat_run_state = { message: 'insert failed' };
+    const host = hostOf();
+    const done = await runSubtasks(host, { parts: [part('B'), part('C')] });
+    delete db.failures.chat_run_state;
+    expect(done).toMatchObject({ kind: 'result', error: true, value: { code: 'failed' } });
+    expect(host.drive).not.toHaveBeenCalled();
+    expect(partRuns().map((r) => r.status)).toEqual(['stopped']);
+    vi.mocked(console.error).mockRestore();
+  });
+
   it('splits nothing with too little time left in the request', async () => {
     const host = hostOf({ endsAt: Date.now() + 70_000 });
     expect(await runSubtasks(host, { parts: [part('B'), part('C')] })).toMatchObject({

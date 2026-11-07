@@ -172,9 +172,8 @@ export type SubtasksOutcome =
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** The parts' runs, made in order, queued until each starts. */
-async function makeParts(host: SubtasksHost, input: SubtasksInput): Promise<string[]> {
-  const ids: string[] = [];
+/** The parts' runs, made in order into `ids`, queued until each starts. */
+async function makeParts(host: SubtasksHost, input: SubtasksInput, ids: string[]): Promise<void> {
   for (const [i, part] of input.parts.entries()) {
     const { data, error } = await supabaseAdmin
       .from('chat_runs')
@@ -213,7 +212,6 @@ async function makeParts(host: SubtasksHost, input: SubtasksInput): Promise<stri
     });
     if (stateError) throw new Error(`Chat could not keep a part: ${stateError.message}`);
   }
-  return ids;
 }
 
 /** The parts as their runs and steps are now, in order. */
@@ -340,12 +338,13 @@ export async function runSubtasks(
   progress.toolReads = { ...counts, [SUBTASKS_TOOL]: (counts[SUBTASKS_TOOL] ?? 0) + 1 };
 
   const count = input.parts.length;
-  let ids: string[] = [];
+  const ids: string[] = [];
   try {
-    ids = await makeParts(host, input);
+    await makeParts(host, input, ids);
   } catch (err) {
+    // The parts made so far never start.
     console.error('[chat/subtasks] could not make the parts:', err);
-    for (const id of ids) await host.stop(id).catch(() => {});
+    for (const id of ids) await moveRun(id, ['queued'], 'stopped', { finished: true });
     return failed({ code: 'failed' });
   }
 
