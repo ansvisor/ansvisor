@@ -4,8 +4,8 @@ route: /dashboard/action-center/actions
 keywords: [start now, content editor, start in content editor, write page, open draft, chat, what to do, play, also worth doing]
 synonyms: [one click to editor, start writing, draft from action, work on action, which page to write, playbook]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-07
+last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
 approved: false
@@ -20,6 +20,12 @@ When an action asks for new content for prompts or a topic, Ansvisor reads what 
 **Also worth doing here** lists up to two more pages the same prompts ask for. When the prompts' search intents aren't known yet, nothing is picked.
 
 **Start now** sits under it and writes that kind of page.
+
+## A store's category page or buying guide
+
+On an online store, a topic action whose topic is linked to a catalog category with a live page (**Settings › Integrations**, **Topics and categories**) reads **Optimize the category page** instead of a new page. Its draft opens that page, with the category's best sellers in stock picked for its shopping path.
+
+When the category has products in stock but no live page, it reads **Write a buying guide**: a new page for the topic, its shopping path starting with the category's best sellers.
 
 ## What Content Editor opens
 

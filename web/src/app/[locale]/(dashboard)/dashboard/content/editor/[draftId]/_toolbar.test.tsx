@@ -4,7 +4,7 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { CharacterCount } from '@tiptap/extensions';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
 import { ContentImage } from '@/lib/content/content-image';
@@ -33,7 +33,7 @@ vi.mock('./_ai-image-panel', () => ({
   ),
 }));
 
-const { EditorToolbar, onEmptyLine } = await import('./_toolbar');
+const { EditorToolbar, onEmptyLine, TOOLBAR_FOLD_BELOW } = await import('./_toolbar');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -72,8 +72,10 @@ describe('EditorToolbar', () => {
   let container: HTMLElement;
   let root: Root;
   const openUpgrade = vi.fn();
+  const onToggleHtml = vi.fn();
   afterEach(() => {
     openUpgrade.mockReset();
+    onToggleHtml.mockReset();
     act(() => root.unmount());
     container.remove();
     document.body.replaceChildren();
@@ -103,7 +105,7 @@ describe('EditorToolbar', () => {
               target={3000}
               lengthWarning={false}
               htmlView={false}
-              onToggleHtml={() => {}}
+              onToggleHtml={onToggleHtml}
               onAttach={() => {}}
               productsBrandId={productsBrandId}
               aiImages={aiImages}
@@ -163,5 +165,152 @@ describe('EditorToolbar', () => {
     await act(async () => imageButton()!.click());
     expect(document.body.querySelector('[role="tab"]')).toBeNull();
     expect(document.body.textContent).toContain('Image address');
+  });
+
+  // In a pane beside Chat (CHAT-25 §4): the toolbar's own width, not the window's.
+  describe('on a narrow editor', () => {
+    /** The toolbar's width, as its ResizeObserver reports it; `resize` reports a new one. */
+    let width = 900;
+    let report: (() => void) | null = null;
+    beforeEach(() => {
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(private callback: ResizeObserverCallback) {}
+          observe(el: Element) {
+            report = () =>
+              this.callback(
+                [
+                  {
+                    target: el,
+                    contentRect: { width: width - 32 },
+                    borderBoxSize: [{ inlineSize: width, blockSize: 40 }],
+                  } as unknown as ResizeObserverEntry,
+                ],
+                this as unknown as ResizeObserver,
+              );
+            report();
+          }
+          unobserve() {}
+          disconnect() {
+            report = null;
+          }
+        },
+      );
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      width = 900;
+    });
+    async function resize(next: number) {
+      width = next;
+      await act(async () => report?.());
+    }
+
+    const toolbar = () => document.body.querySelector('[role="toolbar"]')!;
+    const tool = (label: string) =>
+      toolbar().querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    const more = () =>
+      [...toolbar().querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent === 'More',
+      );
+    const items = () => [...document.body.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+    async function pick(name: string) {
+      await act(async () => more()!.click());
+      await act(async () =>
+        items()
+          .find((i) => i.textContent?.endsWith(name))!
+          .click(),
+      );
+    }
+    const LESS_USED = [
+      'Numbered list',
+      'Quote',
+      'Insert a table',
+      'Add an HTML block',
+      'Attach a file: Excel, CSV, Word, Markdown, HTML or text',
+      'Edit as HTML',
+    ];
+    const KEPT = [
+      'Heading 2',
+      'Heading 3',
+      'Bold',
+      'Italic',
+      'Link',
+      'Bulleted list',
+      'Insert an image',
+    ];
+
+    it('keeps every tool in the row at a normal width, with no More', async () => {
+      width = TOOLBAR_FOLD_BELOW;
+      await render(null);
+      expect(more()).toBeUndefined();
+      for (const label of [...KEPT, ...LESS_USED]) expect(tool(label), label).not.toBeNull();
+    });
+
+    it('folds the less-used tools into More below 600px, and removes none', async () => {
+      width = 520;
+      await render('b1');
+      for (const label of LESS_USED) expect(tool(label), label).toBeNull();
+      expect(tool('Insert products from your catalog')).toBeNull();
+      for (const label of KEPT) expect(tool(label), label).not.toBeNull();
+      // H1 stays as it is: disabled, saying why, while the page has its H1.
+      await act(async () => editor!.commands.setTextSelection(9));
+      expect(tool('A page has one H1, its title: use Heading 2 here')!.ariaDisabled).toBe('true');
+
+      await act(async () => more()!.click());
+      expect(items().map((i) => i.textContent)).toEqual([
+        'Numbered list',
+        'Quote',
+        'Table',
+        'Add HTML',
+        'Products',
+        'Attach a file',
+        '</>Edit as HTML',
+      ]);
+    });
+
+    it('runs the same commands from More as from the row', async () => {
+      width = 520;
+      await render(null);
+      await act(async () => editor!.commands.setTextSelection(9));
+      await pick('Numbered list');
+      expect(editor!.getHTML()).toContain('<ol><li><p>Text</p></li></ol>');
+      // The numbered list is on: More marks it.
+      await act(async () => more()!.click());
+      expect(items()[0].querySelector('svg + svg')).not.toBeNull();
+      await act(async () => items()[0].click());
+      expect(editor!.getHTML()).not.toContain('<ol>');
+
+      await pick('Quote');
+      expect(editor!.getHTML()).toContain('<blockquote>');
+      await pick('Add HTML');
+      expect(document.body.textContent).toContain('Add an HTML block');
+      await act(async () =>
+        document.body.querySelector<HTMLButtonElement>('[role="dialog"] button')!.click(),
+      );
+      await pick('Edit as HTML');
+      expect(onToggleHtml).toHaveBeenCalledTimes(1);
+    });
+
+    it('opens the upgrade dialog from More on a read-only workspace, and changes nothing', async () => {
+      width = 520;
+      await render(null, true);
+      await act(async () => editor!.commands.setTextSelection(9));
+      await pick('Quote');
+      expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Editing the page needs a plan');
+      expect(editor!.getHTML()).not.toContain('<blockquote>');
+    });
+
+    it('unfolds when the editor widens again, and folds as it narrows', async () => {
+      await render(null);
+      expect(more()).toBeUndefined();
+      await resize(560);
+      expect(more()).toBeDefined();
+      expect(tool('Quote')).toBeNull();
+      await resize(800);
+      expect(more()).toBeUndefined();
+      expect(tool('Quote')).not.toBeNull();
+    });
   });
 });
