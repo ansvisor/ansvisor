@@ -30,11 +30,16 @@ import { describeSignal } from '../../audit/rubric.js';
 import { canonicalIssue } from '../../audit/canonical.js';
 import { TRAFFIC_WINDOW_DAYS } from '../traffic-evidence.js';
 import { chooseBridgeLinks } from '../../action-center/bridge-links.js';
+import { chooseProductPages } from '../../action-center/product-page-groups.js';
+import { pageKey } from '../../audit/history.js';
+import { siteTypeOf } from '../../content-page-types.js';
 
 const { library: t } = resolve();
 const DAY_MS = 86_400_000;
 /** Every page the AI Traffic list has for the bridge links' pairs: site_pages keeps 500. */
 const BRIDGE_PAGES_LIMIT = 1000;
+/** Days of shopping cards, AI visits and sales the product pages are chosen on. */
+const PRODUCT_PAGES_DAYS = 30;
 
 const AI = ['ai_results'];
 const GSC = ['gsc'];
@@ -759,6 +764,65 @@ const FAMILIES = [
           {
             siteKeyRate: rounded(siteKeyRate),
           },
+        ),
+      ];
+    },
+  },
+
+  // An online store's product pages worth optimizing (AC plan P-6, spec
+  // §6.1): one signal with up to ten products, best first, chosen by
+  // product-page-groups.js. Only on a store: its site type says so.
+  {
+    name: 'productPages',
+    requires: ['tracking'],
+    kinds: ['product_pages_to_optimize'],
+    async run(ctx) {
+      const { data: brand, error } = await supabaseAdmin
+        .from('brands')
+        .select('site_type, industry, shopping_mode_enabled')
+        .eq('id', ctx.brandId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      const siteType = siteTypeOf({
+        siteType: brand?.site_type,
+        industry: brand?.industry,
+        shoppingModeEnabled: brand?.shopping_mode_enabled,
+      });
+      if (siteType !== 'ecommerce') return [];
+      const since = new Date(ctx.now.getTime() - PRODUCT_PAGES_DAYS * DAY_MS).toISOString();
+      const candidates = await rpc('product_page_candidates', {
+        p_brand_id: ctx.brandId,
+        p_from: since,
+      });
+      if (!candidates?.length) return [];
+      const [prompts, drafts] = await Promise.all([
+        ctx.prompts(),
+        selectAll(() =>
+          supabaseAdmin
+            .from('content_drafts')
+            .select('source_url')
+            .eq('brand_id', ctx.brandId)
+            .eq('method', 'optimize')
+            .in('status', ['ready', 'published'])
+            .gte('updated_at', since)
+            .not('source_url', 'is', null)
+            .order('id'),
+        ),
+      ]);
+      const products = chooseProductPages({
+        candidates,
+        volumes: new Map((prompts ?? []).map((p) => [p.prompt_id, p.volume ?? null])),
+        optimized: new Set(drafts.map((d) => pageKey(d.source_url)?.key).filter(Boolean)),
+      });
+      if (products.length === 0) return [];
+      return [
+        group(
+          'product_pages_to_optimize',
+          'pages',
+          products,
+          // The score only orders them.
+          ({ url, title, score: _score, ...figures }) => ({ id: url, label: title, ...figures }),
+          AI,
         ),
       ];
     },

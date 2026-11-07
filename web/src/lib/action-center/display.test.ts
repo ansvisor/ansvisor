@@ -55,7 +55,7 @@ describe('actionTexts', () => {
   });
 
   it("holds copy for all sixty-two definitions and the AC plan's, the eleven person-sent kinds and the catalog check's", () => {
-    expect(ACTION_KINDS).toHaveLength(76);
+    expect(ACTION_KINDS).toHaveLength(77);
   });
 
   it('says a store’s topic action optimizes its category page when that is its play (AC plan P-7)', () => {
