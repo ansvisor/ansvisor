@@ -20,7 +20,7 @@ export type ScheduleReader = Pick<PrecedenceContext, 'organizationId' | 'role' |
 };
 
 const JOB_COLUMNS =
-  'id, kind, run_mode, due_at, next_run_at, rrule, timezone, title, prompt, skill_name, brand_id, created_by, conversation_id, deliver_to, change_only, mode, enabled, paused_reason, created_via, set_by_run_id, agent_id, target_json, metric, created_at';
+  'id, kind, run_mode, due_at, next_run_at, rrule, timezone, title, prompt, skill_name, brand_id, created_by, conversation_id, deliver_to, change_only, mode, enabled, paused_reason, created_via, set_by_run_id, agent_id, target_json, metric, created_at, external_recipients';
 
 interface JobRow {
   id: string;
@@ -45,6 +45,7 @@ interface JobRow {
   set_by_run_id: string | null;
   agent_id: string | null;
   created_at: string;
+  external_recipients?: string[] | null;
 }
 
 /** A run as the list and the history say it. */
@@ -78,6 +79,8 @@ export interface ScheduleListItem {
   enabled: boolean;
   pausedReason: string | null;
   deliver: DeliverChoice;
+  /** Addresses outside the workspace (W4-28): their e-mails wait for a Send in the Inbox. */
+  external: string[];
   changeOnly: boolean;
   mode: string;
   /** Set by a Full auto run (a follow-up check), not by a click. */
@@ -192,6 +195,7 @@ function listItem(
     enabled: job.enabled,
     pausedReason: job.paused_reason,
     deliver: deliverChoiceOf(job.deliver_to ?? ['chat']),
+    external: job.external_recipients ?? [],
     changeOnly: job.change_only,
     mode: job.mode,
     auto: job.created_via === 'full_auto',

@@ -32,6 +32,7 @@ import {
   type ScheduleReader,
   type ScheduleRunView,
 } from '@/lib/chat/schedule/views';
+import { outsideLockOf } from '@/lib/chat/schedule/outside';
 import { WHEN_MAX_LENGTH } from '@/lib/chat/schedule/when';
 import { runJobNow, type RunNowResult } from '@/lib/chat/schedule/worker';
 
@@ -163,14 +164,21 @@ export async function listChatSchedules(): Promise<ScheduleListRead> {
   }
 }
 
-/** A job's page: the job and its last 20 runs; null when the person can't see it. */
-export async function getChatSchedule(
-  id: string,
-): Promise<{ job: ScheduleListItem; runs: ScheduleRunView[] } | null> {
+/**
+ * A job's page: the job and its last 20 runs, and why the person can't add
+ * an address outside the workspace (W4-28: `role`, `trial`; null when they
+ * can); null when they can't see it.
+ */
+export async function getChatSchedule(id: string): Promise<{
+  job: ScheduleListItem;
+  runs: ScheduleRunView[];
+  outsideLock: 'role' | 'trial' | null;
+} | null> {
   if (!z.guid().safeParse(id).success) return null;
   const me = await reader();
   if (!me) return null;
-  return readScheduleDetail(me.read, id);
+  const detail = await readScheduleDetail(me.read, id);
+  return detail && { ...detail, outsideLock: outsideLockOf(me.read, me.plan) };
 }
 
 /** The person's own jobs that are on: the Chat menu's Scheduled count. */
@@ -227,6 +235,8 @@ const editsInput = z.object({
   changeOnly: z.boolean(),
   /** The job's own time zone; left out, it keeps the one it has. */
   timezone: z.string().trim().min(1).max(64).optional(),
+  /** Its addresses outside the workspace (W4-28; 5 at most, which manage.ts says); left out, kept. */
+  external: z.array(z.string().max(254)).max(20).optional(),
 });
 
 /** Saves the job page's edits (no confirm card, item 23). */
@@ -236,7 +246,7 @@ export async function updateChatSchedule(id: string, edits: unknown): Promise<Ma
   const parsed = editsInput.safeParse(edits);
   if (!me || !idInput.safeParse(id).success) return NOT_SIGNED_IN;
   if (!parsed.success) return { ok: false, reason: 'invalid', message: 'Check the fields.' };
-  return updateSchedule(me.read, id, parsed.data);
+  return updateSchedule(me.read, id, parsed.data, new Date(), me.plan);
 }
 
 /** Run now: one run at once, as its creator. */

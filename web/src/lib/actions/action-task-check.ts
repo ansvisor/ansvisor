@@ -6,8 +6,11 @@ import type { TaskLastCheck } from '@/lib/action-center/task-details';
 
 /**
  * Why nothing was checked: no check here, done, the page didn't answer,
- * changed meanwhile, a closed action, or a shopping links task whose draft
- * has no shopping path left.
+ * changed meanwhile, a closed action, a shopping links task whose draft
+ * has no shopping path left; what a task lacks to be checked (no page, no
+ * new text, raised from the bot logs); or an internal links task with no
+ * page for its links, or none to link to (AC plan P-10). Each has its
+ * words in en.json taskCard.checkNot.
  */
 export type CheckSkippedReason =
   | 'not_checkable'
@@ -15,7 +18,12 @@ export type CheckSkippedReason =
   | 'no_answer'
   | 'changed'
   | 'closed'
-  | 'no_shopping_path';
+  | 'no_shopping_path'
+  | 'no_address'
+  | 'no_change_text'
+  | 'from_bot_logs'
+  | 'no_link_source'
+  | 'no_link_target';
 
 /**
  * What checking a task now came to (AC-010): the check kept on it, or why
@@ -70,6 +78,11 @@ export async function checkActionTask(taskId: string): Promise<CheckTaskResult> 
       'changed',
       'closed',
       'no_shopping_path',
+      'no_address',
+      'no_change_text',
+      'from_bot_logs',
+      'no_link_source',
+      'no_link_target',
     ];
     return {
       checked: null,
