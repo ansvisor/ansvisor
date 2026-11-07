@@ -70,6 +70,7 @@ const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success:
 vi.mock('sonner', () => ({ toast }));
 
 const { ChatThreadView } = await import('./chat-thread-view');
+const { PageChipContext } = await import('./page-chip');
 const { uploadChatFile } = await import('@/lib/chat/upload-client');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -601,6 +602,36 @@ describe('ChatThreadView', () => {
         `/dashboard/chat/${CHAT}?from=%2Fdashboard%2Fmentions%3Frange%3D7d&page=${DRAFT}`,
       );
       expect(window.location.pathname).toBe('/dashboard/mentions');
+    });
+
+    it('opens the page beside the chat from Optimize ▾’s “in the editor here” (W4-15c)', async () => {
+      window.history.replaceState(null, '', `/dashboard/chat/${CHAT}`);
+      const thread = pageThread(true, `/dashboard/content/editor/${DRAFT}`);
+      const [, answer] = thread.messages as unknown as {
+        run: { deliverables: Record<string, unknown>[] };
+      }[];
+      Object.assign(answer.run.deliverables[0], {
+        filed: 'in_files',
+        version: {
+          n: 1,
+          counts: { questions: 3, sections: 3, characters: 900 },
+          changes: { shortened: [], added: [], placeholders: [] },
+          sections: [],
+        },
+      });
+      await render({ thread, variant: 'dock' });
+      const item = (name: string) =>
+        document.querySelector<HTMLElement>(`[data-action="version.${name}"]`)!;
+      await act(async () => {
+        item('optimize').dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        item('optimize').click();
+      });
+      expect(item('optimizeInEditorHere').textContent).toContain('Optimize in the editor here');
+      await act(async () => item('optimizeInEditorHere').click());
+      // The editor's own Optimize, beside the chat: its address names the page, nothing reloads.
+      expect(window.location.pathname).toBe(`/dashboard/chat/${CHAT}`);
+      expect(window.location.search).toBe(`?page=${DRAFT}`);
+      expect(nav.push).not.toHaveBeenCalled();
     });
 
     it('opens the page beside the chat by itself as a run it watched ends, with Open here saved', async () => {
@@ -1612,6 +1643,97 @@ describe('ChatThreadView in the Content Editor’s Chat (W4-16)', () => {
     await type('Make answer 3 shorter');
     await enter();
     expect(onSuggestions).toHaveBeenCalledExactlyOnceWith(2);
+  });
+});
+
+describe('ChatThreadView beside a page open in the editor (Open here, W4-15c)', () => {
+  const DRAFT = 'aaaaaaaa-1111-4111-8111-111111111111';
+  const chip = { key: 'draft', label: 'Page: Pricing FAQ', value: DRAFT };
+  const removeChip = vi.fn();
+  const suggested = vi.fn();
+  const ownThread = {
+    conversationId: CHAT,
+    title: 'Pricing FAQ',
+    brandId: null,
+    mine: true,
+    messages: [],
+  } as unknown as ChatThread;
+
+  async function renderBeside(page: { chip: typeof chip | null } | null) {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <RoleProvider role="admin">
+            <PageChipContext.Provider value={page && { ...page, removeChip, suggested }}>
+              <ChatThreadView
+                thread={ownThread}
+                variant="dock"
+                defaultMode="ask_first"
+                fullAutoOpen={false}
+              />
+            </PageChipContext.Provider>
+          </RoleProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+  const shownChips = () =>
+    [...container.querySelectorAll('[data-action="composer.removeChip"]')].map((x) =>
+      x.parentElement!.firstChild!.textContent!.trim(),
+    );
+
+  beforeEach(() => {
+    removeChip.mockReset();
+    suggested.mockReset();
+    window.history.replaceState(null, '', `/dashboard/chat/${CHAT}?page=${DRAFT}`);
+  });
+
+  it('carries the page as a chip: a request goes to the editor’s bridge for that draft, and its suggestions to the editor', async () => {
+    fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(
+        stream([
+          chatEvent('text.delta', 1, { text: 'Two suggestions wait in the page.' }),
+          chatEvent('suggestion.created', 2, { count: 2 }),
+          ...finished.slice(1).map((e) => ({ ...e, seq: 3 })),
+        ]),
+        { status: 200, headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN } },
+      );
+    });
+    await renderBeside({ chip });
+    expect(shownChips()).toEqual(['Page: Pricing FAQ']);
+
+    await type('Make answer 3 shorter');
+    await enter();
+    const sent = JSON.parse(
+      String(calls.find((c) => c.url === '/api/chat/runs')!.init!.body),
+    ) as Record<string, unknown>;
+    // As the Content Editor's Chat sends "This draft" (W4-14): from the draft's editor, by its id.
+    expect(sent).toMatchObject({
+      message: 'Make answer 3 shorter',
+      conversationId: CHAT,
+      context: { route: `/dashboard/content/editor/${DRAFT}`, chips: [chip] },
+    });
+    expect(sent.origin).toBeUndefined();
+    expect(suggested).toHaveBeenCalledExactlyOnceWith(2);
+  });
+
+  it('takes the chip out with ×, and sends nothing about the page without it', async () => {
+    await renderBeside({ chip });
+    await act(async () =>
+      container.querySelector<HTMLElement>('[data-action="composer.removeChip"]')!.click(),
+    );
+    expect(removeChip).toHaveBeenCalledTimes(1);
+
+    // The shell's chip gone (× or Close): the box has none, and a message no page context.
+    await renderBeside({ chip: null });
+    expect(shownChips()).toEqual([]);
+    await type('What changed this week?');
+    await enter();
+    const sent = JSON.parse(
+      String(calls.find((c) => c.url === '/api/chat/runs')!.init!.body),
+    ) as Record<string, unknown>;
+    expect(sent.context).toBeUndefined();
   });
 });
 

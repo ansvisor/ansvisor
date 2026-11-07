@@ -9256,7 +9256,9 @@ describe('the editor embedded in Chat', () => {
       el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
 
-  async function renderSurface(props: { embedded?: boolean; onClose?: () => void } = {}) {
+  async function renderSurface(
+    props: { embedded?: boolean; onClose?: () => void; suggestedAt?: number } = {},
+  ) {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages}>
@@ -9437,6 +9439,40 @@ describe('the editor embedded in Chat', () => {
     const markReady = button('Mark ready')!;
     expect(markReady.querySelector('svg')!.getAttribute('class')).not.toContain('lg:hidden');
     expect(markReady.querySelector('span')!.className).toBe('hidden');
+  });
+
+  it('shows the suggestions a request in the chat beside it left, as the run leaves them (W4-15c)', async () => {
+    const onClose = vi.fn();
+    await renderSurface({ embedded: true, onClose, suggestedAt: 0 });
+    const card = () => container.querySelector<HTMLElement>('.ProseMirror [data-suggestion="s1"]');
+    expect(card()).toBeNull();
+
+    getDraftSuggestions.mockClear().mockResolvedValue([
+      {
+        id: 's1',
+        batchId: 'b1',
+        actionId: null,
+        actionNo: null,
+        kind: 'replace',
+        blockText: 'Teams trust it.',
+        beforeText: 'Teams trust it.',
+        afterText: 'Teams trust it each week.',
+        reason: 'shorten answer 3',
+        ruleKeys: ['chat'],
+        status: 'open',
+      } as DraftSuggestion,
+    ]);
+    // The chat's run left them: the pane tells the editor, which reads them with no reload.
+    await renderSurface({ embedded: true, onClose, suggestedAt: 1 });
+    await act(async () => {});
+    expect(getDraftSuggestions).toHaveBeenCalledExactlyOnceWith('d1');
+    expect(card()!.textContent).toContain('Content Agent · from your chat · shorten answer 3');
+    expect(
+      [...card()!.querySelectorAll('button')].map((b) => b.textContent).filter(Boolean),
+    ).toEqual(expect.arrayContaining(['Accept', 'Reject']));
+    // Rendered again with nothing new: not read again.
+    await renderSurface({ embedded: true, onClose, suggestedAt: 1 });
+    expect(getDraftSuggestions).toHaveBeenCalledTimes(1);
   });
 
   it('puts Close in the Library link’s place while the Content Agent writes the page too', async () => {

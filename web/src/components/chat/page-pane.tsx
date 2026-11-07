@@ -66,6 +66,8 @@ export function PagePane({
   draftId,
   onClose,
   onBackToChat,
+  onTitle,
+  suggestedAt,
   className,
   style,
   hidden = false,
@@ -75,6 +77,10 @@ export function PagePane({
   onClose: () => void;
   /** One at a time (a narrow window): Back to chat. */
   onBackToChat?: () => void;
+  /** The page's title, once the editor read it: the chat's chip names it (W4-15c). */
+  onTitle?: (title: string) => void;
+  /** Grows each time a run in the chat left suggestions in the page (W4-14): the editor reads them. */
+  suggestedAt?: number;
   className?: string;
   style?: CSSProperties;
   /** Kept, unseen, while the chat shows in its place: its edits and scroll stay. */
@@ -122,7 +128,13 @@ export function PagePane({
       )}
       <div className="flex min-h-0 flex-1 flex-col">
         <ReadOnlyForRole on={!canManage} roleName={roleName}>
-          <ContentEditorSurface draftId={draftId} embedded onClose={onClose} />
+          <ContentEditorSurface
+            draftId={draftId}
+            embedded
+            onClose={onClose}
+            onTitle={onTitle}
+            suggestedAt={suggestedAt}
+          />
         </ReadOnlyForRole>
       </div>
     </section>
