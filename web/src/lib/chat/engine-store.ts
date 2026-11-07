@@ -267,7 +267,10 @@ export interface LoadedRun {
   id: string;
   status: ChatRunStatus;
   conversationId: string;
-  messageId: string;
+  /** The answer's message; null for a part of a run (CHAT-27 §C), which answers its parent. */
+  messageId: string | null;
+  /** The run whose run_subtasks call started this one (CHAT-27 §C); null for any other. */
+  parentRunId: string | null;
   /** 'auto' or the model picked in the menu (chat_runs.model; W4-03). */
   model: string;
   effort: ChatEffort;
@@ -293,7 +296,7 @@ export async function loadRun(runId: string): Promise<LoadedRun | null> {
   const [run, state] = await Promise.all([
     supabaseAdmin
       .from('chat_runs')
-      .select('id, status, conversation_id, message_id, model, effort')
+      .select('id, status, conversation_id, message_id, parent_run_id, model, effort')
       .eq('id', runId)
       .maybeSingle(),
     supabaseAdmin
@@ -313,7 +316,8 @@ export async function loadRun(runId: string): Promise<LoadedRun | null> {
     id: r.id as string,
     status: r.status as ChatRunStatus,
     conversationId: r.conversation_id as string,
-    messageId: r.message_id as string,
+    messageId: (r.message_id as string | null) ?? null,
+    parentRunId: (r.parent_run_id as string | null) ?? null,
     model: (r.model as string) ?? 'auto',
     effort: (r.effort as ChatEffort) ?? 'normal',
     organizationId: s.organization_id as string,
@@ -525,11 +529,16 @@ export async function openSteps(runId: string): Promise<(StepRow & { id: string 
   return (data ?? []) as unknown as (StepRow & { id: string })[];
 }
 
-/** The answer as kept on its message: the text, and when it was made (CHAT-06 38–42). */
+/**
+ * The answer as kept on its message: the text, and when it was made (CHAT-06
+ * 38–42). A part of a run has no message: its parent reads its text from its
+ * state (subtasks.ts).
+ */
 export async function saveAnswer(
-  messageId: string,
+  messageId: string | null,
   answer: { text: string; generatedAt?: string; dataAsOf?: string | null; timezone?: string },
 ): Promise<void> {
+  if (!messageId) return;
   const row: Record<string, unknown> = { content_md: answer.text.slice(0, 200_000) };
   if (answer.generatedAt) row.generated_at = answer.generatedAt;
   if (answer.dataAsOf !== undefined) row.data_as_of = answer.dataAsOf;

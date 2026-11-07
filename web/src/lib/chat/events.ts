@@ -70,8 +70,37 @@ export interface ChatStepScope {
   platforms?: string[];
   /** Only when the read isn't for the chat's brand. */
   brand?: string;
-  /** What rowCount counts when it isn't rows: saved notes ("Memory · 3 items", CHAT-14 item 17). */
-  unit?: 'items';
+  /**
+   * What rowCount counts when it isn't rows: saved notes ("Memory · 3 items",
+   * CHAT-14 item 17), or the parts a run split its work into (CHAT-27 item 7).
+   */
+  unit?: 'items' | 'parts';
+}
+
+/**
+ * Where one part of a run stands (CHAT-27 item 7): working, waiting on the
+ * person, done, failed, stopped, or paused at the AI limit.
+ */
+export const CHAT_PART_STATUSES = [
+  'running',
+  'waiting',
+  'done',
+  'failed',
+  'stopped',
+  'paused',
+] as const;
+export type ChatPartStatus = (typeof CHAT_PART_STATUSES)[number];
+
+/** A part's own step: a step as any other, one level only (a part has no parts). */
+export type ChatPartStep = Omit<ChatStep, 'parts'>;
+
+/** One part of a "Working on N parts" step (CHAT-27 item 7): its title, status and own steps. */
+export interface ChatStepPart {
+  /** "Competitor C" */
+  title: string;
+  status: ChatPartStatus;
+  /** Its own steps, folded under it. */
+  steps: ChatPartStep[];
 }
 
 /** A step as the browser sees it: the label registry's words, never the tool. */
@@ -88,6 +117,8 @@ export interface ChatStep {
   rowCount?: number;
   /** The newest data the read used, ISO (CHAT-20 §15a). */
   dataAsOf?: string;
+  /** A "Working on N parts" step's parts (scope.unit 'parts'), in order (CHAT-27 item 7). */
+  parts?: ChatStepPart[];
 }
 
 // ─── Cards ──────────────────────────────────────────────────────────────────

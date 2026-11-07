@@ -3808,6 +3808,7 @@
     "memorySave": { "name": "Save to memory", "step": "Saved to memory" },
     "memoryForget": { "name": "Remove from memory", "step": "Removed from memory" },
     "callAgent": { "name": "Run another agent", "step": "Ran agent" },
+    "splitWork": { "name": "Split work into parts", "step": "Worked on parts" },
     "followUpCheck": { "name": "Set follow-up checks", "step": "Set follow-up check" },
     "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" },
     "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agent Center" }
@@ -3886,10 +3887,23 @@
       "stepsClock": "{steps, plural, one {# step} other {# steps}} · {clock}",
       "rows": "{count, plural, one {# row} other {# rows}}",
       "items": "{count, plural, one {# item} other {# items}}",
+      "parts": "{count, plural, one {# part} other {# parts}}",
       "seconds": "{s}s",
       "minutes": "{m}m {s}s",
       "now": "Step {n}: {label}",
       "reconnecting": "Reconnecting…"
+    },
+    "runParts": {
+      "list": "Parts",
+      "noSteps": "No steps yet",
+      "status": {
+        "running": "Working",
+        "waiting": "Waiting for approval",
+        "done": "Done",
+        "failed": "Failed",
+        "stopped": "Stopped",
+        "paused": "Paused at the AI limit"
+      }
     },
     "planCard": {
       "head": "Here’s my plan",
@@ -4162,6 +4176,12 @@
     }
   },
   "chatEngine": {
+    "subtasks": {
+      "label": "Working on {count, plural, one {# part} other {# parts}}",
+      "progress": "{ended} of {count} done",
+      "source": "Parts",
+      "noTime": "Too little time is left in this run to split it: do the reads yourself."
+    },
     "pageMoves": {
       "fill": "Fill the {what}",
       "markReady": "Mark ready",

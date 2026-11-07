@@ -13,6 +13,7 @@ import { REPORT_TOOLS } from './report-tools';
 import { SCHEDULE_TOOLS } from './schedule-tools';
 import { FOLLOW_UP_TOOLS } from './followup-tools';
 import { SKILL_TOOLS } from './skill-tools';
+import { SUBTASK_TOOLS } from './subtask-tools';
 import { TOPIC_TOOLS } from './topic-tools';
 import { WHY_TOOLS } from './why-tools';
 import { WRITE_TOOLS } from './write-tools';
@@ -33,6 +34,7 @@ export const CHAT_TOOLS: readonly ChatTool[] = [
   ...NAVIGATION_READS,
   ...WHATS_NEW_READS,
   ...READY_AGENT_READS,
+  ...SUBTASK_TOOLS,
   ...WHY_TOOLS,
   ...IMAGE_READS,
   ...WRITE_TOOLS,

@@ -284,6 +284,8 @@ vi.mock('./engine-model', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./engine-model')>()),
   resolveChatModels: fakes.resolveModels,
 }));
+// run_subtasks (CHAT-27 phase 1) only where a test turns it on: the other tests' tool lists stay.
+const subtaskTests = vi.hoisted(() => ({ on: false }));
 // The registry's writes and request_access as they are; a read and an EXECUTE of the test's own.
 vi.mock('./registry/tools', async (importOriginal) => {
   const real = await importOriginal<typeof import('./registry/tools')>();
@@ -352,6 +354,10 @@ vi.mock('./registry/tools', async (importOriginal) => {
         t.name === 'check_draft_rules',
     ),
     publishPage,
+    {
+      ...real.chatTool('run_subtasks')!,
+      offerIn: async (run: { parentRunId?: string | null }) => subtaskTests.on && !run.parentRunId,
+    },
   ];
   return {
     ...real,
@@ -9230,5 +9236,119 @@ describe('model providers (W4-34)', () => {
       { model: 'anthropic/claude-sonnet-5.5', effort: 'normal' },
       { ansvisorOnly: false, providers: PROVIDERS_OFF },
     );
+  });
+});
+
+describe('a run in parts (CHAT-27 phase 1)', () => {
+  beforeEach(() => {
+    subtaskTests.on = true;
+  });
+  afterEach(() => {
+    subtaskTests.on = false;
+  });
+
+  const PARTS = [
+    { title: 'Competitor Bravo', instruction: "Read Bravo's citations, last 30 days." },
+    { title: 'Competitor Charlie', instruction: "Read Charlie's citations, last 30 days." },
+  ];
+  const streamOf = (chunks: object[]) =>
+    simulateReadableStream({ chunks: [{ type: 'stream-start', warnings: [] }, ...chunks] });
+
+  it('works its parts as child runs, answers from them, and asks for a change in its own chat', async () => {
+    // The parts read and answer with Haiku, in whatever order they run: each step answers for
+    // the part its prompt names. Bravo first tries to split itself again.
+    let bravoTried = false;
+    const partStep = (options: CallOptions) => {
+      const prompt = JSON.stringify(options.prompt);
+      const bravo = prompt.includes('Competitor Bravo');
+      const reading = options.responseFormat?.type === 'json';
+      if (reading && bravo && !bravoTried) {
+        bravoTried = true;
+        return streamOf(calls(toolCall('p1', 'run_subtasks', { parts: PARTS })));
+      }
+      if (reading) return streamOf(READY);
+      return streamOf(
+        text(bravo ? 'Bravo is cited on pricing pages.' : 'Charlie is cited in reviews.'),
+      );
+    };
+    const { haiku, sonnet } = useModels(
+      [READY, partStep, partStep, partStep, partStep, partStep],
+      [
+        calls(toolCall('w1', 'run_subtasks', { parts: PARTS })),
+        calls(
+          toolCall('w2', 'create_draft', {
+            brand_id: BRAND,
+            title: 'Pricing FAQ',
+            page_type: 'docs_faq',
+            source: { kind: 'content' },
+          }),
+        ),
+      ],
+    );
+    const runId = await turn(ADMIN, 'Compare my two competitors', 'ask_first');
+
+    // Each part is a child run of this one, with its title and no message of its own.
+    const parts = db.tables.chat_runs.filter((r) => r.parent_run_id === runId);
+    expect(parts.map((r) => [r.subtask_title, r.message_id ?? null, r.status])).toEqual([
+      ['Competitor Bravo', null, 'done'],
+      ['Competitor Charlie', null, 'done'],
+    ]);
+    // A part only reads: no change, and no parts of its own.
+    const partCalls = haiku.seen.slice(1);
+    for (const options of partCalls) {
+      const names = (options.tools ?? []).map((tool) => tool.name);
+      expect(names).not.toContain('run_subtasks');
+      expect(names).not.toContain('create_draft');
+      expect(names).not.toContain(ASK_TOOL);
+      expect(names).not.toContain(NEXT_MOVES_TOOL);
+    }
+    // Bravo's try to split again (a tool it wasn't given) starts nothing: one level only.
+    expect(bravoTried).toBe(true);
+    expect(db.tables.chat_runs).toHaveLength(3);
+
+    // The parent shows one step for its parts, then goes on from what they found.
+    const events = await eventsOf(runId);
+    expectClean(events);
+    const partsStep = ofType(events, 'step.finished').find((e) => e.data.step.parts)!.data.step;
+    expect(partsStep).toMatchObject({
+      label: 'Working on 2 parts',
+      detail: '2 of 2 done',
+      status: 'done',
+      parts: [
+        { title: 'Competitor Bravo', status: 'done' },
+        { title: 'Competitor Charlie', status: 'done' },
+      ],
+    });
+    const after = JSON.stringify(sonnet.seen[1].prompt);
+    expect(after).toContain('Bravo is cited on pricing pages.');
+    expect(after).toContain('Charlie is cited in reviews.');
+
+    // The change it makes from them waits on its card in the parent's chat, not in a part.
+    expect(runRow(runId).status).toBe('waiting');
+    expect(ofType(events, 'confirm.required')).toHaveLength(1);
+    for (const part of parts) {
+      expect(ofType(await eventsOf(part.id as string), 'confirm.required')).toEqual([]);
+    }
+    expect(createContentDraft).not.toHaveBeenCalled();
+    expect(ofType(events, 'confirm.required')[0].data.n).toBe(partsStep.n + 1);
+  });
+
+  it('pauses the parent at the cap its parts share', async () => {
+    useModels([READY], [calls(toolCall('w1', 'run_subtasks', { parts: PARTS }))]);
+    // The parent's steps fit; every part's first step is refused at the run's cap.
+    fakes.reserve.mockImplementation(async (step: { runId: string }) => {
+      const part = db.tables.chat_runs.find((r) => r.id === step.runId)?.parent_run_id;
+      if (part) return { ok: false, refusal: 'run_cap', message: 'cap' };
+      const hold = { charge: vi.fn(async () => {}), release: vi.fn(async () => {}), keep: vi.fn() };
+      return { ok: true, budget: hold };
+    });
+    const runId = await turn(ADMIN, 'Compare my two competitors');
+
+    expect(
+      db.tables.chat_runs.filter((r) => r.parent_run_id === runId).map((r) => r.status),
+    ).toEqual(['paused_cap', 'paused_cap']);
+    expect(runRow(runId).status).toBe('paused_cap');
+    const events = await eventsOf(runId);
+    expect(ofType(events, 'run.paused_cap').at(-1)!.data.limit).toBe('run');
   });
 });
