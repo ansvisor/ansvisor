@@ -21,6 +21,7 @@ import { latestChoice, type ChatModelChoice } from './models';
 import { isTourTopic, type TourTopic } from './tour';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
+import { withParts } from './subtask-parts';
 import { readDeliverableTasks, readStrips, weekEndIn, type DeliverableTask } from './task-strip';
 import type { WhyResult } from './why/explain';
 import { whyView, type ChatWhy } from './why/view';
@@ -289,7 +290,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       .order('created_at', { ascending: true }),
     supabase
       .from('chat_runs')
-      .select('id, message_id, status, model, effort, created_at')
+      .select('id, message_id, parent_run_id, subtask_title, status, model, effort, created_at')
       .eq('conversation_id', conversationId),
   ]);
   if (messages.error) throw new Error(`Could not read the chat: ${messages.error.message}`);
@@ -427,13 +428,23 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
     const step = toClientStep(row);
     if (step) stepsByRun.set(row.run_id, [...(stepsByRun.get(row.run_id) ?? []), step]);
   }
+  // A run's parts (CHAT-27) show on its "Working on N parts" steps, in the order they were made.
+  const partsOf = (runId: string) =>
+    (runs.data ?? [])
+      .filter((run) => run.parent_run_id === runId)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .map((run) => ({
+        title: run.subtask_title ?? '…',
+        status: run.status,
+        steps: stepsByRun.get(run.id) ?? [],
+      }));
   const runByMessage = new Map(
     (runs.data ?? []).map((run) => [
       run.message_id,
       {
         runId: run.id,
         status: run.status,
-        steps: stepsByRun.get(run.id) ?? [],
+        steps: withParts(stepsByRun.get(run.id) ?? [], partsOf(run.id)),
         fileId: fileByRun.get(run.id) ?? null,
         deliverables: madeByRun.get(run.id) ?? [],
         summary: ends.get(run.id)?.summary ?? null,

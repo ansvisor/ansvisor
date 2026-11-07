@@ -248,6 +248,8 @@ beforeEach(() => {
 
 /** The rows of a page's version in Chat that call Chat's own functions (W4-12b part 2). */
 const CHAT_PAGE_ROWS = new Set(['check_draft_rules', 'optimize_draft']);
+/** Rows the engine works itself (run_subtasks: its parts run through its driver). */
+const ENGINE_ROWS = new Set(['run_subtasks']);
 
 describe('the Chat tool registry', () => {
   it('has a label and a valid fixture on every row', () => {
@@ -303,6 +305,12 @@ describe('the Chat tool registry', () => {
     '%s calls its own function with the fixture, and returns what it returns',
     async (_name, tool) => {
       const result = await tool.run(ctx, tool.inputSchema.parse(tool.fixture.input));
+      // Worked by the engine itself, whose driver its parts need (CHAT-27): nothing to call here.
+      if (ENGINE_ROWS.has(tool.name)) {
+        expect(calls).toEqual([]);
+        expect(result).toEqual({ ok: false, code: 'engine_only' });
+        return;
+      }
       expect(calls).toHaveLength(1);
       expect(result).toEqual({ from: calls[0].from });
       if (tool.area === 'images') {
@@ -1165,8 +1173,12 @@ describe("the model's tool list on the registry's rows", () => {
 
   it('lists reads only on a read-only workspace and on the demo brand', () => {
     const ended = facts({ plan: 'growth', subscription_status: 'canceled' });
-    expect(list('admin', ended)).toEqual(withoutShopping);
-    expect(list('admin', growth, { brandId: FIXTURE_IDS.brand, brandIsDemo: true })).toEqual(reads);
+    // Work in parts runs a model in each part, which neither may spend (CHAT-27).
+    const free = (names: string[]) => names.filter((name) => name !== 'run_subtasks');
+    expect(list('admin', ended)).toEqual(free(withoutShopping));
+    expect(list('admin', growth, { brandId: FIXTURE_IDS.brand, brandIsDemo: true })).toEqual(
+      free(reads),
+    );
   });
 
   it("lists nothing for a brand outside the person's scope", () => {

@@ -144,7 +144,7 @@ export function emailRunResult(
     if (!job || !(job.deliver_to ?? []).includes('email')) return;
     let attachment: EmailBody['attachment'] = null;
     try {
-      attachment = await reportPdf(chat.messageId, job.title);
+      attachment = chat.messageId ? await reportPdf(chat.messageId, job.title) : null;
     } catch (err) {
       // No PDF: the e-mail still goes, with its Open in Chat link.
       console.error('[chat/schedules] could not make a run’s PDF:', err);

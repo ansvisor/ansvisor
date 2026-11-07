@@ -39,6 +39,8 @@ async function previousRunAt(conversationId: string, runId: string): Promise<str
     .select('created_at')
     .eq('conversation_id', conversationId)
     .neq('id', runId)
+    // A run's parts (CHAT-27) are part of it, not a run before it.
+    .is('parent_run_id', null)
     .order('created_at', { ascending: false })
     .limit(1);
   if (error) throw new Error(`Chat could not read the chat's runs: ${error.message}`);

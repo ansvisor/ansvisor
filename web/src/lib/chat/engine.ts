@@ -159,6 +159,7 @@ import {
   readCap,
   readRunCounts,
   startDecision,
+  workspaceRunLimit,
   writeCap,
   type ReadBudget,
 } from './run-limits';
@@ -265,6 +266,14 @@ import {
   type ModelProviderChoices,
 } from './model-providers';
 import type { PlanFacts } from './plan-facts';
+import {
+  SUBTASKS_TOOL,
+  partModels,
+  partToolSet,
+  partTools,
+  runSubtasks,
+  type SubtasksInput,
+} from './subtasks';
 
 /**
  * Chat's engine (CHAT-00, CHAT-03, CHAT-20 §5–§6, §11, §14, §15a): runs one
@@ -409,7 +418,7 @@ interface RunScope {
  */
 async function offeredInRun(
   tools: ReturnType<typeof engineTools>,
-  run: { agentRunId: string | null },
+  run: { agentRunId: string | null; parentRunId: string | null },
 ): Promise<ReturnType<typeof engineTools>> {
   const hidden = new Set<string>();
   for (const tool of CHAT_TOOLS) {
@@ -1098,7 +1107,7 @@ export async function driveRun(
       const covered = await coveredUnits(rc, 1, { reads: true });
       if (covered.fits === 0) return pauseAtCap(rc, covered.limit);
     }
-    if (fresh && typed === 0 && (await helpTurn(rc)) === 'ended') return;
+    if (fresh && typed === 0 && !run.parentRunId && (await helpTurn(rc)) === 'ended') return;
     await modelLoop(rc);
   } catch (err) {
     console.error('[chat/engine] a run failed:', err);
@@ -1244,6 +1253,8 @@ async function openContext(
     await endInError(run, sink, workedMs(base), ctx ? t('error.noKey') : t('error.notFound'));
     return null;
   }
+  // A part of a run reads and answers with the reading model (CHAT-27 item 2).
+  if (run.parentRunId) models = partModels(models);
   const brand = progress.brandId ? await readBrand(progress.brandId, actor.organizationId) : null;
   const { agentRunId, scheduleId } = await readChatOwner(run.conversationId);
   const answerLanguage = await readAnswerLanguage(actor.userId);
@@ -1255,13 +1266,17 @@ async function openContext(
   const tools = engineTools(ctx, scope);
   // A shortcut's run reads only its data plan (W2-09).
   const playbook = shortcutPlaybook(actor.organizationId, progress.shortcut);
-  const shown = await offeredInRun(tools, { agentRunId });
+  const shown = await offeredInRun(tools, { agentRunId, parentRunId: run.parentRunId });
   // Suggestions in the editor are only for the page open there beside the chat (W4-14).
   const openDraft = openDraftOf(progress.scope);
-  const offered = (playbook ? playbookTools(shown.offered, playbook) : shown.offered).filter(
-    (tool) => tool.name !== SUGGEST_TOOL || openDraft !== null,
+  // A part of a run only reads, and explains nothing (CHAT-27 items 2–4).
+  const offered = partTools(
+    run.parentRunId,
+    (playbook ? playbookTools(shown.offered, playbook) : shown.offered).filter(
+      (tool) => tool.name !== SUGGEST_TOOL || openDraft !== null,
+    ),
   );
-  const { refused } = shown;
+  const refused = run.parentRunId ? [] : shown.refused;
   // An agent's run reads what its skills list (run-limits.ts AGENT_READS).
   const budget = readBudget(choice.effort, { agent: agentRunId !== null });
   const history = await readHistory(run, budget.historyChars);
@@ -1871,6 +1886,8 @@ async function modelLoop(rc: RunContext): Promise<void> {
       for (const call of calls) {
         if (rc.signal.aborted) return stopNow(rc);
         const outcome = await handleCall(rc, call, 'read');
+        // Parts paused at the cap or stopped (run_subtasks): the run ended there.
+        if (outcome.kind === 'ended') return;
         results.push(outcome.kind === 'result' ? outcome.result : notAvailable(call));
       }
       rc.readMessages.push(toolMessage(results));
@@ -2218,7 +2235,8 @@ function toolSet(rc: RunContext, phase: ChatPhase): ToolSet {
       }),
     });
   }
-  return set;
+  // A part asks nothing and suggests nothing: nobody reads it but its parent (CHAT-27).
+  return rc.run.parentRunId ? partToolSet(set) : set;
 }
 
 /** What the tools add to a step's prompt, for its token estimate. */
@@ -2744,6 +2762,7 @@ async function handleCall(
     case 'deny':
       return result(call, await deny(rc, tool, ctx, facts, decision.denial, input), true);
     case 'run': {
+      if (tool.name === SUBTASKS_TOOL) return subtasksCall(rc, call, input, ctx);
       if (tool.class === 'read') return readCall(rc, tool, call, input, ctx, facts.brandId);
       if (decision.via === 'go_live') return goLiveCall(rc, tool, call, input, facts, ctx, page);
       // A change that runs without a card: Always, Full auto or the person's tick.
@@ -2755,6 +2774,49 @@ async function handleCall(
     case 'click':
       return openCard(rc, tool, call, input, facts, decision);
   }
+}
+
+/**
+ * run_subtasks (CHAT-27 phase 1): its parts work as child runs through this
+ * engine's driver, in this request (subtasks.ts). The parent pauses at the
+ * cap with them, or stops with them.
+ */
+async function subtasksCall(
+  rc: RunContext,
+  call: PendingCall,
+  input: Record<string, unknown>,
+  ctx: PrecedenceContext | null,
+): Promise<CallOutcome> {
+  const done = await runSubtasks(
+    {
+      run: rc.run,
+      progress: rc.progress,
+      sink: rc.sink,
+      signal: rc.signal,
+      endsAt: rc.segmentStart + RUN_REQUEST_MS,
+      atOnce: ctx ? workspaceRunLimit(ctx.plan) : 1,
+      room: rc.budget.dataChars - rc.progress.dataChars,
+      logRead: rc.progress.phase === 'read' && rc.models.phases === 'auto',
+      drive: (runId) => driveRun(rc.actor, runId, undefined, { sessionUserId: rc.sessionUserId }),
+      stop: async (runId) => {
+        await stopChatRun(rc.actor, runId);
+      },
+    },
+    input as SubtasksInput,
+  );
+  if (done.kind === 'cap') {
+    await pauseAtCap(rc, done.limit);
+    return { kind: 'ended' };
+  }
+  if (done.kind === 'stopped') {
+    await stopNow(rc);
+    return { kind: 'ended' };
+  }
+  const outcome = result(call, done.value, done.error);
+  if (outcome.kind === 'result') {
+    Object.assign(outcome.result, { untrusted: done.untrusted, source: done.source });
+  }
+  return outcome;
 }
 
 /** The editor's suggestions for the page open beside the chat (W4-14). */
@@ -4889,8 +4951,11 @@ async function finish(rc: RunContext): Promise<void> {
     workingMs,
     pending: null,
   });
-  await offerNextMoves(rc);
-  await offerRemember(rc);
+  // A part's answer is its parent's to read: no moves, nothing to remember (CHAT-27).
+  if (!rc.run.parentRunId) {
+    await offerNextMoves(rc);
+    await offerRemember(rc);
+  }
   await showStrip({ ...rc.run, progress: rc.progress }, rc.sink, true);
   rc.sink.emit('run.finished', {
     ...summaryOf(rc.progress, workingMs),

@@ -1055,6 +1055,10 @@
         "attach files",
         "reference data",
         "data used",
+        "work in parts",
+        "working on parts",
+        "split into parts",
+        "at the same time",
         "retry",
         "error",
         "reconnecting",
@@ -1162,7 +1166,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-07",
       "sections": [
         {
           "heading": null,
@@ -1299,6 +1303,10 @@
         {
           "heading": "Watch the work",
           "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone."
+        },
+        {
+          "heading": "Big requests in parts",
+          "text": "For a bigger request, such as comparing five competitors, Chat can split the work into 2 to 5 parts and work on them at the same time. The steps show **Working on 5 parts** and how many are done, with a dot for each part: working, done, failed, or paused at the AI limit. Click a part to see its own steps. Then Chat writes one answer from all the parts. A part that failed is named, and the others still count.\n\nParts only read, on the same brand and with the same access as you. When a part finds something to change, Chat asks you in this chat with the usual approval card. **Stop** stops every part. An agent's limit for one run covers the run and its parts together: when they reach it, they all pause."
         },
         {
           "heading": "When something goes wrong",

@@ -61,7 +61,7 @@ function scopeOf(json: unknown): ChatStepScope | undefined {
   if (dateRange) scope.dateRange = dateRange;
   if (platforms.length > 0) scope.platforms = platforms;
   if (brand) scope.brand = brand;
-  if (raw.unit === 'items') scope.unit = 'items';
+  if (raw.unit === 'items' || raw.unit === 'parts') scope.unit = raw.unit;
   return Object.keys(scope).length > 0 ? scope : undefined;
 }
 
