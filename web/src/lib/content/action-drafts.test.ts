@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   MAX_ACTION_PROMPTS,
   MAX_START_DRAFTS,
+  actionLinkTable,
   actionPages,
   actionPromptIds,
   actionTopicIds,
@@ -101,6 +102,38 @@ describe('actionPages and findActionDraft', () => {
 
 const P1 = '11111111-1111-4111-8111-111111111111';
 const P2 = '22222222-2222-4222-8222-222222222222';
+
+describe('actionLinkTable (AC plan P-10)', () => {
+  const labels = { name: 'Links to add on this page', linkTo: 'Link to', anchor: 'Link text' };
+  const payload = {
+    linkPairs: [
+      { from: 'https://a.example/blog/x', to: 'https://a.example/pricing', anchor: ' Pricing ' },
+      { from: 'https://a.example/blog/x', to: 'https://a.example/demo' },
+      { from: 'https://a.example/blog/y', to: 'https://a.example/products/z', anchor: 'Z' },
+      { from: 'https://a.example/blog/x', to: '/not-whole' },
+    ],
+  };
+
+  it('gives a bridge links page its links as a Your input table, the page each goes to and its text', () => {
+    expect(actionLinkTable(payload, 'https://a.example/blog/x', labels)).toEqual({
+      name: 'Links to add on this page',
+      rows: [
+        ['Link to', 'Link text'],
+        ['https://a.example/pricing', 'Pricing'],
+        ['https://a.example/demo', ''],
+      ],
+    });
+  });
+
+  it('gives none to a page without links, a new page, or without its words', () => {
+    expect(actionLinkTable(payload, 'https://a.example/blog/other', labels)).toBeNull();
+    expect(actionLinkTable(payload, null, labels)).toBeNull();
+    expect(actionLinkTable(payload, 'https://a.example/blog/x', undefined)).toBeNull();
+    expect(
+      actionLinkTable({ pages: ['https://a.example/blog/x'] }, 'https://a.example/blog/x', labels),
+    ).toBeNull();
+  });
+});
 
 describe('Start now (AC plan P-3)', () => {
   const task = (id: string, taskKey: string | null, status = 'todo') => ({ id, taskKey, status });

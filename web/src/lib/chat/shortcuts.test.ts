@@ -3,9 +3,10 @@ import messages from '../../../messages/en.json';
 import { SHORTCUTS, SHORTCUT_IDS, isShortcutId, keepsTrigger, shortcutCommand } from './shortcuts';
 
 /**
- * Chat's shortcuts (CHAT-08, W2-09): the / menu's seven, in CHAT-08's
- * order, under the commands decided on 2026-11-02, each with its words; a
- * message is a shortcut's only while it keeps its trigger words.
+ * Chat's shortcuts (CHAT-08, W2-09): the / menu's eight, in CHAT-08's
+ * order, under the commands decided on 2026-11-02 (Create image's /image
+ * since W4-08b), each with its words; a message is a shortcut's only while
+ * it keeps its trigger words.
  */
 
 describe('the shortcuts', () => {
@@ -18,6 +19,7 @@ describe('the shortcuts', () => {
       '/optimize',
       '/opportunities',
       '/audit',
+      '/image',
     ]);
     expect(SHORTCUT_IDS).toEqual(SHORTCUTS.map((s) => s.id));
     // shortcut_id's check (00417): lowercase, digits and hyphens.
@@ -35,6 +37,7 @@ describe('the shortcuts', () => {
       ['Optimize content', 'Optimize this page:'],
       ['Find opportunities', 'Find content opportunities for'],
       ['Improve with audit', 'Run an audit on'],
+      ['Create image', 'Create an image for'],
     ]);
   });
 
