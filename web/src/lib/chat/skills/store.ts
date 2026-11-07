@@ -15,6 +15,7 @@ import { RESERVED_SKILL_NAMES } from './reserved-names';
 import { MAX_BYTES, MAX_DESCRIPTION, MAX_NAME, checkSkillFile } from './format';
 import type { GithubRefusalCode } from './github';
 import type { ImportRefusalCode, ParsedImport } from './import';
+import type { SkillsShRefusalCode } from './skills-sh';
 import { SKILL_LIBRARY, enabledSkills, type SkillFilter } from './library';
 import { MAX_TITLE, skillChecksum, skillFileText, type SkillParts } from './skill-file';
 
@@ -185,6 +186,8 @@ export type SkillRefusalCode =
   // Imports and their review (W3-09).
   | ImportRefusalCode
   | GithubRefusalCode
+  // A skills.sh page's GitHub link (W4-29).
+  | SkillsShRefusalCode
   | 'import_plan'
   | 'role_review'
   | 'not_pending'
@@ -225,6 +228,10 @@ const REFUSAL_STATUS: Record<SkillRefusalCode, number> = {
   github_busy: 429,
   github_failed: 502,
   github_redirect: 400,
+  skills_sh_no_github: 400,
+  page_timeout: 504,
+  page_unreachable: 502,
+  page_failed: 502,
   import_plan: 403,
   role_review: 403,
   not_pending: 409,

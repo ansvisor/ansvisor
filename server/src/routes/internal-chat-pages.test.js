@@ -15,8 +15,12 @@ class PageFetchError extends Error {
   }
 }
 const openPage = vi.fn();
+const readSkillsShSource = vi.fn();
 vi.mock('../lib/safe-fetch.js', () => ({ PageFetchError }));
 vi.mock('../lib/page-open.js', () => ({ openPage: (...args) => openPage(...args) }));
+vi.mock('../lib/skills-sh.js', () => ({
+  readSkillsShSource: (...args) => readSkillsShSource(...args),
+}));
 
 const { default: router } = await import('./internal-chat-pages.js');
 
@@ -40,6 +44,7 @@ afterAll(() => new Promise((resolve) => server.close(resolve)));
 beforeEach(() => {
   vi.stubEnv('CRON_SECRET', 'chat-secret');
   openPage.mockReset();
+  readSkillsShSource.mockReset();
   logged.mockReset();
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -48,8 +53,8 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 const SITES = { hosts: ['acme.example'], domains: ['northwind.example'] };
 const ASK = { ...SITES, orgId: ORG };
 
-const post = (body, secret = 'chat-secret') =>
-  fetch(`${base}/open`, {
+const post = (body, secret = 'chat-secret', path = '/open') =>
+  fetch(`${base}${path}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -166,5 +171,33 @@ describe('POST /api/internal/chat/pages/open', () => {
     for (const done of waits) done();
     expect((await first).status).toBe(200);
     expect((await second).status).toBe(200);
+  });
+});
+
+describe('POST /api/internal/chat/pages/skill-source', () => {
+  const PAGE = 'https://skills.sh/acme/skills/copy-editing';
+  const ask = (body, secret = 'chat-secret') => post(body, secret, '/skill-source');
+
+  it('gives back the skill’s github.com link from its skills.sh page, or null', async () => {
+    expect((await ask({ url: PAGE, orgId: ORG }, null)).status).toBe(401);
+    readSkillsShSource.mockResolvedValueOnce('https://github.com/acme/skills/tree/main/copy');
+    const res = await ask({ url: ` ${PAGE} `, orgId: ORG });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ source: 'https://github.com/acme/skills/tree/main/copy' });
+    expect(readSkillsShSource).toHaveBeenCalledWith(PAGE);
+    readSkillsShSource.mockResolvedValueOnce(null);
+    expect(await (await ask({ url: PAGE, orgId: ORG })).json()).toEqual({ source: null });
+  });
+
+  it('says why the page couldn’t be read, and needs a workspace', async () => {
+    readSkillsShSource.mockRejectedValueOnce(new PageFetchError('timeout', 'slow'));
+    expect((await ask({ url: PAGE, orgId: ORG })).status).toBe(504);
+    readSkillsShSource.mockRejectedValueOnce(new PageFetchError('not_allowed', 'off skills.sh'));
+    const off = await ask({ url: 'https://skills.marketing/x', orgId: ORG });
+    expect(off.status).toBe(422);
+    expect(await off.json()).toMatchObject({ code: 'not_allowed' });
+    expect((await ask({ url: PAGE })).status).toBe(400);
+    expect((await ask({ url: PAGE, orgId: ORG, hosts: [] })).status).toBe(400);
+    expect(readSkillsShSource).toHaveBeenCalledTimes(2);
   });
 });
