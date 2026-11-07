@@ -48,6 +48,7 @@ import { matchProperty } from '@/lib/property-match';
 import { MERCHANT_CENTER_LABEL } from '@/lib/catalog';
 import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-card';
 import { CatalogCategoryPages } from './catalog-category-pages';
+import { TopicCategories } from './topic-categories';
 import { FramerCard } from './framer-card';
 import { IndexNowCard } from './indexnow-card';
 import { GoogleAccountsOverview } from '@/components/settings/google-accounts-overview';
@@ -181,6 +182,8 @@ export function IntegrationsSection() {
           </div>
 
           <CatalogCategoryPages refreshKey={categoryReads} />
+
+          <TopicCategories refreshKey={categoryReads} />
         </IntegrationGroup>
 
         {/* Send to CMS destinations: a new CMS's card goes in this group. */}

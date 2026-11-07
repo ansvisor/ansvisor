@@ -1,3 +1,4 @@
+import { readChosenTimeZone } from '@/lib/account-time-zone';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import {
@@ -21,9 +22,12 @@ import { latestChoice, type ChatModelChoice } from './models';
 import { isTourTopic, type TourTopic } from './tour';
 import { applyChatEvent, emptyRun } from './run-state';
 import { CHAT_RUN_STEP_SELECT, toClientStep, type ChatRunStepMemberRow } from './steps';
+import { withParts } from './subtask-parts';
 import { readDeliverableTasks, readStrips, weekEndIn, type DeliverableTask } from './task-strip';
+import { CHAT_UPLOAD_BUCKET, isImageUpload, isUploadType, type SentFile } from './uploads';
 import type { WhyResult } from './why/explain';
 import { whyView, type ChatWhy } from './why/view';
+import type { ChatActor } from './engine';
 
 /**
  * A saved chat as its page opens it (CHAT-01, CHAT-03 item 21): its
@@ -38,8 +42,22 @@ import { whyView, type ChatWhy } from './why/view';
  * person's own chat only; a failed read of them loses the moves, not the chat.
  * A /tasks run's task strip comes back from chat_task_state as it is now
  * (CHAT-09 §B): a task the person completed in Action Center since reads
- * Done; a failed read loses the strip, not the chat.
+ * Done; a failed read loses the strip, not the chat. A job with a due time
+ * still at work, this chat's own or one made in it, puts its due line under
+ * the latest task strip (readReadyBy); a failed read loses the line.
  */
+
+/**
+ * A job's due line (CHAT-09 item 8, W4-30): "Due Mon 19 Oct, 09:00 · I'll
+ * keep working and notify you", with Change.
+ */
+export interface ChatReadyBy {
+  dueAt: string;
+  /** The person's time zone (Settings › Account), else the job's own. */
+  timeZone: string;
+  /** Change: the job's page at its When, for its creator. */
+  href: `/dashboard/chat/scheduled/${string}`;
+}
 
 export interface ThreadRun {
   /** The run's handle for its routes (approve, stop, events): the person's own. */
@@ -64,6 +82,8 @@ export interface ThreadRun {
   sent: ChatActionSent[];
   /** The Action Center tasks it worked on (CHAT-09 §B); null when it had none. */
   tasks: ChatTaskStrip | null;
+  /** A job with a due time's line under its tasks (W4-30); on one run of the chat at most. */
+  readyBy?: ChatReadyBy | null;
   /** The Why did it move analyses it kept (CHAT-22 §1), in order. */
   why: ChatWhy[];
   /** What's new's cards (CHAT-11 item 10). */
@@ -85,6 +105,13 @@ export interface ThreadMessage {
    * and @ references stay on the server). Questions only.
    */
   resendable?: boolean;
+  /**
+   * The files the question was sent with (00409), in the order they were
+   * attached; none without. An image shows as a thumbnail read through its
+   * route (readSentImage), any other file as a chip with its name.
+   * Questions only.
+   */
+  attachments?: SentFile[];
   /**
    * The product tour's topic a line of the tour is about (its context_json,
    * 00486), so the side panel finds the turn about the page on screen.
@@ -289,7 +316,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       .order('created_at', { ascending: true }),
     supabase
       .from('chat_runs')
-      .select('id, message_id, status, model, effort, created_at')
+      .select('id, message_id, parent_run_id, subtask_title, status, model, effort, created_at')
       .eq('conversation_id', conversationId),
   ]);
   if (messages.error) throw new Error(`Could not read the chat: ${messages.error.message}`);
@@ -297,7 +324,11 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
 
   const questionIds = (messages.data ?? []).filter((m) => m.role === 'user').map((m) => m.id);
   const uploads = questionIds.length
-    ? await supabase.from('chat_uploads').select('message_id').in('message_id', questionIds)
+    ? await supabase
+        .from('chat_uploads')
+        .select('id, message_id, name, mime_type, size_bytes, created_at')
+        .in('message_id', questionIds)
+        .order('created_at', { ascending: true })
     : { data: [], error: null };
   // Unread, every question counts as having files: Retry stays off rather than send it short.
   if (uploads.error)
@@ -307,6 +338,15 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       ? questionIds
       : (uploads.data ?? []).map((row) => row.message_id).filter((id): id is string => !!id),
   );
+  // Each question's files, as its bubble shows them: a failed read shows none.
+  const filesOf = new Map<string, SentFile[]>();
+  for (const row of uploads.error ? [] : (uploads.data ?? [])) {
+    if (!row.message_id || !row.name || !isUploadType(row.mime_type)) continue;
+    filesOf.set(row.message_id, [
+      ...(filesOf.get(row.message_id) ?? []),
+      { id: row.id, name: row.name, mimeType: row.mime_type, sizeBytes: row.size_bytes },
+    ]);
+  }
 
   const runIds = (runs.data ?? []).map((run) => run.id);
   const endedIds = (runs.data ?? []).filter((run) => ENDED.includes(run.status)).map((r) => r.id);
@@ -427,13 +467,35 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
     const step = toClientStep(row);
     if (step) stepsByRun.set(row.run_id, [...(stepsByRun.get(row.run_id) ?? []), step]);
   }
+  // A run's parts (CHAT-27) show on its "Working on N parts" steps, in the order they were made.
+  const partsOf = (runId: string) =>
+    (runs.data ?? [])
+      .filter((run) => run.parent_run_id === runId)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at))
+      .map((run) => ({
+        title: run.subtask_title ?? '…',
+        status: run.status,
+        steps: stepsByRun.get(run.id) ?? [],
+      }));
+  // Its due line goes under the latest strip, else under the run that made the job.
+  const readyBy =
+    mine && user ? await readReadyBy(supabase, conversationId, runIds, user.id) : null;
+  const ordered = (messages.data ?? [])
+    .map((m) => (runs.data ?? []).find((run) => run.message_id === m.id)?.id)
+    .filter((id): id is string => !!id);
+  const readyByRun = readyBy
+    ? ([...ordered].reverse().find((id) => (strips.get(id)?.total ?? 0) > 0) ??
+      (readyBy.setByRunId && ordered.includes(readyBy.setByRunId)
+        ? readyBy.setByRunId
+        : ordered.at(-1)))
+    : undefined;
   const runByMessage = new Map(
     (runs.data ?? []).map((run) => [
       run.message_id,
       {
         runId: run.id,
         status: run.status,
-        steps: stepsByRun.get(run.id) ?? [],
+        steps: withParts(stepsByRun.get(run.id) ?? [], partsOf(run.id)),
         fileId: fileByRun.get(run.id) ?? null,
         deliverables: madeByRun.get(run.id) ?? [],
         summary: ends.get(run.id)?.summary ?? null,
@@ -444,6 +506,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         remember: mine ? (ends.get(run.id)?.remember ?? null) : null,
         sent: ends.get(run.id)?.sent ?? [],
         tasks: strips.get(run.id) ?? null,
+        ...(readyBy && run.id === readyByRun ? { readyBy: readyBy.line } : {}),
         why: whyByRun.get(run.id) ?? [],
         whatsNew: ends.get(run.id)?.whatsNew ?? [],
         audits: ends.get(run.id)?.audits ?? [],
@@ -466,6 +529,9 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
       run: runByMessage.get(message.id) ?? null,
       ...(message.role === 'user'
         ? { resendable: !message.context_json && !withFiles.has(message.id) }
+        : {}),
+      ...(message.role === 'user' && filesOf.has(message.id)
+        ? { attachments: filesOf.get(message.id)! }
         : {}),
       ...(message.role === 'user' && tourTopicOf(message.context_json)
         ? { tour: tourTopicOf(message.context_json)! }
@@ -502,6 +568,60 @@ async function readThreadStrips(
   }
 }
 
+/**
+ * The person's job with a due time that is still at work (not delivered,
+ * due later, on or paused at the AI limit), when it is this chat's own or
+ * was made in it; the newest one. Read as the person; null when none.
+ */
+async function readReadyBy(
+  db: Awaited<ReturnType<typeof createClient>>,
+  conversationId: string,
+  runIds: readonly string[],
+  userId: string,
+): Promise<{ line: ChatReadyBy; setByRunId: string | null } | null> {
+  try {
+    const { data, error } = await db
+      .from('chat_schedules')
+      .select('id, due_at, timezone, conversation_id, set_by_run_id, enabled, paused_reason')
+      .eq('created_by', userId)
+      .eq('kind', 'once')
+      .eq('run_mode', 'ready_by')
+      .not('next_run_at', 'is', null)
+      .gt('due_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) throw new Error(error.message);
+    const job = (
+      (data ?? []) as {
+        id: string;
+        due_at: string;
+        timezone: string;
+        conversation_id: string | null;
+        set_by_run_id: string | null;
+        enabled: boolean;
+        paused_reason: string | null;
+      }[]
+    ).find(
+      (row) =>
+        (row.enabled || row.paused_reason === 'cap') &&
+        (row.conversation_id === conversationId ||
+          (!!row.set_by_run_id && runIds.includes(row.set_by_run_id))),
+    );
+    if (!job) return null;
+    return {
+      line: {
+        dueAt: job.due_at,
+        timeZone: (await readChosenTimeZone(userId)) ?? job.timezone,
+        href: `/dashboard/chat/scheduled/${job.id}#schedule-when`,
+      },
+      setByRunId: job.set_by_run_id,
+    };
+  } catch (err) {
+    console.error("[chat/thread] could not read the chat's due line:", err);
+    return null;
+  }
+}
+
 /** The tasks of the chat's deliverables (CHAT-09 item 12), read as the person; a failed read loses them, not the chat. */
 async function readFileTasks(
   db: Awaited<ReturnType<typeof createClient>>,
@@ -521,4 +641,31 @@ function tourTopicOf(context: unknown): TourTopic | null {
   const topic =
     context && typeof context === 'object' ? (context as { tour?: unknown }).tour : null;
   return isTourTopic(topic) ? topic : null;
+}
+
+/**
+ * An image a message was sent with, for its thumbnail (GET
+ * /api/chat/uploads/{id}): read as the person, so it is their own or one of
+ * a chat they can read (00409's policy), in their workspace, up and an
+ * image; its bytes from the private bucket. Null for anything else.
+ */
+export async function readSentImage(
+  actor: ChatActor,
+  uploadId: string,
+): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
+  const { data, error } = await (await createClient())
+    .from('chat_uploads')
+    .select('storage_path, mime_type')
+    .eq('id', uploadId)
+    .eq('organization_id', actor.organizationId)
+    .eq('status', 'ready')
+    .maybeSingle();
+  if (error) throw new Error(`Could not read the file: ${error.message}`);
+  if (!data || !isImageUpload(data.mime_type)) return null;
+  const { data: blob, error: readError } = await supabaseAdmin.storage
+    .from(CHAT_UPLOAD_BUCKET)
+    .download(data.storage_path);
+  // Gone from the bucket (the 90-day sweep): as a file that isn't there.
+  if (readError || !blob) return null;
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), mimeType: data.mime_type };
 }

@@ -54,6 +54,12 @@ function More({ shown, total }: { shown: number; total: number }) {
 const EVIDENCE_KEYS = [
   'aiBotsMentioned',
   'wafBlockedBots',
+  // The no-JS check's (SA-009).
+  'hiddenPercent',
+  'hiddenWords',
+  'mainWords',
+  'hiddenText',
+  'readAs',
   'ageDays',
   'newest',
   'dateSignals',
@@ -84,7 +90,15 @@ const EVIDENCE_KEYS = [
 ] as const;
 // The live bot test's per-bot rows and its own request (SA-008) are the
 // report's to show; the bots it found blocked are named.
-const HIDDEN_EVIDENCE = new Set(['model', 'blocked', 'blockedBots', 'bots', 'control', 'liveTest']);
+const HIDDEN_EVIDENCE = new Set([
+  'model',
+  'blocked',
+  'blockedBots',
+  'bots',
+  'control',
+  'liveTest',
+  'compared',
+]);
 
 /**
  * An audit check's evidence as a line: "Age in days: 412 · Newest date:
@@ -100,6 +114,7 @@ function describeEvidence(
     if (value === null || value === undefined || value === '') return null;
     // A language by its name, a reading formula as the editor names it.
     if (key === 'language' && typeof value === 'string') return languageName(value);
+    if (key === 'readAs' && typeof value === 'string') return crawlerName(value);
     if (key === 'formula' && typeof value === 'string' && tFormula.has(value)) {
       return tFormula(value as Parameters<typeof tFormula>[0]);
     }

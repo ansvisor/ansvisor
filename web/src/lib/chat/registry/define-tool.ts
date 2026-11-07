@@ -368,11 +368,11 @@ interface ToolFields<S extends z.ZodObject> {
   doneStep?(input: z.output<S>, output: unknown): { label: string; detail?: string } | null;
   /**
    * Whether the row is offered in this run at all (run_agent: only in an
-   * agent's run whose Can call names an agent, CHAT-27 item 14). Without it,
-   * every run that the precedence allows gets it. Not offered, it isn't
-   * explained as refused either.
+   * agent's run whose Can call names an agent, CHAT-27 item 14; run_subtasks:
+   * never in a part of a run, item 3). Without it, every run that the
+   * precedence allows gets it. Not offered, it isn't explained as refused either.
    */
-  offerIn?(run: { agentRunId: string | null }): Promise<boolean>;
+  offerIn?(run: { agentRunId: string | null; parentRunId?: string | null }): Promise<boolean>;
   /**
    * What the change answers is untrusted data (another agent's words): the
    * run is tainted after it, so every later change shows a card (CHAT-20 §16a).

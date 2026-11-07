@@ -122,11 +122,13 @@ export function writeCap(toolName: string): number {
 
 /**
  * READ caps per run (§14), by tool name, on top of the read budget: pages
- * opened (fetch_page, CHAT-10 item 12), whatever the effort. A read not
- * named here has only the budget.
+ * opened (fetch_page, CHAT-10 item 12), and work split into parts
+ * (run_subtasks, CHAT-27 item 3: twice a run, so at most 10 parts),
+ * whatever the effort. A read not named here has only the budget.
  */
 export const READ_CAPS: Readonly<Record<string, number>> = {
   fetch_page: 10,
+  run_subtasks: 2,
 };
 
 export function readCap(toolName: string): number | null {

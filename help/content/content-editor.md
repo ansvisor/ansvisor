@@ -4,8 +4,8 @@ route: /dashboard/content/editor
 keywords: [content editor, draft, placeholders, your input needed, side panel, instructions, sources, live page, rebuild brief, mark ready, mark published, history, export, site audit estimate, health claims, supplements, chat in the editor, chat tab, continued from your chat, from your chat, this draft, ctrl j, accepted suggestions, rejected suggestions, read your choices in the editor]
 synonyms: [write an article, edit a draft, page editor, finish a page]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-07
+last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -37,6 +37,8 @@ The page starts with its H1, which is also its title. A page has one H1: the too
 
 **Attach a file** inserts Excel, CSV, Word, Markdown, HTML or text, up to 10 MB each; a sheet comes in as a table. **Add HTML** adds an embed, a widget or a form, kept exactly as written; Ansvisor never runs it. **Edit as HTML** shows the page's source; scripts, iframes and inline styles are removed when you switch back.
 
+In a narrow editor, such as beside the side panel on a small screen, the numbered list, quote, table, **Add HTML**, **Products**, **Attach a file** and **Edit as HTML** move under **More** in the toolbar.
+
 ## Facts and your input
 
 The Content Agent looks up the facts a page needs, such as a price, a plan's limits or a statistic, and links each to the page it came from, never a forum or a social post. A fact no trusted page has is left out of its sentence.
@@ -63,7 +65,7 @@ Building the brief and running the Content Agent use your workspace's monthly AI
 
 With Chat on, **Chat** is the side panel's first tab. A page Chat made opens on it and continues that chat: "Continued from your chat". Otherwise it continues the chat you last had here about the page, or starts one. **Ctrl J** opens it.
 
-What you ask about the page doesn't change it. The Content Agent leaves suggestions in the page, labelled "Content Agent · from your chat", with the same guards as Fix open rules; the page changes only when you **Accept** one. Remove **This draft** from the box to talk about something else. The expand icon opens the chat on Chat's own page.
+What you ask about the page doesn't change it. The Content Agent leaves suggestions in the page, labelled "Content Agent · from your chat", with the same guards as Fix open rules; the page changes only when you **Accept** one. Remove **This draft** from the box to talk about something else. The expand icon opens the chat on Chat's own page. From Chat, **Open here** opens this editor beside the conversation instead, with its chip **Page:** and the page's title in the box.
 
 ## Chat knows what you accepted
 

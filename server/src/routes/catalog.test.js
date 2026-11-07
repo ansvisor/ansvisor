@@ -20,6 +20,12 @@ const disconnectStore = vi.fn();
 const connectSignInSource = vi.fn();
 const categoryPages = vi.fn();
 const setCategoryPage = vi.fn();
+const topicCategories = vi.fn();
+const setTopicCategory = vi.fn();
+vi.mock('../lib/catalog/topic-categories.js', () => ({
+  topicCategories: (...args) => topicCategories(...args),
+  setTopicCategory: (...args) => setTopicCategory(...args),
+}));
 const listSignInAccounts = vi.fn();
 const matchBrandLater = vi.fn();
 let configured;
@@ -509,6 +515,49 @@ describe('DELETE /api/catalog/sources/:id', () => {
     expect((await send('DELETE', `/sources/${STORE}`)).status).toBe(403);
     expect((await send('DELETE', '/sources/nope')).status).toBe(404);
     expect(disconnectStore).not.toHaveBeenCalled();
+  });
+});
+
+describe("topics' categories (AC plan P-7)", () => {
+  const TOPIC = '6e1d2c3b-4a5f-4c6d-9e7f-8a9b0c1d2e3f';
+  const CATEGORY = '7f2e3d4c-5b6a-4d7e-8f90-a1b2c3d4e5f6';
+
+  it("lists each topic's categories to any member", async () => {
+    role = 'analyst';
+    topicCategories.mockResolvedValue({
+      topics: [{ id: TOPIC, name: 'Cold brew', categories: [] }],
+      categories: [],
+    });
+    const res = await fetch(`${base}/topic-categories?brandId=${BRAND}`);
+    expect(res.status).toBe(200);
+    expect((await res.json()).topics[0].name).toBe('Cold brew');
+    expect(topicCategories).toHaveBeenCalledWith(BRAND);
+    expect((await fetch(`${base}/topic-categories?brandId=nope`)).status).toBe(400);
+  });
+
+  it('links one by hand or takes one away for an admin or a manager, and puts it back', async () => {
+    setTopicCategory.mockReset().mockResolvedValue(undefined);
+    role = 'manager';
+    const body = { brandId: BRAND, topicId: TOPIC, categoryId: CATEGORY, linked: false };
+    expect((await send('PUT', '/topic-categories', body)).status).toBe(200);
+    expect(setTopicCategory).toHaveBeenCalledWith({ ...body, userId: 'user-1' });
+    const back = await send(
+      'DELETE',
+      `/topic-categories?brandId=${BRAND}&topicId=${TOPIC}&categoryId=${CATEGORY}`,
+    );
+    expect(back.status).toBe(200);
+    expect(setTopicCategory).toHaveBeenLastCalledWith({
+      brandId: BRAND,
+      topicId: TOPIC,
+      categoryId: CATEGORY,
+      linked: undefined,
+      userId: 'user-1',
+    });
+    expect((await send('PUT', '/topic-categories', { ...body, linked: 'yes' })).status).toBe(400);
+
+    role = 'analyst';
+    expect((await send('PUT', '/topic-categories', body)).status).toBe(403);
+    expect(setTopicCategory).toHaveBeenCalledTimes(2);
   });
 });
 

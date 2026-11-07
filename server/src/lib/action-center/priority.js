@@ -94,6 +94,7 @@ const KIND_CHANGE = {
   competitor_momentum: 'slipping',
   // Something to fix on the site.
   structured_data_issue: 'issue',
+  canonical_issue: 'issue',
   outdated_content: 'issue',
   weak_entity: 'issue',
   weak_internal_links: 'issue',
@@ -103,6 +104,8 @@ const KIND_CHANGE = {
   // Ground to win.
   page_opportunity: 'opportunity',
   ai_landing_page_winner: 'opportunity',
+  bridge_link_gap: 'opportunity',
+  product_pages_to_optimize: 'opportunity',
   new_engine: 'opportunity',
   ai_platform_new: 'opportunity',
   gsc_low_ctr: 'opportunity',

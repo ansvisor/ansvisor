@@ -98,6 +98,18 @@ describe('emailRunResult', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('hands over a chat-only job’s run when it has addresses outside the workspace (W4-28)', async () => {
+    // The server only prepares their e-mails for a Send in the Inbox.
+    db.tables.chat_schedules[0].deliver_to = ['chat'];
+    db.tables.chat_schedules[0].external_recipients = ['jane@client.com'];
+    email.emailRunResult({ id: 'run-1', schedule_id: 'job-1' }, { messageId: 'msg-1' });
+    await settle();
+    expect(sent()).toEqual([
+      expect.objectContaining({ scheduleId: 'job-1', runId: 'run-1', kind: 'result' }),
+    ]);
+    expect(sent()[0].attachment.filename).toMatch(/\.pdf$/);
+  });
+
   it('never throws into the run when the server is down', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     fetchMock.mockRejectedValueOnce(new Error('down'));

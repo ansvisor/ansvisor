@@ -49,6 +49,17 @@ export interface AiUsage {
    */
   chatMetered?: boolean;
   /**
+   * This period's use by agent (CHAT-27 item 27), with Chat metered and
+   * outside the trial: each agent's share of the allowance, highest first (a
+   * null agentId is the deleted agents' runs together), and Chat's outside
+   * any agent's run. `name` is set on the web, for the agents the person may
+   * see (ai-usage-agents.ts nameAgents). Missing: no By agent list.
+   */
+  byAgent?: {
+    agents: { agentId: string | null; percent: number; name?: string }[];
+    chat: number;
+  };
+  /**
    * Purchased AI credits are left (CHAT-18 §F, with Chat on): AI calls go on
    * running on them past 100% of the allowance. Missing: none.
    */

@@ -18,6 +18,8 @@ export interface StepRow {
   pill?: ApprovalPillKind | null;
   /** Skipped by the person or by a Stop: greyed, with its reason ("Stopped"), else "Skipped". */
   skipped?: boolean;
+  /** What shows under its words: a "Working on N parts" step's parts (CHAT-27 item 7). */
+  below?: ReactNode;
 }
 
 /** A stored step's status as its marker shows it (CHAT-03 icons, Chat v2 step states). */
@@ -80,6 +82,7 @@ export function StepList({
             <div className={cn('min-w-0 flex-1', row.skipped && 'text-muted-foreground')}>
               {row.label}
               {detail && <span className="block text-xs text-muted-foreground">{detail}</span>}
+              {row.below}
             </div>
             {controls?.(row, index)}
             {row.pill && <ApprovalPill kind={row.pill} className="w-[104px] self-center" />}

@@ -126,6 +126,7 @@ const JOB: ScheduleListItem = {
   enabled: true,
   pausedReason: null,
   deliver: 'both',
+  external: [],
   changeOnly: false,
   mode: 'auto',
   auto: false,
@@ -298,6 +299,7 @@ describe('ScheduleDetail', () => {
       deliver: 'both',
       changeOnly: false,
       timezone: 'Europe/Istanbul',
+      external: [],
     });
     // Its runs: status, run now, and use as a share, never dollars.
     const rows = $$('[data-slot="schedule-run"]');
@@ -370,6 +372,58 @@ describe('ScheduleDetail', () => {
     await type(when, '29 Oct 2026 at 09:00');
     expect(when.getAttribute('aria-invalid')).toBe('true');
     expect(($('[data-action="schedule.save"]') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('adds and takes off people outside the workspace, and says why it can’t (W4-28)', async () => {
+    actions.getChatSchedule.mockResolvedValue({ job: JOB, runs: [] });
+    await render(
+      <ScheduleDetail
+        initial={{ job: { ...JOB, external: ['ops@client.com'] }, runs: [], outsideLock: null }}
+        now={NOW}
+      />,
+    );
+    const input = $('[data-action="schedule.outside"]') as HTMLInputElement;
+    const add = $('[data-action="schedule.outsideAdd"]') as HTMLButtonElement;
+    const type = async (value: string) =>
+      act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+          input,
+          value,
+        );
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    await type('jane at client');
+    expect(add.disabled).toBe(true);
+    expect(container.textContent).toContain('That isn’t an e-mail address.');
+    await type('Jane@Client.com');
+    await click(add);
+    expect($$('[data-slot="schedule-outside"] li').map((li) => li.textContent)).toEqual([
+      'ops@client.com',
+      'jane@client.com',
+    ]);
+    await click($('[aria-label="Remove ops@client.com"]'));
+    await click($('[data-action="schedule.save"]'));
+    expect(actions.updateChatSchedule).toHaveBeenCalledWith(
+      JOB.id,
+      expect.objectContaining({ external: ['jane@client.com'] }),
+    );
+
+    // The free trial, or an Analyst: no field to add one, and why.
+    await render(
+      <ScheduleDetail
+        key="trial"
+        initial={{ job: JOB, runs: [], outsideLock: 'trial' }}
+        now={NOW}
+      />,
+    );
+    expect($('[data-action="schedule.outside"]')).toBeNull();
+    expect(container.textContent).toContain('Not in the free trial.');
+    await render(
+      <ScheduleDetail key="role" initial={{ job: JOB, runs: [], outsideLock: 'role' }} now={NOW} />,
+    );
+    expect(container.textContent).toContain(
+      'Only Admins and Managers add people outside the workspace.',
+    );
   });
 
   it('lets an Admin switch or delete a teammate’s job, not edit it', async () => {

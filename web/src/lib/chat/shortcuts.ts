@@ -6,9 +6,10 @@
  * skills/analyze/SKILL.md), that the engine loads for the run. "Complete
  * tasks" is the /tasks skill itself, and "Create a report on" is
  * /new-report, as /report is the Weekly report skill's (decided
- * 2026-11-02). What's new and Create image wait for their features. Pure,
- * for the browser and the server alike: the trigger words are the
- * composer's (chatComposer.slash.shortcuts in messages/en.json).
+ * 2026-11-02). What's new waits for its feature; Create image (/image)
+ * came with images in Chat (W4-08b). Pure, for the browser and the server
+ * alike: the trigger words are the composer's (chatComposer.slash.shortcuts
+ * in messages/en.json).
  */
 
 /** The shortcuts in the / menu's order (CHAT-08's table): each id its playbook's name and /command. */
@@ -20,11 +21,15 @@ export const SHORTCUTS = [
   { id: 'optimize', key: 'optimize' },
   { id: 'opportunities', key: 'opportunities' },
   { id: 'audit', key: 'audit' },
+  { id: 'image', key: 'image' },
 ] as const;
 export type Shortcut = (typeof SHORTCUTS)[number];
 export type ShortcutId = Shortcut['id'];
 
 export const SHORTCUT_IDS: readonly ShortcutId[] = SHORTCUTS.map((s) => s.id);
+
+/** Create image (/image): also the composer's ＋ Create an image (W4-08b). */
+export const IMAGE_SHORTCUT = SHORTCUTS.find((s) => s.id === 'image')!;
 
 export const isShortcutId = (value: unknown): value is ShortcutId =>
   typeof value === 'string' && (SHORTCUT_IDS as readonly string[]).includes(value);

@@ -76,7 +76,30 @@ export const PLAYS = Object.freeze([
   },
 ]);
 
-const PLAY_IDS = new Set(PLAYS.map((play) => play.id));
+/**
+ * A store's topic whose category page is live (AC plan P-7, spec §6.2):
+ * that page, optimized, rather than a new one. Picked on the catalog, not
+ * the prompts' intents (category-play.js), so it isn't in PLAYS.
+ */
+export const CATEGORY_PAGE_PLAY = Object.freeze({
+  id: 'category_page',
+  assetType: 'category_page',
+});
+
+/**
+ * A store's topic whose category has no live page (EC-1, AC plan P-7): a
+ * buying guide for the topic, linking the category's best sellers.
+ */
+export const BUYING_GUIDE_PLAY = Object.freeze({
+  id: 'buying_guide',
+  assetType: 'buying_guide',
+});
+
+const PLAY_IDS = new Set([
+  ...PLAYS.map((play) => play.id),
+  CATEGORY_PAGE_PLAY.id,
+  BUYING_GUIDE_PLAY.id,
+]);
 
 /** Whether a play id is one the chooser picks (the drawer names only those). */
 export function isPlayId(id) {
@@ -137,6 +160,42 @@ export function rankPlays(prompts) {
   }
   // Best first; on a tie, in PLAYS' order.
   return ranked.sort((a, b) => b.score - a.score || PLAYS.indexOf(a.play) - PLAYS.indexOf(b.play));
+}
+
+/**
+ * The catalog's play for a store's topic action (above), as the payload
+ * keeps it: its category page, or a buying guide when the category has no
+ * page (`url` null); the category and its page as the reason, and the plays
+ * its prompts qualify for as the ones also worth doing.
+ *
+ * @param {{ siteType: string, category: { name: string, url: string|null, inStock: number },
+ *   prompts: Array<{ id: string, intent: string|null, volume: number|null }> }} input
+ */
+export function categoryPagePlay({ siteType, category, prompts = [] }) {
+  const play = category.url ? CATEGORY_PAGE_PLAY : BUYING_GUIDE_PLAY;
+  return {
+    version: PLAY_VERSION,
+    id: play.id,
+    assetType: play.assetType,
+    siteType,
+    reasons: [
+      {
+        kind: 'category',
+        category: category.name,
+        page: category.url,
+        inStock: category.inStock,
+      },
+    ],
+    supporting: rankPlays(prompts)
+      .slice(0, MAX_SUPPORTING)
+      .map((entry) => ({
+        id: entry.play.id,
+        assetType: entry.play.assetType,
+        prompts: entry.prompts,
+        of: entry.of,
+        share: entry.share,
+      })),
+  };
 }
 
 /**

@@ -398,6 +398,47 @@ describe("a technical finding with its checks' evidence", () => {
     );
   });
 
+  it('names what the no-JS check found in words (SA-009)', () => {
+    render(
+      <SignalWhereBlock
+        signal={signal({
+          category: 'technical',
+          kind: 'content_gap',
+          currentValue: 1,
+          payload: {
+            entity: 'pages',
+            targets: [
+              {
+                id: '/app',
+                label: '/app',
+                issues: [
+                  {
+                    check: 'no-js-content',
+                    label: 'Main text without JavaScript',
+                    evidence: {
+                      hiddenPercent: 42,
+                      hiddenWords: 310,
+                      mainWords: 740,
+                      hiddenText: ['Step by step'],
+                      readAs: 'gptbot',
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+          where: NO_WHERE,
+        })}
+      />,
+    );
+    const rows = [...container.querySelectorAll('dt')].map(
+      (dt) => `${dt.textContent}: ${dt.nextElementSibling?.textContent}`,
+    );
+    expect(rows).toContain(
+      'Failed checks: /appMain text without JavaScript · Main text only after JavaScript (%): 42 · Words only after JavaScript: 310 · Main-text words: 740 · Not in the HTML: Step by step · Read as: GPTBot (OpenAI)',
+    );
+  });
+
   it('names the crawlers a CDN or firewall turned away, and leaves out the live test’s rows (SA-008)', () => {
     render(
       <SignalWhereBlock

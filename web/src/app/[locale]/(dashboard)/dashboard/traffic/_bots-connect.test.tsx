@@ -24,6 +24,11 @@ vi.mock('@/lib/actions/ai-bots', () => ({
 vi.mock('@/lib/traffic-reads', () => ({
   getBotConnections: (...a: unknown[]) => getBotConnections(...a),
 }));
+const uploadBotLog = vi.fn();
+vi.mock('@/lib/bot-log-upload', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/bot-log-upload')>()),
+  uploadBotLog: (...a: unknown[]) => uploadBotLog(...a),
+}));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, ...props }: { href: string }) => <a href={href} {...props} />,
 }));
@@ -58,6 +63,7 @@ beforeEach(() => {
   getBotConnections.mockReset().mockResolvedValue(info());
   createBotConnection.mockReset();
   revokeBotConnection.mockReset().mockResolvedValue({ ok: true });
+  uploadBotLog.mockReset();
   toast.success.mockReset();
   toast.error.mockReset();
   container = document.createElement('div');
@@ -319,7 +325,7 @@ describe('BotsSource', () => {
     await act(async () => button('Manage')!.click());
     expect(page()).toContain('Log records this month: 20,000,400 of 20,000,000.');
     expect(page()).toContain(
-      "Log files paused until Nov 1: this month's log records are used up, so requests from Logpush or the Vercel drain aren't read until then.",
+      "Log files paused until Nov 1: this month's log records are used up, so requests from Logpush, the Vercel drain, the webhook or an upload aren't read until then.",
     );
   });
 
@@ -337,5 +343,181 @@ describe('BotsSource', () => {
     getBotConnections.mockResolvedValue(info());
     await render(false);
     expect(button('Connect')!.disabled).toBe(true);
+  });
+});
+
+/** Picks a file in the dialog's hidden file input, as the browser's picker does. */
+async function pick(name = 'access.log') {
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const file = new File(
+    ['20.171.207.12 - - [04/Nov/2026:09:15:02 +0000] "GET / HTTP/1.1" 200 1'],
+    name,
+  );
+  Object.defineProperty(input, 'files', { value: [file], configurable: true });
+  await act(async () => input.dispatchEvent(new Event('change', { bubbles: true })));
+  return { input, file };
+}
+
+describe('BotsDialog: any server, by webhook or a log file (#2170)', () => {
+  it('makes a generic webhook: the endpoint, the header with the secret, and an example line', async () => {
+    await render();
+    await act(async () => button('Connect')!.click());
+    expect(page()).toContain('Any server (webhook)');
+    expect(page()).toContain('your log shipper posts your access log as JSON lines');
+    createBotConnection.mockResolvedValue({
+      connection: { id: 'c4', kind: 'log_webhook', createdAt: 't', lastEventAt: null },
+      secret: 'abot_s3cret',
+      endpoint: 'https://api.example/bots/ingest',
+      workerScript: null,
+      workerSecretName: null,
+      logpushJob: null,
+      vercelDrain: null,
+    } satisfies NewBotConnection);
+    const webhook = [...document.querySelectorAll('[role="radio"]')].find((r) =>
+      r.textContent?.includes('Any server (webhook)'),
+    ) as HTMLElement;
+    await act(async () => webhook.click());
+    await act(async () => button('Create connection')!.click());
+    expect(createBotConnection).toHaveBeenCalledWith('b1', 'log_webhook');
+    expect(page()).toContain('add an HTTP output that POSTs to the endpoint below');
+    expect(page()).toContain('https://api.example/bots/ingest');
+    const header = [...document.querySelectorAll('pre')].find(
+      (pre) => pre.textContent === 'Authorization: Bearer abot_s3cret',
+    );
+    // Left out of session replays (SEC-10a), as every other secret.
+    expect(header?.closest('.ph-no-capture')).not.toBeNull();
+    const example = [...document.querySelectorAll('pre')].find((pre) =>
+      pre.textContent?.includes('"user_agent"'),
+    );
+    expect(JSON.parse(example!.textContent!)).toMatchObject({ ip: '20.171.207.12', status: 200 });
+    expect(page()).not.toContain('traffic.bots.');
+  });
+
+  it('uploads a log file and says what it held, then reads the report again', async () => {
+    await render();
+    await act(async () => button('Connect')!.click());
+    expect(page()).toContain('Up to 4 MB a file (gzip a larger one) and 20,000 lines.');
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    expect(input.accept).toContain('.gz');
+
+    let finish: (value: unknown) => void = () => {};
+    uploadBotLog.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const { file } = await pick('access.log');
+    expect(uploadBotLog).toHaveBeenCalledWith('b1', file);
+    expect(page()).toContain('Reading access.log…');
+    expect(button('Upload a log file')!.disabled).toBe(true);
+
+    await act(async () =>
+      finish({ ok: true, records: 4, bots: 1, leftOut: 2, duplicate: false, rawCapped: false }),
+    );
+    const status = document.querySelector('[role="status"]')!.textContent;
+    expect(status).toContain('Read 4 lines of access.log: 1 AI bot request.');
+    expect(status).toContain(
+      '2 lines were left out: older than 7 days, for another site, or without a user agent.',
+    );
+    expect(button('Upload a log file')!.disabled).toBe(false);
+    // The connections, and the month's use, read again.
+    expect(getBotConnections).toHaveBeenCalledTimes(2);
+    expect(page()).not.toContain('traffic.bots.');
+  });
+
+  it('says when a file was read already, or the month’s log records are used up', async () => {
+    await render();
+    await act(async () => button('Connect')!.click());
+    uploadBotLog.mockResolvedValue({
+      ok: true,
+      records: 0,
+      bots: 0,
+      leftOut: 0,
+      duplicate: true,
+      rawCapped: false,
+    });
+    await pick('access.log');
+    expect(page()).toContain('access.log was read already: a file is read once.');
+    // Nothing was read: nothing to read again.
+    expect(getBotConnections).toHaveBeenCalledTimes(1);
+
+    uploadBotLog.mockResolvedValue({
+      ok: true,
+      records: 4,
+      bots: 0,
+      leftOut: 0,
+      duplicate: false,
+      rawCapped: true,
+    });
+    await pick('today.log');
+    expect(page()).toContain(
+      "This month's log records are used up, so today.log was counted but not read.",
+    );
+  });
+
+  it('says why a file was not read, with the limits', async () => {
+    await render();
+    await act(async () => button('Connect')!.click());
+    uploadBotLog.mockResolvedValue({ ok: false, code: 'too_large' });
+    await pick('huge.log');
+    expect(page()).toContain(
+      'That file is too large. Upload up to 4 MB and 20,000 lines at a time, or gzip it.',
+    );
+    uploadBotLog.mockResolvedValue({ ok: false, code: 'unreadable' });
+    await pick('photo.jpg');
+    expect(page()).toContain("That file isn't an access log or JSON lines, so nothing was read.");
+    expect(page()).not.toContain('huge.log');
+    for (const code of ['empty', 'plan', 'forbidden', 'workspace', 'busy', 'session', 'failed']) {
+      uploadBotLog.mockResolvedValue({ ok: false, code });
+      await pick();
+      expect(document.querySelector('[role="status"]')!.textContent).not.toContain('traffic.bots.');
+    }
+    // The same file can be picked again after a failure.
+    expect(document.querySelector<HTMLInputElement>('input[type="file"]')!.value).toBe('');
+  });
+
+  it('opens the upgrade dialog on a read-only workspace, or when the API says so', async () => {
+    openUpgrade.mockReset();
+    getBotConnections.mockResolvedValue(
+      info({
+        connections: [
+          { id: 'c1', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: hoursAgo(1) },
+        ],
+      }),
+    );
+    await render(true, true);
+    await act(async () => button('Manage')!.click());
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const click = vi.spyOn(input, 'click');
+    await act(async () => button('Upload a log file')!.click());
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Uploading bot logs needs a plan');
+    expect(click).not.toHaveBeenCalled();
+
+    // The demo brand, or a plan that ended a moment ago: the server's 402.
+    openUpgrade.mockReset();
+    uploadBotLog.mockResolvedValue({ ok: false, code: 'subscription' });
+    await pick();
+    expect(openUpgrade).toHaveBeenCalledExactlyOnceWith('Uploading bot logs needs a plan');
+    expect(document.querySelector('[role="status"]')!.textContent).toBe('');
+  });
+
+  it('opens the file picker for an admin or a manager, and keeps it from other members', async () => {
+    await render();
+    await act(async () => button('Connect')!.click());
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+    const click = vi.spyOn(input, 'click').mockImplementation(() => {});
+    await act(async () => button('Upload a log file')!.click());
+    expect(click).toHaveBeenCalledOnce();
+
+    act(() => root.unmount());
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    getBotConnections.mockResolvedValue(
+      info({
+        connections: [{ id: 'c1', kind: 'log_webhook', createdAt: 't', lastEventAt: null }],
+      }),
+    );
+    await render(false);
+    await act(async () => button('Manage')!.click());
+    expect(page()).toContain('Any server (webhook)');
+    expect(button('Upload a log file')!.disabled).toBe(true);
   });
 });

@@ -480,3 +480,65 @@ describe('AI bot access (SA-008)', () => {
     expect(panel()).toBeNull();
   });
 });
+
+describe('main text without JavaScript (SA-009)', () => {
+  const noJs = (evidence: Record<string, unknown>, status: AuditSignal['status'] = 'fail') =>
+    signal({
+      key: 'no-js-content',
+      category: 'structure',
+      label: 'Main text without JavaScript',
+      status,
+      evidence,
+      evidenceLevel: 'strong',
+    });
+  const opened = () => {
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>('button[aria-controls="signal-panel-no-js-content"]')
+        ?.click(),
+    );
+    return container.querySelector('#signal-panel-no-js-content')?.textContent ?? '';
+  };
+
+  it('says how much of the main text only JavaScript writes, and the first passages', () => {
+    render([], {
+      signals: [
+        noJs({
+          hiddenPercent: 42,
+          hiddenWords: 310,
+          mainWords: 740,
+          hiddenText: ['Step by step', 'Rinse the filter with hot water first…'],
+          readAs: 'gptbot',
+        }),
+      ],
+    });
+    const text = opened();
+    expect(text).toContain(
+      "Finding: 42% of the main text (310 of 740 words) appears only after JavaScript runs, so AI crawlers don't see it.",
+    );
+    expect(text).toContain(
+      'Not in the HTML GPTBot gets:“Step by step”“Rinse the filter with hot water first…”',
+    );
+  });
+
+  it('says all of it is there on a page rendered on the server', () => {
+    render([], {
+      signals: [
+        noJs(
+          { hiddenPercent: 0, hiddenWords: 0, mainWords: 740, hiddenText: [], readAs: 'claudebot' },
+          'pass',
+        ),
+      ],
+    });
+    const text = opened();
+    expect(text).toContain(
+      'Finding: All the main text is in the HTML ClaudeBot gets, before any JavaScript runs.',
+    );
+    expect(text).not.toContain('Not in the HTML');
+  });
+
+  it('shows no finding for a page it could not compare', () => {
+    render([], { signals: [noJs({ compared: false }, 'na')] });
+    expect(opened()).not.toContain('Finding');
+  });
+});

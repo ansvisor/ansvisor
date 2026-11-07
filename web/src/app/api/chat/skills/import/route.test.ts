@@ -25,7 +25,11 @@ vi.mock('@/lib/chat/engine', () => ({ driveRun: vi.fn(), stopChatRun: vi.fn() })
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: vi.fn(async () => ({ ok: true, id: 'request-1' })),
 }));
-vi.mock('@/lib/chat/skills/github', () => ({ readGithubSkill: github.read }));
+// The skill's own read is mocked; finding a skills.sh skill's folder (W4-29) is GitHub's real code.
+vi.mock('@/lib/chat/skills/github', async (original) => ({
+  ...(await original<typeof import('@/lib/chat/skills/github')>()),
+  readGithubSkill: github.read,
+}));
 vi.mock('@/lib/chat/run-api', async (original) => {
   const actual = await original<typeof import('@/lib/chat/run-api')>();
   return {
@@ -102,6 +106,7 @@ afterEach(() => {
   state.on = true;
   state.readOnly = false;
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 /** Imports the skill as the person, and answers what the route said. */
@@ -178,6 +183,90 @@ describe('POST /api/chat/skills/import', () => {
       status: 429,
       body: { ok: false, failure: 'busy', code: 'github_busy' },
     });
+  });
+
+  it('imports a skills.sh page’s skill from its folder, the page read by the API', async () => {
+    as(PEOPLE.admin);
+    vi.stubEnv('CRON_SECRET', 'chat-secret');
+    // The API's guarded read of the page (server/src/lib/skills-sh.js) and GitHub's
+    // listing, by URL: no network here.
+    let page: unknown = { source: 'https://github.com/acme/skills', skill: 'copy-editing' };
+    let pageStatus = 200;
+    const GH = 'https://api.github.com/repos/acme/skills';
+    const listing: Record<string, unknown> = {
+      [`${GH}/commits/HEAD`]: SHA,
+      [`${GH}/contents/skills/copy-editing?ref=${SHA}`]: [{ name: 'SKILL.md', type: 'file' }],
+      [`${GH}/git/trees/${SHA}?recursive=1`]: { tree: [] },
+    };
+    const api = vi.fn<(url: string, init?: RequestInit) => Promise<Response>>(async (url) => {
+      if (url.endsWith('/api/internal/chat/pages/skill-source')) {
+        return Response.json(page, { status: pageStatus });
+      }
+      const body = listing[url];
+      if (body === undefined) return new Response('Not Found', { status: 404 });
+      return new Response(typeof body === 'string' ? body : JSON.stringify(body));
+    });
+    vi.stubGlobal('fetch', api);
+    github.read.mockResolvedValue({
+      ok: true,
+      value: {
+        files: [{ path: 'SKILL.md', bytes: strToU8(SKILL) }],
+        sourceUrl: `https://github.com/acme/skills/tree/${SHA}/skills/copy-editing`,
+        commitSha: SHA,
+      },
+    });
+    const { body } = await imported(link('https://skills.sh/acme/skills/copy-editing'));
+    expect(body).toMatchObject({ ok: true, skill: { name: 'copy-editing' } });
+    expect(JSON.parse(String(api.mock.calls[0][1]?.body))).toEqual({
+      url: 'https://skills.sh/acme/skills/copy-editing',
+      orgId: ORG,
+    });
+    // The skill's folder, pinned to the commit, goes to the GitHub import as any link.
+    expect(github.read).toHaveBeenCalledWith(
+      `https://github.com/acme/skills/tree/${SHA}/skills/copy-editing`,
+    );
+    expect(skills()[0]).toMatchObject({
+      source_url: `https://github.com/acme/skills/tree/${SHA}/skills/copy-editing`,
+      commit_sha: SHA,
+    });
+
+    // No skill of that name in the repository, no GitHub link, a timeout: nothing is imported.
+    github.read.mockClear();
+    page = { source: 'https://github.com/acme/skills', skill: 'grill-me' };
+    expect(await imported(link('https://www.skills.sh/acme/skills/grill-me'))).toMatchObject({
+      status: 400,
+      body: {
+        ok: false,
+        code: 'skill_not_in_repo',
+        error: 'This repository has no skill named grill-me.',
+      },
+    });
+    page = { source: null, skill: null };
+    expect(await imported(link('https://www.skills.sh/acme/skills/x'))).toMatchObject({
+      status: 400,
+      body: {
+        ok: false,
+        code: 'skills_sh_no_github',
+        error: "This page doesn't link to the skill's source on GitHub.",
+      },
+    });
+    page = { code: 'timeout' };
+    pageStatus = 504;
+    expect(await imported(link('https://skills.sh/acme/skills/x'))).toMatchObject({
+      status: 504,
+      body: { code: 'page_timeout', error: 'The page took too long to answer.' },
+    });
+    expect(github.read).not.toHaveBeenCalled();
+
+    // Another directory isn't read: it stays a link that isn't GitHub's.
+    api.mockClear();
+    github.read.mockResolvedValue({ ok: false, refusal: { code: 'github_url' } });
+    expect(await imported(link('https://skills.marketing/acme/copy-editing'))).toMatchObject({
+      status: 400,
+      body: { code: 'github_url' },
+    });
+    expect(api).not.toHaveBeenCalled();
+    expect(skills()).toHaveLength(1);
   });
 
   it('says why something can’t be imported, and keeps nothing', async () => {

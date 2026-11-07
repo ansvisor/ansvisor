@@ -35,6 +35,21 @@ export const CHAT_UPLOAD_TYPES = {
 } as const;
 export type ChatUploadType = keyof typeof CHAT_UPLOAD_TYPES;
 
+/** A file a message was sent with, as its bubble shows it (thread.ts, the composer's send). */
+export interface SentFile {
+  /** Its attachment's id: an image's thumbnail is read through its route. */
+  id: string;
+  name: string;
+  mimeType: ChatUploadType;
+  sizeBytes: number;
+}
+
+/** Whether an attachment shows as a picture: a PNG, JPEG or WebP. */
+export const isImageUpload = (type: string) => type.startsWith('image/');
+
+/** Where a sent image is read from for its thumbnail (GET /api/chat/uploads/{id}). */
+export const sentImageSrc = (id: string) => `/api/chat/uploads/${encodeURIComponent(id)}`;
+
 /** The file picker's accept list. */
 export const UPLOAD_ACCEPT = Object.entries(CHAT_UPLOAD_TYPES)
   .flatMap(([type, { ext }]) => [type, ...ext.map((e) => `.${e}`)])

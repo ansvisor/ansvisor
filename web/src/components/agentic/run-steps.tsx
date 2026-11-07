@@ -7,6 +7,7 @@ import type { ChatStep } from '@/lib/chat/events';
 import { cn } from '@/lib/utils';
 import { DoneTick } from './done-tick';
 import { ListDot } from './list-dot';
+import { RunParts } from './run-parts';
 import { StepList, stepRowFrom } from './step-list';
 
 /** Where a run is, for its step header (CHAT-03 items 9–12, 18–19). */
@@ -84,7 +85,7 @@ export function RunSteps({
     title = single.detail ? `${single.label} · ${single.detail}` : single.label;
     end =
       single.rowCount !== undefined
-        ? t(single.scope?.unit === 'items' ? 'items' : 'rows', { count: single.rowCount })
+        ? t(single.scope?.unit ?? 'rows', { count: single.rowCount })
         : '';
   } else if (status === 'done') {
     title = t('workedFor', { duration });
@@ -137,7 +138,13 @@ export function RunSteps({
         {announce}
       </p>
       <div id={listId} hidden={!open}>
-        <StepList rows={ordered.map((step) => stepRowFrom(step))} className="pl-1" />
+        <StepList
+          rows={ordered.map((step) => ({
+            ...stepRowFrom(step),
+            ...(step.parts?.length ? { below: <RunParts parts={step.parts} /> } : {}),
+          }))}
+          className="pl-1"
+        />
       </div>
     </div>
   );

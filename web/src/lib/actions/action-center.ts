@@ -475,6 +475,28 @@ export async function setActionDueDate(
   await logEvent(supabase, actionId, 'due_date_set', { dueDate });
 }
 
+/**
+ * The group a product pages action works on (G21, AC plan P-6): the first
+ * 3, 5 or 10 of its products, its pages and count read again
+ * (set_product_group_size, 00493). Throws when it can't be changed: a
+ * closed or deleted action, or another kind.
+ */
+export async function setProductGroupSize(
+  brandId: string,
+  actionId: string,
+  size: number,
+): Promise<void> {
+  await assertWritable({ brandId });
+  if (![3, 5, 10].includes(size)) throw new Error('A group is 3, 5 or 10 products');
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('set_product_group_size', {
+    p_action_id: actionId,
+    p_size: size,
+  });
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('The group can’t be changed');
+}
+
 export async function updateTaskStatus(
   brandId: string,
   actionId: string,

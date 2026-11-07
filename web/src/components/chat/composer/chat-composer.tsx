@@ -20,6 +20,7 @@ import type { ChatMode } from '@/lib/chat/precedence';
 import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import { MAX_REFERENCES, type ChatReference } from '@/lib/chat/references';
 import {
+  IMAGE_SHORTCUT,
   keepsTrigger,
   shortcutCommand,
   type Shortcut,
@@ -30,6 +31,7 @@ import {
   UPLOAD_ACCEPT,
   uploadProblem,
   uploadTypeOf,
+  type SentFile,
   type UploadProblem,
 } from '@/lib/chat/uploads';
 import { cn } from '@/lib/utils';
@@ -91,6 +93,8 @@ export interface ComposerSend {
   references: ChatReference[];
   /** The attachments' ids (chat_uploads), each up and ready. */
   attachments: string[];
+  /** The same files as the question's bubble shows them, while it waits for the saved chat. */
+  files?: SentFile[];
   /**
    * The shortcut picked from the / menu (CHAT-08 item 4), while the text
    * still starts with its trigger words: the run uses its data plan.
@@ -198,6 +202,7 @@ export function ChatComposer({
   onOpenModel,
   modelChoice,
   onModelChoice,
+  imageModel = null,
   onSaveKey,
   keyForm = false,
   className,
@@ -260,6 +265,12 @@ export function ChatComposer({
    */
   modelChoice?: ChatModelChoice;
   onModelChoice?: (choice: ChatModelChoice) => void;
+  /**
+   * The image model the chat's latest answer picked or made images with
+   * (CHAT-15 item 18, W4-08b): the model button reads "Image · {model}"
+   * for that task; null for the chat model.
+   */
+  imageModel?: string | null;
   /**
    * Save securely on the pasted-key line: the text goes to the page's own
    * key form, never to Chat. Without it, only Remove shows.
@@ -335,9 +346,13 @@ export function ChatComposer({
         }
       : undefined);
   const uploading = files.some((f) => f.status === 'uploading');
-  const failedFiles = files.some((f) => f.status === 'failed');
-  // The ghost shows in an empty box, not while a run answers or the box is off.
-  const ghostShown = !!ghost && text === '' && !running && !disabled;
+  const failed = files.filter((f) => f.status === 'failed');
+  const failedFiles = failed.length > 0;
+  const readyFiles = files.filter((f) => f.status === 'ready' && f.id);
+  // Words, or files alone: an image with no text is a message.
+  const sendable = hasText || readyFiles.length > 0;
+  // The ghost shows in an empty box, not while a run answers, the box is off or files wait in it.
+  const ghostShown = !!ghost && text === '' && files.length === 0 && !running && !disabled;
   const ghostId = useId();
 
   // The box grows with its lines, from its rows up to MAX_HEIGHT, then scrolls.
@@ -428,6 +443,19 @@ export function ChatComposer({
           },
         ]
       : []),
+    // Create an image (mockup #plusmenu): the /image shortcut's first words in the box, for
+    // those who may make images (Admins and Managers; generate_image's role).
+    ...(readOnly
+      ? []
+      : [
+          {
+            key: 'image' as const,
+            mark: '◫',
+            label: t('plus.image'),
+            note: t('plus.imageNote'),
+            onPick: () => pickShortcut(IMAGE_SHORTCUT),
+          },
+        ]),
     {
       key: 'connect',
       mark: '⛓',
@@ -625,7 +653,9 @@ export function ChatComposer({
 
   async function submit(steer: boolean) {
     const message = text.trim();
-    if (!message || sending || disabled || uploading || looksLikeApiKey(message)) return;
+    // A file that didn't upload holds the message: it never goes without it (its line says so).
+    if (!sendable || sending || disabled || uploading || failedFiles) return;
+    if (looksLikeApiKey(message)) return;
     // "Use my OpenAI key": the card answers it, and the key never goes to Chat (W4-06).
     // The message stays in the box, and a second send sends it, so a misread loses nothing.
     if (keyForm && asksToAddKey(message) && keyOfferedFor !== message) {
@@ -637,6 +667,7 @@ export function ChatComposer({
     if (!handler) return;
     const sentRefs = refs;
     const sentFiles = files;
+    const ready = sentFiles.filter((f) => f.status === 'ready' && f.id);
     const sentShortcut = shortcut && keepsTrigger(message, shortcut.trigger) ? shortcut : null;
     setSending(true);
     setText('');
@@ -655,7 +686,17 @@ export function ChatComposer({
       const sent = await handler(message, {
         context: chips,
         references: sentRefs,
-        attachments: sentFiles.flatMap((f) => (f.status === 'ready' && f.id ? [f.id] : [])),
+        attachments: ready.map((f) => f.id!),
+        ...(ready.length > 0
+          ? {
+              files: ready.map((f) => ({
+                id: f.id!,
+                name: f.file.name,
+                mimeType: uploadTypeOf(f.file)!,
+                sizeBytes: f.file.size,
+              })),
+            }
+          : {}),
         ...(sentShortcut ? { shortcutId: sentShortcut.id } : {}),
       });
       if (sent === false) restore();
@@ -883,7 +924,7 @@ export function ChatComposer({
                 coarse: window.matchMedia?.('(pointer: coarse)')?.matches ?? false,
                 running,
                 stoppable: answering,
-                hasText,
+                hasText: sendable,
                 canSteer: !!onSteer,
                 ghost: ghostShown,
               });
@@ -982,7 +1023,7 @@ export function ChatComposer({
                 type="button"
                 data-action="composer.send"
                 onClick={() => void submit(false)}
-                disabled={!hasText || sending || disabled || uploading || keyInText}
+                disabled={!sendable || sending || disabled || uploading || failedFiles || keyInText}
                 aria-label={t('send')}
                 title={t('send')}
                 className="flex size-8 items-center justify-center rounded-[10px] bg-foreground text-background disabled:cursor-not-allowed disabled:opacity-35"
@@ -1025,22 +1066,29 @@ export function ChatComposer({
           {t('voice.denied')}
         </p>
       )}
-      {(fileProblem || failedFiles) && (
+      {fileProblem && (
+        <p role="alert" className="mt-1.5 px-0.5 text-xs text-red-700 dark:text-red-400">
+          {t(`files.${fileProblem}`)}
+        </p>
+      )}
+      {/* Send waits while a file didn't upload: × takes it off, Retry sends it again. */}
+      {failedFiles && (
         <p
           role="alert"
+          data-slot="composer-upload-failed"
           className="mt-1.5 flex flex-wrap items-center gap-2 px-0.5 text-xs text-red-700 dark:text-red-400"
         >
-          {fileProblem ? t(`files.${fileProblem}`) : t('files.failed')}
-          {!fileProblem && failedFiles && (
-            <button
-              type="button"
-              data-action="composer.retryUpload"
-              onClick={retryFiles}
-              className="font-medium underline underline-offset-2"
-            >
-              {t('files.retry')}
-            </button>
-          )}
+          {failed.length === 1
+            ? t('files.failed', { name: failed[0].file.name })
+            : t('files.failedMany', { count: failed.length })}
+          <button
+            type="button"
+            data-action="composer.retryUpload"
+            onClick={retryFiles}
+            className="font-medium underline underline-offset-2"
+          >
+            {t('files.retry')}
+          </button>
         </p>
       )}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 px-0.5 text-[11.5px] text-muted-foreground">
@@ -1074,7 +1122,10 @@ export function ChatComposer({
                 aria-expanded={modelOpen}
                 className="rounded-[7px] px-1.5 py-0.5 text-foreground hover:bg-muted aria-expanded:bg-muted"
               >
-                {chosenLabel ?? <ModelAuto />} ▾
+                {imageModel
+                  ? t('modelImage', { model: imageModel })
+                  : (chosenLabel ?? <ModelAuto />)}{' '}
+                ▾
               </button>
               {modelOpen && (
                 <ModelMenu

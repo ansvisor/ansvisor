@@ -181,18 +181,22 @@ describe('ChatSettings', () => {
     expect(saved.patches).toEqual([{ answerLanguage: 'tr' }, { answerLanguage: null }]);
   });
 
-  it('keeps where pages open: ask, in chat or the Content Editor, no Open here yet (W4-11)', async () => {
+  it('keeps where pages open: ask, in chat, here or the Content Editor (W4-11, W4-15b)', async () => {
     await render();
     const choices = [...action('chatSettings.pageOpen')];
     expect(choices.map((el) => el.textContent)).toEqual([
       'Ask each time',
       'Keep in chat',
+      'Open here',
       'Content Editor',
     ]);
     expect(choices[0].getAttribute('aria-checked')).toBe('true');
     await act(async () => choices[2].click());
-    expect(saved.patches).toEqual([{ pageOpen: 'editor' }]);
+    expect(saved.patches).toEqual([{ pageOpen: 'here' }]);
     expect(action('chatSettings.pageOpen')[2].getAttribute('aria-checked')).toBe('true');
+    await act(async () => action('chatSettings.pageOpen')[3].click());
+    expect(saved.patches).toEqual([{ pageOpen: 'here' }, { pageOpen: 'editor' }]);
+    expect(action('chatSettings.pageOpen')[3].getAttribute('aria-checked')).toBe('true');
     expect(host.textContent).toContain('Where pages open');
   });
 

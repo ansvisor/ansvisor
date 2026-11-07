@@ -559,6 +559,8 @@ async function chatRunOf(agentRunId: string): Promise<string | null> {
     .from('chat_runs')
     .select('id, created_at')
     .eq('conversation_id', (convo as { id: string }).id)
+    // Its parts (CHAT-27) answer to it: never the agent run's chat run.
+    .is('parent_run_id', null)
     .order('created_at', { ascending: false })
     .limit(1);
   if (runError) throw new Error(`Could not read the agent run's chat: ${runError.message}`);
