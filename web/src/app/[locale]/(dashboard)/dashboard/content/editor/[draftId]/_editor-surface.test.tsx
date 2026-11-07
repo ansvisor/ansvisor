@@ -102,7 +102,7 @@ describe('the editor page', () => {
 
     expect(getContentDraft).toHaveBeenCalledWith('d1');
     const frame = container.firstElementChild!;
-    expect(frame.className).toBe('-m-6 flex h-[calc(100vh-4rem)] flex-col md:h-screen');
+    expect(frame.className).toBe('-m-6 flex h-[calc(100%+3rem)] flex-col');
     // The surface fills the frame; the editor opens in it as the editor's own page.
     const surface = frame.firstElementChild!;
     expect(frame.children).toHaveLength(1);
