@@ -27,6 +27,8 @@ export interface ForYouNowProps {
   lostPages: number | null;
   /** Drafts marked ready to publish; null until read. */
   readyDrafts: number | null;
+  /** The next Weekly report run's weekday in the person's time zone; null when none is due. */
+  weeklyReportDay: string | null;
   /** The person may change things (Admin, Manager): the jobs that write, and More. */
   canChange: boolean;
   /** A chat is starting: the chips wait. */
@@ -62,11 +64,12 @@ interface Job {
  * · 2 pages, Ready to publish · 2 — then More ▾, the composer's / menu. A
  * job with nothing to do has no chip. Each asks in its skill's words
  * (W2-04's /tasks, /winback, /publish): Chat prepares, the person closes
- * the tasks, and going live is always their click. Someone who can't change
+ * the tasks, and going live is always their click. Weekly report shows the
+ * day its own recurring /report job runs next. Someone who can't change
  * things (Analyst, Agency partner) gets the jobs that only read — Win back
  * as "which pages, and what AI cites instead" — and no More, as their
- * composer has no / menu. Quality pass and Weekly report wait for their
- * data: drafts' quality scores aren't kept, and schedules come in Wave 3.
+ * composer has no / menu. Quality pass waits for its data: drafts' quality
+ * scores aren't kept.
  *
  * With a focus picked (CHAT-24 §4), the chips are its areas' shortcuts,
  * taken in turn so every area shows (CHAT-08 v2's six chips, Ask anything
@@ -79,6 +82,7 @@ export function ForYouNow({
   dueTasks,
   lostPages,
   readyDrafts,
+  weeklyReportDay,
   canChange,
   starting,
   onAsk,
@@ -117,6 +121,14 @@ export function ForYouNow({
           message: t('publishMessage', { count: readyDrafts }),
         }
       : null;
+  const weeklyReport: Job | null = weeklyReportDay
+    ? {
+        key: 'weeklyReport',
+        skill: 'report',
+        label: t('weeklyReport', { day: weeklyReportDay }),
+        message: t('weeklyReportMessage'),
+      }
+    : null;
   /** A focus shortcut's chip, or null for a job with nothing to do. */
   const shortcutJob = (shortcut: FocusShortcut, area: FocusArea): Job | null => {
     const job =
@@ -126,13 +138,19 @@ export function ForYouNow({
           ? winBack
           : shortcut === 'publish'
             ? publish
-            : {
-                key: shortcut,
-                skill: SHORTCUT_SKILL[shortcut] ?? shortcut,
-                label: tf(shortcut),
-                message: tf(`${shortcut}Message`),
-                shortcutId: SHORTCUT_PLAYBOOK[shortcut],
-              };
+            : shortcut === 'weeklyReport'
+              ? weeklyReport && {
+                  ...weeklyReport,
+                  label: tf('weeklyReport', { day: weeklyReportDay ?? '' }),
+                  message: tf('weeklyReportMessage'),
+                }
+              : {
+                  key: shortcut,
+                  skill: SHORTCUT_SKILL[shortcut] ?? shortcut,
+                  label: tf(shortcut),
+                  message: tf(`${shortcut}Message`),
+                  shortcutId: SHORTCUT_PLAYBOOK[shortcut],
+                };
     return job && { ...job, area };
   };
   // Ask anything, and What's new when it shows, take their places among the six.
@@ -148,7 +166,7 @@ export function ForYouNow({
           room,
           (job) => job.key,
         )
-      : [tasks, winBack, publish].filter((job) => job !== null).slice(0, room);
+      : [tasks, winBack, publish, weeklyReport].filter((job) => job !== null).slice(0, room);
 
   return (
     <div className="mb-4">

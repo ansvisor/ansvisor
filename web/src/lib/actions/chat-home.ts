@@ -10,6 +10,7 @@ import { parseLocation, regionLabel } from '@/lib/region';
 import { readAllRpcRows } from '@/lib/supabase/rpc-pages';
 import { pageKey } from '@/lib/content/sources';
 import { menuOfProfile, readRoleHidden, type MenuProfile } from '@/lib/menu-access';
+import { effectiveTimeZone } from '@/lib/time-zone';
 import { OPEN_SIGNAL_STATUSES } from '@/lib/signals/registry';
 import { sinceMoves, sincePeriods, type SinceYouLeft } from '@/lib/chat/since';
 import { LEFT_OUT_PLATFORMS } from '@/lib/mcp/why';
@@ -22,6 +23,8 @@ import { LEFT_OUT_PLATFORMS } from '@/lib/mcp/why';
  *   - Win back citations: the pages the brand's open lost-citation signals
  *     name (their AC-001 evidence; one without evidence names none).
  *   - Ready to publish: the brand's drafts marked ready, not archived.
+ *   - Weekly report: the person's next enabled recurring /report job for the
+ *     brand, within the next seven days.
  * A job whose menu section an Admin took off the person's menu (Menu access,
  * 00374) isn't counted: its chip doesn't show. Read as the person, once,
  * then the counts together. Behind CHAT_AGENTIC; never throws (#1777):
@@ -29,7 +32,13 @@ import { LEFT_OUT_PLATFORMS } from '@/lib/mcp/why';
  */
 
 export type HomeShortcuts =
-  | { ok: true; dueTasks: number; lostPages: number; readyDrafts: number }
+  | {
+      ok: true;
+      dueTasks: number;
+      lostPages: number;
+      readyDrafts: number;
+      weeklyReportDay: string | null;
+    }
   | { ok: false };
 
 /** The Action Center statuses still open. */
@@ -40,6 +49,7 @@ const JOB_SECTIONS = {
   dueTasks: 'action-center',
   lostPages: 'citations',
   readyDrafts: 'content',
+  weeklyReport: 'reports',
 } as const;
 
 /** Signals read a page at a time; a brand has one per prompt at most. */
@@ -51,6 +61,8 @@ const input = z.object({
   brandId: z.guid(),
   /** The week's last day, YYYY-MM-DD, in the person's own time zone. */
   through: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  /** The person's browser zone when their account is set to Automatic. */
+  browserZone: z.string().max(64).nullable().optional(),
 });
 
 /** A page as the lost-citation evidence keys it (server signals/lost-citation-evidence.js). */
@@ -93,9 +105,41 @@ async function countOf(
   return count ?? 0;
 }
 
-export async function readHomeShortcuts(brandId: string, through: string): Promise<HomeShortcuts> {
+async function nextWeeklyReportDay(
+  supabase: Client,
+  brandId: string,
+  orgId: string,
+  userId: string,
+  now: Date,
+  timeZone: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('chat_schedules')
+    .select('next_run_at')
+    .eq('organization_id', orgId)
+    .eq('brand_id', brandId)
+    .eq('created_by', userId)
+    .eq('kind', 'recurring')
+    .eq('skill_name', 'report')
+    .eq('enabled', true)
+    .gte('next_run_at', now.toISOString())
+    .lte('next_run_at', new Date(now.getTime() + 7 * 86_400_000).toISOString())
+    .order('next_run_at', { ascending: true })
+    .limit(1);
+  if (error) throw new Error(`chat_schedules: ${error.message}`);
+  const nextRunAt = (data?.[0] as { next_run_at?: string | null } | undefined)?.next_run_at;
+  return nextRunAt
+    ? new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone }).format(new Date(nextRunAt))
+    : null;
+}
+
+export async function readHomeShortcuts(
+  brandId: string,
+  through: string,
+  browserZone?: string | null,
+): Promise<HomeShortcuts> {
   try {
-    const parsed = input.safeParse({ brandId, through });
+    const parsed = input.safeParse({ brandId, through, browserZone });
     if (!parsed.success) return { ok: false };
     const supabase = await createClient();
     const {
@@ -105,7 +149,7 @@ export async function readHomeShortcuts(brandId: string, through: string): Promi
     const { data: profile } = await supabase
       .from('profiles')
       .select(
-        'organization_id, role, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus',
+        'organization_id, role, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus, time_zone',
       )
       .eq('id', user.id)
       .maybeSingle();
@@ -117,7 +161,7 @@ export async function readHomeShortcuts(brandId: string, through: string): Promi
     const shown = (job: keyof typeof JOB_SECTIONS) => !hidden.has(JOB_SECTIONS[job]);
 
     const { brandId: brand, through: weekEnd } = parsed.data;
-    const [dueTasks, lostPages, readyDrafts] = await Promise.all([
+    const [dueTasks, lostPages, readyDrafts, weeklyReportDay] = await Promise.all([
       shown('dueTasks')
         ? countOf(
             supabase
@@ -141,8 +185,18 @@ export async function readHomeShortcuts(brandId: string, through: string): Promi
             'content_drafts',
           )
         : 0,
+      shown('weeklyReport')
+        ? nextWeeklyReportDay(
+            supabase,
+            brand,
+            orgId,
+            user.id,
+            new Date(),
+            effectiveTimeZone(profile.time_zone, parsed.data.browserZone),
+          )
+        : null,
     ]);
-    return { ok: true, dueTasks, lostPages, readyDrafts };
+    return { ok: true, dueTasks, lostPages, readyDrafts, weeklyReportDay };
   } catch (error) {
     console.error('[chat-home] could not count the shortcuts:', error);
     return { ok: false };

@@ -33,7 +33,7 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (table: string) => {
       const chain: Record<string, unknown> = {};
       let page = 0;
-      for (const name of ['select', 'eq', 'in', 'lte', 'gte', 'is', 'order', 'range']) {
+      for (const name of ['select', 'eq', 'in', 'lte', 'gte', 'is', 'order', 'range', 'limit']) {
         chain[name] = (...args: unknown[]) => {
           db.calls.push([table, name, ...args]);
           if (name === 'range') page = (args[0] as number) / 1000;
@@ -80,6 +80,7 @@ beforeEach(() => {
     menu_shown: [],
     menu_hidden: [],
     can_manage_menus: false,
+    time_zone: null,
   };
   db.roleHidden = [];
   db.calls = [];
@@ -109,6 +110,7 @@ describe('readHomeShortcuts', () => {
       dueTasks: 3,
       lostPages: 2,
       readyDrafts: 2,
+      weeklyReportDay: null,
     });
     const of = (table: string) => db.calls.filter(([t]) => t === table).map(([, ...c]) => c);
     expect(of('actions')).toEqual([
@@ -131,6 +133,46 @@ describe('readHomeShortcuts', () => {
       ['eq', 'brand_id', BRAND],
       ['eq', 'status', 'ready'],
       ['is', 'archived_at', null],
+    ]);
+    expect(of('chat_schedules')).toEqual([
+      ['select', 'next_run_at'],
+      ['eq', 'organization_id', 'org-1'],
+      ['eq', 'brand_id', BRAND],
+      ['eq', 'created_by', 'user-1'],
+      ['eq', 'kind', 'recurring'],
+      ['eq', 'skill_name', 'report'],
+      ['eq', 'enabled', true],
+      ['gte', 'next_run_at', expect.any(String)],
+      ['lte', 'next_run_at', expect.any(String)],
+      ['order', 'next_run_at', { ascending: true }],
+      ['limit', 1],
+    ]);
+  });
+
+  it("finds the person's next report day in their saved time zone", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-11-01T10:00:00.000Z'));
+    db.profile.time_zone = 'America/Los_Angeles';
+    db.answers.chat_schedules = {
+      data: [{ next_run_at: '2026-11-02T02:00:00.000Z' }],
+      error: null,
+    };
+    expect(await readHomeShortcuts(BRAND, '2026-11-01', 'Europe/Istanbul')).toMatchObject({
+      ok: true,
+      weeklyReportDay: 'Sun',
+    });
+    expect(db.calls).toContainEqual(['chat_schedules', 'eq', 'created_by', 'user-1']);
+    expect(db.calls).toContainEqual([
+      'chat_schedules',
+      'gte',
+      'next_run_at',
+      '2026-11-01T10:00:00.000Z',
+    ]);
+    expect(db.calls).toContainEqual([
+      'chat_schedules',
+      'lte',
+      'next_run_at',
+      '2026-11-08T10:00:00.000Z',
     ]);
   });
 
@@ -155,9 +197,14 @@ describe('readHomeShortcuts', () => {
       dueTasks: 3,
       lostPages: 0,
       readyDrafts: 0,
+      weeklyReportDay: null,
     });
     expect(tables()).not.toContain('content_drafts');
     expect(tables()).not.toContain('signals');
+    db.profile.menu_hidden = ['reports'];
+    db.calls = [];
+    expect(await readHomeShortcuts(BRAND, '2026-11-01')).toMatchObject({ ok: true });
+    expect(tables()).not.toContain('chat_schedules');
   });
 
   it('takes the demo brand’s id, made by hand and not an RFC 4122 one', async () => {
@@ -182,6 +229,9 @@ describe('readHomeShortcuts', () => {
     expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
     db.answers.content_drafts = { count: 2, error: null };
     db.answers.signals = { data: null, error: { message: 'nope' } };
+    expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
+    db.answers.signals = { data: [], error: null };
+    db.answers.chat_schedules = { data: null, error: { message: 'nope' } };
     expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
     logged.mockRestore();
   });

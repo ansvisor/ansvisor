@@ -29,6 +29,7 @@ import {
 } from '@/lib/chat/focus-home';
 import { dayPartOf, endOfWeek } from '@/lib/chat/home';
 import { formatNumber } from '@/lib/format';
+import { viewerTimeZone } from '@/lib/time-zone';
 import type { ShortcutId } from '@/lib/chat/shortcuts';
 import type { SinceMove, SinceYouLeft } from '@/lib/chat/since';
 import { platformName } from '@/lib/signals/names';
@@ -63,6 +64,8 @@ export interface ChatHomeViewProps {
   /** Pages whose citations the brand lost, and drafts ready to publish; null until read. */
   lostPages: number | null;
   readyDrafts: number | null;
+  /** The next Weekly report run's weekday in the person's time zone; null when none is due. */
+  weeklyReportDay: string | null;
   /** The person may change things: the jobs that write show, and More. */
   canChange: boolean;
   /**
@@ -354,6 +357,7 @@ export function ChatHomeView({
   dueTasks,
   lostPages,
   readyDrafts,
+  weeklyReportDay,
   canChange,
   onAsk,
   starting,
@@ -464,6 +468,7 @@ export function ChatHomeView({
             dueTasks={dueTasks}
             lostPages={lostPages}
             readyDrafts={readyDrafts}
+            weeklyReportDay={weeklyReportDay}
             canChange={canChange}
             starting={starting}
             onAsk={onAsk}
@@ -557,6 +562,7 @@ export function ChatHome({
     dueTasks: number;
     lostPages: number;
     readyDrafts: number;
+    weeklyReportDay: string | null;
   } | null>(null);
   const [since, setSince] = useState<{ brandId: string; since: SinceYouLeft } | null>(null);
   const [words, setWords] = useState<{
@@ -578,11 +584,12 @@ export function ChatHome({
   const items = useMemo(() => inboxItems(chats), [chats]);
   const needsYou = items.filter((c) => c.state === 'needsYou').length;
   const weekEnd = now ? endOfWeek(now) : null;
+  const browserZone = viewerTimeZone();
 
   useEffect(() => {
     if (plain || !brandId || !weekEnd) return;
     let current = true;
-    void readHomeShortcuts(brandId, weekEnd)
+    void readHomeShortcuts(brandId, weekEnd, browserZone)
       .then((result) => {
         if (!current) return;
         setCounts(
@@ -592,6 +599,7 @@ export function ChatHome({
                 dueTasks: result.dueTasks,
                 lostPages: result.lostPages,
                 readyDrafts: result.readyDrafts,
+                weeklyReportDay: result.weeklyReportDay,
               }
             : null,
         );
@@ -602,7 +610,7 @@ export function ChatHome({
     return () => {
       current = false;
     };
-  }, [plain, brandId, weekEnd]);
+  }, [plain, brandId, weekEnd, browserZone]);
 
   useEffect(() => {
     if (plain || !brandId) return;
@@ -722,6 +730,7 @@ export function ChatHome({
       dueTasks={mine ? mine.dueTasks : null}
       lostPages={mine ? mine.lostPages : null}
       readyDrafts={mine ? mine.readyDrafts : null}
+      weeklyReportDay={mine ? mine.weeklyReportDay : null}
       canChange={canManage}
       onAsk={(message, shortcutId) => void startChat(message, shortcutId)}
       starting={starting}

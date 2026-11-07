@@ -12,8 +12,8 @@ import type { SinceYouLeft } from '@/lib/chat/since';
  * Chat Home and the Inbox (CHAT-01 items 10–12; mockup #s-home, #s-inbox):
  * the greeting by the person's clock, what needs them as a link to the
  * Inbox or "All caught up."; "For you now" (CHAT-08 v2): Ask anything
- * always, More and the jobs that write for someone who can change things, a
- * job's chip only with something to do, its count from the brand's data,
+ * always, More and jobs with something to do, including a scheduled Weekly
+ * report with its next weekday,
  * read again for another brand, which starts the chat in its skill's words
  * and opens it; the Inbox lists needs you, running and unread results with
  * Review, Watch and Open.
@@ -129,7 +129,13 @@ beforeEach(() => {
   gate.openUpgrade.mockClear();
   list.chats = [];
   due.brand = BRAND;
-  due.answer = { ok: true, dueTasks: 3, lostPages: 0, readyDrafts: 0 };
+  due.answer = {
+    ok: true,
+    dueTasks: 3,
+    lostPages: 0,
+    readyDrafts: 0,
+    weeklyReportDay: null,
+  };
   due.read.mockReset().mockImplementation(async () => due.answer);
   due.since = null;
   forYou.read.mockReset().mockResolvedValue({ ok: true, agents: [], canTurnOn: true });
@@ -165,6 +171,7 @@ const view = (props: Partial<Parameters<typeof ChatHomeView>[0]> = {}) => (
     dueTasks={null}
     lostPages={null}
     readyDrafts={null}
+    weeklyReportDay={null}
     canChange
     onAsk={() => undefined}
     starting={false}
@@ -244,13 +251,30 @@ describe('ChatHomeView', () => {
 
   it('gives someone who can’t change things the jobs that read, and no More', async () => {
     const onAsk = vi.fn();
-    await render(view({ dueTasks: 4, lostPages: 2, readyDrafts: 1, canChange: false, onAsk }));
+    await render(
+      view({
+        dueTasks: 4,
+        lostPages: 2,
+        readyDrafts: 1,
+        weeklyReportDay: 'Mon',
+        canChange: false,
+        onAsk,
+      }),
+    );
     expect(host.querySelector('[data-action="home.moreShortcuts"]')).toBeNull();
     const chips = [...host.querySelectorAll<HTMLElement>('[data-action="home.runShortcut"]')];
-    expect(chips.map((b) => b.dataset.skill)).toEqual(['winback']);
+    expect(chips.map((b) => [b.dataset.skill, b.textContent])).toEqual([
+      ['winback', 'Win back citations 2 pages'],
+      ['report', 'Weekly report · Mon'],
+    ]);
     await act(async () => chips[0].click());
     expect(onAsk).toHaveBeenCalledWith(
       'Show the 2 pages that lost citations and what AI cites instead.',
+      undefined,
+    );
+    await act(async () => chips[1].click());
+    expect(onAsk).toHaveBeenLastCalledWith(
+      "/report Write this week's report on our AI visibility.",
       undefined,
     );
   });
@@ -396,7 +420,11 @@ describe('ChatHome', () => {
     await render(<ChatHome firstName="Alex" />);
     await act(async () => undefined);
     expect(text()).toContain('Complete tasks 3 due');
-    expect(due.read).toHaveBeenCalledWith(BRAND, expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/));
+    expect(due.read).toHaveBeenCalledWith(
+      BRAND,
+      expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+      expect.any(String),
+    );
     await act(async () => (host.querySelector('[data-skill="tasks"]') as HTMLElement).click());
     expect(calls[0]).toMatchObject({
       url: '/api/chat/runs',
@@ -407,6 +435,36 @@ describe('ChatHome', () => {
       },
     });
     expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/cccccccc-0000-4000-8000-000000000001');
+  });
+
+  it('starts the Weekly report chip in a new chat', async () => {
+    due.answer = {
+      ok: true,
+      dueTasks: 0,
+      lostPages: 0,
+      readyDrafts: 0,
+      weeklyReportDay: 'Mon',
+    };
+    const calls: { url: string; body: unknown }[] = [];
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init?.body)) });
+      return new Response('', {
+        status: 200,
+        headers: { 'x-chat-conversation': 'cccccccc-0000-4000-8000-000000000002' },
+      });
+    }) as unknown as typeof fetch;
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(text()).toContain('Weekly report · Mon');
+    await act(async () => (host.querySelector('[data-skill="report"]') as HTMLElement).click());
+    expect(calls[0]).toMatchObject({
+      url: '/api/chat/runs',
+      body: {
+        message: "/report Write this week's report on our AI visibility.",
+        brandId: BRAND,
+      },
+    });
+    expect(nav.push).toHaveBeenCalledWith('/dashboard/chat/cccccccc-0000-4000-8000-000000000002');
   });
 
   it('starts the product tour from the welcome card, beside the page, in the side panel', async () => {
@@ -476,8 +534,16 @@ describe('ChatHome', () => {
     await render(<ChatHome firstName="Alex" />);
     // While the new brand's counts are read, the first brand's aren't shown.
     expect(host.querySelector('[data-action="home.runShortcut"]')).toBeNull();
-    await act(async () => answer({ ok: true, dueTasks: 0, lostPages: 0, readyDrafts: 5 }));
-    expect(due.read).toHaveBeenLastCalledWith(other, expect.any(String));
+    await act(async () =>
+      answer({
+        ok: true,
+        dueTasks: 0,
+        lostPages: 0,
+        readyDrafts: 5,
+        weeklyReportDay: null,
+      }),
+    );
+    expect(due.read).toHaveBeenLastCalledWith(other, expect.any(String), expect.any(String));
     expect(text()).toContain('Ready to publish 5');
   });
 
@@ -671,11 +737,20 @@ describe('Home by focus (CHAT-24 §4)', () => {
   it('keeps the jobs’ counts and rules, and asks in each shortcut’s words', async () => {
     const onAsk = vi.fn();
     analytics.track.mockClear();
-    await render(view({ focus: focus('seo'), words: words(), dueTasks: 4, lostPages: 0, onAsk }));
+    await render(
+      view({
+        focus: focus('seo'),
+        words: words(),
+        dueTasks: 4,
+        lostPages: 0,
+        weeklyReportDay: 'Mon',
+        onAsk,
+      }),
+    );
     expect(chips().map((chip) => [chip.dataset.skill, chip.textContent])).toEqual([
       ['tasks', 'Complete tasks 4 due'],
       ['audit-fix', 'Site audit fixes'],
-      ['report', 'Weekly report'],
+      ['report', 'Weekly report · Mon'],
     ]);
     await act(async () => chips()[2].click());
     expect(onAsk).toHaveBeenCalledWith(
@@ -687,8 +762,19 @@ describe('Home by focus (CHAT-24 §4)', () => {
       skill: 'report',
     });
     // A role that only reads: no job that changes things.
-    await render(view({ focus: focus('seo'), words: words(), dueTasks: 4, canChange: false }));
-    expect(chips().map((chip) => chip.dataset.skill)).toEqual(['audit-fix', 'report']);
+    await render(
+      view({
+        focus: focus('seo'),
+        words: words(),
+        dueTasks: 4,
+        weeklyReportDay: 'Mon',
+        canChange: false,
+      }),
+    );
+    expect(chips().map((chip) => [chip.dataset.skill, chip.textContent])).toEqual([
+      ['audit-fix', 'Site audit fixes'],
+      ['report', 'Weekly report · Mon'],
+    ]);
   });
 
   it("sends a shortcut's id with a chip that runs its playbook (W2-09), and asks with a skill's /name", async () => {

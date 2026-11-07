@@ -1194,7 +1194,11 @@
         },
         {
           "heading": "Chat Home",
-          "text": "Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**\n\n**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.\n\n**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat."
+          "text": "Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**\n\nWith a focus picked, **For you now** has **Ask anything**, **More** (every shortcut) and jobs with work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares; you close them). **Win back citations**: pages that lost citations. **Ready to publish**: ready drafts Chat sends to your CMS for you to publish. **Weekly report · Mon** appears when your own recurring Weekly report job for this brand runs in the next 7 days; it shows the weekday. The SEO focus has the same chip. Each starts a new chat. Read-only roles get only read-only jobs, no **More**."
+        },
+        {
+          "heading": "Since you left",
+          "text": "**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat."
         },
         {
           "heading": "Agents for you",
