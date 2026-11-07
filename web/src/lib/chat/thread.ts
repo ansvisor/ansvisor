@@ -1,3 +1,4 @@
+import { readChosenTimeZone } from '@/lib/account-time-zone';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { createClient } from '@/lib/supabase/server';
 import {
@@ -40,8 +41,22 @@ import type { ChatActor } from './engine';
  * person's own chat only; a failed read of them loses the moves, not the chat.
  * A /tasks run's task strip comes back from chat_task_state as it is now
  * (CHAT-09 §B): a task the person completed in Action Center since reads
- * Done; a failed read loses the strip, not the chat.
+ * Done; a failed read loses the strip, not the chat. A job with a due time
+ * still at work, this chat's own or one made in it, puts its due line under
+ * the latest task strip (readReadyBy); a failed read loses the line.
  */
+
+/**
+ * A job's due line (CHAT-09 item 8, W4-30): "Due Mon 19 Oct, 09:00 · I'll
+ * keep working and notify you", with Change.
+ */
+export interface ChatReadyBy {
+  dueAt: string;
+  /** The person's time zone (Settings › Account), else the job's own. */
+  timeZone: string;
+  /** Change: the job's page at its When, for its creator. */
+  href: `/dashboard/chat/scheduled/${string}`;
+}
 
 export interface ThreadRun {
   /** The run's handle for its routes (approve, stop, events): the person's own. */
@@ -66,6 +81,8 @@ export interface ThreadRun {
   sent: ChatActionSent[];
   /** The Action Center tasks it worked on (CHAT-09 §B); null when it had none. */
   tasks: ChatTaskStrip | null;
+  /** A job with a due time's line under its tasks (W4-30); on one run of the chat at most. */
+  readyBy?: ChatReadyBy | null;
   /** The Why did it move analyses it kept (CHAT-22 §1), in order. */
   why: ChatWhy[];
   /** What's new's cards (CHAT-11 item 10). */
@@ -449,6 +466,18 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
     const step = toClientStep(row);
     if (step) stepsByRun.set(row.run_id, [...(stepsByRun.get(row.run_id) ?? []), step]);
   }
+  // Its due line goes under the latest strip, else under the run that made the job.
+  const readyBy =
+    mine && user ? await readReadyBy(supabase, conversationId, runIds, user.id) : null;
+  const ordered = (messages.data ?? [])
+    .map((m) => (runs.data ?? []).find((run) => run.message_id === m.id)?.id)
+    .filter((id): id is string => !!id);
+  const readyByRun = readyBy
+    ? ([...ordered].reverse().find((id) => (strips.get(id)?.total ?? 0) > 0) ??
+      (readyBy.setByRunId && ordered.includes(readyBy.setByRunId)
+        ? readyBy.setByRunId
+        : ordered.at(-1)))
+    : undefined;
   const runByMessage = new Map(
     (runs.data ?? []).map((run) => [
       run.message_id,
@@ -466,6 +495,7 @@ export async function loadChatThread(conversationId: string): Promise<ChatThread
         remember: mine ? (ends.get(run.id)?.remember ?? null) : null,
         sent: ends.get(run.id)?.sent ?? [],
         tasks: strips.get(run.id) ?? null,
+        ...(readyBy && run.id === readyByRun ? { readyBy: readyBy.line } : {}),
         why: whyByRun.get(run.id) ?? [],
         whatsNew: ends.get(run.id)?.whatsNew ?? [],
         audits: ends.get(run.id)?.audits ?? [],
@@ -524,6 +554,60 @@ async function readThreadStrips(
   } catch (err) {
     console.error("[chat/thread] could not read the chat's task strip:", err);
     return new Map();
+  }
+}
+
+/**
+ * The person's job with a due time that is still at work (not delivered,
+ * due later, on or paused at the AI limit), when it is this chat's own or
+ * was made in it; the newest one. Read as the person; null when none.
+ */
+async function readReadyBy(
+  db: Awaited<ReturnType<typeof createClient>>,
+  conversationId: string,
+  runIds: readonly string[],
+  userId: string,
+): Promise<{ line: ChatReadyBy; setByRunId: string | null } | null> {
+  try {
+    const { data, error } = await db
+      .from('chat_schedules')
+      .select('id, due_at, timezone, conversation_id, set_by_run_id, enabled, paused_reason')
+      .eq('created_by', userId)
+      .eq('kind', 'once')
+      .eq('run_mode', 'ready_by')
+      .not('next_run_at', 'is', null)
+      .gt('due_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) throw new Error(error.message);
+    const job = (
+      (data ?? []) as {
+        id: string;
+        due_at: string;
+        timezone: string;
+        conversation_id: string | null;
+        set_by_run_id: string | null;
+        enabled: boolean;
+        paused_reason: string | null;
+      }[]
+    ).find(
+      (row) =>
+        (row.enabled || row.paused_reason === 'cap') &&
+        (row.conversation_id === conversationId ||
+          (!!row.set_by_run_id && runIds.includes(row.set_by_run_id))),
+    );
+    if (!job) return null;
+    return {
+      line: {
+        dueAt: job.due_at,
+        timeZone: (await readChosenTimeZone(userId)) ?? job.timezone,
+        href: `/dashboard/chat/scheduled/${job.id}#schedule-when`,
+      },
+      setByRunId: job.set_by_run_id,
+    };
+  } catch (err) {
+    console.error("[chat/thread] could not read the chat's due line:", err);
+    return null;
   }
 }
 

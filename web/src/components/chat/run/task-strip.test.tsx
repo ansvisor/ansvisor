@@ -22,6 +22,7 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 
 const { TaskStrip, TaskStripRows } = await import('./task-strip');
+const { ReadyByLine } = await import('./ready-by-line');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -168,6 +169,30 @@ describe('TaskStrip', () => {
     };
     await render(<TaskStrip strip={writing} ended={false} />);
     expect(news().textContent).toBe('Add FAQPage schema: Writing');
+  });
+
+  it('ends with a job’s due line in the person’s time zone, and Change to its When (W4-30)', async () => {
+    const readyBy = {
+      dueAt: '2026-10-19T06:00:00.000Z',
+      timeZone: 'Europe/Istanbul',
+      href: '/dashboard/chat/scheduled/job-1#schedule-when' as const,
+    };
+    const now = Date.parse('2026-10-16T11:00:00.000Z');
+    await render(<TaskStrip strip={strip} ended readyBy={readyBy} now={now} />);
+    const line = $('[data-slot="task-strip"] [data-slot="ready-by-line"]')!;
+    expect(line.textContent).toContain("Due Mon 19 Oct, 09:00 · I'll keep working and notify you");
+    expect(line.className).toContain('border-t');
+    const change = line.querySelector('[data-action="readyBy.change"]')!;
+    expect(change.textContent).toBe('Change');
+    expect(change.getAttribute('aria-label')).toBe("Change when it's due");
+    expect(change.getAttribute('href')).toBe('/dashboard/chat/scheduled/job-1#schedule-when');
+    // The year shows once it isn't this one; with no strip, the line is a card of its own.
+    await render(<ReadyByLine readyBy={readyBy} now={Date.parse('2025-12-30T00:00:00Z')} />);
+    expect($('[data-slot="ready-by-line"]')!.textContent).toContain('Due Mon 19 Oct 2026, 09:00');
+    expect($('[data-slot="ready-by-line"]')!.className).toContain('bg-card');
+    // No job with a due time: no line.
+    await render(<TaskStrip strip={strip} ended />);
+    expect($('[data-slot="ready-by-line"]')).toBeNull();
   });
 
   it('says nothing as its first tasks come in', async () => {
