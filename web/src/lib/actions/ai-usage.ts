@@ -3,11 +3,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { API_BASE_URL } from '@/config/api';
 import { aiUsageFromApi, type AiUsage } from '@/lib/billing/ai-usage';
+import { nameAgents } from '@/lib/billing/ai-usage-agents';
 
 /**
  * This period's AI usage for the member's workspace, for the Billing page's
- * meter. Null without an active plan (a new workspace, past due, canceled):
- * there is no allowance to meter.
+ * meter, with the names of the agents they may see for its By agent list.
+ * Null without an active plan (a new workspace, past due, canceled): there
+ * is no allowance to meter.
  */
 export async function getAiUsage(): Promise<AiUsage | null> {
   const supabase = await createClient();
@@ -26,5 +28,5 @@ export async function getAiUsage(): Promise<AiUsage | null> {
     if (body.error === 'plan_limit') return null;
     throw new Error(body.message || body.error || `Server error: ${res.status}`);
   }
-  return aiUsageFromApi(await res.json());
+  return nameAgents(supabase, aiUsageFromApi(await res.json()));
 }

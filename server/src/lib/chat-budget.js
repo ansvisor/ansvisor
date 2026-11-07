@@ -51,7 +51,13 @@ import { chatAgenticEnabled } from './chat-flag.js';
 import { drawCredits } from './ai-credits.js';
 import { cacheSplit, generationCostUsd } from './improve-cost.js';
 import { syncedRow } from './model-price-cache.js';
-import { CHAT_AI_FEATURES, aiBudgetOf, aiBudgetUsedUp, quotaPeriodStart } from './plan-guard.js';
+import {
+  CHAT_AI_FEATURES,
+  agentSharesSince,
+  aiBudgetOf,
+  aiBudgetUsedUp,
+  quotaPeriodStart,
+} from './plan-guard.js';
 import { logger } from './logger.js';
 import { shiftMonthClamped } from './quota-period.js';
 
@@ -651,22 +657,7 @@ export async function agentUsageShares(orgId, { days = null } = {}) {
   const { includedUsd: budgetUsd, since } = await aiBudgetOf(orgId, { credits: false });
   if (budgetUsd === null || !(budgetUsd > 0)) return { unlimited: true, since: null, shares: [] };
   const from = days ? new Date(Date.now() - days * 86_400_000).toISOString() : since;
-  const { data, error } = await supabaseAdmin.rpc('chat_agent_usage_shares', {
-    p_organization_id: orgId,
-    p_since: from,
-    p_budget: budgetUsd,
-  });
-  if (error) throw new Error(error.message);
-  return {
-    unlimited: false,
-    since: from,
-    shares: (data ?? []).map((row) => ({
-      agentId: row.agent_id ?? null,
-      share: Number(row.share) || 0,
-      ownKeyShare: Number(row.own_key_share) || 0,
-      runs: Number(row.runs) || 0,
-    })),
-  };
+  return { unlimited: false, since: from, shares: await agentSharesSince(orgId, from, budgetUsd) };
 }
 
 /** How many of the last days a run estimate reads, and how many of their rows. */

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { StartPlanNow } from '@/components/ai-usage/start-plan-now';
@@ -13,6 +14,7 @@ import {
   percentLabel,
   type AiUsage,
 } from '@/lib/billing/ai-usage';
+import { aiUseByAgent, type ByAgentRow } from '@/lib/billing/ai-usage-agents';
 import type { UsageTone } from '@/lib/content-usage';
 import { cn } from '@/lib/utils';
 
@@ -31,7 +33,9 @@ const BAR_CLASS: Record<UsageTone, string> = {
  * so it is a line of text, not a share. Renders nothing for a plan without
  * an allowance, or a workspace without an active plan. In the free trial it
  * shows no shares, only how far the trial credit is (as the header meter),
- * and an admin can start the plan from 80% on.
+ * and an admin can start the plan from 80% on. With Chat on, a By agent list
+ * follows the features (CHAT-27 item 27): each agent's share, linked to its
+ * page, then what used the rest.
  */
 export function AiUsageCard() {
   const t = useTranslations('settings.aiUsageMeter');
@@ -78,6 +82,10 @@ export function AiUsageCard() {
       })
     : null;
   const used = t('used', { percent: percentLabel(usage?.percentUsed ?? 0) });
+  // Nothing used at all: the line above says so, and the list would only repeat it.
+  const byAgent = usage && !trial && usage.features.length > 0 ? aiUseByAgent(usage) : null;
+  const rowLabel = (row: Exclude<ByAgentRow, { kind: 'agent' }>) =>
+    row.kind === 'feature' ? t(`features.${row.feature}`) : t(`byAgent.${row.kind}`);
 
   return (
     <Card id="ai-usage" ref={card} className="scroll-mt-6">
@@ -174,6 +182,47 @@ export function AiUsageCard() {
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">{t('none')}</p>
+            )}
+            {byAgent && (
+              <section aria-labelledby="ai-usage-by-agent" className="space-y-2">
+                <h3 id="ai-usage-by-agent" className="text-sm font-medium">
+                  {t('byAgent.title')}
+                </h3>
+                {byAgent.length > 0 ? (
+                  <ul className="divide-y rounded-lg border text-sm">
+                    {byAgent.map((row) => (
+                      <li
+                        key={
+                          row.kind === 'agent'
+                            ? row.agentId
+                            : row.kind === 'feature'
+                              ? row.feature
+                              : row.kind
+                        }
+                        className="flex items-center justify-between gap-3 px-3 py-2"
+                      >
+                        {row.kind === 'agent' ? (
+                          <Link
+                            href={`/dashboard/agents/${row.agentId}`}
+                            className="min-w-0 truncate underline-offset-4 hover:underline"
+                          >
+                            {row.name}
+                          </Link>
+                        ) : (
+                          <span className={cn(row.kind === 'deleted' && 'text-muted-foreground')}>
+                            {rowLabel(row)}
+                          </span>
+                        )}
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          {featurePercentLabel(row.percent)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">{t('byAgent.none')}</p>
+                )}
+              </section>
             )}
             <p className="text-xs text-muted-foreground">
               {t(usage.chatMetered ? 'chatMetered' : 'chat')}

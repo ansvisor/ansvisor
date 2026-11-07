@@ -973,8 +973,62 @@ describe('ChatComposer: attached files (W1-13)', () => {
       context: [],
       references: [],
       attachments: ['up-1'],
+      // As the question's bubble shows them until the chat is read again.
+      files: [{ id: 'up-1', name: 'brief.pdf', mimeType: 'application/pdf', sizeBytes: 2 * MB }],
     });
     expect(fileChips()).toEqual([]);
+  });
+
+  it('sends an image with no text', async () => {
+    const upload = vi.fn(async () => ({ ok: true as const, id: 'up-img' }));
+    await render({ uploader: { upload, remove: vi.fn() } });
+    expect(button('Send')!.disabled).toBe(true);
+    await pick(file('chart.png', 'image/png', MB));
+    expect(button('Send')!.disabled).toBe(false);
+    await act(async () => button('Send')!.click());
+    expect(handlers.onSend).toHaveBeenCalledExactlyOnceWith('', {
+      context: [],
+      references: [],
+      attachments: ['up-img'],
+      files: [{ id: 'up-img', name: 'chart.png', mimeType: 'image/png', sizeBytes: MB }],
+    });
+  });
+
+  it('refuses Send while a file didn’t upload, and says which', async () => {
+    const upload = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, id: 'up-1' })
+      .mockResolvedValueOnce({ ok: false, failure: 'failed' });
+    await render({ uploader: { upload, remove: vi.fn() } });
+    await type('Compare these');
+    await pick(file('a.png', 'image/png', MB), file('b.csv', 'text/csv', 100));
+    expect(fileChips()).toEqual([
+      ['ready', 'PNGa.png×'],
+      ['failed', 'CSVb.csv×'],
+    ]);
+    expect(alert()).toBe("b.csv didn't upload. Remove it or try again.Retry");
+    expect(button('Send')!.disabled).toBe(true);
+    await press('Enter');
+    expect(handlers.onSend).not.toHaveBeenCalled();
+    // Taken off with ×, the message goes with the file that is up.
+    await act(async () =>
+      container
+        .querySelectorAll<HTMLButtonElement>('[data-action="composer.removeFile"]')[1]
+        .click(),
+    );
+    expect(alert()).toBeNull();
+    await press('Enter');
+    expect(handlers.onSend).toHaveBeenCalledWith(
+      'Compare these',
+      expect.objectContaining({ attachments: ['up-1'] }),
+    );
+  });
+
+  it('counts the files that didn’t upload', async () => {
+    const upload = vi.fn(async () => ({ ok: false as const, failure: 'failed' }));
+    await render({ uploader: { upload, remove: vi.fn() } });
+    await pick(file('a.csv', 'text/csv', 100), file('b.csv', 'text/csv', 100));
+    expect(alert()).toBe("2 files didn't upload. Remove them or try again.Retry");
   });
 
   it('says why a file can’t go: its type, over 10 MB, or a sixth', async () => {
@@ -998,7 +1052,7 @@ describe('ChatComposer: attached files (W1-13)', () => {
     const remove = vi.fn();
     await render({ uploader: { upload, remove } });
     await pick(file('data.csv', 'text/csv', 100));
-    expect(alert()).toBe('Upload failed.Retry');
+    expect(alert()).toBe("data.csv didn't upload. Remove it or try again.Retry");
     await act(async () =>
       container.querySelector<HTMLButtonElement>('[data-action="composer.retryUpload"]')!.click(),
     );
