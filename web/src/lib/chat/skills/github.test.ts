@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it, vi } from 'vitest';
-import { parseGithubUrl, readGithubSkill } from './github';
+import { findSkillFolder, parseGithubUrl, readGithubSkill } from './github';
 
 /**
  * A skill from a GitHub folder (CHAT-13 item 14, W3-09b): only github.com
@@ -178,5 +178,75 @@ describe('readGithubSkill', () => {
       ok: false,
       refusal: { code: 'too_large' },
     });
+  });
+});
+
+describe('findSkillFolder', () => {
+  const REPO = 'https://github.com/acme/skills';
+  const TREE = `${API}/git/trees/${SHA}?recursive=1`;
+  const blobs = (...paths: string[]) =>
+    json({ tree: paths.map((path) => ({ path, type: 'blob' })) });
+
+  it('takes skills/{name} first, pinned to the repository’s commit', async () => {
+    const { fetch, calls } = github({
+      [`${API}/commits/HEAD`]: text(SHA),
+      [`${API}/contents/skills/copy-editing?ref=${SHA}`]: json([
+        { name: 'SKILL.md', path: 'skills/copy-editing/SKILL.md', type: 'file' },
+      ]),
+    });
+    expect(await findSkillFolder(REPO, 'copy-editing', { fetch, token: null })).toEqual({
+      ok: true,
+      url: `https://github.com/acme/skills/tree/${SHA}/skills/copy-editing`,
+    });
+    // The repository's whole file list isn't read for it.
+    expect(calls.some((c) => c.url.includes('/git/trees/'))).toBe(false);
+  });
+
+  it('else the shallowest {name} folder with a SKILL.md, at any depth', async () => {
+    const { fetch } = github({
+      [`${API}/commits/HEAD`]: text(SHA),
+      [TREE]: blobs(
+        'plugins/deep/copy-editing/SKILL.md',
+        'plugins/copy-editing/SKILL.md',
+        'plugins/copy-editing-pro/SKILL.md',
+        'docs/copy-editing/README.md',
+      ),
+    });
+    expect(await findSkillFolder(REPO, 'copy-editing', { fetch, token: null })).toEqual({
+      ok: true,
+      url: `https://github.com/acme/skills/tree/${SHA}/plugins/copy-editing`,
+    });
+  });
+
+  it('takes a single-skill repository’s own SKILL.md when it names the skill', async () => {
+    const { fetch } = github({
+      [`${API}/commits/HEAD`]: text(SHA),
+      [TREE]: blobs('SKILL.md', 'LICENSE'),
+      [`${RAW}/SKILL.md`]: text(SKILL),
+    });
+    expect(await findSkillFolder(REPO, 'copy-editing', { fetch, token: null })).toEqual({
+      ok: true,
+      url: `https://github.com/acme/skills/tree/${SHA}`,
+    });
+    expect(await findSkillFolder(REPO, 'grill-me', { fetch, token: null })).toEqual({
+      ok: false,
+      refusal: { code: 'skill_not_in_repo', detail: { name: 'grill-me' } },
+    });
+  });
+
+  it('says GitHub’s refusals, and never reads a name that leaves the repository', async () => {
+    const busy = github({
+      [`${API}/commits/HEAD`]: text(SHA),
+      [`${API}/contents/skills/copy-editing?ref=${SHA}`]: () => new Response('', { status: 403 }),
+    });
+    expect(await findSkillFolder(REPO, 'copy-editing', { fetch: busy.fetch, token: null })).toEqual(
+      { ok: false, refusal: { code: 'github_busy' } },
+    );
+    const none = github({});
+    expect(await findSkillFolder(REPO, '../x', { fetch: none.fetch, token: null })).toEqual({
+      ok: false,
+      refusal: { code: 'skill_not_in_repo', detail: { name: '../x' } },
+    });
+    expect(none.calls).toEqual([]);
   });
 });

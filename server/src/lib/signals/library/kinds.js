@@ -101,6 +101,9 @@ export const LIBRARY_KINDS = Object.freeze({
   // ── Site Audit findings ───────────────────────────────────────────────────
   crawler_blocked: meta('technical', 'high', []),
   structured_data_issue: meta('technical', 'medium', []),
+  // A page's canonical tag missing, or pointing where it shouldn't (AC plan
+  // P-11, spec §9): read by Site Audit (audit/canonical.js).
+  canonical_issue: meta('technical', 'medium', ['citations']),
   outdated_content: meta('technical', 'medium', ['ai_visibility']),
   weak_entity: meta('technical', 'medium', ['mentions']),
   weak_internal_links: meta('technical', 'low', []),
