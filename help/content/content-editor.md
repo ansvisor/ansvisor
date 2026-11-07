@@ -65,7 +65,7 @@ Building the brief and running the Content Agent use your workspace's monthly AI
 
 With Chat on, **Chat** is the side panel's first tab. A page Chat made opens on it and continues that chat: "Continued from your chat". Otherwise it continues the chat you last had here about the page, or starts one. **Ctrl J** opens it.
 
-What you ask about the page doesn't change it. The Content Agent leaves suggestions in the page, labelled "Content Agent · from your chat", with the same guards as Fix open rules; the page changes only when you **Accept** one. Remove **This draft** from the box to talk about something else. The expand icon opens the chat on Chat's own page.
+What you ask about the page doesn't change it. The Content Agent leaves suggestions in the page, labelled "Content Agent · from your chat", with the same guards as Fix open rules; the page changes only when you **Accept** one. Remove **This draft** from the box to talk about something else. The expand icon opens the chat on Chat's own page. From Chat, **Open here** opens this editor beside the conversation instead, with its chip **Page:** and the page's title in the box.
 
 ## Chat knows what you accepted
 

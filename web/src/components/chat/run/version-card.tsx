@@ -276,13 +276,15 @@ export function useOptimizeHeading() {
 
 /**
  * Optimize ▾ on a page's version card (CHAT-25 §7, mockup #e-chat; W4-12b
- * part 2), headed by the rules still open and Quality. Two equal ways at
- * launch, none Recommended and no cost (owner): Optimize here, no editor,
- * which asks Chat in the person's words (optimize_draft, the editor's
- * Rewrite, the next version card with What changed), and Optimize in
- * Content Editor. "Optimize in the editor here" waits for Open here (W4-15).
- * Only Admins and Managers optimize: anyone else, or a read-only workspace,
- * gets "Ask your Admin" in its place (CHAT-25 §13).
+ * part 2), headed by the rules still open and Quality. Three equal ways,
+ * none Recommended and no cost (owner): Optimize here, no editor, which
+ * asks Chat in the person's words (optimize_draft, the editor's Rewrite,
+ * the next version card with What changed); Optimize in the editor here,
+ * the page opened beside the chat (Open here, W4-15c), where what Chat is
+ * asked comes back as suggestions to accept or reject; and Optimize in
+ * Content Editor. Only Admins and Managers optimize: anyone else, or a
+ * read-only workspace, gets "Ask your Admin" in its place (CHAT-25 §13);
+ * the two editors open for them read-only.
  */
 export function OptimizeMenu({
   version,
@@ -290,6 +292,7 @@ export function OptimizeMenu({
   href,
   canChange,
   onAsk,
+  onOpenHere,
   className,
 }: {
   version: ChatPageVersion;
@@ -299,6 +302,8 @@ export function OptimizeMenu({
   canChange: boolean;
   /** Sends a message in this chat as the person's own. */
   onAsk: (prompt: string) => void;
+  /** Opens the page beside this chat (Open here): the editor's address. */
+  onOpenHere?: (href: string) => void;
   className: string;
 }) {
   const t = useTranslations('chatDeliverable.version.optimize');
@@ -342,6 +347,16 @@ export function OptimizeMenu({
               {allowed ? t('hereDetail', { n: version.n + 1 }) : t('noAccess')}
             </span>
           </DropdownMenuItem>
+          {onOpenHere && (
+            <DropdownMenuItem
+              data-action="version.optimizeInEditorHere"
+              onClick={() => onOpenHere(href)}
+              className="flex-col items-start gap-0.5 text-[13px]"
+            >
+              <span className="font-medium">{t('editorHere')}</span>
+              <span className="text-xs text-muted-foreground">{t('editorHereDetail')}</span>
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             data-action="version.optimizeInEditor"
             onClick={() => router.push(href)}

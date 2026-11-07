@@ -27,12 +27,18 @@ export function ContentEditorSurface({
   draftId,
   embedded = false,
   onClose,
+  onTitle,
+  suggestedAt,
 }: {
   draftId: string;
   /** Shown inside another page, not on the editor's own. */
   embedded?: boolean;
   /** Embedded: Close, for the page around it to put the editor away. */
   onClose?: () => void;
+  /** Embedded: the draft's title as read, for the page around it to name it (Chat's chip). */
+  onTitle?: (title: string) => void;
+  /** Embedded beside Chat: grows each time a run there left suggestions in the page (W4-14). */
+  suggestedAt?: number;
 }) {
   const t = useTranslations('contentEditor.editor');
   const [read, setRead] = useState<DraftRead | null>(null);
@@ -73,6 +79,10 @@ export function ContentEditorSurface({
   }, [draftBrandId, activeBrandId, brands, setActiveBrand]);
 
   const current = read?.id === draftId ? read : null;
+  const draftTitle = current?.draft?.title;
+  useEffect(() => {
+    if (draftTitle !== undefined) onTitle?.(draftTitle);
+  }, [draftTitle, onTitle]);
 
   // While the Content Agent writes the draft (CE-015), the page waits and
   // looks again; the editor opens on what it wrote.
@@ -158,6 +168,7 @@ export function ContentEditorSurface({
           agentFinished={agentFinishedFor === current.draft.id}
           embedded={embedded}
           onClose={onClose}
+          suggestedAt={suggestedAt}
           onAgentStarted={(run) =>
             setRead((prev) =>
               prev?.draft

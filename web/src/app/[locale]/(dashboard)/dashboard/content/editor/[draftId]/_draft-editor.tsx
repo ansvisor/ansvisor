@@ -437,6 +437,7 @@ export function DraftEditor({
   agentFinished = false,
   embedded = false,
   onClose,
+  suggestedAt,
 }: {
   draft: ContentDraft;
   /**
@@ -453,6 +454,11 @@ export function DraftEditor({
   embedded?: boolean;
   /** Embedded: Close, for the page around it to put the editor away. */
   onClose?: () => void;
+  /**
+   * Embedded beside Chat (Open here, W4-15c): grows each time a request
+   * there left the Content Agent's suggestions in the page (W4-14).
+   */
+  suggestedAt?: number;
 }) {
   const t = useTranslations('contentEditor.editor');
   const tNext = useTranslations('contentEditor.editor.nextStep');
@@ -1829,6 +1835,13 @@ export function DraftEditor({
       })
       .catch((err) => console.error('Failed to read the agent suggestions:', err));
   }, [draft.id]);
+  // The same from the chat beside the embedded editor (Open here): read as each run leaves them.
+  const suggestedRead = useRef(suggestedAt);
+  useEffect(() => {
+    if (suggestedAt === suggestedRead.current) return;
+    suggestedRead.current = suggestedAt;
+    readChatSuggestions();
+  }, [suggestedAt, readChatSuggestions]);
 
   // What the agent's open result would do to the rules (editor test
   // 2026-10-25: a fix run turned 11 of 15 met into 10, a rewrite 4 open into
