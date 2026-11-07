@@ -1,0 +1,4 @@
+{"user_agent":"Mozilla/5.0 (compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)","ip":"52.6.40.1","url":"https://www.acme.example/pricing","status":200,"time":"2026-11-04T09:20:00Z","country":"us"}
+{"user_agent":"Mozilla/5.0 (compatible; ClaudeBot/1.0; +claudebot@anthropic.com)","ip":"160.79.104.10","host":"www.acme.example","path":"/blog/cold-brew","status":200,"time":1793783000}
+{"user_agent":"Mozilla/5.0","ip":"203.0.113.9","url":"/about","status":301,"time":1793783000123}
+{"broken":
