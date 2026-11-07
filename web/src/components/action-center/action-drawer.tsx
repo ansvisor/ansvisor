@@ -84,6 +84,7 @@ import { MentionReviewContext } from './mention-review-context';
 import { TrafficPagesContext } from './traffic-pages-context';
 import { ContentDraftContext } from './content-draft-context';
 import { ShoppingLinksContext } from './shopping-links-context';
+import { BridgeLinksContext } from './bridge-links-context';
 import { AuditPageContext } from './audit-page-context';
 import { ChatFindingContext } from './chat-finding-context';
 import {
@@ -790,6 +791,11 @@ export function ActionDrawer({
                   <Separator />
                   <ShoppingLinksContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'bridge_links' ? (
+                <>
+                  <Separator />
+                  <BridgeLinksContext payload={action.payload ?? {}} />
+                </>
               ) : action.kind === 'audit_page' ? (
                 <>
                   <Separator />
@@ -888,9 +894,11 @@ export function ActionDrawer({
                 onAdd={(title) => void mutate(() => addTask(brandId, action.id, title))}
               />
               {/* Written from the action's evidence (AC-004): not for an
-                  action a person sent, which carries its own, nor a closed one. */}
+                  action a person sent, which carries its own, nor a closed one;
+                  nor a bridge links action, whose tasks are its pairs'. */}
               {taskWriterEnabled() &&
                 action.kind !== 'prompt_improve' &&
+                action.kind !== 'bridge_links' &&
                 !opportunityId &&
                 action.status !== 'completed' &&
                 action.status !== 'dismissed' &&

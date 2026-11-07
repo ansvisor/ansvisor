@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import messages from '../../../messages/en.json';
 
 /** Check a task now (AC-010): the server's check, or why there's none. */
 
@@ -39,6 +40,19 @@ describe('checkActionTask', () => {
     // A shopping links task whose draft has no path left (shopping path, part 7).
     vi.stubGlobal('fetch', respond(200, { checked: null, reason: 'no_shopping_path' }));
     expect(await checkActionTask('t1')).toEqual({ checked: null, reason: 'no_shopping_path' });
+    // What a task lacks to be checked, said in its own words (AC plan P-10 adds two).
+    const checkNot = messages.actionCenter.actionsPage.drawer.task.checkNot;
+    for (const reason of [
+      'no_address',
+      'no_change_text',
+      'from_bot_logs',
+      'no_link_source',
+      'no_link_target',
+    ] as const) {
+      vi.stubGlobal('fetch', respond(200, { checked: null, reason }));
+      expect(await checkActionTask('t1')).toEqual({ checked: null, reason });
+      expect(checkNot[reason], reason).toEqual(expect.any(String));
+    }
     vi.stubGlobal('fetch', respond(200, { checked: null, reason: 'something new' }));
     expect(await checkActionTask('t1')).toEqual({ checked: null, reason: 'no_answer' });
     vi.stubGlobal('fetch', respond(404, { error: 'Task not found', code: 'not_found' }));

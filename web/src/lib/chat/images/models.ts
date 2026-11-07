@@ -1,3 +1,5 @@
+import type { ChatStep } from '../events';
+
 /**
  * The image models Chat offers (CHAT-15 §E, Karar 4: Nano Banana 2 Lite,
  * Nano Banana 2, Nano Banana Pro and GPT-5 Image Mini, through OpenRouter),
@@ -47,4 +49,33 @@ export function defaultImageModel(
     if (!best || percent < best.percent) best = { model, percent };
   }
   return best?.model ?? IMAGE_MODELS[0];
+}
+
+/** The labels, longest first: "Nano Banana 2 Lite" is found before "Nano Banana 2". */
+const BY_LENGTH = [...IMAGE_MODELS].sort((a, b) => b.label.length - a.label.length);
+
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const NAMED = BY_LENGTH.map((model) => ({
+  label: model.label,
+  pattern: new RegExp(`(^|[^\\w])${escaped(model.label)}($|[^\\w])`),
+}));
+
+/**
+ * The image model a run's steps name (CHAT-15 item 18, W4-08b), its label:
+ * the image model question answered with it, or the images' card and step
+ * ("4 images · Nano Banana 2 Lite · about …"), the latest of them. Null
+ * when the run's steps name none: it wasn't a request for images. The
+ * steps carry the label registry's words, never the tool, so this reads
+ * their words.
+ */
+export function imageModelNamed(
+  steps: readonly Pick<ChatStep, 'kind' | 'detail'>[],
+): string | null {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const { kind, detail } = steps[i];
+    if (!detail || (kind !== 'ask' && kind !== 'write')) continue;
+    const found = NAMED.find((model) => model.pattern.test(detail));
+    if (found) return found.label;
+  }
+  return null;
 }

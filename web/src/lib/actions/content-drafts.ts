@@ -72,7 +72,7 @@ import {
   type DraftBrief,
   type RebuildSources,
 } from '@/lib/content/brief';
-import { jsonbBytes } from '@/lib/content/draft-inputs';
+import { MAX_DATA_CELL, jsonbBytes } from '@/lib/content/draft-inputs';
 import {
   CITED_DAYS,
   MAX_PASSAGES,
@@ -103,6 +103,7 @@ import { HANDOFF_KEYS } from '@/lib/content/hand-off';
 import type { AgentRule, AgentWriteRequest } from '@/lib/content/agent-write';
 import {
   MAX_ACTION_PROMPTS,
+  actionLinkTable,
   actionPages,
   actionPromptIds,
   actionTopicIds,
@@ -115,6 +116,7 @@ import {
   startNowWork,
   unpublishDraftWork,
   type ActionDraft,
+  type LinkTableLabels,
   type StartNowWork,
 } from '@/lib/content/action-drafts';
 import { opportunityPageType } from '@/lib/content/asset-types';
@@ -893,6 +895,14 @@ const actionStartInput = z.object({
   page: z.string().max(2048).nullable(),
   // The action's own title, for one whose payload names none.
   title: z.string().max(5_000),
+  // A bridge links page's link table, in the reader's words (AC plan P-10).
+  linkLabels: z
+    .object({
+      name: z.string().trim().min(1).max(120),
+      linkTo: z.string().trim().min(1).max(MAX_DATA_CELL),
+      anchor: z.string().trim().min(1).max(MAX_DATA_CELL),
+    })
+    .optional(),
 });
 
 /**
@@ -913,7 +923,7 @@ export async function startDraftFromAction(
   brandId: string,
   actionId: string,
   taskId: string,
-  options: { page: string | null; title: string },
+  options: { page: string | null; title: string; linkLabels?: LinkTableLabels },
 ): Promise<
   | { draftId: string; created: boolean; importFailed: boolean }
   | { error: 'invalid' | 'not_found' | 'failed' }
@@ -1079,6 +1089,18 @@ export async function startDraftFromAction(
       await buildDraftShoppingPath(inserted.id, brandId).catch((err) =>
         console.error("Failed to build the action's shopping path:", err),
       );
+    }
+    // A bridge links page: its links in Your input, for the person to place
+    // (AC plan P-10). Best effort: the draft is started either way.
+    const linkTable = actionLinkTable(payload, page, parsed.data.linkLabels);
+    if (linkTable) {
+      const { error: inputsError } = await supabase
+        .from('content_draft_inputs')
+        .upsert(
+          { draft_id: inserted.id, data: [linkTable], updated_by: user.id },
+          { onConflict: 'draft_id' },
+        );
+      if (inputsError) console.error("Failed to put the page's links in Your input:", inputsError);
     }
     if (taskRes.data.status === 'todo') {
       // The draft is started either way; the task's status can be set in the drawer.

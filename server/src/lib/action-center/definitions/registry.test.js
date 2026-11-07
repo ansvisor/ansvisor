@@ -65,13 +65,13 @@ describe('the definition registry', () => {
   /**
    * The V1 specification's library: 62 definitions, 19 Growth, 10 Protect,
    * 11 Recover, 13 Fix, 9 Compete; and the AC plan's canonical tags (F14,
-   * P-11). Anything else is not the library.
+   * P-11) and bridge links (G20, P-10). Anything else is not the library.
    */
   it('registers the specification’s sixty-two definitions, and the AC plan’s', () => {
     const byFamily = {};
     for (const d of definitions) byFamily[d.category] = (byFamily[d.category] ?? 0) + 1;
-    expect(definitions).toHaveLength(63);
-    expect(byFamily).toEqual({ growth: 19, protect: 10, recover: 11, fix: 14, compete: 9 });
+    expect(definitions).toHaveLength(64);
+    expect(byFamily).toEqual({ growth: 20, protect: 10, recover: 11, fix: 14, compete: 9 });
   });
 
   /**
@@ -87,7 +87,7 @@ describe('the definition registry', () => {
   });
 
   it('gives every definition its own specification code', () => {
-    expect(new Set(definitions.map((d) => d.code)).size).toBe(63);
+    expect(new Set(definitions.map((d) => d.code)).size).toBe(64);
   });
 
   /** A disabled definition is a promise with nothing behind it; it has to

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { TASKS } from './registry.js';
-import { TEMPLATED_TASKS, onePage, templateDetails } from './templates.js';
+import { TEMPLATED_TASKS, linkPlan, onePage, templateDetails } from './templates.js';
 import { TASK_CHECKS } from '../task-writer/quality.js';
 import { CHECKS } from '../task-checks.js';
 
@@ -72,6 +72,34 @@ describe('templateDetails', () => {
       source: 'template',
     });
     expect(CHECKS).not.toHaveProperty('improve_cta_path');
+  });
+
+  it('gives a bridge links action’s link task its pairs, each source page and its link (AC plan P-10)', () => {
+    const SITE = 'https://acme.example';
+    const payload = {
+      pages: [`${SITE}/blog/a`, `${SITE}/blog/b`],
+      linkPairs: [
+        { from: `${SITE}/blog/a`, to: `${SITE}/pricing`, anchor: ' Pricing ' },
+        { from: `${SITE}/blog/b`, to: `${SITE}/demo`, anchor: '' },
+        // Not whole addresses: left out.
+        { from: '/blog/c', to: `${SITE}/demo` },
+        ...Array.from({ length: 6 }, (_, i) => ({ from: `${SITE}/x/${i}`, to: `${SITE}/y` })),
+      ],
+    };
+    const details = templateDetails('add_internal_links', payload);
+    expect(details.links).toHaveLength(5);
+    expect(details.links.slice(0, 2)).toEqual([
+      { url: `${SITE}/blog/a`, linkTo: `${SITE}/pricing`, anchor: 'Pricing' },
+      { url: `${SITE}/blog/b`, linkTo: `${SITE}/demo`, anchor: null },
+    ]);
+    expect(details).not.toHaveProperty('url');
+    // Only the link task names them; the review is the person's.
+    expect(templateDetails('optimize_content', payload)).not.toHaveProperty('links');
+    expect(templateDetails('review_link_plan', payload)).toEqual({
+      check: 'manual',
+      source: 'template',
+    });
+    expect(linkPlan({})).toEqual([]);
   });
 });
 

@@ -14,6 +14,7 @@ import {
   type SuggestionsReadResult,
 } from '@/lib/actions/chat-suggestions';
 import type { ChatNoticesRead } from '@/lib/actions/chat-notices';
+import type { OutsideEmail } from '@/lib/actions/chat-outbound';
 import type { DailySuggestion, DailySuggestionsRead } from '@/lib/chat/daily-suggestions';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { ChatInboxView, inboxItems, inboxTabOf, useNow } from './chat-inbox';
@@ -154,10 +155,13 @@ export function useInboxDaily(
 export function ChatInbox({
   suggestions,
   notices,
+  outside,
 }: {
   suggestions?: SuggestionsReadResult | null;
   /** The person's open notices (00441), as the page read them; none when they couldn't be. */
   notices?: ChatNoticesRead | null;
+  /** Their jobs' e-mails to people outside the workspace, waiting for a Send (W4-28). */
+  outside?: OutsideEmail[];
 }) {
   const { status, chats, refresh } = useChatList();
   const now = useNow();
@@ -174,6 +178,7 @@ export function ChatInbox({
       daily={daily}
       initialTab={tab}
       notices={notices?.ok ? notices.notices : []}
+      outside={outside ?? []}
     />
   );
 }

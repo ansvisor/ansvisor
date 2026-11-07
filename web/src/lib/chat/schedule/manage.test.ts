@@ -458,3 +458,85 @@ describe('the page’s changes', () => {
     expect(row('r')).toMatchObject({ run_mode: 'run_at', next_run_at: '2026-11-05T06:00:00.000Z' });
   });
 });
+
+describe('addresses outside the workspace (W4-28)', () => {
+  const edits = (external: string[]) => ({
+    title: 'Job a',
+    prompt: 'Summarise last week',
+    when: 'every Monday at 09:00',
+    deliver: 'chat' as const,
+    changeOnly: false,
+    external,
+  });
+
+  it('lets an Admin or a Manager add up to 5, kept lowercase and once each', async () => {
+    job('a');
+    expect(
+      await manage.updateSchedule(
+        as('manager'),
+        'a',
+        edits([' Jane@Client.com ', 'jane@client.com', 'ops@client.com']),
+        NOW,
+        growth,
+      ),
+    ).toEqual({ ok: true });
+    expect(row('a').external_recipients).toEqual(['jane@client.com', 'ops@client.com']);
+    job('b', { created_by: PEOPLE.admin });
+    expect(
+      await manage.updateSchedule(as('admin'), 'b', edits(['cfo@client.com']), NOW, growth),
+    ).toEqual({ ok: true });
+    // A sixth is refused, and so is a word that isn't an address.
+    const six = ['a', 'b', 'c', 'd', 'e', 'f'].map((n) => `${n}@client.com`);
+    expect(await manage.updateSchedule(as('manager'), 'a', edits(six), NOW, growth)).toMatchObject({
+      ok: false,
+      reason: 'outside_max',
+    });
+    expect(
+      await manage.updateSchedule(as('manager'), 'a', edits(['jane at client']), NOW, growth),
+    ).toMatchObject({ ok: false, reason: 'outside_invalid' });
+    expect(row('a').external_recipients).toEqual(['jane@client.com', 'ops@client.com']);
+    // Read on the job's page.
+    const detail = await views.readScheduleDetail(as('manager'), 'a');
+    expect(detail?.job.external).toEqual(['jane@client.com', 'ops@client.com']);
+  });
+
+  it('refuses a new address from an Analyst or an Agency partner, who may still take one off', async () => {
+    job('a', { created_by: PEOPLE.analyst, external_recipients: ['jane@client.com'] });
+    const analyst = as('analyst');
+    const partner = { ...analyst, role: 'agency_partner' as never };
+    for (const reader of [analyst, partner]) {
+      expect(
+        await manage.updateSchedule(
+          reader,
+          'a',
+          edits(['jane@client.com', 'ops@client.com']),
+          NOW,
+          growth,
+        ),
+      ).toMatchObject({ ok: false, reason: 'outside_role' });
+    }
+    expect(row('a').external_recipients).toEqual(['jane@client.com']);
+    expect(await manage.updateSchedule(analyst, 'a', edits([]), NOW, growth)).toEqual({
+      ok: true,
+    });
+    expect(row('a').external_recipients).toEqual([]);
+  });
+
+  it('refuses a new address in the free trial, or without the plan read', async () => {
+    job('a');
+    expect(
+      await manage.updateSchedule(as('manager'), 'a', edits(['jane@client.com']), NOW, trial),
+    ).toMatchObject({ ok: false, reason: 'outside_trial' });
+    expect(
+      await manage.updateSchedule(as('manager'), 'a', edits(['jane@client.com']), NOW),
+    ).toMatchObject({ ok: false, reason: 'outside_trial' });
+    expect(row('a').external_recipients).toBeUndefined();
+    // Edits that leave them out keep the ones it has.
+    job('b', { external_recipients: ['jane@client.com'] });
+    const rest = { ...edits([]), external: undefined };
+    expect(await manage.updateSchedule(as('manager'), 'b', rest, NOW, trial)).toEqual({
+      ok: true,
+    });
+    expect(row('b').external_recipients).toEqual(['jane@client.com']);
+  });
+});

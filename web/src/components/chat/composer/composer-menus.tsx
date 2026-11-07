@@ -277,12 +277,19 @@ export function ReferenceMenu({
 }
 
 export interface PlusItem {
-  key: 'attach' | 'connect';
+  key: 'attach' | 'image' | 'connect';
   mark: string;
   label: string;
   note?: string;
   onPick: () => void;
 }
+
+/** Each ＋ item's action name, as the mockup's #plusmenu names it. */
+const PLUS_ACTIONS: Record<PlusItem['key'], string> = {
+  attach: 'plusMenu.attachFiles',
+  image: 'plusMenu.createImage',
+  connect: 'plusMenu.connectTool',
+};
 
 export function PlusMenu({ items, active }: { items: PlusItem[]; active: number }) {
   const t = useTranslations('chatComposer.plus');
@@ -294,7 +301,7 @@ export function PlusMenu({ items, active }: { items: PlusItem[]; active: number 
           type="button"
           role="option"
           aria-selected={i === active}
-          data-action={item.key === 'attach' ? 'plusMenu.attachFiles' : 'plusMenu.connectTool'}
+          data-action={PLUS_ACTIONS[item.key]}
           onMouseDown={(e) => e.preventDefault()}
           onClick={item.onPick}
           className={row}
