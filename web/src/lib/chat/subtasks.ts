@@ -44,8 +44,13 @@ import { partOf, partsEnded } from './subtask-parts';
  *     asks nothing: a change it finds is needed comes back in its answer,
  *     and the parent makes it with its own tool, under the parent's mode,
  *     so its card shows in the parent's chat (item 4).
- *   - The parts start together, as many at once as the plan runs (the
- *     workspace's concurrent runs), in the parent's slot.
+ *   - Slots: each part claims a run slot as any run does (chat_claim_run_slot,
+ *     CHAT-20 §14), so a split never runs more than the workspace's and the
+ *     person's limits allow, the parent's own slot included. As many parts
+ *     run at once as slots are free; the rest wait queued and start as slots
+ *     free up. A part frees its slot as it ends (done, failed, stopped or at
+ *     the cap). One that never got a slot before the parent's time is up is
+ *     stopped and named: it couldn't start, the workspace was busy.
  *   - Budget: a part's steps are held on the chat's agent run like the
  *     parent's (reserve_chat_ai_usage, 00419), so the parent and its parts
  *     share the run's cap. A part refused at the cap pauses, and the parent
@@ -71,6 +76,8 @@ export const ANSWER_ROOM_MS = 60_000;
 const MIN_SPLIT_MS = 30_000;
 /** How often the parent shows where its parts are, and keeps itself alive. */
 const POLL_MS = 2_000;
+/** How often a part that found no free slot asks again. */
+export const SLOT_POLL_MS = 1_000;
 /** A part's answer, as the parent reads it, at most. */
 export const PART_ANSWER_MAX = 4_000;
 
@@ -151,8 +158,11 @@ export interface SubtasksHost {
   signal: AbortSignal;
   /** When the request working the parent reaches its limit (RUN_REQUEST_MS). */
   endsAt: number;
-  /** Parts working at once: the workspace's concurrent runs on its plan. */
-  atOnce: number;
+  /**
+   * Starts a queued part when a run slot is free (the engine's claimRunSlot on
+   * the workspace's plan): true when it is now running.
+   */
+  claim(runId: string): Promise<boolean>;
   /** What the parts' answers may take of the run's data budget, in characters. */
   room: number;
   /** In the reading phase, the writer reads the parts' answers from the read log. */
@@ -248,30 +258,53 @@ export async function readParts(ids: readonly string[]): Promise<ChatStepPart[]>
 }
 
 /**
- * Starts the parts, as many at once as the plan runs, until each has
+ * Starts the parts in order, each once it claims a run slot, until each has
  * ended; none starts after one was refused at the cap, or after the
- * parent's Stop or the time is up.
+ * parent's Stop or the time is up. What never started is returned.
  */
 async function workParts(
   host: SubtasksHost,
   ids: readonly string[],
   until: number,
-): Promise<{ capped: boolean }> {
-  let next = 0;
+): Promise<{ capped: boolean; unstarted: string[] }> {
+  const waiting = [...ids];
+  const working = new Map<string, Promise<void>>();
   let capped = false;
-  const worker = async () => {
-    while (next < ids.length && !capped && !host.signal.aborted && Date.now() < until) {
-      const id = ids[next++];
-      // In the parent's slot: a part doesn't queue for one of its own.
-      if (!(await moveRun(id, ['queued'], 'running', { started: true }))) continue;
-      await host.drive(id).catch((err) => console.error('[chat/subtasks] a part failed:', err));
-      const run = await loadRun(id).catch(() => null);
-      if (run?.status === 'paused_cap') capped = true;
-    }
+  const open = () => !capped && !host.signal.aborted && Date.now() < until;
+  // A part that just paused at the cap has freed its slot before its driver returns: no
+  // part starts after it, even in that moment.
+  const pausedNow = async () => {
+    if (working.size === 0) return false;
+    const { data } = await supabaseAdmin
+      .from('chat_runs')
+      .select('status')
+      .in('id', [...working.keys()]);
+    return ((data ?? []) as { status: string }[]).some((run) => run.status === 'paused_cap');
   };
-  const atOnce = Math.max(1, Math.min(host.atOnce, ids.length));
-  await Promise.all(Array.from({ length: atOnce }, worker));
-  return { capped };
+  const work = async (id: string) => {
+    await host.drive(id).catch((err) => console.error('[chat/subtasks] a part failed:', err));
+    // Its slot is free once it isn't running: a driver that left it running ends it here.
+    await moveRun(id, ['running'], 'error', { error: 'failed', finished: true }).catch(() => {});
+    const run = await loadRun(id).catch(() => null);
+    if (run?.status === 'paused_cap') capped = true;
+    working.delete(id);
+  };
+  while (waiting.length > 0 || working.size > 0) {
+    // As many as there are free slots, in order.
+    while (waiting.length > 0 && open()) {
+      if (await pausedNow()) {
+        capped = true;
+        break;
+      }
+      if (!(await host.claim(waiting[0]))) break;
+      const id = waiting.shift()!;
+      working.set(id, work(id));
+    }
+    if (working.size === 0 && !open()) break;
+    // A part ends, or a slot may have freed up elsewhere.
+    await Promise.race([...working.values(), sleep(SLOT_POLL_MS)]);
+  }
+  return { capped, unstarted: waiting };
 }
 
 /** What a part answered, as the parent's model reads it. */
@@ -279,21 +312,26 @@ function partResult(
   part: ChatStepPart,
   run: LoadedRun | null,
   at: number,
-  timedOut: boolean,
+  { timedOut, started }: { timedOut: boolean; started: boolean },
 ): Record<string, Json> {
   const text = (run?.progress.text ?? '').trim();
   const answer = text.length > PART_ANSWER_MAX ? `${text.slice(0, PART_ANSWER_MAX)}…` : text;
-  const status = part.status === 'stopped' && timedOut ? 'timed_out' : part.status;
+  const status = !started
+    ? 'not_started'
+    : part.status === 'stopped' && timedOut
+      ? 'timed_out'
+      : part.status;
+  const reasons: Record<string, string> = {
+    not_started: "It couldn't start: the workspace was busy.",
+    timed_out: 'It took longer than its time.',
+    failed: 'It stopped on an error.',
+  };
   return {
     part: at,
     title: part.title,
     status,
     ...(answer ? { answer } : {}),
-    ...(status === 'timed_out'
-      ? { reason: 'It took longer than its time.' }
-      : status === 'failed'
-        ? { reason: 'It stopped on an error.' }
-        : {}),
+    ...(reasons[status] ? { reason: reasons[status] } : {}),
   };
 }
 
@@ -372,7 +410,7 @@ export async function runSubtasks(
   const onAbort = () => void stopAll();
   host.signal.addEventListener('abort', onAbort, { once: true });
 
-  const state: { worked: { capped: boolean } | null } = { worked: null };
+  const state: { worked: { capped: boolean; unstarted: string[] } | null } = { worked: null };
   const working = workParts(host, ids, until).then((done) => {
     state.worked = done;
   });
@@ -398,9 +436,10 @@ export async function runSubtasks(
   } finally {
     host.signal.removeEventListener('abort', onAbort);
   }
-  // Parts that never started (after the cap, a Stop or the time) end as stopped; one
-  // paused at the cap stays paused, as its parent does.
+  // Parts that never started (after the cap, a Stop, or the time with no free slot) end
+  // as stopped, never left queued; one paused at the cap stays paused, as its parent does.
   for (const id of ids) await moveRun(id, ['queued'], 'stopped', { finished: true });
+  const unstarted = new Set(state.worked?.unstarted ?? []);
 
   const runs = await Promise.all(ids.map((id) => loadRun(id).catch(() => null)));
   const parts = await readParts(ids).catch(() => shown);
@@ -426,8 +465,10 @@ export async function runSubtasks(
     detail: t('progress', { ended: partsEnded(parts), count }),
   });
   const value = toJson({
-    parts: parts.map((part, i) => partResult(part, runs[i], i + 1, timedOut)),
-    note: 'Write one answer from these parts. Name each part that failed or timed out and why; the others still count. Where a part says a change is needed, make it with its tool: the person approves it in this chat.',
+    parts: parts.map((part, i) =>
+      partResult(part, runs[i], i + 1, { timedOut, started: !unstarted.has(ids[i]) }),
+    ),
+    note: 'Write one answer from these parts. Name each part that failed, timed out or never started, and why; the others still count. Where a part says a change is needed, make it with its tool: the person approves it in this chat.',
   });
   const fitted = fitResult(value, Math.max(500, host.room));
   progress.dataChars += fitted.chars;

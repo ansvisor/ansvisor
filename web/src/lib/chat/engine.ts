@@ -184,7 +184,6 @@ import {
   readCap,
   readRunCounts,
   startDecision,
-  workspaceRunLimit,
   writeCap,
   type ReadBudget,
 } from './run-limits';
@@ -3037,7 +3036,8 @@ async function subtasksCall(
       sink: rc.sink,
       signal: rc.signal,
       endsAt: rc.segmentStart + RUN_REQUEST_MS,
-      atOnce: ctx ? workspaceRunLimit(ctx.plan) : 1,
+      // A slot of its own for each part, as any run (CHAT-20 §14).
+      claim: (runId) => (ctx ? claimRunSlot(runId, ctx.plan) : Promise.resolve(false)),
       room: rc.budget.dataChars - rc.progress.dataChars,
       logRead: rc.progress.phase === 'read' && rc.models.phases === 'auto',
       drive: (runId) => driveRun(rc.actor, runId, undefined, { sessionUserId: rc.sessionUserId }),

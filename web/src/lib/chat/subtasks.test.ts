@@ -19,6 +19,7 @@ const { supabaseAdmin } = await import('@/lib/supabase/admin');
 const db = supabaseAdmin as unknown as FakeSupabase;
 const { chatEvent } = await import('./events');
 const { newProgress } = await import('./engine-store');
+const { claimRunSlot } = await import('./run-limits');
 const { CHAT_TOOLS, chatTool } = await import('./registry/tools');
 const { withParts } = await import('./subtask-parts');
 const { SUBTASKS_TOOL, partQuestion, partToolSet, partTools, runSubtasks, subtasksInput } =
@@ -31,6 +32,11 @@ const USER = '22222222-2222-4222-8222-222222222222';
 const BRAND = '33333333-3333-4333-8333-333333333333';
 const CHAT = '44444444-4444-4444-8444-444444444444';
 const PARENT = '55555555-5555-4555-8555-555555555555';
+
+const TEAMMATE_RUN = '66666666-6666-4666-8666-666666666666';
+/** A trial workspace runs 2 at once (run-limits.ts); Growth 10. */
+const TRIAL = { planId: 'growth', isTrial: true } as const;
+const GROWTH = { planId: 'growth', isTrial: false } as const;
 
 const part = (title: string) => ({
   title,
@@ -58,6 +64,18 @@ beforeEach(() => {
     chat_run_steps: [],
     chat_run_events: [],
   });
+  // chat_claim_run_slot as 00406 counts: every running run of the workspace, parts included.
+  db.rpcs = {
+    chat_claim_run_slot: ({ p_run_id, p_workspace_limit }) => {
+      const running = db.tables.chat_runs.filter((r) => r.status === 'running').length;
+      if (running >= (p_workspace_limit as number)) return false;
+      const run = db.tables.chat_runs.find((r) => r.id === p_run_id);
+      if (!run || run.status !== 'queued') return false;
+      run.status = 'running';
+      run.started_at = new Date().toISOString();
+      return true;
+    },
+  };
   Object.assign(db.defaults, {
     chat_runs: () => ({ created_at: at(), started_at: null, finished_at: null, error: null }),
     chat_run_state: () => ({
@@ -71,6 +89,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
+const running = () => db.tables.chat_runs.filter((r) => r.status === 'running').map((r) => r.id);
 const partRuns = () => db.tables.chat_runs.filter((r) => r.parent_run_id === PARENT);
 const stateOf = (runId: string) => db.tables.chat_run_state.find((s) => s.run_id === runId)!;
 
@@ -133,7 +152,7 @@ function hostOf(overrides: Partial<SubtasksHost> = {}): SubtasksHost & {
     },
     signal: new AbortController().signal,
     endsAt: Date.now() + 300_000,
-    atOnce: 10,
+    claim: (runId: string) => claimRunSlot(runId, GROWTH),
     room: 48_000,
     logRead: false,
     drive: vi.fn(async (runId: string) => endPart(runId, 'done', `Found ${runId.slice(0, 4)}.`)),
@@ -294,7 +313,7 @@ describe('run_subtasks', () => {
   });
 
   it('pauses everyone at the shared cap: no part starts after it, the parent pauses too', async () => {
-    const host = hostOf({ atOnce: 1 });
+    const host = hostOf({ claim: (runId) => claimRunSlot(runId, TRIAL) });
     // The run's cap is the parent's and its parts' (reserve_chat_ai_usage sums the agent run):
     // the first part's next step is refused, so it pauses at the cap.
     host.drive.mockImplementation(async (runId: string) =>
@@ -317,6 +336,8 @@ describe('run_subtasks', () => {
         step: { parts: [{ status: 'paused' }, { status: 'stopped' }, { status: 'stopped' }] },
       },
     });
+    // A part at the cap holds no slot: only the parent runs.
+    expect(running()).toEqual([PARENT]);
   });
 
   it('pauses at the month limit when that is what a part reached', async () => {
@@ -383,6 +404,118 @@ describe('run_subtasks', () => {
       expect.objectContaining({ title: 'B', status: 'done' }),
       expect.objectContaining({ title: 'C', status: 'timed_out', answer: 'Half of C.' }),
     ]);
+  });
+
+  it('claims a slot for each part: on a trial the parent holds 1 of 2, so parts run one at a time', async () => {
+    const host = hostOf({ claim: (runId) => claimRunSlot(runId, TRIAL) });
+    let most = 0;
+    let parts = 0;
+    let mostParts = 0;
+    host.drive.mockImplementation(async (runId: string) => {
+      parts += 1;
+      mostParts = Math.max(mostParts, parts);
+      most = Math.max(most, running().length);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      parts -= 1;
+      endPart(runId, 'done', 'Read it.');
+    });
+    const done = await runSubtasks(host, { parts: [part('B'), part('C'), part('D')] });
+
+    expect(done.kind).toBe('result');
+    expect(host.drive).toHaveBeenCalledTimes(3);
+    expect(mostParts).toBe(1);
+    expect(most).toBe(2);
+    expect(partRuns().map((r) => r.status)).toEqual(['done', 'done', 'done']);
+    expect(running()).toEqual([PARENT]);
+  });
+
+  it("lets a teammate's run take a slot once a part ends, and starts the next part when one frees up", async () => {
+    db.tables.chat_runs.push({ id: TEAMMATE_RUN, conversation_id: 'their-chat', status: 'queued' });
+    const host = hostOf({ claim: (runId) => claimRunSlot(runId, TRIAL) });
+    const teammate: boolean[] = [];
+    host.drive.mockImplementation(async (runId: string) => {
+      const title = db.tables.chat_runs.find((r) => r.id === runId)!.subtask_title;
+      if (title === 'B') {
+        // B works a moment, while C finds no slot.
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        // The parent and B hold both slots: the teammate waits.
+        teammate.push(await claimRunSlot(TEAMMATE_RUN, TRIAL));
+        endPart(runId, 'done', 'Read B.');
+        // B ended: its slot is free, and the teammate takes it.
+        teammate.push(await claimRunSlot(TEAMMATE_RUN, TRIAL));
+        // The teammate's run ends a moment later; C starts then.
+        setTimeout(() => {
+          db.tables.chat_runs.find((r) => r.id === TEAMMATE_RUN)!.status = 'done';
+        }, 30);
+        return;
+      }
+      expect(db.tables.chat_runs.find((r) => r.id === TEAMMATE_RUN)!.status).toBe('done');
+      endPart(runId, 'done', 'Read C.');
+    });
+    const done = await runSubtasks(host, { parts: [part('B'), part('C')] });
+
+    expect(teammate).toEqual([false, true]);
+    expect(done.kind).toBe('result');
+    expect(partRuns().map((r) => [r.subtask_title, r.status])).toEqual([
+      ['B', 'done'],
+      ['C', 'done'],
+    ]);
+  });
+
+  it('stops the parts that never got a slot when its time is up, and leaves none queued', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // A teammate's run holds the trial's other slot the whole time.
+    db.tables.chat_runs.push({
+      id: 'busy-run',
+      conversation_id: 'their-chat',
+      status: 'running',
+    });
+    const host = hostOf({
+      endsAt: Date.now() + 120_000,
+      // Each try that finds no slot comes 25 s later than the one before.
+      claim: async (runId) => {
+        const got = await claimRunSlot(runId, TRIAL);
+        if (!got) vi.setSystemTime(Date.now() + 25_000);
+        return got;
+      },
+    });
+    const done = await runSubtasks(host, { parts: [part('B'), part('C')] });
+
+    expect(host.drive).not.toHaveBeenCalled();
+    if (done.kind !== 'result') throw new Error(done.kind);
+    expect((done.value as { parts: unknown[] }).parts).toEqual([
+      expect.objectContaining({
+        title: 'B',
+        status: 'not_started',
+        reason: "It couldn't start: the workspace was busy.",
+      }),
+      expect.objectContaining({ title: 'C', status: 'not_started' }),
+    ]);
+    expect(done.error).toBe(true);
+    expect(partRuns().map((r) => r.status)).toEqual(['stopped', 'stopped']);
+  });
+
+  it("frees each part's slot whichever way it ends", async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const host = hostOf({ claim: (runId) => claimRunSlot(runId, TRIAL) });
+    const ends: Record<string, string> = { B: 'done', C: 'error', D: 'stopped', E: 'running' };
+    host.drive.mockImplementation(async (runId: string) => {
+      const title = db.tables.chat_runs.find((r) => r.id === runId)!.subtask_title as string;
+      // E's driver leaves it running, as a lost one would: it is ended all the same.
+      endPart(runId, ends[title], `Part ${title}.`);
+    });
+    await runSubtasks(host, { parts: ['B', 'C', 'D', 'E'].map(part) });
+
+    // One at a time on a trial, so each part started only once the one before freed its slot.
+    expect(host.drive).toHaveBeenCalledTimes(4);
+    expect(partRuns().map((r) => [r.subtask_title, r.status])).toEqual([
+      ['B', 'done'],
+      ['C', 'error'],
+      ['D', 'stopped'],
+      ['E', 'error'],
+    ]);
+    expect(running()).toEqual([PARENT]);
+    vi.mocked(console.error).mockRestore();
   });
 
   it('starts no part when one could not be made', async () => {
