@@ -22,6 +22,7 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatRailStore } from '@/stores/use-chat-rail-store';
 import { cn } from '@/lib/utils';
 import type { ChatListItem } from '@/lib/chat/conversations';
+import { DRAFT_CHIP } from '@/lib/chat/editor-page';
 import { menuTitleOf } from '@/lib/chat/page-context';
 import { PAGE_PARAM, SPLIT_MIN, openPageOf, withOpenPage } from '@/lib/chat/page-pane';
 import { PANEL_FROM_PARAM, panelReturnOf } from '@/lib/chat/panel';
@@ -35,6 +36,7 @@ import { ChatMenu } from './chat-menu';
 import { ChatHeaderMenu, RenameField } from './chat-menus';
 import { ChatSearchPalette } from './chat-search';
 import { chatShortcutOf, MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
+import { PageChipContext, type PageChip } from './page-chip';
 import { PagePane } from './page-pane';
 
 /** At this width and up the chat menu is a column; below it, a drawer (CHAT-01 item 9). */
@@ -163,7 +165,10 @@ const PILL_OF: Partial<Record<string, StatusPillState>> = {
  * no room for 300px of chat and a 600px editor (Teknik T1), the page takes
  * the whole width with Back to chat, and the chat's header leads back to
  * the page; both stay open underneath, so neither loses its place. The
- * editor's Close takes `?page` out of the address.
+ * editor's Close takes `?page` out of the address. While the page is open,
+ * the chat's box carries it as a chip, "Page: {title}" (W4-15c): what is
+ * asked comes back as the Content Agent's suggestions in the editor, read
+ * there as the run leaves them (W4-14); × takes the chip out, not the page.
  */
 export function ChatShell({
   staff = false,
@@ -283,12 +288,36 @@ function ChatShellFrame({
   // Too narrow for both side by side: one at a time, the page first.
   const stacked = !!openPage && room !== null && room < SPLIT_MIN;
   const [chatShown, setChatShown] = useState(false);
-  // A page just opened shows itself, whichever showed before.
+  // The box's chip for the page, until its × (W4-15c): its title once the editor read it.
+  const [chipOff, setChipOff] = useState(false);
+  const [pageTitle, setPageTitle] = useState<string | null>(null);
+  // Grows each time a run left suggestions in the page: the editor reads them then.
+  const [suggestedAt, setSuggestedAt] = useState(0);
+  // A page just opened shows itself, whichever showed before, with its chip.
   const [shownPage, setShownPage] = useState(openPage);
   if (shownPage !== openPage) {
     setShownPage(openPage);
     setChatShown(false);
+    setChipOff(false);
+    setPageTitle(null);
   }
+  const pageChip = useMemo<PageChip | null>(
+    () =>
+      openPage
+        ? {
+            chip: chipOff
+              ? null
+              : {
+                  key: DRAFT_CHIP,
+                  label: pageTitle ? tPane('chip', { title: pageTitle }) : tPane('chipUntitled'),
+                  value: openPage,
+                },
+            removeChip: () => setChipOff(true),
+            suggested: () => setSuggestedAt((n) => n + 1),
+          }
+        : null,
+    [openPage, chipOff, pageTitle, tPane],
+  );
   const chatHidden = stacked && !chatShown;
   const pageHidden = stacked && chatShown;
   // The one not shown stays laid out at the shown one's width, unseen: its scroll stays.
@@ -539,7 +568,9 @@ function ChatShellFrame({
           data-slot="chat-scroll"
           className={cn('chat-scroll relative min-h-0 flex-1 overflow-y-auto', padded && 'p-6')}
         >
-          <ChatCrumbContext.Provider value={setCrumbTail}>{children}</ChatCrumbContext.Provider>
+          <ChatCrumbContext.Provider value={setCrumbTail}>
+            <PageChipContext.Provider value={pageChip}>{children}</PageChipContext.Provider>
+          </ChatCrumbContext.Provider>
         </div>
       </div>
 
@@ -548,6 +579,8 @@ function ChatShellFrame({
           draftId={openPage}
           onClose={closePage}
           onBackToChat={stacked ? backToChat : undefined}
+          onTitle={setPageTitle}
+          suggestedAt={suggestedAt}
           hidden={pageHidden}
           style={pageHidden ? unseenWidth : undefined}
           className={cn('flex-1', !stacked && 'min-w-[600px]', pageHidden && unseen)}

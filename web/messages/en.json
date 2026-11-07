@@ -4766,6 +4766,8 @@
         "quality": "Quality {score}",
         "here": "Optimize here, no editor",
         "hereDetail": "The agent rewrites the page to its open rules. You get version {n} with what changed.",
+        "editorHere": "Optimize in the editor here",
+        "editorHereDetail": "Opens next to this chat. See each suggestion on the page; accept or reject it.",
         "editor": "Optimize in Content Editor",
         "editorDetail": "The full editor with Brief, Rules, Quality and the agent’s next steps.",
         "prompt": "Optimize “{title}” here, without the editor",
@@ -4978,6 +4980,8 @@
     "backToChatTip": "Show the chat. The page stays open.",
     "showPage": "Back to the page →",
     "showPageTip": "Show the page open beside this chat",
+    "chip": "Page: {title}",
+    "chipUntitled": "This page",
     "readOnly": "Read only: your role is {role}. Admins and Managers can change this page."
   },
   "chatTour": {

@@ -1,4 +1,4 @@
-import { act, type ReactNode } from 'react';
+import { act, useEffect, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,7 +17,8 @@ import {
  * for 300px of chat and a 600px editor, one at a time, with Back to chat and
  * a way back to the page, neither unmounted; Chat's side panel never sits
  * beside it; Analysts and Agency partners get the page read-only, and what
- * they click asks their Admin.
+ * they click asks their Admin. The chat's box carries the page as a chip,
+ * "Page: {title}" (W4-15c), until its × or Close.
  */
 
 const nav = vi.hoisted(() => ({ pathname: '/dashboard/chat', push: vi.fn() }));
@@ -60,6 +61,8 @@ interface SurfaceProps {
   draftId: string;
   embedded?: boolean;
   onClose?: () => void;
+  onTitle?: (title: string) => void;
+  suggestedAt?: number;
 }
 const surface = vi.hoisted(() => ({
   Component: null as ((props: SurfaceProps) => ReactNode) | null,
@@ -75,14 +78,16 @@ vi.mock('next/dynamic', () => ({
     };
   },
 }));
-function FakeSurface({ draftId, embedded, onClose }: SurfaceProps) {
+function FakeSurface({ draftId, embedded, onClose, onTitle, suggestedAt }: SurfaceProps) {
   const { isLocked, guard } = useUpgradeGate();
+  useEffect(() => onTitle?.(`Title of ${draftId.slice(-1)}`), [draftId, onTitle]);
   return (
     <div
       data-testid="surface"
       data-draft={draftId}
       data-embedded={String(embedded)}
       data-locked={String(isLocked)}
+      data-suggested={suggestedAt}
     >
       <button type="button" data-action="editor.close" onClick={onClose}>
         Close
@@ -104,6 +109,7 @@ const { ChatShell } = await import('./chat-shell');
 const { ChatPanelProvider } = await import('./panel/chat-panel-provider');
 const { ChatSidePanelSlot } = await import('./panel/chat-side-panel-slot');
 const { useChatPanel } = await import('./panel/chat-panel-context');
+const { usePageChip } = await import('./page-chip');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -439,5 +445,53 @@ describe('ChatShell with a page open (?page=)', () => {
     expect(one('[data-testid="surface"]')?.dataset.draft).toBe(OTHER);
     expect(pane()!.className).not.toContain('invisible');
     expect(column().className).toContain('invisible');
+  });
+
+  it('puts the page in the box as a chip: × takes it out and leaves the page, Close takes both (W4-15c)', async () => {
+    /** What the chat's page reads from the shell: the box's chip, and its two calls. */
+    function Box() {
+      const page = usePageChip();
+      return (
+        <div data-testid="box" data-chip={page?.chip ? JSON.stringify(page.chip) : 'none'}>
+          {page && (
+            <>
+              <button type="button" data-action="test.removeChip" onClick={page.removeChip} />
+              <button
+                type="button"
+                data-action="test.suggested"
+                onClick={() => page.suggested(2)}
+              />
+            </>
+          )}
+        </div>
+      );
+    }
+    const chip = () => {
+      const value = one('[data-testid="box"]')!.dataset.chip!;
+      return value === 'none' ? null : JSON.parse(value);
+    };
+    await render(shell(<Box />));
+    // Named by the page's title once the editor read it; its value is the draft, as "This draft" is.
+    expect(chip()).toEqual({ key: 'draft', label: 'Page: Title of 1', value: DRAFT });
+
+    // A run left suggestions in the page: the editor is told, to read them.
+    expect(one('[data-testid="surface"]')!.dataset.suggested).toBe('0');
+    await click(action('test.suggested'));
+    expect(one('[data-testid="surface"]')!.dataset.suggested).toBe('1');
+
+    // ×: the chip goes, the page stays.
+    await click(action('test.removeChip'));
+    expect(chip()).toBeNull();
+    expect(pane()).not.toBeNull();
+
+    // Closed, then opened again: the chip with it.
+    search.value = '';
+    await render(shell(<Box />));
+    expect(pane()).toBeNull();
+    expect(chip()).toBeNull();
+    expect(action('test.removeChip')).toBeNull();
+    search.value = `page=${OTHER}`;
+    await render(shell(<Box />));
+    expect(chip()).toEqual({ key: 'draft', label: 'Page: Title of 2', value: OTHER });
   });
 });
