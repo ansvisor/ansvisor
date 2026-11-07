@@ -3,11 +3,13 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -21,6 +23,7 @@ import { useChatRailStore } from '@/stores/use-chat-rail-store';
 import { cn } from '@/lib/utils';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { menuTitleOf } from '@/lib/chat/page-context';
+import { PAGE_PARAM, SPLIT_MIN, openPageOf, withOpenPage } from '@/lib/chat/page-pane';
 import { PANEL_FROM_PARAM, panelReturnOf } from '@/lib/chat/panel';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
@@ -32,9 +35,12 @@ import { ChatMenu } from './chat-menu';
 import { ChatHeaderMenu, RenameField } from './chat-menus';
 import { ChatSearchPalette } from './chat-search';
 import { chatShortcutOf, MenuToggleIcon, shortcutLabel, useIsMac } from './chat-shortcuts';
+import { PagePane } from './page-pane';
 
 /** At this width and up the chat menu is a column; below it, a drawer (CHAT-01 item 9). */
 const WIDE_QUERY = '(min-width: 1100px)';
+/** The menu's column, shown (w-64). */
+const MENU_WIDTH = 256;
 
 function subscribeWide(onChange: () => void) {
   const media = window.matchMedia(WIDE_QUERY);
@@ -49,6 +55,35 @@ function useIsWide(): boolean {
     () => window.matchMedia(WIDE_QUERY).matches,
     () => true,
   );
+}
+
+/**
+ * An element's width as laid out, while `on`: read before the first paint,
+ * then again on every change (the window, the app sidebar); null until
+ * measured. A box not laid out (0) keeps the width it had.
+ */
+function useWidthOf(ref: RefObject<HTMLElement | null>, on: boolean): number | null {
+  const [width, setWidth] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!on || !el) return;
+    const now = el.getBoundingClientRect().width;
+    // Before the first paint, so a narrow window never shows the two side by side.
+    if (now > 0) setWidth(now);
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      const next = entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width;
+      if (next > 0) setWidth(next);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, on]);
+  return width;
+}
+
+/** Once the layout changed: focus on the composer, or on what `selector` names. */
+function focusSoon(selector = '[data-action="composer.input"]') {
+  requestAnimationFrame(() => document.querySelector<HTMLElement>(selector)?.focus());
 }
 
 const CHAT_PATH = /^\/dashboard\/chat\/([0-9a-f-]{36})$/i;
@@ -120,6 +155,15 @@ const PILL_OF: Partial<Record<string, StatusPillState>> = {
  * toggle opens, which leaves the saved choice alone. `Ctrl+Shift+O` starts
  * a new chat; `Ctrl K` opens the search palette under Search chats, or
  * under the strip's Search. The app sidebar beside it is untouched.
+ *
+ * Open here (CHAT-25 §4, W4-15): a chat whose address names a page
+ * (`?page={draftId}`) has the Content Editor beside it, the chat about 420px
+ * on the left (at least 300px) and the editor filling the right. It is the
+ * one pane on the right: Chat's side panel is off on Chat's own routes. With
+ * no room for 300px of chat and a 600px editor (Teknik T1), the page takes
+ * the whole width with Back to chat, and the chat's header leads back to
+ * the page; both stay open underneath, so neither loses its place. The
+ * editor's Close takes `?page` out of the address.
  */
 export function ChatShell({
   staff = false,
@@ -165,6 +209,7 @@ function ChatShellFrame({
   const t = useTranslations('chatShell.menu');
   const tNav = useTranslations('chatShell.nav');
   const tMenu = useTranslations('nav');
+  const tPane = useTranslations('chatPagePane');
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -229,6 +274,42 @@ function ChatShellFrame({
 
   const chatId = CHAT_PATH.exec(pathname)?.[1] ?? null;
 
+  // The page open beside this chat (W4-15), from its address: a chat's page only.
+  const openPage = chatId ? openPageOf(searchParams?.get(PAGE_PARAM)) : null;
+  const frame = useRef<HTMLDivElement>(null);
+  const frameWidth = useWidthOf(frame, !!openPage);
+  // The room for the chat and the page: the frame less the menu's column.
+  const room = frameWidth === null ? null : frameWidth - (isWide && open ? MENU_WIDTH : 0);
+  // Too narrow for both side by side: one at a time, the page first.
+  const stacked = !!openPage && room !== null && room < SPLIT_MIN;
+  const [chatShown, setChatShown] = useState(false);
+  // A page just opened shows itself, whichever showed before.
+  const [shownPage, setShownPage] = useState(openPage);
+  if (shownPage !== openPage) {
+    setShownPage(openPage);
+    setChatShown(false);
+  }
+  const chatHidden = stacked && !chatShown;
+  const pageHidden = stacked && chatShown;
+  // The one not shown stays laid out at the shown one's width, unseen: its scroll stays.
+  const unseen = 'invisible absolute inset-y-0 right-0';
+  const unseenWidth = stacked && room !== null ? { width: room } : undefined;
+
+  // Close: the page leaves the address, without a reload; the chat takes the width.
+  const closePage = useCallback(() => {
+    const { pathname: path, search: query, hash } = window.location;
+    window.history.replaceState(null, '', `${path}${withOpenPage(query, null)}${hash}`);
+    focusSoon();
+  }, []);
+  const backToChat = useCallback(() => {
+    setChatShown(true);
+    focusSoon();
+  }, []);
+  const showPage = useCallback(() => {
+    setChatShown(false);
+    focusSoon('[data-action="pagePane.backToChat"]');
+  }, []);
+
   // The app sidebar beside Chat: the rail, or expanded as the person left it (CHAT-01 4f).
   useEffect(() => {
     useChatRailStore.getState().setOpen(railOpen);
@@ -272,7 +353,7 @@ function ChatShellFrame({
     // As tall as the main area (its height plus the p-6 the -m-6 takes back),
     // not the window: a demo, read-only or plan band above it would push a
     // window-tall frame past the bottom.
-    <div className="-m-6 flex h-[calc(100%+3rem)] min-w-0">
+    <div ref={frame} className="relative -m-6 flex h-[calc(100%+3rem)] min-w-0">
       <div
         id="chat-menu"
         className={cn(
@@ -286,13 +367,31 @@ function ChatShellFrame({
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col bg-background">
-        <header className="flex min-h-[52px] shrink-0 items-center gap-2.5 border-b px-[18px] py-2.5">
+      <div
+        data-slot="chat-column"
+        inert={chatHidden || undefined}
+        style={chatHidden ? unseenWidth : undefined}
+        className={cn(
+          'flex min-w-0 flex-col bg-background',
+          openPage && !stacked ? 'w-[420px] min-w-[300px] border-r' : 'flex-1',
+          chatHidden && unseen,
+        )}
+      >
+        {/* Beside a page the chat is narrow: its header wraps rather than run under the page. */}
+        <header
+          className={cn(
+            'flex min-h-[52px] shrink-0 items-center gap-2.5 border-b px-[18px] py-2.5',
+            openPage && 'flex-wrap gap-y-1.5',
+          )}
+        >
           {strip && (
             <div
               role="toolbar"
               aria-label={t('strip')}
-              className="flex shrink-0 items-center gap-1.5"
+              className={cn(
+                'flex items-center gap-1.5',
+                openPage ? 'min-w-0 flex-wrap' : 'shrink-0',
+              )}
             >
               <button
                 ref={stripToggle}
@@ -419,6 +518,17 @@ function ChatShellFrame({
             />
           )}
           <div className="ml-auto flex items-center gap-1.5">
+            {pageHidden && (
+              <button
+                type="button"
+                data-action="pagePane.showPage"
+                title={tPane('showPageTip')}
+                onClick={showPage}
+                className="flex h-7 shrink-0 items-center rounded-lg border bg-card px-2.5 text-xs font-medium outline-none hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                {tPane('showPage')}
+              </button>
+            )}
             {!strip && runs}
             {current && <ChatHeaderMenu chat={current} />}
           </div>
@@ -432,6 +542,17 @@ function ChatShellFrame({
           <ChatCrumbContext.Provider value={setCrumbTail}>{children}</ChatCrumbContext.Provider>
         </div>
       </div>
+
+      {openPage && (
+        <PagePane
+          draftId={openPage}
+          onClose={closePage}
+          onBackToChat={stacked ? backToChat : undefined}
+          hidden={pageHidden}
+          style={pageHidden ? unseenWidth : undefined}
+          className={cn('flex-1', !stacked && 'min-w-[600px]', pageHidden && unseen)}
+        />
+      )}
 
       <Sheet open={drawer && !isWide} onOpenChange={setDrawer}>
         <SheetContent

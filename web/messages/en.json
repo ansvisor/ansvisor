@@ -4938,6 +4938,15 @@
       "all": "All time"
     }
   },
+  "chatPagePane": {
+    "label": "Page beside the chat",
+    "loading": "Opening the page…",
+    "backToChat": "← Back to chat",
+    "backToChatTip": "Show the chat. The page stays open.",
+    "showPage": "Back to the page →",
+    "showPageTip": "Show the page open beside this chat",
+    "readOnly": "Read only: your role is {role}. Admins and Managers can change this page."
+  },
   "chatTour": {
     "topics": {
       "visibility": "Visibility",
