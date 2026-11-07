@@ -127,7 +127,7 @@ describe('getShoppingOwnChannels', () => {
       'chatgpt-shopping',
       'gemini-web',
     ]);
-    expect(reads).toHaveLength(5);
+    expect(reads).toHaveLength(4);
     for (const read of reads) {
       expect(read).toMatchObject({
         table: 'prompt_result_shopping_cards',
@@ -140,7 +140,6 @@ describe('getShoppingOwnChannels', () => {
       ['google-aio'],
       ['google-aimode'],
       ['gemini-web'],
-      ['copilot-web'],
     ]);
   });
 

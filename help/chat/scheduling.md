@@ -1,11 +1,11 @@
 ---
 title: Schedule work in Chat
 route: /dashboard/chat/scheduled
-keywords: [schedule, scheduled job, scheduled page, every monday, recurring report, ready by, create schedule, repeat, run now, take over, no change, didn't run, paused, job time zone]
+keywords: [schedule, scheduled job, scheduled page, every monday, recurring report, ready by, due time, due date, keep working, create schedule, repeat, run now, take over, no change, didn't run, paused, job time zone]
 synonyms: [run later, run on repeat, weekly report automatically, remind me, automate a chat]
 plan: all
-updated: 2026-11-02
-last_checked: 2026-11-02
+updated: 2026-11-07
+last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -46,6 +46,14 @@ Each run posts its result in the job's own chat, and the chat shows up in your *
 With **Notify only if the answer changed**, a run that reads the same data as the last result stops before writing and says **No change**. Nothing new is sent or saved, and the writing step uses none of your AI limit. The first run always delivers.
 
 If a run fails, Chat tries again 10 minutes later. If that fails too, the top of your **Inbox** says the job didn't run and why. A job that stops by itself, such as at your monthly AI limit or after 3 failed runs in a row, says so there too. The note goes away once the job runs again.
+
+## Work with a due time
+
+"Have it ready by Monday" starts the work at once. Under the job's task list, or under its answer, Chat shows **Due Mon 19 Oct, 09:00 · I'll keep working and notify you** in your time zone, with **Change** to set another due time on the job's page. Chat keeps working on the parts until they are all ready. A part that fails or stops at your monthly AI limit is tried again up to 3 times, at least 30 minutes apart, and never after the due time. This takes the place of the one try 10 minutes later that other jobs get.
+
+## When it's due
+
+When everything is ready, or when the due time comes, Chat posts what is ready in the job's chat and lists what isn't ready yet, so nothing is left out without a word. It shows up in your **Inbox**, and by email if the job delivers to email. If the 3 tries run out before the due time, Chat posts the same list then. A job that stopped at your monthly AI limit goes on after the limit resets if it isn't due yet; at its due time it delivers what is ready even while paused.
 
 ## The Scheduled page
 
