@@ -1,4 +1,4 @@
-import { act } from 'react';
+import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,7 +15,22 @@ import { RoleProvider, type TeamRole } from '@/components/providers/role-provide
 import { AiUsageCard } from './ai-usage-card';
 
 vi.mock('@/lib/actions/ai-usage', () => ({ getAiUsage: vi.fn() }));
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ refresh: () => {} }) }));
+vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ refresh: () => {} }),
+  Link: ({
+    href,
+    className,
+    children,
+  }: {
+    href: string;
+    className?: string;
+    children: ReactNode;
+  }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
+}));
 
 (
   globalThis as typeof globalThis & {
@@ -262,6 +277,78 @@ describe('AiUsageCard', () => {
     await render();
     expect(container.textContent).toContain("Couldn't read this period's AI usage.");
     error.mockRestore();
+  });
+
+  describe('By agent (CHAT-27 item 27)', () => {
+    const byAgentList = () =>
+      container.querySelector('section[aria-labelledby="ai-usage-by-agent"]');
+
+    it('lists each agent’s share highest first, linked to its page, then what used the rest', async () => {
+      vi.mocked(getAiUsage).mockResolvedValue(
+        usage({
+          chatMetered: true,
+          byAgent: {
+            agents: [
+              { agentId: 'a-2', percent: 1.5, name: 'Rival brief' },
+              { agentId: null, percent: 3 },
+              { agentId: 'a-1', percent: 12, name: 'Weekly report' },
+            ],
+            chat: 4.2,
+          },
+        }),
+      );
+      await render('analyst');
+      const list = byAgentList()!;
+      expect(list.querySelector('h3')!.textContent).toBe('By agent');
+      expect([...list.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'Weekly report12%',
+        'Deleted agent3%',
+        'Rival brief1.5%',
+        'Chat (no agent)4.2%',
+        'Content Editor (briefs, Content Agent, quality checks)30%',
+        'Action Center task writing0.4%',
+        'Improve suggestions12.5%',
+      ]);
+      expect(
+        [...list.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]),
+      ).toEqual([
+        ['Weekly report', '/dashboard/agents/a-1'],
+        ['Rival brief', '/dashboard/agents/a-2'],
+      ]);
+      // Shares of the limit only: never an amount.
+      expect(container.textContent).not.toMatch(/\$|USD/);
+    });
+
+    it('says when no agent used any', async () => {
+      vi.mocked(getAiUsage).mockResolvedValue(
+        usage({ chatMetered: true, byAgent: { agents: [], chat: 1 } }),
+      );
+      await render();
+      expect(byAgentList()!.textContent).toBe('By agentNo agent has used AI this period.');
+      expect(byAgentList()!.querySelector('li')).toBeNull();
+    });
+
+    it('isn’t there with Chat off, in the trial, or with nothing used at all', async () => {
+      vi.mocked(getAiUsage).mockResolvedValue(usage());
+      await render();
+      expect(byAgentList()).toBeNull();
+
+      const agents = { agents: [{ agentId: 'a-1', percent: 12, name: 'Weekly report' }], chat: 0 };
+      vi.mocked(getAiUsage).mockResolvedValue(usage({ trial: true, byAgent: agents }));
+      act(() => root.unmount());
+      root = createRoot(container);
+      await render();
+      expect(byAgentList()).toBeNull();
+
+      vi.mocked(getAiUsage).mockResolvedValue(
+        usage({ percentUsed: 0, features: [], byAgent: { agents: [], chat: 0 } }),
+      );
+      act(() => root.unmount());
+      root = createRoot(container);
+      await render();
+      expect(byAgentList()).toBeNull();
+      expect(container.textContent).toContain('No AI usage yet this period.');
+    });
   });
 });
 

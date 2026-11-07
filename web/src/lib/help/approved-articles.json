@@ -761,6 +761,9 @@
         "resume agent",
         "archive agent",
         "agent ai use",
+        "by agent",
+        "top agent",
+        "ai use by agent",
         "agent runs",
         "triggers",
         "max per run",
@@ -852,7 +855,7 @@
         "agent for new brands"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-07",
       "sections": [
         {
           "heading": null,
@@ -893,6 +896,10 @@
         {
           "heading": "An agent's page",
           "text": "Click **Open** or the agent's name. The top shows its state, its owner, whether it is private or shared, and **This period**: what it used of this month's AI limit, with its monthly cap when one is set. Under it you see its skills, mode, connections and model.\n\n**Triggers** lists what starts it and when it runs next, and **What this agent did** what its runs took live in the last 30 days. **Run history** lists its last 50 runs: when each started, its trigger and brand, its result, its outcome and its **AI use**, for example \"3.2% of 10%\": what the run used and the most one run may use. Filter them with **All**, **Improved**, **Pending** and **Stopped**, and click a run to open its chat.\n\nOn the right, **Access**, **Scope** and **AI use** show who owns it, what it may reach and its limits."
+        },
+        {
+          "heading": "Which agent used the most AI",
+          "text": "To compare agents, open **Settings › Billing**. Under **This period's AI usage**, **By agent** lists the 5 agents that used the most this period, highest first, then **Other agents** and what used the rest: **Chat (no agent)**, the Content Editor, the Action Center and Improve. Click an agent to open its page. A deleted agent's use shows as **Deleted agent**, and an agent you can't see counts in **Other agents**. The AI usage meter's panel names the top one, for example **Top agent this period: Weekly report · 12%**."
         },
         {
           "heading": "What this agent did",

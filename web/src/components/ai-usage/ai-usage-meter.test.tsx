@@ -269,6 +269,37 @@ describe('AiUsageMeter', () => {
     ]);
   });
 
+  it('names the top agent this period once one the member may see used some (CHAT-27 item 28)', async () => {
+    vi.mocked(readAiUsage).mockResolvedValue(
+      usage({
+        chatMetered: true,
+        byAgent: {
+          agents: [
+            { agentId: null, percent: 20 },
+            { agentId: 'a-1', percent: 12, name: 'Weekly report' },
+            { agentId: 'a-2', percent: 3, name: 'Rival brief' },
+          ],
+          chat: 1,
+        },
+      }),
+    );
+    await render();
+    await open();
+    expect(popup()!.textContent).toContain('Top agent this period: Weekly report · 12%');
+    expect(popup()!.textContent).not.toContain('Rival brief');
+    expect(popup()!.textContent).not.toMatch(/\$|USD/);
+
+    // No agent used any, or none the member may see: no line.
+    for (const agents of [[], [{ agentId: 'a-3', percent: 5 }]]) {
+      vi.mocked(readAiUsage).mockResolvedValue(
+        usage({ chatMetered: true, byAgent: { agents, chat: 1 } }),
+      );
+      await remount('analyst');
+      await open();
+      expect(popup()!.textContent).not.toContain('Top agent');
+    }
+  });
+
   it('closes when one of its links is followed', async () => {
     await render();
     await open();

@@ -8,6 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 let org;
 let spend;
+// chat_agent_usage_shares' rows, for the By agent list.
+let agentRows;
 let rpcCalls;
 // The page's ledger rows, and the filters its read used.
 let pageRows;
@@ -24,6 +26,8 @@ function query(table) {
       if (table === 'prompt_improve_usage') pageFilters.push(['gte', column, value]);
       return builder;
     },
+    // The credit grants' read (with Chat on): none.
+    gt: () => builder,
     maybeSingle: () => builder,
     single: () => builder,
     then: (resolve) =>
@@ -47,6 +51,7 @@ beforeEach(async () => {
     subscription_ends_at: '2026-11-20T09:00:00Z',
   };
   spend = [];
+  agentRows = [];
   rpcCalls = [];
   pageRows = [];
   pageFilters = [];
@@ -55,7 +60,7 @@ beforeEach(async () => {
       from: (t) => query(t),
       rpc: async (fn, args) => {
         rpcCalls.push({ fn, args });
-        return { data: spend, error: null };
+        return { data: fn === 'chat_agent_usage_shares' ? agentRows : spend, error: null };
       },
     },
   }));
@@ -67,6 +72,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers();
   delete process.env.IS_CLOUD;
+  delete process.env.CHAT_AGENTIC;
   vi.doUnmock('../config/supabase.js');
   // One test reads plans.js mocked: here, so a failing one can't pass it on.
   vi.doUnmock('../config/plans.js');
@@ -225,6 +231,71 @@ describe('getAiUsage', () => {
     const usage = await guard.getAiUsage('o1');
     expect(usage).toMatchObject({ unlimited: true, percentUsed: null, features: [] });
     expect(rpcCalls).toEqual([]);
+  });
+});
+
+describe('getAiUsage by agent (CHAT-27 item 27)', () => {
+  beforeEach(() => {
+    process.env.CHAT_AGENTIC = 'true';
+  });
+
+  it('lists each agent’s share highest first, and Chat’s use outside them', async () => {
+    // Starter's $5. Chat's features hold $1.80: $1.25 of it the agents'.
+    spend = [
+      { feature: 'agent', cost_usd: '1.2' },
+      { feature: 'chat', cost_usd: '0.5' },
+      { feature: 'image', cost_usd: '0.1' },
+      { feature: 'content', cost_usd: '1' },
+    ];
+    agentRows = [
+      { agent_id: 'a-small', share: '0.0100', own_key_share: '0', runs: 1 },
+      // A run with 3 parts: the parts' steps carry the parent's agent (00419).
+      { agent_id: 'a-big', share: '0.2000', own_key_share: '0', runs: 1 },
+      // The deleted agents' runs, together.
+      { agent_id: null, share: '0.0400', own_key_share: '0', runs: 2 },
+      // On the workspace's own key only: not the budget's.
+      { agent_id: 'a-own', share: '0', own_key_share: '0.3000', runs: 4 },
+    ];
+    const usage = await guard.getAiUsage('o1');
+    expect(rpcCalls).toContainEqual({
+      fn: 'chat_agent_usage_shares',
+      args: { p_organization_id: 'o1', p_since: usage.periodStart, p_budget: 5 },
+    });
+    expect(usage.byAgent).toEqual({
+      agents: [
+        { agentId: 'a-big', percent: 20 },
+        { agentId: null, percent: 4 },
+        { agentId: 'a-small', percent: 1 },
+      ],
+      chat: 11,
+    });
+    // Shares only: no dollars leave the server.
+    expect(JSON.stringify(usage.byAgent)).not.toMatch(/usd|cost/i);
+  });
+
+  it('scales the agents as the features past the budget', async () => {
+    spend = [{ feature: 'agent', cost_usd: '10' }];
+    agentRows = [{ agent_id: 'a1', share: '2.0000', own_key_share: '0', runs: 3 }];
+    const usage = await guard.getAiUsage('o1');
+    expect(usage.features).toEqual([{ feature: 'agent', percent: 100 }]);
+    expect(usage.byAgent).toEqual({ agents: [{ agentId: 'a1', percent: 100 }], chat: 0 });
+  });
+
+  it('has an empty list when no agent used any', async () => {
+    spend = [{ feature: 'chat', cost_usd: '0.5' }];
+    expect((await guard.getAiUsage('o1')).byAgent).toEqual({ agents: [], chat: 10 });
+  });
+
+  it('isn’t read with Chat off, or in the trial, whose shares aren’t shown', async () => {
+    delete process.env.CHAT_AGENTIC;
+    expect(await guard.getAiUsage('o1')).not.toHaveProperty('byAgent');
+    expect(rpcCalls.map((c) => c.fn)).toEqual(['ai_usage_by_feature']);
+
+    process.env.CHAT_AGENTIC = 'true';
+    org = { ...org, subscription_status: 'trialing' };
+    const trial = await guard.getAiUsage('o1');
+    expect(trial.trial).toBe(true);
+    expect(trial).not.toHaveProperty('byAgent');
   });
 });
 

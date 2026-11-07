@@ -7,8 +7,13 @@ import { readAiUsage, readDraftAiUsage, readUsageLimits } from './ai-usage-clien
  */
 
 let session: { access_token: string } | null;
+// The names of the agents the member may see (chat_agents, their own session).
+const agentNames = vi.fn();
 vi.mock('@/lib/supabase/client', () => ({
-  createClient: () => ({ auth: { getSession: async () => ({ data: { session } }) } }),
+  createClient: () => ({
+    auth: { getSession: async () => ({ data: { session } }) },
+    from: () => ({ select: () => ({ in: agentNames }) }),
+  }),
 }));
 
 const fetchMock = vi.fn();
@@ -54,6 +59,29 @@ describe('readAiUsage', () => {
       percentUsed: 1.3,
       features: [{ feature: 'content', percent: 1.3 }],
     });
+  });
+
+  it('names the agents the member may see, for the Top agent line', async () => {
+    fetchMock.mockResolvedValue(
+      answer(200, {
+        unlimited: false,
+        percentUsed: 30,
+        features: [{ feature: 'agent', percent: 15 }],
+        byAgent: {
+          agents: [
+            { agentId: 'a-1', percent: 12 },
+            { agentId: 'a-2', percent: 3 },
+          ],
+          chat: 0,
+        },
+      }),
+    );
+    agentNames.mockResolvedValue({ data: [{ id: 'a-1', name: 'Weekly report' }], error: null });
+    expect((await readAiUsage())?.byAgent?.agents).toEqual([
+      { agentId: 'a-1', percent: 12, name: 'Weekly report' },
+      { agentId: 'a-2', percent: 3 },
+    ]);
+    expect(agentNames).toHaveBeenCalledWith('id', ['a-1', 'a-2']);
   });
 
   it('is null without an active plan', async () => {
