@@ -84,6 +84,7 @@ import { MentionReviewContext } from './mention-review-context';
 import { TrafficPagesContext } from './traffic-pages-context';
 import { ContentDraftContext } from './content-draft-context';
 import { ShoppingLinksContext } from './shopping-links-context';
+import { BridgeLinksContext } from './bridge-links-context';
 import { ProductPagesContext } from './product-pages-context';
 import { AuditPageContext } from './audit-page-context';
 import { ChatFindingContext } from './chat-finding-context';
@@ -791,6 +792,11 @@ export function ActionDrawer({
                   <Separator />
                   <ShoppingLinksContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'bridge_links' ? (
+                <>
+                  <Separator />
+                  <BridgeLinksContext payload={action.payload ?? {}} />
+                </>
               ) : action.kind === 'product_pages_optimize' ? (
                 <>
                   <Separator />
@@ -904,9 +910,11 @@ export function ActionDrawer({
               />
               {/* Written from the action's evidence (AC-004): not for an
                   action a person sent, which carries its own, nor a closed one;
-                  nor a product pages action, whose tasks are its plan's. */}
+                  nor a bridge links action, whose tasks are its pairs', nor a
+                  product pages action, whose tasks are its plan's. */}
               {taskWriterEnabled() &&
                 action.kind !== 'prompt_improve' &&
+                action.kind !== 'bridge_links' &&
                 action.kind !== 'product_pages_optimize' &&
                 !opportunityId &&
                 action.status !== 'completed' &&

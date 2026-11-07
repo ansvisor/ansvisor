@@ -9,7 +9,9 @@
  *     AI limit's pauses); then, in the same tick, Chat's scheduled jobs'
  *     POST /api/internal/chat/schedules/tick (CHAT-12, W3-01), which
  *     settles their open runs, lets jobs paused at the AI limit go on and
- *     runs the ones that are due. Like the server's other crons, not in
+ *     runs the ones that are due; then the scheduled jobs' e-mails to
+ *     outside addresses not sent in their 7 days expire (W4-28,
+ *     chat-outbound-email.js). Like the server's other crons, not in
  *     development (server.js): there, `node src/scripts/chat-agents-tick.js`
  *     calls both once.
  *   - After Action Center's signal pass records new signals on a brand
@@ -28,6 +30,7 @@ import cron from 'node-cron';
 import supabaseAdmin from '../config/supabase.js';
 import { loadDefinitions } from './action-center/definitions/index.js';
 import { chatAgenticDeployed, chatAgenticEnabled } from './chat-flag.js';
+import { expireOutsideEmails } from './chat-outbound-email.js';
 import { logger } from './logger.js';
 
 /** Every minute. */
@@ -125,9 +128,10 @@ export function startChatAgentTicks(schedule = cron.schedule) {
     if (running) return;
     running = true;
     try {
-      // Neither throws: the agents' tick first, then the jobs' in the same minute.
+      // None throws: the agents' tick first, then the jobs' in the same minute.
       await tickChatAgents();
       await tickChatSchedules();
+      await expireOutsideEmails();
     } catch (err) {
       logger.error({ err }, '[chat-agents] the tick crashed');
     } finally {

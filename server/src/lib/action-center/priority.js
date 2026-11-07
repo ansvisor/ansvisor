@@ -104,6 +104,7 @@ const KIND_CHANGE = {
   // Ground to win.
   page_opportunity: 'opportunity',
   ai_landing_page_winner: 'opportunity',
+  bridge_link_gap: 'opportunity',
   product_pages_to_optimize: 'opportunity',
   new_engine: 'opportunity',
   ai_platform_new: 'opportunity',

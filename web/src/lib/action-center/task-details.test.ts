@@ -22,6 +22,8 @@ const empty = {
   sources: [],
   where: null,
   url: null,
+  linkTo: null,
+  links: [],
   change: null,
   why: null,
   how: [],
@@ -324,6 +326,46 @@ describe('pageCheckable', () => {
     expect(pageCheckable({ taskKey: 'refresh_content', details: auto({ check: 'manual' }) })).toBe(
       false,
     );
+  });
+
+  it('checks a bridge links task on its pairs’ pages, with none of its own (AC plan P-10)', () => {
+    const details = parseTaskDetails({
+      check: 'auto',
+      links: [
+        {
+          url: 'https://a.example/blog/x',
+          linkTo: ' https://a.example/pricing ',
+          anchor: 'Pricing',
+        },
+        { url: 'https://a.example/blog/y', linkTo: 'https://a.example/demo' },
+        { url: 'https://a.example/blog/z' },
+      ],
+      autoCheck: {
+        at: '2026-11-07T03:00:00Z',
+        passed: false,
+        missing: ['link_missing'],
+        links: [
+          { url: 'https://a.example/blog/x', linkTo: 'https://a.example/pricing', passed: true },
+          { url: 'https://a.example/blog/y', passed: 'no' },
+        ],
+      },
+    })!;
+    expect(details.links).toEqual([
+      { url: 'https://a.example/blog/x', linkTo: 'https://a.example/pricing', anchor: 'Pricing' },
+      { url: 'https://a.example/blog/y', linkTo: 'https://a.example/demo', anchor: null },
+    ]);
+    expect(details.lastCheck?.links).toEqual([{ url: 'https://a.example/blog/x', passed: true }]);
+    expect(pageCheckable({ taskKey: 'add_internal_links', details })).toBe(true);
+    // Only the internal links task is checked on pairs.
+    expect(pageCheckable({ taskKey: 'refresh_content', details })).toBe(false);
+  });
+
+  it('checks an internal links task on the page its links go on (AC plan P-10)', () => {
+    expect(pageCheckable({ taskKey: 'add_internal_links', details: auto() })).toBe(true);
+    expect(parseTaskDetails({ url: '/blog/cold-brew', linkTo: ' /pricing ' })?.linkTo).toBe(
+      '/pricing',
+    );
+    expect(parseTaskDetails({ url: '/blog/cold-brew' })?.linkTo).toBeNull();
   });
 
   it('keeps Check now on a shopping links task, which has no new text (#1616)', () => {

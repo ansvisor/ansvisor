@@ -258,6 +258,14 @@ export const DEMO_OPEN = [
     'brands.js answers a demo brand itself (409 demo_brand): it is hidden, not deleted, and the web app shows that as information, not as the plan dialog.',
   ),
   open(
+    'POST /chat-outbound/:id/send',
+    'Sends an e-mail a scheduled job prepared for someone outside the workspace (W4-28). A demo brand has no scheduled jobs (Chat refuses every change on it), so none of its e-mails waits; the route checks the job and its brand itself.',
+  ),
+  open(
+    'POST /chat-outbound/:id/cancel',
+    'Cancels an e-mail a scheduled job prepared: it stops a send and never starts one.',
+  ),
+  open(
     'POST /competitors/suggest',
     "Onboarding's suggestions from a brand's name and site, before the brand exists. Names no brand; the plan check bounds them.",
   ),

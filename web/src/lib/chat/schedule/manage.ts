@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isTimeZone } from '@/lib/time-zone';
 import type { PlanFacts } from '../plan-facts';
 import { closeJobNotices } from './deliver';
+import { outsideLockOf, readOutsideEdit, type OutsideRefusal } from './outside';
 import {
   activeScheduleLimit,
   countActiveSchedules,
@@ -21,7 +22,9 @@ import { readWhen, whenHint, whenPhrase, type ScheduleWhen, type WhenWords } fro
  * Delete, edits (no confirm card: the page is the person's own), and an
  * Admin's Take over of a job its creator can no longer run (Wave 3
  * decision 16). Its creator and Admins switch and delete a job; only its
- * creator edits it, as its runs act as them. Server only.
+ * creator edits it, as its runs act as them. Its addresses outside the
+ * workspace (W4-28) are added only by an Admin or a Manager, out of the
+ * free trial, 5 at most (outside.ts). Server only.
  */
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatSchedules.page.errors' });
@@ -42,7 +45,8 @@ type Refusal =
   | 'limit'
   | 'when'
   | 'prompt'
-  | 'zone';
+  | 'zone'
+  | OutsideRefusal;
 
 const refused = (reason: Refusal, message: string = t(reason)): ManageResult => ({
   ok: false,
@@ -51,7 +55,7 @@ const refused = (reason: Refusal, message: string = t(reason)): ManageResult => 
 });
 
 const JOB_COLUMNS =
-  'id, organization_id, kind, run_mode, due_at, rrule, timezone, created_by, brand_id, enabled, paused_reason';
+  'id, organization_id, kind, run_mode, due_at, rrule, timezone, created_by, brand_id, enabled, paused_reason, external_recipients';
 
 interface ManagedJob {
   id: string;
@@ -65,6 +69,7 @@ interface ManagedJob {
   brand_id: string | null;
   enabled: boolean;
   paused_reason: string | null;
+  external_recipients: string[] | null;
 }
 
 /** The job, when the reader may see it in their workspace. */
@@ -195,6 +200,8 @@ export interface ScheduleEdits {
   changeOnly: boolean;
   /** The job's own time zone, changed on its page; left out, it keeps the one it has. */
   timezone?: string;
+  /** Its addresses outside the workspace (W4-28); left out, it keeps the ones it has. */
+  external?: string[];
 }
 
 /** The When a job keeps now, as its page reads it; null for a follow-up check. */
@@ -217,13 +224,16 @@ const sameWhen = (a: ScheduleWhen, b: ScheduleWhen) =>
  * next run from now when it is on. The person's Settings › Account zone
  * never moves a job: only this does. A When left as it was, on the same
  * zone, keeps the job's timing: a one-time job that already ran isn't run
- * again, and one whose time passed still saves its other edits.
+ * again, and one whose time passed still saves its other edits. A new
+ * outside address needs the reader's role and the workspace's `plan`
+ * (outside.ts); without the plan, none is added.
  */
 export async function updateSchedule(
   reader: ScheduleReader,
   id: string,
   edits: ScheduleEdits,
   now: Date = new Date(),
+  plan: PlanFacts | null = null,
 ): Promise<ManageResult> {
   const job = await readJob(reader, id);
   if (!job) return refused('not_found');
@@ -231,6 +241,16 @@ export async function updateSchedule(
     return refused('forbidden');
   }
   if (edits.timezone !== undefined && !isTimeZone(edits.timezone)) return refused('zone');
+  let outside: string[] | undefined;
+  if (edits.external !== undefined) {
+    const read = readOutsideEdit(
+      job.external_recipients ?? [],
+      edits.external,
+      outsideLockOf(reader, plan),
+    );
+    if (!read.ok) return refused(read.reason);
+    outside = read.addresses;
+  }
   const zone = edits.timezone ?? job.timezone;
   // A new zone reads When again on the new clock and makes the next run again.
   const moved = zone !== job.timezone;
@@ -272,6 +292,7 @@ export async function updateSchedule(
       timezone: zone,
       deliver_to: deliverToOf(edits.deliver),
       change_only: recurring && edits.changeOnly,
+      ...(outside ? { external_recipients: outside } : {}),
     })
     .eq('id', id);
   if (error) throw new Error(`Could not save the job: ${error.message}`);

@@ -20,7 +20,7 @@ import type { SuggestionsReadResult } from '@/lib/actions/chat-suggestions';
  * its action is closed, and doesn't open on a brand the person's list lacks.
  */
 
-const nav = vi.hoisted(() => ({ push: vi.fn(), search: '' }));
+const nav = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn(), search: '' }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(nav.search) }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
@@ -28,7 +28,7 @@ vi.mock('@/i18n/navigation', () => ({
       {children}
     </a>
   ),
-  useRouter: () => ({ push: nav.push }),
+  useRouter: () => ({ push: nav.push, refresh: nav.refresh }),
 }));
 const plan = vi.hoisted(() => ({ locked: false, openUpgrade: vi.fn() }));
 vi.mock('@/components/providers/upgrade-gate', () => ({
@@ -84,6 +84,18 @@ const notices = vi.hoisted(() => ({
 vi.mock('@/lib/actions/chat-notices', () => ({
   markChatNoticesRead: notices.read,
   closeChatNotice: notices.close,
+}));
+const outside = vi.hoisted(() => ({
+  send: vi.fn(
+    async (): Promise<{ ok: boolean; code?: string; message?: string }> => ({
+      ok: true,
+    }),
+  ),
+  cancel: vi.fn(async () => ({ ok: true })),
+}));
+vi.mock('@/lib/actions/chat-outbound', () => ({
+  sendOutsideEmail: outside.send,
+  cancelOutsideEmail: outside.cancel,
 }));
 const list = vi.hoisted(() => ({ chats: [] as ChatListItem[] }));
 vi.mock('./chat-list-provider', () => ({
@@ -632,6 +644,73 @@ describe('a follow-up check’s result (W3-05)', () => {
     expect(row.querySelector('[data-action="inbox.openSchedule"]')!.getAttribute('href')).toBe(
       '/dashboard/chat/0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c21',
     );
+  });
+});
+
+describe('an e-mail to someone outside the workspace (W4-28)', () => {
+  const EMAIL = {
+    id: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c30',
+    to: 'jane@client.com',
+    subject: 'Weekly report',
+    summary: ['Citations rose 12%', 'ChatGPT cited /pricing 4 times'],
+    files: [{ name: 'weekly-report-2026-11-02.pdf', bytes: 120_000 }],
+    scheduleId: '0b6c2f2e-6a43-4c55-9f0e-3f4f1d2a7c31',
+    title: 'Weekly report',
+    createdAt: '2026-11-02T06:05:00Z',
+    expiresAt: '2026-11-09T06:05:00Z',
+    sendError: null,
+  };
+  beforeEach(() => {
+    outside.send.mockClear();
+    outside.cancel.mockClear();
+    nav.refresh.mockClear();
+  });
+
+  it('waits in Needs you with its preview, and goes only on Send', async () => {
+    await render(<ChatInbox suggestions={ok()} outside={[EMAIL]} />);
+    const card = host.querySelector('[data-slot="inbox-outside-email"]')!;
+    expect(card.textContent).toContain('Send to jane@client.com');
+    expect(card.textContent).toContain('Weekly report · waits for your click · expires Nov 9');
+    expect(card.textContent).toContain('Citations rose 12%');
+    expect(card.textContent).toContain('weekly-report-2026-11-02.pdf · 117 KB');
+    expect(card.textContent).toContain('No links into Ansvisor');
+    // Counted in Needs you, beside the chat that needs the person.
+    expect(tabs()).toContain('Needs you2');
+    expect(outside.send).not.toHaveBeenCalled();
+    await act(async () =>
+      (card.querySelector('[data-action="inbox.sendOutsideEmail"]') as HTMLElement).click(),
+    );
+    expect(outside.send).toHaveBeenCalledExactlyOnceWith(EMAIL.id);
+    expect(sonner.success).toHaveBeenCalledWith('Sent to jane@client.com');
+    expect(host.querySelector('[data-slot="inbox-outside-email"]')).toBeNull();
+    expect(nav.refresh).toHaveBeenCalled();
+  });
+
+  it('keeps the card with why when the send fails, and drops it once it expired', async () => {
+    outside.send.mockResolvedValueOnce({ ok: false, code: 'daily_limit' });
+    await render(<ChatInbox suggestions={ok()} outside={[EMAIL]} />);
+    const send = () =>
+      act(async () =>
+        (host.querySelector('[data-action="inbox.sendOutsideEmail"]') as HTMLElement).click(),
+      );
+    await send();
+    expect(
+      host.querySelector('[data-slot="inbox-outside-email"] [role="alert"]')!.textContent,
+    ).toBe('Your workspace sent 50 e-mails outside it today. Try again tomorrow.');
+    outside.send.mockResolvedValueOnce({ ok: false, code: 'expired' });
+    await send();
+    expect(sonner.error).toHaveBeenLastCalledWith('It expired after 7 days without a Send.');
+    expect(host.querySelector('[data-slot="inbox-outside-email"]')).toBeNull();
+  });
+
+  it('Cancel sends nothing', async () => {
+    await render(<ChatInbox suggestions={ok()} outside={[EMAIL]} />);
+    await act(async () =>
+      (host.querySelector('[data-action="inbox.cancelOutsideEmail"]') as HTMLElement).click(),
+    );
+    expect(outside.cancel).toHaveBeenCalledExactlyOnceWith(EMAIL.id);
+    expect(outside.send).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-slot="inbox-outside-email"]')).toBeNull();
   });
 });
 
