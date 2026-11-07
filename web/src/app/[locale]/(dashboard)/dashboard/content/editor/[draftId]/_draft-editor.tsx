@@ -435,6 +435,8 @@ export function DraftEditor({
   draft,
   onAgentStarted,
   agentFinished = false,
+  embedded = false,
+  onClose,
 }: {
   draft: ContentDraft;
   /**
@@ -444,6 +446,13 @@ export function DraftEditor({
   onAgentStarted?: (run: 'write' | 'rewrite') => void;
   /** The editor opens on what the agent just wrote here: the next-step nudge's moment. */
   agentFinished?: boolean;
+  /**
+   * Inside another page (Chat's Open here, CHAT-25 §4): Close in the Library
+   * link's place, no Chat tab, and the address stays.
+   */
+  embedded?: boolean;
+  /** Embedded: Close, for the page around it to put the editor away. */
+  onClose?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor');
   const tNext = useTranslations('contentEditor.editor.nextStep');
@@ -471,8 +480,9 @@ export function DraftEditor({
   // With the new Chat on, the header speaks Chat's language: the page's pill and the runs tray.
   const chatOn = useChatAgentic();
   // Chat beside the page, first in the side panel (CHAT-25 §5, W4-16), with the panel's setup.
+  // Not embedded in Chat: the chat is beside it already.
   const chatPanel = useChatPanel();
-  const chatTab = chatOn && chatPanel !== null;
+  const chatTab = chatOn && chatPanel !== null && !embedded;
   // Where the page is live (CE-013), and Mark published open.
   const [liveUrl, setLiveUrl] = useState(draft.publishedUrl);
   const [askLive, setAskLive] = useState(false);
@@ -3680,7 +3690,9 @@ export function DraftEditor({
         setAuthorMenuOpen(true);
         return;
       case 'addAuthor':
-        router.push(MANAGE_AUTHORS_PATH);
+        // Embedded, the page around the editor stays: Authors opens in a new tab.
+        if (embedded) window.open(MANAGE_AUTHORS_PATH, '_blank', 'noopener');
+        else router.push(MANAGE_AUTHORS_PATH);
         return;
       case 'showTodos':
       case 'showTrust':
@@ -3906,14 +3918,26 @@ export function DraftEditor({
           move), and the page's tags under the title, all of them at any width. */}
       <header className="border-b px-4 pt-2.5 pb-2">
         <div className="flex items-center gap-2.5">
-          <Link
-            href={CONTENT_LIBRARY_PATH}
-            aria-label={t('back')}
-            title={t('back')}
-            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
+          {embedded ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('closeHere')}
+              title={t('closeHere')}
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Link
+              href={CONTENT_LIBRARY_PATH}
+              aria-label={t('back')}
+              title={t('back')}
+              className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          )}
           {/* The title takes the room left (at least ~140px from 1024px, 96px
               narrower; less while the save state needs its words), ends in "…",
               and never pushes, overlaps or wraps the buttons (Next step spec §3b). */}

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useNow, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ArrowLeft, Check, Circle } from 'lucide-react';
+import { ArrowLeft, Check, Circle, X } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -166,6 +166,8 @@ export function AgentWriting({
   since,
   rewrite = false,
   onRunEnded,
+  embedded = false,
+  onClose,
 }: {
   draftId: string;
   brandId: string;
@@ -177,6 +179,9 @@ export function AgentWriting({
   rewrite?: boolean;
   /** The run ended (stopped, done or failed): the page reads the draft again. */
   onRunEnded?: (stopped?: boolean) => void;
+  /** Inside another page (Chat's Open here, CHAT-25 §4): Close in the Library link's place. */
+  embedded?: boolean;
+  onClose?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor');
   const seconds = elapsedSeconds(since, useNow({ updateInterval: 1000 }));
@@ -215,14 +220,26 @@ export function AgentWriting({
   return (
     <>
       <header className="flex items-center gap-2.5 border-b px-4 py-2.5">
-        <Link
-          href={CONTENT_LIBRARY_PATH}
-          aria-label={t('back')}
-          title={t('back')}
-          className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Link>
+        {embedded ? (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('closeHere')}
+            title={t('closeHere')}
+            onClick={onClose}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        ) : (
+          <Link
+            href={CONTENT_LIBRARY_PATH}
+            aria-label={t('back')}
+            title={t('back')}
+            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        )}
         <h1 className="min-w-0 truncate text-sm font-medium">{title.trim() || t('untitled')}</h1>
       </header>
       <div className="flex flex-1 flex-col items-center justify-center px-6">
