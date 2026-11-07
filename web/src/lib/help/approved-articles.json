@@ -1132,17 +1132,6 @@
         "show all questions",
         "mark ready",
         "set ready",
-        "rules pill",
-        "quality pill",
-        "rules met",
-        "check it against the rules",
-        "check rules",
-        "open rules",
-        "optimize",
-        "optimize here",
-        "optimize page",
-        "rewrite page",
-        "optimize in content editor",
         "voice",
         "microphone",
         "speak",
@@ -1153,7 +1142,23 @@
         "audit card",
         "audit in chat",
         "audit score in chat",
-        "open report"
+        "open report",
+        "agents for you",
+        "recommended agents",
+        "new member",
+        "new teammate",
+        "hide agents for you",
+        "rules pill",
+        "quality pill",
+        "rules met",
+        "check it against the rules",
+        "check rules",
+        "open rules",
+        "optimize",
+        "optimize here",
+        "optimize page",
+        "rewrite page",
+        "optimize in content editor"
       ],
       "synonyms": [
         "assistant",
@@ -1171,6 +1176,10 @@
         {
           "heading": "Chat Home",
           "text": "Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**\n\n**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.\n\n**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat."
+        },
+        {
+          "heading": "Agents for you",
+          "text": "In your first 14 days in a workspace, once you've answered or skipped **What do you work on?**, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nIt shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.\n\nAdmins and Managers click an agent to open it in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide it on all your devices."
         },
         {
           "heading": "The welcome card",
@@ -1610,7 +1619,7 @@
         },
         {
           "heading": "The Default view",
-          "text": "On the Default view, Chat Home shows your greeting, one line and the chat box in the middle of the page. The line says how many chats need you, or, when none do, how a competitor's mention rate moved this week. **For you now**, **What's new**, **Start with a question** and **New for you** don't show.\n\nWhen the Default view arrived, everyone started on it, people who had picked areas before too. Your areas are kept: select **Edit** under the greeting and the picker opens with them ticked, so **Continue** brings your focused Home back."
+          "text": "On the Default view, Chat Home shows your greeting, one line and the chat box in the middle of the page. The line says how many chats need you, or, when none do, how a competitor's mention rate moved this week. **For you now**, **What's new**, **Start with a question** and **New for you** don't show. In your first 14 days in a workspace, **Agents for you** shows there too, until you hide it.\n\nWhen the Default view arrived, everyone started on it, people who had picked areas before too. Your areas are kept: select **Edit** under the greeting and the picker opens with them ticked, so **Continue** brings your focused Home back."
         },
         {
           "heading": "What changes on Chat Home",
@@ -4919,7 +4928,8 @@
         "what do you work on",
         "my menu",
         "hidden sections",
-        "sections off your menu"
+        "sections off your menu",
+        "agents for you"
       ],
       "synonyms": [
         "missing menu item",
@@ -4940,7 +4950,7 @@
         },
         {
           "heading": "When you're asked",
-          "text": "**What do you work on?** is asked once:\n\n- when you sign up, after your competitors and before you choose a plan;\n- when you join from an invitation, on your first sign-in;\n- on a self-hosted install, the first time the admin opens the dashboard.\n\n**Skip: show me everything** keeps every section."
+          "text": "**What do you work on?** is asked once:\n\n- when you sign up, after your competitors and before you choose a plan;\n- when you join from an invitation, on your first sign-in;\n- on a self-hosted install, the first time the admin opens the dashboard.\n\n**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas. It shows on Home's Default view too."
         },
         {
           "heading": "Change your work areas",

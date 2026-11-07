@@ -5183,6 +5183,17 @@
       "whatsNew": {
         "showMe": "Show me",
         "showMeMessage": "What’s new: how can {feature} help me?"
+      },
+      "agentsForYou": {
+        "title": "Agents for you",
+        "note": "Ready-to-use agents for your brand’s site type and your work. Nothing turns on until you do.",
+        "noteAsk": "Ready-to-use agents for your brand’s site type and your work. An Admin or Manager turns them on.",
+        "agent": "Agent",
+        "everyBrand": "For every brand",
+        "open": "See it in Agent Center",
+        "openLabel": "{name}: see it in Agent Center",
+        "asked": "Please turn on the {name} agent for me.",
+        "hide": "Hide Agents for you"
       }
     },
     "focus": {
