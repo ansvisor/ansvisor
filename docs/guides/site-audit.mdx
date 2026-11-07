@@ -1,11 +1,11 @@
 ---
 title: "Site Audit"
-description: "Score any page for AI search readiness across 48 signals, and get page-specific fixes you can paste."
+description: "Score any page for AI search readiness across 49 signals, and get page-specific fixes you can paste."
 ---
 
 ## What it does
 
-The **Site Audit** page (`/dashboard/audit`) checks how ready a page is to be cited by AI answer engines. It fetches the page, runs **48 signals** in five categories, scores the page out of 100, and writes fixes for what failed: an improved H1, a meta description, an opening paragraph that leads with the answer, FAQ markup and more.
+The **Site Audit** page (`/dashboard/audit`) checks how ready a page is to be cited by AI answer engines. It fetches the page, runs **49 signals** in five categories, scores the page out of 100, and writes fixes for what failed: an improved H1, a meta description, an opening paragraph that leads with the answer, FAQ markup and more.
 
 You find it in the sidebar under **Execution**, after **Content**. It is available on plans that include Content Optimization.
 
@@ -18,7 +18,7 @@ You can audit any URL: your own pages, or a competitor's page to see what it doe
     The field at the top is filled in with your brand's primary domain. Replace it with the page you want to check and click **Run Audit**.
   </Step>
   <Step title="Wait for the report">
-    The report page opens right away and follows the audit through its stages: **Fetching the page…**, **Analyzing 48 signals…** and **Generating AI recommendations…**. An audit usually takes about 30 seconds. If it is still running after two minutes, the page says **This audit is taking longer than expected.** Click **Check again** to look again.
+    The report page opens right away and follows the audit through its stages: **Fetching the page…**, **Analyzing 49 signals…** and **Generating AI recommendations…**. An audit usually takes about 30 seconds. If it is still running after two minutes, the page says **This audit is taking longer than expected.** Click **Check again** to look again.
   </Step>
   <Step title="Read the report and fix">
     Start with the **AI Recommendations**, then open the failing signals. When you've made changes, click the re-run icon at the top of the report to audit the page again.
@@ -97,7 +97,7 @@ Each audit has its own report at `/dashboard/audit/[id]`. The icons at the top r
 
 ### Total score
 
-The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40–69) or **Poor** (below 40). Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 48 signals were evaluated.
+The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40–69) or **Poor** (below 40). Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 49 signals were evaluated.
 
 Once a page has three audits, the gauge shows its score with a range, such as **64 ± 2**: half the gap between the lowest and highest score of its last five audits (partial ones aren't counted), rounded up. A line beside it gives those two scores. It's worked out from the page's own audits, with no AI call. Changes you made to the page count too, so after a fix that lifts the score the range stays wide until the older scores leave the last five; a page that didn't change usually shows ± 0. The Pages export has it as its last column, `score_range`. Chat (on the audit's card under its answer, with the change since the page's audit before and **Open report**), the MCP `get_site_audit` tool (`scoreRange`) and a report's **Site Audit Score** give the same range, the report's from the page's audits up to its end date.
 
@@ -116,6 +116,8 @@ Once a page has three audits, the gauge shows its score with a range, such as **
 A category's score is the average of its signals, each counting the same; the total is the weighted average of the categories. A signal that couldn't be evaluated (**n/a**) is left out, so it never lowers the score. **Formula**, beside **Category breakdown**, shows the weights.
 
 **AI bot access** reads robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five (Google-Extended has no crawler of its own), to catch a CDN or firewall that turns them away. A bot robots.txt keeps out fails the check. A bot refused with a 4xx while robots.txt lets it in raises a warning, not a fail: the requests come from Ansvisor's servers, and a firewall that checks a crawler's published IP ranges refuses a request that only names the bot while it may let the real crawler in, so the check can't tell. A slow, busy (429) or failing (5xx) answer isn't counted as a refusal. Ansvisor asks as itself first: if the site turns that request away too, the bots aren't asked.
+
+**Main text without JavaScript** compares the page's main text, as a browser renders it, with the HTML the first AI bot let in got during the live test, before any JavaScript ran. AI crawlers don't run JavaScript, so text only a script writes is text they never see. Menus and footers don't count; 10% or less missing passes, up to 30% warns, and more fails. With no AI bot let in, it shows n/a, and so it does when the bot got bot protection's own page with a 200 (a challenge or block page, much shorter than the page and marked as one) instead of the page, rather than counting the page's text as JavaScript's.
 
 **llms.txt presence** doesn't count toward the score: there's little evidence it helps (most llms.txt files are never requested by AI crawlers, and Google says it has no effect). The report still shows whether the site has one.
 

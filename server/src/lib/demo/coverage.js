@@ -36,6 +36,8 @@ export const SKIPPED = {
     'The demo catalog is built from a public product feed and has no order history; order line items must not imply a merchant’s real purchases.',
   catalog_item_issues:
     "Merchant Center's item issues: the demo's catalog comes from a product feed, and Merchant Center shows as Soon in the demo.",
+  topic_catalog_categories:
+    "A person's topic ↔ category decisions (00494): the demo's links are the worked-out ones.",
 
   // demo-workflows
   action_candidates:
