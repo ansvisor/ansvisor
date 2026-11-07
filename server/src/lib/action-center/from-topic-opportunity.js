@@ -156,9 +156,11 @@ export async function sendTopicOpportunityToActionCenter(topic, { suggestionIds,
   }
 
   const sources = await resolveBrandSources(brandId);
+  // An untracked topic's work is a new page: G16's create branch (its
+  // optimize branch is a store's category page, AC plan P-7).
   const plan = planTasks(
     { id: TOPIC_OPPORTUNITY_ACTION_KIND, tasks: definition.tasks },
-    { sources, payload },
+    { sources, payload: { ...payload, contentExists: false } },
   );
   const { error: tasksErr } = await supabaseAdmin.from('action_tasks').insert(
     plan.map((item) => ({

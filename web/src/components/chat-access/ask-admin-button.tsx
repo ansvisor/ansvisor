@@ -53,8 +53,62 @@ export function AskAdminButton({
 }) {
   const t = useTranslations('chatAccess.askAdmin');
   const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button
+        type="button"
+        size={size}
+        variant={variant}
+        title={title}
+        className={className}
+        onClick={() => setOpen(true)}
+      >
+        {label ?? t('button')}
+      </Button>
+      <AskAdminDialog
+        open={open}
+        onOpenChange={setOpen}
+        asked={asked}
+        ruleKind={ruleKind}
+        ruleDetail={ruleDetail}
+        toolKey={toolKey}
+        onSent={onSent}
+      />
+    </>
+  );
+}
+
+/**
+ * Ask your Admin's dialog, for a place that opens it without its button:
+ * a page open read-only beside Chat (W4-15) opens it from whatever was
+ * clicked there. Each time it opens, the text starts again from `asked`.
+ */
+export function AskAdminDialog({
+  open,
+  onOpenChange,
+  asked,
+  ruleKind,
+  ruleDetail = '',
+  toolKey = null,
+  onSent,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  asked: string;
+  ruleKind: AccessRequest['ruleKind'];
+  ruleDetail?: string;
+  toolKey?: string | null;
+  onSent?: () => void;
+}) {
+  const t = useTranslations('chatAccess.askAdmin');
   const [text, setText] = useState(asked);
   const [sending, setSending] = useState(false);
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setText(asked);
+  }
 
   async function send() {
     setSending(true);
@@ -62,7 +116,7 @@ export function AskAdminButton({
       const result = await requestAccess({ asked: text, ruleKind, ruleDetail, toolKey });
       if (result.ok) {
         toast.success(t('sent'));
-        setOpen(false);
+        onOpenChange(false);
         onSent?.();
       } else if (result.reason === 'too_many') {
         toast.error(t('tooMany', { count: MAX_PENDING_REQUESTS }));
@@ -70,7 +124,7 @@ export function AskAdminButton({
         toast.error(t('dailyLimit', { count: MAX_REQUESTS_PER_DAY }));
       } else if (result.reason === 'already_today') {
         toast.info(t('alreadyToday'));
-        setOpen(false);
+        onOpenChange(false);
       } else {
         toast.error(t('failed'));
       }
@@ -82,47 +136,32 @@ export function AskAdminButton({
   }
 
   return (
-    <>
-      <Button
-        type="button"
-        size={size}
-        variant={variant}
-        title={title}
-        className={className}
-        onClick={() => {
-          setText(asked);
-          setOpen(true);
-        }}
-      >
-        {label ?? t('button')}
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{t('title')}</DialogTitle>
-            <DialogDescription>{t('lead')}</DialogDescription>
-          </DialogHeader>
-          <label className="space-y-1.5 text-sm">
-            <span className="font-medium">{t('label')}</span>
-            <Textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              maxLength={500}
-              rows={3}
-            />
-          </label>
-          {ruleDetail && <p className="text-xs text-muted-foreground">{ruleDetail}</p>}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              {t('cancel')}
-            </Button>
-            <Button type="button" onClick={() => void send()} disabled={sending || !text.trim()}>
-              {sending && <Loader2 className="h-4 w-4 animate-spin" />}
-              {t('send')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('title')}</DialogTitle>
+          <DialogDescription>{t('lead')}</DialogDescription>
+        </DialogHeader>
+        <label className="space-y-1.5 text-sm">
+          <span className="font-medium">{t('label')}</span>
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            maxLength={500}
+            rows={3}
+          />
+        </label>
+        {ruleDetail && <p className="text-xs text-muted-foreground">{ruleDetail}</p>}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {t('cancel')}
+          </Button>
+          <Button type="button" onClick={() => void send()} disabled={sending || !text.trim()}>
+            {sending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {t('send')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

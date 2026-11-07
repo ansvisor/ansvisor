@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/site-audit.mdx]
 ---
-**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 48 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **Execution**, after **Content**. It is on every plan.
+**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 49 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **Execution**, after **Content**. It is on every plan.
 
 ## Start an audit
 
@@ -21,7 +21,7 @@ You can audit any page: your own, or a competitor's page to see what it does bet
 
 ## While it runs
 
-The report opens right away and follows the audit through its stages: **Fetching the page…**, **Analyzing 48 signals…** and **Generating AI recommendations…**. An audit usually takes about 30 seconds. If it is still running after two minutes, the page says **This audit is taking longer than expected.** Click **Check again** to look again.
+The report opens right away and follows the audit through its stages: **Fetching the page…**, **Analyzing 49 signals…** and **Generating AI recommendations…**. An audit usually takes about 30 seconds. If it is still running after two minutes, the page says **This audit is taking longer than expected.** Click **Check again** to look again.
 
 ## Other ways to start an audit
 

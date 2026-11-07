@@ -76,14 +76,17 @@ export function PageTypeMenu({
         title={detected ? t('pageType.detectedHint') : (sourceUrl ?? undefined)}
         className={cn(
           badgeVariants({ variant: 'outline' }),
-          'cursor-pointer gap-1 font-normal hover:bg-muted',
+          // A long address ends in "…" rather than run past a narrow pane (CHAT-25 §4).
+          'max-w-full cursor-pointer gap-1 font-normal hover:bg-muted',
           !current && 'border-dashed text-muted-foreground',
         )}
       >
-        {[label, isNew ? t('newPage') : sourceUrl ? pagePath(sourceUrl) : null]
-          .filter(Boolean)
-          .join(' · ')}
-        <ChevronDown className="h-3 w-3 opacity-60" />
+        <span className="truncate">
+          {[label, isNew ? t('newPage') : sourceUrl ? pagePath(sourceUrl) : null]
+            .filter(Boolean)
+            .join(' · ')}
+        </span>
+        <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60">
         {onPickSite && (
