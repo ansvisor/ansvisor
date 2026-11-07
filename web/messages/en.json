@@ -4039,7 +4039,7 @@
           "tray": "Runs tray"
         },
         "states": {
-          "openPage": "After Chat writes a page · none Recommended; Open here comes with W4-15",
+          "openPage": "After Chat writes a page · none Recommended",
           "pageVersion1": "Version 1: the page Chat wrote · no Undo",
           "pageVersion2": "Version 2 after a change, for an Admin or a Manager · Rules, Quality and Optimize come with W4-12b-2",
           "pageMarkReady": "Next moves once nothing is left to fill (W4-12b)",
@@ -4357,6 +4357,8 @@
     "thoughtFor": "Thought for {seconds, plural, one {# s} other {# s}}",
     "openPage": {
       "question": "Where should we open this page?",
+      "here": "Open here",
+      "hereDetail": "Edit it next to this chat. Ask for changes in plain words.",
       "editor": "Open in Content Editor",
       "editorDetail": "The full editor with Brief, Rules and Quality.",
       "chat": "Keep working in chat",
@@ -5631,6 +5633,7 @@
         "note": "When Chat writes or starts editing a page.",
         "ask": "Ask each time",
         "chat": "Keep in chat",
+        "here": "Open here",
         "editor": "Content Editor"
       },
       "title": "Settings",
