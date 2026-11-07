@@ -1,11 +1,15 @@
+import { readFileSync } from 'fs';
 import { gzipSync } from 'zlib';
 import { describe, expect, it } from 'vitest';
 import {
   LogTooLargeError,
+  LogUnreadableError,
   MAX_INFLATED_BYTES,
   MAX_LOG_LINES,
+  readJsonLinesBody,
   readLogpushBody,
   readSenderBody,
+  readUploadBody,
   readVercelBody,
   readWorkerBody,
 } from './bot-log-formats.js';
@@ -144,5 +148,111 @@ describe('a large or odd file', () => {
       ]),
     );
     expect(vercel).toEqual({ records: 1, requests: [] });
+  });
+});
+
+/** A fixture of each format a person can send or upload (#2170). */
+const fixture = (name) =>
+  readFileSync(new URL(`./__fixtures__/bot-logs/${name}`, import.meta.url), 'utf8');
+
+describe('readJsonLinesBody (a generic webhook, #2170)', () => {
+  it('reads the documented fields: a full address, or a host and path, and any time format', async () => {
+    const { records, requests } = await readJsonLinesBody(fixture('log-lines.jsonl'));
+    expect(records).toBe(3);
+    expect(requests).toEqual([
+      {
+        userAgent: expect.stringContaining('PerplexityBot'),
+        ip: '52.6.40.1',
+        url: 'https://www.acme.example/pricing',
+        status: 200,
+        at: '2026-11-04T09:20:00.000Z',
+        country: 'us',
+      },
+      {
+        userAgent: expect.stringContaining('ClaudeBot'),
+        ip: '160.79.104.10',
+        url: 'https://www.acme.example/blog/cold-brew',
+        status: 200,
+        at: new Date(1793783000 * 1000).toISOString(),
+        country: undefined,
+      },
+      {
+        userAgent: 'Mozilla/5.0',
+        ip: '203.0.113.9',
+        url: '/about',
+        status: 301,
+        at: new Date(1793783000123).toISOString(),
+        country: undefined,
+      },
+    ]);
+  });
+
+  it("is what a log_webhook connection's body reads as", async () => {
+    const body = Buffer.from(fixture('log-lines.jsonl'));
+    expect((await readSenderBody('log_webhook', body)).requests).toHaveLength(3);
+  });
+});
+
+describe('readUploadBody (an uploaded access log, #2170)', () => {
+  it('reads the combined log format: address, path, status, user agent and time with its offset', async () => {
+    const { records, requests } = await readUploadBody(fixture('combined-log.txt'));
+    expect(records).toBe(4);
+    expect(requests).toEqual([
+      {
+        userAgent: expect.stringContaining('GPTBot/1.2'),
+        ip: '20.171.207.12',
+        url: '/blog/cold-brew',
+        status: '200',
+        at: '2026-11-04T09:15:02.000Z',
+        country: null,
+      },
+      {
+        userAgent: expect.stringContaining('Googlebot'),
+        ip: '66.249.66.1',
+        url: '/pricing',
+        status: '200',
+        at: '2026-11-04T09:15:40.000Z',
+        country: null,
+      },
+      {
+        userAgent: expect.stringContaining('Safari'),
+        ip: '198.51.100.7',
+        url: '/blog/cold-brew?ref=x',
+        status: '304',
+        at: '2026-11-04T09:01:09.000Z',
+        country: null,
+      },
+    ]);
+  });
+
+  it('counts the common log format, which names no user agent, but finds no bot in it', async () => {
+    expect(await readUploadBody(fixture('common-log.txt'))).toEqual({ records: 2, requests: [] });
+  });
+
+  it('takes JSON lines too, mixed with log lines, and a gzipped file', async () => {
+    const mixed = `${fixture('combined-log.txt')}${fixture('log-lines.jsonl')}`;
+    expect((await readUploadBody(mixed)).requests).toHaveLength(6);
+    const gzipped = gzipSync(Buffer.from(fixture('combined-log.txt')));
+    expect((await readSenderBody('log_upload', gzipped)).requests).toHaveLength(3);
+  });
+
+  it('refuses a file with no line it reads, another kind of file, so it is never counted', async () => {
+    await expect(readUploadBody('%PDF-1.7\nnot a log\r\n')).rejects.toBeInstanceOf(
+      LogUnreadableError,
+    );
+    // One line in a format it reads is enough: the rest are counted and left out.
+    expect((await readUploadBody(`not a log\n${fixture('common-log.txt')}`)).records).toBe(3);
+  });
+
+  it('reads Windows line endings', async () => {
+    const crlf = fixture('combined-log.txt').replace(/\n/g, '\r\n');
+    expect((await readUploadBody(crlf)).requests).toHaveLength(3);
+  });
+
+  it('refuses a file past the lines it reads', async () => {
+    const line = `${fixture('common-log.txt').split('\n')[0]}\n`;
+    await expect(readUploadBody(line.repeat(MAX_LOG_LINES + 1))).rejects.toBeInstanceOf(
+      LogTooLargeError,
+    );
   });
 });

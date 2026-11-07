@@ -60808,6 +60808,26 @@ create policy "chat_agent_trigger_claims: agent select"
   );
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00483_chat_agents_for_you_dismissed.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Chat (00483): "Agents for you" on Chat Home (AGENTS plan §8 and #11, its
+-- new member half): someone who joined the workspace in the last 14 days,
+-- once they answered or skipped Your work areas, sees 3 to 5 ready-to-use
+-- agents there, each linked to its card in Agent Center, until they hide
+-- the section. No agent runs and no AI is used.
+--
+-- When they hid it is kept on their own Chat settings row, so it stays
+-- hidden on every device (DECISIONS N3), as home_seen_at is (00420). Null:
+-- not hidden. The row's own policies and grants (00400) already let the
+-- person read and write it.
+
+alter table public.chat_user_prefs
+  add column if not exists agents_for_you_dismissed_at timestamptz;
+
+comment on column public.chat_user_prefs.agents_for_you_dismissed_at is
+  'When the person hid "Agents for you" on Chat Home (00483). Null: not hidden; it shows in their first 14 days in the workspace, once they answered or skipped Your work areas.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00484_action_scorecard_by_play.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -61297,6 +61317,40 @@ begin
   return new;
 end;
 $$;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00492_ai_bot_log_upload.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00492: AI bot logs from any server, by upload or a generic webhook (#2170)
+-- ============================================================================
+-- AI Traffic's bot report reads a brand's own edge from three senders: a
+-- Cloudflare Worker, Cloudflare Logpush and a Vercel drain (00183). A brand
+-- on any other server or CDN had no way in. Two more kinds of connection:
+--
+--   * log_webhook: a generic sender that posts JSON lines with the
+--     documented fields (bot-log-formats.js readJsonLinesBody) to
+--     /bots/ingest with its secret, so any log shipper can send to it.
+--   * log_upload: the brand's own uploads of an access log file (common or
+--     combined log format, or the same JSON lines) on the AI Traffic page.
+--     One per brand, made at the first upload; its secret is never shown,
+--     since a person uploads through the app, signed in. A file is read
+--     once and counts against the month's raw-record cap, as a log
+--     sender's does (00189).
+
+alter table public.ai_bot_connections
+  drop constraint if exists ai_bot_connections_kind_check;
+alter table public.ai_bot_connections
+  add constraint ai_bot_connections_kind_check check (
+    kind in ('cloudflare_worker', 'cloudflare_logpush', 'vercel_drain', 'log_webhook', 'log_upload')
+  );
+
+-- One live upload connection a brand: two first uploads at once make one.
+create unique index if not exists ai_bot_connections_upload_uidx
+  on public.ai_bot_connections (brand_id)
+  where kind = 'log_upload' and revoked_at is null;
 
 notify pgrst, 'reload schema';
 

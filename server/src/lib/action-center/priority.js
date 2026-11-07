@@ -94,6 +94,7 @@ const KIND_CHANGE = {
   competitor_momentum: 'slipping',
   // Something to fix on the site.
   structured_data_issue: 'issue',
+  canonical_issue: 'issue',
   outdated_content: 'issue',
   weak_entity: 'issue',
   weak_internal_links: 'issue',

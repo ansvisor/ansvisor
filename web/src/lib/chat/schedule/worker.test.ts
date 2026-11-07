@@ -180,7 +180,15 @@ describe('running a due job', () => {
   it('runs it in its own chat as its creator, on Auto · Normal, and moves on to its next slot', async () => {
     seedJob();
     const counts = await worker.fireDueJobs(NOW, driver);
-    expect(counts).toEqual({ due: 1, started: 1, skipped: 0, paused: 0, busy: 0, failed: 0 });
+    expect(counts).toEqual({
+      due: 1,
+      started: 1,
+      skipped: 0,
+      paused: 0,
+      busy: 0,
+      failed: 0,
+      delivered: 0,
+    });
 
     expect(jobRow()).toMatchObject({
       next_run_at: NEXT_SLOT,
@@ -681,7 +689,12 @@ describe('the AI limit', () => {
       paused_reason: 'cap',
     });
     expect(await worker.resumeCapPausedJobs(minutes(60))).toBe(1);
-    expect(jobRow()).toMatchObject({ enabled: true, next_run_at: minutes(60).toISOString() });
+    // A try at once (W4-30), its due time kept for the delivery.
+    expect(jobRow()).toMatchObject({
+      enabled: true,
+      retry_at: minutes(60).toISOString(),
+      next_run_at: '2026-11-04T06:00:00.000Z',
+    });
 
     db.tables.chat_schedules = [];
     seedJob({
@@ -701,6 +714,193 @@ describe('the AI limit', () => {
     db.tables.organizations[0].subscription_status = 'canceled';
     expect(await worker.resumeCapPausedJobs(minutes(60))).toBe(0);
     expect(jobRow()).toMatchObject({ enabled: false, paused_reason: 'cap' });
+  });
+});
+
+describe('a job with a due time (W4-30)', () => {
+  const DUE = '2026-11-04T06:00:00.000Z';
+  const readyByJob = (over: Record<string, unknown> = {}) =>
+    seedJob({
+      kind: 'once',
+      run_mode: 'ready_by',
+      rrule: null,
+      due_at: DUE,
+      next_run_at: SLOT,
+      title: 'Pricing tasks',
+      ...over,
+    });
+  const TASKS = ['Add FAQ block', 'Fix the title', 'Rewrite the intro', 'Link the guide'];
+  /** Its run worked on the chat's tasks: the first `ready` are Ready for review. */
+  function tasksReady(runRowId: unknown, ready: number, total = TASKS.length) {
+    const row = runsOf().find((r) => r.id === runRowId)!;
+    const state = db.tables.chat_run_state.find((s) => s.run_id === row.run_id)!;
+    state.progress = { ...(state.progress as object), taskStrip: true };
+    db.tables.action_tasks = TASKS.slice(0, total).map((title, i) => ({
+      id: `t${i}`,
+      title,
+      status: 'todo',
+    }));
+    db.tables.chat_task_state = TASKS.slice(0, total).map((_, i) => ({
+      conversation_id: jobRow().conversation_id,
+      action_task_id: `t${i}`,
+      position: i + 1,
+      chat_status: i < ready ? 'ready_for_review' : 'queued',
+      run_id: row.run_id,
+    }));
+  }
+  /** The job's delivery: its answer in its chat. */
+  const delivered = () =>
+    db.tables.chat_messages.filter(
+      (m) => m.role === 'assistant' && String(m.content_md).startsWith('**Pricing tasks**'),
+    );
+
+  it('keeps working until every part is ready, then delivers it', async () => {
+    readyByJob();
+    await worker.fireDueJobs(NOW, driver);
+    // Its due time is its next run: the delivery.
+    expect(jobRow()).toMatchObject({ next_run_at: DUE, retry_at: null });
+    tasksReady(runsOf()[0].id, 2);
+    chatEnds(runsOf()[0].id, 'done');
+    await worker.settleOpenRuns(minutes(5));
+    expect(runsOf()[0]).toMatchObject({ status: 'done', parts_done: 2, parts_total: 4 });
+    // Further than before: a fresh run at once.
+    expect(jobRow()).toMatchObject({ next_run_at: minutes(5).toISOString(), retry_at: null });
+
+    await worker.fireDueJobs(minutes(6), driver);
+    expect(runsOf()[1]).toMatchObject({ attempt: 1, slot_at: minutes(5).toISOString() });
+    expect(jobRow().next_run_at).toBe(DUE);
+    tasksReady(runsOf()[1].id, 4);
+    chatEnds(runsOf()[1].id, 'done');
+    await worker.settleOpenRuns(minutes(10));
+
+    expect(jobRow()).toMatchObject({ enabled: true, next_run_at: null, retry_at: null });
+    const [answer] = delivered();
+    expect(answer).toMatchObject({ conversation_id: jobRow().conversation_id });
+    expect(answer.content_md).toBe(
+      [
+        '**Pricing tasks**\nEverything is ready, ahead of its due time (Wed 4 Nov, 09:00).',
+        `Ready:\n${TASKS.map((title) => `- ${title}`).join('\n')}`,
+      ].join('\n\n'),
+    );
+    // In the Inbox as a new result, and in its runs as Done, 4 of 4.
+    expect(db.tables.chat_runs.find((r) => r.message_id === answer.id)).toMatchObject({
+      status: 'done',
+    });
+    expect(runsOf()[2]).toMatchObject({ status: 'done', parts_done: 4, parts_total: 4 });
+    // Once: its due time delivers nothing more.
+    expect((await worker.fireDueJobs(new Date(DUE), driver)).delivered).toBe(0);
+    expect(delivered()).toHaveLength(1);
+  });
+
+  it('tries a miss again at most 3 times, 30 minutes apart, then delivers what is ready', async () => {
+    readyByJob();
+    await worker.fireDueJobs(NOW, driver);
+    let end = 1;
+    for (const at of [31, 62, 93]) {
+      chatEnds(runsOf().at(-1)!.id, 'error');
+      await worker.settleOpenRuns(minutes(end));
+      expect(jobRow()).toMatchObject({
+        enabled: true,
+        next_run_at: DUE,
+        retry_at: minutes(at).toISOString(),
+      });
+      // Not before its time.
+      expect((await worker.fireDueJobs(minutes(at - 1), driver)).due).toBe(0);
+      await worker.fireDueJobs(minutes(at), driver);
+      expect(runsOf().at(-1)).toMatchObject({
+        attempt: 2,
+        slot_at: minutes(at).toISOString(),
+        status: 'running',
+      });
+      end = at + 1;
+    }
+    chatEnds(runsOf().at(-1)!.id, 'error');
+    await worker.settleOpenRuns(minutes(end));
+    expect(runsOf().filter((r) => r.attempt === 2)).toHaveLength(3);
+    // Its tries used up: delivered now, the rest listed; not turned off, and no failed notice.
+    expect(jobRow()).toMatchObject({ enabled: true, next_run_at: null, retry_at: null });
+    expect(delivered()[0].content_md).toBe(
+      [
+        '**Pricing tasks**\nI tried 3 more times and stopped. 0 of 1 ready.',
+        'Nothing was ready.',
+        'Not ready yet:\n- Pricing tasks',
+        "What's ready is in this chat and in Files. Ask me to finish the rest.",
+      ].join('\n\n'),
+    );
+    expect(db.tables.chat_notices).toEqual([]);
+  });
+
+  it('never runs at or after its due time: what is ready is delivered then, the rest listed', async () => {
+    const due = minutes(40).toISOString();
+    readyByJob({ due_at: due });
+    await worker.fireDueJobs(NOW, driver);
+    tasksReady(runsOf()[0].id, 1, 3);
+    chatEnds(runsOf()[0].id, 'done');
+    await worker.settleOpenRuns(minutes(5));
+    await worker.fireDueJobs(minutes(5), driver);
+    db.tables.chat_task_state.forEach((row) => (row.run_id = runsOf()[1].run_id));
+    chatEnds(runsOf()[1].id, 'error');
+    await worker.settleOpenRuns(minutes(15));
+    // A try would come at 45 minutes, past its due time: none; it waits for it.
+    expect(jobRow()).toMatchObject({ next_run_at: due, retry_at: null });
+    expect(await worker.fireDueJobs(minutes(39), driver)).toMatchObject({ due: 0, delivered: 0 });
+
+    expect(await worker.fireDueJobs(minutes(40), driver)).toMatchObject({ due: 0, delivered: 1 });
+    expect(runsOf()).toHaveLength(3);
+    expect(delivered()[0].content_md).toBe(
+      [
+        '**Pricing tasks**\nIt was due Mon 2 Nov, 09:40. 1 of 3 ready.',
+        'Ready:\n- Add FAQ block',
+        'Not ready yet:\n- Fix the title\n- Rewrite the intro',
+        "What's ready is in this chat and in Files. Ask me to finish the rest.",
+      ].join('\n\n'),
+    );
+    expect(runsOf()[2]).toMatchObject({ status: 'done', parts_done: 1, parts_total: 3 });
+    expect(await worker.fireDueJobs(minutes(41), driver)).toMatchObject({ delivered: 0 });
+  });
+
+  it('goes on after the monthly reset before its due time, as a try 30 minutes from its run', async () => {
+    readyByJob();
+    await worker.fireDueJobs(NOW, driver);
+    chatEnds(runsOf()[0].id, 'paused_cap', { capHit: 'month' });
+    await worker.settleOpenRuns(minutes(1));
+    expect(jobRow()).toMatchObject({ enabled: false, paused_reason: 'cap', next_run_at: DUE });
+
+    // Room again 10 minutes on: the try waits for 30 minutes after the run.
+    fakes.usage.mockResolvedValue({ active_plan: true, unlimited: false, percent_used: 0 });
+    expect(await worker.resumeCapPausedJobs(minutes(10))).toBe(1);
+    expect(jobRow()).toMatchObject({
+      enabled: true,
+      paused_reason: null,
+      next_run_at: DUE,
+      retry_at: '2026-11-02T06:30:30.000Z',
+    });
+    expect(runsOf()[0]).toMatchObject({
+      status: 'paused_cap',
+      ended_at: minutes(10).toISOString(),
+    });
+    expect((await worker.fireDueJobs(minutes(29), driver)).due).toBe(0);
+    await worker.fireDueJobs(minutes(30), driver);
+    expect(runsOf()[1]).toMatchObject({ attempt: 2, status: 'running' });
+  });
+
+  it('delivers at its due time while paused at the AI limit, and stays delivered after the reset', async () => {
+    readyByJob({ due_at: minutes(60).toISOString() });
+    await worker.fireDueJobs(NOW, driver);
+    chatEnds(runsOf()[0].id, 'paused_cap', { capHit: 'month' });
+    await worker.settleOpenRuns(minutes(1));
+
+    fakes.usage.mockResolvedValue({ active_plan: true, unlimited: false, percent_used: 100 });
+    expect(await worker.resumeCapPausedJobs(minutes(60))).toBe(0);
+    expect(await worker.fireDueJobs(minutes(60), driver)).toMatchObject({ delivered: 1 });
+    expect(jobRow()).toMatchObject({ enabled: false, paused_reason: 'cap', next_run_at: null });
+    expect(delivered()[0].content_md).toContain('It was due Mon 2 Nov, 10:00. 0 of 1 ready.');
+
+    // After the reset: on again, with nothing left to run.
+    fakes.usage.mockResolvedValue({ active_plan: true, unlimited: false, percent_used: 0 });
+    expect(await worker.resumeCapPausedJobs(minutes(120))).toBe(1);
+    expect(jobRow()).toMatchObject({ enabled: true, next_run_at: null, retry_at: null });
+    expect((await worker.fireDueJobs(minutes(121), driver)).due).toBe(0);
   });
 });
 

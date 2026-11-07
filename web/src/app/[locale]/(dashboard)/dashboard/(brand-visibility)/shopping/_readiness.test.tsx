@@ -41,8 +41,8 @@ describe('ReadinessTab', () => {
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
           <ReadinessTab
             market="europe"
-            tracked={['chatgpt-shopping', 'copilot-web']}
-            ownSlots={new Map([['copilot-web', 3]])}
+            tracked={['chatgpt-shopping', 'gemini-web']}
+            ownSlots={new Map([['gemini-web', 3]])}
             score={64}
             items={[
               { key: 'catalog', state: 'pass', values: { count: 320 } },
@@ -71,8 +71,10 @@ describe('ReadinessTab', () => {
     expect(text).toContain(
       'ChatGPT ShoppingTracked, yours not shownGoogle Shopping · via Merchant Center',
     );
-    expect(text).toContain('Microsoft CopilotShowing your productsMicrosoft Merchant Center');
-    expect(text).toContain('Google GeminiNot tracked');
+    expect(text).toContain('Google GeminiShowing your productsGoogle Shopping Graph');
+    expect(text).toContain('Google AI ModeNot tracked');
+    // Copilot isn't a channel while Cloro doesn't serve it (#2181).
+    expect(text).not.toContain('Microsoft Copilot');
     expect(text).toContain('AI shopping readiness64 / 100');
     expect(text).toContain('Catalog connected320 products from your feed, file or store.');
     expect(text).toContain('First 40 words of descriptions · 132 products');
@@ -97,7 +99,7 @@ describe('ReadinessTab', () => {
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
           <ReadinessTab
             market="us"
-            tracked={['copilot-web']}
+            tracked={['gemini-web']}
             ownSlots={new Map()}
             score={80}
             items={[{ key: 'catalog', state: 'pass', values: { count: 320 } }]}
@@ -147,10 +149,10 @@ describe('ReadinessTab', () => {
   });
 
   it("doesn't call a channel without the brand's products while every channel's shelves are read, or unread", () => {
-    expect(renderTab({})).toContain('Microsoft CopilotTracked, yours not shown');
+    expect(renderTab({})).toContain('Google GeminiTracked, yours not shown');
     const reading = renderTab({ channelsRead: 'loading' });
     expect(reading).not.toContain('Tracked, yours not shown');
     expect(reading).not.toContain('Not tracked');
-    expect(renderTab({ channelsRead: 'failed' })).toContain("Microsoft CopilotCouldn't read");
+    expect(renderTab({ channelsRead: 'failed' })).toContain("Google GeminiCouldn't read");
   });
 });

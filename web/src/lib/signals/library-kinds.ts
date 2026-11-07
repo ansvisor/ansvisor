@@ -53,6 +53,7 @@ export const LIBRARY_SIGNAL_KINDS = {
   cited_page_uncrawled: { stateKey: 'issue', positive: false },
   crawler_blocked: { stateKey: 'issue', positive: false },
   structured_data_issue: { stateKey: 'issue', positive: false },
+  canonical_issue: { stateKey: 'issue', positive: false },
   outdated_content: { stateKey: 'issue', positive: false },
   weak_entity: { stateKey: 'issue', positive: false },
   weak_internal_links: { stateKey: 'issue', positive: false },
