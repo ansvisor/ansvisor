@@ -289,6 +289,8 @@ export const PAGE_CHECKED_TASKS: readonly string[] = [
   'publish_content',
   'fix_broken_target',
   'fix_structured_data',
+  // Its canonical tag and the page it points to (AC plan P-11).
+  'fix_canonical',
   'fix_crawler_access',
   'optimize_content',
   'refresh_content',
