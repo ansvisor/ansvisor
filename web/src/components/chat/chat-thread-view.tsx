@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
 import { saveChatGeneralSettings } from '@/lib/actions/chat-prefs';
+import { DRAFT_CHIP } from '@/lib/chat/editor-page';
 import type { PageOpen } from '@/lib/chat/page-open';
 import { keepPageChoice, pageChoiceMade, pageHrefOf } from '@/lib/chat/page-open';
 import {
@@ -41,6 +42,7 @@ import {
   type ClientRunStatus,
 } from '@/lib/chat/run-state';
 import type { ChatReadyBy, ChatThread } from '@/lib/chat/thread';
+import { CONTENT_EDITOR_PATH } from '@/lib/content/drafts';
 import { dropChatUpload, uploadChatFile } from '@/lib/chat/upload-client';
 import type { SentFile } from '@/lib/chat/uploads';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -70,6 +72,7 @@ import { RememberThis } from './run/remember-this';
 import { RunAnswer } from './run/run-answer';
 import { StaffDebug } from './run/staff-debug';
 import { useChatDebug } from './chat-debug';
+import { usePageChip } from './page-chip';
 import type { FailingKey } from '@/lib/chat/key-health';
 import { ChatKeyNotice } from './own-key-notice';
 import { ChatUsageNotice, ComposerUsageMeter, chatAtCap } from './chat-usage';
@@ -209,17 +212,17 @@ export function ChatThreadView({
   onConversation,
   empty,
   usageNoticeSeen = null,
-  chips,
-  onRemoveChip,
+  chips: ownChips,
+  onRemoveChip: ownRemoveChip,
   pageReferences,
-  pageRoute,
+  pageRoute: ownRoute,
   draft,
   onOwnKey = false,
   keyFailure = null,
   skills,
   pageOpen = 'ask',
   placeholder,
-  onSuggestions,
+  onSuggestions: ownSuggestions,
   afterLast,
   afterTurn,
   markedTurn = null,
@@ -269,6 +272,22 @@ export function ChatThreadView({
 }) {
   const t = useTranslations('chatPage');
   const tLimit = useTranslations('chatComposer.limit');
+  // A page open beside the chat on its own page (Open here, W4-15c): its chip
+  // is the box's, sent from the page's editor as the Content Editor's Chat
+  // sends "This draft", so a request comes back as suggestions there (W4-14).
+  const beside = usePageChip();
+  const besideChip = ownChips ? null : (beside?.chip ?? null);
+  const chips = ownChips ?? (besideChip ? [besideChip] : undefined);
+  const onRemoveChip =
+    ownRemoveChip ??
+    (besideChip
+      ? (key: string) => {
+          if (key === DRAFT_CHIP) beside?.removeChip();
+        }
+      : undefined);
+  const pageRoute =
+    ownRoute ?? (besideChip ? `${CONTENT_EDITOR_PATH}/${besideChip.value}` : undefined);
+  const onSuggestions = ownSuggestions ?? beside?.suggested;
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const { isLocked, openUpgrade } = useUpgradeGate();
   // At the AI limit, Chat pauses: the composer is off (CHAT-04 item 17).
@@ -846,6 +865,7 @@ export function ChatThreadView({
                   onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
                   canChangeTasks={canManage && (!thread || thread.mine)}
+                  onOpenHere={openBeside}
                   // The person's own chat: a page's Optimize ▾ asks here (W4-12b part 2).
                   onAsk={
                     !thread || thread.mine
@@ -1009,6 +1029,7 @@ function Answer({
   onSendToActionCenter,
   onTryAgain,
   onAsk,
+  onOpenHere,
 }: {
   turn: Turn;
   now: number;
@@ -1032,6 +1053,8 @@ function Answer({
   onTryAgain?: () => void;
   /** Sends a message as the person's, in their own chat: a page's Optimize ▾ (W4-12b part 2). */
   onAsk?: (prompt: string) => void;
+  /** Opens a page beside the chat (Open here): Optimize ▾'s "in the editor here" (W4-15c). */
+  onOpenHere?: (href: string) => void;
 }) {
   const t = useTranslations('chatPage');
   const debug = useChatDebug();
@@ -1138,6 +1161,7 @@ function Answer({
             onTasks={onTasks}
             onTryAgain={onTryAgain}
             onAsk={onAsk}
+            onOpenHere={onOpenHere}
           />
         ))}
       {run.sent.map((sent, i) => (

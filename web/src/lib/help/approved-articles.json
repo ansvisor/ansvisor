@@ -1193,7 +1193,12 @@
         "optimize here",
         "optimize page",
         "rewrite page",
-        "optimize in content editor"
+        "optimize in content editor",
+        "optimize in the editor here",
+        "page chip",
+        "suggestions from chat",
+        "accept suggestion",
+        "reject suggestion"
       ],
       "synonyms": [
         "assistant",
@@ -1285,6 +1290,10 @@
           "text": "With **Open here**, the chat stays on the left and the page opens on the right. From the side panel, the chat moves to its own page with the page beside it. In a narrow window there's room for one at a time: the page shows first, **← Back to chat** shows the conversation, and **Back to the page →** at the top of the chat returns to the page. Both stay open, so nothing you typed is lost. **Close** (×) at the start of the page's header closes it, and the chat takes the whole width again. Analysts and Agency partners see the page read-only, with **Ask your Admin** to request changes."
         },
         {
+          "heading": "Ask about the page beside the chat",
+          "text": "While a page is open beside the chat, the box shows a chip, **Page:** and the page's title. What you ask then doesn't change the page: the Content Agent leaves suggestions in it, labelled \"Content Agent · from your chat\", with the same guards as Fix open rules. They appear in the editor as the run ends, with no reload, and the page changes only when you **Accept** one; **Reject** drops it. Click **×** on the chip to talk about something else: Chat then doesn't edit that page, and the page stays open. Closing the page removes the chip too.\n\nThe editor beside the chat is narrower: **Brief**, **Rules** and **Quality** sit in a bar under the page, with **Sources** and **Live page** under its **More**. The toolbar's less used buttons, such as the table and **Add HTML**, move under the toolbar's own **More**."
+        },
+        {
           "heading": "Versions of a page in chat",
           "text": "Each time Chat writes or changes a page, its card shows the version, such as **Version 2 · 7 questions · 905 characters**. **What changed** lists sections Chat made shorter, new questions or sections, and placeholders in [BRACKETS] for you to fill; the first next move offers to fill one. The card previews the first sections; **Show all** opens the rest. **Undo to version 1** puts the version before back, as the editor's History does. Every version is saved to the Library as a draft. Admins and Managers can **Send to CMS** from the card, as from the Library. Once nothing is left to fill, **Mark ready** is a next move: it sets the draft to Ready as the editor does, and Undo takes it back for 7 days."
         },
@@ -1294,7 +1303,7 @@
         },
         {
           "heading": "Optimize a page in chat",
-          "text": "**Optimize ▾** on a page's card is headed by what's left, such as **1 rule open · Quality 82**. **Optimize here, no editor** has the Content Agent rewrite the page to its open rules, as the editor's **Rewrite the page to these rules** does, with the same guards: quoted passages kept, only known links, no invented facts. The page comes back as the next version card with **What changed** and **Undo**. If the agent takes longer than Chat can wait (up to 3.5 minutes), the page stays as it was and the rewrite waits in the Content Editor to compare. Chat asks first, and it counts toward your AI usage as the editor's rewrite does. A rule the agent tried here and couldn't close isn't sent again: Chat names it for you to decide. **Optimize in Content Editor** opens the full editor. Admins and Managers optimize; others get **Ask your Admin**."
+          "text": "**Optimize ▾** on a page's card is headed by what's left, such as **1 rule open · Quality 82**. **Optimize here, no editor** has the Content Agent rewrite the page to its open rules, with the editor's guards: quoted passages kept, only known links, no invented facts. The page comes back as the next version card with **What changed** and **Undo**. If the agent takes longer than Chat can wait (up to 3.5 minutes), the page stays as it was and the rewrite waits in the Content Editor to compare. Chat asks first; it counts toward your AI usage. A rule the agent tried here and couldn't close isn't sent again: Chat names it for you to decide. **Optimize in the editor here** opens the page beside the chat, with suggestions to accept or reject; **Optimize in Content Editor**, the full editor. Admins and Managers optimize; others get **Ask your Admin**."
         },
         {
           "heading": "Send or publish a page from Chat",
@@ -2739,7 +2748,7 @@
         },
         {
           "heading": "Chat beside the page",
-          "text": "With Chat on, **Chat** is the side panel's first tab. A page Chat made opens on it and continues that chat: \"Continued from your chat\". Otherwise it continues the chat you last had here about the page, or starts one. **Ctrl J** opens it.\n\nWhat you ask about the page doesn't change it. The Content Agent leaves suggestions in the page, labelled \"Content Agent · from your chat\", with the same guards as Fix open rules; the page changes only when you **Accept** one. Remove **This draft** from the box to talk about something else. The expand icon opens the chat on Chat's own page."
+          "text": "With Chat on, **Chat** is the side panel's first tab. A page Chat made opens on it and continues that chat: \"Continued from your chat\". Otherwise it continues the chat you last had here about the page, or starts one. **Ctrl J** opens it.\n\nWhat you ask about the page doesn't change it. The Content Agent leaves suggestions in the page, labelled \"Content Agent · from your chat\", with the same guards as Fix open rules; the page changes only when you **Accept** one. Remove **This draft** from the box to talk about something else. The expand icon opens the chat on Chat's own page. From Chat, **Open here** opens this editor beside the conversation instead, with its chip **Page:** and the page's title in the box."
         },
         {
           "heading": "Chat knows what you accepted",

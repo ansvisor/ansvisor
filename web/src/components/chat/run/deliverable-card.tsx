@@ -99,6 +99,7 @@ export function DeliverableCard({
   onTasks,
   onTryAgain,
   onAsk,
+  onOpenHere,
 }: {
   runId: string;
   n: number;
@@ -112,6 +113,8 @@ export function DeliverableCard({
    * A page's Optimize ▾ asks Chat with it (W4-12b part 2).
    */
   onAsk?: (prompt: string) => void;
+  /** Opens the page beside this chat (Open here): Optimize ▾'s "in the editor here" (W4-15c). */
+  onOpenHere?: (href: string) => void;
 }) {
   const t = useTranslations('chatDeliverable');
   const tFormats = useTranslations('chatAnswer.formats');
@@ -257,6 +260,7 @@ export function DeliverableCard({
             href={deliverable.href}
             canChange={canChange}
             onAsk={onAsk}
+            onOpenHere={onOpenHere}
             className={ACTION}
           />
         )}
