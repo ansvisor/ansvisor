@@ -21,8 +21,9 @@
  * POST /api/internal/chat/pages/skill-source { url, orgId }
  *   A skill's page on skills.sh, for its import (lib/skills-sh.js; Chat
  *   Wave 4 W4-29): read on skills.sh only, each redirect too.
- *   → 200 { source }: the skill's github.com link, or null when the page
- *     links to none. Refusals and the 2-at-once limit as above.
+ *   → 200 { source, skill }: the skill's github.com link (null when the
+ *     page links to none) and its name in that repository (null when
+ *     unknown). Refusals and the 2-at-once limit as above.
  *
  * Neither the page nor its address is logged. Calls with the secret aren't
  * counted by the API's per-IP limiter (rate-limiter.js), as the budget's.
@@ -126,7 +127,7 @@ router.post('/skill-source', async (req, res) => {
     return res.status(400).json({ code: 'invalid_url', message: 'Not a URL', status: null });
   }
   const { url, orgId } = parsed.data;
-  return readInPlace(req, res, orgId, async () => ({ source: await readSkillsShSource(url) }));
+  return readInPlace(req, res, orgId, () => readSkillsShSource(url));
 });
 
 export default router;

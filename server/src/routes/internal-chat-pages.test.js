@@ -178,15 +178,19 @@ describe('POST /api/internal/chat/pages/skill-source', () => {
   const PAGE = 'https://skills.sh/acme/skills/copy-editing';
   const ask = (body, secret = 'chat-secret') => post(body, secret, '/skill-source');
 
-  it('gives back the skill’s github.com link from its skills.sh page, or null', async () => {
+  it('gives back the skill’s github.com link and name from its skills.sh page', async () => {
     expect((await ask({ url: PAGE, orgId: ORG }, null)).status).toBe(401);
-    readSkillsShSource.mockResolvedValueOnce('https://github.com/acme/skills/tree/main/copy');
+    const found = { source: 'https://github.com/acme/skills', skill: 'copy-editing' };
+    readSkillsShSource.mockResolvedValueOnce(found);
     const res = await ask({ url: ` ${PAGE} `, orgId: ORG });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ source: 'https://github.com/acme/skills/tree/main/copy' });
+    expect(await res.json()).toEqual(found);
     expect(readSkillsShSource).toHaveBeenCalledWith(PAGE);
-    readSkillsShSource.mockResolvedValueOnce(null);
-    expect(await (await ask({ url: PAGE, orgId: ORG })).json()).toEqual({ source: null });
+    readSkillsShSource.mockResolvedValueOnce({ source: null, skill: null });
+    expect(await (await ask({ url: PAGE, orgId: ORG })).json()).toEqual({
+      source: null,
+      skill: null,
+    });
   });
 
   it('says why the page couldn’t be read, and needs a workspace', async () => {

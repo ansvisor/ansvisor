@@ -2,13 +2,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * A skill's skills.sh page (Chat Wave 4 W4-29): read through safe-fetch on
- * skills.sh only, its github.com source link found; no network here.
+ * skills.sh only, its repository and skill name found (its install command,
+ * else its github.com link and the page's path); no network here. The pages
+ * are small copies of skills.sh's own structure.
  */
 
 const fetchPage = vi.fn();
 vi.mock('./safe-fetch.js', () => ({ fetchPage: (...args) => fetchPage(...args) }));
 
-const { githubSourceIn, isSkillsShUrl, readSkillsShSource } = await import('./skills-sh.js');
+const { githubSourceIn, isSkillsShUrl, readSkillsShSource, skillSourceIn } =
+  await import('./skills-sh.js');
 
 const PAGE = 'https://skills.sh/acme/skills/copy-editing';
 const html = (body) => `<!doctype html><html><body>${body}</body></html>`;
@@ -75,6 +78,66 @@ describe('githubSourceIn', () => {
   });
 });
 
+/** A skills.sh skill page, as the site lays it out: the install box, the repository, the footer. */
+const skillPage = ({ install = '', extra = '' } = {}) =>
+  html(`
+    <main>
+      <button title="Copy command to clipboard"><code class="truncate">
+        <span class="opacity-50">$</span> <!-- -->${install}</code></button>
+      <div><div><span>Repository</span></div>
+        <a href="https://github.com/acme/skills" rel="ugc nofollow noopener noreferrer" title="acme/skills">acme/skills</a>
+      </div>
+      ${extra}
+    </main>
+    <footer><span>Skills are open source on <a href="https://github.com/vercel-labs/skills">GitHub</a>.</span></footer>
+  `);
+
+describe('skillSourceIn', () => {
+  it('reads the repository and the skill’s name from the install command', () => {
+    const page = skillPage({
+      install: 'npx skills add https://github.com/acme/skills --skill copy-editing',
+      // The skill's own text can show other commands: the page's own comes first.
+      extra:
+        '<pre><code>npx skills add &lt;package&gt;\nnpx skills add other/tools --skill x</code></pre>',
+    });
+    expect(skillSourceIn(page, PAGE)).toEqual({
+      source: 'https://github.com/acme/skills',
+      skill: 'copy-editing',
+    });
+    // Of several, the one for the page's own /{owner}/{repo}/{skill}.
+    const several = html(
+      '<code>npx skills add other/tools --skill x</code><code>npx skills add acme/skills.git -s copy-editing</code>',
+    );
+    expect(skillSourceIn(several, PAGE)).toEqual({
+      source: 'https://github.com/acme/skills',
+      skill: 'copy-editing',
+    });
+  });
+
+  it('falls back to the page’s GitHub link, the skill named by its path', () => {
+    expect(skillSourceIn(skillPage(), 'https://www.skills.sh/acme/skills/copy-editing')).toEqual({
+      source: 'https://github.com/acme/skills',
+      skill: 'copy-editing',
+    });
+    // A command for another host isn't GitHub's.
+    const other = skillPage({ install: 'npx skills add https://gitlab.com/acme/skills --skill x' });
+    expect(skillSourceIn(other, 'https://skills.sh/acme/skills')).toEqual({
+      source: 'https://github.com/acme/skills',
+      skill: null,
+    });
+    // The home page: only the footer's link.
+    expect(
+      skillSourceIn(
+        html('<footer><a href="https://github.com/vercel-labs/skills">GitHub</a></footer>'),
+        'https://www.skills.sh/',
+      ),
+    ).toEqual({
+      source: null,
+      skill: null,
+    });
+  });
+});
+
 describe('readSkillsShSource', () => {
   it('reads the page through safe-fetch, on skills.sh only', async () => {
     fetchPage.mockResolvedValue({
@@ -82,9 +145,10 @@ describe('readSkillsShSource', () => {
       status: 200,
       html: html('<a href="https://github.com/acme/skills/tree/main/copy-editing">Source</a>'),
     });
-    expect(await readSkillsShSource(PAGE)).toBe(
-      'https://github.com/acme/skills/tree/main/copy-editing',
-    );
+    expect(await readSkillsShSource(PAGE)).toEqual({
+      source: 'https://github.com/acme/skills/tree/main/copy-editing',
+      skill: 'copy-editing',
+    });
     const [address, opts] = fetchPage.mock.calls[0];
     expect(address).toBe(PAGE);
     expect(opts).toMatchObject({ timeoutMs: 10_000, maxBytes: 1024 * 1024, maxRedirects: 3 });

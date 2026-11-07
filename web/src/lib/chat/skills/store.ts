@@ -228,6 +228,7 @@ const REFUSAL_STATUS: Record<SkillRefusalCode, number> = {
   github_busy: 429,
   github_failed: 502,
   github_redirect: 400,
+  skill_not_in_repo: 400,
   skills_sh_no_github: 400,
   page_timeout: 504,
   page_unreachable: 502,

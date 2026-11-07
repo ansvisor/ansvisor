@@ -62,7 +62,11 @@ export async function POST(req: Request) {
       let link = body.url;
       if (isSkillsShUrl(link)) {
         const found = await findSkillsShSource(link, viewer.organizationId);
-        if (!found.ok) return skillRefusalResponse(skillRefusal(found.refusal.code).refusal);
+        if (!found.ok) {
+          return skillRefusalResponse(
+            skillRefusal(found.refusal.code, found.refusal.detail).refusal,
+          );
+        }
         link = found.url;
       }
       const read = await readGithubSkill(link);

@@ -4,8 +4,9 @@
  * is read through safe-fetch, with Chat's page limits (page-open.js: 10 s,
  * 1 MB, 3 redirects), and every step of it, the first and each redirect's,
  * must stay on skills.sh over https ('not_allowed' otherwise): no other host
- * is read for it. Only its github.com link comes back, never the page; the
- * web then imports the skill from GitHub as any other, pinned to a commit
+ * is read for it. Only its github.com link and the skill's name come back,
+ * never the page; the web then finds the skill's folder in that repository
+ * and imports it from GitHub as any other, pinned to a commit
  * (web/src/lib/chat/skills/github.ts).
  */
 
@@ -116,14 +117,80 @@ export function githubSourceIn(html, pageUrl) {
   return (inside ?? best).url;
 }
 
+/** A skill's name, as a folder in its repository can be named. */
+const SKILL_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+const REPO_PART = /^[A-Za-z0-9._-]{1,100}$/;
+
 /**
- * Reads a skills.sh page and finds its skill's github.com link (above), or
- * null. Throws safe-fetch's PageFetchError when the page can't be read:
+ * `skills add <repo> --skill <name>`, as a skills.sh page shows how to
+ * install its skill: the repository as a github.com link or `owner/repo`.
+ */
+const INSTALL = /\bskills\s+add\s+(\S+)\s+(?:--skill|-s)\s+(\S+)/g;
+
+/** A command's repository as `owner/repo`, or null when it isn't GitHub's. */
+function commandRepo(arg) {
+  const github = /^https:\/\/(?:www\.)?github\.com\//i;
+  // Another scheme (http, git+ssh, a local path's file:…) isn't read.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(arg) && !github.test(arg)) return null;
+  const parts = arg
+    .replace(github, '')
+    .replace(/(?:\.git)?\/?$/, '')
+    .split('/');
+  const fine = (p) => REPO_PART.test(p) && p !== '.' && p !== '..';
+  return parts.length === 2 && parts.every(fine) ? parts.join('/') : null;
+}
+
+/**
+ * The install commands on a skills.sh page, in its order: each one's
+ * repository (`owner/repo`) and skill name.
+ *
+ * @param {string} html
+ * @returns {{ repo: string, skill: string }[]}
+ */
+export function installCommandsIn(html) {
+  const $ = cheerio.load(html);
+  const commands = [];
+  $('code, pre').each((_, el) => {
+    for (const [, arg, name] of $(el).text().matchAll(INSTALL)) {
+      const repo = commandRepo(arg);
+      if (repo && SKILL_NAME.test(name)) commands.push({ repo, skill: name });
+    }
+  });
+  return commands;
+}
+
+/**
+ * Where a skills.sh page's skill is on GitHub: `source`, the github.com link
+ * to import from, and `skill`, the skill's name in it (null when unknown).
+ * Its install command comes first (`skills add <repo> --skill <name>`; of
+ * several, the one for the page's own /{owner}/{repo}/{skill}); else its
+ * github.com link (above), with the skill named by the page's path.
+ *
+ * @param {string} html
+ * @param {string} pageUrl the page's address, after redirects
+ * @returns {{ source: string | null, skill: string | null }}
+ */
+export function skillSourceIn(html, pageUrl) {
+  const parts = new URL(pageUrl).pathname.split('/').filter(Boolean);
+  const pathRepo = parts.length === 3 ? `${parts[0]}/${parts[1]}`.toLowerCase() : null;
+  const pathSkill = parts.length === 3 && SKILL_NAME.test(parts[2]) ? parts[2] : null;
+  const commands = installCommandsIn(html);
+  const ours = (c) => c.repo.toLowerCase() === pathRepo;
+  const command =
+    commands.find((c) => ours(c) && c.skill === pathSkill) ?? commands.find(ours) ?? commands[0];
+  if (command) return { source: `https://github.com/${command.repo}`, skill: command.skill };
+  return { source: githubSourceIn(html, pageUrl), skill: pathSkill };
+}
+
+/**
+ * Reads a skills.sh page and finds where its skill is on GitHub (above).
+ * Throws safe-fetch's PageFetchError when the page can't be read:
  * not_allowed (not skills.sh over https, or a redirect off it), timeout,
  * unreachable, http_error, not_html, too_large…
  *
  * @param {string} address
  * @param {{ lookup?: Function, ports?: string[], signal?: AbortSignal }} [opts] as safe-fetch's
+ * @returns {Promise<{ source: string | null, skill: string | null }>}
  */
 export async function readSkillsShSource(address, opts = {}) {
   const page = await fetchPage(address, {
@@ -131,5 +198,5 @@ export async function readSkillsShSource(address, opts = {}) {
     ...opts,
     allowUrl: isSkillsShUrl,
   });
-  return githubSourceIn(page.html, page.url);
+  return skillSourceIn(page.html, page.url);
 }

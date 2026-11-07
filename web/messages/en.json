@@ -7313,6 +7313,7 @@
       "github_busy": "GitHub is busy right now. Try again in a few minutes.",
       "github_failed": "GitHub couldn't be reached. Try again.",
       "github_redirect": "GitHub sent the request somewhere else, so nothing was imported.",
+      "skill_not_in_repo": "This repository has no skill named {name}.",
       "skills_sh_no_github": "This page doesn't link to the skill's source on GitHub.",
       "page_timeout": "The page took too long to answer.",
       "page_unreachable": "The page couldn't be reached.",
