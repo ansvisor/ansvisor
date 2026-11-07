@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import type { ActionPlay } from '@/lib/action-center/play';
+import { pagePath } from '@/lib/content/overlap';
 
 /**
  * "What to do for {an online store | a SaaS | an app | a travel brand}"
@@ -21,12 +22,23 @@ export function PlaySection({ play, children }: { play: ActionPlay; children?: R
         <p className="font-medium">{t(`plays.${play.id}`)}</p>
         {play.reasons.map((reason, i) => (
           <p key={i} className="text-xs text-muted-foreground">
-            {t('reason', {
-              play: play.id,
-              prompts: reason.prompts,
-              of: reason.of,
-              share: reason.share,
-            })}
+            {reason.kind === 'category'
+              ? reason.page
+                ? t('categoryReason', {
+                    category: reason.category,
+                    page: pagePath(reason.page),
+                    inStock: reason.inStock,
+                  })
+                : t('buyingGuideReason', {
+                    category: reason.category,
+                    inStock: reason.inStock,
+                  })
+              : t('reason', {
+                  play: play.id,
+                  prompts: reason.prompts,
+                  of: reason.of,
+                  share: reason.share,
+                })}
           </p>
         ))}
       </div>

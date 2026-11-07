@@ -1,12 +1,14 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { useTranslations } from 'next-intl';
 import { useEditorState, type Editor } from '@tiptap/react';
 import { FloatingMenu } from '@tiptap/react/menus';
 import type { EditorState } from '@tiptap/pm/state';
 import {
   Bold,
+  Check,
+  ChevronDown,
   Code2,
   ExternalLink,
   Columns3,
@@ -30,6 +32,13 @@ import {
 import { ImageUploadButton } from '@/components/content/image-upload-button';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog,
   DialogClose,
@@ -66,6 +75,37 @@ export function onEmptyLine(editor: Editor, state: EditorState): boolean {
 }
 
 /**
+ * Narrower than this, the toolbar's own width (the editor's: in a pane beside
+ * Chat, CHAT-25 §4, or beside the side panel on a small window), the
+ * less-used tools fold into More ▾. Wider, it wraps onto a second row when
+ * it runs out of room, as it always has.
+ */
+export const TOOLBAR_FOLD_BELOW = 600;
+/** The less-used tools, by key: in More ▾ on a narrow toolbar, with </> HTML. */
+const FOLDED = new Set(['orderedList', 'quote', 'table', 'htmlBlock', 'products', 'attach']);
+
+/**
+ * Whether an element is narrower than `below` px: its own width, not the
+ * window's, which a pane beside Chat doesn't follow. False until measured
+ * (laid out, with a ResizeObserver to measure it).
+ */
+function useNarrowerThan(ref: RefObject<HTMLElement | null>, below: number): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      const width = entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width;
+      // 0 is a box not laid out (hidden): it keeps what it had.
+      if (width > 0) setNarrow(width < below);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, below]);
+  return narrow;
+}
+
+/**
  * The editor's toolbar (CE-004, spec §6): H1 H2 H3 · B I link · lists,
  * quote · table, image, Add HTML, attach a file · </> HTML, the placeholders left to fill
  * (PlaceholderNav) and the length counter against the page type's target. Inside a table it adds a row, a column, or removes the
@@ -73,7 +113,9 @@ export function onEmptyLine(editor: Editor, state: EditorState): boolean {
  * line, a small menu offers an HTML block, a table or an image there. With
  * `productsBrandId` (an online shop's draft), both offer products from its
  * catalog too (shopping path, part 5). With `aiImages` (a draft's), both
- * offer Generate with AI too (W4-09).
+ * offer Generate with AI too (W4-09). Narrower than TOOLBAR_FOLD_BELOW, the
+ * numbered list, quote, table, Add HTML, products, attach and </> HTML fold
+ * into More ▾, which runs the same commands (CHAT-25 §4): nothing is removed.
  */
 export function EditorToolbar({
   editor,
@@ -145,6 +187,11 @@ export function EditorToolbar({
       words: e.storage.characterCount.words() as number,
     }),
   });
+
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const folded = useNarrowerThan(toolbarRef, TOOLBAR_FOLD_BELOW);
+  // A tool picked in More keeps the focus it gave (the page, or a dialog's field).
+  const pickedInMore = useRef(false);
 
   const chain = () => editor.chain().focus();
   /** Why a tool can't be used now, by its key. */
@@ -233,14 +280,24 @@ export function EditorToolbar({
     { key: 'addColumn', icon: Columns3, run: () => chain().addColumnAfter().run() },
     { key: 'deleteTable', icon: Trash2, run: () => chain().deleteTable().run() },
   ];
+  // Narrow, the less-used tools leave their groups for More ▾ (each group keeps one).
+  const shownTools = folded
+    ? tools.map((group) => group.filter((tool) => !FOLDED.has(tool.key)))
+    : tools;
+  const moreTools = tools.flat().filter((tool) => FOLDED.has(tool.key));
+  const pickInMore = (run: () => void) => () => {
+    pickedInMore.current = true;
+    run();
+  };
 
   return (
     <div
+      ref={toolbarRef}
       role="toolbar"
       aria-label={t('label')}
       className="flex flex-wrap items-center gap-0.5 border-b px-4 py-1.5"
     >
-      {tools.map((group, i) => (
+      {shownTools.map((group, i) => (
         <div key={i} className="flex items-center gap-0.5">
           {i > 0 && <span aria-hidden="true" className="mx-1.5 h-5 w-px bg-border" />}
           {group.map((tool) => (
@@ -259,13 +316,58 @@ export function EditorToolbar({
         </div>
       ))}
       <span aria-hidden="true" className="mx-1.5 h-5 w-px bg-border" />
-      <ToolButton
-        label={htmlView ? t('htmlBack') : t('html')}
-        pressed={htmlView}
-        onClick={onToggleHtml}
-      >
-        <span className="font-mono text-[11.5px] font-medium">&lt;/&gt; HTML</span>
-      </ToolButton>
+      {folded ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            title={t('moreHint')}
+            className={cn(
+              TOOL_CLASS,
+              'gap-0.5 aria-expanded:bg-muted aria-expanded:text-foreground',
+            )}
+          >
+            <span className="text-xs font-medium">{t('more')}</span>
+            <ChevronDown aria-hidden className="h-3.5 w-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="w-auto min-w-44"
+            // A tool picked keeps the focus it gave (the page, or its dialog); Esc
+            // or a click away returns it to More.
+            finalFocus={() => {
+              const picked = pickedInMore.current;
+              pickedInMore.current = false;
+              return !picked;
+            }}
+          >
+            {moreTools.map((tool) => (
+              <DropdownMenuItem
+                key={tool.key}
+                disabled={htmlView}
+                onClick={pickInMore(edit(tool.run))}
+              >
+                <tool.icon className="h-4 w-4" />
+                {t(`folded.${tool.key}`)}
+                {tool.on && <Check aria-hidden className="ml-auto h-3.5 w-3.5" />}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={pickInMore(onToggleHtml)}>
+              <span aria-hidden className="w-4 font-mono text-[11px] font-medium">
+                &lt;/&gt;
+              </span>
+              {htmlView ? t('htmlBack') : t('html')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : (
+        <ToolButton
+          label={htmlView ? t('htmlBack') : t('html')}
+          pressed={htmlView}
+          onClick={onToggleHtml}
+        >
+          <span className="font-mono text-[11.5px] font-medium">&lt;/&gt; HTML</span>
+        </ToolButton>
+      )}
       {state.href && !htmlView && <LinkTarget href={state.href} />}
       {state.inTable && !htmlView && (
         <div className="flex items-center gap-0.5">
@@ -392,6 +494,10 @@ function LinkTarget({ href }: { href: string }) {
   );
 }
 
+/** A tool's button, and More ▾'s. */
+const TOOL_CLASS =
+  'flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40';
+
 function ToolButton({
   label,
   pressed,
@@ -420,7 +526,7 @@ function ToolButton({
       onMouseDown={(e) => e.preventDefault()}
       onClick={blocked ? undefined : onClick}
       className={cn(
-        'flex h-7 min-w-7 items-center justify-center rounded-md px-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-40',
+        TOOL_CLASS,
         pressed && 'bg-muted text-foreground',
         blocked && 'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground',
       )}

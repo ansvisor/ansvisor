@@ -435,6 +435,8 @@ export function DraftEditor({
   draft,
   onAgentStarted,
   agentFinished = false,
+  embedded = false,
+  onClose,
 }: {
   draft: ContentDraft;
   /**
@@ -444,6 +446,13 @@ export function DraftEditor({
   onAgentStarted?: (run: 'write' | 'rewrite') => void;
   /** The editor opens on what the agent just wrote here: the next-step nudge's moment. */
   agentFinished?: boolean;
+  /**
+   * Inside another page (Chat's Open here, CHAT-25 §4): Close in the Library
+   * link's place, no Chat tab, and the address stays.
+   */
+  embedded?: boolean;
+  /** Embedded: Close, for the page around it to put the editor away. */
+  onClose?: () => void;
 }) {
   const t = useTranslations('contentEditor.editor');
   const tNext = useTranslations('contentEditor.editor.nextStep');
@@ -471,8 +480,9 @@ export function DraftEditor({
   // With the new Chat on, the header speaks Chat's language: the page's pill and the runs tray.
   const chatOn = useChatAgentic();
   // Chat beside the page, first in the side panel (CHAT-25 §5, W4-16), with the panel's setup.
+  // Not embedded in Chat: the chat is beside it already.
   const chatPanel = useChatPanel();
-  const chatTab = chatOn && chatPanel !== null;
+  const chatTab = chatOn && chatPanel !== null && !embedded;
   // Where the page is live (CE-013), and Mark published open.
   const [liveUrl, setLiveUrl] = useState(draft.publishedUrl);
   const [askLive, setAskLive] = useState(false);
@@ -636,8 +646,13 @@ export function DraftEditor({
     /** Quality's part to show, from the Next step basket: its to-dos, or what raises Trust. */
     focus?: QualityFocus;
   } | null>(null);
+  // Embedded, the bottom bar opens what is asked for itself, and the page's
+  // own open-or-closed choice stays as it was.
+  const showPanel = () => {
+    if (!embedded && !panelOpen) togglePanel();
+  };
   const openPanelTab = (tab: PanelTarget, source?: { kind: DraftSourceKind; ref: string }) => {
-    if (!panelOpen) togglePanel();
+    showPanel();
     setTabRequest((prev) => ({
       tab,
       n: (prev?.n ?? 0) + 1,
@@ -1540,7 +1555,7 @@ export function DraftEditor({
   };
   // Quality's Add opens Brief › Your input.
   const addInput = () => {
-    if (!panelOpen) togglePanel();
+    showPanel();
     setTabRequest((prev) => ({ tab: 'brief', n: (prev?.n ?? 0) + 1, input: true }));
   };
   const nudge = useNextNudge(draft.id, todos);
@@ -3660,7 +3675,7 @@ export function DraftEditor({
         } else reviewFirst();
         return;
       case 'buildBrief':
-        if (!panelOpen) togglePanel();
+        showPanel();
         setTabRequest((prev) => ({ tab: 'brief', n: (prev?.n ?? 0) + 1, build: true }));
         return;
       case 'writeWithAgent':
@@ -3680,12 +3695,14 @@ export function DraftEditor({
         setAuthorMenuOpen(true);
         return;
       case 'addAuthor':
-        router.push(MANAGE_AUTHORS_PATH);
+        // Embedded, the page around the editor stays: Authors opens in a new tab.
+        if (embedded) window.open(MANAGE_AUTHORS_PATH, '_blank', 'noopener');
+        else router.push(MANAGE_AUTHORS_PATH);
         return;
       case 'showTodos':
       case 'showTrust':
         // Shown even with Quality open already: the part it names scrolls in and is marked.
-        if (!panelOpen) togglePanel();
+        showPanel();
         setTabRequest((prev) => ({
           tab: 'quality',
           n: (prev?.n ?? 0) + 1,
@@ -3905,19 +3922,33 @@ export function DraftEditor({
           stays light (the title shortens, the save state and Mark ready never
           move), and the page's tags under the title, all of them at any width. */}
       <header className="border-b px-4 pt-2.5 pb-2">
-        <div className="flex items-center gap-2.5">
-          <Link
-            href={CONTENT_LIBRARY_PATH}
-            aria-label={t('back')}
-            title={t('back')}
-            className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
+        {/* Embedded, in a pane beside Chat (CHAT-25 §4): the buttons move under the
+            title when the row can't hold both, so nothing overflows at 600px. */}
+        <div className={cn('flex items-center gap-2.5', embedded && 'flex-wrap gap-y-1.5')}>
+          {embedded ? (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('closeHere')}
+              title={t('closeHere')}
+              onClick={onClose}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Link
+              href={CONTENT_LIBRARY_PATH}
+              aria-label={t('back')}
+              title={t('back')}
+              className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          )}
           {/* The title takes the room left (at least ~140px from 1024px, 96px
               narrower; less while the save state needs its words), ends in "…",
               and never pushes, overlaps or wraps the buttons (Next step spec §3b). */}
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <div className={cn('flex min-w-0 flex-1 items-center gap-2.5', embedded && 'min-w-72')}>
             <h1
               className={cn(
                 'shrink text-sm font-medium',
@@ -3942,9 +3973,16 @@ export function DraftEditor({
               <SaveIndicator state={autosave.state} onRetry={() => void autosave.retry()} />
             </span>
           </div>
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+          <div
+            className={cn(
+              'flex shrink-0 items-center gap-1.5 sm:gap-2.5',
+              embedded && 'ml-auto min-w-0 shrink flex-wrap justify-end gap-y-1.5',
+            )}
+          >
             {qualityOn && (
               <NextStepButton
+                // The pane is narrow on a wide window: "Next" and the bars, the step on hover.
+                compact={embedded}
                 next={next}
                 state={nextState}
                 todoLine={todoLine}
@@ -4033,7 +4071,7 @@ export function DraftEditor({
             )}
             {/* The one black button. Marked, it reads Ready (a click moves it back
                 to review); published, Published (a click changes its live
-                address, CE-013). Narrower than 1024px, ✓ alone. */}
+                address, CE-013). Narrower than 1024px, or embedded, ✓ alone. */}
             {status === 'ready' || status === 'published' ? (
               <HeaderTip
                 label={tDraftStatus(status)}
@@ -4060,11 +4098,13 @@ export function DraftEditor({
                   className="border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 disabled:opacity-100 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300 dark:hover:bg-emerald-900"
                 >
                   {unmarking ? <LoadingDots /> : <Check className="h-3.5 w-3.5" />}
-                  <span className="hidden lg:inline">{tDraftStatus(status)}</span>
+                  <span className={embedded ? 'hidden' : 'hidden lg:inline'}>
+                    {tDraftStatus(status)}
+                  </span>
                 </Button>
               </HeaderTip>
             ) : (
-              <HeaderTip label={t('markReady')} narrowOnly>
+              <HeaderTip label={t('markReady')} narrowOnly={!embedded}>
                 <Button
                   size="sm"
                   // A page that can't be saved can't be marked ready; the save state says why.
@@ -4077,22 +4117,29 @@ export function DraftEditor({
                     { action: tActions('markReady') },
                   )}
                 >
-                  {marking ? <LoadingDots /> : <Check className="h-3.5 w-3.5 lg:hidden" />}
-                  <span className="hidden lg:inline">{t('markReady')}</span>
+                  {marking ? (
+                    <LoadingDots />
+                  ) : (
+                    <Check className={cn('h-3.5 w-3.5', !embedded && 'lg:hidden')} />
+                  )}
+                  <span className={embedded ? 'hidden' : 'hidden lg:inline'}>{t('markReady')}</span>
                 </Button>
               </HeaderTip>
             )}
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-pressed={panelOpen}
-              aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
-              title={panelOpen ? t('panel.hide') : t('panel.show')}
-              onClick={togglePanel}
-              className={cn(panelOpen && 'bg-muted')}
-            >
-              <PanelRight className="h-4 w-4" />
-            </Button>
+            {/* Embedded, the bottom bar holds the panel's parts: nothing to show or hide. */}
+            {!embedded && (
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-pressed={panelOpen}
+                aria-label={panelOpen ? t('panel.hide') : t('panel.show')}
+                title={panelOpen ? t('panel.hide') : t('panel.show')}
+                onClick={togglePanel}
+                className={cn(panelOpen && 'bg-muted')}
+              >
+                <PanelRight className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
         {/* Lined up under the title (the back button's 28px and the 10px gap). */}
@@ -4214,8 +4261,9 @@ export function DraftEditor({
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col">
+      {/* Embedded, the page over its bottom bar (CHAT-25 §4); else the page beside its panel. */}
+      <div className={cn('flex min-h-0 flex-1', embedded && 'flex-col')}>
+        <div className={cn('flex min-w-0 flex-1 flex-col', embedded && 'min-h-0')}>
           {/* From 80% of the month's AI usage, as on the other pages, as a strip
               like the agent's own notices. */}
           <AiUsageBanner className="rounded-none border-x-0 border-t-0 px-4 py-1.5 text-[13px]" />
@@ -4441,8 +4489,9 @@ export function DraftEditor({
           </div>
           {attachments.ui}
         </div>
-        {panelOpen ? (
+        {embedded || panelOpen ? (
           <EditorSidePanel
+            layout={embedded ? 'bar' : 'side'}
             draft={draft}
             liveUrl={liveUrl}
             published={status === 'published'}

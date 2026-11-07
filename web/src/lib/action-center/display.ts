@@ -228,10 +228,33 @@ export function actionTexts(
     };
   }
   const targets = targetLabel(p, t);
+  // A store's topic whose category page is live optimizes that page (AC plan P-7).
+  if (optimizesCategoryPage(action.kind, p)) {
+    return {
+      title: targets
+        ? t(`${action.kind}.categoryTitle`, { targets })
+        : t(`${action.kind}.categoryTitleGeneric`),
+      description: t(`${action.kind}.categoryDescription`),
+    };
+  }
   return {
     title: targets ? t(`${action.kind}.title`, { targets }) : t(`${action.kind}.titleGeneric`),
     description: t(`${action.kind}.description`),
   };
+}
+
+/**
+ * Whether a topic action (G16) optimizes its topic's live category page
+ * (AC plan P-7): its play is the category page, not a new page.
+ */
+function optimizesCategoryPage(kind: string, payload: Record<string, unknown>): boolean {
+  const play = payload.play;
+  return (
+    kind === 'create_content_for_topics' &&
+    !!play &&
+    typeof play === 'object' &&
+    (play as { id?: unknown }).id === 'category_page'
+  );
 }
 
 /**
@@ -347,6 +370,7 @@ export function actionGoal(
   ) {
     return payload.goal;
   }
+  if (optimizesCategoryPage(kind, payload ?? {})) return t(`${kind}.categoryGoal`);
   return isActionKind(kind) ? t(`${kind}.goal`) : t('unknown.goal');
 }
 

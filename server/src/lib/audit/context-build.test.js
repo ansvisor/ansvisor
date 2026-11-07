@@ -50,12 +50,23 @@ describe('buildAuditContext', () => {
     probeAnswer = tested;
     const ctx = await buildAuditContext('acme.com/pricing');
     expect(probeCalls).toEqual(['https://acme.com/pricing']);
-    expect(ctx.botAccess).toBe(tested);
+    expect(ctx.botAccess).toEqual(tested);
+    expect(ctx.rawPage).toBeNull();
     // Refused only in the live test: a warning, the real crawler may get in.
     expect(aiBotAccess.evaluate(ctx)).toMatchObject({
       status: 'warn',
       evidence: { wafBlockedBots: ['perplexitybot'] },
     });
+  });
+
+  it('keeps the HTML the first bot let in got for the no-JS check, apart from the answers (SA-009)', async () => {
+    const page = { html: '<h1>Pricing</h1>', from: 'gptbot' };
+    probeAnswer = { ...tested, page };
+    const ctx = await buildAuditContext('https://acme.com/pricing');
+    expect(ctx.rawPage).toEqual(page);
+    expect(ctx.botAccess).toEqual(tested);
+    // The rendered page stays the one the audit reads.
+    expect(ctx.html).toBe('<h1>Pricing</h1>');
   });
 
   it('reads where the canonical tag points, and keeps it as the check’s evidence, its score as before', async () => {
@@ -95,6 +106,7 @@ describe('buildAuditContext', () => {
     probeAnswer = new Error('boom');
     const ctx = await buildAuditContext('https://acme.com/pricing');
     expect(ctx.botAccess).toBeNull();
+    expect(ctx.rawPage).toBeNull();
     expect(aiBotAccess.evaluate(ctx)).toMatchObject({ status: 'pass' });
     expect(aiBotAccess.evaluate(ctx).evidence).not.toHaveProperty('liveTest');
   });

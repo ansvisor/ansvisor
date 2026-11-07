@@ -514,6 +514,8 @@ describe('buildShoppingPath', () => {
 
   const COUNTS = [
     ['best_of', 8],
+    // A category page's best sellers (AC plan P-7).
+    ['category_page', 8],
     ['buying_guide', 5],
     ['comparison', 4],
     ['alternatives', 4],
