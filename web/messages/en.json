@@ -4298,7 +4298,10 @@
         "done": "Done"
       },
       "closeNote": "You close tasks in Action Center. I never mark them done.",
-      "close": "Close tasks in Action Center"
+      "close": "Close tasks in Action Center",
+      "dueLine": "Due {date} · I'll keep working and notify you",
+      "change": "Change",
+      "changeLabel": "Change when it's due"
     },
     "proposal": {
       "goal": "Goal",
@@ -7756,6 +7759,16 @@
       "done": "Scheduled: {title}",
       "detail": "{when} · {deliver}",
       "detailReadyBy": "{when} · Starts now · {deliver}"
+    },
+    "readyBy": {
+      "ready": "Everything is ready, ahead of its due time ({date}).",
+      "due": "It was due {date}. {ready, number} of {total, number} ready.",
+      "tries": "I tried {tries, plural, one {# more time} other {# more times}} and stopped. {ready, number} of {total, number} ready.",
+      "readyList": "Ready",
+      "restList": "Not ready yet",
+      "nothing": "Nothing was ready.",
+      "answer": "The answer, in this chat",
+      "rest": "What's ready is in this chat and in Files. Ask me to finish the rest."
     },
     "notice": {
       "failed": "Something went wrong, twice.",
