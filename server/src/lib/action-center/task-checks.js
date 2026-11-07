@@ -22,6 +22,8 @@
  *    query or trailing slash aside (add_internal_links, AC plan P-10); a
  *    bridge links action's names its pairs (`links`): each source page is
  *    read for its link, and it passes once every one has it;
+ *  - a canonical tag points to the page itself, or to a live, indexable
+ *    page of the same site (fix_canonical, AC plan P-11; audit/canonical.js);
  *  - a shopping links task's page links no product that no longer sells,
  *    read as the catalog sync's shopping check reads it (shopping-check.js;
  *    Check now only: the sync checks it, not the sweep).
@@ -42,6 +44,7 @@ import { fetchPage } from '../safe-fetch.js';
 import { checkShoppingDraft } from '../shopping-check.js';
 import { classIdWords, furnitureNamed } from '../page-content.js';
 import { onBrandDomain } from '../audit/host.js';
+import { canonicalHref, canonicalIssue, probeCanonical } from '../audit/canonical.js';
 import { aiBotAccess } from '../audit/signals/trust.js';
 import { LIVE_BOT_KEYS, probeBotAccess } from '../audit/bot-access.js';
 import {
@@ -58,6 +61,7 @@ export const CHECKS = Object.freeze({
   fix_broken_target: 'answers',
   fix_structured_data: 'structuredData',
   fix_crawler_access: 'crawlers',
+  fix_canonical: 'canonical',
   optimize_content: 'changed',
   refresh_content: 'changed',
   strengthen_reference_asset: 'changed',
@@ -455,6 +459,14 @@ export async function checkPage(
   if (kind === 'answers') return { passed: true, missing: [] };
 
   const $ = loadPage(page.html);
+  if (kind === 'canonical') {
+    // Its tag read again, and its target as Site Audit reads it (canonical.js).
+    const href = canonicalHref($);
+    const target = await probeCanonical(page.url, href, { fetchImpl: fetch });
+    if (target?.state === 'unreadable') return null;
+    const issue = canonicalIssue({ canonical: href, target });
+    return { passed: !issue, missing: issue ? [`canonical_${issue}`] : [] };
+  }
   if (kind === 'structuredData') {
     const named = auditChecks.filter((key) => STRUCTURED_CHECKS[key]);
     const failing = (named.length ? named : DEFAULT_STRUCTURED).filter((key) => {

@@ -14,6 +14,8 @@ let noPlan;
 const capReads = [];
 const inserted = [];
 const updates = [];
+// The filters a read left out rows with: [table, column, value].
+const excluded = [];
 
 function table(name) {
   const state = { name, filters: {} };
@@ -70,6 +72,11 @@ function table(name) {
             state.filters[col] = val;
             return chain;
           };
+        if (prop === 'neq')
+          return (col, val) => {
+            excluded.push([name, col, val]);
+            return chain;
+          };
         return () => chain;
       },
     },
@@ -109,6 +116,7 @@ beforeEach(async () => {
   capReads.length = 0;
   inserted.length = 0;
   updates.length = 0;
+  excluded.length = 0;
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -165,6 +173,26 @@ describe('AI bot connections', () => {
     expect(logpush.vercelDrain).toBeNull();
   });
 
+  it('makes a generic webhook: the endpoint and its secret, nothing else to copy (#2170)', async () => {
+    const res = await create({ kind: 'log_webhook' });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.endpoint).toBe('https://api.example.com/bots/ingest');
+    expect(body.secret).toMatch(/^abot_/);
+    expect(body).toMatchObject({
+      workerScript: null,
+      workerSecretName: null,
+      logpushJob: null,
+      vercelDrain: null,
+    });
+    expect(inserted[0]).toMatchObject({ brand_id: 'b1', kind: 'log_webhook' });
+  });
+
+  it("makes no upload connection by hand: it's made at the first upload", async () => {
+    expect((await create({ kind: 'log_upload' })).status).toBe(400);
+    expect(inserted).toHaveLength(0);
+  });
+
   it('makes no connection while the server has no public https address', async () => {
     vi.stubEnv('PUBLIC_SERVER_URL', 'http://api.example.com');
     const res = await create({ kind: 'cloudflare_worker' });
@@ -204,6 +232,8 @@ describe('AI bot connections', () => {
     expect(body.usage).not.toHaveProperty('noPlan');
     // A read: a plan that ended doesn't refuse it.
     expect(capReads).toEqual([['o1', { readOnly: true }]]);
+    // Uploads have their own connection, never one to set up or revoke (#2170).
+    expect(excluded).toEqual([['ai_bot_connections', 'kind', 'log_upload']]);
   });
 
   it('still lists the connections and their use once the plan has ended', async () => {

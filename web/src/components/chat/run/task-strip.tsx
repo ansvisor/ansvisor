@@ -5,7 +5,9 @@ import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button';
 import type { ChatTaskRow, ChatTaskStatus, ChatTaskStrip } from '@/lib/chat/events';
+import type { ChatReadyBy } from '@/lib/chat/thread';
 import { cn } from '@/lib/utils';
+import { ReadyByLine } from './ready-by-line';
 
 /** Each status's pill, in both themes: Queued plain, Writing working, Ready for review waiting on the person, Done done. */
 const STATUS_PILL: Record<ChatTaskStatus, string> = {
@@ -65,11 +67,23 @@ export function TaskStripRows({ tasks }: { tasks: readonly ChatTaskRow[] }) {
  * "Action Center tasks · 4 due", how many are ready ("1 of 3 ready",
  * CHAT-01 item 7) with its bar, the tasks, and once the run ended the line
  * of #s-done: the person closes the tasks in Action Center, Chat never does.
+ * Under a job with a due time's tasks, its due line with Change (W4-30).
  * Screen readers hear what changes, once: the rows whose status moved, then
  * how many are ready when that moved. A reload or the strip's first tasks
  * say nothing; the rows are read as they are.
  */
-export function TaskStrip({ strip, ended }: { strip: ChatTaskStrip; ended: boolean }) {
+export function TaskStrip({
+  strip,
+  ended,
+  readyBy = null,
+  now = 0,
+}: {
+  strip: ChatTaskStrip;
+  ended: boolean;
+  readyBy?: ChatReadyBy | null;
+  /** The page's clock, for the due line's year. */
+  now?: number;
+}) {
   const t = useTranslations('chatRun.tasks');
   const titleId = useId();
   const [seen, setSeen] = useState(strip);
@@ -127,6 +141,7 @@ export function TaskStrip({ strip, ended }: { strip: ChatTaskStrip; ended: boole
         {news}
       </p>
       <TaskStripRows tasks={strip.tasks} />
+      {readyBy && <ReadyByLine readyBy={readyBy} now={now} inStrip />}
       {ended && (
         <div className="flex flex-wrap items-center gap-2 border-t px-3.5 py-2.5">
           <span className="text-xs text-muted-foreground">{t('closeNote')}</span>

@@ -1123,6 +1123,56 @@ describe('an internal links task', () => {
   });
 });
 
+describe('a canonical fix (AC plan P-11)', () => {
+  const tag = (href) =>
+    `<html><head><link rel="canonical" href="${href}"></head><body><main><h1>Pricing</h1><p>${FILLER}</p></main></body></html>`;
+
+  it('is checked on its page', () => {
+    expect(checkKind({ task_key: 'fix_canonical', details: { check: 'auto', url: PAGE } })).toBe(
+      'canonical',
+    );
+  });
+
+  it('passes when the tag points to the page itself, or a live page of the site', async () => {
+    expect(
+      await checkPage('canonical', PAGE, { fetch: fetchOf({ [PAGE]: tag('/pricing/') }) }),
+    ).toEqual({
+      passed: true,
+      missing: [],
+    });
+    const plans = 'https://acme.example/plans';
+    expect(
+      await checkPage('canonical', PAGE, {
+        fetch: fetchOf({ [PAGE]: tag('/plans'), [plans]: html('Plans') }),
+      }),
+    ).toEqual({ passed: true, missing: [] });
+  });
+
+  it('names what is still wrong: no tag, another site, a redirect; and says nothing when its target can’t be read', async () => {
+    expect(
+      await checkPage('canonical', PAGE, { fetch: fetchOf({ [PAGE]: html('Pricing') }) }),
+    ).toEqual({
+      passed: false,
+      missing: ['canonical_missing'],
+    });
+    expect(
+      await checkPage('canonical', PAGE, {
+        fetch: fetchOf({ [PAGE]: tag('https://other.example/x') }),
+      }),
+    ).toEqual({ passed: false, missing: ['canonical_other_host'] });
+    const old = 'https://acme.example/old-pricing';
+    expect(
+      await checkPage('canonical', PAGE, {
+        fetch: fetchOf({ [PAGE]: tag('/old-pricing'), [old]: { redirect: PAGE, html: html('x') } }),
+      }),
+    ).toEqual({ passed: false, missing: ['canonical_redirect'] });
+    // Its target times out: no answer.
+    expect(
+      await checkPage('canonical', PAGE, { fetch: fetchOf({ [PAGE]: tag('/gone') }) }),
+    ).toBeNull();
+  });
+});
+
 describe('runTaskCheck on a shopping links task', () => {
   const action = { brand_id: 'b1' };
   const LIVE = 'https://acme.example/blog/boots';

@@ -55,7 +55,7 @@ describe('actionTexts', () => {
   });
 
   it("holds copy for all sixty-two definitions and the AC plan's, the eleven person-sent kinds and the catalog check's", () => {
-    expect(ACTION_KINDS).toHaveLength(75);
+    expect(ACTION_KINDS).toHaveLength(76);
   });
 
   it('names a product or category sent from Product Visibility after it (ECOM-013)', () => {
