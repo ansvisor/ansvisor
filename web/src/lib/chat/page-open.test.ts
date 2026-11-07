@@ -22,10 +22,11 @@ describe('where a page Chat writes opens (W4-11)', () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  it('reads a saved choice, and asks for one it doesn’t offer yet (Open here)', () => {
+  it('reads a saved choice, Open here too (W4-15b), and asks for one it doesn’t know', () => {
     expect(pageOpenOf('chat')).toBe('chat');
     expect(pageOpenOf('editor')).toBe('editor');
-    expect(pageOpenOf('here')).toBe('ask');
+    expect(pageOpenOf('here')).toBe('here');
+    expect(pageOpenOf('nowhere')).toBe('ask');
     expect(pageOpenOf(null)).toBe('ask');
   });
 
@@ -47,5 +48,7 @@ describe('where a page Chat writes opens (W4-11)', () => {
     keepPageChoice('run-1', 'chat');
     expect(pageChoiceMade('run-1')).toBe(true);
     expect(pageChoiceMade('run-2')).toBe(false);
+    keepPageChoice('run-2', 'here');
+    expect(pageChoiceMade('run-2')).toBe(true);
   });
 });

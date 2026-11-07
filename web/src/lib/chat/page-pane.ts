@@ -1,3 +1,5 @@
+import { PANEL_FROM_PARAM } from './panel';
+
 /**
  * Chat's Open here (CHAT-25 §4, W4-15): a page open in the Content Editor
  * beside the conversation. Which page is the chat's address, `?page={draftId}`,
@@ -43,4 +45,23 @@ export function withOpenPage(search: string, draftId: string | null): string {
   else params.delete(PAGE_PARAM);
   const query = params.toString();
   return query ? `?${query}` : '';
+}
+
+const EDITOR_HREF = /^\/dashboard\/content\/editor\/([^/?#]+)/;
+
+/** The draft a page's Content Editor address (`/dashboard/content/editor/{draftId}`) names, or null. */
+export function draftOfEditorHref(href: string): string | null {
+  return openPageOf(EDITOR_HREF.exec(href)?.[1]);
+}
+
+/**
+ * Open here from outside the chat's own page (the side panel, W4-15b): the
+ * chat's full page with the draft beside it, and `?from=` the page the
+ * person was on, as the panel's Open as full page keeps it (CHAT-22).
+ */
+export function chatWithPageHref(chatId: string, draftId: string, from?: string | null): string {
+  const params = new URLSearchParams();
+  if (from) params.set(PANEL_FROM_PARAM, from);
+  params.set(PAGE_PARAM, draftId);
+  return `/dashboard/chat/${chatId}?${params.toString()}`;
 }

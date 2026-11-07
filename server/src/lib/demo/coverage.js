@@ -36,6 +36,8 @@ export const SKIPPED = {
     'The demo catalog is built from a public product feed and has no order history; order line items must not imply a merchant’s real purchases.',
   catalog_item_issues:
     "Merchant Center's item issues: the demo's catalog comes from a product feed, and Merchant Center shows as Soon in the demo.",
+  catalog_item_matches:
+    "GA items matched to the catalog after a GA sync (00493): the demo's Analytics is sample data that is never synced, so nothing is matched.",
   topic_catalog_categories:
     "A person's topic ↔ category decisions (00494): the demo's links are the worked-out ones.",
 

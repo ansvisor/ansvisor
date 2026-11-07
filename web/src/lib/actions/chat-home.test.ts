@@ -33,7 +33,7 @@ vi.mock('@/lib/supabase/server', () => ({
     from: (table: string) => {
       const chain: Record<string, unknown> = {};
       let page = 0;
-      for (const name of ['select', 'eq', 'in', 'lte', 'gte', 'is', 'order', 'range']) {
+      for (const name of ['select', 'eq', 'in', 'lte', 'gte', 'is', 'order', 'range', 'limit']) {
         chain[name] = (...args: unknown[]) => {
           db.calls.push([table, name, ...args]);
           if (name === 'range') page = (args[0] as number) / 1000;
@@ -109,6 +109,7 @@ describe('readHomeShortcuts', () => {
       dueTasks: 3,
       lostPages: 2,
       readyDrafts: 2,
+      nextReport: null,
     });
     const of = (table: string) => db.calls.filter(([t]) => t === table).map(([, ...c]) => c);
     expect(of('actions')).toEqual([
@@ -134,6 +135,34 @@ describe('readHomeShortcuts', () => {
     ]);
   });
 
+  it('reads when the person’s own Weekly report job for the brand runs next, within a week', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-18T12:00:00Z'));
+    db.answers.chat_schedules = {
+      data: [{ next_run_at: '2026-10-19T06:00:00+00:00' }],
+      error: null,
+    };
+    expect(await readHomeShortcuts(BRAND, '2026-10-18')).toMatchObject({
+      ok: true,
+      nextReport: '2026-10-19T06:00:00+00:00',
+    });
+    expect(db.calls.filter(([t]) => t === 'chat_schedules').map(([, ...c]) => c)).toEqual([
+      ['select', 'next_run_at'],
+      ['eq', 'created_by', 'user-1'],
+      ['eq', 'brand_id', BRAND],
+      ['eq', 'skill_name', 'report'],
+      ['eq', 'kind', 'recurring'],
+      ['eq', 'enabled', true],
+      ['gte', 'next_run_at', '2026-10-18T12:00:00.000Z'],
+      ['lte', 'next_run_at', '2026-10-25T12:00:00.000Z'],
+      ['order', 'next_run_at'],
+      ['limit', 1],
+    ]);
+    // None this coming week.
+    db.answers.chat_schedules = { data: [], error: null };
+    expect(await readHomeShortcuts(BRAND, '2026-10-18')).toMatchObject({ nextReport: null });
+  });
+
   it('reads the next page of signals while a page is full', async () => {
     db.signalPages = [
       Array.from({ length: 1000 }, (_, i) => lost(`https://acme.example/p${i % 10}`)),
@@ -148,16 +177,22 @@ describe('readHomeShortcuts', () => {
   });
 
   it('counts nothing for a section an Admin took off the person’s menu', async () => {
-    db.profile.menu_hidden = ['content'];
+    db.profile.menu_hidden = ['content', 'reports'];
     db.roleHidden = ['citations'];
+    db.answers.chat_schedules = {
+      data: [{ next_run_at: '2026-11-02T06:00:00+00:00' }],
+      error: null,
+    };
     expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({
       ok: true,
       dueTasks: 3,
       lostPages: 0,
       readyDrafts: 0,
+      nextReport: null,
     });
     expect(tables()).not.toContain('content_drafts');
     expect(tables()).not.toContain('signals');
+    expect(tables()).not.toContain('chat_schedules');
   });
 
   it('takes the demo brand’s id, made by hand and not an RFC 4122 one', async () => {
@@ -182,6 +217,9 @@ describe('readHomeShortcuts', () => {
     expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
     db.answers.content_drafts = { count: 2, error: null };
     db.answers.signals = { data: null, error: { message: 'nope' } };
+    expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
+    delete db.answers.signals;
+    db.answers.chat_schedules = { data: null, error: { message: 'nope' } };
     expect(await readHomeShortcuts(BRAND, '2026-11-01')).toEqual({ ok: false });
     logged.mockRestore();
   });
