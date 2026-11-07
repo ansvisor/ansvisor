@@ -936,6 +936,11 @@
           "keys": {
             "aiBotsMentioned": "In robots.txt",
             "wafBlockedBots": "Blocked by CDN or firewall",
+            "hiddenPercent": "Main text only after JavaScript (%)",
+            "hiddenWords": "Words only after JavaScript",
+            "mainWords": "Main-text words",
+            "hiddenText": "Not in the HTML",
+            "readAs": "Read as",
             "ageDays": "Age in days",
             "newest": "Newest date",
             "dateSignals": "Date signals",
@@ -2300,8 +2305,12 @@
           "comparison": "Write a comparison page",
           "best_of": "Write a best-of list",
           "guide": "Write a how-to guide",
-          "definition": "Write a definition page"
+          "definition": "Write a definition page",
+          "category_page": "Optimize the category page",
+          "buying_guide": "Write a buying guide"
         },
+        "buyingGuideReason": "The topic is about your {category} category, with {inStock, plural, one {# product} other {# products}} in stock and no live page yet. A buying guide for the topic answers its questions and links the category’s best sellers.",
+        "categoryReason": "The topic is about your {category} category, whose page {page} is live with {inStock, plural, one {# product} other {# products}} in stock. Optimize it for the topic’s questions; its best sellers are picked for its shopping path.",
         "reason": "{prompts, number} of {of, plural, one {# prompt} other {# prompts}} {play, select, comparison {ask to compare options} best_of {ask for the best options} guide {ask how to do something or fix a problem} definition {ask what something is} other {ask for this}}: {share, number, percent} of their estimated AI searches.",
         "also": "Also worth doing here",
         "alsoLine": "{name} · {share, number, percent} of the AI searches"
@@ -2720,7 +2729,11 @@
         "title": "Create content to cover {targets}",
         "titleGeneric": "Create content for topic gaps",
         "description": "You barely appear in this topic, and new content is needed rather than edits.",
-        "goal": "Build coverage for a topic you are missing."
+        "goal": "Build coverage for a topic you are missing.",
+        "categoryTitle": "Optimize the category page for {targets}",
+        "categoryTitleGeneric": "Optimize a category page for a topic gap",
+        "categoryDescription": "You barely appear in this topic, and its category page is live: optimizing that page answers the topic's questions.",
+        "categoryGoal": "Make your category page the answer for this topic."
       },
       "optimize_content_for_ai": {
         "title": "Optimize pages for {targets}",
@@ -8058,7 +8071,7 @@
   },
   "audit": {
     "title": "Site Audit",
-    "description": "Score any page against the 48-signal AEO/GEO",
+    "description": "Score any page against the 49-signal AEO/GEO",
     "runAudit": "Run Audit",
     "running": "Auditing…",
     "pages": {
@@ -8435,7 +8448,9 @@
       "words": "Words: {syllables, number} syllables and {letters, number} letters on average",
       "wordsLetters": "Words: {letters, number} letters on average",
       "paragraphs": "Paragraphs: {words, number} words on average, about {lines, plural, one {# line} other {# lines}} each on a phone",
-      "firstPerson": "{count, plural, one {# sentence} other {# sentences}} of {total, number} told in the first person ({language})"
+      "firstPerson": "{count, plural, one {# sentence} other {# sentences}} of {total, number} told in the first person ({language})",
+      "noJs": "{percent, plural, =0 {All the main text is in the HTML {bot} gets, before any JavaScript runs.} other {#% of the main text ({hidden, number} of {words, number} words) appears only after JavaScript runs, so AI crawlers don't see it.}}",
+      "noJsHidden": "Not in the HTML {bot} gets:"
     },
     "why": "Why",
     "recommendedFix": "Recommended fix",
@@ -8499,7 +8514,7 @@
     "noIssues": "No issues found — every evaluated signal passed.",
     "stages": {
       "fetch": "Fetching the page…",
-      "analyze": "Analyzing 48 signals…",
+      "analyze": "Analyzing 49 signals…",
       "recommend": "Generating AI recommendations…"
     },
     "emptyTitle": "Audit any page for AI search readiness",
@@ -15335,6 +15350,33 @@
           "workspace": "This brand isn't in your workspace.",
           "busy": "Too many requests. Wait a few minutes.",
           "failed": "Couldn't save the page. Try again later."
+        }
+      },
+      "topicCategories": {
+        "title": "Topics and categories",
+        "description": "Which catalog categories each topic is about, so its work reaches the category page and its products. Worked out from the category's name in the topic's name or prompts; change them here.",
+        "unavailable": "Couldn't read the topics' categories. Reload the page to try again.",
+        "topic": "Topic",
+        "categories": "Categories",
+        "none": "No category yet",
+        "source": {
+          "auto": "matched",
+          "manual": "set by hand"
+        },
+        "remove": "Take {category} away",
+        "add": "Add a category",
+        "addLabel": "Add a category to {topic}",
+        "saved": "Topic categories saved",
+        "errors": {
+          "invalid": "That change can't be made.",
+          "off_site": "That change can't be made.",
+          "not_found": "This topic or category isn't there any more. Reload the page.",
+          "forbidden": "Only admins and managers can change this.",
+          "session": "Your session expired. Sign in again.",
+          "workspace": "This brand isn't in your workspace.",
+          "busy": "Too many requests. Wait a few minutes.",
+          "subscription": "Your plan has ended. Upgrade to change this.",
+          "failed": "Couldn't save the change. Try again later."
         }
       },
       "synced": "{count, plural, one {# product read} other {# products read}}",

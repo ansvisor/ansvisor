@@ -1,14 +1,14 @@
 {
-  "version": "v1.3",
-  "description": "48-signal AEO/GEO scoring rubric for measuring whether a page will get cited by AI answer engines. Each signal carries an evidence level; informational signals are shown but left out of the score.",
-  "totalSignals": 48,
+  "version": "v1.4",
+  "description": "49-signal AEO/GEO scoring rubric for measuring whether a page will get cited by AI answer engines. Each signal carries an evidence level; informational signals are shown but left out of the score.",
+  "totalSignals": 49,
   "categories": [
     {
       "key": "structure",
       "label": "Structure",
       "weight": 0.25,
       "description": "How parseable your page is to an AI engine. Schema, headings, lists, tables, alt-text, OG meta. The substrate that makes everything else legible.",
-      "signalCount": 13
+      "signalCount": 14
     },
     {
       "key": "authority",
@@ -72,6 +72,17 @@
       "source": "Google SGE crawler docs",
       "impactTier": "standard",
       "evidenceLevel": "hygiene"
+    },
+    {
+      "key": "no-js-content",
+      "category": "structure",
+      "label": "Main text without JavaScript",
+      "what": "How much of the page's main text is in the HTML an AI bot gets before any JavaScript runs, compared with the page as a browser renders it. 10% or less hidden passes; up to 30% warns.",
+      "why": "AI crawlers such as GPTBot, ClaudeBot and PerplexityBot don't run JavaScript: text that only appears once it runs is text they never see.",
+      "howToFix": "Render the main content on the server (server-side rendering or static pages), or prerender it for bots, instead of loading it with JavaScript.",
+      "source": "Vercel / MERJ, The rise of the AI crawler (2024)",
+      "impactTier": "high",
+      "evidenceLevel": "strong"
     },
     {
       "key": "json-ld-presence",

@@ -20,6 +20,10 @@
  *   is shown but isn't a block, so a slow or busy site doesn't move the
  *   score from one audit to the next.
  * - Fetched through safe-fetch: public addresses only, redirects checked.
+ * - The first bot let in is read whole (up to BOT_ACCESS.pageBytes): that
+ *   HTML, as an AI bot gets it before any JavaScript runs, is what the no-JS
+ *   check compares with the rendered page (SA-009). A site that prerenders
+ *   for bots is read as the bots get it.
  *
  * The bots are asked from Ansvisor's servers, not the operators' own
  * addresses: a firewall that checks a crawler's published IP ranges can
@@ -28,7 +32,7 @@
  */
 
 import { AI_BOTS } from '../ai-bots.js';
-import { fetchPage } from '../safe-fetch.js';
+import { MAX_PAGE_BYTES, fetchPage } from '../safe-fetch.js';
 
 /** The bots fetched by their user agent, in the spec's order (keys in ai-bots.json). */
 export const LIVE_BOT_KEYS = [
@@ -46,6 +50,8 @@ export const BOT_ACCESS = Object.freeze({
   budgetMs: 15_000,
   /** Bytes of an answer read: the status is what counts. */
   maxBytes: 64 * 1024,
+  /** Bytes of the first bot's answer read, for the no-JS check (safe-fetch's page limit). */
+  pageBytes: MAX_PAGE_BYTES,
 });
 
 /** 4xx answers that say nothing about a block: timed out, or asked to slow down. */
@@ -64,19 +70,20 @@ export function liveBots() {
 /**
  * One request: its HTTP status and what it says, `ok` (2xx), `refused`
  * (an answer other than 2xx), `no_answer` (timed out, unreachable) or
- * `not_tested` (an address safe-fetch won't read).
+ * `not_tested` (an address safe-fetch won't read); and for a 2xx, the start
+ * of its body, up to `maxBytes`.
  */
-async function ask(url, userAgent, { fetchImpl, timeoutMs }) {
+async function ask(url, userAgent, { fetchImpl, timeoutMs, maxBytes = BOT_ACCESS.maxBytes }) {
   try {
-    const { status } = await fetchImpl(url, {
+    const { status, html } = await fetchImpl(url, {
       userAgent,
       timeoutMs,
-      maxBytes: BOT_ACCESS.maxBytes,
+      maxBytes,
       truncate: true,
       // Any type: a PDF or a feed answers too.
       types: /(?:)/,
     });
-    return { http: status, answer: 'ok' };
+    return { http: status, answer: 'ok', html: html ?? '' };
   } catch (err) {
     if (err?.code === 'http_error') return { http: err.status ?? null, answer: 'refused' };
     if (err?.code === 'invalid_url' || err?.code === 'blocked' || err?.code === 'not_allowed') {
@@ -105,9 +112,11 @@ export function liveResult({ http, answer }) {
  *   tested: boolean,
  *   control: number|null,
  *   bots: Array<{ key: string, name: string, http: number|null,
- *     live: 'ok'|'blocked'|'error'|'no_answer'|'not_tested'|'inconclusive' }>
+ *     live: 'ok'|'blocked'|'error'|'no_answer'|'not_tested'|'inconclusive' }>,
+ *   page: { html: string, from: string } | null
  * }>} null for an address safe-fetch won't read; `tested` false when the
- *   control wasn't let in, and then no bot was asked
+ *   control wasn't let in, and then no bot was asked. `page` is the HTML the
+ *   first bot let in got, and that bot's key; null when none was.
  */
 export async function probeBotAccess(url, { fetchImpl = fetchPage, now = Date.now } = {}) {
   const deadline = now() + BOT_ACCESS.budgetMs;
@@ -121,18 +130,25 @@ export async function probeBotAccess(url, { fetchImpl = fetchPage, now = Date.no
       tested: false,
       control: control.http,
       bots: bots.map((b) => ({ key: b.key, name: b.name, http: null, live: 'inconclusive' })),
+      page: null,
     };
   }
 
   const results = [];
+  let page = null;
   for (const bot of bots) {
     const timeoutMs = timeLeft();
     if (timeoutMs <= 0) {
       results.push({ key: bot.key, name: bot.name, http: null, live: 'not_tested' });
       continue;
     }
-    const answer = await ask(url, botUserAgent(bot.userAgent), { fetchImpl, timeoutMs });
+    const answer = await ask(url, botUserAgent(bot.userAgent), {
+      fetchImpl,
+      timeoutMs,
+      maxBytes: page ? BOT_ACCESS.maxBytes : BOT_ACCESS.pageBytes,
+    });
+    if (!page && answer.answer === 'ok') page = { html: answer.html, from: bot.key };
     results.push({ key: bot.key, name: bot.name, http: answer.http, live: liveResult(answer) });
   }
-  return { tested: true, control: control.http, bots: results };
+  return { tested: true, control: control.http, bots: results, page };
 }

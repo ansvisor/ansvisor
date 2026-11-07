@@ -7,6 +7,9 @@ vi.mock('../../config/supabase.js', () => ({ default: { from: (...a) => from(...
 vi.mock('../logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
+// A store's topic with a live category page (AC plan P-7): none unless a test says.
+const categoryPageFor = vi.hoisted(() => vi.fn());
+vi.mock('./category-play.js', () => ({ categoryPageFor: (...a) => categoryPageFor(...a) }));
 
 import { generateActionsForBrand } from './generate.js';
 import { ENGINE_THRESHOLDS } from '../../config/action-engine.js';
@@ -34,6 +37,7 @@ function mockDb({
   candidates = [],
   promptVolumes = [],
   failActionUpdates = false,
+  brand = null,
 } = {}) {
   // `log` keeps the order of the writes across tables.
   const writes = { inserted: [], updated: [], upserted: [], log: [] };
@@ -58,7 +62,8 @@ function mockDb({
       range: () => builder,
       single: () => Promise.resolve(result()),
       // The brand's Analytics sign-in (resolveBrandSources, 00470): none.
-      maybeSingle: () => Promise.resolve({ data: null, error: null }),
+      // The brand's kind of site, for the play: as a test gives it.
+      maybeSingle: () => Promise.resolve({ data: table === 'brands' ? brand : null, error: null }),
       insert: (payload) => {
         state.op = 'insert';
         state.payload = payload;
@@ -121,6 +126,7 @@ const daysAgo = (n) => new Date(NOW.getTime() - n * 86_400_000).toISOString();
 
 beforeEach(() => {
   from.mockReset();
+  categoryPageFor.mockReset().mockResolvedValue(null);
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
 });
@@ -650,6 +656,104 @@ describe('the task plan the action is created with', () => {
       siteType: 'b2b',
       reasons: [{ kind: 'intent', prompts: 1, of: 2, share: 0.9 }],
       supporting: [],
+    });
+  });
+
+  describe('a store’s topic action (G16, AC plan P-7)', () => {
+    const TOPIC = '33333333-3333-4333-8333-333333333333';
+    const topicSignal = () =>
+      signal({
+        kind: 'topic_uncovered',
+        impact: 'medium',
+        payload: { targets: [{ id: TOPIC, label: 'Cold brew' }], topicName: 'Cold brew' },
+      });
+
+    it('optimizes the topic’s live category page, its best sellers locked in', async () => {
+      categoryPageFor.mockResolvedValue({
+        category: {
+          id: 'c1',
+          name: 'Coffee > Cold Brew',
+          url: 'https://shop.example/collections/cold-brew',
+          inStock: 12,
+        },
+        products: ['p1', 'p2'],
+      });
+      const writes = mockDb({ signals: [topicSignal()], brand: { site_type: 'ecommerce' } });
+
+      await generateActionsForBrand(BRAND, {
+        now: NOW,
+        sources: new Set([...ALL_SOURCES, 'topics']),
+      });
+
+      expect(categoryPageFor).toHaveBeenCalledWith(BRAND, [TOPIC]);
+      const action = writes.inserted.find((w) => w.table === 'actions').rows[0];
+      expect(action.kind).toBe('create_content_for_topics');
+      expect(action.definition_version).toBe(2);
+      expect(action.payload).toMatchObject({
+        contentExists: true,
+        pages: ['https://shop.example/collections/cold-brew'],
+        products: ['p1', 'p2'],
+        play: {
+          id: 'category_page',
+          assetType: 'category_page',
+          siteType: 'ecommerce',
+          reasons: [
+            {
+              kind: 'category',
+              category: 'Coffee > Cold Brew',
+              page: 'https://shop.example/collections/cold-brew',
+              inStock: 12,
+            },
+          ],
+        },
+      });
+      expect(taskRows(writes)).toContain('optimize_content');
+      expect(taskRows(writes)).not.toContain('create_content_brief');
+    });
+
+    it('writes a buying guide when the topic’s category has products but no page (EC-1)', async () => {
+      categoryPageFor.mockResolvedValue({
+        category: { id: 'c2', name: 'Gifts', url: null, inStock: 4 },
+        products: ['p3'],
+      });
+      const writes = mockDb({ signals: [topicSignal()], brand: { site_type: 'ecommerce' } });
+      await generateActionsForBrand(BRAND, {
+        now: NOW,
+        sources: new Set([...ALL_SOURCES, 'topics']),
+      });
+      const action = writes.inserted.find((w) => w.table === 'actions').rows[0];
+      expect(action.payload).toMatchObject({
+        contentExists: false,
+        products: ['p3'],
+        play: { id: 'buying_guide', assetType: 'buying_guide' },
+      });
+      expect(action.payload).not.toHaveProperty('pages');
+      expect(taskRows(writes)).toEqual(
+        expect.arrayContaining(['create_content_brief', 'create_content_draft']),
+      );
+    });
+
+    it('writes a new page off a store, or without a category page', async () => {
+      const writes = mockDb({ signals: [topicSignal()], brand: { site_type: 'ecommerce' } });
+      await generateActionsForBrand(BRAND, {
+        now: NOW,
+        sources: new Set([...ALL_SOURCES, 'topics']),
+      });
+      expect(taskRows(writes)).toEqual(
+        expect.arrayContaining(['create_content_brief', 'create_content_draft']),
+      );
+      expect(taskRows(writes)).not.toContain('optimize_content');
+      expect(writes.inserted.find((w) => w.table === 'actions').rows[0].payload.contentExists).toBe(
+        false,
+      );
+
+      categoryPageFor.mockClear();
+      mockDb({ signals: [topicSignal()], brand: { site_type: 'b2b' } });
+      await generateActionsForBrand(BRAND, {
+        now: NOW,
+        sources: new Set([...ALL_SOURCES, 'topics']),
+      });
+      expect(categoryPageFor).not.toHaveBeenCalled();
     });
   });
 
