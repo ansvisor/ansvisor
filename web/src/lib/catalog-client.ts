@@ -430,3 +430,52 @@ export function resetCategoryPage(brandId: string, category: string) {
     () => true,
   );
 }
+
+/** A topic's catalog category: worked out from the words (`auto`), or linked by a person (`manual`). */
+export interface TopicCategory {
+  id: string;
+  name: string;
+  source: 'auto' | 'manual';
+}
+
+/** The brand's topics with their categories, and its catalog's categories to pick from (AC plan P-7). */
+export interface TopicCategories {
+  topics: { id: string; name: string; categories: TopicCategory[] }[];
+  categories: { id: string; name: string }[];
+}
+
+/** Each topic's catalog categories; none while the API has no such route. */
+export function listTopicCategories(brandId: string) {
+  return categoryCall<TopicCategories>(
+    `/topic-categories?${new URLSearchParams({ brandId })}`,
+    { signal: AbortSignal.timeout(INTEGRATION_READ_TIMEOUT_MS) },
+    (body) => ({
+      topics: (body.topics as TopicCategories['topics'] | undefined) ?? [],
+      categories: (body.categories as TopicCategories['categories'] | undefined) ?? [],
+    }),
+    { topics: [], categories: [] },
+  );
+}
+
+/** A topic's category linked by hand (`linked` true), or a worked-out one taken away (false). */
+export function setTopicCategory(
+  brandId: string,
+  topicId: string,
+  categoryId: string,
+  linked: boolean,
+) {
+  return categoryCall(
+    '/topic-categories',
+    { method: 'PUT', body: JSON.stringify({ brandId, topicId, categoryId, linked }) },
+    () => true,
+  );
+}
+
+/** A topic's category back to the worked-out link. */
+export function resetTopicCategory(brandId: string, topicId: string, categoryId: string) {
+  return categoryCall(
+    `/topic-categories?${new URLSearchParams({ brandId, topicId, categoryId })}`,
+    { method: 'DELETE' },
+    () => true,
+  );
+}

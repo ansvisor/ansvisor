@@ -34,6 +34,10 @@ export interface ActionTaskDetails {
   where: string | null;
   /** The exact page the change is made on (AC-010): a path or a full URL. */
   url: string | null;
+  /** An internal links task's page to link to (AC plan P-10): a path or a full URL. */
+  linkTo: string | null;
+  /** A bridge links task's pairs (AC plan P-10): each source page and the page it links to. */
+  links: TaskLink[];
   /** The change to make there (AC-010). */
   change: TaskChange | null;
   /** The evidence from the action's signals. */
@@ -55,12 +59,25 @@ export interface ActionTaskDetails {
   lastCheck: TaskLastCheck | null;
 }
 
+/** A link a bridge links task asks for (AC plan P-10), as the server plans it (tasks/templates.js). */
+export interface TaskLink {
+  url: string;
+  linkTo: string;
+  /** The suggested link text; null for none. */
+  anchor: string | null;
+}
+
+/** Pairs a bridge links task keeps (the server's MAX_LINK_PAIRS). */
+const MAX_TASK_LINKS = 5;
+
 /** What an automatic check (AC-010) found, as the server keeps it (task-checks.js). */
 export interface TaskLastCheck {
   at: string;
   passed: boolean;
   /** Codes, worded by en.json actionCenter.taskCheckMissing. */
   missing: string[];
+  /** A bridge links task's: each source page, and whether it has its link. */
+  links?: { url: string; passed: boolean }[];
 }
 
 export interface TaskSent {
@@ -137,6 +154,8 @@ export function parseTaskDetails(raw: unknown): ActionTaskDetails | null {
       .filter((source) => source.type && source.ref),
     where: text(r.where),
     url: text(r.url),
+    linkTo: text(r.linkTo),
+    links: parseLinks(r.links),
     change: parseChange(r.change),
     why: text(r.why),
     how: (Array.isArray(r.how) ? r.how : [])
@@ -198,7 +217,24 @@ function parseLastCheck(raw: unknown): TaskLastCheck | null {
   const missing = Array.isArray(c.missing)
     ? c.missing.filter((code): code is string => typeof code === 'string' && code.length > 0)
     : [];
-  return { at, passed: c.passed, missing };
+  const links = (Array.isArray(c.links) ? c.links : []).flatMap((item) => {
+    const l = (item ?? {}) as Record<string, unknown>;
+    const url = text(l.url);
+    return url && typeof l.passed === 'boolean' ? [{ url, passed: l.passed }] : [];
+  });
+  return { at, passed: c.passed, missing, ...(links.length ? { links } : {}) };
+}
+
+/** A bridge links task's pairs, read defensively: any may be missing or of the wrong shape. */
+function parseLinks(raw: unknown): TaskLink[] {
+  return (Array.isArray(raw) ? raw : [])
+    .flatMap((item) => {
+      const l = (item ?? {}) as Record<string, unknown>;
+      const url = text(l.url);
+      const linkTo = text(l.linkTo);
+      return url && linkTo ? [{ url, linkTo, anchor: text(l.anchor) }] : [];
+    })
+    .slice(0, MAX_TASK_LINKS);
 }
 
 /** Whether any field says something. */
@@ -218,6 +254,8 @@ export function hasTaskDetails(details: ActionTaskDetails): boolean {
 export function hasTaskSpec(details: ActionTaskDetails): boolean {
   return (
     details.url !== null ||
+    // A details object built by hand (a test, an old caller) may have none.
+    (details.links?.length ?? 0) > 0 ||
     details.where !== null ||
     details.why !== null ||
     details.change !== null ||
@@ -289,11 +327,15 @@ export const PAGE_CHECKED_TASKS: readonly string[] = [
   'publish_content',
   'fix_broken_target',
   'fix_structured_data',
+  // Its canonical tag and the page it points to (AC plan P-11).
+  'fix_canonical',
   'fix_crawler_access',
   'optimize_content',
   'refresh_content',
   'strengthen_reference_asset',
   'strengthen_entity_content',
+  // Its page links to the page it names (AC plan P-10).
+  'add_internal_links',
 ];
 
 /**
@@ -302,7 +344,8 @@ export const PAGE_CHECKED_TASKS: readonly string[] = [
  * or a written one with its new text. A Site Audit fix is checked by the
  * next audit instead. A shopping links action's task (`actionKind`
  * 'shopping_links') is checked on its draft by the shopping check, with no
- * new text to look for.
+ * new text to look for. A bridge links task (AC plan P-10) is checked on
+ * its pairs' pages, with none of its own.
  */
 export function pageCheckable(
   task: {
@@ -312,7 +355,10 @@ export function pageCheckable(
   actionKind?: string,
 ): boolean {
   const d = task.details;
-  if (d?.check !== 'auto' || !d.url?.trim()) return false;
+  if (d?.check !== 'auto') return false;
+  // A bridge links task: each of its pairs' pages (AC plan P-10).
+  if (task.taskKey === 'add_internal_links' && d.links?.length) return true;
+  if (!d.url?.trim()) return false;
   if (task.taskKey) return PAGE_CHECKED_TASKS.includes(task.taskKey);
   return actionKind === 'shopping_links' || Boolean(d.change?.after);
 }
@@ -331,6 +377,8 @@ export const MANUAL_TASKS: readonly string[] = [
   'prepare_contribution',
   'track_third_party_status',
   'validate_third_party_presence',
+  // The bridge links' pairs, read before they go on the pages (AC plan P-10).
+  'review_link_plan',
 ];
 
 /**

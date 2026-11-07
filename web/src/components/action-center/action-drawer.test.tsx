@@ -484,10 +484,12 @@ describe('ActionDrawer', () => {
       await openTask('Optimize the page');
 
       await act(async () => button('Optimize page')!.click());
-      expect(drafts.startDraftFromAction).toHaveBeenCalledWith('b1', 'a1', 't1', {
-        page: PRICING,
-        title: expect.any(String),
-      });
+      expect(drafts.startDraftFromAction).toHaveBeenCalledWith(
+        'b1',
+        'a1',
+        't1',
+        expect.objectContaining({ page: PRICING, title: expect.any(String) }),
+      );
       expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
     });
 
@@ -506,10 +508,12 @@ describe('ActionDrawer', () => {
       const block = document.querySelector('section[aria-label="Start now"]');
       expect(block?.textContent).toContain('Opens /pricing as a draft');
       await act(async () => button('Content Editor')!.click());
-      expect(drafts.startDraftFromAction).toHaveBeenCalledWith('b1', 'a1', 't1', {
-        page: PRICING,
-        title: expect.any(String),
-      });
+      expect(drafts.startDraftFromAction).toHaveBeenCalledWith(
+        'b1',
+        'a1',
+        't1',
+        expect.objectContaining({ page: PRICING, title: expect.any(String) }),
+      );
       // A new draft's brief is built as it opens.
       expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new?brief=build');
 

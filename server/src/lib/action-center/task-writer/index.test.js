@@ -527,6 +527,10 @@ describe('writeTasksForAction', () => {
   it('refuses an action a person sent, which carries its own tasks', async () => {
     db.actions[0].kind = 'prompt_improve';
     await expect(writeTasksForAction('a1')).rejects.toThrow('carries the tasks it was sent with');
+    // A bridge links action's tasks are its pairs' (AC plan P-10).
+    db.actions[0].kind = 'bridge_links';
+    await expect(writeTasksForAction('a1')).rejects.toMatchObject({ code: 'sent' });
+    expect(generateObject).not.toHaveBeenCalled();
   });
 });
 

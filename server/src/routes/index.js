@@ -23,6 +23,7 @@ import cmsFramerRoutes from './cms-framer.js';
 import cmsWixRoutes from './cms-wix.js';
 import cmsIndexNowRoutes from './cms-indexnow.js';
 import demoRoutes from './demo.js';
+import chatOutboundRoutes from './chat-outbound.js';
 
 const router = Router();
 
@@ -50,6 +51,7 @@ router.use('/cms', cmsFramerRoutes);
 router.use('/cms', cmsWixRoutes);
 router.use('/cms', cmsIndexNowRoutes);
 router.use('/demo', demoRoutes);
+router.use('/chat-outbound', chatOutboundRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });

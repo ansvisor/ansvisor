@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { ListDot } from '@/components/agentic/list-dot';
 import { FormSwitch } from '@/components/chat/agents/agent-form-triggers';
@@ -27,6 +28,7 @@ import {
 } from '@/lib/actions/chat-schedules';
 import { percentOf } from '@/lib/chat/agent-view';
 import { DELIVER_CHOICES, type DeliverChoice } from '@/lib/chat/schedule/deliver-choices';
+import { OUTSIDE_MAX, outsideAddress } from '@/lib/chat/schedule/outside';
 import type { ScheduleListItem, ScheduleRunView } from '@/lib/chat/schedule/views';
 import { nextRuns, readWhen, whenHint, whenPhrase, type WhenWords } from '@/lib/chat/schedule/when';
 import { cn } from '@/lib/utils';
@@ -43,13 +45,20 @@ import { runDotOf, useScheduleWords } from './schedule-words';
  * creator's own), Run now and Delete ("Past results stay in Files"). Its
  * last 20 runs below: date, status, the result in its chat, and its use as
  * a share of the monthly AI limit — never dollars. Only its creator edits
- * it; an Admin switches or deletes it.
+ * it; an Admin switches or deletes it. Under Deliver to, people outside the
+ * workspace (W4-28): up to 5 addresses, added by an Admin or a Manager out
+ * of the free trial (`outsideLock` says why not); each run's e-mail to them
+ * waits in the Inbox for a Send.
  */
 export function ScheduleDetail({
   initial,
   now: nowProp,
 }: {
-  initial: { job: ScheduleListItem; runs: ScheduleRunView[] };
+  initial: {
+    job: ScheduleListItem;
+    runs: ScheduleRunView[];
+    outsideLock?: 'role' | 'trial' | null;
+  };
   now?: Date;
 }) {
   const t = useTranslations('chatSchedules.page');
@@ -69,6 +78,8 @@ export function ScheduleDetail({
   const [zone, setZone] = useState(job.timezone);
   const [deliver, setDeliver] = useState<DeliverChoice>(job.deliver);
   const [changeOnly, setChangeOnly] = useState(job.changeOnly);
+  const [outside, setOutside] = useState<string[]>(job.external);
+  const [typed, setTyped] = useState('');
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const cancelRef = useRef<HTMLButtonElement>(null);
@@ -89,6 +100,14 @@ export function ScheduleDetail({
   const recurring = reading.ok && reading.when.kind === 'recurring';
   const editable = job.canEdit;
   const blocked = !title.trim() || !(reading.ok || kept) || (!prompt.trim() && !job.skill);
+  const outsideLock = data.outsideLock ?? null;
+  const typedAddress = outsideAddress(typed);
+  const typedWrong = typed.trim() !== '' && !typedAddress;
+  const addOutside = () => {
+    if (!typedAddress) return;
+    if (!outside.includes(typedAddress)) setOutside([...outside, typedAddress]);
+    setTyped('');
+  };
 
   const reload = async () => {
     const next = await getChatSchedule(job.id).catch(() => null);
@@ -111,7 +130,15 @@ export function ScheduleDetail({
   const save = guard(async () => {
     const ok = await act(
       () =>
-        updateChatSchedule(job.id, { title, prompt, when, deliver, changeOnly, timezone: zone }),
+        updateChatSchedule(job.id, {
+          title,
+          prompt,
+          when,
+          deliver,
+          changeOnly,
+          timezone: zone,
+          external: outside,
+        }),
       t('saved'),
     );
     if (ok) await reload();
@@ -264,6 +291,76 @@ export function ScheduleDetail({
                 </button>
               ))}
             </div>
+          </div>
+          <div className="grid gap-1" data-slot="schedule-outside">
+            <label htmlFor="schedule-outside" className="text-xs font-medium text-muted-foreground">
+              {tDetail('outside')}
+            </label>
+            {outside.length > 0 && (
+              <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+                {outside.map((address) => (
+                  <li
+                    key={address}
+                    className="inline-flex items-center gap-1 rounded-full border bg-muted/40 py-0.5 pr-1 pl-2.5 text-[12px]"
+                  >
+                    {address}
+                    {editable && (
+                      <button
+                        type="button"
+                        data-action="schedule.outsideRemove"
+                        aria-label={tDetail('outsideRemove', { address })}
+                        disabled={busy}
+                        onClick={() => setOutside(outside.filter((a) => a !== address))}
+                        className="rounded-full p-0.5 text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                      >
+                        <X aria-hidden className="size-3" />
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {editable && !outsideLock && outside.length < OUTSIDE_MAX && (
+              <div className="flex gap-1.5">
+                <Input
+                  id="schedule-outside"
+                  type="email"
+                  data-action="schedule.outside"
+                  value={typed}
+                  placeholder={tDetail('outsidePlaceholder')}
+                  disabled={busy}
+                  aria-invalid={typedWrong || undefined}
+                  onChange={(e) => setTyped(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addOutside();
+                    }
+                  }}
+                  className="text-[13px]"
+                />
+                <Button
+                  variant="outline"
+                  data-action="schedule.outsideAdd"
+                  disabled={busy || !typedAddress}
+                  onClick={addOutside}
+                >
+                  {tDetail('outsideAdd')}
+                </Button>
+              </div>
+            )}
+            <p
+              className={cn(
+                'm-0 text-xs',
+                typedWrong ? 'text-red-700 dark:text-red-300' : 'text-muted-foreground',
+              )}
+            >
+              {typedWrong
+                ? tDetail('outsideWrong')
+                : outsideLock
+                  ? tDetail(outsideLock === 'role' ? 'outsideRole' : 'outsideTrial')
+                  : tDetail('outsideHint', { max: OUTSIDE_MAX })}
+            </p>
           </div>
           {recurring && (
             <div className="flex items-start gap-2.5">

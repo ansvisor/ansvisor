@@ -1,8 +1,8 @@
 ---
 title: Read a site audit report
 route: /dashboard/audit
-keywords: [audit report, audit score, signals, audit categories, grade, readability, first person, score range, evidence level, formula, llms.txt, AI bot access, robots.txt, firewall]
-synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed, plus or minus, score margin, strong evidence, likely helps, hygiene, informational, category weights, how the score is calculated, llms.txt score, GPTBot blocked, ClaudeBot blocked, PerplexityBot blocked, Cloudflare blocks AI bots, CDN blocks crawlers, WAF]
+keywords: [audit report, audit score, signals, audit categories, grade, readability, first person, score range, evidence level, formula, llms.txt, AI bot access, robots.txt, firewall, JavaScript, server-side rendering]
+synonyms: [audit results, page score, what failed, E-E-A-T score, Flesch, Ateşman, reading score, score changed, plus or minus, score margin, strong evidence, likely helps, hygiene, informational, category weights, how the score is calculated, llms.txt score, GPTBot blocked, ClaudeBot blocked, PerplexityBot blocked, Cloudflare blocks AI bots, CDN blocks crawlers, WAF, client-side rendering, JS rendering, SSR, prerender, hidden content]
 plan: all
 updated: 2026-11-06
 last_checked: 2026-11-06
@@ -15,13 +15,13 @@ Each audit has its own report. It opens right after you run an audit, or from a 
 
 ## Total score
 
-The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40 to 69) or **Poor** (below 40). When the page was audited before, a badge beside the grade shows the change since then, such as "+8 since" that audit's date. Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 48 signals were evaluated.
+The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40 to 69) or **Poor** (below 40). When the page was audited before, a badge beside the grade shows the change since then, such as "+8 since" that audit's date. Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 49 signals were evaluated.
 
 ## Categories
 
 **Category breakdown** scores each category out of 100, with how many of its signals were evaluated:
 
-- **Structure** (25%): whether an AI engine can parse the page, such as heading hierarchy, FAQ schema, lists and tables, and alt text.
+- **Structure** (25%): whether an AI engine can parse the page, such as heading hierarchy, FAQ schema, lists and tables, alt text, and main text that is there without JavaScript.
 - **Content** (25%): whether the page answers its question directly and completely.
 - **Authority** (20%): whether it reads as expert and sourced, such as author byline, citations, statistics and freshness.
 - **E-E-A-T** (20%): experience, expertise and trust, such as case studies and author credentials.
@@ -51,7 +51,7 @@ The same range comes with an audit wherever else you read it: in Chat, on the au
 
 ## When the scoring changes
 
-A change to how the score is worked out counts like a change to the page. Since llms.txt left the score, a page's next audit can move by a point or two with no change to the page. Its range and its change badge show that move until the older scores leave the last five.
+A change to how the score is worked out counts like a change to the page. Since llms.txt left the score and **Main text without JavaScript** joined it, a page's next audit can move by a point or two with no change to the page. Its range and its change badge show that move until the older scores leave the last five.
 
 ## Signals
 
@@ -76,6 +76,10 @@ The finding shows the score with its formula and language, then its parts: words
 **AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.
 
 A bot robots.txt keeps out, by name or with "User-agent: *", fails the check. A bot your CDN or firewall refuses while robots.txt lets it in only warns: the bots are asked from Ansvisor's servers, and a firewall that checks a crawler's own addresses can still let the real one in. A slow or busy answer isn't a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides.
+
+## Main text without JavaScript
+
+**Main text without JavaScript** checks how much of the page's main text is in the HTML an AI bot gets before any JavaScript runs. AI crawlers such as GPTBot, ClaudeBot and PerplexityBot don't run JavaScript, so text that only appears once it runs is text they never see. It compares the page as a browser shows it with the HTML the first AI bot let in got during **AI bot access**, so a site that prerenders pages for bots is read as the bots get it. Menus and footers don't count. 10% or less missing passes, up to 30% raises a warning, and more fails. Open it to see the share and the first passages missing. When no AI bot was let in, or the bot got a bot-protection check such as "Checking your browser" instead of the page, it shows n/a.
 
 ## Authority links
 

@@ -16,6 +16,7 @@ import { ListProgress } from '@/components/agentic/list-dot';
 import { Skeleton } from '@/components/ui/skeleton';
 import { buttonVariants } from '@/components/ui/button';
 import type { ChatNotice } from '@/lib/actions/chat-notices';
+import type { OutsideEmail } from '@/lib/actions/chat-outbound';
 import type { ChatListItem } from '@/lib/chat/conversations';
 import { agoOf } from '@/lib/chat/home';
 import { chatMenuLists } from '@/lib/chat/menu-groups';
@@ -23,6 +24,7 @@ import { cn } from '@/lib/utils';
 import type { ChatListStatus } from './chat-list-provider';
 import { INBOX_ROW, SuggestionRows, SuggestionsPanel, type InboxDaily } from './inbox-suggestions';
 import { NoticeRows } from './inbox-notices';
+import { OutsideEmailRows } from './inbox-outside';
 
 /**
  * The Inbox's rows: what needs the person, what runs, and unread results —
@@ -214,6 +216,8 @@ export interface ChatInboxViewProps {
   initialTab?: InboxTab;
   /** The person's open notices (00441), at the top of Needs you. */
   notices?: ChatNotice[];
+  /** Their jobs' e-mails to people outside the workspace, waiting for a Send (W4-28), in Needs you. */
+  outside?: OutsideEmail[];
 }
 
 /**
@@ -238,10 +242,12 @@ function PlainInboxView({
   now,
   onRetry,
   notices = [],
+  outside = [],
 }: Omit<ChatInboxViewProps, 'daily' | 'initialTab'>) {
   const t = useTranslations('chatShell.inbox');
   const counts = inboxCounts(items, now ?? new Date());
-  const needsYou = counts.needsYou + notices.length;
+  const waiting = notices.length + outside.length;
+  const needsYou = counts.needsYou + waiting;
   const summary = [
     needsYou ? t('summary.needsYou', { count: needsYou }) : null,
     counts.running ? t('summary.running', { count: counts.running }) : null,
@@ -253,7 +259,7 @@ function PlainInboxView({
       <div className="mb-3.5 flex items-center gap-3">
         <h1 className="text-2xl font-bold tracking-[-.6px]">{t('title')}</h1>
       </div>
-      {status === 'ready' && items.length + notices.length > 0 && (
+      {status === 'ready' && items.length + waiting > 0 && (
         <p className="-mt-1 mb-3.5 text-[13px] text-muted-foreground">
           {summary.length > 0 && `${summary.join(' · ')}. `}
           {t('lands')}
@@ -278,15 +284,16 @@ function PlainInboxView({
           </button>
         </p>
       )}
-      {status === 'ready' && items.length + notices.length === 0 && (
+      {status === 'ready' && items.length + waiting === 0 && (
         <div className="flex items-center gap-2 rounded-[14px] border border-dashed px-4 py-6 text-sm text-muted-foreground">
           <InboxIcon aria-hidden className="size-4" />
           {t('empty')}
         </div>
       )}
-      {status === 'ready' && items.length + notices.length > 0 && (
+      {status === 'ready' && items.length + waiting > 0 && (
         <div className="flex flex-col gap-2">
           <NoticeRows notices={notices} />
+          <OutsideEmailRows emails={outside} />
           {items.map((chat) => (
             <InboxRow key={chat.id} chat={chat} now={now} />
           ))}
@@ -314,6 +321,7 @@ function TabbedInboxView({
   daily,
   initialTab = 'all',
   notices = [],
+  outside = [],
 }: Omit<ChatInboxViewProps, 'daily'> & { daily: InboxDaily }) {
   const t = useTranslations('chatShell.inbox');
   const gets = daily.read.roleFeed !== 'never';
@@ -332,7 +340,7 @@ function TabbedInboxView({
   const tabs = INBOX_TABS.filter((name) => gets || name !== 'suggestions');
   const ready = status === 'ready';
   const counts = inboxCounts(items, now ?? new Date());
-  const tabCounts = inboxTabCounts(items, suggestionsTotal, notices.length);
+  const tabCounts = inboxTabCounts(items, suggestionsTotal, notices.length + outside.length);
   const summary = [
     tabCounts.needsYou ? t('summary.needsYou', { count: tabCounts.needsYou }) : null,
     counts.running ? t('summary.running', { count: counts.running }) : null,
@@ -380,10 +388,13 @@ function TabbedInboxView({
   }, [unseen, onSeen]);
 
   const chats = inboxTabChats(items, tab);
-  // Notices lead Needs you, and All with it.
+  // Notices lead Needs you, and All with it; then the e-mails waiting for a Send.
   const noticesShown = tab === 'all' || tab === 'needsYou' ? notices : [];
+  const outsideShown = tab === 'all' || tab === 'needsYou' ? outside : [];
   const rows =
-    (tab === 'all' ? chats.length + suggestions.length : chats.length) + noticesShown.length;
+    (tab === 'all' ? chats.length + suggestions.length : chats.length) +
+    noticesShown.length +
+    outsideShown.length;
 
   return (
     <div className="max-w-[880px]">
@@ -459,6 +470,7 @@ function TabbedInboxView({
             {rows > 0 ? (
               <div className="flex flex-col gap-2">
                 <NoticeRows notices={noticesShown} />
+                <OutsideEmailRows emails={outsideShown} />
                 {chats.map((chat) => (
                   <InboxRow key={chat.id} chat={chat} now={now} />
                 ))}

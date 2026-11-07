@@ -60,6 +60,8 @@ export type ActionKind =
   | 'optimize_content_for_ai'
   | 'earn_third_party_presence'
   | 'earn_third_party_citations'
+  // Links from pages AI sends readers to, to pages that convert (G20, AC plan P-10).
+  | 'bridge_links'
   | 'protect_visibility'
   | 'protect_valuable_citations'
   | 'protect_ai_traffic_pages'
@@ -84,6 +86,8 @@ export type ActionKind =
   | 'fix_low_scores'
   | 'fix_crawler_access'
   | 'fix_structured_data'
+  // Canonical tags missing or pointing where they shouldn't (F14, AC plan P-11).
+  | 'fix_canonical_tags'
   | 'fix_content_gaps'
   | 'fix_outdated_content'
   | 'fix_entity_signals'
@@ -248,6 +252,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'optimize_content_for_ai',
   'earn_third_party_presence',
   'earn_third_party_citations',
+  'bridge_links',
   'protect_visibility',
   'protect_valuable_citations',
   'protect_ai_traffic_pages',
@@ -272,6 +277,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'fix_low_scores',
   'fix_crawler_access',
   'fix_structured_data',
+  'fix_canonical_tags',
   'fix_content_gaps',
   'fix_outdated_content',
   'fix_entity_signals',

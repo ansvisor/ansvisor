@@ -1,0 +1,4 @@
+20.171.207.12 - - [04/Nov/2026:09:15:02 +0000] "GET /blog/cold-brew HTTP/1.1" 200 18342 "-" "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)"
+66.249.66.1 - - [04/Nov/2026:09:15:40 +0000] "GET /pricing HTTP/1.1" 200 9120 "-" "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+198.51.100.7 - - [04/Nov/2026:12:01:09 +0300] "GET /blog/cold-brew?ref=x HTTP/2.0" 304 0 "https://www.acme.example/" "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) Safari/605.1.15"
+this line is not a log line

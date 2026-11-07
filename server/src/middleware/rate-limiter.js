@@ -183,6 +183,20 @@ export const catalogLimiter = rateLimit({
   },
 });
 
+// An access log uploaded for the AI bot report (#2170): each reads a file of
+// up to 20,000 lines and checks its bots' addresses, so a member's are few.
+export const botUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // A catalog category's page set by hand, or put back to its match (shopping
 // path, 00350): a person goes down the table a row at a time, so a bucket
 // of its own, wider than the syncs'. Reading the table takes the API's.

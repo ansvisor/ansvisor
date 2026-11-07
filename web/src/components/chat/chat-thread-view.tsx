@@ -23,6 +23,7 @@ import { ANSWER_MAX, composerAnswer, recommendedLabel } from '@/lib/chat/asks';
 import type { ChatSkillItem } from '@/lib/chat/composer-setup';
 import { ghostOf } from '@/lib/chat/next-moves';
 import type { ChatEvent, ChatTaskStrip } from '@/lib/chat/events';
+import { CHAT_IMAGE_VARIANTS, imageModelNamed } from '@/lib/chat/images/models';
 import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import type { ChatMode } from '@/lib/chat/precedence';
 import { readSse } from '@/lib/chat/run-hub';
@@ -32,7 +33,7 @@ import {
   type ClientRun,
   type ClientRunStatus,
 } from '@/lib/chat/run-state';
-import type { ChatThread } from '@/lib/chat/thread';
+import type { ChatReadyBy, ChatThread } from '@/lib/chat/thread';
 import { dropChatUpload, uploadChatFile } from '@/lib/chat/upload-client';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { ChatReference } from '@/lib/chat/references';
@@ -45,6 +46,7 @@ import {
 } from './composer/chat-composer';
 import { useUserRole } from '@/hooks/use-user-role';
 import { ActionSentCard } from './run/action-sent-card';
+import { ReadyByLine } from './run/ready-by-line';
 import { TaskStrip } from './run/task-strip';
 import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
@@ -76,6 +78,8 @@ interface Turn {
   /** Its answer in Files (Save to Files). */
   fileId?: string | null;
   timezone?: string | null;
+  /** A job with a due time's line under its tasks (W4-30), as the chat was read. */
+  readyBy?: ChatReadyBy | null;
   /**
    * A question as it was sent, for Retry to send it again: its page chips,
    * @ references and the page they came from. Null when it can't go again
@@ -116,6 +120,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
       turn.runId = message.run.runId;
       turn.timezone = message.timezone;
       turn.fileId = message.run.fileId;
+      turn.readyBy = message.run.readyBy ?? null;
       turn.run = {
         ...emptyRun(message.run.status as ClientRunStatus),
         steps: message.run.steps,
@@ -287,9 +292,24 @@ export function ChatThreadView({
   const brandId = thread?.brandId ?? activeBrandId ?? null;
   // On Chat Home, what its page put in the box (What's new's Show me).
   const homeDraft = useHomeDraft();
+  // What this chat puts in its own box (an image set's Try again), while the page hands
+  // nothing newer: a page's new hand-off takes the box again. Its nonces are negative,
+  // so they never match one of the page's.
+  const pageDraft = homeDraft ?? draft ?? null;
+  const [ownDraft, setOwnDraft] = useState<{
+    draft: ComposerDraft;
+    over: ComposerDraft | null;
+  } | null>(null);
+  const boxDraft = ownDraft && ownDraft.over === pageDraft ? ownDraft.draft : pageDraft;
 
   const last = turns[turns.length - 1];
   const working = !!last?.run && OPEN.includes(last.run.status);
+  // The image model the latest answer picked or made images with (CHAT-15 item 18): the
+  // model button reads "Image · {model}" until a request that isn't for images, or until
+  // the person picks a chat model in the menu.
+  const [imageLabelOff, setImageLabelOff] = useState<string | null>(null);
+  const lastImageModel = last?.run ? imageModelNamed(last.run.steps) : null;
+  const imageModel = lastImageModel && imageLabelOff !== last?.key ? lastImageModel : null;
 
   // Where a page Chat writes opens (CHAT-25 §3, W4-11): the card asks under
   // the latest answer once, in the person's own chat; "Don't ask again" keeps
@@ -706,6 +726,23 @@ export function ChatThreadView({
   }
 
   /**
+   * Try again on the latest answer's images (CHAT-15 item 22, W4-08b): a
+   * request for new images with the model that made them goes in the box,
+   * for the person to add a change to and send; its card shows before any
+   * image is made. Admins and Managers, in their own chat, while nothing
+   * else runs and Chat isn't paused at the AI limit.
+   */
+  function tryAgainOf(index: number): (() => void) | undefined {
+    if (!canManage || index !== turns.length - 1) return undefined;
+    if ((thread && !thread.mine) || working || atCap) return undefined;
+    const model = turns[index].run ? imageModelNamed(turns[index].run.steps) : null;
+    const text = model
+      ? t('tryAgainImages', { count: CHAT_IMAGE_VARIANTS, model })
+      : t('tryAgainImagesSame', { count: CHAT_IMAGE_VARIANTS });
+    return () => setOwnDraft({ draft: { nonce: -Date.now(), text: `${text} ` }, over: pageDraft });
+  }
+
+  /**
    * Send to Action Center on the latest answer (CHAT-09 item 18): Chat
    * proposes the finding as an action, on its card. Admins and Managers, in
    * their own chat, while nothing else runs.
@@ -780,6 +817,7 @@ export function ChatThreadView({
                   onRetry={retryOf(index)}
                   onUseAnsvisorLimit={ansvisorRetryOf(index)}
                   onSendToActionCenter={sendToActionCenterOf(index)}
+                  onTryAgain={tryAgainOf(index)}
                 />
                 {turn === last && askPage && lastPage && (
                   <OpenPageCard
@@ -861,14 +899,19 @@ export function ChatThreadView({
           placeholder={atCap ? tLimit(usage?.trial ? 'trial' : 'paid') : placeholder}
           usage={<ComposerUsageMeter />}
           modelChoice={modelChoice}
-          onModelChoice={setModelChoice}
+          onModelChoice={(choice) => {
+            setModelChoice(choice);
+            // A chat model picked: the button names it again, not the images' model.
+            if (last) setImageLabelOff(last.key);
+          }}
+          imageModel={imageModel}
           keyForm
           // An answer is its text only: no page chips, @ data or files go with it.
           chips={asking ? undefined : chips}
           onRemoveChip={onRemoveChip}
           references={asking ? undefined : pageReferences}
           skills={skills}
-          draft={homeDraft ?? draft}
+          draft={boxDraft}
           onSend={(message, sent) =>
             asking && last
               ? answerQuestion(last, composerAnswer(asking, message), 'composer')
@@ -916,6 +959,7 @@ function Answer({
   onRetry,
   onUseAnsvisorLimit,
   onSendToActionCenter,
+  onTryAgain,
   onAsk,
 }: {
   turn: Turn;
@@ -936,6 +980,8 @@ function Answer({
   onUseAnsvisorLimit?: () => void;
   /** Send to Action Center (CHAT-09 item 18): the latest answer, for Admins and Managers. */
   onSendToActionCenter?: () => void;
+  /** Its images' Try again (W4-08b): the latest answer, for Admins and Managers. */
+  onTryAgain?: () => void;
   /** Sends a message as the person's, in their own chat: a page's Optimize ▾ (W4-12b part 2). */
   onAsk?: (prompt: string) => void;
 }) {
@@ -953,7 +999,15 @@ function Answer({
 
   const cards = (
     <>
-      {run.tasks && <TaskStrip strip={run.tasks} ended={!OPEN.includes(run.status)} />}
+      {run.tasks && (
+        <TaskStrip
+          strip={run.tasks}
+          ended={!OPEN.includes(run.status)}
+          readyBy={turn.readyBy}
+          now={now}
+        />
+      )}
+      {turn.readyBy && !run.tasks?.total && <ReadyByLine readyBy={turn.readyBy} now={now} />}
       {run.denials.map((denial, i) => (
         <DenialCard
           key={i}
@@ -1034,6 +1088,7 @@ function Answer({
             deliverable={deliverable}
             canChange={canChangeTasks}
             onTasks={onTasks}
+            onTryAgain={onTryAgain}
             onAsk={onAsk}
           />
         ))}

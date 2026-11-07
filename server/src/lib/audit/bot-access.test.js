@@ -43,7 +43,7 @@ describe('probeBotAccess', () => {
       const status = answers[bot ?? 'control'] ?? 200;
       if (status === 'hang') return; // never answers
       res.writeHead(status, { 'content-type': 'text/html' });
-      res.end('<h1>Pricing</h1>');
+      res.end(`<h1>Pricing</h1><p>For ${bot ?? 'control'}</p>`);
     });
     await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
     port = String(server.address().port);
@@ -82,6 +82,8 @@ describe('probeBotAccess', () => {
         { key: 'perplexitybot', name: 'PerplexityBot', http: 200, live: 'ok' },
         { key: 'claudebot', name: 'ClaudeBot', http: 200, live: 'ok' },
       ],
+      // GPTBot's answer, read whole for the no-JS check (SA-009).
+      page: { html: '<h1>Pricing</h1><p>For gptbot</p>', from: 'gptbot' },
     });
   });
 
@@ -95,6 +97,35 @@ describe('probeBotAccess', () => {
     expect(bots.find((b) => b.key === 'gptbot')).toMatchObject({ http: 429, live: 'error' });
   });
 
+  it('reads the first bot let in whole, and the others only as far as their status', async () => {
+    answers = { gptbot: 403 };
+    const sizes = [];
+    const { page } = await probe({
+      fetchImpl: (url, opts) => {
+        sizes.push(opts.maxBytes);
+        return fetchImpl(url, opts);
+      },
+    });
+    expect(page).toEqual({
+      html: '<h1>Pricing</h1><p>For oai-searchbot</p>',
+      from: 'oai-searchbot',
+    });
+    // The control, GPTBot (refused) and OAI-SearchBot read whole; the rest a little.
+    expect(sizes).toEqual([
+      BOT_ACCESS.maxBytes,
+      BOT_ACCESS.pageBytes,
+      BOT_ACCESS.pageBytes,
+      BOT_ACCESS.maxBytes,
+      BOT_ACCESS.maxBytes,
+      BOT_ACCESS.maxBytes,
+    ]);
+  });
+
+  it('keeps no page when no bot was let in', async () => {
+    answers = Object.fromEntries(LIVE_BOT_KEYS.map((k) => [k, 403]));
+    expect((await probe()).page).toBeNull();
+  });
+
   it('asks no bot when AnsvisorBot itself is refused, and concludes nothing', async () => {
     answers = { control: 403 };
     const result = await probe();
@@ -102,6 +133,7 @@ describe('probeBotAccess', () => {
     expect(result.tested).toBe(false);
     expect(result.control).toBe(403);
     expect(result.bots.every((b) => b.live === 'inconclusive' && b.http === null)).toBe(true);
+    expect(result.page).toBeNull();
   });
 
   it('stops at its time budget: a bot not reached is not tested', async () => {

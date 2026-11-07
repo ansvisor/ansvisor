@@ -14,8 +14,8 @@ const levelOf = (level) =>
     .sort();
 
 describe('rubric evidence levels', () => {
-  it('is rubric v1.3 (v1.2 evidence levels, v1.3 the live bot test) with the four levels, of which only informational is not scored', () => {
-    expect(RUBRIC_VERSION).toBe('v1.3');
+  it('is rubric v1.4 (v1.2 evidence levels, v1.3 the live bot test, v1.4 the no-JS check) with the four levels, of which only informational is not scored', () => {
+    expect(RUBRIC_VERSION).toBe('v1.4');
     expect(evidenceLevels.map((l) => [l.key, l.scored])).toEqual([
       ['strong', true],
       ['likely', true],
@@ -31,7 +31,7 @@ describe('rubric evidence levels', () => {
     for (const s of signals) expect(keys.has(s.evidenceLevel), s.key).toBe(true);
   });
 
-  it('rates as strong what the spec’s research rates strong: bot access, freshness, statistics, quotes and sources', () => {
+  it('rates as strong what the spec’s research rates strong: bot access, server-rendered text, freshness, statistics, quotes and sources', () => {
     expect(levelOf('strong')).toEqual(
       [
         'ai-bot-access',
@@ -40,6 +40,7 @@ describe('rubric evidence levels', () => {
         'quotations',
         'citation-density',
         'outbound-authority-links',
+        'no-js-content',
       ].sort(),
     );
   });

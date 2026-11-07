@@ -95,6 +95,8 @@ export const DEMO_GUARDED = [
   // would revoke a secret that was never given out.
   guard('POST /bots/connections/:brandId', brandIn('path')),
   guard('DELETE /bots/connections/:brandId/:id', brandIn('path')),
+  // An access log upload (#2170): the demo brand's AI bot report is sample data.
+  guard('POST /bots/upload/:brandId', brandIn('path')),
 
   // Brand facts (brand-facts.js): reading the site again, approving a fact.
   guard('POST /brand-facts/fetch', brandIn('body')),
@@ -113,6 +115,8 @@ export const DEMO_GUARDED = [
   guard('POST /catalog/sources/:id/sync', rowIn('catalog_sources', 'path')),
   guard('PUT /catalog/categories', brandIn('body')),
   guard('DELETE /catalog/categories', brandIn('query')),
+  guard('PUT /catalog/topic-categories', brandIn('body')),
+  guard('DELETE /catalog/topic-categories', brandIn('query')),
   guard('POST /catalog/upload', brandIn('query')),
 
   // Webflow (cms.js): the demo's connection is a sample.
@@ -254,6 +258,14 @@ export const DEMO_OPEN = [
   open(
     'DELETE /brands/:id',
     'brands.js answers a demo brand itself (409 demo_brand): it is hidden, not deleted, and the web app shows that as information, not as the plan dialog.',
+  ),
+  open(
+    'POST /chat-outbound/:id/send',
+    'Sends an e-mail a scheduled job prepared for someone outside the workspace (W4-28). A demo brand has no scheduled jobs (Chat refuses every change on it), so none of its e-mails waits; the route checks the job and its brand itself.',
+  ),
+  open(
+    'POST /chat-outbound/:id/cancel',
+    'Cancels an e-mail a scheduled job prepared: it stops a send and never starts one.',
   ),
   open(
     'POST /competitors/suggest',

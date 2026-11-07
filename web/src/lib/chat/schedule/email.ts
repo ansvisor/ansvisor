@@ -19,7 +19,10 @@ import { fileStamp } from '../stamp';
  *     makes, attached up to 5 MB; a bigger one goes as the Open in Chat
  *     link only;
  *   - a run that didn't run after its retry, and a job that turned itself
- *     off: why, sent once, as its Inbox notice.
+ *     off: why, sent once, as its Inbox notice;
+ *   - a run that is done for a job with addresses outside the workspace
+ *     (W4-28), whatever its Deliver to: the server only prepares their
+ *     e-mails, with the same PDF, for a Send in the Inbox.
  *
  * In the background (next/server's after()), so a run's row moves on
  * whatever the e-mail does. Never throws. Server only.
@@ -70,19 +73,23 @@ async function post(body: EmailBody): Promise<boolean> {
   return res.ok;
 }
 
-/** A job as its e-mail reads it: whether it delivers by e-mail. */
-async function readEmailJob(
-  jobId: string,
-): Promise<{ id: string; organization_id: string; title: string; deliver_to: string[] } | null> {
+interface EmailJob {
+  id: string;
+  organization_id: string;
+  title: string;
+  deliver_to: string[];
+  external_recipients?: string[] | null;
+}
+
+/** A job as its e-mail reads it: whether it delivers by e-mail, and to whom outside. */
+async function readEmailJob(jobId: string): Promise<EmailJob | null> {
   const { data, error } = await supabaseAdmin
     .from('chat_schedules')
-    .select('id, organization_id, title, deliver_to')
+    .select('id, organization_id, title, deliver_to, external_recipients')
     .eq('id', jobId)
     .maybeSingle();
   if (error) throw new Error(`Could not read a scheduled job: ${error.message}`);
-  return (
-    (data as { id: string; organization_id: string; title: string; deliver_to: string[] }) ?? null
-  );
+  return (data as EmailJob | null) ?? null;
 }
 
 /**
@@ -133,7 +140,8 @@ export async function reportPdf(
 
 /**
  * A run that is done goes by e-mail, for a job that delivers by e-mail
- * (above), with its report attached when it fits. In the background.
+ * (above), with its report attached when it fits; for a job with outside
+ * addresses, the server prepares theirs. In the background.
  */
 export function emailRunResult(
   run: { id: string; schedule_id: string },
@@ -141,7 +149,8 @@ export function emailRunResult(
 ): void {
   inBackground(async () => {
     const job = await readEmailJob(run.schedule_id);
-    if (!job || !(job.deliver_to ?? []).includes('email')) return;
+    const outside = (job?.external_recipients ?? []).length > 0;
+    if (!job || (!(job.deliver_to ?? []).includes('email') && !outside)) return;
     let attachment: EmailBody['attachment'] = null;
     try {
       attachment = chat.messageId ? await reportPdf(chat.messageId, job.title) : null;
