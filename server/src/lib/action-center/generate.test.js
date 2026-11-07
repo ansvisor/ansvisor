@@ -711,6 +711,28 @@ describe('the task plan the action is created with', () => {
       expect(taskRows(writes)).not.toContain('create_content_brief');
     });
 
+    it('writes a buying guide when the topic’s category has products but no page (EC-1)', async () => {
+      categoryPageFor.mockResolvedValue({
+        category: { id: 'c2', name: 'Gifts', url: null, inStock: 4 },
+        products: ['p3'],
+      });
+      const writes = mockDb({ signals: [topicSignal()], brand: { site_type: 'ecommerce' } });
+      await generateActionsForBrand(BRAND, {
+        now: NOW,
+        sources: new Set([...ALL_SOURCES, 'topics']),
+      });
+      const action = writes.inserted.find((w) => w.table === 'actions').rows[0];
+      expect(action.payload).toMatchObject({
+        contentExists: false,
+        products: ['p3'],
+        play: { id: 'buying_guide', assetType: 'buying_guide' },
+      });
+      expect(action.payload).not.toHaveProperty('pages');
+      expect(taskRows(writes)).toEqual(
+        expect.arrayContaining(['create_content_brief', 'create_content_draft']),
+      );
+    });
+
     it('writes a new page off a store, or without a category page', async () => {
       const writes = mockDb({ signals: [topicSignal()], brand: { site_type: 'ecommerce' } });
       await generateActionsForBrand(BRAND, {

@@ -10,9 +10,17 @@ import { SITE_TYPES, type SiteType } from '@/lib/content/page-types';
 
 /**
  * The plays the chooser picks today, as playbooks.js lists them (PLAYS), and
- * a store's category page (CATEGORY_PAGE_PLAY, AC plan P-7).
+ * a store's category page or buying guide (CATEGORY_PAGE_PLAY,
+ * BUYING_GUIDE_PLAY, AC plan P-7).
  */
-export const PLAY_IDS = ['comparison', 'best_of', 'guide', 'definition', 'category_page'] as const;
+export const PLAY_IDS = [
+  'comparison',
+  'best_of',
+  'guide',
+  'definition',
+  'category_page',
+  'buying_guide',
+] as const;
 export type PlayId = (typeof PLAY_IDS)[number];
 
 /** Why the play: how many of the prompts ask for it, and their share of the AI searches. */
@@ -24,11 +32,14 @@ export interface IntentReason {
   share: number;
 }
 
-/** Why a store's category page: the topic's category, its live page and its products in stock. */
+/**
+ * Why a store's category page, or its buying guide: the topic's category,
+ * its live page (null for none: the guide's case) and its products in stock.
+ */
 export interface CategoryReason {
   kind: 'category';
   category: string;
-  page: string;
+  page: string | null;
   inStock: number;
 }
 
@@ -75,9 +86,11 @@ function reasonOf(value: unknown): PlayReason | null {
   if (value.kind === 'category') {
     const inStock = count(value.inStock);
     if (typeof value.category !== 'string' || !value.category.trim()) return null;
-    if (typeof value.page !== 'string' || !/^https?:\/\//i.test(value.page)) return null;
+    const page =
+      typeof value.page === 'string' && /^https?:\/\//i.test(value.page) ? value.page : null;
+    if (value.page != null && page === null) return null;
     if (inStock === null) return null;
-    return { kind: 'category', category: value.category.trim(), page: value.page, inStock };
+    return { kind: 'category', category: value.category.trim(), page, inStock };
   }
   if (value.kind !== 'intent') return null;
   const prompts = count(value.prompts);

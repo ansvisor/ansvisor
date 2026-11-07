@@ -35,8 +35,24 @@ describe('pickCategoryPage', () => {
       url: 'https://shop.example/c/coffee',
       inStock: 30,
     });
-    expect(pickCategoryPage({ topicIds: ['t2'], topics, pages })).toBeNull();
     expect(pickCategoryPage({ topicIds: [], topics, pages })).toBeNull();
+  });
+
+  it('else the first with a product in stock and no page, for a buying guide (EC-1)', () => {
+    expect(pickCategoryPage({ topicIds: ['t2'], topics, pages })).toEqual({
+      id: 'c-gifts',
+      name: 'Gifts',
+      url: null,
+      inStock: 4,
+    });
+    // Nothing in stock: none.
+    expect(
+      pickCategoryPage({
+        topicIds: ['t2'],
+        topics,
+        pages: [{ name: 'Gifts', inStock: 0, page: null }],
+      }),
+    ).toBeNull();
   });
 });
 
@@ -123,5 +139,19 @@ describe('categoryPagePlay', () => {
       supporting: [{ id: 'best_of', share: 0.9 }],
     });
     expect(isPlayId(CATEGORY_PAGE_PLAY.id)).toBe(true);
+  });
+
+  it('writes a buying guide for a category with no page (EC-1)', () => {
+    const play = categoryPagePlay({
+      siteType: 'ecommerce',
+      category: { name: 'Gifts', url: null, inStock: 4 },
+    });
+    expect(play).toMatchObject({
+      id: 'buying_guide',
+      assetType: 'buying_guide',
+      reasons: [{ kind: 'category', category: 'Gifts', page: null, inStock: 4 }],
+      supporting: [],
+    });
+    expect(isPlayId('buying_guide')).toBe(true);
   });
 });

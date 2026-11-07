@@ -2306,8 +2306,10 @@
           "best_of": "Write a best-of list",
           "guide": "Write a how-to guide",
           "definition": "Write a definition page",
-          "category_page": "Optimize the category page"
+          "category_page": "Optimize the category page",
+          "buying_guide": "Write a buying guide"
         },
+        "buyingGuideReason": "The topic is about your {category} category, with {inStock, plural, one {# product} other {# products}} in stock and no live page yet. A buying guide for the topic answers its questions and links the category’s best sellers.",
         "categoryReason": "The topic is about your {category} category, whose page {page} is live with {inStock, plural, one {# product} other {# products}} in stock. Optimize it for the topic’s questions; its best sellers are picked for its shopping path.",
         "reason": "{prompts, number} of {of, plural, one {# prompt} other {# prompts}} {play, select, comparison {ask to compare options} best_of {ask for the best options} guide {ask how to do something or fix a problem} definition {ask what something is} other {ask for this}}: {share, number, percent} of their estimated AI searches.",
         "also": "Also worth doing here",

@@ -21,9 +21,11 @@ When an action asks for new content for prompts or a topic, Ansvisor reads what 
 
 **Start now** sits under it and writes that kind of page.
 
-## A store's category page
+## A store's category page or buying guide
 
 On an online store, a topic action whose topic is linked to a catalog category with a live page (**Settings › Integrations**, **Topics and categories**) reads **Optimize the category page** instead of a new page. Its draft opens that page, with the category's best sellers in stock picked for its shopping path.
+
+When the category has products in stock but no live page, it reads **Write a buying guide**: a new page for the topic, its shopping path starting with the category's best sellers.
 
 ## What Content Editor opens
 

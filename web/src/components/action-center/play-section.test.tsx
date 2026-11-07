@@ -60,6 +60,21 @@ describe('PlaySection', () => {
     expect(text).toContain('Write a best-of list · 60% of the AI searches');
   });
 
+  it('says why a store writes a buying guide for a category with no page (EC-1)', async () => {
+    await render({
+      id: 'buying_guide',
+      assetType: 'buying_guide',
+      siteType: 'ecommerce',
+      reasons: [{ kind: 'category', category: 'Mugs', page: null, inStock: 3 }],
+      supporting: [],
+    });
+    const text = container.textContent ?? '';
+    expect(text).toContain('Write a buying guide');
+    expect(text).toContain(
+      'The topic is about your Mugs category, with 3 products in stock and no live page yet.',
+    );
+  });
+
   it('says how many prompts ask for an intent play', async () => {
     await render({
       id: 'comparison',
