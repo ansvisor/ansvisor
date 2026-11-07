@@ -72,6 +72,7 @@ answer reads only the tools in the playbook's `metadata.reads`.
 | [`optimize`](./optimize) | Optimize content |
 | [`opportunities`](./opportunities) | Find opportunities |
 | [`audit`](./audit) | Improve with audit |
+| [`image`](./image) | Create image |
 
 CI checks every one of them (`web/src/lib/chat/skills/library.test.ts`):
 the front matter (`name` matches the folder, `description` up to 1,024

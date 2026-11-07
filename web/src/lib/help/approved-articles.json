@@ -1125,6 +1125,7 @@
         "/optimize",
         "/opportunities",
         "/audit",
+        "/image",
         "get started",
         "create a report",
         "optimize a page",
@@ -1302,7 +1303,7 @@
         },
         {
           "heading": "Shortcuts",
-          "text": "Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/start** (Get started), **/analyze**, **/new-report** (Reports), **/create**, **/optimize**, **/opportunities** and **/audit** (Improve with audit). A shortcut puts its first words in the box, such as \"Analyze\", for you to finish. Chat then reads only the data that job needs, by default your brand's last 30 days, and says in one line when your plan leaves part of it out. Change the first words and Chat treats the message as your own question. Some **For you now** chips on Chat Home work the same way.\n\nUnder the shortcuts are the skills Chat can use, such as **/report** for the weekly report (see **Skills in Chat**)."
+          "text": "Type **/** at the start of an empty box, or click **/**, for shortcuts that start a message: **/start** (Get started), **/analyze**, **/new-report** (Reports), **/create**, **/optimize**, **/opportunities**, **/audit** (Improve with audit) and **/image** (Create image). A shortcut puts its first words in the box, such as \"Analyze\", for you to finish. Chat then reads only the data that job needs, by default your brand's last 30 days, and says in one line when your plan leaves part of it out. Change the first words and Chat treats the message as your own question. Some **For you now** chips on Chat Home work the same way.\n\nUnder the shortcuts are the skills Chat can use, such as **/report** for the weekly report (see **Skills in Chat**)."
         },
         {
           "heading": "Reference your data",
@@ -1310,7 +1311,7 @@
         },
         {
           "heading": "Attach files",
-          "text": "Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until they are up. If a file can't go, the box says why, and **Retry** sends a failed one again.\n\nAttached files are data for Chat to read, not files you made: they don't show in **Files**, and they are kept for 90 days.\n\nIn **＋**, **Connect a tool** opens **Settings › Integrations** for Admins; others send their Admin a request in one click."
+          "text": "Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until they are up. If a file can't go, the box says why, and **Retry** sends a failed one again.\n\nAttached files are data for Chat to read, not files you made: they don't show in **Files**, and they are kept for 90 days.\n\nIn **＋**, **Create an image** starts the **/image** shortcut, for Admins and Managers (see **Create images in Chat**). **Connect a tool** opens **Settings › Integrations** for Admins; others send their Admin a request in one click."
         },
         {
           "heading": "Speak your message",
@@ -1700,13 +1701,17 @@
       "route": "/dashboard/chat",
       "keywords": [
         "create image",
+        "create an image",
+        "/image",
         "make an image",
         "generate image",
         "cover image",
         "image model",
         "nano banana",
         "gpt image",
-        "images in chat"
+        "images in chat",
+        "try again",
+        "new images"
       ],
       "synonyms": [
         "ai image",
@@ -1718,15 +1723,15 @@
         "draw"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
-          "text": "Chat can make images for your brand, such as a cover for a blog post. Ask in your own words, for example \"Create a cover image for our GEO post\", in any language. Admins and Managers can create images."
+          "text": "Chat can make images for your brand, such as a cover for a blog post. Ask in your own words, for example \"Create a cover image for our GEO post\", in any language. You can also click **＋** and **Create an image**, or type **/image**: \"Create an image for\" goes in the box, for you to finish. Admins and Managers can create images."
         },
         {
           "heading": "Pick an image model",
-          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model."
+          "text": "The first time you ask for an image in a chat, Chat asks **Which image model should I use?** The first option is marked **Recommended**: it is the one that uses your AI limit most slowly. Each option shows how fast it uses your AI limit compared with that one (**1x**, **2x**, **4x**) and about how much of your monthly AI limit one image uses. Chat uses your pick for every image in that chat, unless you ask for another model.\n\nAfter you pick, the model button under the box reads **Image ·** and the model, such as **Image · Nano Banana 2 Lite**. Your next request that isn't for an image shows the chat model there again, as does picking a chat model in that menu."
         },
         {
           "heading": "Approve the images",
@@ -1734,7 +1739,11 @@
         },
         {
           "heading": "Pick and download an image",
-          "text": "The images show on a card under the answer, the first one selected. Click another image to select it. Click **PNG** to download the selected image.\n\nThe set is saved to **Files** as one file, and it counts toward your storage. Its download there is the selected image. When Files is full, Chat says so before making any image."
+          "text": "The images show on a card under the answer, the first one selected. Click another image to select it. Click **PNG** to download the selected image."
+        },
+        {
+          "heading": "Try again",
+          "text": "Under the latest images, click **Try again**. A request for 4 new images with the same model goes in the box, for example \"Try again: make 4 new images with Nano Banana 2 Lite.\" Add a change if you like, such as \"Make the background blue\", then send. Chat shows the card before it makes them.\n\nThe set is saved to **Files** as one file, and it counts toward your storage. Its download there is the selected image. When Files is full, Chat says so before making any image."
         },
         {
           "heading": "When no image comes",
