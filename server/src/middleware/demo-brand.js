@@ -115,6 +115,8 @@ export const DEMO_GUARDED = [
   guard('POST /catalog/sources/:id/sync', rowIn('catalog_sources', 'path')),
   guard('PUT /catalog/categories', brandIn('body')),
   guard('DELETE /catalog/categories', brandIn('query')),
+  guard('PUT /catalog/topic-categories', brandIn('body')),
+  guard('DELETE /catalog/topic-categories', brandIn('query')),
   guard('POST /catalog/upload', brandIn('query')),
 
   // Webflow (cms.js): the demo's connection is a sample.
