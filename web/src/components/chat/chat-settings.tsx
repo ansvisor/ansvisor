@@ -353,7 +353,7 @@ export function ChatSettings({
             </Row>
           )}
 
-          {/* Where a page Chat writes opens (CHAT-25 §3, W4-11): "Open here" comes with W4-15. */}
+          {/* Where a page Chat writes opens (CHAT-25 §3, W4-11; Open here, W4-15b). */}
           <Row label={t('pageOpen.label')} note={t('pageOpen.note')}>
             <span
               role="radiogroup"

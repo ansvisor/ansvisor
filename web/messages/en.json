@@ -1315,6 +1315,10 @@
         "title": "Link {targets} to pages that convert",
         "description": "AI sends readers to these pages and few of them convert. Pages on the same topic that convert have little AI traffic."
       },
+      "product_pages_to_optimize": {
+        "title": "Product pages AI asks about: {targets}",
+        "description": "AI shopping answers show these products, or they sell, and their pages can answer more of what people ask."
+      },
       "ai_landing_underperforming": {
         "title": "Weak engagement on {targets}",
         "description": "AI visitors engage on these pages well below your site’s rate."
@@ -1886,6 +1890,7 @@
           "status_changed": "Status changed to {to}",
           "assigned": "Assignee changed",
           "due_date_set": "Due date updated",
+          "group_size_set": "Product pages per group changed",
           "task_status": "Task updated",
           "task_added": "Task added: “{title}”",
           "task_renamed": "Task renamed to “{title}”",
@@ -2196,6 +2201,19 @@
           "planLine": "On {from}, link to {to} with the text “{anchor}”",
           "planLineNoAnchor": "On {from}, link to {to}",
           "startNow": "Start now opens each page in the Content Editor, its link in Your input."
+        },
+        "productPages": {
+          "why": "The products AI shopping answers show for your prompts, or that sell, best first. Work on a few pages at a time.",
+          "groupSize": "Pages at a time",
+          "groupSizeLabel": "{size} pages",
+          "groupSizeSaved": "Working on {size} product pages",
+          "groupSizeFailed": "Couldn’t change the group. Try again.",
+          "inGroup": "In this group",
+          "next": "Next",
+          "figures": "{prompts, plural, =0 {Not on AI shopping cards} one {On AI shopping cards for # prompt} other {On AI shopping cards for # prompts}}",
+          "sales": "{orders, plural, =0 {No orders} one {# order} other {# orders}} · {aiVisits, plural, one {# AI visit} other {# AI visits}} in 30 days",
+          "revenue": "{revenue} in 30 days",
+          "startNow": "Start now opens each page of the group in the Content Editor."
         },
         "shoppingLinks": {
           "source": "Source",
@@ -2758,6 +2776,12 @@
         "titleGeneric": "Link AI-visited pages to pages that convert",
         "description": "AI sends readers to these pages and few of them convert. A link to a page on the same topic that converts puts it one click away.",
         "goal": "So AI finds these pages too, and readers follow the click."
+      },
+      "product_pages_optimize": {
+        "title": "Optimize {targets} AI asks about",
+        "titleGeneric": "Optimize the product pages AI asks about",
+        "description": "AI shopping answers show these products, or they sell. Their pages can answer more of what people ask before they buy.",
+        "goal": "Get these products picked more often in AI shopping answers."
       },
       "protect_valuable_citations": {
         "title": "Protect citations on {targets}",
@@ -4039,7 +4063,7 @@
           "tray": "Runs tray"
         },
         "states": {
-          "openPage": "After Chat writes a page · none Recommended; Open here comes with W4-15",
+          "openPage": "After Chat writes a page · none Recommended",
           "pageVersion1": "Version 1: the page Chat wrote · no Undo",
           "pageVersion2": "Version 2 after a change, for an Admin or a Manager · Rules, Quality and Optimize come with W4-12b-2",
           "pageMarkReady": "Next moves once nothing is left to fill (W4-12b)",
@@ -4357,6 +4381,8 @@
     "thoughtFor": "Thought for {seconds, plural, one {# s} other {# s}}",
     "openPage": {
       "question": "Where should we open this page?",
+      "here": "Open here",
+      "hereDetail": "Edit it next to this chat. Ask for changes in plain words.",
       "editor": "Open in Content Editor",
       "editorDetail": "The full editor with Brief, Rules and Quality.",
       "chat": "Keep working in chat",
@@ -5631,6 +5657,7 @@
         "note": "When Chat writes or starts editing a page.",
         "ask": "Ask each time",
         "chat": "Keep in chat",
+        "here": "Open here",
         "editor": "Content Editor"
       },
       "title": "Settings",
