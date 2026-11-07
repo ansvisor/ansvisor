@@ -15,6 +15,14 @@
  *     those with a `proxy` object describe a request (clientIp, userAgent[],
  *     host, path, statusCode, timestamp in ms). Build and function output
  *     lines are skipped.
+ *   * Generic webhook (log_webhook, #2170): JSON lines, or one JSON array,
+ *     with the documented fields: user_agent, ip, url (a full address, or a
+ *     path) or host and path, status, time (RFC 3339, or seconds or
+ *     milliseconds since the epoch) and country (two letters, optional).
+ *   * An uploaded access log (log_upload, #2170): the combined log format
+ *     (Apache's and nginx's default), the common log format, or the same
+ *     JSON lines, line by line. A common-format line names no user agent,
+ *     so it is counted but never a bot.
  *
  * Log senders report every line they hold; `records` is that count, for the
  * raw-record cap.
@@ -45,6 +53,13 @@ const PARSE_SLICE = 1000;
 
 /** A body past MAX_INFLATED_BYTES or MAX_LOG_LINES; the route answers 413. */
 export class LogTooLargeError extends Error {}
+
+/**
+ * An uploaded file with no line in a format it reads (#2170): not an access
+ * log or JSON lines, so it isn't counted against the raw cap; the route
+ * answers 400.
+ */
+export class LogUnreadableError extends Error {}
 
 /**
  * The body as text. A body sent with Content-Encoding: gzip arrives already
@@ -159,10 +174,114 @@ export async function readVercelBody(text) {
   return { records: lines.length, requests };
 }
 
+/** A JSON line with the documented fields (above), as a request. */
+function documentedRequest(line) {
+  const host = typeof line.host === 'string' && line.host ? line.host : null;
+  const path = typeof line.path === 'string' ? line.path : null;
+  return {
+    userAgent: line.user_agent ?? line.userAgent,
+    ip: line.ip,
+    url: typeof line.url === 'string' ? line.url : host ? `https://${host}${path ?? '/'}` : path,
+    status: line.status,
+    at: logpushTime(line.time ?? line.timestamp),
+    country: line.country,
+  };
+}
+
+export async function readJsonLinesBody(text) {
+  const lines = await readLines(text);
+  const requests = lines
+    .filter((l) => l && typeof l === 'object')
+    .map(documentedRequest)
+    .filter((r) => r.at !== undefined);
+  return { records: lines.length, requests };
+}
+
+const MONTHS = {
+  Jan: '01',
+  Feb: '02',
+  Mar: '03',
+  Apr: '04',
+  May: '05',
+  Jun: '06',
+  Jul: '07',
+  Aug: '08',
+  Sep: '09',
+  Oct: '10',
+  Nov: '11',
+  Dec: '12',
+};
+
+/** An access log's time, "10/Oct/2026:13:55:36 +0000", as an ISO time. */
+function accessLogTime(value) {
+  const m = /^(\d{2})\/([A-Z][a-z]{2})\/(\d{4}):(\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2})$/.exec(
+    value,
+  );
+  if (!m || !MONTHS[m[2]]) return undefined;
+  return isoTime(`${m[3]}-${MONTHS[m[2]]}-${m[1]}T${m[4]}${m[5]}:${m[6]}`);
+}
+
+/**
+ * A combined or common log format line: ip - user [time] "METHOD path PROTO"
+ * status bytes, and in the combined format "referer" "user agent".
+ */
+const ACCESS_LINE =
+  /^(\S+) \S+ \S+ \[([^\]]+)\] "(?:[A-Z]+ )?(\S+)(?: [^"]*)?" (\d{3}) \S+(?: "[^"]*" "([^"]*)")?/;
+
+function accessLogRequest(line) {
+  const m = ACCESS_LINE.exec(line);
+  if (!m) return null;
+  return {
+    userAgent: m[5],
+    ip: m[1],
+    url: m[3],
+    status: m[4],
+    at: accessLogTime(m[2]),
+    country: null,
+  };
+}
+
+/**
+ * An uploaded access log (above), a line at a time: JSON lines and log lines
+ * may mix. A file with no line in either format (another kind of file) is
+ * LogUnreadableError, so it isn't counted.
+ */
+export async function readUploadBody(text) {
+  const lines = text.split('\n').filter((line) => line.trim());
+  if (lines.length > MAX_LOG_LINES) throw tooManyLines(lines.length);
+  const requests = [];
+  let readable = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0 && i % PARSE_SLICE === 0) await nextTurn();
+    const line = lines[i].trim();
+    let request = null;
+    if (line.startsWith('{')) {
+      try {
+        request = documentedRequest(JSON.parse(line));
+      } catch {
+        // A malformed line is left out.
+      }
+    } else {
+      request = accessLogRequest(line);
+    }
+    if (request) readable++;
+    // A common-format line names no user agent: counted, never a bot.
+    if (request && request.at !== undefined && typeof request.userAgent === 'string') {
+      requests.push(request);
+    }
+  }
+  if (lines.length > 0 && readable === 0) {
+    throw new LogUnreadableError('No line is an access log line or a JSON line');
+  }
+  return { records: lines.length, requests };
+}
+
 const READERS = {
   cloudflare_worker: readWorkerBody,
   cloudflare_logpush: readLogpushBody,
   vercel_drain: readVercelBody,
+  log_webhook: readJsonLinesBody,
+  log_upload: readUploadBody,
 };
 
 /** A connection's body as requests, and how many records it held. */

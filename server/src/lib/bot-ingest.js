@@ -26,7 +26,16 @@ export const MAX_BATCH = 500;
 /** Requests older than this are dropped: a sender catching up after a week isn't the site's reading now. */
 export const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-export const CONNECTION_KINDS = ['cloudflare_worker', 'cloudflare_logpush', 'vercel_drain'];
+export const CONNECTION_KINDS = [
+  'cloudflare_worker',
+  'cloudflare_logpush',
+  'vercel_drain',
+  // A generic sender of JSON lines (#2170, 00492).
+  'log_webhook',
+];
+
+/** A brand's own uploads of an access log (#2170, 00492): one connection, made at the first. */
+export const UPLOAD_KIND = 'log_upload';
 
 const SECRET_PREFIX = 'abot_';
 

@@ -95,6 +95,8 @@ export const DEMO_GUARDED = [
   // would revoke a secret that was never given out.
   guard('POST /bots/connections/:brandId', brandIn('path')),
   guard('DELETE /bots/connections/:brandId/:id', brandIn('path')),
+  // An access log upload (#2170): the demo brand's AI bot report is sample data.
+  guard('POST /bots/upload/:brandId', brandIn('path')),
 
   // Brand facts (brand-facts.js): reading the site again, approving a fact.
   guard('POST /brand-facts/fetch', brandIn('body')),
