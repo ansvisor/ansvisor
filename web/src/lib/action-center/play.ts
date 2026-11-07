@@ -8,18 +8,31 @@
 
 import { SITE_TYPES, type SiteType } from '@/lib/content/page-types';
 
-/** The plays the chooser picks today, as playbooks.js lists them (PLAYS). */
-export const PLAY_IDS = ['comparison', 'best_of', 'guide', 'definition'] as const;
+/**
+ * The plays the chooser picks today, as playbooks.js lists them (PLAYS), and
+ * a store's category page (CATEGORY_PAGE_PLAY, AC plan P-7).
+ */
+export const PLAY_IDS = ['comparison', 'best_of', 'guide', 'definition', 'category_page'] as const;
 export type PlayId = (typeof PLAY_IDS)[number];
 
 /** Why the play: how many of the prompts ask for it, and their share of the AI searches. */
-export interface PlayReason {
+export interface IntentReason {
   kind: 'intent';
   prompts: number;
   of: number;
   /** 0–1. */
   share: number;
 }
+
+/** Why a store's category page: the topic's category, its live page and its products in stock. */
+export interface CategoryReason {
+  kind: 'category';
+  category: string;
+  page: string;
+  inStock: number;
+}
+
+export type PlayReason = IntentReason | CategoryReason;
 
 export interface PlayOption {
   id: PlayId;
@@ -58,7 +71,15 @@ function optionOf(value: unknown): PlayOption | null {
 }
 
 function reasonOf(value: unknown): PlayReason | null {
-  if (!isRecord(value) || value.kind !== 'intent') return null;
+  if (!isRecord(value)) return null;
+  if (value.kind === 'category') {
+    const inStock = count(value.inStock);
+    if (typeof value.category !== 'string' || !value.category.trim()) return null;
+    if (typeof value.page !== 'string' || !/^https?:\/\//i.test(value.page)) return null;
+    if (inStock === null) return null;
+    return { kind: 'category', category: value.category.trim(), page: value.page, inStock };
+  }
+  if (value.kind !== 'intent') return null;
   const prompts = count(value.prompts);
   const of = count(value.of);
   const part = share(value.share);
