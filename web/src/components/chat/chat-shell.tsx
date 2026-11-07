@@ -269,7 +269,10 @@ function ChatShellFrame({
   const runs = <RunsTray brandId={brandId} />;
 
   return (
-    <div className="-m-6 flex h-[calc(100vh-4rem)] min-w-0 md:h-screen">
+    // As tall as the main area (its height plus the p-6 the -m-6 takes back),
+    // not the window: a demo, read-only or plan band above it would push a
+    // window-tall frame past the bottom.
+    <div className="-m-6 flex h-[calc(100%+3rem)] min-w-0">
       <div
         id="chat-menu"
         className={cn(
@@ -420,7 +423,12 @@ function ChatShellFrame({
             {current && <ChatHeaderMenu chat={current} />}
           </div>
         </header>
-        <div className={cn('chat-scroll min-h-0 flex-1 overflow-y-auto', padded && 'p-6')}>
+        {/* Positioned, so absolute children (screen-reader text in long answers)
+            stay inside the scroll area instead of stretching the whole page. */}
+        <div
+          data-slot="chat-scroll"
+          className={cn('chat-scroll relative min-h-0 flex-1 overflow-y-auto', padded && 'p-6')}
+        >
           <ChatCrumbContext.Provider value={setCrumbTail}>{children}</ChatCrumbContext.Provider>
         </div>
       </div>

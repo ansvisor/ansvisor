@@ -46,6 +46,8 @@ export interface DraftRulesRead {
   checked: { rule: ActiveRule; status: RuleStatus }[];
   met: number;
   total: number;
+  /** The person's own rules that are on, in their words (checked by AI in the editor, not counted). */
+  textRules: string[];
 }
 
 export async function readDraftRules(input: {
@@ -132,5 +134,10 @@ export async function readDraftRules(input: {
   const html = draft.body_html ?? '';
   const page = readPage(html, pageTextLength(html));
   const checked = rules.map((rule) => ({ rule, status: checkRule(rule, page, ctx) }));
-  return { title, checked, ...rulesMet(checked) };
+  return {
+    title,
+    checked,
+    ...rulesMet(checked),
+    textRules: effective.textRules.filter((rule) => rule.on).map((rule) => rule.text),
+  };
 }

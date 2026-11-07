@@ -57,24 +57,36 @@ export type RuleDescriber = (
   status?: RuleStatus,
 ) => { name: string; detail: string };
 
+/**
+ * A rule in the Rules tab's words (contentEditor.editor.rules), as Fix open
+ * rules sends it: the editor's hook below, and Chat's Optimize here on the
+ * server (W4-12b part 2).
+ */
+export function describeRule(
+  t: (key: string) => string,
+  rule: ActiveRule,
+  status?: RuleStatus,
+): { name: string; detail: string } {
+  const fanouts = status ? fanoutsToUse(status) : null;
+  return {
+    name: t(`names.${rule.key}`),
+    detail: [
+      rule.current
+        ? `${t('agent.aim')}: ${rule.current}${rule.unit ? ` ${t(`units.${rule.unit}`)}` : ''}`
+        : null,
+      fanouts ? `${t('agent.fanouts')}: ${fanouts}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  };
+}
+
 /** Rules in the reader's words, as Fix open rules sends them. */
 export function useRuleDescriber(): RuleDescriber {
   const t = useTranslations('contentEditor.editor.rules');
   return useCallback(
-    (rule: ActiveRule, status?: RuleStatus) => {
-      const fanouts = status ? fanoutsToUse(status) : null;
-      return {
-        name: t(`names.${rule.key}`),
-        detail: [
-          rule.current
-            ? `${t('agent.aim')}: ${rule.current}${rule.unit ? ` ${t(`units.${rule.unit}`)}` : ''}`
-            : null,
-          fanouts ? `${t('agent.fanouts')}: ${fanouts}` : null,
-        ]
-          .filter(Boolean)
-          .join(' · '),
-      };
-    },
+    (rule: ActiveRule, status?: RuleStatus) =>
+      describeRule(t as unknown as (key: string) => string, rule, status),
     [t],
   );
 }

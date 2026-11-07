@@ -481,20 +481,27 @@
         "claudebot",
         "perplexitybot",
         "cloudflare",
-        "vercel"
+        "vercel",
+        "access log",
+        "log file",
+        "webhook",
+        "nginx",
+        "apache"
       ],
       "synonyms": [
         "bot logs",
         "ai crawlers",
         "who crawls my site",
-        "bot traffic"
+        "bot traffic",
+        "upload server logs",
+        "log shipper"
       ],
       "plan": "growth",
-      "updated": "2026-10-31",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
-          "text": "The **AI bots reading your site** section of **AI Traffic Analytics** shows which AI bots read your pages, from your own Cloudflare or Vercel. Only verified bots count: the bot's name and its operator's published addresses must both match. Today that's the bots of OpenAI, Anthropic and Perplexity."
+          "text": "The **AI bots reading your site** section of **AI Traffic Analytics** shows which AI bots read your pages, from your own Cloudflare, Vercel or any server's logs. Only verified bots count: the bot's name and its operator's published addresses must both match. Today that's the bots of OpenAI, Anthropic and Perplexity."
         },
         {
           "heading": "What the section shows",
@@ -502,15 +509,23 @@
         },
         {
           "heading": "Connect AI bots",
-          "text": "Click **Connect** on the **AI bots** card in the Data sources strip, and choose how your site sends AI-bot requests: **Cloudflare Worker** (recommended), **Cloudflare Logpush** or **Vercel Drain** (Vercel Pro and Enterprise only). Each option says what it costs on your own Cloudflare or Vercel bill before you connect, and none of them changes your site's speed.\n\nClick **Create connection** and follow the numbered steps. Copy the settings right away: the secret in them isn't shown again. If you lose it, revoke the connection and create a new one."
+          "text": "Click **Connect** on the **AI bots** card in the Data sources strip, and choose how your site sends AI-bot requests: **Cloudflare Worker** (recommended), **Cloudflare Logpush**, **Vercel Drain** (Vercel Pro and Enterprise only) or **Any server (webhook)**. Each option says what it costs on your own bill before you connect, and none of them changes your site's speed. Only admins and managers can connect a source.\n\nClick **Create connection** and follow the numbered steps. Copy the settings right away: the secret in them isn't shown again. If you lose it, revoke the connection and create a new one."
+        },
+        {
+          "heading": "Send logs from any server",
+          "text": "On another server or CDN, choose **Any server (webhook)**. Your log shipper, such as Vector, Fluent Bit or Logstash, sends one request a line, with the fields the setup steps list and show in an example line: the user agent, the IP address, the page, the status and the time, and the country if you have it. It sends them to the address shown, with the header that holds the secret. A batch sent twice is read once, and requests older than 7 days aren't counted."
+        },
+        {
+          "heading": "Upload a log file",
+          "text": "Under **Or upload a log file** in the same dialog, click **Upload a log file** and pick an access log: the combined log format (Apache's and nginx's default), or one request a line with the same fields as the webhook. A gzipped file works too. The dialog says how large a file can be and how many lines it may hold.\n\nAnsvisor reads the file once and says how many lines it read, how many AI bot requests it found, and how many lines it left out: older than 7 days, for another site, or without a user agent. The common log format has no user agent, so it shows no bots. A file uploaded again isn't read twice. Only admins and managers can upload."
         },
         {
           "heading": "Manage connections",
-          "text": "**Manage** on the card lists your connections with their last request, lets you **Revoke** one, and shows this month's use. Cloud plans store a monthly number of detailed rows; past it, detailed rows pause until the next month and the totals are still counted. Cloudflare Logpush and Vercel Drain also have a monthly number of log records; past it, they aren't read until the next month. Only requests to your brand's own domains, or their subdomains, are kept."
+          "text": "**Manage** on the card lists your connections with their last request, lets you **Revoke** one, and shows this month's use. Cloud plans store a monthly number of detailed rows; past it, detailed rows pause until the next month and the totals are still counted. Log files, from Cloudflare Logpush, Vercel Drain, the webhook or an upload, also count against a monthly number of log records; past it, they aren't read until the next month. Only requests to your brand's own domains, or their subdomains, are kept."
         },
         {
           "heading": "Dates and sample data",
-          "text": "Bot counts are kept by UTC day, so the 24-hour range reads yesterday and today (UTC), and All time reads the last 90 days.\n\nOn the Starter plan, the section shows sample data with **Upgrade**. Without a connection, it offers **Connect** or **Preview with sample data**."
+          "text": "Bot counts are kept by UTC day, so the 24-hour range reads yesterday and today (UTC), and All time reads the last 90 days.\n\nOn the Starter plan, the section shows sample data with **Upgrade**. With no connection and no AI-bot data yet, it offers **Connect** or **Preview with sample data**."
         }
       ]
     },
@@ -693,7 +708,7 @@
         "gsc"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-06",
       "sections": [
         {
           "heading": null,
@@ -701,7 +716,7 @@
         },
         {
           "heading": "What each source adds",
-          "text": "- **Tracking snippet**: AI-referred visits, page by page, as they happen.\n- **Google Analytics**: AI visits on days the snippet has none, plus engaged visits, key events, revenue and the AI share of all traffic.\n- **Google Search Console**: Google clicks, the pages where AI may be taking them, and the Google queries you don't track yet.\n- **AI bots**: which AI bots read your pages, from your own Cloudflare or Vercel, on the Growth plan and above."
+          "text": "- **Tracking snippet**: AI-referred visits, page by page, as they happen.\n- **Google Analytics**: AI visits on days the snippet has none, plus engaged visits, key events, revenue and the AI share of all traffic.\n- **Google Search Console**: Google clicks, the pages where AI may be taking them, and the Google queries you don't track yet.\n- **AI bots**: which AI bots read your pages, from your own Cloudflare, Vercel or any server's logs, on the Growth plan and above."
         },
         {
           "heading": "Add the tracking snippet",
@@ -1132,12 +1147,6 @@
         "show all questions",
         "mark ready",
         "set ready",
-        "rules pill",
-        "quality pill",
-        "rules met",
-        "check it against the rules",
-        "check rules",
-        "open rules",
         "voice",
         "microphone",
         "speak",
@@ -1148,7 +1157,23 @@
         "audit card",
         "audit in chat",
         "audit score in chat",
-        "open report"
+        "open report",
+        "agents for you",
+        "recommended agents",
+        "new member",
+        "new teammate",
+        "hide agents for you",
+        "rules pill",
+        "quality pill",
+        "rules met",
+        "check it against the rules",
+        "check rules",
+        "open rules",
+        "optimize",
+        "optimize here",
+        "optimize page",
+        "rewrite page",
+        "optimize in content editor"
       ],
       "synonyms": [
         "assistant",
@@ -1166,6 +1191,10 @@
         {
           "heading": "Chat Home",
           "text": "Chat opens on **Home**: a greeting by name at your time of day, then a link to your **Inbox** when something needs you, else **All caught up.**\n\n**For you now** starts common jobs: **Ask anything** goes to the box, **More** opens every shortcut, and the rest show when the open brand has work. **Complete tasks**: Action Center actions due this week or overdue (Chat prepares, you close them). **Win back citations**: pages that lost citations. **Ready to publish**: drafts marked ready (Chat sends them to your CMS as drafts; you publish them). Each starts a new chat. Read-only roles get only the jobs that read, no **More**.\n\n**Since you left** shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat."
+        },
+        {
+          "heading": "Agents for you",
+          "text": "In your first 14 days in a workspace, once you've answered or skipped **What do you work on?**, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nIt shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.\n\nAdmins and Managers click an agent to open it in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide it on all your devices."
         },
         {
           "heading": "The welcome card",
@@ -1234,6 +1263,10 @@
         {
           "heading": "Rules and Quality on a page's card",
           "text": "A page's card also shows **Rules 11/12** and **Quality 82**, as the Content Editor's header does: how many of the page's rules it meets, and the average of its E-E-A-T, Trust and Readability scores. Rules is green when every rule is met and amber when some are open. Quality is read the way the editor reads it: with its AI checks on, a read the page doesn't have yet counts toward your AI usage as part of the run. A pill that couldn't be read isn't shown, and Quality shows only where Content Quality is on. While rules are open, **Check it against the rules** is a next move: Chat lists each open rule and Quality check in the editor's words, using no AI, and offers **Open in Content Editor**."
+        },
+        {
+          "heading": "Optimize a page in chat",
+          "text": "**Optimize ▾** on a page's card is headed by what's left, such as **1 rule open · Quality 82**. **Optimize here, no editor** has the Content Agent rewrite the page to its open rules, as the editor's **Rewrite the page to these rules** does, with the same guards: quoted passages kept, only known links, no invented facts. The page comes back as the next version card with **What changed** and **Undo**. If the agent takes longer than Chat can wait (up to 3.5 minutes), the page stays as it was and the rewrite waits in the Content Editor to compare. Chat asks first, and it counts toward your AI usage as the editor's rewrite does. A rule the agent tried here and couldn't close isn't sent again: Chat names it for you to decide. **Optimize in Content Editor** opens the full editor. Admins and Managers optimize; others get **Ask your Admin**."
         },
         {
           "heading": "Send or publish a page from Chat",
@@ -1601,7 +1634,7 @@
         },
         {
           "heading": "The Default view",
-          "text": "On the Default view, Chat Home shows your greeting, one line and the chat box in the middle of the page. The line says how many chats need you, or, when none do, how a competitor's mention rate moved this week. **For you now**, **What's new**, **Start with a question** and **New for you** don't show.\n\nWhen the Default view arrived, everyone started on it, people who had picked areas before too. Your areas are kept: select **Edit** under the greeting and the picker opens with them ticked, so **Continue** brings your focused Home back."
+          "text": "On the Default view, Chat Home shows your greeting, one line and the chat box in the middle of the page. The line says how many chats need you, or, when none do, how a competitor's mention rate moved this week. **For you now**, **What's new**, **Start with a question** and **New for you** don't show. In your first 14 days in a workspace, **Agents for you** shows there too, until you hide it.\n\nWhen the Default view arrived, everyone started on it, people who had picked areas before too. Your areas are kept: select **Edit** under the greeting and the picker opens with them ticked, so **Continue** brings your focused Home back."
         },
         {
           "heading": "What changes on Chat Home",
@@ -1899,6 +1932,9 @@
         "every monday",
         "recurring report",
         "ready by",
+        "due time",
+        "due date",
+        "keep working",
         "create schedule",
         "repeat",
         "run now",
@@ -1916,7 +1952,7 @@
         "automate a chat"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-07",
       "sections": [
         {
           "heading": null,
@@ -1937,6 +1973,14 @@
         {
           "heading": "Results and notices",
           "text": "Each run posts its result in the job's own chat, and the chat shows up in your **Inbox** as a new result. When a job makes several things, such as drafts for three tasks, the job shows how many are ready.\n\nWith **Notify only if the answer changed**, a run that reads the same data as the last result stops before writing and says **No change**. Nothing new is sent or saved, and the writing step uses none of your AI limit. The first run always delivers.\n\nIf a run fails, Chat tries again 10 minutes later. If that fails too, the top of your **Inbox** says the job didn't run and why. A job that stops by itself, such as at your monthly AI limit or after 3 failed runs in a row, says so there too. The note goes away once the job runs again."
+        },
+        {
+          "heading": "Work with a due time",
+          "text": "\"Have it ready by Monday\" starts the work at once. Under the job's task list, or under its answer, Chat shows **Due Mon 19 Oct, 09:00 · I'll keep working and notify you** in your time zone, with **Change** to set another due time on the job's page. Chat keeps working on the parts until they are all ready. A part that fails or stops at your monthly AI limit is tried again up to 3 times, at least 30 minutes apart, and never after the due time. This takes the place of the one try 10 minutes later that other jobs get."
+        },
+        {
+          "heading": "When it's due",
+          "text": "When everything is ready, or when the due time comes, Chat posts what is ready in the job's chat and lists what isn't ready yet, so nothing is left out without a word. It shows up in your **Inbox**, and by email if the job delivers to email. If the 3 tries run out before the due time, Chat posts the same list then. A job that stopped at your monthly AI limit goes on after the limit resets if it isn't due yet; at its due time it delivers what is ready even while paused."
         },
         {
           "heading": "The Scheduled page",
@@ -1975,6 +2019,8 @@
         "import a skill",
         "upload a skill",
         "skill from github",
+        "skill from skills.sh",
+        "skills.sh",
         "review a skill",
         "skill update",
         "update available",
@@ -2008,7 +2054,7 @@
         "skills directory"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-07",
       "sections": [
         {
           "heading": null,
@@ -2032,7 +2078,7 @@
         },
         {
           "heading": "Import a skill",
-          "text": "Admins and Managers on a paid plan can bring in a skill from outside. On the **Skills** page, click **New skill**, then **Upload a SKILL.md or .zip** (up to 5 MB), or **Import from GitHub** and paste a public github.com link. Only the skill's instructions come in: scripts, commands and allowed tools are removed, and nothing runs. A GitHub skill is read at today's commit and never updates by itself. Only MIT, Apache-2.0, BSD and ISC licenses are accepted.\n\nAn imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it."
+          "text": "Admins and Managers on a paid plan can bring in a skill from outside. On the **Skills** page, click **New skill**, then **Upload a SKILL.md or .zip** (up to 5 MB), or **Import from GitHub** and paste a public github.com link. A skills.sh page that links to the skill on GitHub works too. Only the skill's instructions come in: scripts, commands and allowed tools are removed, and nothing runs. A GitHub skill is read at today's commit and never updates by itself. Only MIT, Apache-2.0, BSD and ISC licenses are accepted.\n\nAn imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it."
         },
         {
           "heading": "The Library",
@@ -2592,7 +2638,10 @@
         "continued from your chat",
         "from your chat",
         "this draft",
-        "ctrl j"
+        "ctrl j",
+        "accepted suggestions",
+        "rejected suggestions",
+        "read your choices in the editor"
       ],
       "synonyms": [
         "write an article",
@@ -2601,7 +2650,7 @@
         "finish a page"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-05",
       "sections": [
         {
           "heading": null,
@@ -2638,6 +2687,10 @@
         {
           "heading": "Chat beside the page",
           "text": "With Chat on, **Chat** is the side panel's first tab. A page Chat made opens on it and continues that chat: \"Continued from your chat\". Otherwise it continues the chat you last had here about the page, or starts one. **Ctrl J** opens it.\n\nWhat you ask about the page doesn't change it. The Content Agent leaves suggestions in the page, labelled \"Content Agent · from your chat\", with the same guards as Fix open rules; the page changes only when you **Accept** one. Remove **This draft** from the box to talk about something else. The expand icon opens the chat on Chat's own page."
+        },
+        {
+          "heading": "Chat knows what you accepted",
+          "text": "When you send your next message in the Chat tab, Chat reads which of its suggestions you accepted and which you rejected since your last one. Its steps show **Read your choices in the editor**, such as \"1 accepted · 1 rejected\". It takes the page as it is now, and doesn't suggest a rejected change again unless you ask."
         },
         {
           "heading": "The brief",
@@ -4903,7 +4956,8 @@
         "what do you work on",
         "my menu",
         "hidden sections",
-        "sections off your menu"
+        "sections off your menu",
+        "agents for you"
       ],
       "synonyms": [
         "missing menu item",
@@ -4924,7 +4978,7 @@
         },
         {
           "heading": "When you're asked",
-          "text": "**What do you work on?** is asked once:\n\n- when you sign up, after your competitors and before you choose a plan;\n- when you join from an invitation, on your first sign-in;\n- on a self-hosted install, the first time the admin opens the dashboard.\n\n**Skip: show me everything** keeps every section."
+          "text": "**What do you work on?** is asked once:\n\n- when you sign up, after your competitors and before you choose a plan;\n- when you join from an invitation, on your first sign-in;\n- on a self-hosted install, the first time the admin opens the dashboard.\n\n**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas. It shows on Home's Default view too."
         },
         {
           "heading": "Change your work areas",
@@ -4951,7 +5005,7 @@
         "raise page score"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-07",
       "sections": [
         {
           "heading": null,
@@ -4976,6 +5030,10 @@
         {
           "heading": "How audits feed the Action Center",
           "text": "Each night the Action Center reads each page's latest audit from the last 90 days and turns failed signals into actions:\n\n- **Fix low-scoring pages**, for audited pages scoring below 50;\n- **Fix AI crawler accessibility**, **Fix structured data issues** and **Fix outdated content**;\n- **Fix weak entity signals**, **Fix internal content connectivity** and **Fix content gaps**.\n\nAn action lists the pages it covers and the failed checks on each, with **Open Site Audit**."
+        },
+        {
+          "heading": "Canonical tags",
+          "text": "The **Canonical URL** check scores whether a page has a canonical tag. When the tag points to another address, the audit also opens that address once. **Fix canonical tags** opens in the Action Center for pages whose tag is missing, or points to another site, a redirect, a page that asks not to be indexed or one that isn't there. Its score stays as it is. Its task checks the page again: it's done once the tag points to the page itself or to a live page of your site."
         },
         {
           "heading": "Re-audit after you fix",

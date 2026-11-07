@@ -438,6 +438,15 @@ describe('ChatMenuView', () => {
 });
 
 describe('ChatShell', () => {
+  it('scrolls the page in a positioned area, so screen-reader text in a long chat never stretches the page', async () => {
+    await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
+    const area = host.querySelector('[data-slot="chat-scroll"]')!;
+    // Absolute children (sr-only) take it as their containing block, clipped by its scroll.
+    expect(area.className).toContain('relative');
+    expect(area.className).toContain('overflow-y-auto');
+    expect(area.textContent).toBe('page');
+  });
+
   it('hides the menu with Ctrl+\\, keeps the choice and shows the strip; again shows it', async () => {
     await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
     expect(host.querySelector('[role="toolbar"]')).toBeNull();

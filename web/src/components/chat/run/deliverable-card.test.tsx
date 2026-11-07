@@ -10,13 +10,18 @@ import type { ChatDeliverable, ChatTaskStrip } from '@/lib/chat/events';
  * Files, its file's formats, and a page opened in the Content Editor.
  */
 
+const router = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
     <a href={href} {...rest}>
       {children}
     </a>
   ),
+  useRouter: () => router,
 }));
+// Ask your Admin on Optimize ▾ (W4-12b part 2): the request the server sends.
+const access = vi.hoisted(() => ({ requestAccess: vi.fn() }));
+vi.mock('@/lib/actions/chat-access-requests', () => access);
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 const getMore = vi.hoisted(() => ({ open: null as ((tab?: string) => void) | null }));
@@ -80,7 +85,11 @@ const fetchMock = vi.fn(
 
 async function render(
   deliverable: ChatDeliverable = page,
-  props: { canChange?: boolean; onTasks?: (strip: ChatTaskStrip) => void } = {},
+  props: {
+    canChange?: boolean;
+    onTasks?: (strip: ChatTaskStrip) => void;
+    onAsk?: (prompt: string) => void;
+  } = {},
 ) {
   await act(async () => {
     root.render(
@@ -543,6 +552,77 @@ describe('DeliverableCard for a page’s version (CHAT-25 §6, W4-12a)', () => {
     await render(versionCard(2, { rules: { met: 12, total: 12 }, quality: 55 }));
     expect(container.querySelector('[data-slot="version-rules"]')!.className).toContain('emerald');
     expect(container.querySelector('[data-slot="version-quality"]')!.className).toContain('amber');
+  });
+
+  describe('Optimize ▾ (CHAT-25 §7, W4-12b part 2)', () => {
+    const onAsk = vi.fn();
+
+    beforeEach(() => {
+      onAsk.mockReset();
+      router.push.mockReset();
+      access.requestAccess.mockReset().mockResolvedValue({ ok: true });
+    });
+
+    it('is headed by the rules open and Quality, with two equal ways, and asks Chat here', async () => {
+      await render(versionCard(2, { rules: { met: 11, total: 12 }, quality: 90 }), {
+        canChange: true,
+        onAsk,
+      });
+      await click(action('version.optimize')!);
+      expect(document.querySelector('[data-slot="optimize-heading"]')!.textContent).toBe(
+        '1 rule open · Quality 90',
+      );
+      const here = document.querySelector('[data-action="version.optimizeHere"]')!;
+      expect(here.textContent).toContain('Optimize here, no editor');
+      expect(here.textContent).toContain('You get version 3 with what changed.');
+      expect(document.body.textContent).not.toContain('Recommended');
+      expect(document.querySelector('[data-action="version.askAdmin"]')).toBeNull();
+      await click(here);
+      expect(onAsk).toHaveBeenCalledWith('Optimize “Pricing FAQ” here, without the editor');
+    });
+
+    it('opens the full editor, and says All rules met when none is open', async () => {
+      await render(versionCard(2, { rules: { met: 12, total: 12 }, quality: 82 }), {
+        canChange: true,
+        onAsk,
+      });
+      await click(action('version.optimize')!);
+      expect(document.querySelector('[data-slot="optimize-heading"]')!.textContent).toBe(
+        'All rules met · Quality 82',
+      );
+      await click(document.querySelector('[data-action="version.optimizeInEditor"]')!);
+      expect(router.push).toHaveBeenCalledWith('/dashboard/content/editor/d1');
+    });
+
+    it('gives an Analyst, or a read-only workspace, Ask your Admin in place of Optimize here', async () => {
+      await render(versionCard(2, { rules: { met: 10, total: 12 } }), { onAsk });
+      await click(action('version.optimize')!);
+      const here = document.querySelector('[data-action="version.optimizeHere"]')!;
+      expect(here.textContent).toContain('Admins and Managers can optimize a page.');
+      await click(here);
+      expect(onAsk).not.toHaveBeenCalled();
+      await click(document.querySelector('[data-action="version.askAdmin"]')!);
+      expect(access.requestAccess).toHaveBeenCalledWith({
+        asked: 'Optimize “Pricing FAQ” in chat',
+        ruleKind: 'role',
+        ruleDetail: 'Admins and Managers can optimize a page.',
+      });
+      expect(toast).toHaveBeenCalledWith('Sent to your Admins');
+      plan.locked = true;
+      await render(versionCard(2), { canChange: true, onAsk });
+      await click(action('version.optimize')!);
+      expect(document.querySelector('[data-action="version.askAdmin"]')).not.toBeNull();
+      plan.locked = false;
+    });
+
+    it('isn’t on a teammate’s shared chat, nor on a card that isn’t a page in Files', async () => {
+      await render(versionCard(), { canChange: true });
+      expect(action('version.optimize')).toBeNull();
+      await render({ ...versionCard(), filed: 'storage_full' }, { canChange: true, onAsk });
+      expect(action('version.optimize')).toBeNull();
+      await render(page, { canChange: true, onAsk });
+      expect(action('version.optimize')).toBeNull();
+    });
   });
 
   it('shows no pill whose read wasn’t made, nor any on a page not saved to Files', async () => {

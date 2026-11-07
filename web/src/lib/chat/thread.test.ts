@@ -162,6 +162,65 @@ describe('loadChatThread', () => {
     });
   });
 
+  it('puts a job’s due line under the latest task strip, in the person’s time zone (W4-30)', async () => {
+    seed([
+      { id: 'run-1', status: 'done' },
+      { id: 'run-2', status: 'done' },
+    ]);
+    fake.db.tables.chat_run_steps = [];
+    fake.db.tables.chat_run_events = [];
+    fake.db.tables.chat_task_state = [
+      {
+        conversation_id: CHAT,
+        action_task_id: 't1',
+        position: 1,
+        chat_status: 'queued',
+        run_id: 'run-1',
+      },
+    ];
+    fake.db.tables.action_tasks = [
+      { id: 't1', task_key: null, title: 'Add FAQ block', title_params: null, status: 'todo' },
+    ];
+    fake.db.tables.profiles = [{ id: USER, time_zone: 'America/New_York' }];
+    const job = {
+      id: 'job-1',
+      created_by: USER,
+      kind: 'once',
+      run_mode: 'ready_by',
+      due_at: '2099-01-05T06:00:00.000Z',
+      next_run_at: '2099-01-05T06:00:00.000Z',
+      timezone: 'Europe/Istanbul',
+      conversation_id: null,
+      set_by_run_id: 'run-2',
+      enabled: true,
+      paused_reason: null,
+      created_at: '2026-10-30T09:02:00.000Z',
+    };
+    fake.db.tables.chat_schedules = [job];
+    const runs = async () => (await loadChatThread(CHAT))!.messages.map((m) => m.run?.readyBy);
+    expect(await runs()).toEqual([
+      undefined,
+      {
+        dueAt: '2099-01-05T06:00:00.000Z',
+        timeZone: 'America/New_York',
+        href: '/dashboard/chat/scheduled/job-1#schedule-when',
+      },
+      undefined,
+      undefined,
+    ]);
+    // Delivered, or turned off: no line.
+    fake.db.tables.chat_schedules = [{ ...job, next_run_at: null }];
+    expect((await runs()).filter(Boolean)).toEqual([]);
+    fake.db.tables.chat_schedules = [{ ...job, enabled: false, paused_reason: 'manual' }];
+    expect((await runs()).filter(Boolean)).toEqual([]);
+    // Paused at the AI limit it still goes on: the line stays, under the job's chat's last run.
+    fake.db.tables.chat_task_state = [];
+    fake.db.tables.chat_schedules = [
+      { ...job, set_by_run_id: null, conversation_id: CHAT, enabled: false, paused_reason: 'cap' },
+    ];
+    expect((await runs())[3]).toMatchObject({ dueAt: job.due_at });
+  });
+
   it('reads a task an ended run still has Writing as Queued, and keeps a running run’s Writing', async () => {
     seed([
       { id: 'run-1', status: 'done' },

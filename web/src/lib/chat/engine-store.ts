@@ -193,6 +193,12 @@ export interface RunProgress {
    * part 2): its editor link and the rules still open, for the moves after it.
    */
   pageChecked?: { href: `/dashboard/content/editor/${string}`; open: number } | null;
+  /**
+   * The rules Optimize here tried on a draft and couldn't close, by draft
+   * (W4-12b part 2): later runs of the chat read them, so the agent is never
+   * sent for them again.
+   */
+  optimizeTried?: Record<string, string[]>;
   /** By the file a page version was filed as: the draft and the History version its Undo puts back (W4-12a). */
   pageUndos?: Record<string, { draftId: string; versionId: string }>;
   /**

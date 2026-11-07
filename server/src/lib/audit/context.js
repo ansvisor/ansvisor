@@ -11,6 +11,7 @@
 import * as cheerio from 'cheerio';
 import { fetchViaScrapeDo, fetchText } from './fetcher.js';
 import { probeBotAccess } from './bot-access.js';
+import { canonicalHref, probeAuditCanonical } from './canonical.js';
 
 /**
  * Normalize user-supplied input into an absolute http(s) URL.
@@ -53,6 +54,9 @@ export function normalizeUrl(raw) {
  * @property {{ html: string, from: string } | null} [rawPage]
  *   the page's HTML as the first AI bot let in got it, before JavaScript
  *   (SA-009); `html` above is the page as a browser renders it
+ * @property {Awaited<ReturnType<typeof probeAuditCanonical>>} [canonicalTarget]
+ *   where the page's canonical tag points, read once when it isn't the page
+ *   (AC plan P-11, canonical.js); absent for a page not fetched
  */
 
 /**
@@ -75,27 +79,33 @@ export async function buildAuditContext(rawUrl, { query = null } = {}) {
     throw Object.assign(new Error(`Failed to fetch page (status ${page.status})`), { status: 502 });
   }
 
-  // The live bot test (SA-008) asks the page itself, alongside the two files.
-  const [robotsTxt, llmsTxt, botAccess] = await Promise.all([
+  const read = auditContextOf({
+    url,
+    statusCode: page.status,
+    html: page.html,
+    robotsTxt: null,
+    llmsTxt: null,
+    query,
+  });
+  // The live bot test (SA-008) asks the page itself, alongside the two
+  // files; and the canonical tag's target is read once (AC plan P-11).
+  const [robotsTxt, llmsTxt, botAccess, canonicalTarget] = await Promise.all([
     fetchText(`${origin}/robots.txt`),
     fetchText(`${origin}/llms.txt`),
     probeBotAccess(url).catch(() => null),
+    probeAuditCanonical(url, canonicalHref(read.$)).catch(() => null),
   ]);
 
   // The HTML the first AI bot let in got, before any JavaScript ran, for the
   // no-JS check (SA-009); the bot check keeps the answers.
   const { page: rawPage = null, ...access } = botAccess ?? {};
   return {
-    ...auditContextOf({
-      url,
-      statusCode: page.status,
-      html: page.html,
-      robotsTxt,
-      llmsTxt,
-      query,
-    }),
+    ...read,
+    robotsTxt,
+    llmsTxt,
     botAccess: botAccess ? access : null,
     rawPage,
+    canonicalTarget,
   };
 }
 
