@@ -7363,6 +7363,7 @@ export type Database = {
           prompt_set_id: string
           regions: string[]
           text: string
+          tags: string[]
           topic_id: string | null
           work_status: string | null
         }
@@ -7376,6 +7377,7 @@ export type Database = {
           prompt_set_id: string
           regions?: string[]
           text: string
+          tags?: string[]
           topic_id?: string | null
           work_status?: string | null
         }
@@ -7389,6 +7391,7 @@ export type Database = {
           prompt_set_id?: string
           regions?: string[]
           text?: string
+          tags?: string[]
           topic_id?: string | null
           work_status?: string | null
         }

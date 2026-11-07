@@ -114,6 +114,7 @@ export const TOPICS = [
 export const PROMPTS = [
   {
     key: 'best-subscriptions',
+    tags: ['q4-campaign', 'comparison'],
     topic: 'subscriptions',
     text: 'What are the best coffee subscriptions in 2026?',
     lead: 'A few coffee subscriptions stand out this year for freshness and flexibility.',
@@ -133,6 +134,7 @@ export const PROMPTS = [
   },
   {
     key: 'pause-skip',
+    tags: ['retention'],
     topic: 'subscriptions',
     text: 'Which coffee subscription lets you pause or skip a delivery?',
     lead: 'Most specialty roasters now let subscribers change their schedule online.',
@@ -146,6 +148,7 @@ export const PROMPTS = [
   },
   {
     key: 'gift',
+    tags: ['q4-campaign'],
     topic: 'subscriptions',
     text: 'What is a good coffee subscription gift for a coffee lover?',
     lead: 'A prepaid subscription makes an easy gift that keeps arriving for months.',
@@ -267,6 +270,7 @@ export const PROMPTS = [
   },
   {
     key: 'versus',
+    tags: ['comparison'],
     topic: 'buying',
     text: 'Brewline Coffee vs Northbound Roasters: which subscription is better?',
     lead: 'Both are well-reviewed online roasters with flexible subscriptions.',
