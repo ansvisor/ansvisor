@@ -3,6 +3,7 @@ import { writeRefusal } from '@/lib/subscription-guard';
 import { skillRefusalResponse, skillViewerFor } from '@/lib/chat/skills/api';
 import { readGithubSkill } from '@/lib/chat/skills/github';
 import { MAX_UPLOAD, parseSkillImport, parseSkillUpload } from '@/lib/chat/skills/import';
+import { findSkillsShSource, isSkillsShUrl } from '@/lib/chat/skills/skills-sh';
 import {
   canImportSkill,
   importSkill,
@@ -17,7 +18,10 @@ import { chatActor, runFailure } from '@/lib/chat/run-api';
  * Imports a skill for review (CHAT-13 items 13–18, W3-09): an upload
  * (multipart `file`: a SKILL.md or a .zip of the skill's folder, at most
  * 5 MB) or a GitHub link (JSON `{ url }`: a public repository, or a folder
- * or a SKILL.md in it, read at one commit). It is read as instructions only
+ * or a SKILL.md in it, read at one commit), or a skills.sh page that links
+ * to one (W4-29: read on skills.sh only, its GitHub link then imported the
+ * same way; the skill's source stays the GitHub link, as the record has
+ * one source). It is read as instructions only
  * (lib/chat/skills/import.ts), then kept off and private, waiting for an
  * Admin's review (`pending_review`), or `blocked` when the scan blocks it.
  * A Manager's import asks the Admins to review it. Admins and Managers, on
@@ -27,7 +31,7 @@ import { chatActor, runFailure } from '@/lib/chat/run-api';
  * warnings, blocks, requested } }`. Refusals as values (`{ ok: false,
  * failure, code, error, detail? }`, #1777): 400 what can't be imported and
  * why, 401, 402 a read-only workspace (before anything else), 403 role or
- * plan, 409 the name, 413 too large, 429/502 GitHub.
+ * plan, 409 the name, 413 too large, 429/502 GitHub, 502/504 the skills.sh page.
  */
 export async function POST(req: Request) {
   try {
@@ -55,7 +59,17 @@ export async function POST(req: Request) {
       if (typeof body?.url !== 'string' || body.url.length > 2048) {
         return invalid('add a github.com link');
       }
-      const read = await readGithubSkill(body.url);
+      let link = body.url;
+      if (isSkillsShUrl(link)) {
+        const found = await findSkillsShSource(link, viewer.organizationId);
+        if (!found.ok) {
+          return skillRefusalResponse(
+            skillRefusal(found.refusal.code, found.refusal.detail).refusal,
+          );
+        }
+        link = found.url;
+      }
+      const read = await readGithubSkill(link);
       if (!read.ok) {
         return skillRefusalResponse(skillRefusal(read.refusal.code, read.refusal.detail).refusal);
       }
