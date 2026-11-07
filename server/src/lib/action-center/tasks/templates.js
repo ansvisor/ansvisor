@@ -29,6 +29,7 @@ const TEMPLATES = Object.freeze({
   publish_content: { check: 'auto', page: true },
   fix_crawler_access: { check: 'auto', page: true },
   fix_structured_data: { check: 'auto', page: true },
+  fix_canonical: { check: 'auto', page: true },
   fix_broken_target: { check: 'auto', page: true },
   fix_technical_issue: { check: 'auto', page: true },
   validate_technical_fix: { check: 'auto', page: true },

@@ -13,7 +13,12 @@ import { API_BASE_URL } from '@/config/api';
  * production.
  */
 
-export type BotConnectionKind = 'cloudflare_worker' | 'cloudflare_logpush' | 'vercel_drain';
+export type BotConnectionKind =
+  | 'cloudflare_worker'
+  | 'cloudflare_logpush'
+  | 'vercel_drain'
+  // A generic sender of JSON lines (#2170, 00492).
+  | 'log_webhook';
 
 export interface BotConnection {
   id: string;

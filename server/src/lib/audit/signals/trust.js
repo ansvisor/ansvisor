@@ -180,10 +180,15 @@ export const canonical = {
   evaluate(ctx) {
     const href = ctx.$('link[rel="canonical"]').first().attr('href');
     const present = Boolean(href && href.trim());
+    // The score is the tag's presence (rubric); where it points is evidence
+    // for the Action Center (AC plan P-11, canonical.js), read at fetch time.
     return {
       status: present ? 'pass' : 'fail',
       score: present ? 1 : 0,
-      evidence: { canonical: href || null },
+      evidence: {
+        canonical: href || null,
+        ...(ctx.canonicalTarget ? { target: ctx.canonicalTarget } : {}),
+      },
     };
   },
 };

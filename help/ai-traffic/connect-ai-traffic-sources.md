@@ -4,8 +4,8 @@ route: /dashboard/traffic
 keywords: [tracking snippet, connect google analytics, connect search console, data sources, install snippet, check again, tracking code not detected]
 synonyms: [set up ai traffic, add tracking code, link analytics, ga4, gsc]
 plan: all
-updated: 2026-11-01
-last_checked: 2026-11-01
+updated: 2026-11-06
+last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -18,7 +18,7 @@ The **Data sources** strip at the top of **AI Traffic Analytics** shows the four
 - **Tracking snippet**: AI-referred visits, page by page, as they happen.
 - **Google Analytics**: AI visits on days the snippet has none, plus engaged visits, key events, revenue and the AI share of all traffic.
 - **Google Search Console**: Google clicks, the pages where AI may be taking them, and the Google queries you don't track yet.
-- **AI bots**: which AI bots read your pages, from your own Cloudflare or Vercel, on the Growth plan and above.
+- **AI bots**: which AI bots read your pages, from your own Cloudflare, Vercel or any server's logs, on the Growth plan and above.
 
 ## Add the tracking snippet
 
