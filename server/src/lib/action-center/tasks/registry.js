@@ -80,6 +80,7 @@ const EXECUTION = [
   'publish_content',
   'fix_crawler_access',
   'fix_structured_data',
+  'fix_canonical',
   'fix_broken_target',
   'fix_technical_issue',
   'execute_outreach',
@@ -265,6 +266,8 @@ export const TASKS = Object.freeze({
   // ── Technical execution ───────────────────────────────────────────────────
   fix_crawler_access: human('fix_crawler_access', { permission: 'write', outputs: ['changes'] }),
   fix_structured_data: human('fix_structured_data', { permission: 'write', outputs: ['changes'] }),
+  // A canonical tag pointing to the page itself or a live page (AC plan P-11).
+  fix_canonical: human('fix_canonical', { permission: 'write', outputs: ['changes'] }),
   fix_broken_target: human('fix_broken_target', { permission: 'write', outputs: ['changes'] }),
   fix_technical_issue: human('fix_technical_issue', { permission: 'write', outputs: ['changes'] }),
   validate_technical_fix: validation('validate_technical_fix', { requires: ['site_audits'] }),

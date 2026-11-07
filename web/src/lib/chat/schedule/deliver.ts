@@ -1,9 +1,13 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../../messages/en.json';
+import { readChosenTimeZone } from '@/lib/account-time-zone';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { LoadedRun } from '../engine-store';
 import { readStrips, weekEndIn } from '../task-strip';
+import { startTouchedBrands } from '../touched-brands';
 import { emailJobProblem, emailRunResult } from './email';
+import { readyByAnswer, type ReadyByWhy } from './ready-by';
+import { dateWords, type WhenWords } from './when';
 
 /**
  * What a scheduled job's run leaves once it moves (CHAT-12 items 13, 16,
@@ -22,11 +26,24 @@ import { emailJobProblem, emailRunResult } from './email';
  *     that turned itself off (the AI limit, its creator's role or brand
  *     access, its brand or skill gone, 3 failed runs). One per event; a run
  *     that goes on, or the job turned back on, closes them.
+ *   - A job with a due time (ready-by.ts, W4-30): each run's answer comes
+ *     to the Inbox as any run's, with no e-mail and no notice of its own;
+ *     its delivery (deliverReadyBy) is the answer that lists what is ready
+ *     and what isn't yet, in its chat, so in the Inbox, and by e-mail for a
+ *     job that delivers by e-mail.
  *
- * Never throws: what is left here is told, not what runs. Server only.
+ * Never throws, but the delivery: what is left here is told, not what
+ * runs. Server only.
  */
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatSchedules.notice' });
+const tReady = createTranslator({ locale: 'en', messages, namespace: 'chatSchedules.readyBy' });
+const tTasks = createTranslator({ locale: 'en', messages, namespace: 'chatRun.tasks' });
+const tWhen = createTranslator({
+  locale: 'en',
+  messages,
+  namespace: 'chatSchedules.when',
+}) as unknown as WhenWords;
 
 export const SCHEDULE_NOTICE_KINDS = ['schedule_failed', 'schedule_paused'] as const;
 export type ScheduleNoticeKind = (typeof SCHEDULE_NOTICE_KINDS)[number];
@@ -201,7 +218,8 @@ export type SettledStatus =
  * moved to `status`: its parts and fingerprint; a delivered run's
  * fingerprint as the job's last; the job's notices closed once a run goes
  * on; a failed retry told; a done run e-mailed for a job that delivers by
- * e-mail (email.ts, W3-04b). Never throws.
+ * e-mail (email.ts, W3-04b). A job with a due time (`readyBy`) tells and
+ * e-mails its delivery instead. Never throws.
  */
 export async function keepRunResult(
   run: { id: string; schedule_id: string; attempt: number },
@@ -211,10 +229,12 @@ export async function keepRunResult(
     reason = null,
     jobOn = true,
     now = new Date(),
+    readyBy = false,
   }: {
     reason?: string | null;
     jobOn?: boolean;
     now?: Date;
+    readyBy?: boolean;
   } = {},
 ): Promise<void> {
   try {
@@ -242,13 +262,196 @@ export async function keepRunResult(
       await closeJobNotices(run.schedule_id, now);
     }
     // Done, not No change: its result by e-mail too, for a job that delivers by e-mail (W3-04b).
-    if (status === 'done' && chat) emailRunResult(run, chat);
+    if (status === 'done' && chat && !readyBy) emailRunResult(run, chat);
     // The first failure is tried again in 10 minutes: only a failed retry is told (CHAT-12
     // item 26). A job that turned off on it is told so by its own notice.
-    if (status === 'failed' && run.attempt >= 2 && jobOn) {
+    if (status === 'failed' && run.attempt >= 2 && jobOn && !readyBy) {
       await noticeRunFailed(run.schedule_id, run.id, reason ?? t('failed'));
     }
   } catch (err) {
     console.error('[chat/schedules] could not keep what a run left:', err);
   }
+}
+
+// ─── A job with a due time (W4-30) ───────────────────────────────────────────
+
+/** A job with a due time as its delivery reads it. */
+export interface ReadyByJob {
+  id: string;
+  organization_id: string;
+  title: string;
+  brand_id: string | null;
+  created_by: string | null;
+  conversation_id: string | null;
+  due_at: string | null;
+  timezone: string;
+}
+
+/**
+ * What is ready of a job with a due time, and what isn't yet, by name: its
+ * chat's Action Center tasks (Ready for review or Done, else not yet), else
+ * what its runs made (Files), or its answer once a run is done; with no
+ * run done, the job itself is what isn't ready.
+ */
+export async function readyByParts(
+  job: ReadyByJob,
+  zone: string,
+  now: Date,
+): Promise<{ ready: string[]; rest: string[] }> {
+  if (job.conversation_id) {
+    const strips = await readStrips(supabaseAdmin, job.conversation_id, weekEndIn(now, zone));
+    const tasks = [...strips.values()].flatMap((strip) => strip.tasks);
+    if (tasks.length > 0) {
+      const ready = (status: string) => status === 'ready_for_review' || status === 'done';
+      const name = (task: { title: string }) => task.title || tTasks('untitled');
+      return {
+        ready: tasks.filter((task) => ready(task.status)).map(name),
+        rest: tasks.filter((task) => !ready(task.status)).map(name),
+      };
+    }
+  }
+  const { data, error } = await supabaseAdmin
+    .from('chat_schedule_runs')
+    .select('run_id, status')
+    .eq('schedule_id', job.id);
+  if (error) throw new Error(`Could not read a job's runs: ${error.message}`);
+  const runs = (data ?? []) as { run_id: string | null; status: string }[];
+  const runIds = runs.map((run) => run.run_id).filter((id): id is string => !!id);
+  let made: string[] = [];
+  if (runIds.length > 0) {
+    const { data: files, error: filesError } = await supabaseAdmin
+      .from('chat_files')
+      .select('title')
+      .in('run_id', runIds)
+      .is('message_id', null)
+      .order('created_at', { ascending: true });
+    if (filesError) throw new Error(`Could not read a job's files: ${filesError.message}`);
+    made = ((files ?? []) as { title: string }[]).map((file) => file.title).slice(0, MAX_PARTS);
+  }
+  const done = runs.some((run) => run.status === 'done');
+  return {
+    ready: made.length > 0 ? made : done ? [tReady('answer')] : [],
+    rest: done ? [] : [job.title],
+  };
+}
+
+async function insertId(table: string, row: Record<string, unknown>, what: string) {
+  const { data, error } = await supabaseAdmin
+    .from(table as 'chat_messages')
+    .insert(row as never)
+    .select('id')
+    .single();
+  if (error || !data) {
+    const failure = new Error(`Could not ${what}: ${error?.message ?? 'no row'}`);
+    (failure as Error & { code?: string }).code = error?.code;
+    throw failure;
+  }
+  return (data as { id: string }).id;
+}
+
+/** The job's live chat, made when it has none (it never ran). */
+async function readyByChat(job: ReadyByJob): Promise<string> {
+  const live = async () => {
+    const { data, error } = await supabaseAdmin
+      .from('chat_conversations')
+      .select('id')
+      .eq('schedule_id', job.id)
+      .is('deleted_at', null)
+      .limit(1);
+    if (error) throw new Error(`Could not read a job's chat: ${error.message}`);
+    return ((data ?? []) as { id: string }[])[0]?.id ?? null;
+  };
+  const found = await live();
+  if (found) return found;
+  try {
+    const id = await insertId(
+      'chat_conversations',
+      {
+        organization_id: job.organization_id,
+        user_id: job.created_by,
+        brand_id: job.brand_id,
+        title: job.title.slice(0, 200),
+        origin: 'schedule',
+        schedule_id: job.id,
+      },
+      "start a job's chat",
+    );
+    await startTouchedBrands(id);
+    return id;
+  } catch (err) {
+    // Made by another worker at the same time: one live chat per job.
+    const again = (err as { code?: string }).code === '23505' ? await live() : null;
+    if (again) return again;
+    throw err;
+  }
+}
+
+/**
+ * Delivers a job with a due time (ready-by.ts), once the worker claimed its
+ * delivery: an answer in its chat, in its creator's time zone, says why
+ * (all ready, its tries used up, or the due time came), how many parts are
+ * ready, what is and what isn't yet. Its run's chat counts as a new result
+ * in their Inbox; its row in the job's runs (Done, "2 of 3 ready") carries
+ * the e-mail for a job that delivers by e-mail (email.ts). Throws when the
+ * answer couldn't be written: the worker gives the delivery back.
+ */
+export async function deliverReadyBy(job: ReadyByJob, why: ReadyByWhy, now: Date): Promise<void> {
+  if (!job.created_by || !job.due_at) return;
+  const zone = (await readChosenTimeZone(job.created_by)) ?? job.timezone;
+  const parts = await readyByParts(job, zone, now);
+  const chatId = await readyByChat(job);
+  const answerId = await insertId(
+    'chat_messages',
+    {
+      conversation_id: chatId,
+      role: 'assistant',
+      content_md: readyByAnswer({
+        why,
+        title: job.title,
+        due: dateWords(job.due_at, zone, now, tWhen),
+        ...parts,
+      }),
+      timezone: zone,
+      generated_at: now.toISOString(),
+    },
+    "write a job's delivery",
+  );
+  // A run that ended as it began: the chat list and Inbox show it as an unread result.
+  const chatRunId = await insertId(
+    'chat_runs',
+    {
+      message_id: answerId,
+      conversation_id: chatId,
+      status: 'done',
+      started_at: now.toISOString(),
+      finished_at: now.toISOString(),
+    },
+    "keep a job's delivery",
+  );
+  const total = Math.min(MAX_PARTS, parts.ready.length + parts.rest.length);
+  const runRowId = await insertId(
+    'chat_schedule_runs',
+    {
+      schedule_id: job.id,
+      slot_at: now.toISOString(),
+      attempt: 1,
+      status: 'done',
+      run_id: chatRunId,
+      message_id: answerId,
+      parts_done: Math.min(total, parts.ready.length),
+      parts_total: total,
+      started_at: now.toISOString(),
+      ended_at: now.toISOString(),
+    },
+    "keep a job's delivery",
+  );
+  if (job.conversation_id !== chatId) {
+    const { error } = await supabaseAdmin
+      .from('chat_schedules')
+      .update({ conversation_id: chatId })
+      .eq('id', job.id);
+    if (error) console.error('[chat/schedules] could not keep a job’s chat:', error.message);
+  }
+  // By e-mail too, for a job that delivers by e-mail (W3-04b).
+  emailRunResult({ id: runRowId, schedule_id: job.id }, { messageId: answerId });
 }

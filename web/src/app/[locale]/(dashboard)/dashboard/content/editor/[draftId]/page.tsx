@@ -10,7 +10,7 @@ import { ContentEditorSurface } from './_editor-surface';
 export default function ContentEditorPage() {
   const { draftId } = useParams<{ draftId: string }>();
   return (
-    <div className="-m-6 flex h-[calc(100vh-4rem)] flex-col md:h-screen">
+    <div className="-m-6 flex h-[calc(100%+3rem)] flex-col">
       <ContentEditorSurface draftId={draftId} />
     </div>
   );

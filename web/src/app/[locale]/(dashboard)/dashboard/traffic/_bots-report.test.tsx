@@ -178,7 +178,7 @@ describe('BotsReportSection', () => {
   it('shows the bot types, the pages each type last read, and the search-bot alert', async () => {
     await render();
     expect(getTrafficBots).toHaveBeenCalledWith('b1', WEEK);
-    expect(text()).toContain('Growth and above · needs Cloudflare or Vercel');
+    expect(text()).toContain("Growth and above · needs Cloudflare, Vercel or your server's logs");
     expect(rows()).toEqual([
       ['Training (GPTBot, ClaudeBot)', '1,200', '300', '2h ago'],
       ['Search index (OAI-SearchBot)', '400', '120', '1h ago'],
@@ -286,13 +286,15 @@ describe('BotsReportSection', () => {
     getBotConnections.mockResolvedValue(info({ connections: [] }));
     getTrafficBots.mockResolvedValue(report({ lastSeen: null, types: [], pages: [] }));
     await render();
-    expect(text()).toContain('Connect Cloudflare or Vercel in 2 minutes.');
+    expect(text()).toContain('Connect Cloudflare or Vercel in 2 minutes, or upload');
     const preview = [...container.querySelectorAll('button')].find(
       (b) => b.textContent === 'Preview with sample data',
     )!;
     await act(async () => preview.click());
-    expect(text()).not.toContain('Connect Cloudflare or Vercel in 2 minutes.');
-    expect(text()).toContain('Sample data: connect Cloudflare or Vercel to see yours.');
+    expect(text()).not.toContain('Connect Cloudflare or Vercel in 2 minutes, or upload');
+    expect(text()).toContain(
+      'Sample data: connect Cloudflare or Vercel, or upload a log file, to see yours.',
+    );
 
     await remount(false);
     const connect = [...container.querySelectorAll('button')].find(

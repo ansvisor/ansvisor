@@ -4,8 +4,8 @@ route: /dashboard/audit
 keywords: [ai recommendations, fix audit issues, placeholders, your input needed, send to action center, re-audit]
 synonyms: [audit fixes, improve audit score, fix failed signals, raise page score]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-07
+last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -44,6 +44,10 @@ Each night the Action Center reads each page's latest audit from the last 90 day
 - **Fix weak entity signals**, **Fix internal content connectivity** and **Fix content gaps**.
 
 An action lists the pages it covers and the failed checks on each, with **Open Site Audit**.
+
+## Canonical tags
+
+The **Canonical URL** check scores whether a page has a canonical tag. When the tag points to another address, the audit also opens that address once. **Fix canonical tags** opens in the Action Center for pages whose tag is missing, or points to another site, a redirect, a page that asks not to be indexed or one that isn't there. Its score stays as it is. Its task checks the page again: it's done once the tag points to the page itself or to a live page of your site.
 
 ## Re-audit after you fix
 
