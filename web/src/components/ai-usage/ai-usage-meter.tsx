@@ -19,6 +19,7 @@ import {
   type UsageCount,
   type UsageLimits,
 } from '@/lib/billing/ai-usage';
+import { topAgent } from '@/lib/billing/ai-usage-agents';
 import { readDraftAiUsage, readUsageLimits } from '@/lib/billing/ai-usage-client';
 import type { UsageTone } from '@/lib/content-usage';
 import { formatMonthDay, formatNumber } from '@/lib/format';
@@ -103,7 +104,9 @@ export function HeaderWithAiUsage({
  * header row from shifting. In the Content Editor's header (Next step spec
  * §3b) it is `compact`, the header's button height, and the percent alone
  * narrower than 1280px, as the Next button's label goes; with the page's
- * `draftId` the popover adds the page's own share of the month.
+ * `draftId` the popover adds the page's own share of the month. Once an
+ * agent the member may see has used some, a line names the top one
+ * (CHAT-27 item 28).
  */
 export function AiUsageMeter({
   className,
@@ -155,6 +158,10 @@ export function AiUsageMeter({
   const resets = usage.periodEnd ? formatMonthDay(usage.periodEnd) : null;
   // A warning or a used-up allowance makes Get more the primary button (spec §4).
   const pressing = tone === 'warning' || tone === 'exhausted';
+  const top = topAgent(usage);
+  const topLine = top
+    ? t('popover.topAgent', { name: top.name, percent: featurePercentLabel(top.percent) })
+    : null;
 
   const onOpenChange = (next: boolean) => {
     setOpen(next);
@@ -303,6 +310,11 @@ export function AiUsageMeter({
           ) : (
             <p className="mt-3 border-t py-1.5 text-[13px] text-muted-foreground">
               {t('popover.none')}
+            </p>
+          )}
+          {topLine && (
+            <p title={topLine} className="truncate border-t py-1.5 text-[13px]">
+              {topLine}
             </p>
           )}
 
