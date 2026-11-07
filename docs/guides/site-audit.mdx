@@ -111,9 +111,11 @@ Once a page has three audits, the gauge shows its score with a range, such as **
 | **Content** | 25% | Whether the page answers its question directly and completely | Direct answer, BLUF, sub-query coverage, in-line definitions, readability |
 | **Authority** | 20% | Whether the page reads as expert and sourced | Author byline, citations, statistics, quotations, freshness |
 | **E-E-A-T** | 20% | Experience, expertise and trust signals | First-person evidence, case studies, author credentials, your brand in Wikidata, privacy and contact pages |
-| **Trust** | 10% | Crawl-time and share-time basics | AI bot access in robots.txt, HTTPS, canonical URL, meta description (llms.txt is shown for information only) |
+| **Trust** | 10% | Crawl-time and share-time basics | AI bot access (robots.txt and a live test), HTTPS, canonical URL, meta description (llms.txt is shown for information only) |
 
 A category's score is the average of its signals, each counting the same; the total is the weighted average of the categories. A signal that couldn't be evaluated (**n/a**) is left out, so it never lowers the score. **Formula**, beside **Category breakdown**, shows the weights.
+
+**AI bot access** reads robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five (Google-Extended has no crawler of its own), to catch a CDN or firewall that turns them away. A bot robots.txt keeps out fails the check. A bot refused with a 4xx while robots.txt lets it in raises a warning, not a fail: the requests come from Ansvisor's servers, and a firewall that checks a crawler's published IP ranges refuses a request that only names the bot while it may let the real crawler in, so the check can't tell. A slow, busy (429) or failing (5xx) answer isn't counted as a refusal. Ansvisor asks as itself first: if the site turns that request away too, the bots aren't asked.
 
 **llms.txt presence** doesn't count toward the score: there's little evidence it helps (most llms.txt files are never requested by AI crawlers, and Google says it has no effect). The report still shows whether the site has one.
 
@@ -177,7 +179,7 @@ Each night the Action Center reads the latest audit of each page from the last 9
 | Action | Raised when |
 |---|---|
 | **Fix low-scoring pages** | Audited pages score below 50/100. One action covers all of them, worst first. |
-| **Fix AI crawler accessibility** | **AI bot access (robots.txt)** fails |
+| **Fix AI crawler accessibility** | **AI bot access** fails |
 | **Fix structured data issues** | A JSON-LD or **FAQ schema** signal fails |
 | **Fix outdated content** | **Freshness** or **Date markup** fails |
 | **Fix weak entity signals** | **Brand entity in Wikidata** or **Entity coverage** fails |

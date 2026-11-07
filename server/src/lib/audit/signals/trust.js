@@ -74,37 +74,92 @@ export function robotsGroups(robotsTxt) {
   return groups;
 }
 
+/**
+ * Whether robots.txt keeps a crawler out of the whole site, as crawlers read
+ * it: the crawler's own groups when it has any, else the `*` groups. Its
+ * groups disallow the whole site and none allows it back ("Allow: /" wins a
+ * tie).
+ */
+export function robotsBlocks(groups, agent) {
+  const own = groups.filter((g) => g.agents.includes(agent));
+  const rules = own.length > 0 ? own : groups.filter((g) => g.agents.includes('*'));
+  return rules.some((g) => g.disallowAll) && !rules.some((g) => g.allowAll);
+}
+
+/**
+ * The AI bots the report lists one by one (Site Audit spec §6.3): the five
+ * the live test asks the page as (audit/bot-access.js), and Google-Extended,
+ * which only robots.txt lets in or keeps out.
+ */
+export const REPORTED_BOTS = [
+  { key: 'gptbot', name: 'GPTBot' },
+  { key: 'oai-searchbot', name: 'OAI-SearchBot' },
+  { key: 'chatgpt-user', name: 'ChatGPT-User' },
+  { key: 'perplexitybot', name: 'PerplexityBot' },
+  { key: 'claudebot', name: 'ClaudeBot' },
+  { key: 'google-extended', name: 'Google-Extended' },
+];
+
 export const aiBotAccess = {
   key: 'ai-bot-access',
   evaluate(ctx) {
-    if (!ctx.robotsTxt) {
-      // No robots.txt → still crawlable by default, but no explicit signal.
-      return { status: 'warn', score: 0.5, evidence: { robotsTxt: false } };
-    }
-    const lower = ctx.robotsTxt.toLowerCase();
+    const groups = ctx.robotsTxt ? robotsGroups(ctx.robotsTxt) : [];
+    const lower = (ctx.robotsTxt ?? '').toLowerCase();
     const mentioned = AI_BOTS.filter((b) => lower.includes(b));
-    // An explicit block: the bot's own groups disallow the whole site and
-    // none allows it back ("Allow: /" wins a tie). Read group by group, as
-    // crawlers do; scanning the text after a bot's name also caught the next
-    // group's rules, and blocked a bot that robots.txt allows. The Action
-    // Center names the crawlers a block affects.
-    const groups = robotsGroups(ctx.robotsTxt);
-    const blockedBots = mentioned.filter((b) => {
-      const own = groups.filter((g) => g.agents.includes(b));
-      return own.some((g) => g.disallowAll) && !own.some((g) => g.allowAll);
-    });
+    // An explicit block, read group by group as crawlers do; scanning the
+    // text after a bot's name also caught the next group's rules, and blocked
+    // a bot that robots.txt allows. A bot with no group of its own follows
+    // "User-agent: *" (SA-008). The Action Center names the crawlers a block
+    // affects.
+    const blockedBots = AI_BOTS.filter((b) => robotsBlocks(groups, b));
     const blocked = blockedBots.length > 0;
 
+    // The live test (SA-008): a bot the CDN or firewall refused while
+    // robots.txt lets it in. A page read without the test (the demo brand,
+    // a draft's estimate) is judged on robots.txt alone; a crawler task's
+    // re-check asks the bots itself (action-center/task-checks.js).
+    const live = ctx.botAccess ?? null;
+    const liveByKey = new Map((live?.bots ?? []).map((b) => [b.key, b]));
+    const wafBlockedBots = live?.tested
+      ? live.bots
+          .filter((b) => b.live === 'blocked' && !robotsBlocks(groups, b.key))
+          .map((b) => b.key)
+      : [];
+    const bots = REPORTED_BOTS.map(({ key, name }) => ({
+      key,
+      name,
+      robots: robotsBlocks(groups, key) ? 'blocked' : 'allowed',
+      http: liveByKey.get(key)?.http ?? null,
+      live: liveByKey.get(key)?.live ?? null,
+    }));
+
+    // A refusal seen only in the live test can't tell: a CDN that checks a
+    // crawler's published addresses turns away a request that only names the
+    // bot, as ours does, and may still let the real crawler in. It warns,
+    // never fails or scores 0; robots.txt's own block still fails.
     let status = 'warn';
     let score = 0.5;
     if (blocked) {
       status = 'fail';
       score = 0;
-    } else if (mentioned.length > 0) {
+    } else if (mentioned.length > 0 && wafBlockedBots.length === 0) {
       status = 'pass';
       score = 1;
     }
-    return { status, score, evidence: { aiBotsMentioned: mentioned, blocked, blockedBots } };
+    return {
+      status,
+      score,
+      evidence: {
+        // No robots.txt: still crawlable by default, but no explicit signal.
+        ...(ctx.robotsTxt ? {} : { robotsTxt: false }),
+        aiBotsMentioned: mentioned,
+        blocked,
+        blockedBots,
+        bots,
+        ...(live ? { liveTest: live.tested ? 'done' : 'inconclusive', control: live.control } : {}),
+        ...(wafBlockedBots.length > 0 ? { wafBlockedBots } : {}),
+      },
+    };
   },
 };
 
@@ -125,10 +180,15 @@ export const canonical = {
   evaluate(ctx) {
     const href = ctx.$('link[rel="canonical"]').first().attr('href');
     const present = Boolean(href && href.trim());
+    // The score is the tag's presence (rubric); where it points is evidence
+    // for the Action Center (AC plan P-11, canonical.js), read at fetch time.
     return {
       status: present ? 'pass' : 'fail',
       score: present ? 1 : 0,
-      evidence: { canonical: href || null },
+      evidence: {
+        canonical: href || null,
+        ...(ctx.canonicalTarget ? { target: ctx.canonicalTarget } : {}),
+      },
     };
   },
 };

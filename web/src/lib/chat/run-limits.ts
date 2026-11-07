@@ -136,6 +136,13 @@ export function readCap(toolName: string): number | null {
 /** Model steps one run may take before it answers with what it has. */
 export const MAX_MODEL_STEPS = 16;
 
+/**
+ * The request a run works in, at most: the run routes' maxDuration (300 s).
+ * A call that waits on work elsewhere (Optimize here) counts its wait from
+ * the request's start, so what it writes after the wait isn't cut off.
+ */
+export const RUN_REQUEST_MS = 300_000;
+
 /** The counts for a person in their workspace, or null when they can't be read. */
 export async function readRunCounts(
   organizationId: string,

@@ -49,6 +49,16 @@ vi.mock('@/lib/actions/chat-home', () => ({
 }));
 const analytics = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('@/lib/analytics', () => analytics);
+// Agents for you (AGENTS plan §8, #11): its read, its Hide, and Ask your Admin's request.
+const forYou = vi.hoisted(() => ({ read: vi.fn(), dismiss: vi.fn(), request: vi.fn() }));
+vi.mock('@/lib/actions/agents-for-you', () => ({ readAgentsForYou: forYou.read }));
+vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: forYou.request }));
+// The person's focus on Chat Home: none (outside the gate) unless a test sets one.
+const homeFocus = vi.hoisted(() => ({ areas: null as FocusArea[] | null }));
+vi.mock('./focus-picker', async (original) => ({
+  ...(await original<typeof import('./focus-picker')>()),
+  useChatFocus: () => (homeFocus.areas ? { focus: homeFocus.areas, edit: () => undefined } : null),
+}));
 // The product tour's server actions (00486): their own tests.
 vi.mock('@/lib/actions/chat-tour', () => ({
   showTourTopic: vi.fn(async () => ({ ok: false })),
@@ -59,6 +69,8 @@ vi.mock('@/lib/actions/chat-prefs', () => ({
   saveChatFocus: vi.fn(),
   skipChatFocus: vi.fn(),
   markFocusPrompted: vi.fn(),
+  dismissAgentsForYou: forYou.dismiss,
+  dismissChatWelcome: vi.fn(async () => ({ ok: true })),
 }));
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (pick: (s: { activeBrandId: string }) => unknown) =>
@@ -120,6 +132,11 @@ beforeEach(() => {
   due.answer = { ok: true, dueTasks: 3, lostPages: 0, readyDrafts: 0 };
   due.read.mockReset().mockImplementation(async () => due.answer);
   due.since = null;
+  forYou.read.mockReset().mockResolvedValue({ ok: true, agents: [], canTurnOn: true });
+  forYou.dismiss.mockReset().mockResolvedValue({ ok: true });
+  forYou.request.mockReset();
+  homeFocus.areas = null;
+  analytics.track.mockClear();
 });
 
 afterEach(() => {
@@ -864,5 +881,173 @@ describe('What’s new in ChatHome', () => {
       'What’s new: how can Agent Center help me?',
     );
     expect(urls.some((url) => url === '/api/chat/runs')).toBe(false);
+  });
+});
+
+describe('Agents for you (AGENTS plan §8, #11)', () => {
+  const AGENTS = [
+    { id: 'alternatives-comparison-pages', fit: 'siteType' as const },
+    { id: 'ceo-brief', fit: 'role' as const },
+    { id: 'visibility-watch', fit: null },
+  ];
+  const section = () => host.querySelector<HTMLElement>('[data-slot="agents-for-you"]');
+  const cards = () => [...host.querySelectorAll<HTMLElement>('[data-slot="agent-for-you"]')];
+
+  it('lists the agents with what each does and why it fits, each linked to its card in Ready to use', async () => {
+    const hide = vi.fn();
+    await render(view({ agentsForYou: { agents: AGENTS, canTurnOn: true }, onHideAgents: hide }));
+    expect(section()?.textContent).toContain('Agents for you');
+    expect(section()?.textContent).toContain('Nothing turns on until you do.');
+    expect(cards().map((c) => c.dataset.preset)).toEqual([
+      'alternatives-comparison-pages',
+      'ceo-brief',
+      'visibility-watch',
+    ]);
+    expect(
+      [...host.querySelectorAll('a[data-action="agentsForYou.open"]')].map((a) =>
+        a.getAttribute('href'),
+      ),
+    ).toEqual([
+      '/dashboard/agents?tab=ready#preset-alternatives-comparison-pages',
+      '/dashboard/agents?tab=ready#preset-ceo-brief',
+      '/dashboard/agents?tab=ready#preset-visibility-watch',
+    ]);
+    expect(cards()[1].textContent).toContain('CEO Brief');
+    expect(
+      cards().map((c) => c.querySelector('[data-slot="agent-for-you-fit"]')?.textContent),
+    ).toEqual(['For your site type', 'For your role', 'For every brand']);
+    expect(section()?.textContent).not.toContain('Ask your Admin');
+    expect(cards()[0].querySelector('a')?.getAttribute('aria-label')).toBe(
+      'Alternatives & Comparison Pages: see it in Agent Center',
+    );
+  });
+
+  it('gives Analysts and Agency partners the cards with Ask your Admin, and no link to turn one on', async () => {
+    await render(
+      view({ agentsForYou: { agents: AGENTS, canTurnOn: false }, onHideAgents: vi.fn() }),
+      'analyst',
+    );
+    expect(host.querySelectorAll('[data-action="agentsForYou.open"]')).toHaveLength(0);
+    expect(section()?.textContent).toContain('An Admin or Manager turns them on.');
+    expect(cards().every((c) => c.textContent?.includes('Ask your Admin'))).toBe(true);
+  });
+
+  it('hides with its ×, and shows nothing with no agents or before it is read', async () => {
+    const hide = vi.fn();
+    await render(view({ agentsForYou: { agents: AGENTS, canTurnOn: true }, onHideAgents: hide }));
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="agentsForYou.hide"]')!.click(),
+    );
+    expect(hide).toHaveBeenCalledTimes(1);
+    expect(analytics.track).toHaveBeenCalledWith('chat_agents_for_you_hidden', { count: 3 });
+    await render(view({ agentsForYou: { agents: [], canTurnOn: true }, onHideAgents: hide }));
+    expect(section()).toBeNull();
+    await render(view({ agentsForYou: null, onHideAgents: hide }));
+    expect(section()).toBeNull();
+  });
+
+  it('reads them for the open brand on Home, and Hide hides them at once and keeps it', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false })),
+    ) as unknown as typeof fetch;
+    forYou.read.mockResolvedValue({ ok: true, agents: AGENTS, canTurnOn: true });
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(forYou.read).toHaveBeenCalledWith(BRAND);
+    expect(cards()).toHaveLength(3);
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="agentsForYou.hide"]')!.click(),
+    );
+    expect(section()).toBeNull();
+    expect(forYou.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows nothing on Home when the read has no agents or fails', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false })),
+    ) as unknown as typeof fetch;
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(section()).toBeNull();
+    forYou.read.mockResolvedValue({ ok: false });
+    due.brand = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(section()).toBeNull();
+  });
+
+  it('shows on the Default view under the greeting when given, as on a focused Home', async () => {
+    const shown = { agentsForYou: { agents: AGENTS, canTurnOn: true }, onHideAgents: vi.fn() };
+    await render(view({ ...shown, focus: { areas: [], onEdit: () => undefined } }));
+    expect(cards()).toHaveLength(3);
+    // The Default view's other blocks stay off; the greeting moves up a little to make room.
+    expect(host.textContent).not.toContain('For you now');
+    expect(host.querySelector('h1')!.parentElement?.className).toContain('mt-[12vh]');
+    await render(view({ ...shown, focus: { areas: ['lead'], onEdit: () => undefined } }));
+    expect(cards()).toHaveLength(3);
+    await render(
+      view({
+        agentsForYou: null,
+        onHideAgents: vi.fn(),
+        focus: { areas: [], onEdit: () => undefined },
+      }),
+    );
+    expect(section()).toBeNull();
+  });
+
+  it('reads and shows them on the Default view for a new member (owner, 2026-11-06)', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false })),
+    ) as unknown as typeof fetch;
+    forYou.read.mockResolvedValue({ ok: true, agents: AGENTS, canTurnOn: true });
+    homeFocus.areas = [];
+    await render(<ChatHome firstName="Alex" newMember />);
+    await act(async () => undefined);
+    expect(forYou.read).toHaveBeenCalledWith(BRAND);
+    expect(cards()).toHaveLength(3);
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="agentsForYou.hide"]')!.click(),
+    );
+    expect(section()).toBeNull();
+    expect(forYou.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('waits while the welcome card shows, and follows once it is gone (owner, 2026-11-06)', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false })),
+    ) as unknown as typeof fetch;
+    forYou.read.mockResolvedValue({ ok: true, agents: AGENTS, canTurnOn: true });
+    homeFocus.areas = [];
+    await render(<ChatHome firstName="Alex" welcome="demo" newMember />);
+    await act(async () => undefined);
+    // One card at a time: the tour first.
+    expect(host.querySelector('[data-slot="chat-welcome"]')).not.toBeNull();
+    expect(forYou.read).not.toHaveBeenCalled();
+    expect(section()).toBeNull();
+
+    await act(async () =>
+      host.querySelector<HTMLElement>('[data-action="welcome.notNow"]')!.click(),
+    );
+    await act(async () => undefined);
+    expect(host.querySelector('[data-slot="chat-welcome"]')).toBeNull();
+    expect(forYou.read).toHaveBeenCalledWith(BRAND);
+    expect(cards()).toHaveLength(3);
+  });
+
+  it('is not read on anyone else’s Default view (00485), and is where Home has a focus', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ ok: false })),
+    ) as unknown as typeof fetch;
+    forYou.read.mockResolvedValue({ ok: true, agents: AGENTS, canTurnOn: true });
+    homeFocus.areas = [];
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(forYou.read).not.toHaveBeenCalled();
+    expect(section()).toBeNull();
+    homeFocus.areas = ['lead'];
+    await render(<ChatHome firstName="Alex" />);
+    await act(async () => undefined);
+    expect(forYou.read).toHaveBeenCalledWith(BRAND);
+    expect(cards()).toHaveLength(3);
   });
 });

@@ -24,6 +24,7 @@ import {
 } from '@/lib/audit/reading-evidence';
 import { scoreRange, type ScoreRange } from '@/lib/audit/score-range';
 import { AUTHORITY_SIGNAL, AuthoritySources } from './authority-sources';
+import { BOT_ACCESS_SIGNAL, BotAccess } from './bot-access';
 import { ScoreRangeMark, useScoreRangeTip } from './score-range';
 import { ScoreFormula } from './score-formula';
 import { formatMonthDay } from '@/lib/format';
@@ -250,6 +251,8 @@ function Finding({ signal }: { signal: AuditSignal }) {
       </p>
     );
   }
+  // AI bot access: each bot's answer, from robots.txt and the live test (SA-008).
+  if (signal.key === BOT_ACCESS_SIGNAL) return <BotAccess signal={signal} />;
   const reading = signal.key === 'readability' ? readingEvidence(evidence) : null;
   if (reading) return <ReadingFinding evidence={reading} />;
   const told = signal.key === 'first-person' ? firstPersonEvidence(evidence) : null;

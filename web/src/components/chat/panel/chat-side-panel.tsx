@@ -441,7 +441,7 @@ export function ChatSidePanel() {
           </div>
         </div>
 
-        <div data-slot="panel-scroll" className="min-h-0 flex-1 overflow-y-auto">
+        <div data-slot="panel-scroll" className="relative min-h-0 flex-1 overflow-y-auto">
           {history && (
             <nav aria-label={t('history')} className="flex flex-col gap-1 p-3">
               <h3 className="px-2 pb-1 text-xs font-medium text-muted-foreground">{t('recent')}</h3>

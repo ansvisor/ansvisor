@@ -299,6 +299,7 @@
       "removeKpis": "Removing KPIs needs a plan",
       "correctSentiment": "Correcting sentiment needs a plan",
       "connectBotLogs": "Connecting bot logs needs a plan",
+      "uploadBotLogs": "Uploading bot logs needs a plan",
       "connectIntegrations": "Connecting an integration needs a plan",
       "mapProperties": "Choosing a property needs a plan",
       "setProductFeed": "Changing the product feed setting needs a plan",
@@ -934,6 +935,7 @@
           "no": "no",
           "keys": {
             "aiBotsMentioned": "In robots.txt",
+            "wafBlockedBots": "Blocked by CDN or firewall",
             "ageDays": "Age in days",
             "newest": "Newest date",
             "dateSignals": "Date signals",
@@ -1339,6 +1341,10 @@
       "structured_data_issue": {
         "title": "Structured data issues on {targets}",
         "description": "Structured data is missing or invalid on these pages."
+      },
+      "canonical_issue": {
+        "title": "Canonical tag issues on {targets}",
+        "description": "The canonical tag is missing, or points to another site, a redirect, a noindex page or a missing page."
       },
       "outdated_content": {
         "title": "Outdated content on {targets}",
@@ -2820,6 +2826,12 @@
         "description": "Structured data is missing or invalid on these pages.",
         "goal": "Describe your pages in a form engines understand."
       },
+      "fix_canonical_tags": {
+        "title": "Fix the canonical tags on {targets}",
+        "titleGeneric": "Fix canonical tags",
+        "description": "These pages have no canonical tag, or it points to another site, a redirect, a page that asks not to be indexed or one that isn't there.",
+        "goal": "Point engines and AI answers to the right address of each page."
+      },
       "fix_content_gaps": {
         "title": "Fix content gaps on {targets}",
         "titleGeneric": "Fix content gaps",
@@ -3139,6 +3151,8 @@
       "fix_crawler_access_target": "Fix crawler access on {targets}",
       "fix_structured_data": "Add or correct structured data",
       "fix_structured_data_target": "Fix structured data on {targets}",
+      "fix_canonical": "Fix the canonical tags",
+      "fix_canonical_target": "Fix the canonical tags on {targets}",
       "fix_broken_target": "Repair the broken page or redirect",
       "fix_broken_target_target": "Repair {targets}",
       "fix_technical_issue": "Resolve the audit issues",
@@ -3228,6 +3242,7 @@
       "publish_content": "The page is published at its address and answers when fetched",
       "fix_crawler_access": "robots.txt and the page let the AI crawlers in, fetched again",
       "fix_structured_data": "The page has valid structured data (JSON-LD), fetched again",
+      "fix_canonical": "The page's canonical tag points to itself, or to a live page of the site that can be indexed, fetched again",
       "fix_broken_target": "The page, or its redirect, answers when fetched again",
       "fix_technical_issue": "A new Site Audit no longer finds the issue",
       "validate_technical_fix": "A new Site Audit passes the checks that failed",
@@ -3258,6 +3273,7 @@
       "structured_data_irrelevant": "the structured data has no type that describes the page",
       "no_faq_schema": "no FAQ schema with at least two questions",
       "crawlers_blocked": "robots.txt blocks AI crawlers",
+      "crawlers_firewall": "a CDN or firewall still turns away requests as AI crawlers",
       "noindex": "the page asks not to be indexed",
       "first_look": "first look kept: it passes once the page changes",
       "not_changed": "the page hasn't changed since the first look",
@@ -3265,6 +3281,13 @@
       "old_text_still_there": "the text it replaces is still on the page",
       "off_site": "the page isn't on the brand's site",
       "valid_before": "the structured data was valid before the fix. Mark the task done once it's fixed",
+      "canonical_missing": "the page has no canonical tag",
+      "canonical_invalid": "its canonical tag isn't a web address",
+      "canonical_other_host": "its canonical tag points to another site",
+      "canonical_redirect": "its canonical tag points to a page that redirects",
+      "canonical_noindex": "its canonical tag points to a page that asks not to be indexed",
+      "canonical_not_found": "its canonical tag points to a page that isn't there",
+      "canonical_error_status": "its canonical tag points to a page that answers with an error",
       "links_not_for_sale": "the page still links products that no longer sell"
     },
     "taskChecks": {
@@ -3610,6 +3633,7 @@
       "name": "Check pages against their rules",
       "step": "Checked the page against its rules"
     },
+    "optimizePage": { "name": "Optimize pages in chat", "step": "Optimized the page" },
     "reports": { "name": "Read reports", "step": "Read Reports" },
     "goToPage": { "name": "Go to a page", "step": "Opened a page" },
     "fanouts": { "name": "Read query fan-outs", "step": "Read Query Fan-outs" },
@@ -4057,7 +4081,24 @@
       "checkRules": "Check it against the rules",
       "checkRulesPrompt": "Check this page against the rules",
       "openEditor": "Open in Content Editor",
+      "optimizeHere": "Optimize here",
+      "optimizeHerePrompt": "Optimize this page here, without the editor",
       "untitled": "Untitled page"
+    },
+    "optimize": {
+      "notFound": "That draft isn’t in the Library.",
+      "allMet": "Every rule the Content Agent can fix is met already.",
+      "triedAlready": "The Content Agent already tried these rules here and couldn’t close them: {rules}. They’re yours to decide in the Content Editor.",
+      "openSuggestions": "The Content Agent’s suggestions on this page still wait for review. Accept or reject them in the editor first.",
+      "busy": "The Content Agent is already working on this page. Try again once it’s done.",
+      "notDraft": "This page is published: open it in the Content Editor to change it.",
+      "empty": "The page is empty.",
+      "tooLong": "The page is too long to rewrite whole. Open it in the Content Editor to fix its rules.",
+      "aiBudget": "The workspace’s monthly AI limit is used up.",
+      "stillWriting": "The Content Agent is still rewriting the page. Its rewrite will wait in the Content Editor to compare.",
+      "tooLate": "The Content Agent’s rewrite came too late to put in here, so the page is as it was. Its rewrite waits in the Content Editor to compare.",
+      "nothingChanged": "The Content Agent found nothing to change.",
+      "failed": "The Content Agent couldn’t optimize the page just now. Try again."
     },
     "pageCheck": {
       "todo": "Yours to do: the Content Editor’s Quality tab says how.",
@@ -4156,6 +4197,9 @@
       "usedShortcut": "Used shortcut: {title}",
       "usedMemory": "Used memory",
       "memorySubject": "Memory",
+      "editorDecisions": "Read your choices in the editor",
+      "editorAccepted": "{count} accepted",
+      "editorRejected": "{count} rejected",
       "unchanged": "No change since the last run: the data this job reads is the same, so there is nothing new to send."
     },
     "answer": {
@@ -4275,7 +4319,10 @@
         "done": "Done"
       },
       "closeNote": "You close tasks in Action Center. I never mark them done.",
-      "close": "Close tasks in Action Center"
+      "close": "Close tasks in Action Center",
+      "dueLine": "Due {date} · I'll keep working and notify you",
+      "change": "Change",
+      "changeLabel": "Change when it's due"
     },
     "proposal": {
       "goal": "Goal",
@@ -4610,6 +4657,22 @@
       "rulesPillLabel": "{met} of {total} rules met",
       "qualityPill": "Quality {score}",
       "qualityPillLabel": "Quality {score}: {band}",
+      "optimize": {
+        "button": "Optimize",
+        "rulesOpen": "{count, plural, one {# rule open} other {# rules open}}",
+        "allMet": "All rules met",
+        "quality": "Quality {score}",
+        "here": "Optimize here, no editor",
+        "hereDetail": "The agent rewrites the page to its open rules. You get version {n} with what changed.",
+        "editor": "Optimize in Content Editor",
+        "editorDetail": "The full editor with Brief, Rules, Quality and the agent’s next steps.",
+        "prompt": "Optimize “{title}” here, without the editor",
+        "noAccess": "Admins and Managers can optimize a page.",
+        "askAdmin": "Ask your Admin",
+        "asked": "Optimize “{title}” in chat",
+        "askSent": "Sent to your Admins",
+        "askFailed": "The request couldn’t be sent. Try again."
+      },
       "questions": "{count, plural, one {# question} other {# questions}}",
       "sections": "{count, plural, one {# section} other {# sections}}",
       "whatChanged": "What changed",
@@ -5144,6 +5207,17 @@
       "whatsNew": {
         "showMe": "Show me",
         "showMeMessage": "What’s new: how can {feature} help me?"
+      },
+      "agentsForYou": {
+        "title": "Agents for you",
+        "note": "Ready-to-use agents for your brand’s site type and your work. Nothing turns on until you do.",
+        "noteAsk": "Ready-to-use agents for your brand’s site type and your work. An Admin or Manager turns them on.",
+        "agent": "Agent",
+        "everyBrand": "For every brand",
+        "open": "See it in Agent Center",
+        "openLabel": "{name}: see it in Agent Center",
+        "asked": "Please turn on the {name} agent for me.",
+        "hide": "Hide Agents for you"
       }
     },
     "focus": {
@@ -6059,6 +6133,8 @@
       "taskReadyForReviewUndo": "Took {task} back from Ready for review",
       "reviseDraft": "Changed the draft “{title}”",
       "reviseDraftUndo": "Put the draft “{title}” back as it was",
+      "optimizePage": "Optimized the draft “{title}” in chat",
+      "optimizePageUndo": "Put the draft “{title}” back as it was before it was optimized",
       "markDraftReady": "Marked the draft “{title}” ready",
       "editorSuggestions": "Asked the Content Agent for suggestions on “{title}”",
       "markDraftReadyUndo": "Took the draft “{title}” back from Ready",
@@ -7272,6 +7348,11 @@
       "github_busy": "GitHub is busy right now. Try again in a few minutes.",
       "github_failed": "GitHub couldn't be reached. Try again.",
       "github_redirect": "GitHub sent the request somewhere else, so nothing was imported.",
+      "skill_not_in_repo": "This repository has no skill named {name}.",
+      "skills_sh_no_github": "This page doesn't link to the skill's source on GitHub.",
+      "page_timeout": "The page took too long to answer.",
+      "page_unreachable": "The page couldn't be reached.",
+      "page_failed": "The page couldn't be opened.",
       "role_review": "Only Admins approve or reject skills.",
       "not_pending": "This skill was reviewed already.",
       "blocked": "This skill holds something a skill may never hold, so it can't be approved.",
@@ -7374,7 +7455,7 @@
       "uploadTitle": "Upload a skill",
       "githubTitle": "Import a skill from GitHub",
       "uploadBody": "Pick a SKILL.md, or a .zip of the skill's folder, up to 5 MB. Only its instructions come in: scripts and commands are removed, and nothing runs.",
-      "githubBody": "Paste a public github.com link to a repository, a folder or a SKILL.md. It's read at today's commit and never updates by itself.",
+      "githubBody": "Paste a public github.com link to a repository, a folder or a SKILL.md, or a skills.sh page that links to one. It's read at today's commit and never updates by itself.",
       "file": "Skill file",
       "choose": "Choose file",
       "noFile": "No file chosen",
@@ -7715,6 +7796,16 @@
       "done": "Scheduled: {title}",
       "detail": "{when} · {deliver}",
       "detailReadyBy": "{when} · Starts now · {deliver}"
+    },
+    "readyBy": {
+      "ready": "Everything is ready, ahead of its due time ({date}).",
+      "due": "It was due {date}. {ready, number} of {total, number} ready.",
+      "tries": "I tried {tries, plural, one {# more time} other {# more times}} and stopped. {ready, number} of {total, number} ready.",
+      "readyList": "Ready",
+      "restList": "Not ready yet",
+      "nothing": "Nothing was ready.",
+      "answer": "The answer, in this chat",
+      "rest": "What's ready is in this chat and in Files. Ask me to finish the rest."
     },
     "notice": {
       "failed": "Something went wrong, twice.",
@@ -8243,6 +8334,18 @@
       "informational": "Hygiene / informational"
     },
     "evidenceNote": "Evidence",
+    "botAccess": {
+      "firewall": "{count, plural, one {{bots} is} other {{bots} are}} blocked by your CDN or firewall, though robots.txt lets {count, plural, one {it} other {them}} in.",
+      "robots": "robots.txt keeps out {bots}.",
+      "allLetIn": "Every AI bot tested was let in.",
+      "inconclusive": "Your site turned away Ansvisor's own request ({status}), so the bots weren't tested.",
+      "note": "Asked once as each bot, from Ansvisor's servers. A firewall that checks a crawler's own addresses can treat the real crawler differently.",
+      "cell": {
+        "robots": "robots.txt",
+        "noAnswer": "No answer",
+        "allowed": "Allowed"
+      }
+    },
     "notScored": "Not in the score",
     "formula": {
       "button": "Formula",
@@ -12264,7 +12367,7 @@
     },
     "bots": {
       "title": "AI bots reading your site",
-      "description": "See which AI bots read your pages, from your own Cloudflare or Vercel. Verified bots only: the user agent and the operator's published IP ranges must both match. No change to your site's speed.",
+      "description": "See which AI bots read your pages, from your own Cloudflare, Vercel or any server's logs. Verified bots only: the user agent and the operator's published IP ranges must both match. No change to your site's speed.",
       "connected": "Connected",
       "choose": "How should your site send AI-bot requests?",
       "addAnother": "Add another way",
@@ -12282,7 +12385,7 @@
       "usageNoCap": "This month: {stored} detailed {count, plural, one {row} other {rows}}.",
       "paused": "Detailed rows paused until {day}, totals still counted.",
       "rawUsage": "Log records this month: {raw} of {cap}.",
-      "logsPaused": "Log files paused until {day}: this month's log records are used up, so requests from Logpush or the Vercel drain aren't read until then.",
+      "logsPaused": "Log files paused until {day}: this month's log records are used up, so requests from Logpush, the Vercel drain, the webhook or an upload aren't read until then.",
       "secretOnce": "Copy these settings now: the secret in them isn't shown again. Lost it? Revoke this connection and create a new one.",
       "copy": "Copy",
       "copied": "Copied",
@@ -12309,6 +12412,11 @@
           "name": "Vercel Drain",
           "what": "Vercel sends your request logs; Ansvisor keeps the AI bots and drops the rest.",
           "cost": "Vercel Pro and Enterprise only, at $0.50 per GB of drained data on your Vercel bill."
+        },
+        "log_webhook": {
+          "name": "Any server (webhook)",
+          "what": "Any server or CDN: your log shipper posts your access log as JSON lines; Ansvisor keeps the AI bots and drops the rest.",
+          "cost": "Nothing on a Cloudflare or Vercel bill: only what your own log shipper costs to run."
         }
       },
       "steps": {
@@ -12327,12 +12435,39 @@
           "In Vercel, open Team Settings › Drains and add a Logs drain for your site's project.",
           "Choose Custom endpoint and paste the endpoint URL below.",
           "Set the format to JSON and add the custom header below."
+        ],
+        "log_webhook": [
+          "In your log shipper (Vector, Fluent Bit, Logstash or your own script), add an HTTP output that POSTs to the endpoint below.",
+          "Add the header below, with the secret in it.",
+          "Send JSON lines, one request a line, with the fields in the example: user_agent, ip, url (or host and path), status, time (RFC 3339, or seconds or milliseconds since 1970) and, if you have it, country. Up to 20,000 lines and 20 MB a post, gzipped if you like. Requests older than 7 days aren't counted."
         ]
+      },
+      "copyExample": "An example line",
+      "upload": {
+        "title": "Or upload a log file",
+        "what": "An access log from any server, read once: the combined log format (Apache's and nginx's default), or JSON lines with user_agent, ip, url, status and time. Up to {mb} MB a file (gzip a larger one) and {lines} lines. Only requests from the last 7 days count.",
+        "button": "Upload a log file",
+        "uploading": "Reading {name}…",
+        "done": "Read {records, plural, one {# line} other {# lines}} of {name}: {bots, plural, =0 {no AI bot requests} one {# AI bot request} other {# AI bot requests}}.",
+        "leftOut": "{count, plural, one {# line was} other {# lines were}} left out: older than 7 days, for another site, or without a user agent.",
+        "duplicate": "{name} was read already: a file is read once.",
+        "rawCapped": "This month's log records are used up, so {name} was counted but not read. Files are read again next month.",
+        "errors": {
+          "too_large": "That file is too large. Upload up to {mb} MB and {lines} lines at a time, or gzip it.",
+          "unreadable": "That file isn't an access log or JSON lines, so nothing was read.",
+          "empty": "That file is empty.",
+          "plan": "The AI bot report comes with the Growth plan.",
+          "forbidden": "Only admins and managers can upload AI bot logs.",
+          "workspace": "This brand isn't in your workspace.",
+          "busy": "Too many uploads. Wait a few minutes and try again.",
+          "session": "Your session expired. Sign in again.",
+          "failed": "The file couldn't be uploaded. Try again."
+        }
       }
     },
     "botReport": {
       "title": "AI bots reading your site",
-      "needs": "Growth and above · needs Cloudflare or Vercel",
+      "needs": "Growth and above · needs Cloudflare, Vercel or your server's logs",
       "typesTitle": "By bot type",
       "pagesTitle": "Pages AI bots read",
       "columns": {
@@ -12348,13 +12483,13 @@
         "user": "User fetch"
       },
       "overlayTitle": "See which AI bots read your pages",
-      "connectBody": "Connect Cloudflare or Vercel in 2 minutes. Verified bots only. No change to your site's speed.",
-      "lockedBody": "The AI bot report comes with the Growth plan. Verified bots only, from your own Cloudflare or Vercel.",
+      "connectBody": "Connect Cloudflare or Vercel in 2 minutes, or upload your server's access log. Verified bots only. No change to your site's speed.",
+      "lockedBody": "The AI bot report comes with the Growth plan. Verified bots only, from your own Cloudflare, Vercel or server logs.",
       "connect": "Connect",
       "preview": "Preview with sample data",
       "upgrade": "Upgrade",
-      "sampleNote": "Sample data: connect Cloudflare or Vercel to see yours.",
-      "waiting": "Waiting for the first AI-bot request from your Cloudflare or Vercel. Requests show here as soon as they arrive.",
+      "sampleNote": "Sample data: connect Cloudflare or Vercel, or upload a log file, to see yours.",
+      "waiting": "Waiting for the first AI-bot request from your Cloudflare, Vercel or log shipper. Requests show here as soon as they arrive.",
       "emptyRange": "No AI bot read your site in this range.",
       "failed": "Couldn't load the AI bot report.",
       "morePages": "{shown} of {count} pages · the export has them all",
@@ -13622,8 +13757,7 @@
         "chatgpt_europe": "Google Shopping · via Merchant Center",
         "google-aio": "Via Merchant Center",
         "google-aimode": "Google Shopping Graph",
-        "gemini-web": "Google Shopping Graph",
-        "copilot-web": "Microsoft Merchant Center"
+        "gemini-web": "Google Shopping Graph"
       },
       "view": "View products",
       "connect": "Connect",

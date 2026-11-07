@@ -360,3 +360,123 @@ describe('evidence levels (SA-010)', () => {
     expect(text).toContain('Not in the scorellms.txt presence: shown for information only.');
   });
 });
+
+describe('AI bot access (SA-008)', () => {
+  const row = (key: string, name: string, over: Record<string, unknown> = {}) => ({
+    key,
+    name,
+    robots: 'allowed',
+    http: 200,
+    live: 'ok',
+    ...over,
+  });
+  const bots = (over: Record<string, Record<string, unknown>> = {}) => [
+    row('gptbot', 'GPTBot', over.gptbot),
+    row('oai-searchbot', 'OAI-SearchBot', over['oai-searchbot']),
+    row('chatgpt-user', 'ChatGPT-User', over['chatgpt-user']),
+    row('perplexitybot', 'PerplexityBot', over.perplexitybot),
+    row('claudebot', 'ClaudeBot', over.claudebot),
+    row('google-extended', 'Google-Extended', {
+      http: null,
+      live: null,
+      ...over['google-extended'],
+    }),
+  ];
+  const access = (evidence: Record<string, unknown>, status: AuditSignal['status'] = 'fail') =>
+    signal({
+      key: 'ai-bot-access',
+      category: 'trust',
+      label: 'AI bot access',
+      status,
+      evidence,
+      evidenceLevel: 'strong',
+    });
+  /** Opens the bot check's row, once a render. */
+  const open = () =>
+    act(() =>
+      container
+        .querySelector<HTMLButtonElement>('button[aria-controls="signal-panel-ai-bot-access"]')
+        ?.click(),
+    );
+  const panel = () => container.querySelector('[data-slot="bot-access"]');
+  const cells = () =>
+    [...(panel()?.querySelectorAll('li') ?? [])].map((li) => [
+      li.textContent,
+      li.className.includes('destructive'),
+    ]);
+
+  it('lists each bot with its answer, and names a CDN or firewall block', () => {
+    render([], {
+      signals: [
+        access({
+          liveTest: 'done',
+          control: 200,
+          wafBlockedBots: ['perplexitybot'],
+          bots: bots({ perplexitybot: { http: 403, live: 'blocked' } }),
+        }),
+      ],
+    });
+    open();
+    expect(panel()?.textContent).toContain(
+      'Finding: PerplexityBot is blocked by your CDN or firewall, though robots.txt lets it in.',
+    );
+    expect(cells()).toEqual([
+      ['GPTBot200', false],
+      ['OAI-SearchBot200', false],
+      ['ChatGPT-User200', false],
+      ['PerplexityBot403', true],
+      ['ClaudeBot200', false],
+      ['Google-ExtendedAllowed', false],
+    ]);
+    expect(panel()?.textContent).toContain("Asked once as each bot, from Ansvisor's servers.");
+  });
+
+  it('names the bots robots.txt keeps out', () => {
+    render([], {
+      signals: [
+        access({
+          liveTest: 'done',
+          control: 200,
+          bots: bots({
+            gptbot: { robots: 'blocked', http: 200 },
+            'google-extended': { robots: 'blocked' },
+          }),
+        }),
+      ],
+    });
+    open();
+    expect(panel()?.textContent).toContain(
+      'Finding: robots.txt keeps out GPTBot, Google-Extended.',
+    );
+    expect(cells()[0]).toEqual(['GPTBotrobots.txt', true]);
+    expect(cells()[5]).toEqual(['Google-Extendedrobots.txt', true]);
+  });
+
+  it('says when every bot was let in', () => {
+    render([], { signals: [access({ liveTest: 'done', control: 200, bots: bots() }, 'pass')] });
+    open();
+    expect(panel()?.textContent).toContain('Finding: Every AI bot tested was let in.');
+  });
+
+  it('says when its own request was turned away, and lists robots.txt’s answers alone', () => {
+    const untested = bots().map((b) =>
+      b.key === 'google-extended' ? b : { ...b, http: null, live: 'inconclusive' },
+    );
+    render([], {
+      signals: [access({ liveTest: 'inconclusive', control: 403, bots: untested }, 'warn')],
+    });
+    open();
+    expect(panel()?.textContent).toContain(
+      "Finding: Your site turned away Ansvisor's own request (403), so the bots weren't tested.",
+    );
+    expect(cells().map(([text]) => text)).toContain('GPTBotAllowed');
+  });
+
+  it('shows an audit from before the live test as it was', () => {
+    render([], {
+      signals: [access({ aiBotsMentioned: ['gptbot'], blocked: true, blockedBots: ['gptbot'] })],
+    });
+    open();
+    expect(panel()).toBeNull();
+  });
+});

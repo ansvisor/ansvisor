@@ -32,7 +32,7 @@ import {
   type ClientRun,
   type ClientRunStatus,
 } from '@/lib/chat/run-state';
-import type { ChatThread } from '@/lib/chat/thread';
+import type { ChatReadyBy, ChatThread } from '@/lib/chat/thread';
 import { dropChatUpload, uploadChatFile } from '@/lib/chat/upload-client';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { ChatReference } from '@/lib/chat/references';
@@ -45,6 +45,7 @@ import {
 } from './composer/chat-composer';
 import { useUserRole } from '@/hooks/use-user-role';
 import { ActionSentCard } from './run/action-sent-card';
+import { ReadyByLine } from './run/ready-by-line';
 import { TaskStrip } from './run/task-strip';
 import { ProposalDetails } from './run/proposal-details';
 import { AnswerActions } from './run/answer-actions';
@@ -76,6 +77,8 @@ interface Turn {
   /** Its answer in Files (Save to Files). */
   fileId?: string | null;
   timezone?: string | null;
+  /** A job with a due time's line under its tasks (W4-30), as the chat was read. */
+  readyBy?: ChatReadyBy | null;
   /**
    * A question as it was sent, for Retry to send it again: its page chips,
    * @ references and the page they came from. Null when it can't go again
@@ -116,6 +119,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
       turn.runId = message.run.runId;
       turn.timezone = message.timezone;
       turn.fileId = message.run.fileId;
+      turn.readyBy = message.run.readyBy ?? null;
       turn.run = {
         ...emptyRun(message.run.status as ClientRunStatus),
         steps: message.run.steps,
@@ -731,7 +735,8 @@ export function ChatThreadView({
           ? 'mx-auto flex w-full max-w-[720px] flex-col gap-5 px-5 pb-6'
           : variant === 'panel'
             ? 'flex w-full flex-1 flex-col gap-4 px-4 pt-4'
-            : 'mx-auto flex w-full max-w-[760px] flex-col gap-5 px-5 py-6'
+            : // The chat page: full height, so the box stays at the bottom of a short chat.
+              'mx-auto flex min-h-full w-full max-w-[760px] flex-col gap-5 px-5 py-6'
       }
     >
       {turns.length === 0 && empty}
@@ -760,6 +765,17 @@ export function ChatThreadView({
                   onAnswerQuestion={(value) => answerQuestion(turn, value)}
                   onFiled={(fileId) => updateRun(turn.key, (was) => ({ ...was, fileId }))}
                   canChangeTasks={canManage && (!thread || thread.mine)}
+                  // The person's own chat: a page's Optimize ▾ asks here (W4-12b part 2).
+                  onAsk={
+                    !thread || thread.mine
+                      ? (prompt) =>
+                          void send(prompt, {
+                            context: chips ?? [],
+                            references: [],
+                            attachments: [],
+                          })
+                      : undefined
+                  }
                   onTasks={(strip) =>
                     updateRun(turn.key, (was) =>
                       was.run ? { ...was, run: { ...was.run, tasks: strip } } : was,
@@ -825,7 +841,7 @@ export function ChatThreadView({
             ? 'flex flex-col gap-2'
             : variant === 'panel'
               ? 'sticky bottom-0 mt-auto flex flex-col gap-2 bg-background pt-1 pb-3'
-              : 'sticky bottom-0 flex flex-col gap-2 bg-background pt-1 pb-2'
+              : 'sticky bottom-0 mt-auto flex flex-col gap-2 bg-background pt-1 pb-2'
         }
       >
         {(!thread || thread.mine) && (
@@ -904,6 +920,7 @@ function Answer({
   onRetry,
   onUseAnsvisorLimit,
   onSendToActionCenter,
+  onAsk,
 }: {
   turn: Turn;
   now: number;
@@ -923,6 +940,8 @@ function Answer({
   onUseAnsvisorLimit?: () => void;
   /** Send to Action Center (CHAT-09 item 18): the latest answer, for Admins and Managers. */
   onSendToActionCenter?: () => void;
+  /** Sends a message as the person's, in their own chat: a page's Optimize ▾ (W4-12b part 2). */
+  onAsk?: (prompt: string) => void;
 }) {
   const t = useTranslations('chatPage');
   const debug = useChatDebug();
@@ -938,7 +957,15 @@ function Answer({
 
   const cards = (
     <>
-      {run.tasks && <TaskStrip strip={run.tasks} ended={!OPEN.includes(run.status)} />}
+      {run.tasks && (
+        <TaskStrip
+          strip={run.tasks}
+          ended={!OPEN.includes(run.status)}
+          readyBy={turn.readyBy}
+          now={now}
+        />
+      )}
+      {turn.readyBy && !run.tasks?.total && <ReadyByLine readyBy={turn.readyBy} now={now} />}
       {run.denials.map((denial, i) => (
         <DenialCard
           key={i}
@@ -1019,6 +1046,7 @@ function Answer({
             deliverable={deliverable}
             canChange={canChangeTasks}
             onTasks={onTasks}
+            onAsk={onAsk}
           />
         ))}
       {run.sent.map((sent, i) => (

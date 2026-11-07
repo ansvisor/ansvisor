@@ -598,14 +598,16 @@ function pageIssues(targets: Target[]): PageIssue[] {
 }
 
 /**
- * The AI crawlers robots.txt blocks, from the bot check's evidence. Audits
- * from before it named them only say some bot is blocked, among bots it may
+ * The AI crawlers robots.txt blocks, and those a CDN or firewall turned away
+ * in the live test (SA-008), from the bot check's evidence. Audits from
+ * before it named them only say some bot is blocked, among bots it may
  * allow, so they name none.
  */
 function blockedCrawlers(issues: PageIssue[]): string[] {
+  const listed = (value: unknown) => (Array.isArray(value) ? value : []);
   const agents = issues
     .filter((i) => i.check === 'ai-bot-access')
-    .flatMap((i) => (Array.isArray(i.evidence.blockedBots) ? i.evidence.blockedBots : []))
+    .flatMap((i) => [...listed(i.evidence.blockedBots), ...listed(i.evidence.wafBlockedBots)])
     .filter((a): a is string => typeof a === 'string');
   return [...new Set(agents)];
 }

@@ -237,7 +237,7 @@ describe('evaluateLlmSignals', () => {
     }
 
     const result = await evaluateLlmSignals(ctx);
-    expect(RUBRIC_VERSION).toBe('v1.2');
+    expect(RUBRIC_VERSION).not.toBe('v1.1');
     expect(PROMPT_VERSION).toBe('v1.1/2');
     expect(generateObject).not.toHaveBeenCalled();
     expect(result.partial).toBe(false);

@@ -1,7 +1,7 @@
 ---
 title: Use Chat
 route: /dashboard/chat
-keywords: [chat, ask chat, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, rules pill, quality pill, rules met, check it against the rules, check rules, open rules]
+keywords: [chat, ask chat, welcome card, preparing your data, quick tour, product tour, task finisher, download answer, save to files, export chat, storage, output card, open in content editor, side panel, chat panel, ctrl j, ask about this, page context, agent, new chat, open a chat, chat menu, governance, open governance, agents at work, hide menu, inbox, chat home, for you now, weekly report, pin chat, rename chat, share chat, archive chat, delete chat, run mode, full auto, stop chat, steer, attach files, reference data, data used, retry, error, reconnecting, question, chat asks, recommended option, skip question, next moves, what to do next, add prompts, pause prompts, add topic, rename topic, add competitors, remove competitor, undo, change draft, send to cms, make report, site audit, open page, read web page, fetch page, why did it change, why did visibility drop, explain change, what explains the change, cited before, cited now, since you left, send to action center, add to action, attach to task, ready for review, complete tasks, /tasks, task strip, tasks ready, close tasks, attach to task and mark done, attach only, mark task done, ai limit, part of a job, remaining ai usage, do the first now, shortcuts, slash menu, /start, /analyze, /new-report, /create, /optimize, /opportunities, /audit, get started, create a report, optimize a page, find opportunities, improve with audit, brand facts, approved facts, /facts, /wrongclaim, fact check, api key in message, paste api key, remove key, where pages open, keep working in chat, page version, what changed, placeholder, undo version, show all questions, mark ready, set ready, voice, microphone, speak, dictate, send to webhook, webhook, workflow webhook, audit card, audit in chat, audit score in chat, open report, agents for you, recommended agents, new member, new teammate, hide agents for you, rules pill, quality pill, rules met, check it against the rules, check rules, open rules, optimize, optimize here, optimize page, rewrite page, optimize in content editor]
 synonyms: [assistant, ai agent, agent chat, ask ansvisor]
 plan: all
 updated: 2026-11-06
@@ -9,7 +9,7 @@ last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
 approved: true
-sources: [web/messages/en.json]
+sources: [web/messages/en.json, web/src/components/chat/agents-for-you.tsx, web/src/lib/chat/agents-for-you.ts, web/src/lib/actions/agents-for-you.ts]
 ---
 Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. In the free trial, and while you explore the demo brand, Ansvisor opens on Chat when you sign in. Every chat is saved, so you can come back to it later and pick up where you left off.
 
@@ -22,6 +22,16 @@ Chat opens on **Home**: a greeting by name at your time of day, then a link to y
 ## Since you left
 
 **Since you left** on Chat Home shows the engine whose citations fell most, and one that won, from the day you last left Home to yesterday, against as many days before, beyond normal swing only. **Why?** and **Which ones?** ask Chat in a new chat.
+
+## Agents for you
+
+In your first 14 days in a workspace, once you've answered or skipped **What do you work on?**, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.
+
+It shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.
+
+Admins and Managers click an agent to open it in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.
+
+Click **×** (**Hide Agents for you**) to hide it on all your devices.
 
 ## The welcome card
 
@@ -137,6 +147,10 @@ Each time Chat writes or changes a page, its card shows the version, such as **V
 ## Rules and Quality on a page's card
 
 A page's card also shows **Rules 11/12** and **Quality 82**, as the Content Editor's header does: how many of the page's rules it meets, and the average of its E-E-A-T, Trust and Readability scores. Rules is green when every rule is met and amber when some are open. Quality is read the way the editor reads it: with its AI checks on, a read the page doesn't have yet counts toward your AI usage as part of the run. A pill that couldn't be read isn't shown, and Quality shows only where Content Quality is on. While rules are open, **Check it against the rules** is a next move: Chat lists each open rule and Quality check in the editor's words, using no AI, and offers **Open in Content Editor**.
+
+## Optimize a page in chat
+
+**Optimize ▾** on a page's card is headed by what's left, such as **1 rule open · Quality 82**. **Optimize here, no editor** has the Content Agent rewrite the page to its open rules, as the editor's **Rewrite the page to these rules** does, with the same guards: quoted passages kept, only known links, no invented facts. The page comes back as the next version card with **What changed** and **Undo**. If the agent takes longer than Chat can wait (up to 3.5 minutes), the page stays as it was and the rewrite waits in the Content Editor to compare. Chat asks first, and it counts toward your AI usage as the editor's rewrite does. A rule the agent tried here and couldn't close isn't sent again: Chat names it for you to decide. **Optimize in Content Editor** opens the full editor. Admins and Managers optimize; others get **Ask your Admin**.
 
 ## Send or publish a page from Chat
 
