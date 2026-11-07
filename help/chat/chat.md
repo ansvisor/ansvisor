@@ -214,7 +214,7 @@ Type **@**, or click **@**, to point Chat at your data: charts and metrics on th
 
 ## Attach files
 
-Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until they are up. If a file can't go, the box says why. If one didn't upload, the box names it and the arrow waits until you click **Retry** or take it off with **×**. You can send files without text. Your message then shows its files: images as previews, other files by name.
+Click **＋** and **Attach files**, drop files on the box, or paste them. A message takes up to 5 files of 10 MB each: PDF, Word, Excel, CSV, text, Markdown and HTML files, and PNG, JPG or WEBP images. Each file shows as a chip while it uploads; the arrow waits until all are up, so click **Retry** on one that failed or take it off with **×**. If a file can't go, the box says why. You can send files without text; your message shows images as previews, others by name.
 
 Attached files are data for Chat to read, not files you made: they don't show in **Files**, and they are kept for 90 days.
 
