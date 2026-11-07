@@ -18,6 +18,13 @@
  *     one run can't hold the API's event loop. The count is this process's:
  *     with several API instances, a workspace opens 2 on each.
  *
+ * POST /api/internal/chat/pages/skill-source { url, orgId }
+ *   A skill's page on skills.sh, for its import (lib/skills-sh.js; Chat
+ *   Wave 4 W4-29): read on skills.sh only, each redirect too.
+ *   → 200 { source, skill }: the skill's github.com link (null when the
+ *     page links to none) and its name in that repository (null when
+ *     unknown). Refusals and the 2-at-once limit as above.
+ *
  * Neither the page nor its address is logged. Calls with the secret aren't
  * counted by the API's per-IP limiter (rate-limiter.js), as the budget's.
  */
@@ -26,6 +33,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { openPage } from '../lib/page-open.js';
 import { PageFetchError } from '../lib/safe-fetch.js';
+import { readSkillsShSource } from '../lib/skills-sh.js';
 
 const router = Router();
 
@@ -48,6 +56,11 @@ const openSchema = z.strictObject({
   orgId: z.guid(),
 });
 
+const skillSourceSchema = z.strictObject({
+  url: z.string().trim().min(1).max(2048),
+  orgId: z.guid(),
+});
+
 /** The answer for a page that couldn't be opened, by safe-fetch's code. */
 const FETCH_STATUS = {
   invalid_url: 400,
@@ -67,12 +80,11 @@ export const PAGES_AT_ONCE = 2;
 /** Pages opening now, by workspace, in this process (not shared between API instances). */
 const opening = new Map();
 
-router.post('/open', async (req, res) => {
-  const parsed = openSchema.safeParse(req.body ?? {});
-  if (!parsed.success) {
-    return res.status(400).json({ code: 'invalid_url', message: 'Not a URL', status: null });
-  }
-  const { url, hosts, domains, orgId: key } = parsed.data;
+/**
+ * Answers with what `read` gives back, in one of the workspace's places
+ * (PAGES_AT_ONCE), or why the page couldn't be read.
+ */
+async function readInPlace(req, res, key, read) {
   const now = opening.get(key) ?? 0;
   if (now >= PAGES_AT_ONCE) {
     return res
@@ -81,8 +93,7 @@ router.post('/open', async (req, res) => {
   }
   opening.set(key, now + 1);
   try {
-    const page = await openPage(url, { sites: { hosts, domains } });
-    return res.json({ page });
+    return res.json(await read());
   } catch (err) {
     if (err instanceof PageFetchError) {
       return res
@@ -97,6 +108,26 @@ router.post('/open', async (req, res) => {
     if (left > 0) opening.set(key, left);
     else opening.delete(key);
   }
+}
+
+router.post('/open', async (req, res) => {
+  const parsed = openSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ code: 'invalid_url', message: 'Not a URL', status: null });
+  }
+  const { url, hosts, domains, orgId } = parsed.data;
+  return readInPlace(req, res, orgId, async () => ({
+    page: await openPage(url, { sites: { hosts, domains } }),
+  }));
+});
+
+router.post('/skill-source', async (req, res) => {
+  const parsed = skillSourceSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    return res.status(400).json({ code: 'invalid_url', message: 'Not a URL', status: null });
+  }
+  const { url, orgId } = parsed.data;
+  return readInPlace(req, res, orgId, () => readSkillsShSource(url));
 });
 
 export default router;

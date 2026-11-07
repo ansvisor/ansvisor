@@ -1263,3 +1263,15 @@ describe('When a brand is added (00482)', () => {
     );
   });
 });
+
+describe('Agents for you hidden (00483)', () => {
+  const sql = migration('00483');
+
+  it('keeps when the person hid it on their own Chat settings row, with no grant or policy of its own', () => {
+    expect(sql).toMatch(
+      /alter table public\.chat_user_prefs\s+add column if not exists agents_for_you_dismissed_at timestamptz;/,
+    );
+    // 00400's own-row policies and table grants already cover the new column.
+    expect(sql).not.toMatch(/\bgrant\b|create policy/);
+  });
+});

@@ -16,7 +16,14 @@ import type { ChatMode } from '../precedence';
 import { readPrecedenceContext } from '../precedence-context';
 import { RUNS_PER_USER, claimRunSlot, readRunCounts, workspaceRunLimit } from '../run-limits';
 import { enabledSkillsFor, loadSkillBodies } from '../skills/store';
-import { closeJobNotices, keepRunResult, noticeJobPaused, type PausedReason } from './deliver';
+import {
+  closeJobNotices,
+  deliverReadyBy,
+  keepRunResult,
+  noticeJobPaused,
+  type PausedReason,
+} from './deliver';
+import { isReadyBy, readyByNext, type ReadyByStep, type ReadyByWhy } from './ready-by';
 import { nextJobRun } from './rule';
 import { isWhatsNewDigest, sendWhatsNewDigest, type DigestOutcome } from './whats-new-digest';
 
@@ -61,7 +68,11 @@ import { isWhatsNewDigest, sendWhatsNewDigest, type DigestOutcome } from './what
  * its chat or Unchanged with nothing new (whats-new-digest.ts).
  *
  * A failed run is tried once more 10 minutes later; 3 failed runs in a
- * row turn the job off (failed). Server only.
+ * row turn the job off (failed). A job with a due time ("ready by") follows
+ * its own rule instead (ready-by.ts, W4-30): its parts are worked on until
+ * the due time, a miss tried again at most 3 times, 30 minutes apart, and
+ * what is ready is delivered with the rest listed (deliverDueJobs). Server
+ * only.
  */
 
 const t = createTranslator({ locale: 'en', messages, namespace: 'chatSchedules.run' });
@@ -154,6 +165,8 @@ export interface DueCounts {
   /** Left due: the workspace (or the creator) had no free run slot. */
   busy: number;
   failed: number;
+  /** Jobs with a due time delivered as it came (deliverDueJobs). */
+  delivered: number;
 }
 
 const noDue = (): DueCounts => ({
@@ -163,6 +176,7 @@ const noDue = (): DueCounts => ({
   paused: 0,
   busy: 0,
   failed: 0,
+  delivered: 0,
 });
 
 // ─── The driver ──────────────────────────────────────────────────────────────
@@ -349,6 +363,11 @@ async function readDueRuns(now: Date): Promise<DueRun[]> {
     by: 'next',
   }));
   for (const job of (byRetry.data ?? []) as JobRow[]) {
+    // A job with a due time: each try is a slot of its own, attempt 2 (ready-by.ts).
+    if (isReadyBy(job)) {
+      due.push({ job, slot: job.retry_at!, attempt: 2, by: 'retry' });
+      continue;
+    }
     const { data, error } = await supabaseAdmin
       .from('chat_schedule_runs')
       .select('slot_at')
@@ -375,11 +394,13 @@ async function claimDueRun(due: DueRun, now: Date): Promise<'claimed' | 'lost' |
   const { job } = due;
   const next = due.by === 'next' ? nextJobRun(job, now) : null;
   if (next?.unreadable) return (await pauseJob(job.id, 'failed')) ? 'unreadable' : 'lost';
+  // A job with a due time keeps it as its next run: its delivery (ready-by.ts).
+  const nextAt = next && isReadyBy(job) ? job.due_at : (next?.at ?? null);
   const claim = supabaseAdmin
     .from('chat_schedules')
     .update(
       next
-        ? { next_run_at: next.at, last_run_at: now.toISOString() }
+        ? { next_run_at: nextAt, last_run_at: now.toISOString() }
         : { retry_at: null, last_run_at: now.toISOString() },
     )
     .eq('id', job.id)
@@ -613,6 +634,8 @@ async function fireDueRun(
   counts: DueCounts,
 ): Promise<void> {
   const { job } = due;
+  // Never at or after a job's due time: what is ready is delivered instead (deliverDueJobs).
+  if (isReadyBy(job) && now.getTime() >= Date.parse(job.due_at!)) return;
   const late =
     job.kind === 'recurring' &&
     due.by === 'next' &&
@@ -652,9 +675,11 @@ async function fireDueRun(
 
   const opened = await openJobRun(job, due, runRowId, checked.facts, now);
   if (!opened) {
-    // Counted as any failed run: tried again 10 minutes on.
+    // Counted as any failed run: tried again 10 minutes on, or as a job with a due time tries.
     if (await moveRunRow(runRowId, 'running', 'failed', { reason: reasonWords('failed'), now })) {
-      await countRun(job.id, due.attempt, true, now);
+      const fresh = isReadyBy(job) ? await readJob(job.id) : null;
+      if (fresh) await followReadyBy(fresh, runRowId, now);
+      else await countRun(job.id, due.attempt, true, now);
     }
     counts.failed += 1;
     return;
@@ -777,6 +802,7 @@ async function runDigest(
  */
 export async function fireDueJobs(now: Date, driver: ScheduleRunDriver): Promise<DueCounts> {
   const counts = noDue();
+  counts.delivered = await deliverDueJobs(now);
   const due = await readDueRuns(now);
   if (due.length === 0) return counts;
   const plans = await readJobOrgs(due.map((d) => d.job.organization_id));
@@ -924,15 +950,22 @@ export async function settleScheduleRun(
   }
   let jobOn = true;
   if (target.status === 'paused_cap') await pauseJob(run.schedule_id, 'cap');
+  // A job with a due time follows its own rule (ready-by.ts), not the failed runs in a row.
+  const job = run.run_now ? null : await readJob(run.schedule_id);
+  const readyBy = !!job && isReadyBy(job);
   // A Run now is outside the job's slots: it isn't retried or counted toward its failed runs.
-  if (!run.run_now && (target.status === 'done' || target.status === 'unchanged')) {
+  if (!run.run_now && !readyBy && (target.status === 'done' || target.status === 'unchanged')) {
     jobOn = await countRun(run.schedule_id, run.attempt, false, now);
   }
-  if (!run.run_now && target.status === 'failed') {
+  if (!run.run_now && !readyBy && target.status === 'failed') {
     jobOn = await countRun(run.schedule_id, run.attempt, true, now);
   }
   // Its parts, fingerprint and notices (W3-04a: deliver.ts).
-  await keepRunResult(run, target.status, chat, { reason, jobOn, now });
+  await keepRunResult(run, target.status, chat, { reason, jobOn, now, readyBy });
+  // Its parts kept: what the job does next, from them.
+  if (job && readyBy && ['done', 'failed', 'skipped'].includes(target.status)) {
+    await followReadyBy(job, run.id, now);
+  }
   return target.status;
 }
 
@@ -999,13 +1032,21 @@ export async function resumeCapPausedJobs(now: Date): Promise<number> {
   return resumed;
 }
 
-/** One cap-paused job goes on (above); false when another worker got to it. */
+/**
+ * One cap-paused job goes on (above); false when another worker got to it.
+ * A job with a due time still to come is tried again (ready-by.ts): its
+ * stop at the limit was a miss, so the try waits 30 minutes from that run's
+ * start at least, and with its tries used up what is ready is delivered.
+ * One whose due time passed keeps its delivery (deliverDueJobs).
+ */
 async function resumeJob(job: JobRow, now: Date): Promise<boolean> {
+  const readyBy = isReadyBy(job);
+  const pastDue = !job.due_at || Date.parse(job.due_at) <= now.getTime();
   const next =
     job.kind === 'recurring'
       ? nextJobRun(job, now).at
-      : job.run_mode === 'ready_by' && job.due_at && Date.parse(job.due_at) > now.getTime()
-        ? now.toISOString()
+      : readyBy
+        ? (job.next_run_at ?? (pastDue ? null : job.due_at))
         : null;
   const { data, error } = await supabaseAdmin
     .from('chat_schedules')
@@ -1030,5 +1071,167 @@ async function resumeJob(job: JobRow, now: Date): Promise<boolean> {
     if (row.run_id) await endHeldRun(row.run_id, 'paused_cap', 'limit');
     await moveRunRow(row.id, 'paused_cap', 'paused_cap', { reason: reasonWords('aiLimit'), now });
   }
+  if (readyBy && next && !pastDue) {
+    const runs = (await readyByRuns(job.id)).filter((run) => !run.run_now);
+    const last = runs.at(-1);
+    const step = readyByNext({
+      dueAt: job.due_at!,
+      now,
+      complete: false,
+      progressed: false,
+      retries: runs.filter((run) => run.attempt === 2).length,
+      gapFrom: last ? new Date(last.started_at) : null,
+    });
+    await applyReadyBy(
+      { ...job, enabled: true, paused_reason: null, next_run_at: next },
+      step,
+      now,
+    );
+  }
   return true;
+}
+
+// ─── Jobs with a due time (W4-30) ────────────────────────────────────────────
+
+/** A job's row as the worker reads it; null once deleted. */
+async function readJob(jobId: string): Promise<JobRow | null> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_schedules')
+    .select(JOB_COLUMNS)
+    .eq('id', jobId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not read a scheduled job: ${error.message}`);
+  return (data as JobRow | null) ?? null;
+}
+
+interface ReadyByRunRow {
+  id: string;
+  attempt: number;
+  run_now: boolean | null;
+  status: string;
+  parts_done: number;
+  parts_total: number;
+  started_at: string;
+}
+
+/** A job's runs, oldest first, with their parts. */
+async function readyByRuns(jobId: string): Promise<ReadyByRunRow[]> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_schedule_runs')
+    .select('id, attempt, run_now, status, parts_done, parts_total, started_at')
+    .eq('schedule_id', jobId)
+    .order('started_at', { ascending: true });
+  if (error) throw new Error(`Could not read a job's runs: ${error.message}`);
+  return ((data ?? []) as ReadyByRunRow[]).map((run) => ({
+    ...run,
+    parts_done: Number(run.parts_done) || 0,
+    parts_total: Number(run.parts_total) || 0,
+  }));
+}
+
+/**
+ * Delivers a job with a due time once (deliver.ts): claimed by clearing its
+ * next run from what was read, so two workers deliver it once. A delivery
+ * that couldn't be written gives its next run back, for the next minute.
+ * False when another delivered it.
+ */
+async function deliverJob(job: JobRow, why: ReadyByWhy, now: Date): Promise<boolean> {
+  if (!job.next_run_at) return false;
+  const { data, error } = await supabaseAdmin
+    .from('chat_schedules')
+    .update({ next_run_at: null, retry_at: null })
+    .eq('id', job.id)
+    .eq('next_run_at', job.next_run_at)
+    .select('id');
+  if (error) throw new Error(`Could not deliver a scheduled job: ${error.message}`);
+  if ((data ?? []).length === 0) return false;
+  try {
+    await deliverReadyBy(job, why, now);
+  } catch (err) {
+    const { error: backError } = await supabaseAdmin
+      .from('chat_schedules')
+      .update({ next_run_at: job.next_run_at })
+      .eq('id', job.id)
+      .is('next_run_at', null);
+    if (backError) console.error('[chat/schedules] could not give a delivery back:', backError);
+    throw err;
+  }
+  return true;
+}
+
+/** Keeps what a job with a due time does next (ready-by.ts), only from what was read. */
+async function applyReadyBy(job: JobRow, step: ReadyByStep, now: Date): Promise<void> {
+  if (step.kind === 'deliver') {
+    await deliverJob(job, step.why, now);
+    return;
+  }
+  const patch =
+    step.kind === 'run'
+      ? { next_run_at: step.at, retry_at: null }
+      : { next_run_at: job.due_at, retry_at: step.kind === 'retry' ? step.at : null };
+  const { error } = await supabaseAdmin
+    .from('chat_schedules')
+    .update(patch)
+    .eq('id', job.id)
+    .eq('enabled', true)
+    .eq('next_run_at', job.next_run_at!);
+  if (error) throw new Error(`Could not keep a scheduled job's next run: ${error.message}`);
+}
+
+/**
+ * After a run of a job with a due time ended (done, failed or skipped),
+ * from the parts its row keeps (ready-by.ts): delivered once all is ready
+ * or its tries are used up; a fresh run at once when it got more parts
+ * ready than any run before; else a try 30 minutes on, before the due
+ * time. Only while the job is on and not delivered yet.
+ */
+async function followReadyBy(job: JobRow, runRowId: string, now: Date): Promise<void> {
+  if (!job.enabled || !job.next_run_at || !job.due_at) return;
+  const runs = (await readyByRuns(job.id)).filter((run) => !run.run_now);
+  const ended = runs.find((run) => run.id === runRowId);
+  if (!ended) return;
+  const best = Math.max(0, ...runs.filter((run) => run !== ended).map((run) => run.parts_done));
+  const done = ended.status === 'done';
+  const step = readyByNext({
+    dueAt: job.due_at,
+    now,
+    complete: done && ended.parts_done >= ended.parts_total,
+    progressed: done && ended.parts_done > best,
+    retries: runs.filter((run) => run.attempt === 2).length,
+    gapFrom: now,
+  });
+  await applyReadyBy(job, step, now);
+}
+
+/**
+ * Jobs with a due time whose due time came (ready-by.ts): what is ready is
+ * delivered and the rest listed, once, in workspaces where Chat is on; one
+ * paused at the AI limit too. A run still open goes on: the delivery
+ * doesn't wait for it. Answers how many were delivered.
+ */
+async function deliverDueJobs(now: Date): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from('chat_schedules')
+    .select(JOB_COLUMNS)
+    .eq('kind', 'once')
+    .eq('run_mode', 'ready_by')
+    .not('next_run_at', 'is', null)
+    .lte('due_at', now.toISOString())
+    .or('enabled.eq.true,paused_reason.eq.cap')
+    .order('due_at', { ascending: true })
+    .limit(TICK_ROWS);
+  if (error) throw new Error(`Could not read the jobs due: ${error.message}`);
+  const jobs = (data ?? []) as JobRow[];
+  if (jobs.length === 0) return 0;
+  const plans = await readJobOrgs(jobs.map((job) => job.organization_id));
+  let delivered = 0;
+  for (const job of jobs) {
+    if (!plans.has(job.organization_id)) continue;
+    try {
+      if (await deliverJob(job, 'due', now)) delivered += 1;
+    } catch (err) {
+      console.error('[chat/schedules] could not deliver a job:', err);
+    }
+  }
+  return delivered;
 }

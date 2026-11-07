@@ -84,6 +84,8 @@ export type ActionKind =
   | 'fix_low_scores'
   | 'fix_crawler_access'
   | 'fix_structured_data'
+  // Canonical tags missing or pointing where they shouldn't (F14, AC plan P-11).
+  | 'fix_canonical_tags'
   | 'fix_content_gaps'
   | 'fix_outdated_content'
   | 'fix_entity_signals'
@@ -272,6 +274,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'fix_low_scores',
   'fix_crawler_access',
   'fix_structured_data',
+  'fix_canonical_tags',
   'fix_content_gaps',
   'fix_outdated_content',
   'fix_entity_signals',
