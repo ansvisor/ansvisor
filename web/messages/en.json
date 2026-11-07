@@ -9960,6 +9960,16 @@
         "products": "Insert products from your catalog",
         "html": "Edit as HTML",
         "htmlBack": "Back to visual",
+        "more": "More",
+        "moreHint": "More tools: lists, quote, table, HTML and files",
+        "folded": {
+          "orderedList": "Numbered list",
+          "quote": "Quote",
+          "table": "Table",
+          "htmlBlock": "Add HTML",
+          "products": "Products",
+          "attach": "Attach a file"
+        },
         "openLink": "Open the link in a new tab (or ⌘/Ctrl + click it in the page)",
         "counter": "{count} / {target} characters · {words, plural, one {# word} other {# words}}"
       },
@@ -10078,6 +10088,12 @@
           "rules": "Rules",
           "quality": "Quality",
           "open": "{count, number} open"
+        },
+        "bar": {
+          "label": "Brief, rules and quality",
+          "more": "More",
+          "moreHint": "Sources and Live page",
+          "close": "Close {name}"
         }
       },
       "impact": {
