@@ -213,6 +213,8 @@ describe('the Chat pieces preview', () => {
     expect([...slots('version-pills')].map((el) => el.textContent)).toEqual([
       'Rules 11/12Quality 90',
     ]);
+    // And Optimize ▾ (W4-12b part 2).
+    expect(container.querySelectorAll('[data-action="version.optimize"]')).toHaveLength(1);
     // The Inbox notice of a page an agent sent to the webhook on its own (go-live PR 11).
     expect(container.textContent).toContain('Publisher sent “Pricing FAQ” to your webhook');
     expect(container.querySelectorAll('[data-action="runs.toggleTray"]')).toHaveLength(3);

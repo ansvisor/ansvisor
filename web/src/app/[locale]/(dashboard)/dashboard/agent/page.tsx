@@ -359,7 +359,7 @@ function AgentChat(props: {
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] md:h-screen -m-6">
+    <div className="flex h-[calc(100%+3rem)] -m-6">
       <aside className="w-72 border-r bg-card flex flex-col">
         <div className="p-3 border-b">
           <Button onClick={newChat} variant="outline" className="w-full justify-start gap-2">
@@ -798,7 +798,7 @@ function KeyGatedAgentChat(props: React.ComponentProps<typeof AgentChat>) {
 
   if (status === 'loading') {
     return (
-      <div className="flex h-[calc(100vh-4rem)] md:h-screen items-center justify-center -m-6 p-6">
+      <div className="flex h-[calc(100%+3rem)] items-center justify-center -m-6 p-6">
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       </div>
     );
@@ -812,7 +812,7 @@ function KeyGatedAgentChat(props: React.ComponentProps<typeof AgentChat>) {
 function KeyMissingState() {
   const t = useTranslations('agent');
   return (
-    <div className="flex h-[calc(100vh-4rem)] md:h-screen items-center justify-center -m-6 p-6">
+    <div className="flex h-[calc(100%+3rem)] items-center justify-center -m-6 p-6">
       <div className="text-center max-w-md">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary mb-4">
           <KeyRound className="h-7 w-7" />
@@ -834,7 +834,7 @@ function KeyMissingState() {
 function PlanGate({ requiredPlan }: { requiredPlan: string }) {
   const t = useTranslations('agent');
   return (
-    <div className="flex h-[calc(100vh-4rem)] md:h-screen items-center justify-center -m-6 p-6">
+    <div className="flex h-[calc(100%+3rem)] items-center justify-center -m-6 p-6">
       <div className="text-center max-w-md">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30 mb-4">
           <Crown className="h-7 w-7 text-amber-600 dark:text-amber-400" />

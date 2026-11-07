@@ -5,7 +5,7 @@ description: "Measure real visits to your site from AI answer engines, what they
 
 ## Why this exists
 
-Most analytics platforms (Google Analytics, Plausible, etc.) lump AI traffic into "direct" or "referral" buckets — they can't tell you a visitor arrived from ChatGPT vs. perplexity.ai. Ansvisor's tracking snippet reads the referrer, classifies AI sources by domain, and gives you a clean breakdown. Connect Google Analytics, Google Search Console and your Cloudflare or Vercel, and the same page shows what those visits are worth, whether AI is changing your Google traffic, and which AI bots read your pages.
+Most analytics platforms (Google Analytics, Plausible, etc.) lump AI traffic into "direct" or "referral" buckets — they can't tell you a visitor arrived from ChatGPT vs. perplexity.ai. Ansvisor's tracking snippet reads the referrer, classifies AI sources by domain, and gives you a clean breakdown. Connect Google Analytics, Google Search Console and your Cloudflare, Vercel or server logs, and the same page shows what those visits are worth, whether AI is changing your Google traffic, and which AI bots read your pages.
 
 ## Data sources
 
@@ -16,7 +16,7 @@ The **AI Traffic Analytics** page (`/dashboard/traffic`, **AI Referral Traffic**
 | **Tracking snippet** | AI-referred visits, page by page, as they happen. Reads **Active · last visit …** once it has sent a visit in the last week, otherwise **Not detected**. |
 | **Google Analytics** | AI visits on days the snippet has none, plus engaged visits, key events, revenue and the AI share of all traffic. |
 | **Google Search Console** | Google clicks, the pages where AI may be taking them, and the Google queries you don't track yet. |
-| **AI bots** | Which AI bots read your pages, from your own Cloudflare or Vercel. Growth plan and above. |
+| **AI bots** | Which AI bots read your pages, from your own Cloudflare, Vercel or any server's logs. Growth plan and above. |
 
 A section whose source isn't connected stays on the page with a **Needs …** tag and a **Connect** button, rather than hiding. Only admins and managers can connect a source.
 
@@ -142,7 +142,7 @@ The suggested redirect is a working page: a **Similar page**, **The page above i
 
 ### AI bots reading your site
 
-From your own Cloudflare or Vercel. Only verified bots count: the user agent and the operator's published IP ranges must both match. Today that's OpenAI's GPTBot, OAI-SearchBot and ChatGPT-User, Anthropic's ClaudeBot, Claude-SearchBot and Claude-User, and Perplexity's PerplexityBot and Perplexity-User.
+From your own Cloudflare, Vercel or any server's logs. Only verified bots count: the user agent and the operator's published IP ranges must both match. Today that's OpenAI's GPTBot, OAI-SearchBot and ChatGPT-User, Anthropic's ClaudeBot, Claude-SearchBot and Claude-User, and Perplexity's PerplexityBot and Perplexity-User.
 
 - **By bot type** — hits, pages read and last seen for **Training**, **Search index** and **User fetch**, with the bots under each.
 - **Pages AI bots read** — hits per page, and when each type last read it.
@@ -160,15 +160,47 @@ Bot counts are kept by UTC day, so the 24-hour range reads yesterday and today (
     - **Cloudflare Worker** (recommended) — a small Worker on your site's route passes every request through and sends only AI-bot requests, in batches.
     - **Cloudflare Logpush** — Cloudflare sends only the AI bots' log lines, filtered at its edge. Nothing runs on your requests.
     - **Vercel Drain** — Vercel sends your request logs; Ansvisor keeps the AI bots and drops the rest. Vercel Pro and Enterprise only.
+    - **Any server (webhook)** — your own log shipper (Vector, Fluent Bit, Logstash or a script) posts your access log as JSON lines; Ansvisor keeps the AI bots and drops the rest. See [Send logs from any server](#send-logs-from-any-server).
 
-    Each option says what it costs on your own Cloudflare or Vercel bill before you connect. None of them changes your site's speed.
+    Each option says what it costs on your own bill before you connect. None of them changes your site's speed.
   </Step>
   <Step title="Create the connection and copy its settings">
     Click **Create connection** and follow the numbered steps. **Copy the settings right away: the secret in them isn't shown again.** If you lose it, revoke the connection and create a new one.
   </Step>
 </Steps>
 
-**Manage** on the card lists your connections with their last request, lets you **Revoke** one, and shows this month's use. Cloud plans store a monthly number of detailed rows; past it, detailed rows pause until the next month and the totals are still counted. Log records from Logpush or a Vercel drain have a monthly cap of their own. Only requests to your brand's own domains, or their subdomains, are kept.
+**Manage** on the card lists your connections with their last request, lets you **Revoke** one, and shows this month's use. Cloud plans store a monthly number of detailed rows; past it, detailed rows pause until the next month and the totals are still counted. Log records from Logpush, a Vercel drain, the webhook or an upload have a monthly cap of their own. Only requests to your brand's own domains, or their subdomains, are kept.
+
+#### Send logs from any server
+
+On a server or CDN without a sender of its own, choose **Any server (webhook)**. **Create connection** shows the endpoint (`POST /bots/ingest` on the API's public address) and a header with the connection's secret, `Authorization: Bearer abot_…`, shown once. Point an HTTP output of your log shipper at it.
+
+Send one request a line (JSON lines, `Content-Type` of your choice), or one JSON array, with these fields:
+
+| Field | What it holds |
+|---|---|
+| `user_agent` | The request's user agent. |
+| `ip` | The client's IP address. Used to verify the bot, never stored. |
+| `url` | The full address (`https://www.example.com/pricing`), or just the path. Or send `host` and `path` instead. |
+| `status` | The HTTP status your server answered. |
+| `time` | When the request came: RFC 3339, or seconds or milliseconds since 1970. |
+| `country` | Two letters, if you have it. Optional. |
+
+```json
+{"user_agent":"Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2)","ip":"20.171.207.12","url":"https://www.example.com/pricing","status":200,"time":"2026-11-06T09:15:02Z","country":"US"}
+```
+
+A post holds up to 20,000 lines and 20 MB, and may be gzipped (as a gzip file, or with `Content-Encoding: gzip`). A post sent twice is read once. Lines older than 7 days, or whose time can't be read, are left out.
+
+#### Upload a log file
+
+**Or upload a log file**, in the same dialog, reads an access log once, without a connection to set up. It takes:
+
+- the **combined log format**, Apache's and nginx's default: `20.171.207.12 - - [06/Nov/2026:09:15:02 +0000] "GET /pricing HTTP/1.1" 200 5120 "-" "Mozilla/5.0 … GPTBot/1.2 …"`;
+- the **common log format**, which has no user agent, so its lines are counted but never a bot;
+- **JSON lines** with the webhook's fields above.
+
+Up to 4 MB a file (a gzipped file holds far more) and 20,000 lines. The dialog then says how many lines it read, how many AI bot requests it found, and how many lines it left out: older than 7 days, for another site, or without a user agent. A file uploaded again isn't read twice, and a file with no line in these formats isn't counted. Only admins and managers can upload; uploads count against the monthly log records like the senders' files.
 
 ### Recent AI Referral Visits
 
@@ -323,7 +355,7 @@ With [conversions](#conversions-from-ai-visits) on, it stores one item, `ansviso
 
 **The visitor's IP address is never stored.** To group a visit's pageviews into one visit, Ansvisor keeps a one-way key made from the IP address, your brand and a random salt that changes every day. Each day's salt is deleted after two days. From then on, nothing links a key to an address, and one visitor's days can't be joined. A visit that runs past midnight (UTC) counts as two.
 
-AI-bot requests from Cloudflare or Vercel are stored without IP addresses.
+AI-bot requests, from Cloudflare, Vercel, the webhook or an upload, are stored without IP addresses. An uploaded file isn't kept: only the verified bots' requests, and a fingerprint of the file for 7 days so it isn't read twice.
 
 ## Common patterns
 

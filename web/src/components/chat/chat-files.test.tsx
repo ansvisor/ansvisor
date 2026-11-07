@@ -32,6 +32,9 @@ vi.mock('@/lib/actions/chat-task-card', () => ({
   attachOnlyFromCard: vi.fn(),
   undoTaskDoneFromCard: vi.fn(),
 }));
+// Optimize ▾'s Ask your Admin on a page's version card (W4-12b part 2), which the cards bring:
+// its request reads the server's Supabase client.
+vi.mock('@/lib/actions/chat-access-requests', () => ({ requestAccess: vi.fn() }));
 
 const { ChatFiles } = await import('./chat-files');
 

@@ -480,7 +480,6 @@ describe('get_shopping_readiness', () => {
       { platform: 'google-aio', state: 'notTracked' },
       { platform: 'google-aimode', state: 'showing' },
       { platform: 'gemini-web', state: 'notTracked' },
-      { platform: 'copilot-web', state: 'notTracked' },
     ]);
     // The channels from one row each, not the shelves' every card.
     expect(shopping.getShoppingOwnChannels).toHaveBeenCalledWith(BRAND, {

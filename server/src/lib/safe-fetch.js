@@ -36,7 +36,7 @@ export const MAX_REDIRECTS = 5;
 const HTML_TYPES = /^\s*(text\/html|application\/xhtml\+xml)\b/i;
 const HTML_ACCEPT = 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.1';
 
-const USER_AGENT = 'Mozilla/5.0 (compatible; AnsvisorBot/1.0; +https://ansvisor.com)';
+export const USER_AGENT = 'Mozilla/5.0 (compatible; AnsvisorBot/1.0; +https://ansvisor.com)';
 
 export class PageFetchError extends Error {
   /**
@@ -169,7 +169,7 @@ function decode(buffer, contentType) {
  * One request, no redirects followed: the response, or where it redirects to.
  * A body over `maxBytes` is refused, or with `truncate` cut off there.
  */
-function requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept }) {
+function requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept, userAgent }) {
   return new Promise((resolve, reject) => {
     const client = url.protocol === 'https:' ? https : http;
     const req = client.request(
@@ -180,7 +180,7 @@ function requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept })
         lookup,
         signal,
         headers: {
-          'user-agent': USER_AGENT,
+          'user-agent': userAgent,
           accept,
           'accept-encoding': 'gzip, deflate, br',
         },
@@ -256,7 +256,7 @@ function requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept })
  * A web page's HTML, fetched safely (see above).
  *
  * @param {string} address
- * @param {{ timeoutMs?: number, maxBytes?: number, truncate?: boolean, maxRedirects?: number, lookup?: Function, ports?: string[], signal?: AbortSignal, types?: RegExp, accept?: string, allowUrl?: (url: URL) => boolean }} [opts]
+ * @param {{ timeoutMs?: number, maxBytes?: number, truncate?: boolean, maxRedirects?: number, lookup?: Function, ports?: string[], signal?: AbortSignal, types?: RegExp, accept?: string, allowUrl?: (url: URL) => boolean, userAgent?: string }} [opts]
  *   `signal` ends the read early too (a run's Stop), as its timeout does.
  *   `truncate` reads a page over `maxBytes` up to it, instead of refusing it
  *   ('too_large'), for a caller that needs only its start.
@@ -267,6 +267,8 @@ function requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept })
  *   `allowUrl` is a caller's own check of each address, the first and each
  *   redirect's, after safe-fetch's: false refuses it ('not_allowed'). Chat
  *   keeps a page's redirects on the sites a run may open with it.
+ *   `userAgent` replaces AnsvisorBot's: Site Audit's bot access test asks
+ *   the page as each AI bot (SA-008).
  * @returns {Promise<{ url: string, status: number, html: string }>} url is the address after redirects
  */
 export async function fetchPage(address, opts = {}) {
@@ -281,6 +283,7 @@ export async function fetchPage(address, opts = {}) {
     ports = WEB_PORTS,
     signal: outer = null,
     allowUrl = null,
+    userAgent = USER_AGENT,
   } = opts;
   const signal = outer
     ? AbortSignal.any([outer, AbortSignal.timeout(timeoutMs)])
@@ -295,7 +298,15 @@ export async function fetchPage(address, opts = {}) {
   for (let hops = 0; ; hops += 1) {
     let res;
     try {
-      res = await requestOnce(url, { signal, lookup, maxBytes, truncate, types, accept });
+      res = await requestOnce(url, {
+        signal,
+        lookup,
+        maxBytes,
+        truncate,
+        types,
+        accept,
+        userAgent,
+      });
     } catch (err) {
       if (err instanceof PageFetchError) throw err;
       if (signal.aborted) throw new PageFetchError('timeout', 'The page took too long to answer');
