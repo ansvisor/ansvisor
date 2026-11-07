@@ -242,6 +242,32 @@ describe('ChatHomeView', () => {
     );
   });
 
+  it('shows when the Weekly report job runs next, and asks for this week’s report now', async () => {
+    const onAsk = vi.fn();
+    // Monday 2 Nov 2026, at noon UTC: a Monday in any time zone a test runs in.
+    await render(view({ dueTasks: 1, nextReport: '2026-11-02T12:00:00Z', onAsk }));
+    const chips = [...host.querySelectorAll<HTMLElement>('[data-action="home.runShortcut"]')];
+    expect(chips.map((b) => [b.dataset.skill, b.textContent])).toEqual([
+      ['tasks', 'Complete tasks 1 due'],
+      ['report', 'Weekly report Mon'],
+    ]);
+    await act(async () => chips[1].click());
+    expect(onAsk).toHaveBeenCalledWith(
+      "/report Write this week's report on our AI visibility.",
+      undefined,
+    );
+    // It only reads: a role that can't change things gets it too.
+    await render(view({ nextReport: '2026-11-02T12:00:00Z', canChange: false }));
+    expect(
+      [...host.querySelectorAll<HTMLElement>('[data-action="home.runShortcut"]')].map(
+        (b) => b.dataset.skill,
+      ),
+    ).toEqual(['report']);
+    // No job this coming week: no chip.
+    await render(view({ dueTasks: 1, nextReport: null }));
+    expect(host.querySelector('[data-skill="report"]')).toBeNull();
+  });
+
   it('gives someone who can’t change things the jobs that read, and no More', async () => {
     const onAsk = vi.fn();
     await render(view({ dueTasks: 4, lostPages: 2, readyDrafts: 1, canChange: false, onAsk }));
@@ -689,6 +715,9 @@ describe('Home by focus (CHAT-24 §4)', () => {
     // A role that only reads: no job that changes things.
     await render(view({ focus: focus('seo'), words: words(), dueTasks: 4, canChange: false }));
     expect(chips().map((chip) => chip.dataset.skill)).toEqual(['audit-fix', 'report']);
+    // With a Weekly report job this coming week, the shortcut carries its day.
+    await render(view({ focus: focus('seo'), words: words(), nextReport: '2026-11-02T12:00:00Z' }));
+    expect(chips().map((chip) => chip.textContent)).toContain('Weekly report Mon');
   });
 
   it("sends a shortcut's id with a chip that runs its playbook (W2-09), and asks with a skill's /name", async () => {

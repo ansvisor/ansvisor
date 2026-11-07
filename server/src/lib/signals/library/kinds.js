@@ -98,6 +98,9 @@ export const LIBRARY_KINDS = Object.freeze({
   // Pages AI sends readers to that rarely convert, to link to pages that do
   // (AC plan P-10, spec §8).
   bridge_link_gap: meta('traffic', 'medium', ['ai_referral_traffic']),
+  // An online store's product pages worth optimizing, best first (AC plan
+  // P-6, spec §6.1).
+  product_pages_to_optimize: meta('visibility', 'medium', ['ai_visibility']),
   broken_citation_target: meta('technical', 'high', ['ai_referral_traffic', 'citations']),
   cited_page_uncrawled: meta('technical', 'medium', ['citations']),
 

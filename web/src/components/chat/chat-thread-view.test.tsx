@@ -462,7 +462,8 @@ describe('ChatThreadView', () => {
   });
 
   describe('where the page it wrote opens (CHAT-25 §3, W4-11)', () => {
-    const pageThread = (mine = true) =>
+    const DRAFT = 'aaaaaaaa-1111-4111-8111-111111111111';
+    const pageThread = (mine = true, href = '/dashboard/content/editor/d1') =>
       ({
         conversationId: CHAT,
         title: 'Pricing FAQ',
@@ -487,7 +488,7 @@ describe('ChatThreadView', () => {
                   type: 'document',
                   formats: ['html'],
                   status: 'draft',
-                  href: '/dashboard/content/editor/d1',
+                  href,
                 },
               ],
             },
@@ -552,13 +553,98 @@ describe('ChatThreadView', () => {
       expect(pageCard()).toBeNull();
     });
 
+    it('opens the page beside the chat on its own page, and keeps Open here (W4-15b)', async () => {
+      window.history.replaceState(null, '', `/dashboard/chat/${CHAT}?from=%2Fdashboard%2Fmentions`);
+      await render({
+        thread: pageThread(true, `/dashboard/content/editor/${DRAFT}`),
+        variant: 'dock',
+      });
+      expect(pick('here').textContent).toContain('Open here');
+      await act(async () => pick('dontAskAgain').click());
+      await act(async () => pick('here').click());
+      expect(prefs.saveGeneral).toHaveBeenCalledWith({ pageOpen: 'here' });
+      expect(toast).toHaveBeenCalledWith(
+        'Your choice is saved. Change it anytime in Settings › Chat.',
+      );
+      // Its address names the page, the rest kept; nothing navigates away or reloads.
+      expect(window.location.pathname).toBe(`/dashboard/chat/${CHAT}`);
+      expect(window.location.search).toBe(`?from=%2Fdashboard%2Fmentions&page=${DRAFT}`);
+      expect(nav.push).not.toHaveBeenCalled();
+      expect(nav.refresh).toHaveBeenCalled();
+      expect(pageCard()).toBeNull();
+    });
+
+    it('opens the page beside the chat once, without a choice kept', async () => {
+      window.history.replaceState(null, '', `/dashboard/chat/${CHAT}`);
+      const entries = window.history.length;
+      await render({
+        thread: pageThread(true, `/dashboard/content/editor/${DRAFT}`),
+        variant: 'dock',
+      });
+      await act(async () => pick('here').click());
+      expect(prefs.saveGeneral).not.toHaveBeenCalled();
+      expect(window.location.search).toBe(`?page=${DRAFT}`);
+      // A step back closes it again.
+      expect(window.history.length).toBe(entries + 1);
+      expect(nav.refresh).not.toHaveBeenCalled();
+    });
+
+    it('goes from the side panel to the chat’s full page with the page beside it', async () => {
+      window.history.replaceState(null, '', '/dashboard/mentions?range=7d');
+      await render({
+        thread: pageThread(true, `/dashboard/content/editor/${DRAFT}`),
+        variant: 'panel',
+        pageRoute: '/dashboard/mentions',
+      });
+      await act(async () => pick('here').click());
+      expect(nav.push).toHaveBeenCalledWith(
+        `/dashboard/chat/${CHAT}?from=%2Fdashboard%2Fmentions%3Frange%3D7d&page=${DRAFT}`,
+      );
+      expect(window.location.pathname).toBe('/dashboard/mentions');
+    });
+
+    it('opens the page beside the chat by itself as a run it watched ends, with Open here saved', async () => {
+      fetchMock.mockImplementationOnce(async (url: string, init?: RequestInit) => {
+        calls.push({ url, init });
+        return new Response(
+          stream([
+            chatEvent('text.delta', 1, { text: 'Here is the FAQ.' }),
+            chatEvent('deliverable.created', 2, {
+              title: 'Pricing FAQ',
+              type: 'document',
+              formats: ['html'],
+              status: 'draft',
+              href: `/dashboard/content/editor/${DRAFT}`,
+            }),
+            ...finished.slice(1).map((e) => ({ ...e, seq: 3 })),
+          ]),
+          { status: 200, headers: { 'x-chat-conversation': CHAT, 'x-chat-run': RUN } },
+        );
+      });
+      await render({ pageOpen: 'here' });
+      await type('Write an FAQ');
+      await enter();
+      expect(pageCard()).toBeNull();
+      expect(window.location.pathname).toBe(`/dashboard/chat/${CHAT}`);
+      expect(window.location.search).toBe(`?page=${DRAFT}`);
+      expect(nav.push).not.toHaveBeenCalled();
+    });
+
     it('doesn’t ask with a saved choice, nor on a teammate’s chat', async () => {
       await render({ thread: pageThread(), variant: 'dock', pageOpen: 'chat' });
       expect(pageCard()).toBeNull();
-      // A finished answer read back doesn't open the editor by itself.
+      // A finished answer read back doesn't open the editor, or the page beside it, by itself.
       await render({ thread: pageThread(), variant: 'dock', pageOpen: 'editor' });
       expect(pageCard()).toBeNull();
       expect(nav.push).not.toHaveBeenCalled();
+      window.history.replaceState(null, '', `/dashboard/chat/${CHAT}`);
+      await render({
+        thread: pageThread(true, `/dashboard/content/editor/${DRAFT}`),
+        variant: 'dock',
+        pageOpen: 'here',
+      });
+      expect(pageCard()).toBeNull();
+      expect(window.location.search).toBe('');
       act(() => root.unmount());
       root = createRoot(container);
       await render({ thread: pageThread(false), variant: 'dock' });
