@@ -4267,6 +4267,7 @@
       "factsMatch": "Every figure matches the data",
       "factsRemoved": "{count, plural, one {# figure wasn't in the data, so it was left out} other {# figures weren't in the data, so they were left out}}",
       "readHelp": "Read Ansvisor Help",
+      "readFiles": "Read your attached files",
       "ask": "Waiting for your answer",
       "askSkipped": "Skipped · used {option}",
       "askStopped": "Question skipped",
@@ -4540,7 +4541,8 @@
       "type": "This file type isn't supported.",
       "size": "Files must be 10 MB or smaller.",
       "count": "You can attach up to 5 files.",
-      "failed": "Upload failed.",
+      "failed": "{name} didn't upload. Remove it or try again.",
+      "failedMany": "{count} files didn't upload. Remove them or try again.",
       "retry": "Retry"
     },
     "slash": {
@@ -4685,7 +4687,11 @@
     "connectionLost": "Lost the connection to Chat. It keeps working: reload the page to see where it is.",
     "untitledExport": "Chat",
     "tryAgainImages": "Try again: make {count} new images with {model}.",
-    "tryAgainImagesSame": "Try again: make {count} new images with the same image model."
+    "tryAgainImagesSame": "Try again: make {count} new images with the same image model.",
+    "sentFiles": {
+      "label": "Files you sent",
+      "open": "Open {name}"
+    }
   },
   "chatDebug": {
     "title": "Debug · staff only",

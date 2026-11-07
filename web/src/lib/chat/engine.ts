@@ -1,5 +1,12 @@
 import { createTranslator } from 'next-intl';
-import { Output, streamText, tool as aiTool, type ModelMessage, type ToolSet } from 'ai';
+import {
+  Output,
+  streamText,
+  tool as aiTool,
+  type ModelMessage,
+  type ToolSet,
+  type UserContent,
+} from 'ai';
 import { z } from 'zod';
 import messages from '../../../messages/en.json';
 import { PLANS } from '@/config/plans';
@@ -14,6 +21,24 @@ import type { Json } from '@/types/supabase';
 import type { UserRole } from '@/types';
 import { recordAccessDenied } from './access-log';
 import { approvalFor, type ActivityApproval } from './activity';
+import { loadRunAttachments, readSentUploads, type SentUpload } from './attachment-store';
+import {
+  ATTACHMENTS_ONLY,
+  ATTACHMENT_SOURCE,
+  TRANSCRIBE_READ,
+  TRANSCRIBE_SYSTEM,
+  TRANSCRIPT_CHARS,
+  attachmentParts,
+  attachmentFacts,
+  attachmentTokens,
+  earlierFilesLine,
+  modelReads,
+  textFigures,
+  transcribeParts,
+  visualFiles,
+  type ModelReads,
+  type RunAttachment,
+} from './attachments';
 import { fitChatUnits, meteredAs, reserveChatStep, type ChatStepUsage } from './budget';
 import { buildDenial } from './denial';
 import { KeyFailureError, ProviderDownError, stepFailure, type RunKeyFailure } from './engine-key';
@@ -55,7 +80,7 @@ import {
   type ChatStepScope,
 } from './events';
 import { HOLD_MAX, checkFigures, figureHold, figuresOfRun, type KnownFigures } from './facts';
-import { fitResult, toJson } from './fit';
+import { cutText, fitResult, toJson } from './fit';
 import { historyMessages, planHistory, type HistoryPlan, type HistoryRow } from './history';
 import { fitImageParts } from './images/chat-images';
 import {
@@ -470,8 +495,9 @@ const MAX_CONTEXT_CHIPS = 12;
 const MAX_REFERENCE_SCOPE = 8;
 
 // guid, not uuid: ids made by hand (the demo brand's) aren't RFC 4122 ones.
-export const startRunInput = z.object({
-  message: z.string().trim().min(1).max(20_000),
+const startRunFields = z.object({
+  /** Empty only with files attached: an image alone is a message (startRunInput). */
+  message: z.string().trim().max(20_000),
   conversationId: z.guid().optional(),
   brandId: z.guid().nullable().optional(),
   mode: z.enum(CHAT_MODES).default('auto'),
@@ -549,6 +575,12 @@ export const startRunInput = z.object({
    */
   shortcutId: z.string().trim().max(40).optional().catch(undefined),
 });
+
+/** A new message's body: its words, or files alone (an image with no text is a message). */
+export const startRunInput = startRunFields.refine(
+  (input) => input.message.length > 0 || (input.attachmentIds?.length ?? 0) > 0,
+  { path: ['message'] },
+);
 
 /** What a message was scoped to: its page's chips and its @ references (chat_messages.context_json). */
 export type MessageScope = Pick<z.infer<typeof startRunInput>, 'context' | 'references'>;
@@ -742,19 +774,23 @@ export async function startChatRun(
   // The files go with the message only when each is the person's own, up,
   // and not sent with another (00409); else nothing is kept.
   const attachments = [...new Set(input.attachmentIds ?? [])];
+  // Their names, in the order attached: a chat started with files alone is named after the first.
+  let attachedNames: string[] = [];
   if (attachments.length > 0) {
     const { data, error } = await supabaseAdmin
       .from('chat_uploads')
-      .select('id')
+      .select('id, name')
       .in('id', attachments)
       .eq('user_id', actor.userId)
       .eq('organization_id', actor.organizationId)
       .eq('status', 'ready')
       .is('message_id', null);
     if (error) throw new Error(`Chat could not read the attachments: ${error.message}`);
-    if ((data ?? []).length !== attachments.length) {
+    const rows = (data ?? []) as { id: string; name: string }[];
+    if (rows.length !== attachments.length) {
       return failure(400, 'attachments', t('error.attachments'));
     }
+    attachedNames = attachments.map((id) => rows.find((row) => row.id === id)?.name ?? '');
   }
 
   let conversationId = input.conversationId ?? null;
@@ -805,7 +841,7 @@ export async function startChatRun(
         organization_id: actor.organizationId,
         user_id: actor.userId,
         brand_id: brandId,
-        title: titleOf(input.message),
+        title: titleOf(input.message || attachedNames[0] || ''),
         ...(input.origin === 'panel'
           ? { origin: 'panel', origin_page: input.originPage ?? null }
           : { origin: 'page', origin_page: '/dashboard/chat' }),
@@ -877,6 +913,8 @@ export async function startChatRun(
     question: input.message,
     ...(scope ? { scope } : {}),
     ...(shortcut ? { shortcut } : {}),
+    // The run reads its files again with each request (openContext).
+    ...(attachments.length > 0 ? { attachments: attachments.length } : {}),
     ...(earlier.fromTaintedMove || earlier.afterInjection || fromRun || options.tainted
       ? { tainted: true }
       : {}),
@@ -924,6 +962,10 @@ const STEP_RETRY_MS = 1_000;
 type Progress = RunProgress & {
   question?: string;
   scope?: MessageScope;
+  /** How many files the question was sent with (00409): its run can't go on without them. */
+  attachments?: number;
+  /** Its images and PDFs were written out for the fact check, or that was tried (readAttachedFiles). */
+  filesRead?: boolean;
   /** The picked model was checked against the catalog once (W4-03). */
   modelChecked?: boolean;
   /**
@@ -964,6 +1006,11 @@ interface RunContext {
   planName: string;
   /** The chat so far: recent turns, older ones in short (history.ts). */
   history: HistoryPlan;
+  /**
+   * The files the question was sent with, as its turn gives them to the
+   * models (attachments.ts); earlier messages' are only named in the history.
+   */
+  attachments: RunAttachment[];
   /**
    * The person's own earlier messages in this chat: not a next move a
    * tainted run wrote, which the person only clicked (CHAT-10 item 11).
@@ -1090,7 +1137,8 @@ export async function driveRun(
       if (outcome !== 'continue') return;
     }
     // A how-to question is answered from Help before any data is read (CHAT-19 §5);
-    // a message that calls a skill by its /name asks for a task, not how-to help.
+    // a message that calls a skill by its /name asks for a task, not how-to help, and one
+    // sent with files asks about them: Help's answer reads no file.
     const fresh = !resume && rc.progress.steps === 0 && rc.progress.modelSteps === 0;
     const typed = fresh ? (await loadShortcut(rc)) + (await loadTypedSkills(rc)) : 0;
     // A skill's run starts only when the AI limit left covers its answer (CHAT-04 item 17a).
@@ -1098,7 +1146,14 @@ export async function driveRun(
       const covered = await coveredUnits(rc, 1, { reads: true });
       if (covered.fits === 0) return pauseAtCap(rc, covered.limit);
     }
-    if (fresh && typed === 0 && (await helpTurn(rc)) === 'ended') return;
+    const helpFirst = fresh && typed === 0 && rc.attachments.length === 0;
+    if (helpFirst && (await helpTurn(rc)) === 'ended') return;
+    // Attached files are outside text (UNTRUSTED_RULES' uploads): once the model reads them,
+    // as after a read, every change shows a card and no skill loads at the model's pick (CHAT-20
+    // §16a). The person's own /name was loaded above, before them.
+    if (rc.attachments.length > 0) rc.progress.tainted = true;
+    // Their images and PDFs written out once, so the fact check knows their figures.
+    if ((await readAttachedFiles(rc)) === 'ended') return;
     await modelLoop(rc);
   } catch (err) {
     console.error('[chat/engine] a run failed:', err);
@@ -1265,6 +1320,7 @@ async function openContext(
   // An agent's run reads what its skills list (run-limits.ts AGENT_READS).
   const budget = readBudget(choice.effort, { agent: agentRunId !== null });
   const history = await readHistory(run, budget.historyChars);
+  const attachments = await runAttachments(progress, history.questionFiles, models);
   // One model does both on a single-model key: the run writes from the start.
   if (models.phases === 'single') progress.phase = 'write';
   if (progress.modelDropped && !progress.modelNoted) await modelDroppedStep(run, progress, sink);
@@ -1281,6 +1337,7 @@ async function openContext(
     planName: ctx.plan.planName,
     history: history.plan,
     personHistory: history.personWords,
+    attachments,
     progress,
     messages: run.messages,
     readMessages: [],
@@ -1440,16 +1497,27 @@ async function readBrand(brandId: string, organizationId: string) {
  * (history.ts); the question and its own answer left out. With it, the
  * person's own words in it (CHAT-10 item 11): a message marked as a
  * tainted run's next move (context_json.fromTaintedMove) is the model's.
+ * An earlier message sent with files names them (earlierFilesLine: only the
+ * question's own files reach the model, to keep each turn's cost down); the
+ * question's files come back as `questionFiles`, null when the chat's files
+ * couldn't be read.
  */
 async function readHistory(
   run: LoadedRun,
   maxChars: number,
-): Promise<{ plan: HistoryPlan; personWords: string[] }> {
-  const { data, error } = await supabaseAdmin
-    .from('chat_messages')
-    .select('id, role, content_md, context_json, created_at')
-    .eq('conversation_id', run.conversationId)
-    .order('created_at', { ascending: true });
+): Promise<{ plan: HistoryPlan; personWords: string[]; questionFiles: SentUpload[] | null }> {
+  const [{ data, error }, files] = await Promise.all([
+    supabaseAdmin
+      .from('chat_messages')
+      .select('id, role, content_md, context_json, created_at')
+      .eq('conversation_id', run.conversationId)
+      .order('created_at', { ascending: true }),
+    // A failed read loses the earlier files' names; the run checks it has the question's.
+    readSentUploads(run.conversationId, run.organizationId).catch((err) => {
+      console.error("[chat/engine] could not read the chat's attachments:", err);
+      return null;
+    }),
+  ]);
   if (error) throw new Error(`Chat could not read the chat: ${error.message}`);
   const rows = (data ?? []) as {
     id: string;
@@ -1458,15 +1526,52 @@ async function readHistory(
     context_json: { fromTaintedMove?: boolean } | null;
   }[];
   const answerAt = rows.findIndex((row) => row.id === run.messageId);
+  const question = answerAt > 0 && rows[answerAt - 1].role === 'user' ? rows[answerAt - 1] : null;
   // Before the question (the message just before this run's answer).
   const earlier = rows.slice(0, Math.max(0, answerAt - 1));
-  const turns: HistoryRow[] = earlier.map((row) => ({ role: row.role, content: row.content_md }));
+  const turns: HistoryRow[] = earlier.map((row) => {
+    const sent = row.role === 'user' ? files?.get(row.id) : undefined;
+    if (!sent?.length) return { role: row.role, content: row.content_md };
+    const line = earlierFilesLine(sent.map((file) => file.name));
+    return { role: row.role, content: `${row.content_md.trim() || ATTACHMENTS_ONLY}\n\n${line}` };
+  });
   return {
     plan: planHistory(turns, maxChars),
     personWords: earlier
       .filter((row) => row.role === 'user' && row.context_json?.fromTaintedMove !== true)
       .map((row) => row.content_md),
+    questionFiles: files ? (question ? (files.get(question.id) ?? []) : []) : null,
   };
+}
+
+/** What the run's models read besides text: a kind either phase's model reads is read. */
+function runReads(models: ChatModels): ModelReads {
+  const read = modelReads(models.pick('read').budgetModel);
+  const write = modelReads(models.pick('write').budgetModel);
+  return { images: read.images || write.images, pdfs: read.pdfs || write.pdfs };
+}
+
+/** What a step's model reads besides text. */
+const stepReads = (rc: Pick<RunContext, 'models'>, phase: ChatPhase) =>
+  modelReads(rc.models.pick(phase).budgetModel);
+
+/**
+ * The question's files for this request (attachments.ts): read again with
+ * each request, never kept in the run's state. A run whose question has
+ * files ends in error when they can't be listed, rather than answer
+ * without them; a text file that tries to instruct an AI marks the run
+ * (§16a rule 3), as a read's does.
+ */
+async function runAttachments(
+  progress: Progress,
+  questionFiles: SentUpload[] | null,
+  models: ChatModels,
+): Promise<RunAttachment[]> {
+  if (!progress.attachments) return [];
+  if (!questionFiles) throw new Error('Chat could not read the files sent with the message');
+  const loaded = await loadRunAttachments(questionFiles, runReads(models));
+  if (loaded.injection) progress.injection = true;
+  return loaded.files;
 }
 
 // ─── Help ───────────────────────────────────────────────────────────────────
@@ -1623,6 +1728,124 @@ async function helpTurn(rc: RunContext): Promise<'none' | 'ended'> {
   });
   await finish(rc);
   return 'ended';
+}
+
+// ─── Attached files ─────────────────────────────────────────────────────────
+
+/**
+ * The question's images and PDFs written out (owner decision 2026-11-07):
+ * once a run, before its first reading step, the read model writes out
+ * their visible text and numbers (attachments.ts TRANSCRIBE_SYSTEM). It
+ * goes in the read log as untrusted data from source 'attachment', so the
+ * writer reads it as any read and the fact check knows its figures: a
+ * number in the person's own screenshot isn't masked. Held and charged on
+ * the AI budget as every step, and shown as a step. When it fails, or its
+ * hold is refused (the next step's says why), the run goes on as before,
+ * their figures unknown. 'ended' when the person stopped the run.
+ */
+async function readAttachedFiles(rc: RunContext): Promise<'none' | 'ended'> {
+  if (rc.progress.filesRead !== undefined) return 'none';
+  const choice = rc.models.pick('read');
+  const files = visualFiles(rc.attachments, modelReads(choice.budgetModel));
+  if (files.length === 0) return 'none';
+  rc.progress.filesRead = false;
+  const names = files.map((file) => file.name).join(' · ');
+  const started = Date.now();
+  let row = await insertStep(rc.run.id, {
+    position: ++rc.progress.steps,
+    kind: 'read',
+    status: 'running',
+    label: t('step.readFiles'),
+    detail: names,
+  });
+  rc.sink.emit('step.started', { step: clientStep(row) });
+  const endStep = async (patch: Parameters<typeof updateStep>[1]) => {
+    row = await updateStep(row.id, { measure: { latencyMs: Date.now() - started }, ...patch });
+    rc.sink.emit('step.finished', { step: clientStep(row) });
+  };
+  const messages: ModelMessage[] = [{ role: 'user', content: transcribeParts(files) }];
+  const reservation = await reserveChatStep({
+    organizationId: rc.run.organizationId,
+    runId: rc.run.id,
+    ...meteredAs(rc),
+    model: choice.budgetModel,
+    inputTokens:
+      estimateInputTokens([TRANSCRIBE_SYSTEM, messages]) +
+      attachmentTokens(files, modelReads(choice.budgetModel)),
+    maxOutputTokens: choice.maxOutputTokens,
+    source: rc.models.source,
+  });
+  if (!reservation.ok) {
+    await endStep({ status: 'skipped', detail: t('step.skipped') });
+    return 'none';
+  }
+  const { budget } = reservation;
+  const called = Date.now();
+  let written = '';
+  try {
+    const result = streamText({
+      model: choice.model,
+      system: TRANSCRIBE_SYSTEM,
+      messages,
+      maxOutputTokens: choice.maxOutputTokens,
+      providerOptions: choice.providerOptions,
+      abortSignal: rc.signal,
+    });
+    for await (const part of result.fullStream) {
+      if (part.type === 'text-delta') written += part.text;
+      else if (part.type === 'error') throw part.error;
+    }
+    if (rc.signal.aborted) {
+      budget.keep();
+      await stopNow(rc);
+      return 'ended';
+    }
+    await budget.charge(stepUsage(await result.usage), Date.now() - called);
+    await keyAnswered(rc);
+  } catch (err) {
+    if (rc.signal.aborted) {
+      budget.keep();
+      await stopNow(rc);
+      return 'ended';
+    }
+    await budget.release();
+    const failure = stepFailure(rc.models, choice.budgetModel, err);
+    // The own key failed: every step after it runs on the same key.
+    if (failure instanceof KeyFailureError) throw failure;
+    console.error(
+      "[chat/engine] the attached files couldn't be written out; their figures stay unchecked:",
+      err,
+    );
+    await endStep({ status: 'error', detail: t('step.readFailed') });
+    return 'none';
+  } finally {
+    await budget.release();
+  }
+  // Outside text (§16a): hidden text goes, an attempt to instruct is marked, as a read's.
+  const guarded = guardData(cutText(written.trim(), TRANSCRIPT_CHARS));
+  if (guarded.injection) rc.progress.injection = true;
+  const transcript = String(guarded.value);
+  if (!transcript) {
+    console.error(
+      '[chat/engine] the attached files were written out empty; their figures stay unchecked',
+    );
+    await endStep({ status: 'error', detail: t('step.readFailed') });
+    return 'none';
+  }
+  rc.progress.filesRead = true;
+  rc.progress.readLog.push({
+    tool: TRANSCRIBE_READ,
+    input: { files: files.map((file) => file.name) },
+    result: transcript,
+    source: ATTACHMENT_SOURCE,
+    untrusted: true,
+  });
+  await endStep({
+    status: 'done',
+    detail: names,
+    measure: { latencyMs: Date.now() - started, resultTokens: tokensOf(transcript.length) },
+  });
+  return 'none';
 }
 
 // ─── Memory ─────────────────────────────────────────────────────────────────
@@ -1928,6 +2151,14 @@ function stepInput(rc: RunContext, phase: ChatPhase, claude: boolean) {
   });
 }
 
+/**
+ * A step's prompt in tokens for its hold: its text, and the question's
+ * images and PDFs at their most (attachments.ts); the charge is what the
+ * provider counted, the files in it.
+ */
+const stepTokens = (rc: RunContext, phase: ChatPhase, parts: readonly unknown[]) =>
+  estimateInputTokens(parts) + attachmentTokens(rc.attachments, stepReads(rc, phase));
+
 async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepResult> {
   const choice = rc.models.pick(phase);
   await noteMemory(rc);
@@ -1940,7 +2171,7 @@ async function modelStep(rc: RunContext, phase: ChatPhase): Promise<ModelStepRes
     // An agent's run as the agent's, within its cap; a job's as the job's (CHAT-12 item 14).
     ...meteredAs(rc),
     model: choice.budgetModel,
-    inputTokens: estimateInputTokens([system, messages, toolSchemas(rc, phase)]),
+    inputTokens: stepTokens(rc, phase, [system, messages, toolSchemas(rc, phase)]),
     maxOutputTokens: choice.maxOutputTokens,
     source: rc.models.source,
   });
@@ -2086,11 +2317,14 @@ const SAVE_STEPS_NOTE =
  */
 function turnMessage(rc: RunContext, phase: ChatPhase): ModelMessage {
   const question = rc.progress.question ?? '';
-  const parts: { type: 'text'; text: string }[] = [{ type: 'text', text: todayLine() }];
+  const parts: Exclude<UserContent, string> = [{ type: 'text', text: todayLine() }];
   if (phase === 'read' && rc.models.phases === 'auto' && rc.history.digest) {
     parts.push({ type: 'text', text: rc.history.digest });
   }
-  parts.push({ type: 'text', text: question });
+  // Files alone: a neutral line in place of the words (an empty text block is refused).
+  parts.push({ type: 'text', text: question || (rc.progress.attachments ? ATTACHMENTS_ONLY : '') });
+  // The question's files, after its words: images and PDFs where this step's model reads them.
+  parts.push(...attachmentParts(rc.attachments, stepReads(rc, phase)));
   const scope = rc.progress.scope;
   if (scope) {
     parts.push({
@@ -2338,7 +2572,15 @@ function runFigures(rc: RunContext): KnownFigures {
     question: `${rc.progress.question ?? ''}\n${todayLine()}`,
     history: [rc.history.summary ?? '', ...rc.history.recent.map((m) => toJson(m.content))],
     reads: [...rc.progress.readLog.map((read) => toJson(read)), ...results],
-    given: [rc.progress.scope ?? null],
+    // A figure in a file the person attached is theirs, as one in their message: its text's,
+    // and what was written out of its images and PDFs (readAttachedFiles), cell by cell too.
+    given: [
+      rc.progress.scope ?? null,
+      ...attachmentFacts(rc.attachments),
+      ...rc.progress.readLog
+        .filter((read) => read.source === ATTACHMENT_SOURCE && typeof read.result === 'string')
+        .flatMap((read) => textFigures(read.result as string, false)),
+    ],
     skills: loadedSkillList(rc).map((skill) => skill.body),
     periods: APP_PERIODS,
   });
@@ -3342,7 +3584,7 @@ async function coveredUnits(
   }
   const choice = rc.models.pick('write');
   const { system, messages } = stepInput(rc, 'write', choice.claude);
-  const prompt = estimateInputTokens([system, messages, toolSchemas(rc, 'write')]);
+  const prompt = stepTokens(rc, 'write', [system, messages, toolSchemas(rc, 'write')]);
   const fit = await fitChatUnits({
     organizationId: rc.run.organizationId,
     model: choice.budgetModel,

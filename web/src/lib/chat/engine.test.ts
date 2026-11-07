@@ -391,6 +391,8 @@ const { toClientStep } = await import('./steps');
 const { CHAT_TOOLS } = await import('./registry/tools');
 const { readPrecedenceContext } = await import('./precedence-context');
 const { ANSWER_NOTE, INJECTION_NOTE, PERSONA_RULES, UNTRUSTED_RULES } = await import('./rules');
+const { ATTACHMENTS_NOTE, ATTACHMENTS_ONLY, IMAGE_TOKENS, PDF_PAGE_TOKENS, earlierFilesLine } =
+  await import('./attachments');
 const { ASK_TOOL } = await import('./asks');
 const { NEXT_MOVES_TOOL } = await import('./next-moves');
 const { PARTS_TOOL } = await import('./partial-limit');
@@ -5518,6 +5520,16 @@ describe('starting', () => {
     expect(parse({ conversationId: 'not-an-id' })).toBe(false);
   });
 
+  it('takes an empty message only with files attached', () => {
+    const FILE = '11111111-2222-4333-8444-555555555555';
+    const parse = (input: Record<string, unknown>) => engine.startRunInput.safeParse(input).success;
+    expect(parse({ message: '' })).toBe(false);
+    expect(parse({ message: '   ' })).toBe(false);
+    expect(parse({ message: '', attachmentIds: [] })).toBe(false);
+    expect(parse({ message: '', attachmentIds: [FILE] })).toBe(true);
+    expect(parse({ message: 'Hi', attachmentIds: [FILE] })).toBe(true);
+  });
+
   it('sends the person’s ready files with the message, and refuses one that isn’t ready first', async () => {
     useModels([READY], [text('Hi.')]);
     db.rpcs.chat_run_limits = () => ({
@@ -5783,6 +5795,391 @@ describe('starting', () => {
     expect(
       await engine.startChatRun(ADMIN, { message: 'Hello', conversationId: BRAND }),
     ).toMatchObject({ ok: false, status: 404 });
+  });
+});
+
+describe('files attached to a message (00409; owner bug report 2026-11-06)', () => {
+  type Part = {
+    type: string;
+    text?: string;
+    mediaType?: string;
+    data?: unknown;
+    filename?: string;
+  };
+  type Sent = { role: string; content: string | Part[] };
+  /** The person's messages of a step's prompt, as parts. */
+  const userParts = (options: CallOptions): Part[] =>
+    (options.prompt as unknown as Sent[])
+      .filter((m) => m.role === 'user')
+      .flatMap((m) =>
+        typeof m.content === 'string' ? [{ type: 'text', text: m.content }] : m.content,
+      );
+  const textOf = (parts: Part[]) =>
+    parts.flatMap((p) => (p.type === 'text' ? [p.text ?? ''] : [])).join('\n');
+  const filesOf = (parts: Part[]) => parts.filter((p) => p.type === 'file');
+  const bytesOf = (data: unknown) =>
+    Array.from(typeof data === 'string' ? Buffer.from(data, 'base64') : (data as Uint8Array));
+
+  // A large PNG: its bytes written out would hold hundreds of thousands of tokens.
+  const PNG = new Uint8Array(300_000);
+  PNG.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const PDF = new TextEncoder().encode('%PDF-1.7\n<</Type /Page>>\n<</Type /Page>>\n');
+  const CSV = new TextEncoder().encode('prompt,volume\nbest crm,4321');
+  const FILES = {
+    png: {
+      id: '11111111-2222-4333-8444-000000000001',
+      name: 'chart.png',
+      type: 'image/png',
+      bytes: PNG,
+    },
+    pdf: {
+      id: '11111111-2222-4333-8444-000000000002',
+      name: 'brief.pdf',
+      type: 'application/pdf',
+      bytes: PDF,
+    },
+    csv: {
+      id: '11111111-2222-4333-8444-000000000003',
+      name: 'prompts.csv',
+      type: 'text/csv',
+      bytes: CSV,
+    },
+  };
+  let objects: Map<string, Uint8Array>;
+  let downloads: string[];
+
+  beforeEach(() => {
+    objects = new Map();
+    downloads = [];
+    db.tables.chat_uploads = [];
+    Object.assign(db, {
+      storage: {
+        from: () => ({
+          upload: async () => ({ error: null }),
+          download: async (path: string) => {
+            downloads.push(path);
+            const bytes = objects.get(path);
+            return bytes
+              ? { data: new Blob([bytes as BlobPart]), error: null }
+              : { data: null, error: { message: 'not found' } };
+          },
+        }),
+      },
+    });
+  });
+
+  /** The person's file, up and ready in a draft, as the composer leaves it. */
+  function attach(...files: { id: string; name: string; type: string; bytes: Uint8Array }[]) {
+    for (const [i, file] of files.entries()) {
+      db.tables.chat_uploads.push({
+        id: file.id,
+        organization_id: ORG,
+        user_id: PEOPLE.admin,
+        conversation_id: null,
+        message_id: null,
+        name: file.name,
+        mime_type: file.type,
+        size_bytes: file.bytes.length,
+        storage_path: `${ORG}/${file.id}`,
+        status: 'ready',
+        created_at: `2026-11-06T10:00:0${i}.000Z`,
+      });
+      objects.set(`${ORG}/${file.id}`, file.bytes);
+    }
+    return files.map((file) => file.id);
+  }
+
+  it('gives both models the question’s image and PDF as files and its text file as untrusted data', async () => {
+    const { haiku, sonnet } = useModels(
+      [text('chart.png\nVisits 1,200\nbrief.pdf\nPlan'), READY],
+      [text('best crm has 4321 searches.')],
+    );
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What do these show?',
+      brandId: BRAND,
+      attachmentIds: attach(FILES.png, FILES.pdf, FILES.csv),
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+
+    // First, once, the read model writes out the image and the PDF (not the text file): no tools.
+    expect(filesOf(userParts(haiku.seen[0])).map((f) => f.mediaType)).toEqual([
+      'image/png',
+      'application/pdf',
+    ]);
+    expect(textOf(userParts(haiku.seen[0]))).not.toContain('best crm,4321');
+    expect(haiku.seen[0].tools ?? []).toEqual([]);
+    expect(JSON.stringify(haiku.seen[0].prompt)).toContain('write out every piece of visible text');
+    for (const options of [haiku.seen[1], sonnet.seen[0]]) {
+      const parts = userParts(options);
+      const files = filesOf(parts);
+      expect(files.map((f) => f.mediaType)).toEqual(['image/png', 'application/pdf']);
+      expect(bytesOf(files[0].data)).toEqual(Array.from(PNG));
+      expect(files[1].filename).toBe('brief.pdf');
+      const said = textOf(parts);
+      expect(said).toContain(ATTACHMENTS_NOTE);
+      expect(said).toContain('Attached image "chart.png":');
+      expect(said).toContain('<untrusted_data source="attachment prompts.csv">');
+      expect(said).toContain('best crm,4321');
+    }
+    // The hold counts the image and the PDF's two pages, never the image's bytes written out.
+    const held = fakes.reserve.mock.calls.map(
+      ([step]) => (step as { inputTokens: number }).inputTokens,
+    );
+    for (const tokens of held) {
+      expect(tokens).toBeGreaterThan(IMAGE_TOKENS + 2 * PDF_PAGE_TOKENS);
+      expect(tokens).toBeLessThan(60_000);
+    }
+    // A figure from the person's file is theirs: the fact check keeps it.
+    expect(
+      db.tables.chat_messages.find((m) => m.id === runRow(started.runId).message_id)?.content_md,
+    ).toContain('4321');
+    // Files are outside text: the run's changes show a card (§16a).
+    const state = db.tables.chat_run_state.find((s) => s.run_id === started.runId)!;
+    expect(state.progress).toMatchObject({ tainted: true, attachments: 3 });
+  });
+
+  it('gives the model a Word file and an Excel workbook as text, in their untrusted blocks', async () => {
+    const docx = await import('docx');
+    const word = new Uint8Array(
+      await docx.Packer.toBuffer(
+        new docx.Document({
+          sections: [
+            {
+              children: [
+                new docx.Paragraph({ text: 'Launch brief', heading: docx.HeadingLevel.HEADING_1 }),
+                new docx.Paragraph('Target 4321 citations.'),
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+    const { default: writeXlsxFile } = await import('write-excel-file/node');
+    const sheet = new Uint8Array(
+      await writeXlsxFile(
+        [
+          [{ value: 'prompt' }, { value: 'volume' }],
+          [{ value: 'best crm' }, { value: 880 }],
+        ],
+        {
+          sheet: 'Prompts',
+        },
+      ).toBuffer(),
+    );
+    const { haiku } = useModels([READY], [text('Read both.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Use these',
+      brandId: BRAND,
+      attachmentIds: attach(
+        {
+          id: '11111111-2222-4333-8444-000000000004',
+          name: 'brief.docx',
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          bytes: word,
+        },
+        {
+          id: '11111111-2222-4333-8444-000000000005',
+          name: 'prompts.xlsx',
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          bytes: sheet,
+        },
+      ),
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    const said = textOf(userParts(haiku.seen[0]));
+    expect(said).toContain('<untrusted_data source="attachment brief.docx">');
+    expect(said).toContain('# Launch brief\\n\\nTarget 4321 citations.');
+    expect(said).toContain('<untrusted_data source="attachment prompts.xlsx">');
+    expect(said).toContain('# Prompts\\nprompt,volume\\nbest crm,880');
+    expect(filesOf(userParts(haiku.seen[0]))).toEqual([]);
+  });
+
+  it('sends a model that reads no images none, and tells it to say so', async () => {
+    const deepseek = scripted('deepseek-v4.1-flash', [text('This model can’t read images.')]);
+    fakes.resolveModels.mockResolvedValue({
+      source: 'ansvisor',
+      provider: 'openrouter',
+      model: 'deepseek/deepseek-v4.1-flash',
+      keyFailing: false,
+      phases: 'single',
+      pick: () => ({
+        model: deepseek.model,
+        budgetModel: 'deepseek/deepseek-v4.1-flash',
+        maxOutputTokens: 16_000,
+        providerOptions: {},
+        claude: false,
+      }),
+    });
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What is in this chart?',
+      brandId: BRAND,
+      attachmentIds: attach(FILES.png, FILES.csv),
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    const parts = userParts(deepseek.seen[0]);
+    expect(filesOf(parts)).toEqual([]);
+    expect(textOf(parts)).toContain(
+      `"chart.png" is an image, and the model this chat runs on can't read images, so it wasn't sent to you.`,
+    );
+    // The text file still goes; the image isn't even read.
+    expect(textOf(parts)).toContain('best crm,4321');
+    expect(downloads).toEqual([`${ORG}/${FILES.csv.id}`]);
+  });
+
+  it('sends files alone: a neutral line for the words, the new chat named after the first file', async () => {
+    const { haiku } = useModels([text('A bar chart.'), READY], [text('A chart.')]);
+    expect(await engine.startChatRun(ADMIN, { message: '  ', brandId: BRAND })).toMatchObject({
+      ok: false,
+      status: 400,
+    });
+    const started = await engine.startChatRun(ADMIN, {
+      message: '',
+      brandId: BRAND,
+      attachmentIds: attach(FILES.png),
+    });
+    if (!started.ok) throw new Error('not started');
+    expect(db.tables.chat_conversations.find((c) => c.id === started.conversationId)?.title).toBe(
+      'chart.png',
+    );
+    const question = db.tables.chat_messages.find(
+      (m) => m.conversation_id === started.conversationId && m.role === 'user',
+    );
+    expect(question?.content_md).toBe('');
+    await engine.driveRun(ADMIN, started.runId);
+    const parts = userParts(haiku.seen[1]);
+    expect(textOf(parts)).toContain(ATTACHMENTS_ONLY);
+    expect(filesOf(parts)).toHaveLength(1);
+    expect(runRow(started.runId).status).toBe('done');
+  });
+
+  it('answers a how-to question sent with a file from the file, not from Help', async () => {
+    const { haiku, sonnet } = useModels([READY], [text('Add them on Tracked Prompts.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'How do I add a prompt?',
+      brandId: BRAND,
+      attachmentIds: attach(FILES.csv),
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect(textOf(userParts(haiku.seen[0]))).toContain('best crm,4321');
+    expect(sonnet.seen).toHaveLength(1);
+  });
+
+  it('names an earlier message’s files in the history, and sends only the question’s own', async () => {
+    useModels([text('A bar chart.'), READY], [text('A chart.')]);
+    const first = await engine.startChatRun(ADMIN, {
+      message: 'Look at this',
+      brandId: BRAND,
+      attachmentIds: attach(FILES.png),
+    });
+    if (!first.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, first.runId);
+
+    const { sonnet } = useModels([READY], [text('Still a chart.')]);
+    const second = await engine.startChatRun(ADMIN, {
+      message: 'And now?',
+      conversationId: first.conversationId,
+    });
+    if (!second.ok) throw new Error('not started');
+    downloads = [];
+    await engine.driveRun(ADMIN, second.runId);
+    const parts = userParts(sonnet.seen[0]);
+    expect(filesOf(parts)).toEqual([]);
+    expect(textOf(parts)).toContain(`Look at this\n\n${earlierFilesLine(['chart.png'])}`);
+    expect(downloads).toEqual([]);
+  });
+
+  it('writes out an image’s numbers once, so the answer keeps them (owner decision 2026-11-07)', async () => {
+    const { haiku, sonnet } = useModels(
+      [text('chart.png\nSessions: 8,558\nUsers: 4,210'), READY],
+      [text('Sessions were 8,558 and users 4,210 last week.')],
+    );
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What does my GA screenshot say?',
+      brandId: BRAND,
+      attachmentIds: attach(FILES.png),
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    const answer = db.tables.chat_messages.find(
+      (m) => m.id === runRow(started.runId).message_id,
+    )?.content_md;
+    expect(answer).toBe('Sessions were 8,558 and users 4,210 last week.');
+    // A step of its own, held and charged on the read model as every step.
+    expect(stepsOf(started.runId)[0]).toMatchObject({
+      kind: 'read',
+      status: 'done',
+      label: 'Read your attached files',
+      detail: 'chart.png',
+    });
+    expect(fakes.reserve.mock.calls[0][0]).toMatchObject({
+      model: 'anthropic/claude-haiku-5.5',
+    });
+    expect(holds[0].charge).toHaveBeenCalledTimes(1);
+    // The writer reads it as untrusted data from the attachment, as any read.
+    const written = JSON.stringify(sonnet.seen[0].prompt);
+    expect(written).toContain('untrusted_data source=\\"attachment\\"');
+    expect(written).toContain('Sessions: 8,558');
+    // Once a run: the reading step that follows doesn't write them out again.
+    expect(haiku.seen).toHaveLength(2);
+    expectClean(await eventsOf(started.runId));
+  });
+
+  it('goes on as before when the files can’t be written out: their figures stay unchecked', async () => {
+    const { haiku } = useModels(
+      [
+        () => {
+          throw new Error('overloaded');
+        },
+        READY,
+      ],
+      [text('Sessions were 8,558 last week.')],
+    );
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What does my GA screenshot say?',
+      brandId: BRAND,
+      attachmentIds: attach(FILES.png),
+    });
+    if (!started.ok) throw new Error('not started');
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await engine.driveRun(ADMIN, started.runId);
+    expect(error).toHaveBeenCalledWith(
+      "[chat/engine] the attached files couldn't be written out; their figures stay unchecked:",
+      expect.anything(),
+    );
+    error.mockRestore();
+    expect(runRow(started.runId).status).toBe('done');
+    expect(stepsOf(started.runId)[0]).toMatchObject({
+      label: 'Read your attached files',
+      status: 'error',
+    });
+    expect(
+      db.tables.chat_messages.find((m) => m.id === runRow(started.runId).message_id)?.content_md,
+    ).toBe('Sessions were [real metric] last week.');
+    // The reading step still sees the image.
+    expect(filesOf(userParts(haiku.seen[1]))).toHaveLength(1);
+    expect(holds[0].release).toHaveBeenCalled();
+    expect(holds[0].charge).not.toHaveBeenCalled();
+  });
+
+  it('ends in error rather than answer without the files when they can’t be read', async () => {
+    const { haiku } = useModels([READY], [text('No files.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'What is this?',
+      brandId: BRAND,
+      attachmentIds: attach(FILES.png),
+    });
+    if (!started.ok) throw new Error('not started');
+    db.failures.chat_uploads = { message: 'down' };
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await engine.driveRun(ADMIN, started.runId);
+    error.mockRestore();
+    delete db.failures.chat_uploads;
+    expect(runRow(started.runId).status).toBe('error');
+    expect(haiku.seen).toHaveLength(0);
   });
 });
 
