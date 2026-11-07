@@ -5077,7 +5077,9 @@
         "llms.txt",
         "AI bot access",
         "robots.txt",
-        "firewall"
+        "firewall",
+        "JavaScript",
+        "server-side rendering"
       ],
       "synonyms": [
         "audit results",
@@ -5102,7 +5104,12 @@
         "PerplexityBot blocked",
         "Cloudflare blocks AI bots",
         "CDN blocks crawlers",
-        "WAF"
+        "WAF",
+        "client-side rendering",
+        "JS rendering",
+        "SSR",
+        "prerender",
+        "hidden content"
       ],
       "plan": "all",
       "updated": "2026-11-06",
@@ -5113,11 +5120,11 @@
         },
         {
           "heading": "Total score",
-          "text": "The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40 to 69) or **Poor** (below 40). When the page was audited before, a badge beside the grade shows the change since then, such as \"+8 since\" that audit's date. Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 48 signals were evaluated."
+          "text": "The gauge shows the page's score out of 100 and a grade: **Good** (70 and above), **Needs work** (40 to 69) or **Poor** (below 40). When the page was audited before, a badge beside the grade shows the change since then, such as \"+8 since\" that audit's date. Beside it are the number of signals that **passed**, raised **warnings** or **failed**, and how many of the 49 signals were evaluated."
         },
         {
           "heading": "Categories",
-          "text": "**Category breakdown** scores each category out of 100, with how many of its signals were evaluated:\n\n- **Structure** (25%): whether an AI engine can parse the page, such as heading hierarchy, FAQ schema, lists and tables, and alt text.\n- **Content** (25%): whether the page answers its question directly and completely.\n- **Authority** (20%): whether it reads as expert and sourced, such as author byline, citations, statistics and freshness.\n- **E-E-A-T** (20%): experience, expertise and trust, such as case studies and author credentials.\n- **Trust** (10%): crawl-time basics such as AI bot access, HTTPS, canonical URL and meta description. **llms.txt presence** is listed here for information only."
+          "text": "**Category breakdown** scores each category out of 100, with how many of its signals were evaluated:\n\n- **Structure** (25%): whether an AI engine can parse the page, such as heading hierarchy, FAQ schema, lists and tables, alt text, and main text that is there without JavaScript.\n- **Content** (25%): whether the page answers its question directly and completely.\n- **Authority** (20%): whether it reads as expert and sourced, such as author byline, citations, statistics and freshness.\n- **E-E-A-T** (20%): experience, expertise and trust, such as case studies and author credentials.\n- **Trust** (10%): crawl-time basics such as AI bot access, HTTPS, canonical URL and meta description. **llms.txt presence** is listed here for information only."
         },
         {
           "heading": "How the score is worked out",
@@ -5137,7 +5144,7 @@
         },
         {
           "heading": "When the scoring changes",
-          "text": "A change to how the score is worked out counts like a change to the page. Since llms.txt left the score, a page's next audit can move by a point or two with no change to the page. Its range and its change badge show that move until the older scores leave the last five."
+          "text": "A change to how the score is worked out counts like a change to the page. Since llms.txt left the score and **Main text without JavaScript** joined it, a page's next audit can move by a point or two with no change to the page. Its range and its change badge show that move until the older scores leave the last five."
         },
         {
           "heading": "Signals",
@@ -5154,6 +5161,10 @@
         {
           "heading": "AI bot access",
           "text": "**AI bot access** checks robots.txt for GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot and Google-Extended, then asks the page once as each of the first five, to catch a CDN or firewall that turns them away. Open it to see each bot's answer: the page's status, such as 200 or 403, **robots.txt** when robots.txt keeps it out, or **Allowed**. Google-Extended has no crawler of its own, so only robots.txt counts for it.\n\nA bot robots.txt keeps out, by name or with \"User-agent: *\", fails the check. A bot your CDN or firewall refuses while robots.txt lets it in only warns: the bots are asked from Ansvisor's servers, and a firewall that checks a crawler's own addresses can still let the real one in. A slow or busy answer isn't a block. If your site turns away Ansvisor's own request too, the bots aren't asked and robots.txt decides."
+        },
+        {
+          "heading": "Main text without JavaScript",
+          "text": "**Main text without JavaScript** checks how much of the page's main text is in the HTML an AI bot gets before any JavaScript runs. AI crawlers such as GPTBot, ClaudeBot and PerplexityBot don't run JavaScript, so text that only appears once it runs is text they never see. It compares the page as a browser shows it with the HTML the first AI bot let in got during **AI bot access**, so a site that prerenders pages for bots is read as the bots get it. Menus and footers don't count. 10% or less missing passes, up to 30% raises a warning, and more fails. Open it to see the share and the first passages missing. When no AI bot was let in, or the bot got a bot-protection check such as \"Checking your browser\" instead of the page, it shows n/a."
         },
         {
           "heading": "Authority links",
@@ -5190,7 +5201,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 48 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **Execution**, after **Content**. It is on every plan."
+          "text": "**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 49 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **Execution**, after **Content**. It is on every plan."
         },
         {
           "heading": "Start an audit",
@@ -5198,7 +5209,7 @@
         },
         {
           "heading": "While it runs",
-          "text": "The report opens right away and follows the audit through its stages: **Fetching the page…**, **Analyzing 48 signals…** and **Generating AI recommendations…**. An audit usually takes about 30 seconds. If it is still running after two minutes, the page says **This audit is taking longer than expected.** Click **Check again** to look again."
+          "text": "The report opens right away and follows the audit through its stages: **Fetching the page…**, **Analyzing 49 signals…** and **Generating AI recommendations…**. An audit usually takes about 30 seconds. If it is still running after two minutes, the page says **This audit is taking longer than expected.** Click **Check again** to look again."
         },
         {
           "heading": "Other ways to start an audit",
