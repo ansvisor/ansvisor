@@ -5287,6 +5287,31 @@
         "followUpResult": "{title} · result",
         "open": "Open"
       },
+      "outside": {
+        "title": "Send to {to}",
+        "line": "{job} · waits for your click · expires {date}",
+        "subject": "Subject:",
+        "footer": "They get only this summary and the PDF, signed “Sent by you from your workspace via Ansvisor”. No links into Ansvisor. Replies come to you.",
+        "send": "Send",
+        "sending": "Sending…",
+        "cancel": "Cancel",
+        "sent": "Sent to {to}",
+        "cancelled": "Cancelled. Nothing went to {to}.",
+        "errors": {
+          "forbidden": "Only Admins and Managers can send this.",
+          "trial": "Not in the free trial. Choose a plan to e-mail people outside your workspace.",
+          "plan": "Your workspace is read-only. Choose a plan to send it.",
+          "daily_limit": "Your workspace sent 50 e-mails outside it today. Try again tomorrow.",
+          "busy": "It’s being sent or cancelled already.",
+          "signed_out": "Your session ended. Sign in again.",
+          "sent": "It was sent already.",
+          "cancelled": "It was cancelled already.",
+          "expired": "It expired after 7 days without a Send.",
+          "removed": "That address is no longer on the job.",
+          "not_found": "This e-mail is gone.",
+          "failed": "That didn’t work. Try again."
+        }
+      },
       "lands": "Results from your agents land here.",
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
       "nothingNeedsYou": "Nothing needs you.",
@@ -6138,7 +6163,9 @@
       "callAgent": "Ran the agent “{agent}”",
       "agentGoLiveOff": "Stopped the agent “{name}” publishing and sending on its own",
       "modelProviderOn": "Turned on {provider} models in Chat",
-      "modelProviderOff": "Turned off {provider} models in Chat"
+      "modelProviderOff": "Turned off {provider} models in Chat",
+      "outsideEmailSent": "Sent “{title}” to {to}, outside the workspace",
+      "outsideEmailCancelled": "Cancelled the e-mail of “{title}” to {to}"
     },
     "undo": {
       "ok": "Undone.",
@@ -7878,7 +7905,15 @@
         "timeZone": "Time zone",
         "timeZoneHint": "This job’s own clock. Changing your time zone in Settings doesn’t move it.",
         "timeZoneSearch": "Search time zones",
-        "timeZoneEmpty": "No time zone matches."
+        "timeZoneEmpty": "No time zone matches.",
+        "outside": "People outside your workspace",
+        "outsidePlaceholder": "jane@client.com",
+        "outsideAdd": "Add",
+        "outsideRemove": "Remove {address}",
+        "outsideWrong": "That isn’t an e-mail address.",
+        "outsideHint": "Up to {max}. Each run prepares their e-mail with the summary and the PDF. It goes only when you click Send in your Inbox.",
+        "outsideRole": "Only Admins and Managers add people outside the workspace.",
+        "outsideTrial": "Not in the free trial. Choose a plan to e-mail people outside your workspace."
       },
       "errors": {
         "not_found": "This job is gone.",
@@ -7889,6 +7924,10 @@
         "when": "That time doesn’t work.",
         "prompt": "Say what Chat does each run.",
         "zone": "Pick a time zone from the list.",
+        "outside_role": "Only Admins and Managers add people outside the workspace.",
+        "outside_trial": "People outside the workspace can’t be added in the free trial.",
+        "outside_max": "Up to 5 people outside the workspace per job.",
+        "outside_invalid": "Check the e-mail addresses.",
         "failed": "That didn’t work. Try again."
       }
     }

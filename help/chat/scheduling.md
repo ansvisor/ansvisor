@@ -1,11 +1,11 @@
 ---
 title: Schedule work in Chat
 route: /dashboard/chat/scheduled
-keywords: [schedule, scheduled job, scheduled page, every monday, recurring report, ready by, create schedule, repeat, run now, take over, no change, didn't run, paused, job time zone]
-synonyms: [run later, run on repeat, weekly report automatically, remind me, automate a chat]
+keywords: [schedule, scheduled job, scheduled page, every monday, recurring report, ready by, create schedule, repeat, run now, take over, no change, didn't run, paused, job time zone, outside the workspace, client email, external recipient]
+synonyms: [run later, run on repeat, weekly report automatically, remind me, automate a chat, email a client, send report to customer]
 plan: all
-updated: 2026-11-02
-last_checked: 2026-11-02
+updated: 2026-11-07
+last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -56,6 +56,14 @@ If a run fails, Chat tries again 10 minutes later. If that fails too, the top of
 ## A job's page
 
 Click a job to change its name, what Chat does each run, **When** (the next three runs show as you type), its **Time zone**, where results go and **Notify only if the answer changed**, then **Save**. A job keeps its own time zone: changing yours in Settings doesn't move it. The page also has **Run now**, **Delete** (past results stay in Files) and the last 20 runs, with the share of your monthly AI usage each one took.
+
+## People outside your workspace
+
+A job can also e-mail up to 5 people outside your workspace, such as a client. Add their addresses under **People outside your workspace** on the job's page. Only Admins and Managers can add them, and not during the free trial.
+
+Chat never sends these by itself, not even on Full auto. Each run prepares the e-mail, and your **Inbox** shows a card such as **Send to jane@client.com** with what it says and the PDF attached. Nothing goes until you click **Send**; **Cancel** drops it. A card not sent within 7 days expires.
+
+The recipient gets only the summary and the report's PDF, with no links into Ansvisor, and a last line saying you sent it from your workspace via Ansvisor. Replies come to you. A workspace can send 50 of these a day. Each Send and Cancel is in the Activity log.
 
 ## Who sees what
 

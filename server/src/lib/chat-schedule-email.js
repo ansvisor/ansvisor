@@ -27,6 +27,12 @@ import { applyPlanOverrides } from './plan-guard.js';
  *     white label and the kit names one, on RESEND_FROM_EMAIL's address.
  *   - A run's result goes once (chat_schedule_runs.email_status); its
  *     outcome and Resend's id are kept on the run.
+ *   - Addresses outside the workspace (external_recipients, 00467; W4-28,
+ *     Wave 4 decision 16) get nothing from a run: it only prepares their
+ *     e-mail, a `pending` chat_outbound_emails row each, with the summary
+ *     and the PDF kept in chat-files. Someone clicks Send on its Inbox card
+ *     every time (chat-outbound-email.js); going live on its own never
+ *     covers it.
  *
  * Through Resend (email.js): a silent no-op where it isn't configured.
  */
@@ -47,7 +53,7 @@ function appOrigin() {
   }
 }
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -224,14 +230,95 @@ export function attachable(attachment) {
 }
 
 const JOB_COLUMNS =
-  'id, organization_id, title, brand_id, created_by, recipient_ids, deliver_to, conversation_id';
+  'id, organization_id, title, brand_id, created_by, recipient_ids, deliver_to, conversation_id, external_recipients';
+
+/** Where a prepared e-mail's PDF waits for its Send (the private bucket of Chat's files). */
+export const OUTBOUND_BUCKET = 'chat-files';
+/** An outside address as 00467 keeps it: lowercase, one address. */
+const OUTSIDE_ADDRESS = /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/;
+
+/**
+ * A summary line with no link into the app: an outside reader can't sign
+ * in (Wave 4 decision 16). The answer's Markdown links are already words
+ * (summaryLines); a bare address of the dashboard is taken out.
+ */
+export function withoutAppLinks(line) {
+  let host = '';
+  try {
+    host = new URL(appOrigin()).host;
+  } catch {
+    host = '';
+  }
+  return String(line ?? '')
+    .replace(/https?:\/\/[^\s<>()]+/gi, (url) => {
+      try {
+        return new URL(url).host === host ? '' : url;
+      } catch {
+        return url;
+      }
+    })
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * A run's e-mails to the job's addresses outside the workspace (above),
+ * prepared, never sent: one `pending` row per address (expires_at, 7 days,
+ * is the table's own), with the answer's first lines and the report's PDF,
+ * kept once for the run in chat-files. A run prepared already keeps its
+ * rows (the run and address are unique). How many it prepared now.
+ * @param {{ job: { id: string, organization_id: string, title: string, external_recipients?: string[] }, run: { id: string }, lines: string[], attachment: { filename: string, content: string } | null }} input
+ */
+export async function prepareOutboundEmails({ job, run, lines, attachment }) {
+  const addresses = [
+    ...new Set((job.external_recipients ?? []).map((a) => String(a).trim().toLowerCase())),
+  ]
+    .filter((address) => address.length <= 254 && OUTSIDE_ADDRESS.test(address))
+    .slice(0, 5);
+  if (addresses.length === 0) return 0;
+  const summary = lines.map(withoutAppLinks).filter(Boolean).join('\n').slice(0, 2000) || job.title;
+  let files = [];
+  if (attachment) {
+    const path = `${job.organization_id}/outbound/${run.id}/report.pdf`;
+    const bytes = Buffer.from(attachment.content, 'base64');
+    try {
+      const { error } = await supabaseAdmin.storage
+        .from(OUTBOUND_BUCKET)
+        .upload(path, bytes, { contentType: 'application/pdf', upsert: true });
+      if (error) throw new Error(error.message);
+      files = [{ path, name: attachment.filename.slice(0, 200), bytes: bytes.length }];
+    } catch (err) {
+      // No PDF kept: the e-mail still waits, with its summary.
+      logger.warn({ err, runId: run.id }, 'could not keep the PDF of an outside e-mail');
+    }
+  }
+  let made = 0;
+  for (const to of addresses) {
+    const { error } = await supabaseAdmin.from('chat_outbound_emails').insert({
+      organization_id: job.organization_id,
+      schedule_id: job.id,
+      schedule_run_id: run.id,
+      to_address: to,
+      subject: String(job.title).slice(0, 200),
+      summary,
+      files,
+    });
+    if (!error) made += 1;
+    else if (error.code !== '23505') {
+      logger.error({ err: error, runId: run.id }, 'could not prepare an outside e-mail');
+    }
+  }
+  return made;
+}
 
 /**
  * Sends a job's e-mail (above): `result` for a run that is done, `failed`
  * for a run that didn't run after its retry, `paused` for a job that turned
  * itself off. What went out: { status: 'sent' | 'failed' | 'skipped' |
  * 'not_found', sent }: skipped with Chat off, a job that doesn't e-mail, a
- * run already e-mailed, no one to send to, or Resend not configured.
+ * run already e-mailed, no one to send to, or Resend not configured. A
+ * result for a job with outside addresses also prepares their e-mails,
+ * sending none of them, with how many it prepared (`prepared`).
  * @param {{ orgId: string, scheduleId: string, runId?: string | null, kind: 'result' | 'failed' | 'paused', reason?: string, attachment?: { filename: string, content: string } | null }} input
  */
 export async function sendScheduleEmail({
@@ -251,7 +338,10 @@ export async function sendScheduleEmail({
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!job) return { status: 'not_found', sent: 0 };
-  if (!(job.deliver_to ?? []).includes('email')) return { status: 'skipped', sent: 0 };
+  const byEmail = (job.deliver_to ?? []).includes('email');
+  // A result for outside addresses is only prepared, whatever deliver_to says (W4-28).
+  const outside = kind === 'result' && (job.external_recipients ?? []).length > 0;
+  if (!byEmail && !outside) return { status: 'skipped', sent: 0 };
 
   let run = null;
   if (runId) {
@@ -263,14 +353,42 @@ export async function sendScheduleEmail({
       .maybeSingle();
     if (runError) throw new Error(runError.message);
     if (!data) return { status: 'not_found', sent: 0 };
-    // A run's e-mail goes once.
-    if (data.email_status) return { status: 'skipped', sent: 0 };
     run = data;
   }
   if (kind === 'result' && !run) return { status: 'not_found', sent: 0 };
 
+  let markdown = '';
+  if (kind === 'result' && run.message_id) {
+    const { data: answer, error: answerError } = await supabaseAdmin
+      .from('chat_messages')
+      .select('content_md')
+      .eq('id', run.message_id)
+      .maybeSingle();
+    if (answerError) throw new Error(answerError.message);
+    markdown = answer?.content_md ?? '';
+  }
+  const file = kind === 'result' ? attachable(attachment) : null;
+
+  let extra = {};
+  if (outside) {
+    let prepared = 0;
+    try {
+      prepared = await prepareOutboundEmails({
+        job,
+        run,
+        lines: summaryLines(markdown),
+        attachment: file,
+      });
+    } catch (err) {
+      logger.error({ err, orgId, scheduleId }, 'could not prepare the outside e-mails');
+    }
+    extra = { prepared };
+  }
+  // A run's e-mail goes once.
+  if (!byEmail || run?.email_status) return { status: 'skipped', sent: 0, ...extra };
+
   const recipients = await scheduleRecipients(job);
-  if (recipients.length === 0) return { status: 'skipped', sent: 0 };
+  if (recipients.length === 0) return { status: 'skipped', sent: 0, ...extra };
 
   const origin = appOrigin();
   const jobUrl = `${origin}/dashboard/chat/scheduled/${job.id}`;
@@ -280,17 +398,6 @@ export async function sendScheduleEmail({
   let message;
   let files = [];
   if (kind === 'result') {
-    let markdown = '';
-    if (run.message_id) {
-      const { data: answer, error: answerError } = await supabaseAdmin
-        .from('chat_messages')
-        .select('content_md')
-        .eq('id', run.message_id)
-        .maybeSingle();
-      if (answerError) throw new Error(answerError.message);
-      markdown = answer?.content_md ?? '';
-    }
-    const file = attachable(attachment);
     files = file ? [file] : [];
     message = renderScheduleResultEmail({
       title: job.title,
@@ -330,7 +437,7 @@ export async function sendScheduleEmail({
     }
   }
   // Resend not configured (self-hosted): nothing went out, nothing to keep.
-  if (tried === 0) return { status: 'skipped', sent: 0 };
+  if (tried === 0) return { status: 'skipped', sent: 0, ...extra };
   const status = sent > 0 ? 'sent' : 'failed';
   if (run) {
     const { error: keepError } = await supabaseAdmin
@@ -339,5 +446,5 @@ export async function sendScheduleEmail({
       .eq('id', run.id);
     if (keepError) logger.error({ err: keepError, runId }, 'could not keep a run’s e-mail');
   }
-  return { status, sent };
+  return { status, sent, ...extra };
 }
