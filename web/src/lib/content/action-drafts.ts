@@ -11,6 +11,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { CLOSED_ACTION_STATUSES, type ActionStatus } from '@/lib/action-center/registry';
 import type { DraftMethod, DraftStatus } from './drafts';
+import { MAX_DATA_CELL } from './draft-inputs';
 
 /** The library tasks a draft is the work of, by the draft's method. */
 export const DRAFT_TASK_KEYS: Record<DraftMethod, readonly string[]> = {
@@ -97,6 +98,40 @@ export function playAssetType(payload: Record<string, unknown> | null | undefine
   if (!play || typeof play !== 'object') return null;
   const type = (play as { assetType?: unknown }).assetType;
   return typeof type === 'string' && type.length <= 60 ? type : null;
+}
+
+/** The words of the link table a bridge links page's draft gets, in the reader's language. */
+export interface LinkTableLabels {
+  name: string;
+  linkTo: string;
+  anchor: string;
+}
+
+const cell = (value: string) => Array.from(value).slice(0, MAX_DATA_CELL).join('');
+
+/**
+ * A bridge links action's page (AC plan P-10, payload.linkPairs): the links
+ * it should get as a Brief › Your input table (content_draft_inputs.data),
+ * the page each goes to and its suggested text, for the person to place.
+ * Null for a page with none, or a new page.
+ */
+export function actionLinkTable(
+  payload: Record<string, unknown> | null | undefined,
+  page: string | null,
+  labels: LinkTableLabels | null | undefined,
+): { name: string; rows: string[][] } | null {
+  if (!page || !labels) return null;
+  const pairs = Array.isArray(payload?.linkPairs) ? payload.linkPairs : [];
+  const rows = pairs.flatMap((item: unknown) => {
+    const pair = (item ?? {}) as { from?: unknown; to?: unknown; anchor?: unknown };
+    if (pair.from !== page || typeof pair.to !== 'string' || !/^https?:\/\//i.test(pair.to)) {
+      return [];
+    }
+    return [[cell(pair.to), cell(typeof pair.anchor === 'string' ? pair.anchor.trim() : '')]];
+  });
+  return rows.length
+    ? { name: labels.name, rows: [[labels.linkTo, labels.anchor], ...rows] }
+    : null;
 }
 
 /**

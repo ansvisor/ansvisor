@@ -1027,6 +1027,100 @@ describe('an internal links task', () => {
       ),
     ).toEqual({ reason: 'no_link_source' });
   });
+
+  describe('of a bridge links action, with its pairs (AC plan P-10)', () => {
+    const GUIDE = 'https://acme.example/guides/espresso';
+    const plan = (over = {}) => ({
+      ...task({}),
+      details: {
+        check: 'auto',
+        links: [
+          { url: BLOG, linkTo: PAGE, anchor: 'Pricing' },
+          { url: GUIDE, linkTo: 'https://acme.example/products/grinder', anchor: null },
+        ],
+        ...over,
+      },
+    });
+
+    it('is checked on its pairs, with no page of its own', () => {
+      expect(checkKind(plan())).toBe('linkPlan');
+      expect(checkKind(plan({ check: 'manual' }))).toBeNull();
+      expect(checkKind(plan({ links: [{ url: BLOG }] }))).toBeNull();
+    });
+
+    it('reads every source page for its link, and completes once each has it', async () => {
+      const fetch = fetchOf({
+        [BLOG]: linking(['/pricing']),
+        [GUIDE]: linking(['https://www.acme.example/products/grinder/']),
+      });
+      const result = await runTaskCheck(plan(), { brand_id: 'b1' }, { fetch, now });
+      expect(result.autoCheck).toEqual({
+        at: now.toISOString(),
+        triedAt: now.toISOString(),
+        url: BLOG,
+        passed: true,
+        missing: [],
+        links: [
+          { url: BLOG, linkTo: PAGE, passed: true },
+          { url: GUIDE, linkTo: 'https://acme.example/products/grinder', passed: true },
+        ],
+      });
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(ops.filter((op) => op.table === 'action_tasks').at(-1).payload.status).toBe(
+        'completed',
+      );
+      expect(ops.find((op) => op.table === 'action_events').payload).toMatchObject({
+        event: 'task_checked',
+        data: { taskId: 't1', task: 'add_internal_links' },
+      });
+    });
+
+    it('names the first page still missing its link, and stays open', async () => {
+      const fetch = fetchOf({ [BLOG]: linking(['/pricing']), [GUIDE]: linking(['/']) });
+      const result = await runTaskCheck(plan(), { brand_id: 'b1' }, { fetch, now });
+      expect(result.autoCheck).toMatchObject({
+        url: GUIDE,
+        passed: false,
+        missing: ['link_missing'],
+        links: [
+          { url: BLOG, passed: true },
+          { url: GUIDE, passed: false },
+        ],
+      });
+      expect(ops.some((op) => op.payload?.status === 'completed')).toBe(false);
+    });
+
+    it('keeps only the try when a page can’t be read, and holds a task reopened after it passed', async () => {
+      expect(
+        await runTaskCheck(
+          plan(),
+          { brand_id: 'b1' },
+          { fetch: fetchOf({ [BLOG]: linking(['/pricing']) }), now },
+        ),
+      ).toEqual({ reason: 'no_answer' });
+
+      ops = [];
+      const fetch = fetchOf({
+        [BLOG]: linking(['/pricing']),
+        [GUIDE]: linking(['/products/grinder']),
+      });
+      const reopened = plan({ autoCheck: { at: 'earlier', passed: true } });
+      const result = await runTaskCheck(reopened, { brand_id: 'b1' }, { fetch, now });
+      expect(result.autoCheck).toMatchObject({ passed: true, held: true });
+      expect(ops.some((op) => op.payload?.status === 'completed')).toBe(false);
+    });
+
+    it('never reads a page off the brand’s site', async () => {
+      const fetch = fetchOf({ [BLOG]: linking(['/pricing']) });
+      const result = await runTaskCheck(
+        plan({ links: [{ url: 'https://other.example/blog', linkTo: PAGE }] }),
+        { brand_id: 'b1' },
+        { fetch, now },
+      );
+      expect(result.autoCheck).toMatchObject({ passed: false, missing: ['off_site'] });
+      expect(fetch).not.toHaveBeenCalled();
+    });
+  });
 });
 
 describe('a canonical fix (AC plan P-11)', () => {
@@ -1189,10 +1283,16 @@ describe('sweepTaskChecks', () => {
   it('reads only tasks it can check, the least recently tried first', async () => {
     await sweepTaskChecks({ fetch: fetchOf({}), now });
     const filters = reads.find((r) => r.table === 'action_tasks').filters;
-    expect(filters).toContainEqual(['not', 'details->>url', 'is', null]);
+    // On its page; or a bridge links task with its pairs (AC plan P-10).
     expect(filters).toContainEqual([
       'or',
-      expect.stringContaining('task_key.in.(publish_content,fix_broken_target'),
+      expect.stringContaining(
+        'and(details->>url.not.is.null,or(task_key.in.(publish_content,fix_broken_target',
+      ),
+    ]);
+    expect(filters).toContainEqual([
+      'or',
+      expect.stringContaining('and(task_key.eq.add_internal_links,details->links.not.is.null)'),
     ]);
     expect(filters).toContainEqual([
       'order',

@@ -19,7 +19,9 @@
  *  - a written task's new text is on it, and the text it replaces gone;
  *  - an internal links task's page links to the page it names (`linkTo`,
  *    else the action's pages): an <a href> to it, on the same site, any
- *    query or trailing slash aside (add_internal_links, AC plan P-10);
+ *    query or trailing slash aside (add_internal_links, AC plan P-10); a
+ *    bridge links action's names its pairs (`links`): each source page is
+ *    read for its link, and it passes once every one has it;
  *  - a canonical tag points to the page itself, or to a live, indexable
  *    page of the same site (fix_canonical, AC plan P-11; audit/canonical.js);
  *  - a shopping links task's page links no product that no longer sells,
@@ -51,6 +53,7 @@ import {
   jsonLdRelevance,
   jsonLdValidity,
 } from '../audit/signals/structure.js';
+import { MAX_LINK_PAIRS } from './tasks/templates.js';
 
 /** What each library task's check reads. */
 export const CHECKS = Object.freeze({
@@ -176,7 +179,10 @@ const SHOPPING_SOURCE = 'shopping_check';
 /** What a task's check reads, or null when it has none here. */
 export function checkKind(task) {
   const d = task.details ?? {};
-  if (d.check !== 'auto' || !text(d.url)) return null;
+  if (d.check !== 'auto') return null;
+  // A bridge links action's pairs: each source page read for its link (AC plan P-10).
+  if (task.task_key === 'add_internal_links' && linkPairs(d).length) return 'linkPlan';
+  if (!text(d.url)) return null;
   if (d.source === SHOPPING_SOURCE) return 'shoppingLinks';
   if (task.task_key) return CHECKS[task.task_key] ?? null;
   return text(d.change?.after) ? 'text' : null;
@@ -196,6 +202,13 @@ function uncheckable(task) {
   if (d.check === 'auto' && !text(d.url)) return 'no_address';
   if (d.check === 'auto' && !task.task_key) return 'no_change_text';
   return 'not_checkable';
+}
+
+/** The pairs a bridge links task names (details.links): a source page and the page it links to. */
+function linkPairs(d) {
+  return (Array.isArray(d.links) ? d.links : [])
+    .filter((pair) => text(pair?.url) && text(pair?.linkTo))
+    .slice(0, MAX_LINK_PAIRS);
 }
 
 /** A name's last label that is a file's, not a domain's: "pricing.html" is a page. */
@@ -716,6 +729,61 @@ async function checkShoppingTask(task, action, { fetch, now }) {
 }
 
 /**
+ * A bridge links task's pairs (AC plan P-10), each source page read for
+ * its link as one page's is (checkPage 'links'), at once. Passed once every
+ * page links to its own; the first page still missing one is the check's
+ * page, and each pair's result is kept (`links`). Null when a page couldn't
+ * be read: nothing to say of the plan then.
+ */
+async function checkLinkPlan(d, domains, { fetch }) {
+  const host = storedHost(domains[0]);
+  const read = await Promise.all(
+    linkPairs(d).map(async (pair) => {
+      const url = pageAddress(pair.url, host);
+      const linkTo = pageAddress(pair.linkTo, host);
+      if (!url || !linkTo || !onBrandDomain(url, domains)) {
+        return {
+          url: url ?? pair.url,
+          linkTo: linkTo ?? pair.linkTo,
+          passed: false,
+          missing: ['off_site'],
+        };
+      }
+      const found = await checkPage('links', url, { domains, linkTo: [linkTo], fetch });
+      return found && { url, linkTo, passed: found.passed, missing: found.missing };
+    }),
+  );
+  if (!read.length || read.some((pair) => !pair)) return null;
+  const failing = read.find((pair) => !pair.passed);
+  return {
+    url: (failing ?? read[0]).url,
+    passed: !failing,
+    missing: [...new Set(read.flatMap((pair) => pair.missing))],
+    links: read.map(({ url, linkTo, passed }) => ({ url, linkTo, passed })),
+  };
+}
+
+/** A check completed its task: a line in the action's History, and its Updated stamp. */
+async function recordCompleted(task, now) {
+  const { error: eventError } = await supabaseAdmin.from('action_events').insert({
+    action_id: task.action_id,
+    event: 'task_checked',
+    // Named once: by its own title when someone renamed it, else its library key.
+    data: {
+      taskId: task.id,
+      task: task.title ? null : (task.task_key ?? null),
+      title: task.title ?? null,
+    },
+    actor_id: null,
+  });
+  if (eventError) logger.warn({ err: eventError }, '[task-checks] History line not written');
+  await supabaseAdmin
+    .from('actions')
+    .update({ updated_at: now.toISOString() })
+    .eq('id', task.action_id);
+}
+
+/**
  * Checks one task and keeps what it found on it (`details.autoCheck`, with
  * the page it read): passed, it is completed and the action's History says
  * so. A task someone reopened after it passed on this page is held: its
@@ -744,6 +812,25 @@ export async function runTaskCheck(read, action, { fetch = fetchPage, now = new 
   if (!(await writeCheck(read, claim, { now }))) return { reason: 'changed' };
   const task = { ...read, details: claim, updated_at: now.toISOString() };
   const domains = await brandDomains(action.brand_id);
+  if (kind === 'linkPlan') {
+    const plan = await checkLinkPlan(d, domains, { fetch });
+    // A page that couldn't be read: only the try is kept (the claim).
+    if (!plan) return { reason: 'no_answer' };
+    // Reopened after it passed: held, as one page's is.
+    const held = previous?.held === true || previous?.passed === true;
+    const completes = plan.passed && !held;
+    const autoCheck = {
+      at: now.toISOString(),
+      triedAt: now.toISOString(),
+      ...plan,
+      ...(held ? { held: true } : {}),
+    };
+    if (!(await writeCheck(task, { ...d, autoCheck }, { completes, now }))) {
+      return { reason: 'changed' };
+    }
+    if (completes) await recordCompleted(task, now);
+    return { autoCheck };
+  }
   const url = pageAddress(d.url, storedHost(domains[0]));
   if (!url) return { reason: 'no_address' };
   let linkTo = [];
@@ -805,34 +892,18 @@ export async function runTaskCheck(read, action, { fetch = fetchPage, now = new 
   }
   if (!found) return { reason: 'no_answer' };
 
-  if (completes) {
-    const { error: eventError } = await supabaseAdmin.from('action_events').insert({
-      action_id: task.action_id,
-      event: 'task_checked',
-      // Named once: by its own title when someone renamed it, else its library key.
-      data: {
-        taskId: task.id,
-        task: task.title ? null : (task.task_key ?? null),
-        title: task.title ?? null,
-      },
-      actor_id: null,
-    });
-    if (eventError) logger.warn({ err: eventError }, '[task-checks] History line not written');
-    await supabaseAdmin
-      .from('actions')
-      .update({ updated_at: now.toISOString() })
-      .eq('id', task.action_id);
-  }
+  if (completes) await recordCompleted(task, now);
   return { autoCheck };
 }
 
 /**
  * The nightly sweep: open tasks checked `auto` that can be checked here (a
  * library task with a check, or a written one with its new text) and have a
- * page, of open actions, not held (reopened after they passed), the least
- * recently tried first, none tried in the last day, one page at a time, at
- * most SWEEP_LIMIT and SWEEP_PER_BRAND of one brand's. A failure on one task
- * is logged and the rest go on.
+ * page (a bridge links task, its pairs), of open actions, not held
+ * (reopened after they passed), the least recently tried first, none tried
+ * in the last day, one task at a time, at most SWEEP_LIMIT and
+ * SWEEP_PER_BRAND of one brand's. A failure on one task is logged and the
+ * rest go on.
  *
  * @returns {Promise<{ checked: number, passed: number }>}
  */
@@ -854,9 +925,10 @@ export async function sweepTaskChecks({
       .eq('actions.brands.is_demo', false)
       .in('status', OPEN)
       .eq('details->>check', 'auto')
-      .not('details->>url', 'is', null)
+      // A library task with a check, or a written one with its new text, on
+      // its page; or a bridge links task with its pairs (AC plan P-10).
       .or(
-        `task_key.in.(${Object.keys(CHECKS).join(',')}),and(task_key.is.null,details->change->>after.not.is.null)`,
+        `and(details->>url.not.is.null,or(task_key.in.(${Object.keys(CHECKS).join(',')}),and(task_key.is.null,details->change->>after.not.is.null))),and(task_key.eq.add_internal_links,details->links.not.is.null)`,
       )
       // A task reopened after it passed is the person's call: Check now still reads it.
       .is('details->autoCheck->>held', null)

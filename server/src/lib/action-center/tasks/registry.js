@@ -3,7 +3,8 @@
  *
  * The shared Task Library of the V1 specification: sixty-two primitives with
  * stable ids, which every definition builds its plan from, and one added
- * since (learning C4's analyze_winning_pages). An action tells the
+ * since (learning C4's analyze_winning_pages, AC plan P-10's
+ * review_link_plan). An action tells the
  * user what to achieve; its tasks say how, and a task is one of these.
  *
  * Each primitive declares, in the specification's terms:
@@ -215,6 +216,9 @@ export const TASKS = Object.freeze({
     outputs: ['paths'],
   }),
   prioritize_targets: system('prioritize_targets', { outputs: ['orderedTargets'] }),
+  // The bridge links' pairs and anchors, read by a person before they go on
+  // the pages (AC plan P-10).
+  review_link_plan: human('review_link_plan', { outputs: ['links'] }),
   define_validation_baseline: system('define_validation_baseline', {
     outputs: ['baseline', 'window'],
   }),

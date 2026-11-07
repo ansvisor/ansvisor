@@ -275,6 +275,38 @@ export function TaskDetailView({
             </Field>
           )}
           {details.linkTo && <Field label={t('linkTo')}>{details.linkTo}</Field>}
+          {details.links?.length > 0 && (
+            <Field label={t('links')}>
+              <ul className="space-y-1">
+                {details.links.map((link) => {
+                  const state = details.lastCheck?.links?.find((l) => l.url === link.url)?.passed;
+                  return (
+                    <li key={`${link.url}→${link.linkTo}`} className="break-all">
+                      {pagePath(link.url)} → {pagePath(link.linkTo)}
+                      {link.anchor && (
+                        <span className="text-muted-foreground">
+                          {' '}
+                          · {t('linkAnchor', { anchor: link.anchor })}
+                        </span>
+                      )}
+                      {state !== undefined && (
+                        <span
+                          className={cn(
+                            'ml-1',
+                            state
+                              ? 'text-emerald-700 dark:text-emerald-400'
+                              : 'text-amber-700 dark:text-amber-400',
+                          )}
+                        >
+                          {state ? t('linkFound') : t('linkNotFound')}
+                        </span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </Field>
+          )}
           {details.where && <Field label={t('where')}>{details.where}</Field>}
           {details.why && <Field label={t('why')}>{details.why}</Field>}
           {details.change && (
