@@ -74,6 +74,7 @@ vi.mock('@/lib/supabase/server', () => ({
         limit: () => chain,
         insert: (value: unknown) => ((call.op = 'insert'), (call.value = value), chain),
         update: (value: unknown) => ((call.op = 'update'), (call.value = value), chain),
+        upsert: (value: unknown) => ((call.op = 'upsert'), (call.value = value), chain),
         maybeSingle: async () => result(),
         single: async () => result(),
         then: (resolve: (r: unknown) => void) => resolve(result()),
@@ -750,6 +751,54 @@ describe('startDraftFromAction', () => {
   });
   const start = (page: string | null = PAGE) =>
     startDraftFromAction(BRAND, ACTION, TASK, { page, title: 'Recover visibility' });
+
+  it('puts a bridge links page’s links in Your input, in the words it is given (AC plan P-10)', async () => {
+    const pairs = {
+      linkPairs: [
+        { from: PAGE, to: 'https://northwind.example/pricing', anchor: 'Pricing' },
+        { from: 'https://northwind.example/other', to: 'https://northwind.example/demo' },
+      ],
+    };
+    reads = {
+      actions: action(pairs),
+      action_tasks: { id: TASK, task_key: 'optimize_content', status: 'in_progress' },
+      content_drafts: [],
+      brands: { site_type: 'b2b', industry: 'Software', shopping_mode_enabled: false },
+      prompts: [],
+      content_opportunities: null,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ error: 'x' }), { status: 502 })),
+    );
+    const labels = { name: 'Links to add on this page', linkTo: 'Link to', anchor: 'Link text' };
+    await startDraftFromAction(BRAND, ACTION, TASK, { page: PAGE, title: 'x', linkLabels: labels });
+    expect(calls.filter((call) => call.op === 'upsert')).toEqual([
+      {
+        table: 'content_draft_inputs',
+        op: 'upsert',
+        value: {
+          draft_id: 'action-draft',
+          data: [
+            {
+              name: 'Links to add on this page',
+              rows: [
+                ['Link to', 'Link text'],
+                ['https://northwind.example/pricing', 'Pricing'],
+              ],
+            },
+          ],
+          updated_by: 'u1',
+        },
+        filters: [],
+      },
+    ]);
+
+    // Without its words, or for a page with no link, nothing is written there.
+    calls = [];
+    await startDraftFromAction(BRAND, ACTION, TASK, { page: PAGE, title: 'x' });
+    expect(calls.some((call) => call.op === 'upsert')).toBe(false);
+  });
 
   it('writes the draft for the page, linked to the action, and starts the task', async () => {
     reads = {

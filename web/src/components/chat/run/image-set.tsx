@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { Check, Download } from 'lucide-react';
+import { Check, Download, RefreshCw } from 'lucide-react';
 import { saveBlob } from '@/lib/download';
 import { cn } from '@/lib/utils';
 
@@ -64,9 +64,21 @@ export async function asPng(blob: Blob): Promise<Blob> {
  * card: each one, the selected one marked (the first, until another is
  * picked), and PNG for the selected one. The person picks another in their
  * own chat; its file in Files becomes that one. The PNG is named after the
- * set's `title`.
+ * set's `title`. Try again (W4-08b), on the latest answer of the person's
+ * own chat: the chat puts a request for new images with the same model in
+ * the box, for the person to add a change to and send (`onTryAgain`).
  */
-export function ImageSet({ runId, n, title }: { runId: string; n: number; title: string }) {
+export function ImageSet({
+  runId,
+  n,
+  title,
+  onTryAgain,
+}: {
+  runId: string;
+  n: number;
+  title: string;
+  onTryAgain?: () => void;
+}) {
   const t = useTranslations('chatDeliverable.images');
   const base = `/api/chat/runs/${runId}/files/${n}/images`;
   const [set, setSet] = useState<SetRead | null>(null);
@@ -183,6 +195,18 @@ export function ImageSet({ runId, n, title }: { runId: string; n: number; title:
         })}
       </div>
       <div className="flex flex-wrap items-center gap-1">
+        {onTryAgain && set.mine && (
+          <button
+            type="button"
+            data-action="deliverable.tryAgain"
+            title={t('tryAgainTip')}
+            onClick={onTryAgain}
+            className={ACTION}
+          >
+            <RefreshCw className="size-3.5" aria-hidden />
+            {t('tryAgain')}
+          </button>
+        )}
         <button
           type="button"
           data-action="deliverable.png"

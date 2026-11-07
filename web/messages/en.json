@@ -1306,6 +1306,10 @@
         "title": "Strong AI conversions on {targets}",
         "description": "These pages turn AI traffic into key events well above your site’s rate."
       },
+      "bridge_link_gap": {
+        "title": "Link {targets} to pages that convert",
+        "description": "AI sends readers to these pages and few of them convert. Pages on the same topic that convert have little AI traffic."
+      },
       "ai_landing_underperforming": {
         "title": "Weak engagement on {targets}",
         "description": "AI visitors engage on these pages well below your site’s rate."
@@ -1956,6 +1960,11 @@
           "what": "What",
           "url": "URL",
           "urlPlaceholder": "e.g. /blog/ai-search-tracking",
+          "linkTo": "Link to",
+          "links": "Links",
+          "linkAnchor": "as “{anchor}”",
+          "linkFound": "linked",
+          "linkNotFound": "not linked yet",
           "where": "Where",
           "why": "Why",
           "change": "Change",
@@ -1984,7 +1993,9 @@
             "no_answer": "Couldn't read the page. Try again later.",
             "changed": "The task changed while it was checked. Try again.",
             "closed": "This action is closed.",
-            "no_shopping_path": "This page's draft has no shopping path left to check: it was archived, or its path was removed."
+            "no_shopping_path": "This page's draft has no shopping path left to check: it was archived, or its path was removed.",
+            "no_link_source": "This task doesn't say which page the links go on. Add it as the task's URL, or check the task yourself.",
+            "no_link_target": "Neither this task nor its action names a page to link to. Check the task yourself."
           },
           "checkFailed": "Couldn't check the task. Try again.",
           "type": "Type",
@@ -2157,6 +2168,30 @@
           "prompts": "Prompts it should answer",
           "promptsValue": "{count, plural, one {# prompt} other {# prompts}}"
         },
+        "bridgeLinks": {
+          "why": "AI sends readers to these pages and few of them convert. Each one gets a link to a page on its topic that does, so AI finds that page too, and readers follow the click.",
+          "sourceFigures": "{aiVisits, plural, one {# AI visit} other {# AI visits}} · {citations, plural, one {# citation} other {# citations}} in 28 days",
+          "reasons": {
+            "sells": "Sells: {count, plural, one {# order} other {# orders}} in 28 days",
+            "converts": "Converts: {count, plural, one {# key event} other {# key events}} in 28 days",
+            "new_page": "A new page on the same topic, not cited yet"
+          },
+          "salesPages": {
+            "pricing": "Your pricing page",
+            "demo": "Your demo page",
+            "product": "A product page",
+            "category": "A category page",
+            "feature": "A feature page"
+          },
+          "anchor": "Link text: “{anchor}”",
+          "none": "No links left to suggest.",
+          "copyPlan": "Copy link plan",
+          "copied": "Link plan copied",
+          "copyFailed": "Couldn’t copy the link plan",
+          "planLine": "On {from}, link to {to} with the text “{anchor}”",
+          "planLineNoAnchor": "On {from}, link to {to}",
+          "startNow": "Start now opens each page in the Content Editor, its link in Your input."
+        },
         "shoppingLinks": {
           "source": "Source",
           "sourceValue": "The catalog check after each sync",
@@ -2252,7 +2287,12 @@
         "failed": "Couldn't open the Content Editor. Try again.",
         "someFailed": "Some drafts couldn't be started. Start now again writes the rest.",
         "pageNotRead": "Couldn't read a live page, so its draft starts with its title. Paste the page into the editor.",
-        "chatFailed": "Couldn't start Chat. Try again."
+        "chatFailed": "Couldn't start Chat. Try again.",
+        "linkTable": {
+          "name": "Links to add on this page",
+          "linkTo": "Link to",
+          "anchor": "Link text"
+        }
       },
       "play": {
         "title": "{siteType, select, ecommerce {What to do for an online store} b2b {What to do for a SaaS} app {What to do for an app} b2c {What to do for a travel brand} other {What to do here}}",
@@ -2700,6 +2740,12 @@
         "description": "These sources are cited when answers discuss your brand, and could reference your own pages.",
         "goal": "Turn third-party mentions into references to your assets."
       },
+      "bridge_links": {
+        "title": "Link {targets} to pages that convert",
+        "titleGeneric": "Link AI-visited pages to pages that convert",
+        "description": "AI sends readers to these pages and few of them convert. A link to a page on the same topic that converts puts it one click away.",
+        "goal": "So AI finds these pages too, and readers follow the click."
+      },
       "protect_valuable_citations": {
         "title": "Protect citations on {targets}",
         "titleGeneric": "Protect valuable citations",
@@ -3128,6 +3174,8 @@
       "identify_inclusion_path_target": "Find a legitimate path onto {targets}",
       "prioritize_targets": "Prioritize targets by impact",
       "prioritize_targets_target": "Prioritize {targets} by impact",
+      "review_link_plan": "Review the links to add",
+      "review_link_plan_target": "Review the links to add on {targets}",
       "define_validation_baseline": "Record the baseline to measure against",
       "define_validation_baseline_target": "Record the baseline for {targets}",
       "create_content_brief": "Create a content brief",
@@ -3238,6 +3286,7 @@
       "strengthen_reference_asset": "The page is live with the facts, sources or tables added, and fetched again it has them",
       "strengthen_entity_content": "The page describes the brand as its profile does, fetched again",
       "add_internal_links": "The pages that should link to it do, fetched again",
+      "review_link_plan": "Each link and its anchor text is approved or changed: you confirm it",
       "improve_cta_path": "The call to action is live on the page: you confirm it",
       "publish_content": "The page is published at its address and answers when fetched",
       "fix_crawler_access": "robots.txt and the page let the AI crawlers in, fetched again",
@@ -3288,7 +3337,8 @@
       "canonical_noindex": "its canonical tag points to a page that asks not to be indexed",
       "canonical_not_found": "its canonical tag points to a page that isn't there",
       "canonical_error_status": "its canonical tag points to a page that answers with an error",
-      "links_not_for_sale": "the page still links products that no longer sell"
+      "links_not_for_sale": "the page still links products that no longer sell",
+      "link_missing": "the page doesn't link to the page it should yet"
     },
     "taskChecks": {
       "auto": "Automatic: we fetch the page again",
@@ -4390,6 +4440,7 @@
     "model": "Model",
     "modelAuto": "Auto",
     "modelAutoHow": "Haiku reads, Sonnet writes",
+    "modelImage": "Image · {model}",
     "modelMenu": {
       "label": "Model and effort",
       "title": "Model",
@@ -4475,7 +4526,8 @@
           "name": "Find opportunities",
           "starter": "Find content opportunities for"
         },
-        "audit": { "name": "Improve with audit", "starter": "Run an audit on" }
+        "audit": { "name": "Improve with audit", "starter": "Run an audit on" },
+        "image": { "name": "Create image", "starter": "Create an image for" }
       }
     },
     "reference": {
@@ -4499,7 +4551,9 @@
       "connect": "Connect a tool",
       "connectAsk": "Ask your Admin to connect",
       "connectNote": "Admins connect · others ask an Admin",
-      "connectAsked": "Connect a tool so Chat can use it"
+      "connectAsked": "Connect a tool so Chat can use it",
+      "image": "Create an image",
+      "imageNote": "Chat asks which image model to use, then creates it"
     },
     "tab": "Tab",
     "under": {
@@ -4592,7 +4646,9 @@
     "noUndo": "This can’t be undone from Chat once it’s done.",
     "pausedCap": "You've used this month's AI limit, so Chat stopped here.",
     "connectionLost": "Lost the connection to Chat. It keeps working: reload the page to see where it is.",
-    "untitledExport": "Chat"
+    "untitledExport": "Chat",
+    "tryAgainImages": "Try again: make {count} new images with {model}.",
+    "tryAgainImagesSame": "Try again: make {count} new images with the same image model."
   },
   "chatDebug": {
     "title": "Debug · staff only",
@@ -4722,7 +4778,9 @@
       "unreadable": "Couldn't show the images. They are in Files.",
       "pickFailed": "Couldn't pick that image. Try again.",
       "png": "PNG",
-      "downloaded": "Downloaded {name}"
+      "downloaded": "Downloaded {name}",
+      "tryAgain": "Try again",
+      "tryAgainTip": "Puts a request for 4 new images in the box: add a change, then send"
     },
     "task": {
       "line": "Task: {title}",
@@ -5336,6 +5394,31 @@
         "schedulePaused": "{title} is paused",
         "followUpResult": "{title} · result",
         "open": "Open"
+      },
+      "outside": {
+        "title": "Send to {to}",
+        "line": "{job} · waits for your click · expires {date}",
+        "subject": "Subject:",
+        "footer": "They get only this summary and the PDF, signed “Sent by you from your workspace via Ansvisor”. No links into Ansvisor. Replies come to you.",
+        "send": "Send",
+        "sending": "Sending…",
+        "cancel": "Cancel",
+        "sent": "Sent to {to}",
+        "cancelled": "Cancelled. Nothing went to {to}.",
+        "errors": {
+          "forbidden": "Only Admins and Managers can send this.",
+          "trial": "Not in the free trial. Choose a plan to e-mail people outside your workspace.",
+          "plan": "Your workspace is read-only. Choose a plan to send it.",
+          "daily_limit": "Your workspace sent 50 e-mails outside it today. Try again tomorrow.",
+          "busy": "It’s being sent or cancelled already.",
+          "signed_out": "Your session ended. Sign in again.",
+          "sent": "It was sent already.",
+          "cancelled": "It was cancelled already.",
+          "expired": "It expired after 7 days without a Send.",
+          "removed": "That address is no longer on the job.",
+          "not_found": "This e-mail is gone.",
+          "failed": "That didn’t work. Try again."
+        }
       },
       "lands": "Results from your agents land here.",
       "landsWithSuggestions": "Results from your agents and daily suggestions land here.",
@@ -6189,7 +6272,9 @@
       "callAgent": "Ran the agent “{agent}”",
       "agentGoLiveOff": "Stopped the agent “{name}” publishing and sending on its own",
       "modelProviderOn": "Turned on {provider} models in Chat",
-      "modelProviderOff": "Turned off {provider} models in Chat"
+      "modelProviderOff": "Turned off {provider} models in Chat",
+      "outsideEmailSent": "Sent “{title}” to {to}, outside the workspace",
+      "outsideEmailCancelled": "Cancelled the e-mail of “{title}” to {to}"
     },
     "undo": {
       "ok": "Undone.",
@@ -7944,7 +8029,15 @@
         "timeZone": "Time zone",
         "timeZoneHint": "This job’s own clock. Changing your time zone in Settings doesn’t move it.",
         "timeZoneSearch": "Search time zones",
-        "timeZoneEmpty": "No time zone matches."
+        "timeZoneEmpty": "No time zone matches.",
+        "outside": "People outside your workspace",
+        "outsidePlaceholder": "jane@client.com",
+        "outsideAdd": "Add",
+        "outsideRemove": "Remove {address}",
+        "outsideWrong": "That isn’t an e-mail address.",
+        "outsideHint": "Up to {max}. Each run prepares their e-mail with the summary and the PDF. It goes only when you click Send in your Inbox.",
+        "outsideRole": "Only Admins and Managers add people outside the workspace.",
+        "outsideTrial": "Not in the free trial. Choose a plan to e-mail people outside your workspace."
       },
       "errors": {
         "not_found": "This job is gone.",
@@ -7955,6 +8048,10 @@
         "when": "That time doesn’t work.",
         "prompt": "Say what Chat does each run.",
         "zone": "Pick a time zone from the list.",
+        "outside_role": "Only Admins and Managers add people outside the workspace.",
+        "outside_trial": "People outside the workspace can’t be added in the free trial.",
+        "outside_max": "Up to 5 people outside the workspace per job.",
+        "outside_invalid": "Check the e-mail addresses.",
         "failed": "That didn’t work. Try again."
       }
     }

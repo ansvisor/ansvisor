@@ -88,6 +88,7 @@ async function render(
   props: {
     canChange?: boolean;
     onTasks?: (strip: ChatTaskStrip) => void;
+    onTryAgain?: () => void;
     onAsk?: (prompt: string) => void;
     onOpenHere?: (href: string) => void;
   } = {},
@@ -431,6 +432,31 @@ describe('DeliverableCard for a set of images (W4-08, CHAT-15 items 21–22)', (
     expect(name).toBe('cover-image-geo-strategies.jpg');
     expect(saved.size).toBe(2);
     expect(toast).toHaveBeenCalledWith('Downloaded cover-image-geo-strategies.jpg');
+  });
+
+  it('offers Try again before PNG when the chat hands it, in the person’s own chat (W4-08b)', async () => {
+    serve({ count: 4, selected: 1, mine: true });
+    await render(images);
+    await settle();
+    // No Try again unless the chat offers it (an older answer, a run under way).
+    expect(action('deliverable.tryAgain')).toBeNull();
+
+    const onTryAgain = vi.fn();
+    await render(images, { onTryAgain });
+    await settle();
+    const buttons = [...container.querySelectorAll('[data-slot="image-set"] [data-action]')].map(
+      (el) => el.getAttribute('data-action'),
+    );
+    expect(buttons).toEqual(['deliverable.tryAgain', 'deliverable.png']);
+    await click(action('deliverable.tryAgain')!);
+    expect(onTryAgain).toHaveBeenCalledOnce();
+  });
+
+  it('offers no Try again on a teammate’s shared chat (W4-08b)', async () => {
+    serve({ count: 4, selected: 1, mine: false });
+    await render(images, { onTryAgain: vi.fn() });
+    await settle();
+    expect(action('deliverable.tryAgain')).toBeNull();
   });
 
   it('says the images are in Files when it can’t show them', async () => {

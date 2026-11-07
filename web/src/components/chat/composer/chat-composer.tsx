@@ -20,6 +20,7 @@ import type { ChatMode } from '@/lib/chat/precedence';
 import { AUTO_CHOICE, type ChatModelChoice } from '@/lib/chat/models';
 import { MAX_REFERENCES, type ChatReference } from '@/lib/chat/references';
 import {
+  IMAGE_SHORTCUT,
   keepsTrigger,
   shortcutCommand,
   type Shortcut,
@@ -198,6 +199,7 @@ export function ChatComposer({
   onOpenModel,
   modelChoice,
   onModelChoice,
+  imageModel = null,
   onSaveKey,
   keyForm = false,
   className,
@@ -260,6 +262,12 @@ export function ChatComposer({
    */
   modelChoice?: ChatModelChoice;
   onModelChoice?: (choice: ChatModelChoice) => void;
+  /**
+   * The image model the chat's latest answer picked or made images with
+   * (CHAT-15 item 18, W4-08b): the model button reads "Image · {model}"
+   * for that task; null for the chat model.
+   */
+  imageModel?: string | null;
   /**
    * Save securely on the pasted-key line: the text goes to the page's own
    * key form, never to Chat. Without it, only Remove shows.
@@ -428,6 +436,19 @@ export function ChatComposer({
           },
         ]
       : []),
+    // Create an image (mockup #plusmenu): the /image shortcut's first words in the box, for
+    // those who may make images (Admins and Managers; generate_image's role).
+    ...(readOnly
+      ? []
+      : [
+          {
+            key: 'image' as const,
+            mark: '◫',
+            label: t('plus.image'),
+            note: t('plus.imageNote'),
+            onPick: () => pickShortcut(IMAGE_SHORTCUT),
+          },
+        ]),
     {
       key: 'connect',
       mark: '⛓',
@@ -1074,7 +1095,10 @@ export function ChatComposer({
                 aria-expanded={modelOpen}
                 className="rounded-[7px] px-1.5 py-0.5 text-foreground hover:bg-muted aria-expanded:bg-muted"
               >
-                {chosenLabel ?? <ModelAuto />} ▾
+                {imageModel
+                  ? t('modelImage', { model: imageModel })
+                  : (chosenLabel ?? <ModelAuto />)}{' '}
+                ▾
               </button>
               {modelOpen && (
                 <ModelMenu

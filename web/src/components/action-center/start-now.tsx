@@ -61,6 +61,12 @@ export function useStartNow(brandId: string) {
           const result = await startDraftFromAction(brandId, action.id, work.taskId, {
             page,
             title: action.title,
+            // A bridge links page gets its links in Your input (AC plan P-10).
+            linkLabels: {
+              name: t('linkTable.name'),
+              linkTo: t('linkTable.linkTo'),
+              anchor: t('linkTable.anchor'),
+            },
           });
           if ('error' in result) {
             // The drafts already written stay; the Library lists them.
