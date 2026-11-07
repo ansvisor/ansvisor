@@ -1956,6 +1956,7 @@
           "what": "What",
           "url": "URL",
           "urlPlaceholder": "e.g. /blog/ai-search-tracking",
+          "linkTo": "Link to",
           "where": "Where",
           "why": "Why",
           "change": "Change",
@@ -1984,7 +1985,9 @@
             "no_answer": "Couldn't read the page. Try again later.",
             "changed": "The task changed while it was checked. Try again.",
             "closed": "This action is closed.",
-            "no_shopping_path": "This page's draft has no shopping path left to check: it was archived, or its path was removed."
+            "no_shopping_path": "This page's draft has no shopping path left to check: it was archived, or its path was removed.",
+            "no_link_source": "This task doesn't say which page the links go on. Add it as the task's URL, or check the task yourself.",
+            "no_link_target": "Neither this task nor its action names a page to link to. Check the task yourself."
           },
           "checkFailed": "Couldn't check the task. Try again.",
           "type": "Type",
@@ -3288,7 +3291,8 @@
       "canonical_noindex": "its canonical tag points to a page that asks not to be indexed",
       "canonical_not_found": "its canonical tag points to a page that isn't there",
       "canonical_error_status": "its canonical tag points to a page that answers with an error",
-      "links_not_for_sale": "the page still links products that no longer sell"
+      "links_not_for_sale": "the page still links products that no longer sell",
+      "link_missing": "the page doesn't link to the page it should yet"
     },
     "taskChecks": {
       "auto": "Automatic: we fetch the page again",

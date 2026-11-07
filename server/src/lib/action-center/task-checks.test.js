@@ -61,6 +61,7 @@ const {
   changedRuns,
   checkKind,
   checkPage,
+  linkKey,
   pageAddress,
   runTaskCheck,
   similarity,
@@ -115,6 +116,7 @@ describe('checkKind', () => {
     expect(checkKind({ task_key: 'fix_structured_data', details: auto })).toBe('structuredData');
     expect(checkKind({ task_key: 'fix_crawler_access', details: auto })).toBe('crawlers');
     expect(checkKind({ task_key: 'optimize_content', details: auto })).toBe('changed');
+    expect(checkKind({ task_key: 'add_internal_links', details: auto })).toBe('links');
     expect(checkKind({ task_key: null, details: { ...auto, change: { after: 'New FAQ' } } })).toBe(
       'text',
     );
@@ -942,6 +944,88 @@ describe('runTaskCheck', () => {
     db.moved = true;
     expect(await runTaskCheck(task(), action, { fetch })).toEqual({ reason: 'changed' });
     expect(ops.some((op) => op.table === 'action_events')).toBe(false);
+  });
+});
+
+// An internal links task (AC plan P-10): its page links to the page it names, else the action's.
+describe('an internal links task', () => {
+  const BLOG = 'https://acme.example/blog/cold-brew';
+  const linking = (hrefs) =>
+    `<html><body><main><h1>Cold brew</h1><p>${FILLER} ${hrefs
+      .map((href) => `<a href="${href}">plans</a>`)
+      .join(' ')}</p></main></body></html>`;
+
+  it('keys a link by its host without www and its path, its query and slash aside', () => {
+    expect(linkKey('https://www.Acme.example/Pricing/?utm=x#plans')).toBe('acme.example/pricing');
+    expect(linkKey('mailto:hi@acme.example')).toBeNull();
+    expect(linkKey('not an address')).toBeNull();
+  });
+
+  it('passes when the page links to every page it names, relative or full, and says when one is missing', async () => {
+    const fetch = fetchOf({
+      [BLOG]: linking(['/pricing/?ref=blog', 'https://www.acme.example/demo']),
+    });
+    expect(
+      await checkPage('links', BLOG, {
+        linkTo: [PAGE, 'https://acme.example/demo'],
+        fetch,
+      }),
+    ).toEqual({ passed: true, missing: [] });
+    expect(
+      await checkPage('links', BLOG, {
+        linkTo: [PAGE, 'https://acme.example/contact'],
+        fetch: fetchOf({ [BLOG]: linking(['/pricing']) }),
+      }),
+    ).toEqual({ passed: false, missing: ['link_missing'] });
+    // An empty shell says nothing.
+    expect(
+      await checkPage('links', BLOG, { linkTo: [PAGE], fetch: fetchOf({ [BLOG]: '<p>x</p>' }) }),
+    ).toBeNull();
+  });
+
+  const task = (details) => ({
+    id: 't1',
+    action_id: 'a1',
+    task_key: 'add_internal_links',
+    title: null,
+    status: 'todo',
+    updated_at: '2026-10-26T10:00:00Z',
+    details: { check: 'auto', url: '/blog/cold-brew', ...details },
+  });
+  const now = new Date('2026-11-07T03:00:00Z');
+
+  it('checks the page it names (linkTo), completing the task once the link is there', async () => {
+    const fetch = fetchOf({ [BLOG]: linking(['/pricing']) });
+    const result = await runTaskCheck(
+      task({ linkTo: '/pricing' }),
+      { brand_id: 'b1' },
+      { fetch, now },
+    );
+    expect(result.autoCheck).toMatchObject({ url: BLOG, passed: true });
+    expect(ops.filter((op) => op.table === 'action_tasks').at(-1).payload.status).toBe('completed');
+  });
+
+  it('else the action’s pages, the task’s own page left out, and says when there is none', async () => {
+    db.actions = { pages: [BLOG, PAGE] };
+    const fetch = fetchOf({ [BLOG]: linking(['/']) });
+    const result = await runTaskCheck(task({}), { brand_id: 'b1' }, { fetch, now });
+    expect(result.autoCheck).toMatchObject({ passed: false, missing: ['link_missing'] });
+
+    ops = [];
+    db.actions = { pages: [BLOG] };
+    expect(await runTaskCheck(task({}), { brand_id: 'b1' }, { fetch, now })).toEqual({
+      reason: 'no_link_target',
+    });
+  });
+
+  it('says a task with no page for its links has no check, by what it lacks', async () => {
+    expect(
+      await runTaskCheck(
+        { ...task({}), details: { check: 'auto' } },
+        { brand_id: 'b1' },
+        { fetch: fetchOf({}), now },
+      ),
+    ).toEqual({ reason: 'no_link_source' });
   });
 });
 
