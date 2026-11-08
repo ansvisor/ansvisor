@@ -5,8 +5,8 @@ const brandField = () => ({
   label: 'Brand',
   type: 'string',
   required: true,
-  dynamic: 'brandList.id.name',
-  search: 'findBrand.id',
+  dynamic: 'brand_list.id.name',
+  search: 'find_brand.id',
   helpText: 'Choose a brand available to the connected Ansvisor API key.',
 });
 
@@ -63,7 +63,7 @@ const aiTraffic = (z, bundle) => {
 };
 
 const creates = {
-  getVisibilitySummary: {
+  get_visibility_summary: {
     key: 'get_visibility_summary',
     noun: 'Visibility Summary',
     display: { label: 'Get Visibility Summary', description: 'Returns visibility KPIs and leading competitors for a brand and date range.' },
@@ -77,7 +77,7 @@ const creates = {
       sample: { brand_id: 'brand-123', totals: { aiVisibilityScore: 42.5, totalMentions: 31, totalCitations: 12 }, topCompetitors: [] },
     },
   },
-  getVisibilityTrend: {
+  get_visibility_trend: {
     key: 'get_visibility_trend',
     noun: 'Visibility Trend',
     display: { label: 'Get Visibility Trend', description: 'Returns daily or weekly visibility buckets for a brand.' },
@@ -93,7 +93,7 @@ const creates = {
       sample: { granularity: 'day', buckets: [{ date: '2026-11-01', ai_visibility_score: 42.5, total_mentions: 31, total_citations: 12 }] },
     },
   },
-  getCitations: {
+  get_citations: {
     key: 'get_citations',
     noun: 'Citations',
     display: { label: 'Get Citations', description: 'Returns citation totals, source breakdowns, top domains and top URLs.' },
@@ -102,7 +102,7 @@ const creates = {
       inputFields: [
         brandField(), ...dateFields(),
         { key: 'source_filter', label: 'Source filter', type: 'string', required: false, choices: ['all', 'owned', 'competitor', 'external'], default: 'all' },
-        { key: 'limit', label: 'Top list limit', type: 'integer', required: false, default: 50, helpText: 'Between 1 and 200.' },
+        { key: 'limit', label: 'Top list limit', type: 'integer', required: false, helpText: 'Optional. The API default is 50; maximum is 200.' },
         { key: 'model', label: 'AI model filter', type: 'string', required: false, helpText: 'Optional comma-separated model slugs.' },
         { key: 'region', label: 'Region filter', type: 'string', required: false },
         { key: 'topic_id', label: 'Topic ID', type: 'string', required: false },
@@ -110,7 +110,7 @@ const creates = {
       sample: { totals: { citations: 12 }, source_breakdown: [], top_domains: [], top_urls: [] },
     },
   },
-  getAiTraffic: {
+  get_ai_traffic: {
     key: 'get_ai_traffic',
     noun: 'AI Traffic',
     display: { label: 'Get AI Traffic', description: 'Returns AI-referred visits and platform, page and country breakdowns.' },
