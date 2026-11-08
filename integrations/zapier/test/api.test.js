@@ -110,7 +110,10 @@ test('API requests remove empty filters without dropping valid values', async ()
   assert.deepEqual(calls[0].params, { brand_id: 'brand-123', limit: 0 });
 });
 
-test('metrics actions require a brand id', async () => {
+test('metrics actions require a brand id', () => {
   const { z } = mockZapier({});
-  await assert.rejects(() => creates.visibilitySummary(z, { ...bundle, inputData: {} }), /Choose a brand/);
+  assert.throws(
+    () => creates.visibilitySummary(z, { ...bundle, inputData: {} }),
+    /Choose a brand/,
+  );
 });
