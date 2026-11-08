@@ -54,7 +54,7 @@ On a self-hosted server, both cards read **Not set up on this server** until the
 
 On **AI Traffic Analytics**, open **Connect** on the **AI bots** card and choose **Fastly HTTPS log stream**. Create the connection and copy its endpoint, bearer header and JSON log format; the secret is shown once.
 
-In your Fastly service, add an **HTTPS logging endpoint**. Set its URL to the endpoint from Ansvisor, use **POST** and `application/json` as the content type, and add the custom header `Authorization` with the bearer value from Ansvisor. Choose **Newline delimited** JSON entries and a **Custom** log line format, then paste the format shown in the connection dialog and activate the service configuration.
+In your Fastly service, add an **HTTPS logging endpoint**. Set its URL to the endpoint from Ansvisor, use **POST** and `application/json` as the content type, and add the custom header `Authorization` with the bearer value from Ansvisor. Choose **Newline delimited** JSON entries and a **Custom** log line format, then paste the format shown in the connection dialog and activate the service configuration. Ansvisor automatically answers Fastly's domain-control challenge for its API endpoint, so you do not need to add a DNS record.
 
 Fastly sends request logs to Ansvisor. Only requests whose user agent names a known AI bot and whose client IP is in that operator's published ranges are counted. All incoming log records, including non-bot requests, count toward the monthly raw-log cap.
 
