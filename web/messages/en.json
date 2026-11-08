@@ -12549,12 +12549,12 @@
       "notConnectedGsc": "Not connected · see if AI is taking Google clicks",
       "unmapped": "Connected · choose a property for this brand",
       "notConfigured": "Not set up on this server",
-      "botsLoading": "Cloudflare / Vercel",
-      "botsFailed": "Cloudflare / Vercel · couldn't be read",
-      "botsLocked": "Cloudflare / Vercel · Growth+",
-      "botsNotConnected": "Cloudflare / Vercel · see which AI bots read your pages",
+      "botsLoading": "Cloudflare / Vercel / Fastly",
+      "botsFailed": "Cloudflare / Vercel / Fastly · couldn't be read",
+      "botsLocked": "Cloudflare / Vercel / Fastly · Growth+",
+      "botsNotConnected": "Cloudflare / Vercel / Fastly · see which AI bots read your pages",
       "botsWaiting": "Connected · waiting for the first AI-bot request",
-      "botsActive": "Cloudflare / Vercel · last event {when}",
+      "botsActive": "Cloudflare / Vercel / Fastly · last event {when}",
       "upgrade": "Upgrade",
       "connect": "Connect",
       "connecting": "Connecting…",
@@ -12563,7 +12563,7 @@
     },
     "bots": {
       "title": "AI bots reading your site",
-      "description": "See which AI bots read your pages, from your own Cloudflare, Vercel or any server's logs. Verified bots only: the user agent and the operator's published IP ranges must both match. No change to your site's speed.",
+      "description": "See which AI bots read your pages, from your own Cloudflare, Vercel, Fastly or any server's logs. Verified bots only: the user agent and the operator's published IP ranges must both match. No change to your site's speed.",
       "connected": "Connected",
       "choose": "How should your site send AI-bot requests?",
       "addAnother": "Add another way",
@@ -12581,7 +12581,7 @@
       "usageNoCap": "This month: {stored} detailed {count, plural, one {row} other {rows}}.",
       "paused": "Detailed rows paused until {day}, totals still counted.",
       "rawUsage": "Log records this month: {raw} of {cap}.",
-      "logsPaused": "Log files paused until {day}: this month's log records are used up, so requests from Logpush, the Vercel drain, the webhook or an upload aren't read until then.",
+      "logsPaused": "Log files paused until {day}: this month's log records are used up, so requests from Fastly, Logpush, the Vercel drain, the webhook or an upload aren't read until then.",
       "secretOnce": "Copy these settings now: the secret in them isn't shown again. Lost it? Revoke this connection and create a new one.",
       "copy": "Copy",
       "copied": "Copied",
@@ -12591,6 +12591,7 @@
       "copyLogpushJob": "Job settings (Cloudflare API: POST /zones/ZONE_ID/logpush/jobs)",
       "copyEndpoint": "Endpoint URL",
       "copyHeader": "Custom header",
+      "copyFastlyFormat": "Fastly JSON log format",
       "vercelFormat": "Format: JSON. Log sources: {sources}.",
       "done": "Done",
       "kinds": {
@@ -12608,6 +12609,11 @@
           "name": "Vercel Drain",
           "what": "Vercel sends your request logs; Ansvisor keeps the AI bots and drops the rest.",
           "cost": "Vercel Pro and Enterprise only, at $0.50 per GB of drained data on your Vercel bill."
+        },
+        "fastly_log_stream": {
+          "name": "Fastly HTTPS log stream",
+          "what": "Fastly sends request logs to Ansvisor over HTTPS; only AI bots with a verified user agent and source IP are counted.",
+          "cost": "All incoming log records count toward the monthly raw-log cap, including requests that are not AI bots."
         },
         "log_webhook": {
           "name": "Any server (webhook)",
@@ -12631,6 +12637,11 @@
           "In Vercel, open Team Settings › Drains and add a Logs drain for your site's project.",
           "Choose Custom endpoint and paste the endpoint URL below.",
           "Set the format to JSON and add the custom header below."
+        ],
+        "fastly_log_stream": [
+          "In Fastly, open your service and add an HTTPS logging endpoint.",
+          "Set the endpoint URL below, use POST, set Content-Type to application/json, and add the custom header below (Authorization with the Bearer value).",
+          "Choose JSON log entries with Newline delimited output and a custom log line format. Paste the format below, then activate the service configuration."
         ],
         "log_webhook": [
           "In your log shipper (Vector, Fluent Bit, Logstash or your own script), add an HTTP output that POSTs to the endpoint below.",
@@ -12663,7 +12674,7 @@
     },
     "botReport": {
       "title": "AI bots reading your site",
-      "needs": "Growth and above · needs Cloudflare, Vercel or your server's logs",
+      "needs": "Growth and above · needs Cloudflare, Vercel, Fastly or your server's logs",
       "typesTitle": "By bot type",
       "pagesTitle": "Pages AI bots read",
       "columns": {
@@ -12679,7 +12690,7 @@
         "user": "User fetch"
       },
       "overlayTitle": "See which AI bots read your pages",
-      "connectBody": "Connect Cloudflare or Vercel in 2 minutes, or upload your server's access log. Verified bots only. No change to your site's speed.",
+      "connectBody": "Connect Cloudflare, Vercel or Fastly in 2 minutes, or upload your server's access log. Verified bots only. No change to your site's speed.",
       "lockedBody": "The AI bot report comes with the Growth plan. Verified bots only, from your own Cloudflare, Vercel or server logs.",
       "connect": "Connect",
       "preview": "Preview with sample data",
