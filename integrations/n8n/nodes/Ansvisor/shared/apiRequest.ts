@@ -28,7 +28,17 @@ export function buildAnsvisorApiRequest(
   operation: AnsvisorOperation,
   parameters: AnsvisorRequestParameters,
 ): AnsvisorApiRequest {
-  if (resource === 'brand' && operation === 'getAll') {
+  const supportedOperation =
+    (resource === 'brand' && operation === 'getAll') ||
+    (resource === 'visibility' &&
+      (operation === 'getSummary' || operation === 'getTrend')) ||
+    ((resource === 'citations' || resource === 'aiTraffic') && operation === 'get');
+
+  if (!supportedOperation) {
+    throw new Error('The selected Ansvisor resource and operation are not supported.');
+  }
+
+  if (resource === 'brand') {
     return { path: '/api/v1/brands', qs: {} };
   }
 
