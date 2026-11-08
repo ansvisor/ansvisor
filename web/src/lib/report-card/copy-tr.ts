@@ -43,6 +43,7 @@ export const tr: CardCopy = {
   // ─── Sayfa 1 ───────────────────────────────────────────────────────────────
   status: {
     eyebrow: 'Ücretsiz yapay zekâ görünürlük karnesi',
+    trial: 'Ücretsiz deneyin',
     title: (company) => `${company}, yapay zekâ yanıtlarında ne kadar görünür?`,
     subtitle: (domain, country, language, date) => `${domain} · ${country}, ${language} · ${date}`,
     oneTime: (date) =>
@@ -212,9 +213,13 @@ export const tr: CardCopy = {
     legendMissed: 'Yanıtladı, adınızı anmadı',
     legendNone: 'Yanıt yok',
     colQuestion: 'Soru',
-    colSearches: 'Arama',
+    colSearches: 'Aylık arama',
     colInstead: 'Önerilen',
-    searchesNote: 'Arama: sorunun anahtar kelimesinin ülkenizde aylık Google arama sayısı.',
+    // B: bin, as Google Ads writes it in Turkish; a no-break space keeps "1 B" whole.
+    ranges: ['10–100', '100–1\u00a0B', '1\u00a0B–10\u00a0B', '10\u00a0B–100\u00a0B', '100\u00a0B+'],
+    low: 'Düşük',
+    searchesNote: (low) =>
+      `Aylık arama: sorunun anahtar kelimesinin ülkenizde aylık Google arama sayısı, Google’ın verdiği aralık olarak. ${low ? 'Düşük: Google’ın sayı vermeyeceği kadar az arama; insanların' : 'İnsanların'} yapay zekâya sorduğu sorular Google aramalarından daha uzundur, bu yüzden bir anahtar kelimenin sayısı bu soruları olduğundan az gösterir.`,
     groupCount: (n) => `${n} soru`,
     related: 'alıcılarınızın başka bir ihtiyacı',
     growthKey: 'Açık sütunlar: Google motorları, Growth’ta',
@@ -262,11 +267,11 @@ export const tr: CardCopy = {
   // ─── Sayfa 4 ───────────────────────────────────────────────────────────────
   value: {
     eyebrow: 'Değeri',
-    title: 'Yapay zekâ ziyaretlerinin değeri ve bu karneye uyan plan',
+    title: 'Yapay zekâ ziyaretlerinin değeri ve bu karne için planlar',
     subtitle:
-      'Yapay zekâ ziyaretleri, aynı tıklamaların Google Ads’teki fiyatıyla; ve bu karnenin ölçtüğü plan.',
+      'Yapay zekâ ziyaretleri, aynı tıklamaların Google Ads’teki fiyatıyla; iki plan yan yana; ve Ansvisor’ın nasıl yardım ettiği.',
     demand: (searches, country, keywords) =>
-      `Sorularınızın anahtar kelimeleri ${country} içinde ayda ${searches} kez Google’da aranıyor (hacmi olan ${keywords} kelime).`,
+      `Sorularınızın anahtar kelimeleri ${country} içinde ayda yaklaşık ${searches} kez Google’da aranıyor (hacmi olan ${keywords} kelime).`,
     cpcLine: (cpc, keywords, total) =>
       `Bu kelimelerin Google Ads’teki tıklama başı ortanca maliyeti: ${cpc} (${total} kelimenin ${keywords} tanesinde var).`,
     colShare: 'Yapay zekâ size gönderse',
@@ -295,18 +300,45 @@ export const tr: CardCopy = {
     revenueRow: (visits, low, high) => `Ayda ${visits} yapay zekâ ziyareti: ayda ${low}–${high}`,
     scenarios:
       'Senaryodur; tahmin ya da garanti değildir. Ansvisor’daki Yapay Zekâ Trafiği, kurulduktan sonra gerçek yapay zekâ ziyaretlerinizi ölçer.',
-    planTitle: 'Bu karneye uyan plan',
+    planTitle: 'Bu karne için planlar',
+    planName: (plan) => `Ansvisor ${plan}`,
+    starterTag: 'Bu karneye uyan',
+    growthTag: 'Google motorlarını ekler',
+    perMonth: (price) => `aylık ${price}`,
+    yearly: (price) => `ya da yıllık ödemeyle ${price} (%20 indirim)`,
     starterMatch: (engines, headed) =>
       headed
         ? `${engines} motorlarını her gün izler: bu karnenin görünürlüğü bu motorlarla sayıldı.`
         : `${engines} motorlarını her gün izler.`,
-    perMonth: (price) => `aylık ${price}`,
-    yearly: (price) => `ya da yıllık ödemeyle ${price}: %20 indirimli`,
-    starterLimits: (prompts, brands) =>
-      `Her gün ${prompts} soru, ${brands} marka, Sohbet ve Ajan Merkezi.`,
-    googleEngines: 'Gemini, Google AI Overviews ve Google AI Mode',
-    growthLine: (engines, price, yearly, prompts, brands) =>
-      `Growth, aylık ${price} ya da yıllık ${yearly} (%20 indirimli): ${engines} (1. sayfadaki Growth bandı), ${prompts} soru, ${brands} marka ve tam otomatik ajanlar ekler.`,
+    growthAdds: (engines, banded) =>
+      banded
+        ? `${engines} motorlarını da her gün izler: 1. sayfadaki Growth bandı.`
+        : `${engines} motorlarını da her gün izler.`,
+    googleEngines: 'Google AI Overviews ve Google AI Mode',
+    planLimits: (prompts, brands) => `Her gün ${prompts} soru, ${brands} marka.`,
+    aiIncluded: 'Yapay zekâ kullanımı dahil.',
+    aiMore: (times) =>
+      `${times} kat yapay zekâ kullanımı: her ay daha çok içerik fırsatı ve taslak, daha çok ajan çalışması ve Aksiyon Merkezi önerisi.`,
+    siteAudits: (pages) => `Site Denetimi: ayda ${pages} sayfa.`,
+    starterAgents: 'Sohbet ve her değişiklikten önce soran ajanlarıyla Ajan Merkezi.',
+    growthAgents: 'Tam otomatik: seçtiğiniz ajanlar kendi başına yayınlar.',
+    mcpRead: 'MCP: Ansvisor verilerinizi yapay zekâ araçlarından okuyun.',
+    mcpReadWrite: 'MCP: Ansvisor verilerinizi yapay zekâ araçlarından okuyun ve yazın.',
+    workTitle: 'Ansvisor işi sizinle birlikte yapar',
+    work: [
+      {
+        title: 'Sohbet',
+        body: 'Kendi Ansvisor verilerinizden yanıt verir, bu karnenin ilk hafta işlerini hazırlar ve eklediğiniz dosyaları okur.',
+      },
+      {
+        title: 'Ajan Merkezi',
+        body: 'Kullanıma hazır ajanlar ve 700’den fazla beceri: rutin yapay zekâ görünürlüğü işlerini bir takvime göre ya da bir şey değiştiğinde yürütür.',
+      },
+      {
+        title: 'MCP',
+        body: 'Ansvisor verilerinizi Claude, ChatGPT, Cursor ve diğer yapay zekâ araçlarından kullanın.',
+      },
+    ],
     ctaTitle: 'Kendi sorularınızı ölçün',
     ctaBody: (prompts, engines, questions) =>
       `Ücretsiz denemeyi başlatın: Starter ${engines} motorlarında her gün ${prompts} soru izler; bu karnenin ${questions} sorusu ve kendi sorularınızdan ${Math.max(prompts - questions, 0)} tanesi sığar.`,
@@ -315,6 +347,6 @@ export const tr: CardCopy = {
       `Bu karnenin ${questions} sorusunu ${country} için izlemeye alın, kendi sorularınızı ekleyin.`,
       'İlk çalışmadan sonra Aksiyon Merkezi’ni açın: sıradaki işler, öncelik sırasıyla.',
     ],
-    ctaLink: 'app.ansvisor.com adresinde ücretsiz denemeyi başlatın',
+    button: 'Ücretsiz denemeyi başlatın',
   },
 };

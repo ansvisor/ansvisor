@@ -17,6 +17,10 @@ import type { CitedSiteKind, ReportCardEngine, ReportCardPayload } from './paylo
 export const REPORT_CARD_SIGN_UP_URL =
   'https://app.ansvisor.com/en/sign-up?utm_source=report-card&utm_medium=pdf';
 
+/** A trial button's link, marked with the page it is on: page 1's small one, page 4's. */
+export const signUpUrlFor = (page: 1 | 4): string =>
+  `${REPORT_CARD_SIGN_UP_URL}&utm_content=page${page}`;
+
 export const engineLabel = (engine: ReportCardEngine): string => PLATFORM_LABELS[engine] ?? engine;
 
 /** At most `max` characters, cut at a word with "…": names and questions keep each page to one. */
@@ -536,6 +540,28 @@ export function questionGroups(card: ReportCardPayload): QuestionGroup[] {
 }
 
 /**
+ * The least monthly searches of each of Google Keyword Planner's ranges, as
+ * the card's copy names them (owner decision 2026-11-08): 1 to 99 is
+ * "10–100", Google's lowest reported values being 10, 20, 30…
+ */
+const SEARCH_RANGE_FLOORS = [1, 100, 1_000, 10_000, 100_000] as const;
+
+/**
+ * A question's searches as page 2 prints them (owner decision 2026-11-08):
+ * the Keyword Planner range they fall in, never an exact count; "Low" when
+ * Google gave 0 or none (too few searches for Google to report, not nobody
+ * asking). The questions stay ordered by the real figure.
+ */
+export function searchesLabel(volume: number | null, t: CardCopy = cardCopy()): string {
+  if (volume === null || volume <= 0) return t.questions.low;
+  let range = 0;
+  SEARCH_RANGE_FLOORS.forEach((floor, i) => {
+    if (volume >= floor) range = i;
+  });
+  return t.questions.ranges[range];
+}
+
+/**
  * Page 2's one-line summary, above the grid: none named, or how many of the
  * main engines' answers named the company and in how many questions.
  */
@@ -709,6 +735,23 @@ export const planPrompts = (plan: ComparedPlan): number => PLANS[plan].limits.ma
 /** The brands a plan tracks. */
 export const planBrands = (plan: ComparedPlan): number => PLANS[plan].limits.maxBrands;
 
+/** A plan's name: "Starter". */
+export const planName = (plan: ComparedPlan): string => PLANS[plan].name;
+
+/**
+ * A plan's monthly AI allowance as a multiple of Starter's, as the Billing
+ * cards show it (components/settings/plan-features.ts aiUsageMultiple): never
+ * in dollars or tokens.
+ */
+export function planAiMultiple(plan: ComparedPlan): number {
+  const starter = PLANS.starter.limits.improveMonthlyBudgetUsd;
+  const own = PLANS[plan].limits.improveMonthlyBudgetUsd;
+  return starter > 0 && own > 0 ? Math.round(own / starter) : 1;
+}
+
+/** The pages a plan's Site Audit checks a month: one audit, one page. */
+export const planSiteAudits = (plan: ComparedPlan): number => PLANS[plan].limits.maxSiteAudits;
+
 /**
  * Buying the visits vs earning them: the middle row's ad cost against
  * Starter, the plan this card measured. `cheap` when the ads would cost
@@ -773,6 +816,12 @@ export function money(amount: number, currency = 'USD', locale = 'en-US'): strin
     return `${Math.round(amount).toLocaleString(locale)} ${currency}`;
   }
 }
+
+/**
+ * A figure to two significant digits, "about 6,900", where an exact count
+ * would read as more precise than Google's searches are.
+ */
+export const roughly = (value: number): number => Number(value.toPrecision(2));
 
 /** "$1.85": a cost per click, to the cent. */
 export const cents = (amount: number, currency = 'USD', locale = 'en-US'): string =>

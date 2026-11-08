@@ -1,4 +1,5 @@
 import path from 'node:path';
+import type { ReactNode } from 'react';
 import {
   Document,
   Font,
@@ -13,7 +14,6 @@ import { reportLook } from '@/lib/white-label/kit';
 import { cardCopy, type CardCopy } from './copy';
 import type { ReportCardEngine, ReportCardPayload } from './payload';
 import {
-  REPORT_CARD_SIGN_UP_URL,
   STARTER_ENGINES,
   adsVerdict,
   alsoNamed,
@@ -31,9 +31,12 @@ import {
   mainTotals,
   money,
   percent,
+  planAiMultiple,
   planBrands,
   planMonthly,
+  planName,
   planPrompts,
+  planSiteAudits,
   planYearly,
   productNames,
   questionDemand,
@@ -41,11 +44,15 @@ import {
   questionSummary,
   quickWins,
   revenueRows,
+  roughly,
+  searchesLabel,
+  signUpUrlFor,
   startingPoint,
   targetGroups,
   topMissed,
   totals,
   valueRows,
+  type ComparedPlan,
 } from './rules';
 
 /**
@@ -53,15 +60,18 @@ import {
  * layout, owner decisions 2026-11-04): four A4 pages, in the card's
  * language (./copy.ts):
  *
- *   1. Status: a one-time snapshot, how the card read the site, the four
- *      figures, the starting point and first step, Starter's engines with
- *      Growth's apart, who AI names and cites, and the questions missed.
- *   2. Questions: every question by product, its searches, a grid of what
- *      each engine did, and the competitor named instead.
+ *   1. Status: a small trial button, a one-time snapshot, how the card read
+ *      the site, the four figures, the starting point and first step,
+ *      Starter's engines with Growth's apart, who AI names and cites, and
+ *      the questions missed.
+ *   2. Questions: every question by product, its searches a month as
+ *      Keyword Planner's range ("Low" when Google reports none), a grid of
+ *      what each engine did, and the competitor named instead.
  *   3. Plan: three findings with what you'd do in week one, the sites to
  *      get onto by kind, and how the work gets done.
- *   4. Value and plan: AI visits priced at the brand's own search demand,
- *      the plan that matches the card, and the one trial invitation.
+ *   4. Value and plans: AI visits priced at the brand's own search demand,
+ *      Starter and Growth side by side, Chat, Agent Center and MCP, and the
+ *      trial invitation with its button (owner review 2026-11-08).
  *
  * Drawn on the server, on the Reports PDF's base: the same renderer, Inter,
  * Ansvisor's look without a kit (reportLook) and its footer.
@@ -177,7 +187,6 @@ const styles = StyleSheet.create({
   },
   box: { borderWidth: 0.5, borderColor: BORDER, borderRadius: 4, padding: 8 },
   tinted: { backgroundColor: BAND, borderColor: BORDER },
-  link: { color: INK, fontWeight: 700, textDecoration: 'underline' },
   chip: {
     fontSize: 7.5,
     borderWidth: 0.5,
@@ -216,6 +225,26 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  /** A trial button: an ink pill, as the e-mail's. */
+  button: {
+    alignSelf: 'flex-start',
+    backgroundColor: INK,
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 18,
+  },
+  buttonText: { color: '#ffffff', fontSize: 9.5, fontWeight: 700 },
+  buttonSmall: { borderRadius: 8, paddingVertical: 3.5, paddingHorizontal: 10 },
+  buttonTextSmall: { fontSize: 7.5 },
+  planCard: { flex: 1, borderWidth: 0.75, borderColor: INK, borderRadius: 4, padding: 8 },
+  planPrice: { fontSize: 13, fontWeight: 700, marginTop: 2 },
+  planLine: { flexDirection: 'row', gap: 5, marginTop: 2 },
+  planText: { flex: 1, fontSize: 8, lineHeight: 1.3 },
+  planDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: INK, marginTop: 4 },
+  /** Page 4's sections: a little closer, so the plans, the work and the trial fit. */
+  section4: { marginBottom: 9 },
+  /** Page 4's Chat, Agent Center and MCP: a column each, under an ink rule. */
+  workItem: { flex: 1, borderTopWidth: 1.5, borderTopColor: INK, paddingTop: 4 },
   footer: {
     position: 'absolute',
     bottom: 22,
@@ -267,18 +296,51 @@ function Header({
   eyebrow,
   title,
   subtitle,
+  action,
 }: {
   eyebrow: string;
   title: string;
   subtitle: string;
+  /** Set at the eyebrow's right, clear of the title: page 1's trial button. */
+  action?: ReactNode;
 }) {
   return (
     <View>
-      <Text style={styles.eyebrow}>{eyebrow}</Text>
+      {action ? (
+        <View
+          style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
+        >
+          <Text style={styles.eyebrow}>{eyebrow}</Text>
+          {action}
+        </View>
+      ) : (
+        <Text style={styles.eyebrow}>{eyebrow}</Text>
+      )}
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.subtitle}>{subtitle}</Text>
       <View style={styles.rule} />
     </View>
+  );
+}
+
+/** A trial button: an ink pill linking to the sign-up page, small in page 1's corner. */
+function TrialButton({
+  label,
+  href,
+  small = false,
+}: {
+  label: string;
+  href: string;
+  small?: boolean;
+}) {
+  return (
+    <Link src={href} style={{ textDecoration: 'none' }}>
+      <View style={small ? [styles.button, styles.buttonSmall] : styles.button}>
+        <Text style={small ? [styles.buttonText, styles.buttonTextSmall] : styles.buttonText}>
+          {label}
+        </Text>
+      </View>
+    </Link>
   );
 }
 
@@ -337,6 +399,7 @@ function StatusPage({ card, t, font }: PageProps) {
     <Page size="A4" style={[styles.page, font]}>
       <Header
         eyebrow={s.eyebrow}
+        action={<TrialButton label={s.trial} href={signUpUrlFor(1)} small />}
         title={s.title(clip(card.companyName, 60))}
         subtitle={s.subtitle(
           clip(card.domain, 60),
@@ -542,6 +605,9 @@ function StatusPage({ card, t, font }: PageProps) {
 
 // ─── Page 2: the questions ───────────────────────────────────────────────────
 
+/** The searches column: wide enough for "Searches/mo" and "Aylık arama" on one line. */
+const SEARCHES_WIDTH = 58;
+
 /** The engines' short names, for page 2's narrow columns. */
 const SHORT_ENGINE: Record<string, string> = {
   'chatgpt-web': 'ChatGPT',
@@ -571,6 +637,7 @@ function QuestionsPage({ card, t, font }: PageProps) {
   const growth = growthEngineRows(card).map((e) => e.engine);
   const withProducts = groups.some((g) => g.product);
   const withVolume = groups.some((g) => g.lines.some((l) => l.volume !== null));
+  const withLow = groups.some((g) => g.lines.some((l) => !l.volume));
   const headerCell = (engine: ReportCardEngine) => (
     <View key={engine} style={styles.cellCol}>
       <Text style={[styles.th, { textAlign: 'center' }]}>
@@ -613,7 +680,7 @@ function QuestionsPage({ card, t, font }: PageProps) {
         <Text style={[styles.th, { width: 16 }]}>#</Text>
         <Text style={[styles.th, { flex: 1 }]}>{q.colQuestion}</Text>
         {withVolume && (
-          <Text style={[styles.th, { width: 40, textAlign: 'right', paddingRight: 6 }]}>
+          <Text style={[styles.th, { width: SEARCHES_WIDTH, textAlign: 'right', paddingRight: 6 }]}>
             {q.colSearches}
           </Text>
         )}
@@ -646,8 +713,14 @@ function QuestionsPage({ card, t, font }: PageProps) {
                 ) : null}
               </View>
               {withVolume && (
-                <Text style={[styles.qText, { width: 40, textAlign: 'right', paddingRight: 6 }]}>
-                  {line.volume === null ? '–' : count(line.volume, t.locale)}
+                <Text
+                  style={[
+                    styles.qText,
+                    { width: SEARCHES_WIDTH, textAlign: 'right', paddingRight: 6 },
+                    line.volume ? {} : { color: MUTED },
+                  ]}
+                >
+                  {searchesLabel(line.volume, t)}
                 </Text>
               )}
               {main.map((engine) => (
@@ -668,7 +741,9 @@ function QuestionsPage({ card, t, font }: PageProps) {
           ))}
         </View>
       ))}
-      {withVolume && <Text style={[styles.small, { marginTop: 5 }]}>{q.searchesNote}</Text>}
+      {withVolume && (
+        <Text style={[styles.small, { marginTop: 5 }]}>{q.searchesNote(withLow)}</Text>
+      )}
       <Footer t={t} />
     </Page>
   );
@@ -774,7 +849,47 @@ function PlanPage({ card, t, font }: PageProps) {
   );
 }
 
-// ─── Page 4: value and plan ──────────────────────────────────────────────────
+// ─── Page 4: value and plans ─────────────────────────────────────────────────
+
+/**
+ * One plan card: its tag, name, prices and what it includes. Starter and
+ * Growth are drawn alike, side by side, so Growth reads as a plan and not
+ * as a footnote (owner review 2026-11-08).
+ */
+function PlanCard({
+  plan,
+  tag,
+  lines,
+  t,
+}: {
+  plan: ComparedPlan;
+  tag: string;
+  lines: string[];
+  t: CardCopy;
+}) {
+  const v = t.value;
+  const usd = (amount: number) => money(amount, 'USD', t.locale);
+  return (
+    <View style={styles.planCard}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>{v.planName(planName(plan))}</Text>
+        <Text style={styles.tag}>{tag}</Text>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginBottom: 1 }}>
+        <Text style={styles.planPrice}>{v.perMonth(usd(planMonthly(plan)))}</Text>
+        <Text style={[styles.small, { flex: 1, marginBottom: 1.5 }]}>
+          {v.yearly(usd(planYearly(plan)))}
+        </Text>
+      </View>
+      {lines.map((line) => (
+        <View key={line} style={styles.planLine}>
+          <View style={styles.planDot} />
+          <Text style={styles.planText}>{line}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 function ValuePage({ card, t, font }: PageProps) {
   const v = t.value;
@@ -790,16 +905,18 @@ function ValuePage({ card, t, font }: PageProps) {
   const growth = growthEngineRows(card);
   // Starter's own engines, whatever the card asked (an older card asked others).
   const starterNames = t.list(STARTER_ENGINES.map(engineLabel));
+  // What Growth adds to them: the card's Growth band, less an engine Starter has now.
+  const growthAdds = growth.filter((e) => !STARTER_ENGINES.includes(e.engine));
   const prompts = planPrompts('starter');
 
   return (
     <Page size="A4" style={[styles.page, font]}>
       <Header eyebrow={v.eyebrow} title={v.title} subtitle={v.subtitle} />
 
-      <View style={styles.section} wrap={false}>
+      <View style={styles.section4} wrap={false}>
         {demand && (
           <Text style={styles.paragraph}>
-            {v.demand(count(demand.searches, t.locale), country, demand.keywords)}
+            {v.demand(count(roughly(demand.searches), t.locale), country, demand.keywords)}
           </Text>
         )}
         {ads.kind === 'none' && (
@@ -841,7 +958,7 @@ function ValuePage({ card, t, font }: PageProps) {
       </View>
 
       {compare && (
-        <View style={styles.section} wrap={false}>
+        <View style={styles.section4} wrap={false}>
           {compare.cheap ? (
             <View style={[styles.box, styles.tinted]}>
               <Text style={styles.paragraph}>
@@ -873,7 +990,7 @@ function ValuePage({ card, t, font }: PageProps) {
       )}
 
       {revenue && card.dealValue && (
-        <View style={styles.section} wrap={false}>
+        <View style={styles.section4} wrap={false}>
           <Text style={styles.sectionTitle}>{v.revenueTitle}</Text>
           <Text style={[styles.paragraph, styles.muted, { marginBottom: 2 }]}>
             {v.revenue(
@@ -895,35 +1012,54 @@ function ValuePage({ card, t, font }: PageProps) {
         </View>
       )}
 
-      <View style={styles.section} wrap={false}>
+      <View style={styles.section4} wrap={false}>
         <Text style={styles.sectionTitle}>{v.planTitle}</Text>
-        <View style={[styles.box, { borderColor: INK }]}>
-          <Text style={[styles.paragraph, styles.bold]}>
-            Ansvisor Starter · {v.perMonth(usd(planMonthly('starter')))}
-            <Text style={[styles.muted, { fontWeight: 400 }]}>
-              {' '}
-              · {v.yearly(usd(planYearly('starter')))}
-            </Text>
-          </Text>
-          <Text style={[styles.paragraph, styles.muted]}>
-            {v.starterMatch(starterNames, growth.length > 0)}
-          </Text>
-          <Text style={[styles.paragraph, styles.muted]}>
-            {v.starterLimits(prompts, planBrands('starter'))}
-          </Text>
+        <View style={styles.row}>
+          <PlanCard
+            plan="starter"
+            tag={v.starterTag}
+            t={t}
+            lines={[
+              v.starterMatch(starterNames, growth.length > 0),
+              v.planLimits(prompts, planBrands('starter')),
+              v.aiIncluded,
+              v.siteAudits(planSiteAudits('starter')),
+              v.starterAgents,
+              v.mcpRead,
+            ]}
+          />
+          <PlanCard
+            plan="growth"
+            tag={v.growthTag}
+            t={t}
+            lines={[
+              v.growthAdds(
+                growthAdds.length ? engineList(growthAdds, t) : v.googleEngines,
+                growth.length > 0,
+              ),
+              v.planLimits(planPrompts('growth'), planBrands('growth')),
+              v.aiMore(planAiMultiple('growth')),
+              v.siteAudits(planSiteAudits('growth')),
+              v.growthAgents,
+              v.mcpReadWrite,
+            ]}
+          />
         </View>
-        <Text style={[styles.small, { marginTop: 3 }]}>
-          {v.growthLine(
-            growth.length ? engineList(growth, t) : v.googleEngines,
-            usd(planMonthly('growth')),
-            usd(planYearly('growth')),
-            planPrompts('growth'),
-            planBrands('growth'),
-          )}
-        </Text>
       </View>
 
-      <View style={[styles.box, styles.tinted, { marginTop: 'auto' }]} wrap={false}>
+      <View style={styles.section4} wrap={false}>
+        <Text style={styles.sectionTitle}>{v.workTitle}</Text>
+        <View style={styles.row}>
+          {v.work.map((item) => (
+            <View key={item.title} style={styles.workItem}>
+              <Text style={[styles.paragraph, styles.bold, { marginBottom: 1 }]}>{item.title}</Text>
+              <Text style={[styles.small, { color: TEXT }]}>{item.body}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={[styles.box, styles.tinted]} wrap={false}>
         <Text style={[styles.sectionTitle, { marginBottom: 3 }]}>{v.ctaTitle}</Text>
         <Text style={[styles.paragraph, { marginBottom: 4 }]}>
           {v.ctaBody(prompts, starterNames, card.questionCount)}
@@ -935,13 +1071,10 @@ function ValuePage({ card, t, font }: PageProps) {
               {i + 1}. {line}
             </Text>
           ))}
-        <Link
-          src={REPORT_CARD_SIGN_UP_URL}
-          style={[styles.paragraph, styles.link, { marginTop: 5 }]}
-        >
-          {v.ctaLink}
-        </Link>
-        <Text style={[styles.small, { marginTop: 5 }]}>{v.scenarios}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 7 }}>
+          <TrialButton label={v.button} href={signUpUrlFor(4)} />
+          <Text style={[styles.small, { flex: 1 }]}>{v.scenarios}</Text>
+        </View>
       </View>
       <Footer t={t} />
     </Page>

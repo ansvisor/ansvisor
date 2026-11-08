@@ -32,7 +32,7 @@ const payload = {
 };
 
 describe('renderReportCardEmail', () => {
-  it('says what came back, invites a trial and says the PDF is attached', () => {
+  it('says first that the PDF is attached, then what came back, and invites a trial', () => {
     const { subject, html } = renderReportCardEmail({
       firstName: 'Ayşe',
       payload,
@@ -42,14 +42,24 @@ describe('renderReportCardEmail', () => {
     });
     expect(subject).toBe('Your AI visibility report card: acme.example');
     expect(html).toContain('Hi Ayşe,');
+    // Right after the greeting: the card is attached, said once.
+    const attached = 'Your AI visibility report card for acme.example is attached: a 4-page PDF.';
+    expect(html).toContain(attached);
+    expect(html.indexOf('Hi Ayşe,')).toBeLessThan(html.indexOf(attached));
+    expect(html.indexOf(attached)).toBeLessThan(html.indexOf('We asked'));
+    expect(html.match(/attached/g)).toHaveLength(1);
     expect(html).toContain(
       'We asked ChatGPT, Gemini, Google AI Overviews and Google AI Mode 25 questions your buyers ask, in the United States.',
     );
     expect(html).toContain('19%');
     expect(html).toContain('named in 18 of 95 answers');
     expect(html).toContain('Ridge &amp; Co');
-    expect(html).toContain('attached as a PDF, 4 pages');
+    expect(html).toContain('The 4 pages hold where you start');
     expect(html).toContain('all 25 questions we asked and what each engine said');
+    expect(html).toContain('with Starter and Growth side by side.');
+    expect(html).toContain(
+      'In Ansvisor, Chat and ready-to-use agents do the week-one work with you.',
+    );
     expect(html).toContain('Want to measure your own questions too?');
     expect(html).toContain('border-radius:100px');
     expect(html).not.toMatch(/#111827|#6b7280|#6366f1/);
@@ -109,6 +119,14 @@ describe('renderReportCardEmail', () => {
     });
     expect(subject).toBe('Yapay zekâ görünürlük karneniz: turadahil.com');
     expect(html).toContain('Merhaba Ayşe,');
+    const ekte = 'turadahil.com için yapay zekâ görünürlük karneniz ekte: 4 sayfalık bir PDF.';
+    expect(html).toContain(ekte);
+    expect(html.indexOf('Merhaba Ayşe,')).toBeLessThan(html.indexOf(ekte));
+    expect(html.match(/ekte/g)).toHaveLength(1);
+    expect(html).toContain('4 sayfada: nereden başladığınız');
+    expect(html).toContain(
+      'Ansvisor’da Sohbet ve kullanıma hazır ajanlar ilk haftanın işlerini sizinle birlikte yapar.',
+    );
     expect(html).toContain(
       'ChatGPT ve Microsoft Copilot (Ansvisor Starter’ın motorları) motorlarına Türkiye konumundan, alıcılarınızın sorduğu 25 soruyu sorduk.',
     );
@@ -119,6 +137,7 @@ describe('renderReportCardEmail', () => {
     expect(html).not.toContain('Hi Ayşe');
     const failed = renderFailedEmail({ firstName: 'Ayşe', site: 'turadahil.com', country: 'TR' });
     expect(failed.subject).toBe('turadahil.com için karnenizi tamamlayamadık');
+    expect(failed.html).not.toMatch(/ekte|PDF/);
   });
 
   it('states one visibility figure: every stat counts the headline’s answers', () => {
@@ -159,7 +178,7 @@ describe('renderReportCardEmail', () => {
     expect(html).toContain('25 questions your readers ask');
   });
 
-  it('says when a card sent again was made, and when a new one can be', () => {
+  it('says a card sent again is attached, when it was made, and when a new one can be', () => {
     const { html } = renderReportCardEmail({
       firstName: 'Mehmet',
       payload,
@@ -168,8 +187,22 @@ describe('renderReportCardEmail', () => {
       origin: 'https://app.ansvisor.com',
     });
     expect(html).toContain(
-      'we made it on Oct 20, 2026, and a new one can be made from Nov 19, 2026.',
+      'Your AI visibility report card for acme.example is attached: a 4-page PDF.',
     );
+    expect(html).toContain(
+      'It is the card we made for acme.example on Oct 20, 2026, sent again; a new one can be made from Nov 19, 2026.',
+    );
+    expect(html.match(/attached/g)).toHaveLength(1);
+    const tr = renderReportCardEmail({
+      firstName: 'Mehmet',
+      payload: { ...payload, country: { code: 'TR', name: 'Türkiye' } },
+      kind: 'resent',
+      madeAt: '2026-10-20T10:00:00Z',
+    });
+    expect(tr.html).toContain(
+      'acme.example için yapay zekâ görünürlük karneniz ekte: 4 sayfalık bir PDF.',
+    );
+    expect(tr.html).toContain('Bu, acme.example için 20 Eki 2026 tarihinde hazırladığımız karne');
   });
 
   it('escapes what the person and the answers gave', () => {
@@ -187,6 +220,8 @@ describe('renderReportCardEmail', () => {
     const { subject, html } = renderFailedEmail({ firstName: 'Ayşe', site: 'acme.example' });
     expect(subject).toBe('We couldn’t finish your report card for acme.example');
     expect(html).toContain('Reply to this e-mail');
+    // No PDF goes with it, so it never says one is attached.
+    expect(html).not.toMatch(/attached|PDF/);
   });
 });
 
@@ -283,7 +318,10 @@ describe('deliverReportCards', () => {
         { filename: 'ansvisor-ai-visibility-report-card-acme.example.pdf', content: 'JVBERg==' },
       ],
     });
-    expect(second.html).toContain('report card again');
+    expect(first.html).toContain('is attached: a 4-page PDF.');
+    expect(second.html).toContain('is attached: a 4-page PDF.');
+    expect(second.html).toContain('sent again');
+    expect(third.html).not.toContain('attached');
     expect(third.subject).toBe('We couldn’t finish your report card for other.example');
     expect(third).not.toHaveProperty('attachments');
     expect(s.markEmailed.mock.calls).toEqual([

@@ -5,8 +5,9 @@ import { countryInSentence } from './countries.js';
 import { reportCardStore } from './store.js';
 
 /**
- * The report card's e-mail (REPORT-CARD §1, §4, §7): the PDF attached, the
- * headline figures, and a "Start a free trial" invitation; from Ansvisor
+ * The report card's e-mail (REPORT-CARD §1, §4, §7): first that the PDF is
+ * attached (owner review 2026-11-08), then the headline figures, and a
+ * "Start a free trial" invitation; from Ansvisor
  * (REPORT_CARD_FROM_EMAIL, else RESEND_FROM_EMAIL). Each minute the queue
  * sends what is waiting: a new card once it's ready, a card sent again
  * (resent), and a short note when a card couldn't be made. The PDF is drawn
@@ -70,8 +71,9 @@ const EMAIL_COPY = {
     footer: `You asked for this report card on ansvisor.com. AI answers change from day to day, so it is a snapshot. How we use your details: <a href="${PRIVACY_URL}" style="color:${GREY};">Privacy Notice</a>.`,
     title: 'Your AI visibility report card',
     hi: (name) => `Hi ${name},`,
+    attached: (site) => `Your AI visibility report card for ${site} is attached: a 4-page PDF.`,
     resent: (site, made, next) =>
-      `Here is ${site}’s report card again: we made it on ${made}, and a new one can be made from ${next}.`,
+      `It is the card we made for ${site} on ${made}, sent again; a new one can be made from ${next}.`,
     intro: (engines, starter, questions, readers, country, site) =>
       `We asked ${engines}${starter ? ', the engines in Ansvisor Starter,' : ''} ${questions} questions your ${readers ? 'readers' : 'buyers'} ask, in ${country}. Here is what came back for ${site}.`,
     growth: (engines) =>
@@ -83,7 +85,8 @@ const EMAIL_COPY = {
     noLeaderLabel: 'No competitor was named',
     cited: (answers) => `Answers that cite your site, of ${answers}`,
     pages: (questions) =>
-      `Your report card is attached as a PDF, 4 pages: where you start and who AI names instead, all ${questions} questions we asked and what each engine said, what you’d do in your first week, and what AI visits are worth with the plan that matches.`,
+      `The 4 pages hold where you start and who AI names instead, all ${questions} questions we asked and what each engine said, what you’d do in your first week, and what AI visits are worth with Starter and Growth side by side.`,
+    work: 'In Ansvisor, Chat and ready-to-use agents do the week-one work with you.',
     button: 'Start a free trial',
     own: 'Want to measure your own questions too? In the free trial, Ansvisor asks this card’s questions and yours every day, and ranks what to do next.',
     subject: (domain) => `Your AI visibility report card: ${domain}`,
@@ -98,8 +101,9 @@ const EMAIL_COPY = {
     footer: `Bu karneyi ansvisor.com üzerinden istediniz. Yapay zekâ yanıtları her gün değişir; bu bir anlık ölçümdür. Bilgilerinizi nasıl kullandığımız: <a href="${PRIVACY_URL}" style="color:${GREY};">Gizlilik Bildirimi</a>.`,
     title: 'Yapay zekâ görünürlük karneniz',
     hi: (name) => `Merhaba ${name},`,
+    attached: (site) => `${site} için yapay zekâ görünürlük karneniz ekte: 4 sayfalık bir PDF.`,
     resent: (site, made, next) =>
-      `${site} için karneniz yeniden ekte: ${made} tarihinde hazırladık; yenisi ${next} tarihinden itibaren hazırlanabilir.`,
+      `Bu, ${site} için ${made} tarihinde hazırladığımız karne, yeniden gönderildi; yenisi ${next} tarihinden itibaren hazırlanabilir.`,
     intro: (engines, starter, questions, readers, country, site) =>
       `${engines}${starter ? ' (Ansvisor Starter’ın motorları)' : ''} motorlarına ${country} konumundan, ${readers ? 'okurlarınızın' : 'alıcılarınızın'} sorduğu ${questions} soruyu sorduk. ${site} için sonuçlar aşağıda.`,
     growth: (engines) =>
@@ -111,7 +115,8 @@ const EMAIL_COPY = {
     noLeaderLabel: 'Hiçbir rakip anılmadı',
     cited: (answers) => `${answers} yanıttan sitenizi kaynak gösteren`,
     pages: (questions) =>
-      `Karneniz ekte, 4 sayfalık bir PDF: nereden başladığınız ve yapay zekânın sizin yerinize kimi önerdiği, sorduğumuz ${questions} sorunun tamamı ve her motorun yanıtı, ilk haftanızda yapacaklarınız ve yapay zekâ ziyaretlerinin değeriyle size uyan plan.`,
+      `4 sayfada: nereden başladığınız ve yapay zekânın sizin yerinize kimi önerdiği, sorduğumuz ${questions} sorunun tamamı ve her motorun yanıtı, ilk haftanızda yapacaklarınız, yapay zekâ ziyaretlerinin değeri ve yan yana Starter ile Growth.`,
+    work: 'Ansvisor’da Sohbet ve kullanıma hazır ajanlar ilk haftanın işlerini sizinle birlikte yapar.',
     button: 'Ücretsiz denemeyi başlatın',
     own: 'Kendi sorularınızı da ölçmek ister misiniz? Ücretsiz denemede Ansvisor bu karnenin sorularını ve sizinkileri her gün sorar, sıradaki işleri öncelik sırasıyla verir.',
     subject: (domain) => `Yapay zekâ görünürlük karneniz: ${domain}`,
@@ -201,6 +206,7 @@ export function renderReportCardEmail({
   const html = shell(
     `  <h1 style="font-size:22px;font-weight:600;letter-spacing:-0.03em;margin:0 0 16px 0;">${t.title}</h1>
   <p style="font-size:14px;margin:0 0 12px 0;">${t.hi(escapeHtml(firstName))}</p>
+  <p style="font-size:14px;margin:0 0 12px 0;">${t.attached(site)}</p>
   <p style="font-size:14px;margin:0 0 16px 0;">${intro}</p>
   <table role="presentation" cellspacing="8" style="width:100%;border-collapse:separate;margin:0 -8px 8px -8px;">
     <tr>
@@ -209,7 +215,8 @@ export function renderReportCardEmail({
     ${stat(String(payload.ownCitations), t.cited(answers))}
     </tr>
   </table>
-  <p style="font-size:14px;margin:8px 0 16px 0;">${t.pages(payload.questionRows?.length || payload.questionCount)}</p>
+  <p style="font-size:14px;margin:8px 0 12px 0;">${t.pages(payload.questionRows?.length || payload.questionCount)}</p>
+  <p style="font-size:14px;margin:0 0 16px 0;">${t.work}</p>
   <div style="margin:24px 0;">
     <a href="${escapeHtml(signUpUrl(origin))}" style="background:${INK};color:#ffffff;text-decoration:none;padding:8px 28px;border-radius:100px;font-size:15px;font-weight:500;display:inline-block;">${t.button}</a>
   </div>

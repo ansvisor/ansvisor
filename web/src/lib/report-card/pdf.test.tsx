@@ -67,7 +67,7 @@ describe('ReportCardPdfDocument', () => {
     for (const page of pages) expect(page).toContain('Generated with Ansvisor · www.ansvisor.com');
   });
 
-  it('page 1: a one-time snapshot, the products, Starter’s engines first and the questions missed', () => {
+  it('page 1: a small trial button, a one-time snapshot, the products, Starter’s engines first and the questions missed', () => {
     const [status] = draw(SAMPLE_REPORT_CARD);
     expect(status).toContain('How visible is Brewline Coffee in AI answers?');
     expect(status).toContain('A one-time snapshot: we asked each question once, on Nov 4, 2026.');
@@ -95,8 +95,9 @@ describe('ReportCardPdfDocument', () => {
       'Named instead: Ridgeline Roasters, Harborline Beans and Copper Kettle Coffee',
     );
     expect(status).not.toContain('Your starting point');
-    // One trial invitation, on page 4 only.
-    expect(status).not.toMatch(/free trial/i);
+    // A small button in the header; the invitation itself is on page 4.
+    expect(status).toContain('Start free trial');
+    expect(status).not.toContain('Measure your own questions');
   });
 
   it('states one visibility figure on every page: the headline’s engines', () => {
@@ -136,16 +137,41 @@ describe('ReportCardPdfDocument', () => {
 
   it('page 2 is the question grid, by product, with searches and who is named instead', () => {
     const [, questions] = draw(SAMPLE_REPORT_CARD);
+    expect(questions).toContain('Searches/mo');
     expect(questions).toContain('The 25 questions, and what each engine said');
     expect(questions).toContain(
       'Named in 6 of the 25 questions: in 8 of the 50 answers from ChatGPT and Google Gemini.',
     );
     expect(questions).toContain('Whole bean coffee · 14 questions · brewlinecoffee.example/beans');
-    expect(questions).toContain('2,900');
+    // Keyword Planner's ranges, never an exact count: 2,900 searches is 1K–10K.
+    expect(questions).toContain('1K–10K');
+    expect(questions).toContain('10–100');
+    expect(questions).not.toContain('2,900');
     expect(questions).toContain('a need your buyers also have');
     expect(questions).toContain('Lighter columns: Google’s engines, in Growth');
     expect(questions).toContain('ChatGPTGeminiAI Overv.');
     expect(questions).toContain('Ridgeline Roasters');
+  });
+
+  it('page 2 shows Low, never 0, for a keyword Google gave 0 or no searches for', () => {
+    const rows = SAMPLE_REPORT_CARD.questionRows ?? [];
+    const [, questions] = draw({
+      ...SAMPLE_REPORT_CARD,
+      questionRows: rows.map((row, i) => ({ ...row, volume: i === 0 ? 0 : row.volume })),
+    });
+    // Question 1's 0 and question 25's unknown both read Low.
+    expect(questions.match(/Low/g)).toHaveLength(3);
+    expect(questions).toContain('best coffee beans for espresso at homeLow');
+    expect(questions).toContain('coffee sampler gift boxLow');
+    expect(questions).toContain(
+      'Searches/mo: Google searches a month for the question’s keyword in your country, as Google’s range. Low: too few searches for Google to report; questions people ask AI are longer than Google searches',
+    );
+    const [, measured] = draw({
+      ...SAMPLE_REPORT_CARD,
+      questionRows: rows.map((row) => ({ ...row, volume: row.volume ?? 50 })),
+    });
+    expect(measured).not.toContain('Low');
+    expect(measured).toContain('as Google’s range. Questions people ask AI are longer');
   });
 
   it('page 3 is three findings with week one, the sites by kind and how work gets done', () => {
@@ -163,26 +189,72 @@ describe('ReportCardPdfDocument', () => {
     expect(plan).not.toMatch(/free trial|Help article/i);
   });
 
-  it('page 4 prices the brand’s own demand, offers Starter and holds the only trial link', () => {
+  it('page 4 prices the brand’s own demand, sets Starter beside Growth, and ends on the trial button', () => {
     const [, , , value] = draw(SAMPLE_REPORT_CARD);
-    expect(value).toContain('Your questions’ keywords get 18,580 Google searches a month');
+    // 18,580 searches, said as roughly as Google gives them.
+    expect(value).toContain('Your questions’ keywords get about 19,000 Google searches a month');
     expect(value).toContain('$1.85 (19 of 25 keywords had one)');
     expect(value).toContain('5% of those searches');
     expect(value).toContain('$1,719');
     expect(value).toContain('Ansvisor Starter is $49 a month.');
-    expect(value).toContain('Ansvisor Starter · $49/month');
-    expect(value).toContain('or $470 a year, paid yearly: 20% off');
-    expect(value).toContain('Tracks ChatGPT and Google Gemini every day');
-    expect(value).toContain('Growth, $249/month or $2,390 a year (20% off)');
     expect(value).toContain('A revenue scenario');
+    // Two plan cards drawn alike: Starter, then Growth.
+    expect(value).toContain('The plans for this card');
+    expect(value).toContain(
+      'Ansvisor StarterMatches this card$49/monthor $470 a year, paid yearly: 20% off',
+    );
+    expect(value).toContain(
+      'Ansvisor GrowthAdds Google’s engines$249/monthor $2,390 a year, paid yearly: 20% off',
+    );
+    expect(value).toContain(
+      'Tracks ChatGPT and Google Gemini every day: the engines this card’s visibility counts.',
+    );
+    expect(value).toContain('50 prompts tracked every day, 1 brand.');
+    expect(value).toContain('AI usage included.');
+    expect(value).toContain('Site Audit: 100 pages a month.');
+    expect(value).toContain('Chat, and Agent Center with agents that ask before every change.');
+    expect(value).toContain('MCP: read your Ansvisor data from AI tools.');
+    expect(value).toContain(
+      'Adds Google AI Overviews and Google AI Mode every day: the Growth band on page 1.',
+    );
+    expect(value).toContain('200 prompts tracked every day, 4 brands.');
+    expect(value).toContain('5× the AI usage: more content opportunities and drafts');
+    expect(value).toContain('Site Audit: 500 pages a month.');
+    expect(value).toContain('Full auto: the agents you choose publish on their own.');
+    expect(value).toContain('MCP: read and write your Ansvisor data from AI tools.');
+    // AI usage is never in dollars or tokens; no Growth footnote left.
+    expect(value).not.toMatch(/\$(5|25) |tokens|Growth, \$249/);
+    // Chat, Agent Center and MCP, with no plan's figures repeated.
+    expect(value).toContain('Ansvisor does the work with you');
+    expect(value).toContain('ChatAnswers from your own Ansvisor data');
+    expect(value).toContain('Agent CenterReady-to-use agents and more than 700 skills');
+    expect(value).toContain('MCPUse your Ansvisor data from Claude, ChatGPT, Cursor');
     expect(value).toContain('Measure your own questions');
     expect(value).toContain('Starter tracks 50 prompts every day');
+    expect(value).toContain('Start your free trial');
     expect(value).toContain('Scenarios, not a forecast or a guarantee.');
     expect(value).not.toMatch(/will (grow|earn|rise)|guaranteed/i);
-    const links = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    expect(links).toEqual([
-      'https://app.ansvisor.com/en/sign-up?utm_source=report-card&utm_medium=pdf',
+    // Page 1's small button and page 4's, each marked with its page.
+    const links = [...container.querySelectorAll('a')].map((a) => [
+      a.textContent,
+      a.getAttribute('href'),
     ]);
+    expect(links).toEqual([
+      [
+        'Start free trial',
+        'https://app.ansvisor.com/en/sign-up?utm_source=report-card&utm_medium=pdf&utm_content=page1',
+      ],
+      [
+        'Start your free trial',
+        'https://app.ansvisor.com/en/sign-up?utm_source=report-card&utm_medium=pdf&utm_content=page4',
+      ],
+    ]);
+  });
+
+  it('page 4 doesn’t point at a Growth band an older card hasn’t got', () => {
+    const [, , , value] = draw({ ...SAMPLE_REPORT_CARD, mainEngines: undefined });
+    expect(value).toContain('Adds Google AI Overviews and Google AI Mode every day.');
+    expect(value).toContain('Tracks ChatGPT and Google Gemini every day.');
   });
 
   it('page 4 prices nothing without enough ad data, or with a median too high to trust', () => {
@@ -236,9 +308,21 @@ describe('ReportCardPdfDocument', () => {
     expect(pages[0]).not.toContain('tüm motorlardaki');
     expect(pages[1]).toContain('25 soru ve her motorun yanıtı');
     expect(pages[2]).toContain('Üç bulgu ve ilk haftada yapacaklarınız');
+    expect(pages[1]).toContain('Aylık arama');
+    expect(pages[1]).toContain('1\u00a0B–10\u00a0B');
+    expect(pages[1]).toContain('Düşük');
+    expect(pages[1]).toContain('Düşük: Google’ın sayı vermeyeceği kadar az arama;');
     expect(pages[3]).toContain('Starter ayda $49.');
     expect(pages[3]).not.toMatch(/₺|USD =/);
+    expect(pages[3]).toContain('ayda yaklaşık 19.000 kez Google’da aranıyor');
+    expect(pages[3]).toContain('Ansvisor StarterBu karneye uyanaylık $49');
+    expect(pages[3]).toContain('Ansvisor GrowthGoogle motorlarını ekleraylık $249');
+    expect(pages[3]).toContain('Yapay zekâ kullanımı dahil.');
+    expect(pages[3]).toContain('5 kat yapay zekâ kullanımı');
+    expect(pages[3]).toContain('Ansvisor işi sizinle birlikte yapar');
     expect(pages[3]).toContain('Kendi sorularınızı ölçün');
+    expect(pages[0]).toContain('Ücretsiz deneyin');
+    expect(pages[3]).toContain('Ücretsiz denemeyi başlatın');
     expect(pages.join(' ')).not.toMatch(/How visible|Week one|Start a free trial/);
   });
 });
