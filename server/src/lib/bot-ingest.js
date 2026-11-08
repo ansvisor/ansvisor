@@ -30,6 +30,8 @@ export const CONNECTION_KINDS = [
   'cloudflare_worker',
   'cloudflare_logpush',
   'vercel_drain',
+  // Fastly HTTPS log streaming (#2164, 00495).
+  'fastly_log_stream',
   // A generic sender of JSON lines (#2170, 00492).
   'log_webhook',
 ];
