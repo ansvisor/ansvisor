@@ -36,7 +36,7 @@ const router = Router();
 // to use the public endpoint. The actual ingest route still requires a
 // connection-specific bearer secret before it reads a request body.
 router.get('/.well-known/fastly/logging/challenge', (_req, res) => {
-  res.type('text/plain').send('*\\n');
+  res.type('text/plain').send('*');
 });
 
 // Raw: each kind has its own body, and a Logpush file comes gzipped. A body
