@@ -20,7 +20,7 @@ module.exports = {
   listBrands,
   findBrand,
   searches: {
-    findBrand: {
+    find_brand: {
       key: 'find_brand',
       noun: 'Brand',
       display: { label: 'Find Brand', description: 'Finds a brand by its name or slug.' },
