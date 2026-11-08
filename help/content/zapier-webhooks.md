@@ -23,4 +23,4 @@ Add a Daily Pulse, Content Draft Sent or Action Center Task trigger and choose t
 
 ## Test the connection
 
-Choose **Test Webhook** in the brand's webhook settings. The test event is sent to every active webhook subscription, and each Ansvisor trigger accepts it so you can confirm the connection before a real event occurs.
+The **Test Webhook** control in Ansvisor tests the dashboard's Default webhook URL; it does not send a test event to API-managed Zapier subscriptions. Use the sample payload in Zapier while setting up the trigger, then enable the Zap and send a real event to verify delivery.
