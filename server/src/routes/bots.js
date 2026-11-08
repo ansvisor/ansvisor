@@ -33,7 +33,7 @@ import {
 } from '../lib/bot-ingest.js';
 import { LogTooLargeError, readSenderBody } from '../lib/bot-log-formats.js';
 import { WORKER_SECRET_NAME, buildWorkerScript } from '../lib/bot-worker-script.js';
-import { logpushJob, vercelDrain } from '../lib/bot-sender-setup.js';
+import { FASTLY_LOG_FORMAT, logpushJob, vercelDrain } from '../lib/bot-sender-setup.js';
 import { botUploadLimiter } from '../middleware/rate-limiter.js';
 
 const router = Router();
@@ -155,6 +155,7 @@ router.post('/connections/:brandId', async (req, res) => {
       workerSecretName: kind === 'cloudflare_worker' ? WORKER_SECRET_NAME : null,
       logpushJob: kind === 'cloudflare_logpush' ? logpushJob({ endpoint, secret }) : null,
       vercelDrain: kind === 'vercel_drain' ? vercelDrain({ endpoint, secret }) : null,
+      fastlyLogFormat: kind === 'fastly_log_stream' ? FASTLY_LOG_FORMAT : null,
     });
   } catch (error) {
     return fail(req, res, error, 'create the AI bot connection');
