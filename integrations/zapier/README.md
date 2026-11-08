@@ -7,13 +7,12 @@ A Zapier Platform CLI app for receiving Ansvisor webhook events and reading AI v
 - **New Daily Pulse** — receives daily_pulse.created.
 - **Content Draft Sent** — receives content_draft.sent when a Content Editor page is sent through the brand webhook.
 - **New Action Center Task** — receives action_task.sent.
-- **Webhook Test Received** — receives webhook.test so a brand's webhook can be tested from Ansvisor settings.
 
-The webhook triggers use Zapier static hooks. Copy the hook URL Zapier gives you into the matching brand's Content → Configure Webhook settings. The app does not create or remove webhook configurations through an Ansvisor subscription API.
+Each trigger is a REST Hook. When a Zap is enabled, the app registers an event-specific webhook config with Ansvisor using the selected brand, Zapier target URL and brand secret. When the Zap is disabled or removed, the app deletes only that Zapier-managed config. The dashboard's Default webhook config remains separate.
 
-Every trigger verifies X-Webhook-Secret using a constant-time comparison. The Content Draft trigger additionally verifies X-Ansvisor-Signature as HMAC-SHA256 over the exact raw request body. Zapier exposes that request as bundle.rawRequest.
+Ansvisor also sends webhook.test to every active webhook config, regardless of its event filter. Each event trigger accepts this test delivery so users can test the connection from Ansvisor settings.
 
-Zapier receives the hook request before the app's trigger code runs. The trigger rejects invalid events so they are not passed into the Zap, but Zapier controls the HTTP response from its hook endpoint; the sender is not guaranteed to receive an HTTP 401 for an invalid event.
+Every event verifies X-Webhook-Secret using a constant-time comparison. The content_draft.sent event additionally verifies X-Ansvisor-Signature as HMAC-SHA256 over the exact raw request body exposed by Zapier as bundle.rawRequest.
 
 ## Searches and actions
 
@@ -30,7 +29,8 @@ All metrics operations are read-only. Brand data is limited by the organization 
 1. In Ansvisor, open **Settings → MCP & API Keys** and create an API key.
 2. In Zapier, connect an Ansvisor account and paste the ans_ key.
 3. Keep the base URL as https://app.ansvisor.com, or enter your self-hosted web app URL.
-4. For webhook triggers, add the secret configured on the target brand's webhook. Use a separate Zapier connection for each brand because webhook secrets are per brand. The secret is optional when using metrics actions only.
+4. For webhook triggers, add the secret configured for the target brand. Use a separate Zapier connection for each brand because webhook secrets are per brand. The secret is optional when using metrics actions only.
+5. The API key's user must be an admin or manager with webhook write access to create or remove subscriptions.
 
 The API key and webhook secret are password fields. The app does not write either value to application logs.
 
@@ -44,4 +44,4 @@ npm run validate
 
 For local CLI testing, copy .env.example to .env and replace the placeholder values. Never commit .env.
 
-Registering, pushing and submitting the app to the public Zapier directory require access to Ansvisor's Zapier account. A contributor can prepare and validate the app, then hand the submission to a maintainer.
+Registering, pushing and submitting the app to the public Zapier directory require access to the Ansvisor Zapier account. A contributor can prepare and validate the app, then hand the submission to a maintainer.
