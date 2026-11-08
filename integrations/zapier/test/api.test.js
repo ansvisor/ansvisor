@@ -68,7 +68,7 @@ test('visibility trend passes granularity and topic filters', async () => {
   const { z, calls } = mockZapier(fixture('visibility-trend.json'));
   await creates.visibilityTrend(z, {
     ...bundle,
-    inputData: { ...bundle.inputData, granularity: 'week', topic_id: 'topic-123' },
+    inputData: { ...bundle.inputData, granularity: 'week', topic_filter: 'topic-123' },
   });
   assert.equal(calls[0].url, 'https://app.ansvisor.com/api/v1/visibility-trend');
   assert.equal(calls[0].params.granularity, 'week');
