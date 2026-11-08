@@ -293,6 +293,18 @@ describe('ReportCardPdfDocument', () => {
     expect(value).toContain('0.5% to 1% of AI visits become a deal');
   });
 
+  it('writes the revenue scenario’s percentages the Turkish way on a Turkish card', () => {
+    const [, , , value] = draw({
+      ...SAMPLE_REPORT_CARD,
+      country: { code: 'TR', name: 'Türkiye' },
+      language: 'Turkish',
+      siteType: 'b2b',
+      dealValue: { amount: 12_000, currency: 'EUR' },
+    });
+    expect(value).toContain('%0,5 ile %1 arası');
+    expect(value).not.toContain('1% ile');
+  });
+
   it('draws a Turkish card in Turkish, with its amounts in dollars', () => {
     const pages = draw({
       ...SAMPLE_REPORT_CARD,

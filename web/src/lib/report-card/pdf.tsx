@@ -899,7 +899,9 @@ function ValuePage({ card, t, font }: PageProps) {
   const compare = buyVsEarn(card);
   const revenue = revenueRows(card);
   const rate = conversionRange(card.siteType);
-  const pct = (r: number) => `${Math.round(r * 1000) / 10}%`;
+  // In the card's language: "1%" in English, "%1" in Turkish.
+  const pct = (r: number) =>
+    new Intl.NumberFormat(t.locale, { style: 'percent', maximumFractionDigits: 1 }).format(r);
   const usd = (amount: number) => money(amount, 'USD', t.locale);
   const country = t.country(card.country);
   const growth = growthEngineRows(card);
