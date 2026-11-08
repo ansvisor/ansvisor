@@ -76,6 +76,11 @@ module.exports = {
     'Webhook Test Received',
     'Receives the test event sent from Ansvisor webhook settings.',
     'webhook.test',
-    { id: 'test-event-123', event: 'webhook.test', brand: { id: 'brand-123', name: 'Acme' } },
+    {
+      id: 'test-event-123',
+      event: 'webhook.test',
+      message: 'This is a test webhook from AEO platform.',
+      timestamp: '2026-07-30T10:00:00.000Z',
+    },
   ),
 };
