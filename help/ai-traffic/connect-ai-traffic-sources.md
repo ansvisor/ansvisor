@@ -4,8 +4,8 @@ route: /dashboard/traffic
 keywords: [tracking snippet, connect google analytics, connect search console, data sources, install snippet, check again, tracking code not detected]
 synonyms: [set up ai traffic, add tracking code, link analytics, ga4, gsc]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-08
+last_checked: 2026-11-08
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -18,7 +18,7 @@ The **Data sources** strip at the top of **AI Traffic Analytics** shows the four
 - **Tracking snippet**: AI-referred visits, page by page, as they happen.
 - **Google Analytics**: AI visits on days the snippet has none, plus engaged visits, key events, revenue and the AI share of all traffic.
 - **Google Search Console**: Google clicks, the pages where AI may be taking them, and the Google queries you don't track yet.
-- **AI bots**: which AI bots read your pages, from your own Cloudflare, Vercel or any server's logs, on the Growth plan and above.
+- **AI bots**: which AI bots read your pages, from your own Cloudflare, Vercel, Fastly or any server's logs, on the Growth plan and above.
 
 ## Add the tracking snippet
 
@@ -49,6 +49,16 @@ The snippet sets no cookies, and without conversions it stores nothing in the vi
 Click **Connect** on either card in the Data sources strip and sign in to Google; access is read-only. If the card then reads **Connected · choose a property for this brand**, pick the property under **Manage**, in **Settings › Integrations**. Connections are shared across your organization.
 
 On a self-hosted server, both cards read **Not set up on this server** until the server has its Google connection keys.
+
+## Connect Fastly AI bot logs
+
+On **AI Traffic Analytics**, open **Connect** on the **AI bots** card and choose **Fastly HTTPS log stream**. Create the connection and copy its endpoint, bearer header and JSON log format; the secret is shown once.
+
+In your Fastly service, add an **HTTPS logging endpoint**. Set its URL to the endpoint from Ansvisor, use **POST** and `application/json` as the content type, and add the custom header `Authorization` with the bearer value from Ansvisor. Choose **Newline delimited** JSON entries and a **Custom** log line format, then paste the format shown in the connection dialog and activate the service configuration.
+
+Fastly sends request logs to Ansvisor. Only requests whose user agent names a known AI bot and whose client IP is in that operator's published ranges are counted. All incoming log records, including non-bot requests, count toward the monthly raw-log cap.
+
+See [Fastly HTTPS log streaming](/guides/ai-traffic-analytics#fastly-https-log-streaming) for the fields in the format and how requests are attributed to the brand.
 
 ## When the first numbers arrive
 
