@@ -17,7 +17,7 @@
  *     lines are skipped.
  *   * Fastly HTTPS log stream (fastly_log_stream, #2164): JSON lines or one
  *     JSON array with the fields in FASTLY_LOG_FORMAT: timestamp, client_ip,
- *     request_user_agent, url, response_status and country.
+ *     host, request_user_agent, url, response_status and country.
  *   * Generic webhook (log_webhook, #2170): JSON lines, or one JSON array,
  *     with the documented fields: user_agent, ip, url (a full address, or a
  *     path) or host and path, status, time (RFC 3339, or seconds or
