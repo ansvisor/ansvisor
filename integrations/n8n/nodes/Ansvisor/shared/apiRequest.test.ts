@@ -59,7 +59,7 @@ describe('buildAnsvisorApiRequest', () => {
   });
 
   it('requires a brand for metrics endpoints', () => {
-    expect(() => buildAnsvisorApiRequest('citations', 'get', {})).toThrow(
+    expect(() => buildAnsvisorApiRequest('citation', 'get', {})).toThrow(
       'A brand is required',
     );
   });

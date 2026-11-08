@@ -59,7 +59,7 @@ export function buildAnsvisorApiRequest(
     return { path: '/api/v1/visibility-trend', qs };
   }
 
-  if (resource === 'citations' && operation === 'get') {
+  if (resource === 'citation' && operation === 'get') {
     if (parameters.sourceFilter) qs.source_filter = parameters.sourceFilter;
     if (parameters.limit !== undefined) qs.limit = parameters.limit;
     return { path: '/api/v1/citations', qs };
