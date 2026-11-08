@@ -107,9 +107,6 @@ export class AnsvisorTrigger implements INodeType {
       }
       if (Buffer.isBuffer(request.rawBody)) {
         rawBody = request.rawBody;
-      } else if (typeof request.rawBody === 'string') {
-        rawBody = Buffer.from(request.rawBody, 'utf8');
-      }
     }
 
     const verified = verifyAnsvisorWebhook({
