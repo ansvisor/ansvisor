@@ -115,7 +115,7 @@ describe('readFastlyBody (#2164)', () => {
       {
         userAgent: expect.stringContaining('GPTBot/1.2'),
         ip: '20.171.206.9',
-        url: '/pricing?from=fastly',
+        url: 'https://acme.example/pricing?from=fastly',
         status: 200,
         at: new Date(1792400000 * 1000).toISOString(),
         country: 'US',
@@ -123,13 +123,13 @@ describe('readFastlyBody (#2164)', () => {
       {
         userAgent: 'Mozilla/5.0 Chrome/129',
         ip: '203.0.113.9',
-        url: '/about',
+        url: 'https://acme.example/about',
         status: 404,
         at: new Date(1792400001 * 1000).toISOString(),
         country: 'GB',
       },
     ]);
-    expect(await readFastlyBody(JSON.stringify([JSON.parse(lines.split('\\n')[0])]))).toMatchObject({
+    expect(await readFastlyBody(JSON.stringify([JSON.parse(lines.split('\n')[0])]))).toMatchObject({
       records: 1,
       requests: [expect.objectContaining({ ip: '20.171.206.9' })],
     });
