@@ -10,7 +10,7 @@ A Zapier Platform CLI app for receiving Ansvisor webhook events and reading AI v
 
 Each trigger is a REST Hook. When a Zap is enabled, the app registers an event-specific webhook config with Ansvisor using the selected brand, Zapier target URL and brand secret. When the Zap is disabled or removed, the app deletes only that Zapier-managed config. The dashboard's Default webhook config remains separate.
 
-Ansvisor also sends webhook.test to every active webhook config, regardless of its event filter. Each event trigger accepts this test delivery so users can test the connection from Ansvisor settings.
+The dashboard's **Test Webhook** button tests the dashboard's Default webhook URL; it does not broadcast to API-managed Zapier subscriptions. Zapier's trigger setup uses the representative sample payload in this app. To verify live delivery, enable the Zap and send a real event from Ansvisor.
 
 Every event verifies X-Webhook-Secret using a constant-time comparison. The content_draft.sent event additionally verifies X-Ansvisor-Signature as HMAC-SHA256 over the exact raw request body exposed by Zapier as bundle.rawRequest.
 
