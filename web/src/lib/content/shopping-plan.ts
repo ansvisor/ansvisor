@@ -24,7 +24,7 @@ import { round } from '@/lib/priority-core';
  * category and the products in stock; a post by how bad its links are.
  */
 
-/** A category needs this many products in stock for a guide. */
+/** A category needs this many products in stock for a guide (the API's GUIDE_MIN_IN_STOCK too). */
 export const MIN_IN_STOCK = 3;
 /** The guides listed, the best first. */
 export const MAX_GUIDES = 10;
@@ -98,6 +98,33 @@ function names(textWords: Set<string>, leafWords: string[]): boolean {
   return leafWords.length > 0 && leafWords.every((w) => textWords.has(w));
 }
 
+/** Whether a draft, its title's words read, covers a category: its path holds it, or its title names it. */
+function covers(
+  draft: Pick<ShoppingPlanDraft, 'categories'>,
+  titleWords: Set<string>,
+  category: string,
+  leafWords: string[],
+): boolean {
+  return draft.categories.includes(category) || names(titleWords, leafWords);
+}
+
+/**
+ * Whether a draft, written or published, covers a category, so the category
+ * needs no buying guide: its shopping path holds it (by its full name), or
+ * its title names its own name. The Action Center asks the same before it
+ * suggests a guide next to a live category page (server/src/lib/
+ * action-center/category-play.js, guideCovers): both sides test the cases
+ * in __fixtures__/guide-covering.json.
+ */
+export function coversCategory(
+  draft: Pick<ShoppingPlanDraft, 'title' | 'categories'>,
+  category: string,
+): boolean {
+  return covers(draft, new Set(wordsOf(draft.title)), category, [
+    ...new Set(wordsOf(categoryLeaf(category))),
+  ]);
+}
+
 const round1 = (n: number) => round(n, 1);
 
 /** A new guide's score: a new page's, its opportunity the prompts asking and the products in stock. */
@@ -141,9 +168,7 @@ export function shoppingOpportunities({
     const leaf = categoryLeaf(category.name);
     const leafWords = [...new Set(wordsOf(leaf))];
     const covering = draftWords
-      .filter(
-        ({ draft, words }) => draft.categories.includes(category.name) || names(words, leafWords),
-      )
+      .filter(({ draft, words }) => covers(draft, words, category.name, leafWords))
       .map(({ draft }) => draft);
     // A published page already guides shoppers there: its links are the fix rows'.
     if (covering.some((d) => d.status === 'published')) continue;
