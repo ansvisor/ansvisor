@@ -145,7 +145,7 @@ router.post('/connections/:brandId', async (req, res) => {
     if (error) throw new Error(error.message);
 
     const { kind } = parsed.data;
-    // What the person copies into Cloudflare or Vercel, with the secret in it once.
+    // What the person copies into Cloudflare, Vercel or Fastly, with the secret in it once.
     return res.status(201).json({
       connection,
       secret,
