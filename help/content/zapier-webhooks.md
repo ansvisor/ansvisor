@@ -11,16 +11,16 @@ app_version: 0.3.0
 approved: false
 sources: [docs/guides/zapier.mdx, docs/api-reference/webhooks.mdx]
 ---
-Send a brand's Ansvisor events to a Zapier workflow. Each brand has its own webhook URL and secret, so configure the connection separately for every brand you want to use.
+Send a brand's Ansvisor events to a Zapier workflow. Each brand has its own webhook secret, so connect a separate Ansvisor account in Zapier for each brand you want to use.
 
-## Configure the brand webhook
+## Connect your account
 
-Open the brand's **Content** area and choose **Configure Webhook**. Paste the hook URL from the Ansvisor trigger in Zapier, choose the events the workflow should receive, and set a secret key. Save the webhook and use an HTTPS address.
+Create an API key under **Settings → MCP & API Keys** and add it to the Ansvisor connection in Zapier. For webhook triggers, also enter the secret configured for the target brand. The key's user must be an admin or manager with webhook write access.
 
-## Connect the trigger in Zapier
+## Enable a webhook trigger
 
-In Zapier, add the matching Ansvisor trigger and connect the brand's webhook secret. Use a separate Ansvisor connection for each brand because the secret belongs to one brand. The same API key can be used in those connections.
+Add a Daily Pulse, Content Draft Sent or Action Center Task trigger and choose the brand. When you enable the Zap, Ansvisor registers the webhook URL automatically. Turning off or removing the Zap removes that subscription.
 
 ## Test the connection
 
-Choose **Test Webhook** in the brand's webhook settings. In Zapier, use **Webhook Test Received** to confirm the event arrives. The Daily Pulse, Content Draft Sent and Action Center Task triggers each receive their own event type.
+Choose **Test Webhook** in the brand's webhook settings. The test event is sent to every active webhook subscription, and each Ansvisor trigger accepts it so you can confirm the connection before a real event occurs.
