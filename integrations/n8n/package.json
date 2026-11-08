@@ -39,7 +39,7 @@
     "strict": true,
     "credentials": [
       "dist/credentials/AnsvisorApi.credentials.js",
-      "dist/credentials/AnsvisorWebhookSecret.credentials.js"
+      "dist/credentials/AnsvisorWebhookSecretApi.credentials.js"
     ],
     "nodes": [
       "dist/nodes/Ansvisor/Ansvisor.node.js",
