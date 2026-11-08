@@ -17,6 +17,8 @@ export type BotConnectionKind =
   | 'cloudflare_worker'
   | 'cloudflare_logpush'
   | 'vercel_drain'
+  // Fastly HTTPS log streaming (#2164, 00495).
+  | 'fastly_log_stream'
   // A generic sender of JSON lines (#2170, 00492).
   | 'log_webhook';
 
@@ -67,6 +69,7 @@ export interface NewBotConnection {
   workerSecretName: string | null;
   logpushJob: Record<string, unknown> | null;
   vercelDrain: { endpoint: string; format: string; headers: string[]; sources: string[] } | null;
+  fastlyLogFormat: string | null;
 }
 
 type Failure = { error: string; code?: 'plan_limit' };
@@ -147,6 +150,7 @@ export async function createBotConnection(
     workerSecretName: typeof b.workerSecretName === 'string' ? b.workerSecretName : null,
     logpushJob: (b.logpushJob as Record<string, unknown> | null) ?? null,
     vercelDrain: (b.vercelDrain as NewBotConnection['vercelDrain']) ?? null,
+    fastlyLogFormat: typeof b.fastlyLogFormat === 'string' ? b.fastlyLogFormat : null,
   };
 }
 
