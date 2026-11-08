@@ -4,8 +4,8 @@ import express from 'express';
 
 /**
  * POST /bots/ingest (AT-010): a connection's secret, then its body read by
- * kind — a Worker's batch, a Vercel drain's entries, a Logpush file or Fastly
- * log entries — with a log sender's file written in one step (claim, raw count, events).
+ * kind — a Worker's batch, a Vercel drain's entries, a Logpush file or a
+ * Fastly log stream — with a log sender's file written in one step (claim, raw count, events).
  */
 
 const connectionForSecret = vi.fn();
@@ -132,6 +132,57 @@ describe('POST /bots/ingest', () => {
     const capped = await post('abot_x', entries);
     expect(capped.status).toBe(200);
     expect(await capped.json()).toMatchObject({ received: 2, stored: 0, rawCapped: true });
+  });
+
+  it("reads Fastly's JSON log entries as one file", async () => {
+    const connection = { id: 'c4', organizationId: 'o1', kind: 'fastly_log_stream' };
+    connectionForSecret.mockResolvedValue(connection);
+    const entries = [
+      {
+        timestamp: '1792400000',
+        client_ip: '20.171.206.9',
+        host: 'acme.example',
+        request_user_agent: 'Mozilla/5.0 (compatible; GPTBot/1.2)',
+        url: '/pricing?from=fastly',
+        response_status: 200,
+        country: 'US',
+      },
+      {
+        timestamp: '1792400001',
+        client_ip: '203.0.113.9',
+        host: 'acme.example',
+        request_user_agent: 'Mozilla/5.0 Chrome/129',
+        url: '/about',
+        response_status: 404,
+        country: 'GB',
+      },
+    ];
+    const res = await post('abot_x', entries);
+    expect(res.status).toBe(200);
+    expect((await res.json()).records).toBe(2);
+    const [conn, hash, parsed] = ingestLogFile.mock.calls[0];
+    expect(conn).toBe(connection);
+    expect(hash).toBe('hash-1');
+    expect(parsed.records).toBe(2);
+    expect(parsed.requests).toEqual([
+      {
+        userAgent: 'Mozilla/5.0 (compatible; GPTBot/1.2)',
+        ip: '20.171.206.9',
+        url: 'https://acme.example/pricing?from=fastly',
+        status: 200,
+        at: new Date(1792400000 * 1000).toISOString(),
+        country: 'US',
+      },
+      {
+        userAgent: 'Mozilla/5.0 Chrome/129',
+        ip: '203.0.113.9',
+        url: 'https://acme.example/about',
+        status: 404,
+        at: new Date(1792400001 * 1000).toISOString(),
+        country: 'GB',
+      },
+    ]);
+    expect(ingestBotRequests).not.toHaveBeenCalled();
   });
 
   it("opens a Logpush job's gzipped file, and refuses an unreadable one", async () => {
