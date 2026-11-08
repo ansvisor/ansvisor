@@ -52,4 +52,31 @@ function requireBrandId(bundle) {
   return brandId.trim();
 }
 
-module.exports = { DEFAULT_BASE_URL, getBaseUrl, cleanParams, apiRequest, requireBrandId };
+async function apiWriteRequest(z, bundle, method, endpoint, body) {
+  if (method !== 'POST' && method !== 'DELETE') {
+    throw new Error('Only POST and DELETE are supported for Ansvisor webhook subscriptions.');
+  }
+  const options = {
+    method,
+    url: getBaseUrl(bundle) + '/api/v1/' + endpoint,
+    headers: { Accept: 'application/json' },
+  };
+  if (body !== undefined) {
+    options.body = JSON.stringify(body);
+    options.headers['Content-Type'] = 'application/json';
+  }
+  const response = await z.request(options);
+  if (response && typeof response.throwForStatus === 'function') {
+    response.throwForStatus();
+  } else if (response && response.status >= 400) {
+    throw new Error('Ansvisor API request failed with status ' + response.status + '.');
+  }
+  if (response && response.json !== undefined) return response.json;
+  if (response && typeof response.content === 'string') {
+    try { return JSON.parse(response.content); }
+    catch { throw new Error('Ansvisor returned an invalid JSON response.'); }
+  }
+  return response;
+}
+
+module.exports = { DEFAULT_BASE_URL, getBaseUrl, cleanParams, apiRequest, apiWriteRequest, requireBrandId };
