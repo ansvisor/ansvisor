@@ -160,6 +160,7 @@ Bot counts are kept by UTC day, so the 24-hour range reads yesterday and today (
     - **Cloudflare Worker** (recommended) — a small Worker on your site's route passes every request through and sends only AI-bot requests, in batches.
     - **Cloudflare Logpush** — Cloudflare sends only the AI bots' log lines, filtered at its edge. Nothing runs on your requests.
     - **Vercel Drain** — Vercel sends your request logs; Ansvisor keeps the AI bots and drops the rest. Vercel Pro and Enterprise only.
+    - **Fastly HTTPS log stream** — Fastly sends request logs to Ansvisor over HTTPS; Ansvisor keeps only verified AI bots. All incoming records count toward the monthly raw-log cap.
     - **Any server (webhook)** — your own log shipper (Vector, Fluent Bit, Logstash or a script) posts your access log as JSON lines; Ansvisor keeps the AI bots and drops the rest. See [Send logs from any server](#send-logs-from-any-server).
 
     Each option says what it costs on your own bill before you connect. None of them changes your site's speed.
@@ -169,7 +170,35 @@ Bot counts are kept by UTC day, so the 24-hour range reads yesterday and today (
   </Step>
 </Steps>
 
-**Manage** on the card lists your connections with their last request, lets you **Revoke** one, and shows this month's use. Cloud plans store a monthly number of detailed rows; past it, detailed rows pause until the next month and the totals are still counted. Log records from Logpush, a Vercel drain, the webhook or an upload have a monthly cap of their own. Only requests to your brand's own domains, or their subdomains, are kept.
+**Manage** on the card lists your connections with their last request, lets you **Revoke** one, and shows this month's use. Cloud plans store a monthly number of detailed rows; past it, detailed rows pause until the next month and the totals are still counted. Log records from Fastly, Logpush, a Vercel drain, the webhook or an upload have a monthly cap of their own. Only requests to your brand's own domains, or their subdomains, are kept.
+
+#### Fastly HTTPS log streaming
+
+Choose **Fastly HTTPS log stream** in the connection dialog. **Create connection** shows the endpoint, the one-time bearer header and the JSON log format to copy. The secret is shown once; if it is lost, revoke the connection and create another.
+
+In your Fastly service, add an **HTTPS logging endpoint** and set:
+
+- **URL**: the endpoint shown by Ansvisor;
+- **Method**: `POST`;
+- **Content type**: `application/json`;
+- **Custom header name**: `Authorization`;
+- **Custom header value**: the `Authorization: Bearer abot_…` value shown by Ansvisor;
+- **JSON log entry format**: **Newline delimited**;
+- **Log line format**: **Custom**, using the format below.
+
+```text
+{
+  "timestamp": "%{time.start.sec}V",
+  "client_ip": "%{req.http.Fastly-Client-IP}V",
+  "host": "%{if(req.http.Fastly-Orig-Host, req.http.Fastly-Orig-Host, req.http.Host)}V",
+  "request_user_agent": "%{json.escape(req.http.User-Agent)}V",
+  "url": "%{json.escape(req.url)}V",
+  "response_status": %{resp.status}V,
+  "country": "%{client.geo.country_code}V"
+}
+```
+
+Activate the service configuration. Fastly sends request logs; Ansvisor checks the user agent against its AI-bot list and the client IP against that bot operator's published ranges. Only verified bots are stored. The host is included so requests for other domains on the same Fastly service are not attributed to this brand. Every incoming record, including non-bot requests, counts toward the monthly raw-log cap.
 
 #### Send logs from any server
 
