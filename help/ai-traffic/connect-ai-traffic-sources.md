@@ -52,14 +52,11 @@ On a self-hosted server, both cards read **Not set up on this server** until the
 
 ## Connect Fastly AI bot logs
 
-On **AI Traffic Analytics**, open **Connect** on the **AI bots** card and choose **Fastly HTTPS log stream**. Create the connection and copy its endpoint, bearer header and JSON log format; the secret is shown once.
+On **AI Traffic Analytics**, open **Connect** on the **AI bots** card and choose **Fastly HTTPS log stream**. Create the connection and copy its endpoint, bearer header and custom log format. The secret is shown once.
 
-In your Fastly service, add an **HTTPS logging endpoint**. Set its URL to the endpoint from Ansvisor, use **POST** and `application/json` as the content type, and add the custom header `Authorization` with the bearer value from Ansvisor. Choose **Newline delimited** JSON entries and a **Custom** log line format, then paste the format shown in the connection dialog and activate the service configuration. Ansvisor automatically answers Fastly's domain-control challenge for its API endpoint, so you do not need to add a DNS record.
+In Fastly, add an **HTTPS logging endpoint**. Use the endpoint from Ansvisor, set the method to **POST**, and add an **Authorization** header with the bearer value. Choose newline-delimited entries and a custom log format, paste the format supplied by Ansvisor, and activate the service configuration. Ansvisor answers the domain-control challenge automatically, so no DNS record is needed.
 
-Fastly sends request logs to Ansvisor. Only requests whose user agent names a known AI bot and whose client IP is in that operator's published ranges are counted. All incoming log records, including non-bot requests, count toward the monthly raw-log cap.
-
-See [Fastly HTTPS log streaming](/guides/ai-traffic-analytics#fastly-https-log-streaming) for the fields in the format and how requests are attributed to the brand.
-
+Fastly sends every request log, including non-bot requests; all records count toward the monthly raw-log cap. Ansvisor stores only requests whose user agent and source IP match a known AI bot and its published ranges.
 ## When the first numbers arrive
 
 Google Analytics' first numbers arrive in about 15 minutes; up to 14 months of history can take up to 24 hours. Search Console's can take up to 48 hours, because Google reports about two days late.
