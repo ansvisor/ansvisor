@@ -198,7 +198,7 @@ In your Fastly service, add an **HTTPS logging endpoint** and set:
 }
 ```
 
-Activate the service configuration. Fastly sends request logs; Ansvisor checks the user agent against its AI-bot list and the client IP against that bot operator's published ranges. Only verified bots are stored. The host is included so requests for other domains on the same Fastly service are not attributed to this brand. Every incoming record, including non-bot requests, counts toward the monthly raw-log cap.
+Activate the service configuration. Ansvisor automatically answers Fastly's domain-control challenge at `/.well-known/fastly/logging/challenge`, so you do not need to add a DNS record for the API endpoint. Fastly sends request logs; Ansvisor checks the user agent against its AI-bot list and the client IP against that bot operator's published ranges. Only verified bots are stored. The host is included so requests for other domains on the same Fastly service are not attributed to this brand. Every incoming record, including non-bot requests, counts toward the monthly raw-log cap.
 
 #### Send logs from any server
 
