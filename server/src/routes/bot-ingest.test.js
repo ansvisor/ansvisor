@@ -4,8 +4,8 @@ import express from 'express';
 
 /**
  * POST /bots/ingest (AT-010): a connection's secret, then its body read by
- * kind — a Worker's batch, a Vercel drain's entries or a Logpush file — with
- * a log sender's file written in one step (claim, raw count, events).
+ * kind — a Worker's batch, a Vercel drain's entries, a Logpush file or Fastly
+ * log entries — with a log sender's file written in one step (claim, raw count, events).
  */
 
 const connectionForSecret = vi.fn();
