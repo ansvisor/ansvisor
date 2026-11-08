@@ -24,6 +24,7 @@ import { AI_BOTS } from './ai-bots.js';
 export const FASTLY_LOG_FORMAT = `{
   "timestamp": "%{time.start.sec}V",
   "client_ip": "%{req.http.Fastly-Client-IP}V",
+  "host": "%{if(req.http.Fastly-Orig-Host, req.http.Fastly-Orig-Host, req.http.Host)}V",
   "request_user_agent": "%{json.escape(req.http.User-Agent)}V",
   "url": "%{json.escape(req.url)}V",
   "response_status": %{resp.status}V,
