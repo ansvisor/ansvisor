@@ -4,7 +4,7 @@
   "private": true,
   "description": "Zapier Platform CLI app for Ansvisor webhooks and AI visibility metrics",
   "license": "MIT",
-  "scripts": { "test": "node --test", "validate": "zapier-platform validate" },
+  "scripts": { "test": "node --test", "validate": "zapier validate" },
   "engines": { "node": ">=20" },
   "dependencies": { "zapier-platform-core": "19.3.0" },
   "devDependencies": { "zapier-platform-cli": "19.3.0" }
