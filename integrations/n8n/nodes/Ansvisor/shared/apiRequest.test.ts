@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildAnsvisorApiRequest } from './apiRequest';
+import {
+  buildAnsvisorApiRequest,
+  buildAnsvisorHttpRequest,
+} from './apiRequest';
 
 describe('buildAnsvisorApiRequest', () => {
   it('lists brands without a brand filter', () => {
@@ -65,5 +68,21 @@ describe('buildAnsvisorApiRequest', () => {
     expect(() => buildAnsvisorApiRequest('brand', 'get', {})).toThrow(
       'not supported',
     );
+  });
+});
+
+describe('buildAnsvisorHttpRequest', () => {
+  it('creates an authenticated GET request target without a trailing base URL slash', () => {
+    expect(
+      buildAnsvisorHttpRequest('https://self-hosted.example/', {
+        path: '/api/v1/brands',
+        qs: {},
+      }),
+    ).toEqual({
+      method: 'GET',
+      url: 'https://self-hosted.example/api/v1/brands',
+      qs: {},
+      json: true,
+    });
   });
 });

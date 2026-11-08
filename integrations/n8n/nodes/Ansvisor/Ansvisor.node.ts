@@ -7,6 +7,7 @@ import type {
 import { NodeConnectionTypes, NodeOperationError } from 'n8n-workflow';
 import {
   buildAnsvisorApiRequest,
+  buildAnsvisorHttpRequest,
   type AnsvisorOperation,
   type AnsvisorResource,
 } from './shared/apiRequest';
@@ -142,7 +143,7 @@ export class Ansvisor implements INodeType {
     const items = this.getInputData();
     const output: INodeExecutionData[] = [];
     const credentials = await this.getCredentials('ansvisorApi');
-    const baseUrl = String(credentials.baseUrl || 'https://app.ansvisor.com').replace(/\/+$/, '');
+    const baseUrl = String(credentials.baseUrl || 'https://app.ansvisor.com');
 
     for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
       try {
@@ -161,15 +162,11 @@ export class Ansvisor implements INodeType {
           limit: this.getNodeParameter('limit', itemIndex, 50) as number,
         });
 
+        const requestOptions = buildAnsvisorHttpRequest(baseUrl, request);
         const response = await this.helpers.httpRequestWithAuthentication.call(
           this,
           'ansvisorApi',
-          {
-            method: 'GET',
-            url: `${baseUrl}${request.path}`,
-            qs: request.qs,
-            json: true,
-          },
+          requestOptions,
         );
 
         output.push({

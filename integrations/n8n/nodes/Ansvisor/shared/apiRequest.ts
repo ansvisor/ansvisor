@@ -15,6 +15,13 @@ export interface AnsvisorApiRequest {
   qs: Record<string, string | number>;
 }
 
+export interface AnsvisorHttpRequestOptions {
+  method: 'GET';
+  url: string;
+  qs: Record<string, string | number>;
+  json: true;
+}
+
 /** Build only the documented, read-only Metrics API requests. */
 export function buildAnsvisorApiRequest(
   resource: AnsvisorResource,
@@ -53,4 +60,16 @@ export function buildAnsvisorApiRequest(
   }
 
   throw new Error('The selected Ansvisor resource and operation are not supported.');
+}
+
+export function buildAnsvisorHttpRequest(
+  baseUrl: string,
+  request: AnsvisorApiRequest,
+): AnsvisorHttpRequestOptions {
+  return {
+    method: 'GET',
+    url: `${baseUrl.replace(/\\/+$/, '')}${request.path}`,
+    qs: request.qs,
+    json: true,
+  };
 }
