@@ -1,0 +1,58 @@
+{
+  "name": "n8n-nodes-ansvisor",
+  "version": "0.1.0",
+  "description": "n8n nodes for Ansvisor webhooks and AI visibility metrics",
+  "license": "MIT",
+  "homepage": "https://github.com/ansvisor/ansvisor/tree/main/integrations/n8n",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ansvisor/ansvisor.git",
+    "directory": "integrations/n8n"
+  },
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "ansvisor",
+    "ai-visibility",
+    "webhooks"
+  ],
+  "author": {
+    "name": "Ansvisor contributors"
+  },
+  "engines": {
+    "node": ">=20.15"
+  },
+  "scripts": {
+    "build": "n8n-node build",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && npm run test && npm run lint"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "credentials": [
+      "dist/credentials/AnsvisorApi.credentials.js",
+      "dist/credentials/AnsvisorWebhookSecret.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Ansvisor/Ansvisor.node.js",
+      "dist/nodes/Ansvisor/AnsvisorTrigger.node.js"
+    ]
+  },
+  "devDependencies": {
+    "@n8n/node-cli": "*",
+    "@types/node": "^22.15.30",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}

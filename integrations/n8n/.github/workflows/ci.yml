@@ -1,0 +1,29 @@
+name: n8n community node
+
+on:
+  push:
+    paths:
+      - 'integrations/n8n/**'
+      - '.github/workflows/n8n-community-node.yml'
+  pull_request:
+    paths:
+      - 'integrations/n8n/**'
+      - '.github/workflows/n8n-community-node.yml'
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/n8n
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: integrations/n8n/package-lock.json
+      - run: npm install
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
