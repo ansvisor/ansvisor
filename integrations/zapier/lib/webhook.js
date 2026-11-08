@@ -55,7 +55,9 @@ function verifyWebhookRequest(bundle, expectedEvent) {
 
 function addZapierId(payload, expectedEvent, rawBody) {
   let id;
-  if (expectedEvent === 'daily_pulse.created') {
+  if (payload.event === 'webhook.test') {
+    id = crypto.createHash('sha256').update(rawBody, 'utf8').digest('hex');
+  } else if (expectedEvent === 'daily_pulse.created') {
     id = [payload.brand && payload.brand.id, payload.pulse && payload.pulse.date].filter(Boolean).join(':');
   } else if (expectedEvent === 'content_draft.sent') {
     id = payload.delivery && payload.delivery.id;
