@@ -45,10 +45,12 @@ test('Content Draft trigger verifies HMAC over the exact raw request body', () =
   assert.equal(result[0].page.title, 'A practical guide');
 });
 
-test('Webhook Test trigger accepts the test event using the shared secret', () => {
-  const result = createWebhookPerform('webhook.test')({}, makeBundle(fixture('webhook-test.json')));
-  assert.equal(result[0].event, 'webhook.test');
-  assert.match(result[0].id, /^[a-f0-9]{64}$/);
+test('Ansvisor test deliveries are accepted by each event trigger', () => {
+  for (const event of ['daily_pulse.created', 'content_draft.sent', 'action_task.sent']) {
+    const result = createWebhookPerform(event)({}, makeBundle(fixture('webhook-test.json')));
+    assert.equal(result[0].event, 'webhook.test');
+    assert.match(result[0].id, /^[a-f0-9]{64}$/);
+  }
 });
 
 test('rejects a missing configured webhook secret', () => {
@@ -107,4 +109,9 @@ test('rejects a body changed after its Content Draft signature was created', () 
 test('does not require the additional HMAC header for other webhook event types', () => {
   const bundle = makeBundle(fixture('action-task.json'), { headers: { 'X-Ansvisor-Signature': undefined } });
   assert.equal(verifyWebhookRequest(bundle, 'action_task.sent').event, 'action_task.sent');
+});
+
+test('a webhook.test delivery does not require the Content Draft HMAC header', () => {
+  const bundle = makeBundle(fixture('webhook-test.json'));
+  assert.equal(createWebhookPerform('content_draft.sent')({}, bundle)[0].event, 'webhook.test');
 });
