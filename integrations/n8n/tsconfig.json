@@ -16,5 +16,6 @@
     "sourceMap": true,
     "outDir": "./dist/"
   },
-  "include": ["credentials/**/*", "nodes/**/*", "package.json"]
+  "include": ["credentials/**/*", "nodes/**/*", "package.json"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }
