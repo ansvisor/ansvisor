@@ -2,10 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { getBaseUrl, apiRequest } = require('../lib/api');
+const { getBaseUrl, apiRequest, apiWriteRequest } = require('../lib/api');
 const authModule = require('../authentication');
 const creates = require('../creates');
 const { findBrand } = require('../searches');
+const { createSubscribe, unsubscribe } = require('../lib/subscription');
 
 const fixture = (name) => JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', name), 'utf8'));
 
@@ -116,4 +117,52 @@ test('metrics actions require a brand id', () => {
     () => creates.visibilitySummary(z, { ...bundle, inputData: {} }),
     /Choose a brand/,
   );
+});
+
+test('webhook subscription creates a brand-scoped Ansvisor config using the Zapier target URL', async () => {
+  const { z, calls } = mockZapier({ id: 'webhook-config-123' });
+  const performSubscribe = createSubscribe('daily_pulse.created');
+  const result = await performSubscribe(z, {
+    ...bundle,
+    authData: { ...bundle.authData, webhook_secret: 'brand-secret' },
+    targetUrl: 'https://hooks.zapier.com/hooks/catch/123/456',
+  });
+  assert.deepEqual(result, { webhookConfigId: 'webhook-config-123' });
+  assert.equal(calls[0].method, 'POST');
+  assert.equal(calls[0].url, 'https://app.ansvisor.com/api/v1/webhooks');
+  const body = JSON.parse(calls[0].body);
+  assert.equal(body.brand_id, 'brand-123');
+  assert.equal(body.event, 'daily_pulse.created');
+  assert.equal(body.webhook_url, 'https://hooks.zapier.com/hooks/catch/123/456');
+  assert.equal(body.webhook_secret, 'brand-secret');
+  assert.match(body.subscription_id, /^[a-f0-9]{32}$/);
+});
+
+test('webhook subscription requires the brand secret before registering', async () => {
+  const { z } = mockZapier({ id: 'webhook-config-123' });
+  await assert.rejects(
+    () => createSubscribe('action_task.sent')(z, {
+      ...bundle,
+      authData: { ...bundle.authData, webhook_secret: '' },
+      targetUrl: 'https://hooks.zapier.com/hooks/catch/123/456',
+    }),
+    /Add this brand’s webhook secret/,
+  );
+});
+
+test('webhook unsubscribe removes only the stored subscription id', async () => {
+  const { z, calls } = mockZapier({ success: true });
+  const result = await unsubscribe(z, { ...bundle, subscribeData: { webhookConfigId: 'webhook-config-123' } });
+  assert.deepEqual(result, {});
+  assert.equal(calls[0].method, 'DELETE');
+  assert.equal(calls[0].url, 'https://app.ansvisor.com/api/v1/webhooks/webhook-config-123');
+});
+
+test('webhook API writes serialize request bodies and reject unsupported methods', async () => {
+  const { z, calls } = mockZapier({ id: 'webhook-config-123' });
+  const result = await apiWriteRequest(z, bundle, 'POST', 'webhooks', { brand_id: 'brand-123' });
+  assert.equal(result.id, 'webhook-config-123');
+  assert.equal(calls[0].headers['Content-Type'], 'application/json');
+  assert.deepEqual(JSON.parse(calls[0].body), { brand_id: 'brand-123' });
+  await assert.rejects(() => apiWriteRequest(z, bundle, 'PATCH', 'webhooks', {}), /Only POST and DELETE/);
 });
