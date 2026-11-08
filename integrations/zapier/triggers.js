@@ -1,18 +1,28 @@
 const { createWebhookPerform } = require('./lib/webhook');
+const { createSubscribe, unsubscribe } = require('./lib/subscription');
 const { listBrands } = require('./searches');
 
-function webhookTrigger(key, label, description, event, sample) {
+const brandField = {
+  key: 'brand_id',
+  label: 'Brand',
+  type: 'string',
+  required: true,
+  dynamic: 'brand_list.id.name',
+  search: 'find_brand.id',
+  helpText: 'Choose a brand available to the connected Ansvisor API key.',
+};
+
+function webhookTrigger(key, noun, label, description, event, sample) {
   return {
     key,
-    noun: label,
-    display: {
-      label,
-      description,
-      directions: 'Copy the Zapier hook URL into this brand’s Content → Configure Webhook settings, then select this event.',
-    },
+    noun,
+    display: { label, description },
     operation: {
       type: 'hook',
+      inputFields: [brandField],
       perform: createWebhookPerform(event),
+      performSubscribe: createSubscribe(event),
+      performUnsubscribe: unsubscribe,
       sample,
     },
   };
@@ -34,6 +44,7 @@ module.exports = {
   },
   new_daily_pulse: webhookTrigger(
     'new_daily_pulse',
+    'Daily Pulse',
     'New Daily Pulse',
     'Triggers when Ansvisor creates a Daily Pulse for a brand.',
     'daily_pulse.created',
@@ -46,6 +57,7 @@ module.exports = {
   ),
   new_content_draft: webhookTrigger(
     'new_content_draft',
+    'Content Draft',
     'Content Draft Sent',
     'Triggers when a Content Editor page is sent through the brand webhook.',
     'content_draft.sent',
@@ -60,6 +72,7 @@ module.exports = {
   ),
   new_action_task: webhookTrigger(
     'new_action_task',
+    'Action Center Task',
     'New Action Center Task',
     'Triggers when a user sends an Action Center task to the brand webhook.',
     'action_task.sent',
@@ -69,18 +82,6 @@ module.exports = {
       task: { id: 'task-123', title: 'Update the shipping guide', status: 'todo', type: 'content' },
       action: { id: 'action-123', action_no: 12, kind: 'recover_lost_citations', impact: 'high' },
       brand: { name: 'Acme', domain: 'acme.example', industry: 'Software' },
-    },
-  ),
-  webhook_test: webhookTrigger(
-    'webhook_test',
-    'Webhook Test Received',
-    'Receives the test event sent from Ansvisor webhook settings.',
-    'webhook.test',
-    {
-      id: 'test-event-123',
-      event: 'webhook.test',
-      message: 'This is a test webhook from AEO platform.',
-      timestamp: '2026-07-30T10:00:00.000Z',
     },
   ),
 };
