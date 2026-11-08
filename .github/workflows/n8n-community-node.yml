@@ -4,10 +4,14 @@ on:
   push:
     paths:
       - 'integrations/n8n/**'
+      - 'docs/guides/n8n.mdx'
+      - 'help/content/n8n-webhooks.md'
       - '.github/workflows/n8n-community-node.yml'
   pull_request:
     paths:
       - 'integrations/n8n/**'
+      - 'docs/guides/n8n.mdx'
+      - 'help/content/n8n-webhooks.md'
       - '.github/workflows/n8n-community-node.yml'
 
 jobs:
@@ -20,8 +24,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - run: npm install
+          node-version: 24
+      - run: npm install --no-audit --no-fund
       - run: npm test
       - run: npm run build
       - run: npm run lint
