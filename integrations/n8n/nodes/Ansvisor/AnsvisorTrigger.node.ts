@@ -102,8 +102,12 @@ export class AnsvisorTrigger implements INodeType {
 
     let rawBody: Buffer | undefined;
     if (event === 'content_draft.sent') {
-      if (!request.rawBody && request.readRawBody) {
-        await request.readRawBody();
+      try {
+        if (!request.rawBody && request.readRawBody) {
+          await request.readRawBody();
+        }
+      } catch {
+        return reject(401);
       }
       if (Buffer.isBuffer(request.rawBody)) {
         rawBody = request.rawBody;
