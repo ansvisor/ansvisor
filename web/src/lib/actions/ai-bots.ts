@@ -5,9 +5,9 @@ import { API_BASE_URL } from '@/config/api';
 
 /**
  * The AI bot report's connections (AT-010): each way a brand sends AI-bot
- * requests from its own Cloudflare or Vercel, read and made through the
+ * requests from its own Cloudflare, Vercel or Fastly, read and made through the
  * server (/api/bots/connections). The secret comes back once, with what to
- * copy into Cloudflare or Vercel; only its hash is kept.
+ * copy into the sender; only its hash is kept.
  *
  * Errors are returned, not thrown: a thrown error's message is masked in
  * production.
@@ -59,7 +59,7 @@ export interface BotConnections {
   usage: BotUsage;
 }
 
-/** What to copy into Cloudflare or Vercel, with the secret in it once. */
+/** What to copy into a log sender, with the secret in it once. */
 export interface NewBotConnection {
   connection: BotConnection;
   secret: string;
