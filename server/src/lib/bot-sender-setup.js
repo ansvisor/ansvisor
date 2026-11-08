@@ -1,5 +1,5 @@
 /**
- * What a person copies into Cloudflare or Vercel to send AI-bot requests
+ * What a person copies into Cloudflare, Vercel or Fastly to send AI-bot requests
  * (AT-010, spec §6.1 options B and C), built when the connection is made so
  * the secret is in it once:
  *
