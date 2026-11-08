@@ -14,6 +14,7 @@ import {
   Info,
   ChevronDown,
   ChevronRight,
+  ShoppingBag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -55,6 +56,7 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
   const { guard } = useUpgradeGate();
   const tActions = useTranslations('readOnly.actions');
   const tManagers = useTranslations('managersOnly');
+  const tCatalog = useTranslations('prompts.topicSuggestions.catalog');
 
   useEffect(() => {
     try {
@@ -262,7 +264,28 @@ export function TopicSuggestionsCard({ brandId, canManage, onAccepted }: Props) 
                     className="group flex items-center gap-3 rounded-lg border bg-muted/20 p-3 transition-colors hover:bg-muted/40"
                   >
                     <div className="flex-1 min-w-0 space-y-1">
-                      <p className="text-sm font-medium leading-snug">{s.name}</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium leading-snug">{s.name}</p>
+                        {/* A category of the brand's catalog no topic covers (AC plan P-8). */}
+                        {s.sourceData && (
+                          <Badge
+                            variant="outline"
+                            className="gap-1.5 bg-card text-xs font-normal"
+                            title={tCatalog('tooltip')}
+                          >
+                            <ShoppingBag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                            {tCatalog('badge')}
+                          </Badge>
+                        )}
+                      </div>
+                      {s.sourceData && (
+                        <p className="text-xs text-muted-foreground leading-relaxed">
+                          {tCatalog('evidence', {
+                            category: s.sourceData.category,
+                            inStock: s.sourceData.inStock,
+                          })}
+                        </p>
+                      )}
                       {s.reason && (
                         <p className="text-xs text-muted-foreground leading-relaxed">{s.reason}</p>
                       )}

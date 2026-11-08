@@ -598,11 +598,29 @@ describe('SuggestionsCard — shopping questions from the catalog (ECOM-003)', (
     },
   };
 
-  async function show(search = '') {
+  // A buyer question about one of the catalog's top products (AC plan P-8).
+  const fromProduct: PromptSuggestion = {
+    ...suggestion(3),
+    suggestedText: 'Atmos AG 65 vs Deuter Aircontact for a week-long trek',
+    topicName: 'Hiking backpacks',
+    estVolume: 900,
+    source: 'catalog',
+    sourceData: {
+      product: 'Atmos AG 65',
+      productId: '7a1c2b9e-1111-4c3d-8e9f-000000000001',
+      productType: 'Backpack',
+      category: 'Bags > Hiking backpacks',
+      categoryId: '7a1c2b9e-2222-4c3d-8e9f-000000000002',
+      cardPrompts: 4,
+      orders: 12,
+    },
+  };
+
+  async function show(search = '', extra: PromptSuggestion[] = []) {
     window.history.replaceState(null, '', `/dashboard/prompts${search}`);
     actions.getPromptSuggestions.mockResolvedValue({
       ok: true,
-      suggestions: [suggestion(1), fromCatalog],
+      suggestions: [suggestion(1), fromCatalog, ...extra],
       stale: false,
     });
     await act(async () => {
@@ -630,6 +648,36 @@ describe('SuggestionsCard — shopping questions from the catalog (ECOM-003)', (
       expect.stringContaining('best hiking backpacks under $150'),
     ]);
     expect(container.textContent).toContain('Shopping');
+  });
+
+  it('shows the category a shopping question came from on its row', async () => {
+    await show();
+    const shopping = rows()[1];
+    // Read by its attribute: the DOM's selector parser takes a ">" in one as a combinator.
+    const chip = [...shopping.querySelectorAll('[title]')].find(
+      (el) => el.getAttribute('title') === 'Category from your catalog: Bags > Hiking backpacks',
+    );
+    expect(chip?.textContent).toBe('Bags > Hiking backpacks');
+  });
+
+  it('shows the product a buyer question is about, with its topic and estimated volume', async () => {
+    await show('', [fromProduct]);
+    const product = rows()[2];
+    const chip = product.querySelector('[title="Product from your catalog: Atmos AG 65"]');
+    expect(chip?.textContent).toBe('Atmos AG 65');
+    expect(product.textContent).toContain('Hiking backpacks');
+    expect(product.textContent).toContain('/mo');
+    expect(product.textContent).toContain('Your catalog');
+    // Its category isn't shown as well: the product says more.
+    expect(product.querySelector('[title^="Category from your catalog"]')).toBeNull();
+  });
+
+  it('lists a product’s questions among the shopping ones', async () => {
+    await show('?source=shopping', [fromProduct]);
+    expect([...rows()].map((li) => li.textContent)).toEqual([
+      expect.stringContaining('best hiking backpacks under $150'),
+      expect.stringContaining('Atmos AG 65 vs Deuter Aircontact'),
+    ]);
   });
 });
 

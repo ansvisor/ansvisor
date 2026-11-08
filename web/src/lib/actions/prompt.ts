@@ -40,6 +40,11 @@ import {
 import { assertWritable } from '@/lib/subscription-guard';
 import { isManager } from '@/lib/session-role';
 import { NO_TOPICS, NO_TOPICS_MESSAGE, brandHasTopics } from '@/lib/topics-required';
+import {
+  sourceDataRefused,
+  validPromptSourceData,
+  type PromptSourceData,
+} from '@/lib/prompt-suggestion-source';
 
 /** A prompt's text as two are compared: case and spacing aside (the natural key, CHAT-20 §11c). */
 const textKey = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -616,6 +621,11 @@ interface AddPromptInput {
   category?: string;
   platforms: string[];
   models?: string[];
+  /**
+   * Where it came from, for a prompt accepted from a catalog suggestion
+   * (prompts.source_data, 00496); kept only in its own shape.
+   */
+  sourceData?: PromptSourceData | null;
 }
 
 /**
@@ -685,20 +695,30 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
     return { error: 'At least one platform or model must be selected.' };
   }
 
-  const { data, error } = await supabase
-    .from('prompts')
-    .insert({
-      prompt_set_id: input.promptSetId,
-      text: input.text,
-      category: input.category || null,
-      topic_id: topicId,
-      platforms,
-      regions: [brandRegion],
-      models: filtered.models,
-      is_active: true,
-    })
-    .select()
-    .single();
+  const row = {
+    prompt_set_id: input.promptSetId,
+    text: input.text,
+    category: input.category || null,
+    topic_id: topicId,
+    platforms,
+    regions: [brandRegion],
+    models: filtered.models,
+    is_active: true,
+  };
+  // Only a catalog suggestion's prompt names the column, so every other add
+  // works on a database without 00496 too.
+  const sourceData = validPromptSourceData(input.sourceData);
+  const insert = (withSource: boolean) =>
+    supabase
+      .from('prompts')
+      .insert(withSource && sourceData ? { ...row, source_data: sourceData } : row)
+      .select()
+      .single();
+  let { data, error } = await insert(true);
+  if (sourceData && sourceDataRefused(error)) {
+    console.warn('[prompts] source_data not kept:', error?.message);
+    ({ data, error } = await insert(false));
+  }
 
   if (error || !data) {
     return { error: error?.message ?? 'Failed to add prompt' };

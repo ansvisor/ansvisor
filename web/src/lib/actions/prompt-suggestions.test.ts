@@ -17,6 +17,11 @@ let brandTopics: string[] = [];
 let madeTopics: string[] = [];
 let removedTopics: string[] = [];
 let categories: (string | undefined)[] = [];
+/** Each added prompt's source (prompts.source_data, 00496), in order. */
+let sources: unknown[] = [];
+/** Suggestions drawn from the catalog, by id: their source_data. */
+let catalogRows: Record<string, unknown> = {};
+const GENERATED_AT = '2026-11-09T08:00:00+00:00';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/config/api', () => ({ API_BASE_URL: 'http://server' }));
@@ -32,6 +37,9 @@ vi.mock('@/lib/supabase/server', () => ({
         brand_id: 'b1',
         suggested_text: `prompt ${id}`,
         topic_name: 'GEO tools',
+        source: catalogRows[id] ? 'catalog' : 'llm',
+        source_data: catalogRows[id] ?? null,
+        generated_at: GENERATED_AT,
       });
       const row = () =>
         table === 'prompt_sets' ? { id: 'ps1' } : { platforms: ['chatgpt-web'], models: [] };
@@ -43,8 +51,9 @@ vi.mock('@/lib/supabase/server', () => ({
           ids = val;
           return chain;
         },
-        eq: (_col: string, val: string) => {
+        eq: (col: string, val: string) => {
           if (removing) removedTopics.push(val);
+          if (col === 'id') ids = [val];
           return chain;
         },
         order: () => chain,
@@ -58,7 +67,10 @@ vi.mock('@/lib/supabase/server', () => ({
           removing = true;
           return chain;
         },
-        single: async () => ({ data: made, error: null }),
+        single: async () =>
+          table === 'prompt_suggestions'
+            ? { data: open.has(ids[0]) ? suggestion(ids[0]) : null, error: null }
+            : { data: made, error: null },
         maybeSingle: async () => ({ data: row(), error: null }),
         then: (resolve: (r: unknown) => void) =>
           resolve(
@@ -73,15 +85,26 @@ vi.mock('@/lib/supabase/server', () => ({
 }));
 
 vi.mock('@/lib/actions/prompt', () => ({
-  addPromptToSet: vi.fn(async ({ text, category }: { text: string; category?: string }) => {
-    categories.push(category);
-    if (slotsLeft <= 0) {
-      return { error: 'Your plan’s prompt locations are full.', code: 'plan_limit' };
-    }
-    slotsLeft -= 1;
-    added.push(text);
-    return { prompt: { id: `p-${added.length}` } };
-  }),
+  addPromptToSet: vi.fn(
+    async ({
+      text,
+      category,
+      sourceData,
+    }: {
+      text: string;
+      category?: string;
+      sourceData?: unknown;
+    }) => {
+      categories.push(category);
+      if (slotsLeft <= 0) {
+        return { error: 'Your plan’s prompt locations are full.', code: 'plan_limit' };
+      }
+      slotsLeft -= 1;
+      added.push(text);
+      sources.push(sourceData);
+      return { prompt: { id: `p-${added.length}` } };
+    },
+  ),
 }));
 
 const targets: { promptId: string; url: string }[] = [];
@@ -98,6 +121,7 @@ const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
 vi.stubGlobal('fetch', fetchMock);
 
 const {
+  acceptSuggestion,
   dismissSuggestions,
   getPromptSuggestions,
   refreshPromptSuggestions,
@@ -114,6 +138,8 @@ beforeEach(() => {
   madeTopics = [];
   removedTopics = [];
   categories = [];
+  sources = [];
+  catalogRows = {};
   reads = [];
   open = new Set(['s1', 's2', 's3', 's4']);
   fetchMock.mockClear();
@@ -161,6 +187,80 @@ describe('trackSuggestions', () => {
     expect((await trackSuggestions(many)).error).toBeDefined();
     expect((await trackSuggestions('s1' as unknown as string[])).error).toBeDefined();
     expect(added).toEqual([]);
+  });
+});
+
+/**
+ * A prompt accepted from a catalog suggestion keeps where it came from
+ * (prompts.source_data, 00496, AC plan P-8), through the same add and the
+ * same plan check as any other.
+ */
+describe('accepting a catalog suggestion keeps where it came from', () => {
+  const CATEGORY_ID = '7a1c2b9e-2222-4c3d-8e9f-000000000002';
+  const PRODUCT_ID = '7a1c2b9e-1111-4c3d-8e9f-000000000001';
+  const fromProduct = {
+    product: 'Atmos AG 65',
+    productId: PRODUCT_ID,
+    productType: 'Backpack',
+    category: 'Bags > Hiking backpacks',
+    categoryId: CATEGORY_ID,
+    cardPrompts: 4,
+    orders: 12,
+  };
+  const fromCategory = {
+    category: 'Bags > Hiking backpacks',
+    categoryId: CATEGORY_ID,
+    products: 18,
+    priceLow: 60,
+    priceHigh: 180,
+    priceUnder: 150,
+    currency: 'USD',
+  };
+
+  it('Add All keeps each one’s product or category, and nothing for the others', async () => {
+    catalogRows = { s1: fromProduct, s2: fromCategory };
+    expect((await trackSuggestions(['s1', 's2', 's3'])).trackedIds).toEqual(['s1', 's2', 's3']);
+    expect(sources).toEqual([
+      {
+        kind: 'catalog_product',
+        product_ids: [PRODUCT_ID],
+        category_id: CATEGORY_ID,
+        category: 'Bags > Hiking backpacks',
+        suggested_at: GENERATED_AT,
+      },
+      {
+        kind: 'catalog_category',
+        category_id: CATEGORY_ID,
+        category: 'Bags > Hiking backpacks',
+        suggested_at: GENERATED_AT,
+      },
+      null,
+    ]);
+  });
+
+  it('Add All still stops where the plan’s prompt locations run out', async () => {
+    catalogRows = { s1: fromProduct, s2: fromProduct, s3: fromCategory };
+    slotsLeft = 1;
+    expect(await trackSuggestions(['s1', 's2', 's3'])).toEqual({
+      trackedIds: ['s1'],
+      skippedIds: [],
+      error: 'Your plan’s prompt locations are full.',
+      code: 'plan_limit',
+    });
+    expect(sources).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('one + keeps it too, and is refused at the limit like any other', async () => {
+    catalogRows = { s1: fromProduct };
+    expect(await acceptSuggestion('s1')).toEqual({ promptId: 'p-1' });
+    expect(sources).toEqual([expect.objectContaining({ kind: 'catalog_product' })]);
+
+    slotsLeft = 0;
+    expect(await acceptSuggestion('s2')).toEqual({
+      error: 'Your plan’s prompt locations are full.',
+      code: 'plan_limit',
+    });
   });
 });
 

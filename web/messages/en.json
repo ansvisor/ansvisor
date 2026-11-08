@@ -13039,7 +13039,10 @@
         "badge": "Your catalog",
         "tooltip": "A shopping question from your catalog's “{category}” category, with {products, plural, one {# product} other {# products}}.",
         "tooltipPrice": "A shopping question from your catalog's “{category}” category, with {products, plural, one {# product} other {# products}}, most under {price}.",
-        "filter": "Shopping"
+        "tooltipProduct": "A buyer question about “{product}”, one of the products in your catalog that sell most or that AI shopping answers show most.",
+        "filter": "Shopping",
+        "productLabel": "Product from your catalog: {product}",
+        "categoryLabel": "Category from your catalog: {category}"
       },
       "addAll": "Add All",
       "addingAll": "Adding…",
@@ -13057,6 +13060,13 @@
       "platformsAndModels": "Platform & Models",
       "selectPlatformsAndModels": "Select platform & models",
       "selectedCount": "{count} selected"
+    },
+    "topicSuggestions": {
+      "catalog": {
+        "badge": "Your catalog",
+        "tooltip": "Suggested from your product catalog: a category with products in stock that none of your topics covers yet.",
+        "evidence": "From your catalog's “{category}” category: {inStock, plural, one {# product} other {# products}} in stock, and no topic covers it yet."
+      }
     },
     "usage": {
       "title": "Tracked Prompts",

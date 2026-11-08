@@ -3957,7 +3957,9 @@
         "add all",
         "clear all",
         "suggested prompts",
-        "source filter"
+        "source filter",
+        "product prompts",
+        "catalog suggestions"
       ],
       "synonyms": [
         "prompt ideas",
@@ -3966,7 +3968,7 @@
         "suggest queries"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-09",
       "sections": [
         {
           "heading": null,
@@ -3974,7 +3976,11 @@
         },
         {
           "heading": "Where suggestions come from",
-          "text": "Suggestions come from four sources. The sources filter (**All sources**) shows one of them, **From your data** for both Google sources, or **Ansvisor Agents only**:\n\n- **Ansvisor Agents**: written by AI from your brand and tracking data. Each shows an estimated monthly AI volume as a grey range.\n- **Google Search Console**: queries people already search, with their impressions over the last 28 days.\n- **Google Analytics (GA4)**: pages that earn revenue or conversions, or already get AI visits, with that evidence on the row.\n- **Your catalog**: for an online shop with a product catalog, the questions a shopper asks before buying in its categories, using their price bands. Hover the badge for the category; the **Shopping** filter lists them.\n\nWhen Search Console or Analytics is connected, a share of each refresh is drawn from their data."
+          "text": "Suggestions come from four sources. The sources filter (**All sources**) shows one of them, **From your data** for both Google sources, or **Ansvisor Agents only**:\n\n- **Ansvisor Agents**: written by AI from your brand and tracking data. Each shows an estimated monthly AI volume as a grey range.\n- **Google Search Console**: queries people already search, with their impressions over the last 28 days.\n- **Google Analytics (GA4)**: pages that earn revenue or conversions, or already get AI visits, with that evidence on the row.\n- **Your catalog**: for an online shop with a product catalog, shopping questions about its categories and its top products. The **Shopping** filter lists them.\n\nWhen Search Console or Analytics is connected, a share of each refresh is drawn from their data."
+        },
+        {
+          "heading": "Shopping suggestions from your catalog",
+          "text": "For an online shop with a product catalog, each refresh adds two kinds of shopping suggestions, marked **Your catalog**:\n\n- the questions a shopper asks before buying in a category, using its price band;\n- buyer questions about the products that sell most, or that AI shopping answers show most.\n\nEach row names the category or the product it's about; hover **Your catalog** for more. A product one of your prompts already names isn't asked about again."
         },
         {
           "heading": "A brand without topics",
@@ -4067,7 +4073,8 @@
         "topic suggestions",
         "topic leaderboard",
         "topic visibility",
-        "top competitor"
+        "top competitor",
+        "catalog topics"
       ],
       "synonyms": [
         "themes",
@@ -4076,7 +4083,7 @@
         "categories"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-09",
       "sections": [
         {
           "heading": null,
@@ -4100,7 +4107,7 @@
         },
         {
           "heading": "Topic Suggestions",
-          "text": "The **Topic Suggestions** card on the Topics tab starts folded, and remembers whether you left it open. Open it to see AI-generated topic ideas for your brand. Topics you already track and ideas you dismissed don't come back.\n\nAdmins and managers can **Refresh** for new ideas, add an idea to your topics, or dismiss it. A new topic starts empty: assign prompts to it to start tracking it."
+          "text": "The **Topic Suggestions** card on the Topics tab starts folded, and remembers whether you left it open. Open it to see AI-generated topic ideas for your brand. Topics you already track and ideas you dismissed don't come back.\n\nAdmins and managers can **Refresh** for new ideas, add an idea to your topics, or dismiss it. A new topic starts empty: assign prompts to it to start tracking it.\n\nOn an online shop with a product catalog, **Refresh** also suggests the catalog's categories that have at least three products in stock and that none of your topics covers yet. They come first, marked **Your catalog**, with the category and how many of its products are in stock. Adding one creates a topic named after the category, which links it to that category."
         },
         {
           "heading": "Add and rename topics",

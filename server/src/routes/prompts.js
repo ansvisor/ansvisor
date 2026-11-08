@@ -20,7 +20,10 @@ import {
 import { withRetry } from '../lib/retry.js';
 import { getGscSuggestionCandidates } from '../lib/gsc-suggestions.js';
 import { getGaSuggestionCandidates } from '../lib/ga-suggestions.js';
-import { getCatalogSuggestionCandidates } from '../lib/catalog-suggestions.js';
+import {
+  getCatalogProductCandidates,
+  getCatalogSuggestionCandidates,
+} from '../lib/catalog-suggestions.js';
 import { suggestPromptsForPage } from '../lib/page-prompt-suggestions.js';
 import { UNTRACKED_QUERY_SCAN, untrackedGoogleQueries } from '../lib/untracked-queries.js';
 import { RELEVANCE_SCALE, ratingCostUsd, toRelevance } from '../lib/suggestion-relevance.js';
@@ -139,6 +142,35 @@ async function loadSuggestionContext(brandId) {
   };
 }
 
+/** Prompts read to keep a suggestion from repeating one the brand has. */
+const BRAND_PROMPTS_READ = 1000;
+
+/** A prompt's text as two are compared: case, spacing and an ending "?" aside. */
+const promptKey = (text) =>
+  String(text ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[\s?.!]+$/, '')
+    .trim();
+
+/**
+ * The texts of the brand's prompts, paused ones too (up to
+ * BRAND_PROMPTS_READ): a suggestion repeating one is left out, and a catalog
+ * product one of them names isn't asked about. [] when they can't be read.
+ */
+async function brandPromptTexts(brandId, log) {
+  const { data, error } = await supabaseAdmin
+    .from('prompts')
+    .select('text, prompt_sets!inner(brand_id)')
+    .eq('prompt_sets.brand_id', brandId)
+    .limit(BRAND_PROMPTS_READ);
+  if (error) {
+    log.warn({ err: error }, 'prompt-suggestions refresh: tracked prompts not read');
+    return [];
+  }
+  return (data ?? []).map((row) => row.text).filter((text) => typeof text === 'string');
+}
+
 /**
  * Suggestions generated per refresh. The schema floor sits well below it: a
  * model that returns a few short of the target should still produce a list,
@@ -152,6 +184,8 @@ const MIN_SUGGESTIONS = 15;
 const MIN_FROM_SEARCH_CONSOLE = 10;
 const MIN_FROM_ANALYTICS = 6;
 const MIN_FROM_CATALOG = 5;
+// And a few buyer questions about its top products (AC plan P-8).
+const MIN_FROM_PRODUCTS = 3;
 
 const newSuggestionSchema = z.object({
   suggestions: z
@@ -203,6 +237,13 @@ const newSuggestionSchema = z.object({
           .optional()
           .describe(
             'ONLY when this suggestion was derived from one of the provided catalog categories: the EXACT category name, verbatim. Omit for all other suggestions.',
+          ),
+        sourceProduct: z
+          .string()
+          .max(1000)
+          .optional()
+          .describe(
+            'ONLY when this suggestion was derived from one of the provided top products: the EXACT product title, verbatim. Omit for all other suggestions.',
           ),
       }),
     )
@@ -292,7 +333,13 @@ async function generateSuggestions(brandId, { orgId, log }) {
 
   // What the brand sells (ECOM-003): its catalog's categories and price bands
   // — [] without a catalog, which keeps every prompt block below unchanged.
-  const catalogCandidates = await getCatalogSuggestionCandidates(brandId);
+  // Its top products (AC plan P-8) ride in the same call: best-selling or
+  // most shown on AI shopping cards, none a prompt of the brand already names.
+  const trackedTexts = await brandPromptTexts(brandId, log);
+  const [catalogCandidates, productCandidates] = await Promise.all([
+    getCatalogSuggestionCandidates(brandId),
+    getCatalogProductCandidates(brandId, { trackedTexts }),
+  ]);
 
   const promptModel = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
   const aiModel = resolveModel(promptModel);
@@ -330,6 +377,11 @@ ${yearRule()}
     catalogCandidates.length
       ? `
 - WHAT THE BRAND SELLS: a list of its product catalog's categories is provided, each with how many products it sells and their price band. Derive at least ${Math.min(MIN_FROM_CATALOG, catalogCandidates.length)} shopping suggestions from those categories: the questions a shopper asks an AI assistant before buying in the category — best-of, under a budget (use the category's price band and currency, written as a shopper writes it), for a use or a person, or which type to choose. Use the category's own words, not the brand's or a product's name. For each such suggestion set sourceCategory to the EXACT category name, verbatim. Never set sourceCategory on suggestions that did not come from that list, and never set it together with sourceQuery or sourcePage.`
+      : ''
+  }${
+    productCandidates.length
+      ? `
+- THE BRAND'S TOP PRODUCTS: a list of its best-selling products, or those AI shopping answers show most, is provided, each with its type and category. Derive at least ${Math.min(MIN_FROM_PRODUCTS, productCandidates.length)} buyer suggestions from those products: what a shopper asks an AI assistant before buying a product like it — the best product of its type for a use or a person ("best {product type} for {use}"), or, when shoppers know it by its model name, how it compares with a named rival ("{product} vs {rival product}"). Never use the brand's own name. For each such suggestion set sourceProduct to the EXACT product title as listed, verbatim. Never set sourceProduct on suggestions that did not come from that list, and never set it together with sourceQuery, sourcePage or sourceCategory.`
       : ''
   }`;
 
@@ -399,7 +451,25 @@ ${catalogCandidates
   )
   .join('\n')}`
     : ''
-}
+}${
+    productCandidates.length
+      ? `
+
+The brand's top products (in stock; best-selling or most shown on AI shopping cards, last 30 days), by category:
+${productCandidates
+  .slice()
+  .sort((a, b) => (a.category ?? '~').localeCompare(b.category ?? '~'))
+  .map((p) => {
+    const evidence = [
+      p.cardPrompts > 0 ? `shown on shopping cards for ${p.cardPrompts} tracked prompts` : null,
+      p.orders > 0 ? `${p.orders.toLocaleString('en-US')} orders` : null,
+      p.aiVisits > 0 ? `${p.aiVisits.toLocaleString('en-US')} AI visits` : null,
+    ].filter(Boolean);
+    return `  • "${p.product}"${p.category ? ` — in "${p.category}"` : ''}${p.productType ? `, type: ${p.productType}` : ''}${evidence.length ? `; ${evidence.join(', ')}` : ''}`;
+  })
+  .join('\n')}`
+      : ''
+  }
 
 Suggest the next ${SUGGESTIONS_PER_REFRESH} prompts this brand should start tracking, with topic, reason and a calibrated monthly AI search volume (estVolume).`;
 
@@ -423,7 +493,14 @@ Suggest the next ${SUGGESTIONS_PER_REFRESH} prompts this brand should start trac
       { attempts: REFRESH_ATTEMPTS, baseDelayMs: 500, label: 'suggestion-refresh' },
     );
     usage = callUsage;
-    return { suggestions: object.suggestions, gscCandidates, gaCandidates, catalogCandidates };
+    return {
+      suggestions: object.suggestions,
+      gscCandidates,
+      gaCandidates,
+      catalogCandidates,
+      productCandidates,
+      trackedTexts,
+    };
   } finally {
     if (rate) await settleRating(log, reservation, { modelId: promptModel, attempts, usage });
   }
@@ -545,11 +622,17 @@ router.post(
       const { brand } = await assertBrandAccess(req.params.brandId, req.user.id);
       await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
       if (!(await brandHasTopics(req.params.brandId))) return refuseNoTopics(res);
-      const { suggestions, gscCandidates, gaCandidates, catalogCandidates } =
-        await generateSuggestions(req.params.brandId, {
-          orgId: brand.organization_id,
-          log: req.log,
-        });
+      const {
+        suggestions,
+        gscCandidates,
+        gaCandidates,
+        catalogCandidates,
+        productCandidates,
+        trackedTexts,
+      } = await generateSuggestions(req.params.brandId, {
+        orgId: brand.organization_id,
+        log: req.log,
+      });
 
       const expiresAt = new Date(Date.now() + SUGGESTION_TTL_HOURS * 60 * 60 * 1000).toISOString();
 
@@ -564,9 +647,15 @@ router.post(
       const candidateByCategory = new Map(
         catalogCandidates.map((c) => [normalizeQuery(c.category), c]),
       );
+      const candidateByProduct = new Map(
+        productCandidates.map((c) => [normalizeQuery(c.product), c]),
+      );
+      // A suggestion repeating a prompt the brand has is no suggestion.
+      const tracked = new Set(trackedTexts.map(promptKey));
 
       const rows = [];
       for (const s of suggestions) {
+        if (tracked.has(promptKey(s.text))) continue;
         const topicId = await findOrCreateTopic(req.params.brandId, s.topic);
         const candidate = s.sourceQuery
           ? candidateByQuery.get(normalizeQuery(s.sourceQuery))
@@ -578,10 +667,15 @@ router.post(
           !candidate && s.sourcePage
             ? candidateByPage.get(normalizeQuery(s.sourcePage))
             : undefined;
-        // A category only when neither Google source claims it: both are
-        // measured demand, the catalog is what the brand sells.
+        // The catalog only when neither Google source claims it: both are
+        // measured demand, the catalog is what the brand sells. A product
+        // before its category: it says more of what the prompt is about.
+        const productCandidate =
+          !candidate && !gaCandidate && s.sourceProduct
+            ? candidateByProduct.get(normalizeQuery(s.sourceProduct))
+            : undefined;
         const catalogCandidate =
-          !candidate && !gaCandidate && s.sourceCategory
+          !candidate && !gaCandidate && !productCandidate && s.sourceCategory
             ? candidateByCategory.get(normalizeQuery(s.sourceCategory))
             : undefined;
         rows.push({
@@ -594,7 +688,13 @@ router.post(
           // estimate must cap out, not reject the whole generated batch.
           est_volume: Math.min(s.estVolume, 10_000_000),
           relevance: toRelevance(s.relevance),
-          source: candidate ? 'gsc' : gaCandidate ? 'ga' : catalogCandidate ? 'catalog' : 'llm',
+          source: candidate
+            ? 'gsc'
+            : gaCandidate
+              ? 'ga'
+              : catalogCandidate || productCandidate
+                ? 'catalog'
+                : 'llm',
           source_data: candidate
             ? {
                 query: candidate.query,
@@ -617,16 +717,27 @@ router.post(
                   aiPlatforms: gaCandidate.aiPlatforms,
                   pageTitle: gaCandidate.page?.title ?? null,
                 }
-              : catalogCandidate
+              : productCandidate
                 ? {
-                    category: catalogCandidate.category,
-                    products: catalogCandidate.products,
-                    priceLow: catalogCandidate.priceLow,
-                    priceHigh: catalogCandidate.priceHigh,
-                    priceUnder: catalogCandidate.priceUnder,
-                    currency: catalogCandidate.currency,
+                    product: productCandidate.product,
+                    productId: productCandidate.productId,
+                    productType: productCandidate.productType,
+                    category: productCandidate.category,
+                    categoryId: productCandidate.categoryId,
+                    cardPrompts: productCandidate.cardPrompts,
+                    orders: productCandidate.orders,
                   }
-                : null,
+                : catalogCandidate
+                  ? {
+                      category: catalogCandidate.category,
+                      categoryId: catalogCandidate.categoryId ?? null,
+                      products: catalogCandidate.products,
+                      priceLow: catalogCandidate.priceLow,
+                      priceHigh: catalogCandidate.priceHigh,
+                      priceUnder: catalogCandidate.priceUnder,
+                      currency: catalogCandidate.currency,
+                    }
+                  : null,
           status: 'new',
           expires_at: expiresAt,
         });

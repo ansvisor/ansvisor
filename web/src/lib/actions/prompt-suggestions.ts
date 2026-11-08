@@ -5,9 +5,13 @@ import { createClient } from '@/lib/supabase/server';
 import { addPromptToSet, type PromptAddFailureCode } from '@/lib/actions/prompt';
 import { addPromptTargetUrl } from '@/lib/actions/prompt-workflow';
 import { API_BASE_URL } from '@/config/api';
-// Types only — this file is `'use server'`, so the guards that go with them
-// live in a plain module (every runtime export here must be a server action).
-import type { PromptSuggestionSource, SuggestionSourceData } from '@/lib/prompt-suggestion-source';
+// This file is `'use server'`, so the guards that go with these types live
+// in a plain module (every runtime export here must be a server action).
+import {
+  promptSourceData,
+  type PromptSuggestionSource,
+  type SuggestionSourceData,
+} from '@/lib/prompt-suggestion-source';
 import { assertWritable } from '@/lib/subscription-guard';
 import {
   NO_ANSWER,
@@ -263,6 +267,26 @@ async function promptTarget(
   return { promptSetId: ps.id, platforms, models };
 }
 
+/** The columns an accepted suggestion is read with: its prompt, topic and where it came from. */
+const ACCEPT_COLUMNS =
+  'id, brand_id, suggested_text, topic_name, source, source_data, generated_at';
+
+/**
+ * Where a prompt accepted from this row came from (prompts.source_data,
+ * 00496): its catalog category or product; null for any other suggestion.
+ */
+function sourceOfRow(row: {
+  source: unknown;
+  source_data: unknown;
+  generated_at: unknown;
+}): ReturnType<typeof promptSourceData> {
+  return promptSourceData({
+    source: row.source as PromptSuggestionSource,
+    sourceData: (row.source_data ?? null) as SuggestionSourceData | null,
+    generatedAt: String(row.generated_at ?? ''),
+  });
+}
+
 /** Marks the suggestion added on the server; a failure is logged, not returned. */
 async function ackAccepted(accessToken: string, suggestionId: string, promptId: string) {
   const ack = await fetch(`${AEO_SERVER_URL}/api/prompts/suggestions/${suggestionId}/accept`, {
@@ -287,7 +311,7 @@ export async function acceptSuggestion(
 
   const { data: row, error: rowErr } = await supabase
     .from('prompt_suggestions')
-    .select('id, brand_id, suggested_text, topic_name')
+    .select(ACCEPT_COLUMNS)
     .eq('id', suggestionId)
     .eq('status', 'new')
     .single();
@@ -302,6 +326,7 @@ export async function acceptSuggestion(
     ...target,
     text: row.suggested_text,
     category: row.topic_name ?? undefined,
+    sourceData: sourceOfRow(row),
   });
   if ('error' in result) {
     return { error: result.error, code: result.code };
@@ -348,7 +373,7 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
   const supabase = await createClient();
   const { data: rows, error: rowsErr } = await supabase
     .from('prompt_suggestions')
-    .select('id, brand_id, suggested_text, topic_name')
+    .select(ACCEPT_COLUMNS)
     .in('id', ids)
     .eq('status', 'new');
   if (rowsErr) return { trackedIds: [], skippedIds: [], error: rowsErr.message };
@@ -373,6 +398,7 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
       ...target,
       text: row.suggested_text as string,
       category: (row.topic_name as string | null) ?? undefined,
+      sourceData: sourceOfRow(row),
     });
     if ('error' in result) {
       failure = { error: result.error, code: result.code };

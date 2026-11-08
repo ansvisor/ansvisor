@@ -25,6 +25,7 @@ import {
   BarChart3,
   Clock,
   ShoppingBag,
+  Package,
 } from 'lucide-react';
 import { Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -57,7 +58,9 @@ import {
 import type { PlanId } from '@/config/plans';
 import { priceText } from '@/lib/shopping/price';
 import {
+  catalogProductSourceData,
   catalogSourceData,
+  fromCatalog,
   fromYourData,
   gaSourceData,
   gscSourceData,
@@ -174,14 +177,27 @@ function HoverTip({ content, children }: { content: string; children: React.Reac
  * Every suggestion is phrased by our own generation step, so `Ansvisor Agents`
  * is always present; a data source badge joins it when the suggestion was
  * mined from the brand's own Search Console or Analytics, or drawn from its
- * catalog (ECOM-003), rather than from the model alone. Two badges is the
- * honest reading — the data and the phrasing come from different places.
+ * catalog (ECOM-003: a category; AC plan P-8: a top product), rather than
+ * from the model alone. Two badges is the honest reading — the data and the
+ * phrasing come from different places.
  */
 function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
   const tCatalog = useTranslations('prompts.suggestions.catalog');
   const gsc = gscSourceData(suggestion);
   const ga = gaSourceData(suggestion);
   const catalog = catalogSourceData(suggestion);
+  const product = catalogProductSourceData(suggestion);
+  const catalogTip = product
+    ? tCatalog('tooltipProduct', { product: product.product })
+    : catalog && catalog.priceUnder !== null
+      ? tCatalog('tooltipPrice', {
+          category: catalog.category,
+          products: catalog.products,
+          price: priceText(catalog.priceUnder, catalog.currency),
+        })
+      : catalog
+        ? tCatalog('tooltip', { category: catalog.category, products: catalog.products })
+        : null;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -218,18 +234,8 @@ function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
           </Badge>
         </HoverTip>
       )}
-      {catalog && (
-        <HoverTip
-          content={
-            catalog.priceUnder !== null
-              ? tCatalog('tooltipPrice', {
-                  category: catalog.category,
-                  products: catalog.products,
-                  price: priceText(catalog.priceUnder, catalog.currency),
-                })
-              : tCatalog('tooltip', { category: catalog.category, products: catalog.products })
-          }
-        >
+      {catalogTip && (
+        <HoverTip content={catalogTip}>
           <Badge variant="outline" className="gap-1.5 bg-card text-xs font-normal">
             <ShoppingBag className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
             {tCatalog('badge')}
@@ -427,8 +433,8 @@ export function SuggestionsCard({
       if (sourceFilter === 'data' && !fromYourData(s)) return false;
       if (sourceFilter === 'gsc' && !gscSourceData(s)) return false;
       if (sourceFilter === 'ga' && !gaSourceData(s)) return false;
-      if (sourceFilter === 'shopping' && !catalogSourceData(s)) return false;
-      if (sourceFilter === 'agents' && (fromYourData(s) || catalogSourceData(s))) return false;
+      if (sourceFilter === 'shopping' && !fromCatalog(s)) return false;
+      if (sourceFilter === 'agents' && (fromYourData(s) || fromCatalog(s))) return false;
       if (!q) return true;
       return (
         s.suggestedText.toLowerCase().includes(q) ||
@@ -438,12 +444,9 @@ export function SuggestionsCard({
     });
   }, [suggestions, sourceFilter, search]);
 
-  // Shopping is offered once the catalog gave a suggestion (ECOM-003), or a link asked for it.
+  // Shopping is offered once the catalog gave a suggestion (ECOM-003, P-8), or a link asked for it.
   const filters = SOURCE_FILTERS.filter(
-    (key) =>
-      key !== 'shopping' ||
-      sourceFilter === 'shopping' ||
-      suggestions.some((s) => catalogSourceData(s) !== null),
+    (key) => key !== 'shopping' || sourceFilter === 'shopping' || suggestions.some(fromCatalog),
   );
   const filterLabel = (key: SourceFilter) =>
     key === 'shopping' ? t('catalog.filter') : SOURCE_FILTER_LABELS[key];
@@ -827,6 +830,8 @@ export function SuggestionsCard({
                   const busy = pendingId === s.id;
                   const gsc = gscSourceData(s);
                   const ga = gaSourceData(s);
+                  const product = catalogProductSourceData(s);
+                  const category = catalogSourceData(s);
                   return (
                     <li
                       key={s.id}
@@ -844,6 +849,28 @@ export function SuggestionsCard({
                               <Tag className="h-3 w-3" />
                               {s.topicName}
                             </Badge>
+                          )}
+                          {/* What a catalog suggestion is about: its product or its category. */}
+                          {product ? (
+                            <Badge
+                              variant="outline"
+                              className="max-w-[16rem] gap-1 text-xs font-normal"
+                              title={t('catalog.productLabel', { product: product.product })}
+                            >
+                              <Package className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                              <span className="truncate">{product.product}</span>
+                            </Badge>
+                          ) : (
+                            category && (
+                              <Badge
+                                variant="outline"
+                                className="max-w-[16rem] gap-1 text-xs font-normal"
+                                title={t('catalog.categoryLabel', { category: category.category })}
+                              >
+                                <ShoppingBag className="h-3 w-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span className="truncate">{category.category}</span>
+                              </Badge>
+                            )
                           )}
                           {/* Measured rows carry real figures — showing the
                               modelled estimate beside measured data reads as a

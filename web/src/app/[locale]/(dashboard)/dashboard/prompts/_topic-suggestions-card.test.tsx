@@ -44,10 +44,20 @@ afterEach(() => {
   container.remove();
 });
 
-async function render(canManage: boolean, ideas: { id: string; name: string }[] = []) {
+async function render(
+  canManage: boolean,
+  ideas: { id: string; name: string; source?: string; sourceData?: unknown }[] = [],
+) {
   actions.getTopicSuggestions.mockResolvedValue({
     ok: true,
-    suggestions: ideas.map((idea) => ({ ...idea, brand_id: 'b1', status: 'new', reason: null })),
+    suggestions: ideas.map((idea) => ({
+      source: 'llm',
+      sourceData: null,
+      ...idea,
+      brand_id: 'b1',
+      status: 'new',
+      reason: null,
+    })),
   });
   await act(async () => {
     root.render(
@@ -85,5 +95,28 @@ describe('TopicSuggestionsCard by role', () => {
     await render(false, [{ id: 't1', name: 'Office coffee' }]);
     expect(container.textContent).toContain('Office coffee');
     expect(container.querySelectorAll('li button')).toHaveLength(0);
+  });
+});
+
+describe('TopicSuggestionsCard — categories from the catalog (AC plan P-8)', () => {
+  it('marks a category no topic covers as Your catalog, with its products in stock', async () => {
+    await render(true, [
+      {
+        id: 't1',
+        name: 'Tents',
+        source: 'catalog',
+        sourceData: { category: 'Camping > Tents', categoryId: 'c-tents', products: 9, inStock: 7 },
+      },
+      { id: 't2', name: 'Office coffee' },
+    ]);
+    const [catalog, idea] = [...container.querySelectorAll('li')];
+    expect(catalog.textContent).toContain('Tents');
+    expect(catalog.textContent).toContain('Your catalog');
+    expect(catalog.textContent).toContain(
+      "From your catalog's “Camping > Tents” category: 7 products in stock, and no topic covers it yet.",
+    );
+    expect(idea.textContent).not.toContain('Your catalog');
+    // Added and dismissed as any idea.
+    expect(catalog.querySelectorAll('button')).toHaveLength(2);
   });
 });
