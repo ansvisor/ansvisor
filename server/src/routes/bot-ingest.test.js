@@ -78,7 +78,7 @@ describe('Fastly HTTPS logging domain challenge', () => {
     const res = await fetch(url.replace('/bots/ingest', '/.well-known/fastly/logging/challenge'));
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('text/plain');
-    expect(await res.text()).toBe('*\\n');
+    expect(await res.text()).toBe('*');
     expect(connectionForSecret).not.toHaveBeenCalled();
   });
 });
