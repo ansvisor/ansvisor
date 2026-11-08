@@ -68,7 +68,7 @@ export function buildAnsvisorHttpRequest(
 ): AnsvisorHttpRequestOptions {
   return {
     method: 'GET',
-    url: `${baseUrl.replace(/\\/+$/, '')}${request.path}`,
+    url: baseUrl.replace(/\/+$/, '') + request.path,
     qs: request.qs,
     json: true,
   };
