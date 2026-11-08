@@ -111,6 +111,7 @@ export class AnsvisorTrigger implements INodeType {
       }
       if (Buffer.isBuffer(request.rawBody)) {
         rawBody = request.rawBody;
+      }
     }
 
     const verified = verifyAnsvisorWebhook({
