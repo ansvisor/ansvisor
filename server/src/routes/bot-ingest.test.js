@@ -73,6 +73,16 @@ const post = (secret, body) =>
     body: JSON.stringify(body),
   });
 
+describe('Fastly HTTPS logging domain challenge', () => {
+  it('returns the wildcard Fastly service proof without exposing a connection secret', async () => {
+    const res = await fetch(url.replace('/bots/ingest', '/.well-known/fastly/logging/challenge'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/plain');
+    expect(await res.text()).toBe('*\\n');
+    expect(connectionForSecret).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /bots/ingest', () => {
   it("ingests a Worker's batch for the connection its secret names", async () => {
     const connection = { id: 'c1', organizationId: 'o1', kind: 'cloudflare_worker' };
