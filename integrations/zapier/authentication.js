@@ -17,7 +17,7 @@ const authentication = {
       label: 'Ansvisor API key',
       type: 'password',
       required: true,
-      helpText: 'Create a key in Ansvisor under Settings → MCP & API Keys. It is shown only once.',
+      helpText: 'Create a key under Settings → MCP & API Keys. It is shown only once. See https://docs.ansvisor.com/guides/mcp-server for setup details.',
     },
     {
       key: 'base_url',
