@@ -105,7 +105,7 @@ function CopyBlock({
   );
 }
 
-/** What to do in Cloudflare, Vercel or a log shipper with the new connection's secret, shown once. */
+/** What to do in Cloudflare, Vercel or Fastly with the new connection's secret, shown once. */
 function SetupSteps({ created }: { created: NewBotConnection }) {
   const t = useTranslations('traffic.bots');
   const kind = created.connection.kind;
