@@ -7,11 +7,11 @@ Connect Ansvisor to Zapier with the Ansvisor Platform CLI app.
 
 ## What the app provides
 
-- **Triggers:** a new Daily Pulse, a Content Editor page sent through the brand webhook, an Action Center task, and a webhook test event.
+- **Triggers:** a new Daily Pulse, a Content Editor page sent through the brand webhook, and an Action Center task.
 - **Search:** find a brand available to the connected API key.
 - **Actions:** read visibility summaries, visibility trends, citations and AI traffic from the read-only Metrics API.
 
-The app uses an Ansvisor API key for metrics and the brand's webhook secret for incoming events. It does not create or modify Ansvisor data.
+The app uses an Ansvisor API key for metrics and webhook subscription management. It uses the brand's webhook secret to verify incoming events. It does not create or modify content, metrics or Action Center data.
 
 ## Connect your Ansvisor account
 
@@ -25,22 +25,22 @@ The key is stored as a password credential and sent in the Authorization: Bearer
 
 ## Set up a webhook trigger
 
-1. In Zapier, add one of the Ansvisor webhook triggers and copy its hook URL.
-2. In Ansvisor, open the brand's **Content → Configure Webhook** settings.
-3. Set a webhook secret, paste the Zapier hook URL, and enable the matching event.
-4. In Zapier, connect an Ansvisor account that contains the same brand webhook secret, then test the trigger.
+1. Add one of the Ansvisor triggers in Zapier and choose the brand.
+2. Connect an Ansvisor account containing that brand's webhook secret.
+3. Enable the Zap. Zapier registers the webhook URL with Ansvisor automatically.
+4. When the Zap is turned off or removed, Zapier removes the subscription it created.
+
+The API key's user must be an admin or manager and the workspace must have webhook write access. The subscription endpoints are protected by the same API-key, brand-access, role and plan checks as other Ansvisor write operations.
 
 Ansvisor webhook secrets are per brand. Use a separate Zapier connection for each brand's secret; the same API key can be used in those connections. The webhook secret is optional if the connection is used only for metrics actions.
 
-The **Webhook Test Received** trigger accepts the webhook.test event sent by **Test Webhook** in Ansvisor settings.
+The **Test Webhook** control in Ansvisor sends a webhook.test event to every active webhook config. Each of the three Ansvisor triggers accepts that test event, so you can test the trigger without waiting for a real Daily Pulse, Content Draft or Action Center task.
 
 ## How webhook verification works
 
 Every supported event must include X-Webhook-Secret, which the trigger compares with the configured brand secret using a constant-time comparison.
 
-The content_draft.sent event also includes X-Ansvisor-Signature: sha256=<hex>. The trigger verifies HMAC-SHA256 against the original raw request body exposed by Zapier before returning the payload to the workflow. The other events do not require this additional signature.
-
-Zapier receives a static hook request before the app's trigger code runs. The app rejects an invalid event inside the trigger, so it is not passed into the Zap. Zapier controls the HTTP response from its hook endpoint, so Ansvisor is not guaranteed to receive an HTTP 401 when an event is rejected.
+The content_draft.sent event also includes X-Ansvisor-Signature: sha256=<hex>. The trigger verifies HMAC-SHA256 against the original raw request body exposed by Zapier before returning the payload to the workflow. Daily Pulse and Action Center events do not require this additional signature.
 
 Use an HTTPS webhook URL. Do not share the API key or brand webhook secret.
 
@@ -61,4 +61,5 @@ Date filters use YYYY-MM-DD. Visibility trend supports daily or weekly buckets. 
 
 - [Metrics API](/api-reference/metrics)
 - [Webhook API](/api-reference/webhooks)
+- [MCP API key setup](https://docs.ansvisor.com/guides/mcp-server)
 - [Zapier Platform CLI](https://developer.zapier.com/)
