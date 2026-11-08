@@ -47,7 +47,7 @@ const citations = (z, bundle) => {
     date_to: input.date_to,
     model: input.model,
     region: input.region,
-    topic_id: input.topic_id,
+    topic_id: input.topic_filter,
     source_filter: input.source_filter,
     limit: input.limit,
   });
@@ -105,7 +105,7 @@ const creates = {
         { key: 'limit', label: 'Top list limit', type: 'integer', required: false, helpText: 'Optional. The API default is 50; maximum is 200.' },
         { key: 'model', label: 'AI model filter', type: 'string', required: false, helpText: 'Optional comma-separated model slugs.' },
         { key: 'region', label: 'Region filter', type: 'string', required: false },
-        { key: 'topic_id', label: 'Topic ID', type: 'string', required: false },
+        { key: 'topic_filter', label: 'Topic filter', type: 'string', required: false, helpText: 'Optional topic UUID.' },
       ],
       sample: { totals: { citations: 12 }, source_breakdown: [], top_domains: [], top_urls: [] },
     },
