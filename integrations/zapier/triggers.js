@@ -19,7 +19,7 @@ function webhookTrigger(key, label, description, event, sample) {
 }
 
 module.exports = {
-  brandList: {
+  brand_list: {
     key: 'brand_list',
     noun: 'Brand',
     display: {
@@ -32,7 +32,7 @@ module.exports = {
       sample: { id: 'brand-123', name: 'Acme', slug: 'acme' },
     },
   },
-  newDailyPulse: webhookTrigger(
+  new_daily_pulse: webhookTrigger(
     'new_daily_pulse',
     'New Daily Pulse',
     'Triggers when Ansvisor creates a Daily Pulse for a brand.',
@@ -44,7 +44,7 @@ module.exports = {
       pulse: { date: '2026-11-08', frequency: 'daily', kpis: { visibilityRate: 42.5, citations: 12 } },
     },
   ),
-  newContentDraft: webhookTrigger(
+  new_content_draft: webhookTrigger(
     'new_content_draft',
     'Content Draft Sent',
     'Triggers when a Content Editor page is sent through the brand webhook.',
@@ -58,7 +58,7 @@ module.exports = {
       brand: { id: 'brand-123', name: 'Acme', domain: 'acme.example' },
     },
   ),
-  newActionTask: webhookTrigger(
+  new_action_task: webhookTrigger(
     'new_action_task',
     'New Action Center Task',
     'Triggers when a user sends an Action Center task to the brand webhook.',
@@ -71,7 +71,7 @@ module.exports = {
       brand: { name: 'Acme', domain: 'acme.example', industry: 'Software' },
     },
   ),
-  webhookTest: webhookTrigger(
+  webhook_test: webhookTrigger(
     'webhook_test',
     'Webhook Test Received',
     'Receives the test event sent from Ansvisor webhook settings.',
