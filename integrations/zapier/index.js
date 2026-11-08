@@ -7,6 +7,7 @@ const creates = require('./creates');
 module.exports = {
   version: require('./package.json').version,
   platformVersion: core.version,
+  flags: { cleanInputData: false },
   authentication: auth.authentication,
   beforeRequest: [auth.includeApiKey],
   triggers,
