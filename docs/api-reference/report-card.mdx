@@ -11,7 +11,7 @@ The free AI visibility report card is Ansvisor's own marketing: a form on www.an
 - Each question asked once in ChatGPT, Gemini, Google AI Overviews and Google AI Mode, from the target country (25 questions × 4 engines: 100 answers at most). ChatGPT and Gemini, Ansvisor Starter's engines, are the card's main result (`mainEngines` in the figures): the visibility, the competitors, the cited sites, the company's own citations and the questions missed all count their answers. Cards made while Ansvisor tracked Microsoft Copilot counted ChatGPT and Copilot instead. Google AI Overviews and Google AI Mode, which Growth adds, are shown apart, each with how often it named the company. Every engine is asked through the tracking's own provider. An engine that doesn't answer from that country is left out.
 - The answers read for the company's name or site, the competitors they name, the other businesses they name, and the sites they cite. One more model call sorts every name the card found (competitor, marketplace, other) and the 25 sites cited most (competitor, marketplace, reviews, guide, publication, official, community, other; a short list of known review and complaint sites, such as sikayetvar.com and trustpilot.com, is always reviews) for the whole card at once; a site whose address names a competitor or marketplace counts as one whatever the call says. Only competitors are counted and shown as "named instead"; a suggestion to get onto a site picks only a guide, publication, official source or community, and only then a reviews site, with "check and answer what customers say about you" as its step.
 - The median Google Ads cost per click of the questions' keywords in that country, from the same search volume call prompt volumes use.
-- A PDF in the target country's language: Turkish for Türkiye, English elsewhere (`web/src/lib/report-card/copy.ts` and `copy-tr.ts`; a language is added as one more copy file). Every amount (costs per click, the value table, Ansvisor's prices) is in US dollars, as Ansvisor's plans are, written the card's language's way; a deal value stays in the currency it was given in. The e-mail is in the same language. The PDF has:
+- A PDF in the language the request chose (`reportLanguage`: English, Turkish, French, Spanish, German, Portuguese, Italian or Dutch), else by the target country: Turkish for Türkiye, English elsewhere (`web/src/lib/report-card/copy.ts`, `copy-tr.ts`, `copy-fr.ts`, `copy-es.ts`, `copy-de.ts`, `copy-pt.ts`, `copy-it.ts` and `copy-nl.ts`; a language is added as one more copy file and in `REPORT_LANGUAGES`, in the web's `copy.ts` and the server's `countries.js`). The questions are asked in the target country's main language whatever the report's language, so the figures and the cost don't change. Ansvisor's product and feature names stay in English. Every amount (costs per click, the value table, Ansvisor's prices) is in US dollars, as Ansvisor's plans are, written the report's language's way; a deal value stays in the currency it was given in. The e-mail is in the same language. The PDF has:
   - status: a small "Start free trial" button in the header, a one-time-snapshot note, the products found, the four headline figures, the starting point (a visibility of 0% with what AI already cites) and first step, Starter's engines with Growth's in a band of their own, who AI names and cites, and the five questions competitors win most;
   - the questions: every question by product, with its keyword's searches a month as Google Keyword Planner's range (10–100, 100–1K, 1K–10K, 10K–100K, 100K+; "Low" when Google reports 0 or none, never an exact count; the questions stay ordered by the real figure), a grid of what each engine's answer did and the competitor named instead;
   - the plan: three findings, each with a week-one action and the Ansvisor area that helps, the cited sites sorted by kind (competitors' sites and marketplaces left out), and how agents work, approved step by step or, in Growth, publishing on their own;
@@ -38,6 +38,7 @@ The free AI visibility report card is Ansvisor's own marketing: a form on www.an
   "consentPrivacy": true,
   "consentOwnSite": true,
   "consentMarketing": false,
+  "reportLanguage": "fr",
   "botToken": "<Cloudflare Turnstile token>",
   "page": "free-ai-visibility-report",
   "utm": { "source": "linkedin", "medium": "social", "campaign": "launch" }
@@ -57,6 +58,7 @@ The free AI visibility report card is Ansvisor's own marketing: a form on www.an
 | `dealValue` | Optional: an amount and a three-letter currency. Only page 3's revenue scenario uses it. |
 | `consentPrivacy`, `consentOwnSite` | Must be `true` |
 | `consentMarketing` | Optional; only people who tick it join the marketing list |
+| `reportLanguage` | Optional: `en`, `tr`, `fr`, `es`, `de`, `pt`, `it` or `nl`, in any case. The PDF and the e-mail are written in it. `auto`, empty or none keeps the country's rule (Turkish for `TR`, English elsewhere). Another value is `invalid`. A server without this field ignores it, as it does any field it doesn't know. |
 
 ## Answers
 
@@ -91,7 +93,7 @@ Every minute the cloud server starts the due cards, `REPORT_CARD_CONCURRENCY` at
 - a card sent again, which says the same first;
 - a note when a card couldn't be made.
 
-The web app draws the PDF from the card's figures (`POST /api/internal/report-card/pdf`, with `CRON_SECRET`); it isn't stored. Requests are deleted after 12 months.
+The web app draws the PDF from the card's figures (`POST /api/internal/report-card/pdf` `{ card, language? }`, with `CRON_SECRET`); it isn't stored. The language is the request's (`report_language`), not the card's, so two people at one company can get the same card in two languages; without one, the card's country decides. A language the web doesn't write is refused (422). Requests are deleted after 12 months.
 
 Ansvisor staff (`STAFF_EMAILS`) see the day's cards, the month's cost, the share that failed and the latest failures at `/dashboard/admin/report-cards`.
 

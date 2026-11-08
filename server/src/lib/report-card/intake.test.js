@@ -138,6 +138,51 @@ describe('submitReportCardRequest', () => {
     expect(store.insertRequest).not.toHaveBeenCalled();
   });
 
+  it('keeps the report language the form chose, whatever the country, and none for auto', async () => {
+    for (const code of ['en', 'tr', 'fr', 'es', 'de', 'pt', 'it', 'nl']) {
+      const store = memoryStore();
+      const res = await submit(form({ reportLanguage: code.toUpperCase() }), store);
+      expect(res.status).toBe(200);
+      expect(store.requests[0].report_language).toBe(code);
+      // The questions are still asked in the country's language.
+      expect(store.cards[0].language).toBe('tr');
+    }
+    for (const reportLanguage of ['auto', 'Auto', '', null, undefined]) {
+      const store = memoryStore();
+      await submit(form({ reportLanguage }), store);
+      expect(store.requests[0].report_language).toBeNull();
+    }
+  });
+
+  it('refuses a report language it doesn’t write, and keeps nothing', async () => {
+    for (const reportLanguage of ['xx', 'ja', 'english', 3]) {
+      const store = memoryStore();
+      const res = await submit(form({ reportLanguage }), store);
+      expect(res).toEqual({
+        status: 422,
+        body: { code: 'invalid', fields: { reportLanguage: FIELD_MESSAGES.reportLanguage } },
+      });
+      expect(store.insertRequest).not.toHaveBeenCalled();
+    }
+  });
+
+  it('keeps the chosen language on a request sent the card already made', async () => {
+    const store = memoryStore({ recent: { id: 'card-9', status: 'ready' } });
+    const res = await submit(form({ email: 'cfo@acme.example', reportLanguage: 'de' }), store);
+    expect(res.body.code).toBe('resent');
+    expect(store.requests[0]).toMatchObject({
+      report_card_id: 'card-9',
+      outcome: 'resent',
+      report_language: 'de',
+    });
+  });
+
+  it('ignores a field an older form or a newer one sends that it doesn’t know', async () => {
+    const store = memoryStore();
+    expect((await submit(form({ somethingNew: 'x' }), store)).status).toBe(200);
+    expect(store.requests[0]).not.toHaveProperty('somethingNew');
+  });
+
   it('refuses a website that isn’t the e-mail’s company', async () => {
     const res = await submit(form({ website: 'competitor.example' }), memoryStore());
     expect(res).toEqual({

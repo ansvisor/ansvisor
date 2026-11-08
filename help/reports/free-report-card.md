@@ -1,11 +1,11 @@
 ---
 title: Your free AI visibility report card
 route: /dashboard/insights
-keywords: [report card, free report card, ai visibility report, report card pdf, value table, revenue scenario]
-synonyms: [free audit from the website, the pdf you e-mailed me, visibility report card, free ai report]
+keywords: [report card, free report card, ai visibility report, report card pdf, value table, revenue scenario, report language]
+synonyms: [free audit from the website, the pdf you e-mailed me, visibility report card, free ai report, report card in french, report card in german]
 plan: all
-updated: 2026-11-08
-last_checked: 2026-11-08
+updated: 2026-11-09
+last_checked: 2026-11-09
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -38,7 +38,7 @@ Everything on the card is picked from your results by fixed rules: no model writ
 
 ## Language and currency
 
-The questions and answers are in your target country's language. The PDF and its e-mail are in Turkish for Türkiye and in English elsewhere. Amounts are in US dollars, as Ansvisor's plans are: Google Ads' costs, the value table and the prices. An average order or deal value you gave stays in its own currency.
+The questions and answers are in your target country's language, whatever language the report is in. The PDF and its e-mail are in the **Report language** you choose on the form: English, Türkçe, Français, Español, Deutsch, Português, Italiano or Nederlands. Left on **Auto (by country)**, they are in Turkish for Türkiye and in English elsewhere. The language is your request's, not the card's: a colleague who asks for your company's card can get the same card in another language. Ansvisor's own names, such as Chat, Agent Center, Action Center and Site Audit, stay in English, as the app shows them. Amounts are in US dollars, as Ansvisor's plans are: Google Ads' costs, the value table and the prices. An average order or deal value you gave stays in its own currency.
 
 ## Why the app shows other numbers
 

@@ -1,4 +1,5 @@
 import type { CardCopy, TargetKind } from './copy';
+import { countryIn, languageIn } from './copy-names';
 
 /**
  * The report card in Turkish, for Türkiye (owner decision 2026-11-04: the
@@ -7,7 +8,9 @@ import type { CardCopy, TargetKind } from './copy';
  * for each name: "{marka} markası", "{site} sitesinde". Ansvisor's own
  * product, feature and button names stay in English, as the app shows them
  * (owner decision 2026-11-08), a suffix after an apostrophe as the English
- * is said: "Action Center’ı", "Agent Center’da".
+ * is said: "Action Center’ı", "Agent Center’da". The country and the
+ * language are named in Turkish, as a card for another country written in
+ * Turkish needs (owner decision 2026-11-09): "Almanya", "Almanca".
  */
 
 /** "A", "A ve B", "A, B ve C". */
@@ -32,9 +35,9 @@ interface TargetStep {
 export const tr: CardCopy = {
   locale: 'tr-TR',
   list: listTr,
-  country: (country) => country.name,
-  language: (english) =>
-    ({ Turkish: 'Türkçe', English: 'İngilizce', German: 'Almanca' })[english] ?? english,
+  countryName: (country) => countryIn('tr', country),
+  country: (country) => countryIn('tr', country),
+  language: (english) => languageIn('tr', english),
   document: (company) => `Yapay zekâ görünürlük karnesi: ${company}`,
   footer: (page, pages) => `${page} / ${pages}`,
   brand: 'Ansvisor ile hazırlandı · www.ansvisor.com',

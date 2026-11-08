@@ -6,6 +6,7 @@ const {
   PRIVACY_URL,
   MAX_PDF_ATTEMPTS,
   deliverReportCards,
+  emailCopy,
   pdfName,
   renderCardPdf,
   renderFailedEmail,
@@ -223,6 +224,104 @@ describe('renderReportCardEmail', () => {
     // No PDF goes with it, so it never says one is attached.
     expect(html).not.toMatch(/attached|PDF/);
   });
+
+  it('writes in the language the request chose over the country’s', () => {
+    const fr = renderReportCardEmail({
+      firstName: 'Ayşe',
+      payload,
+      kind: 'new',
+      madeAt: '2026-11-03T10:00:00Z',
+      language: 'fr',
+    });
+    expect(fr.subject).toBe('Votre rapport de visibilité IA\u00a0: acme.example');
+    expect(fr.html).toContain('Bonjour Ayşe,');
+    expect(fr.html).toContain(
+      'Votre rapport de visibilité IA pour acme.example est en pièce jointe\u00a0: un PDF de 4 pages.',
+    );
+    // The country in French, after "pays :" so no article must agree with it.
+    expect(fr.html).toContain('(pays\u00a0: États-Unis)');
+    expect(fr.html).toContain('19\u00a0%');
+    expect(fr.html).toContain('Commencer l’essai gratuit');
+    expect(fr.html).toContain('Politique de confidentialité');
+    expect(fr.html).not.toMatch(/Hi Ayşe|Start a free trial/);
+    // A Turkish card in English, and an American card in Turkish.
+    const turkishCard = { ...payload, country: { code: 'TR', name: 'Türkiye' } };
+    const en = renderReportCardEmail({
+      firstName: 'Ayşe',
+      payload: turkishCard,
+      kind: 'new',
+      madeAt: '2026-11-03T10:00:00Z',
+      language: 'en',
+    });
+    expect(en.subject).toBe('Your AI visibility report card: acme.example');
+    expect(en.html).toContain('questions your buyers ask, in Türkiye.');
+    const tr = renderReportCardEmail({
+      firstName: 'Ayşe',
+      payload,
+      kind: 'new',
+      madeAt: '2026-11-03T10:00:00Z',
+      language: 'tr',
+    });
+    expect(tr.html).toContain('Amerika Birleşik Devletleri konumundan');
+    expect(tr.html).toContain('%19');
+  });
+
+  it('has a subject, a button and a resent line in every language', () => {
+    const subjects = {};
+    for (const language of ['en', 'tr', 'fr', 'es', 'de', 'pt', 'it', 'nl']) {
+      const t = emailCopy('US', language);
+      expect(t.locale.startsWith(language)).toBe(true);
+      const { subject, html } = renderReportCardEmail({
+        firstName: 'Ayşe',
+        payload,
+        kind: 'resent',
+        madeAt: '2026-10-20T10:00:00Z',
+        language,
+      });
+      subjects[language] = subject;
+      expect(html).toContain(t.button);
+      expect(html).toContain(t.attached('acme.example'));
+      expect(html).not.toContain('undefined');
+    }
+    expect(new Set(Object.values(subjects)).size).toBe(8);
+  });
+
+  it('dates a card sent again in the chosen language’s way', () => {
+    const resent = (language) =>
+      renderReportCardEmail({
+        firstName: 'Mehmet',
+        payload,
+        kind: 'resent',
+        madeAt: '2026-10-20T10:00:00Z',
+        language,
+      }).html;
+    expect(resent('de')).toContain(
+      'Wir senden Ihnen erneut den Bericht, den wir am 20. Okt. 2026 für acme.example erstellt haben. Ein neuer kann ab dem 19. Nov. 2026 erstellt werden.',
+    );
+    expect(resent('es')).toContain('el 20 oct 2026');
+    expect(resent('pt')).toContain('em 20 de out. de 2026');
+    expect(resent('it')).toContain('il 20 ott 2026');
+    expect(resent('nl')).toContain('op 20 okt 2026');
+    expect(resent('fr')).toContain('le 20 oct. 2026');
+  });
+
+  it('writes the note for a card that couldn’t be made in the chosen language', () => {
+    const de = renderFailedEmail({
+      firstName: 'Ayşe',
+      site: 'acme.example',
+      country: 'TR',
+      language: 'de',
+    });
+    expect(de.subject).toBe('Wir konnten Ihren Bericht für acme.example nicht fertigstellen');
+    expect(de.html).toContain('Hallo Ayşe,');
+    expect(de.html).not.toMatch(/PDF|Anhang/);
+    const es = renderFailedEmail({ firstName: 'Ayşe', site: 'acme.example', language: 'es' });
+    expect(es.subject).toBe('No pudimos terminar tu informe de acme.example');
+    // None chosen: the country's rule, as before.
+    expect(renderFailedEmail({ firstName: 'Ayşe', site: 'a.example', country: 'TR' }).subject).toBe(
+      'a.example için karnenizi tamamlayamadık',
+    );
+  });
 });
 
 describe('names and links', () => {
@@ -246,6 +345,15 @@ describe('renderCardPdf', () => {
     expect(url).toMatch(/\/api\/internal\/report-card\/pdf$/);
     expect(init.headers.Authorization).toBe('Bearer s3');
     expect(JSON.parse(init.body)).toEqual({ card: payload });
+  });
+
+  it('asks for the PDF in the language the request chose', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(1),
+    }));
+    await renderCardPdf(payload, { language: 'nl', fetchImpl, env: { CRON_SECRET: 's3' } });
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({ card: payload, language: 'nl' });
   });
 
   it('throws without the secret, and with the status the web refused with', async () => {
@@ -397,5 +505,28 @@ describe('deliverReportCards', () => {
       env: {},
     });
     expect(last.markEmailed).toHaveBeenCalledWith('r1', 'refused', NOW);
+  });
+  it('sends each request in its own language, with a PDF drawn once a language', async () => {
+    const s = store([
+      { ...request('r1', ready), report_language: 'fr' },
+      { ...request('r2', ready, 'resent'), report_language: 'fr' },
+      { ...request('r3', ready), report_language: null },
+      { ...request('r4', failed), country: 'US', report_language: 'it' },
+    ]);
+    const render = vi.fn(async (_payload, { language }) => Buffer.from(`%PDF-${language}`));
+    const send = vi.fn(async () => 'sent');
+    expect(await deliverReportCards({ store: s, render, send, now: () => NOW, env: {} })).toBe(4);
+    expect(render.mock.calls.map(([, options]) => options)).toEqual([
+      { language: 'fr' },
+      { language: null },
+    ]);
+    const [fr, frAgain, auto, it] = send.mock.calls.map(([message]) => message);
+    expect(fr.subject).toBe('Votre rapport de visibilité IA\u00a0: acme.example');
+    expect(Buffer.from(fr.attachments[0].content, 'base64').toString()).toBe('%PDF-fr');
+    expect(frAgain.html).toContain('Nous vous renvoyons le rapport établi pour acme.example');
+    expect(auto.subject).toBe('Your AI visibility report card: acme.example');
+    expect(Buffer.from(auto.attachments[0].content, 'base64').toString()).toBe('%PDF-null');
+    expect(it.subject).toBe('Non siamo riusciti a completare il tuo report per other.example');
+    expect(it).not.toHaveProperty('attachments');
   });
 });
