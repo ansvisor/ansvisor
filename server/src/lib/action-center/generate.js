@@ -162,8 +162,9 @@ function topicIdsOf(payload) {
  * category-play.js): its page, its best sellers locked into the draft's
  * shopping path, and the optimize branch of its plan; one whose category
  * has products but no page writes a buying guide (EC-1), its best sellers
- * locked in. Best effort: a failed read, or no play the data supports,
- * opens the action without one.
+ * locked in. A live category page with no buying guide yet has one also
+ * worth doing, next to the page and linking it. Best effort: a failed read,
+ * or no play the data supports, opens the action without one.
  */
 async function playedPayload(brandId, definitionId, payload) {
   if (!PLAY_DEFINITIONS.includes(definitionId) || payload.play) return payload;
@@ -196,7 +197,12 @@ async function playedPayload(brandId, definitionId, payload) {
       if (found?.category.url) {
         return {
           ...payload,
-          play: categoryPagePlay({ siteType, category: found.category, prompts }),
+          play: categoryPagePlay({
+            siteType,
+            category: found.category,
+            prompts,
+            guideMissing: found.guideMissing,
+          }),
           contentExists: true,
           pages: [found.category.url],
           products: found.products,

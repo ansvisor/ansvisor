@@ -168,11 +168,29 @@ export function rankPlays(prompts) {
  * page (`url` null); the category and its page as the reason, and the plays
  * its prompts qualify for as the ones also worth doing.
  *
+ * A live category page with no buying guide yet (`guideMissing`,
+ * category-play.js) has one also worth doing first: a buying guide next to
+ * that page, which it links (`linkTo`). Never beside a buying guide play:
+ * that one is the guide.
+ *
  * @param {{ siteType: string, category: { name: string, url: string|null, inStock: number },
- *   prompts: Array<{ id: string, intent: string|null, volume: number|null }> }} input
+ *   prompts: Array<{ id: string, intent: string|null, volume: number|null }>,
+ *   guideMissing?: boolean }} input
  */
-export function categoryPagePlay({ siteType, category, prompts = [] }) {
+export function categoryPagePlay({ siteType, category, prompts = [], guideMissing = false }) {
   const play = category.url ? CATEGORY_PAGE_PLAY : BUYING_GUIDE_PLAY;
+  const guide =
+    category.url && guideMissing
+      ? [
+          {
+            id: BUYING_GUIDE_PLAY.id,
+            assetType: BUYING_GUIDE_PLAY.assetType,
+            kind: 'category',
+            category: category.name,
+            linkTo: category.url,
+          },
+        ]
+      : [];
   return {
     version: PLAY_VERSION,
     id: play.id,
@@ -186,15 +204,16 @@ export function categoryPagePlay({ siteType, category, prompts = [] }) {
         inStock: category.inStock,
       },
     ],
-    supporting: rankPlays(prompts)
-      .slice(0, MAX_SUPPORTING)
-      .map((entry) => ({
+    supporting: [
+      ...guide,
+      ...rankPlays(prompts).map((entry) => ({
         id: entry.play.id,
         assetType: entry.play.assetType,
         prompts: entry.prompts,
         of: entry.of,
         share: entry.share,
       })),
+    ].slice(0, MAX_SUPPORTING),
   };
 }
 
