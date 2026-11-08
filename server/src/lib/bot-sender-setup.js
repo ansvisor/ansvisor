@@ -1,6 +1,6 @@
 /**
  * What a person copies into Cloudflare, Vercel or Fastly to send AI-bot requests
- * (AT-010, spec §6.1 options B and C), built when the connection is made so
+ * (AT-010, spec §6.1 options B, C and D), built when the connection is made so
  * the secret is in it once:
  *
  *   * a Cloudflare Logpush job on the http_requests dataset, filtered at the
@@ -8,7 +8,10 @@
  *     posting to /bots/ingest with the secret as a header;
  *   * a Vercel drain (logs, JSON) to /bots/ingest with the secret as a
  *     custom header. Vercel sends every request log; the server filters
- *     them, under the raw-record cap.
+ *     them, under the raw-record cap;
+ *   * a Fastly HTTPS log stream, using FASTLY_LOG_FORMAT and the same
+ *     bearer-secret authentication. Fastly sends every request log; the
+ *     server verifies and filters them, under the raw-record cap.
  *
  * The Worker (option A) is bot-worker-script.js.
  */
@@ -18,8 +21,9 @@ import { AI_BOTS } from './ai-bots.js';
 /**
  * Fastly HTTPS logging endpoint format (#2164). `time.start.sec` is emitted
  * as epoch seconds; the parser accepts it alongside the other sender times.
- * The URL is the request path, which the ingest pipeline accepts for a
- * brand's own edge. The server still verifies the user agent and source IP.
+ * The URL is the request path, paired with its host so the ingest pipeline
+ * can enforce the brand's domain. The server still verifies the user agent
+ * and source IP.
  */
 export const FASTLY_LOG_FORMAT = `{
   "timestamp": "%{time.start.sec}V",
