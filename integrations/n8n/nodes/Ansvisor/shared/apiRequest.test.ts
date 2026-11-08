@@ -40,7 +40,7 @@ describe('buildAnsvisorApiRequest', () => {
 
   it('passes citation filters and limits through', () => {
     expect(
-      buildAnsvisorApiRequest('citations', 'get', {
+      buildAnsvisorApiRequest('citation', 'get', {
         brandId: 'brand-123',
         sourceFilter: 'external',
         limit: 25,

@@ -17,7 +17,8 @@
     "webhooks"
   ],
   "author": {
-    "name": "Ansvisor contributors"
+    "name": "Ansvisor contributors",
+    "email": "support@ansvisor.com"
   },
   "engines": {
     "node": ">=20.15"

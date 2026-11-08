@@ -1,9 +1,13 @@
 import type {
+  ICredentialTestFunctions,
+  ICredentialsDecrypted,
   IHookFunctions,
+  IDataObject,
   INodeType,
   INodeTypeDescription,
   IWebhookFunctions,
   IWebhookResponseData,
+  INodeCredentialTestResult,
 } from 'n8n-workflow';
 import { NodeConnectionTypes } from 'n8n-workflow';
 import { verifyAnsvisorWebhook } from './shared/webhookSignature';
@@ -27,14 +31,15 @@ export class AnsvisorTrigger implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Ansvisor Trigger',
     name: 'ansvisorTrigger',
-    icon: 'fa:bell',
+    icon: { light: 'file:../../icons/ansvisor.svg', dark: 'file:../../icons/ansvisor.dark.svg' },
     group: ['trigger'],
     version: 1,
+    subtitle: 'On webhook event',
     description: 'Start a workflow when Ansvisor sends a brand webhook',
     defaults: { name: 'Ansvisor Trigger' },
     inputs: [],
     outputs: [NodeConnectionTypes.Main],
-    credentials: [{ name: 'ansvisorWebhookSecret', required: true }],
+    credentials: [{ name: 'ansvisorWebhookSecretApi', required: true, testedBy: 'ansvisorWebhookSecretTest' }],
     webhooks: [
       {
         name: 'default',
@@ -50,7 +55,7 @@ export class AnsvisorTrigger implements INodeType {
         type: 'notice',
         default: '',
         description:
-          'Copy the Production URL after activating this workflow into the webhook URL for the matching Ansvisor brand.',
+          'Copy the Production URL after activating this workflow into the webhook URL for the matching Ansvisor brand',
       },
     ],
   };
@@ -69,6 +74,28 @@ export class AnsvisorTrigger implements INodeType {
     },
   };
 
+  methods = {
+    credentialTest: {
+      async ansvisorWebhookSecretTest(
+        this: ICredentialTestFunctions,
+        credential: ICredentialsDecrypted,
+      ): Promise<INodeCredentialTestResult> {
+        const secret = (credential.data as IDataObject).webhookSecret;
+        if (typeof secret !== 'string' || secret.length === 0) {
+          return {
+            status: 'Error',
+            message: 'A webhook secret is required',
+          };
+        }
+
+        return {
+          status: 'OK',
+          message: 'Webhook secret is configured; Ansvisor will verify it on delivery',
+        };
+      },
+    },
+  };
+
   async webhook(this: IWebhookFunctions): Promise<IWebhookResponseData> {
     const request = this.getRequestObject() as unknown as RawWebhookRequest;
     const response = this.getResponseObject();
@@ -81,7 +108,7 @@ export class AnsvisorTrigger implements INodeType {
 
     let credentials: { webhookSecret?: string };
     try {
-      credentials = await this.getCredentials('ansvisorWebhookSecret');
+      credentials = await this.getCredentials('ansvisorWebhookSecretApi');
     } catch {
       return reject(401);
     }

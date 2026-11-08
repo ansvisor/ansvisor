@@ -1,4 +1,4 @@
-export type AnsvisorResource = 'brand' | 'visibility' | 'citations' | 'aiTraffic';
+export type AnsvisorResource = 'brand' | 'visibility' | 'citation' | 'aiTraffic';
 export type AnsvisorOperation = 'getAll' | 'getSummary' | 'getTrend' | 'get';
 
 export interface AnsvisorRequestParameters {
@@ -32,7 +32,7 @@ export function buildAnsvisorApiRequest(
     (resource === 'brand' && operation === 'getAll') ||
     (resource === 'visibility' &&
       (operation === 'getSummary' || operation === 'getTrend')) ||
-    ((resource === 'citations' || resource === 'aiTraffic') && operation === 'get');
+    ((resource === 'citation' || resource === 'aiTraffic') && operation === 'get');
 
   if (!supportedOperation) {
     throw new Error('The selected Ansvisor resource and operation are not supported.');

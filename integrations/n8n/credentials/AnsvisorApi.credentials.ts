@@ -3,12 +3,18 @@ import type {
   ICredentialTestRequest,
   ICredentialType,
   INodeProperties,
+  Icon,
 } from 'n8n-workflow';
 
 export class AnsvisorApi implements ICredentialType {
   name = 'ansvisorApi';
 
   displayName = 'Ansvisor API';
+
+  icon: Icon = {
+    light: 'file:../icons/ansvisor.svg',
+    dark: 'file:../icons/ansvisor.dark.svg',
+  };
 
   documentationUrl = 'https://github.com/ansvisor/ansvisor/blob/main/docs/api-reference/metrics.mdx';
 

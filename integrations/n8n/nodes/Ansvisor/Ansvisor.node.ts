@@ -16,9 +16,10 @@ export class Ansvisor implements INodeType {
   description: INodeTypeDescription = {
     displayName: 'Ansvisor',
     name: 'ansvisor',
-    icon: 'fa:chart-line',
+    icon: { light: 'file:../../icons/ansvisor.svg', dark: 'file:../../icons/ansvisor.dark.svg' },
     group: ['transform'],
     version: 1,
+    subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
     description: 'Read brands and AI visibility metrics from Ansvisor',
     defaults: { name: 'Ansvisor' },
     inputs: [NodeConnectionTypes.Main],
@@ -34,7 +35,7 @@ export class Ansvisor implements INodeType {
         options: [
           { name: 'Brand', value: 'brand' },
           { name: 'Visibility', value: 'visibility' },
-          { name: 'Citations', value: 'citations' },
+          { name: 'Citation', value: 'citation' },
           { name: 'AI Traffic', value: 'aiTraffic' },
         ],
         default: 'brand',
@@ -43,6 +44,7 @@ export class Ansvisor implements INodeType {
         displayName: 'Operation',
         name: 'operation',
         type: 'options',
+        noDataExpression: true,
         displayOptions: { show: { resource: ['brand'] } },
         options: [{ name: 'Get Many', value: 'getAll', action: 'Get many brands' }],
         default: 'getAll',
@@ -62,7 +64,7 @@ export class Ansvisor implements INodeType {
         displayName: 'Operation',
         name: 'operation',
         type: 'options',
-        displayOptions: { show: { resource: ['citations'] } },
+        displayOptions: { show: { resource: ['citation'] } },
         options: [{ name: 'Get', value: 'get', action: 'Get citations' }],
         default: 'get',
       },
@@ -81,7 +83,7 @@ export class Ansvisor implements INodeType {
         default: '',
         required: true,
         displayOptions: { show: { resource: ['visibility', 'citations', 'aiTraffic'] } },
-        description: 'The brand ID returned by the Brand resource.',
+        description: 'The brand ID returned by the Brand resource',
       },
       {
         displayName: 'Date From',
@@ -90,7 +92,7 @@ export class Ansvisor implements INodeType {
         default: '',
         placeholder: '2026-01-01',
         displayOptions: { show: { resource: ['visibility', 'citations', 'aiTraffic'] } },
-        description: 'Start date in YYYY-MM-DD format.',
+        description: 'Start date in YYYY-MM-DD format',
       },
       {
         displayName: 'Date To',
@@ -99,7 +101,7 @@ export class Ansvisor implements INodeType {
         default: '',
         placeholder: '2026-01-31',
         displayOptions: { show: { resource: ['visibility', 'citations', 'aiTraffic'] } },
-        description: 'End date in YYYY-MM-DD format.',
+        description: 'End date in YYYY-MM-DD format',
       },
       {
         displayName: 'Granularity',
@@ -134,7 +136,7 @@ export class Ansvisor implements INodeType {
         typeOptions: { minValue: 1, maxValue: 200 },
         displayOptions: { show: { resource: ['citations'] } },
         default: 50,
-        description: 'Maximum number of citation rows (1–200).',
+        description: 'Max number of results to return',
       },
     ],
   };
