@@ -136,10 +136,15 @@ describe('readFastlyBody (#2164)', () => {
   });
 
   it('drops Fastly records without a readable timestamp', async () => {
-    const parsed = await readFastlyBody(JSON.stringify({
-      timestamp: 'not-a-time', client_ip: '1.2.3.4',
-      request_user_agent: 'GPTBot', url: '/', response_status: 200,
-    }));
+    const parsed = await readFastlyBody(
+      JSON.stringify({
+        timestamp: 'not-a-time',
+        client_ip: '1.2.3.4',
+        request_user_agent: 'GPTBot',
+        url: '/',
+        response_status: 200,
+      }),
+    );
     expect(parsed).toEqual({ records: 1, requests: [] });
   });
 });

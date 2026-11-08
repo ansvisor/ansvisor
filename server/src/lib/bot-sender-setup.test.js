@@ -49,24 +49,27 @@ describe('vercelDrain', () => {
   });
 });
 
-
 describe('Fastly HTTPS log format', () => {
   it('uses Fastly request variables and the fields read by its parser', async () => {
     expect(FASTLY_LOG_FORMAT).toContain('"timestamp": "%{time.start.sec}V"');
     expect(FASTLY_LOG_FORMAT).toContain('"client_ip": "%{req.http.Fastly-Client-IP}V"');
     expect(FASTLY_LOG_FORMAT).toContain('req.http.Fastly-Orig-Host');
-    expect(FASTLY_LOG_FORMAT).toContain('"request_user_agent": "%{json.escape(req.http.User-Agent)}V"');
+    expect(FASTLY_LOG_FORMAT).toContain(
+      '"request_user_agent": "%{json.escape(req.http.User-Agent)}V"',
+    );
     expect(FASTLY_LOG_FORMAT).toContain('"url": "%{json.escape(req.url)}V"');
     expect(FASTLY_LOG_FORMAT).toContain('"response_status": %{resp.status}V');
     expect(FASTLY_LOG_FORMAT).toContain('"country": "%{client.geo.country_code}V"');
-    const parsed = await readFastlyBody(JSON.stringify({
-      timestamp: '1792400000',
-      client_ip: '20.171.206.9',
-      request_user_agent: 'Mozilla/5.0 (compatible; GPTBot/1.2)',
-      url: '/pricing',
-      response_status: 200,
-      country: 'US',
-    }));
+    const parsed = await readFastlyBody(
+      JSON.stringify({
+        timestamp: '1792400000',
+        client_ip: '20.171.206.9',
+        request_user_agent: 'Mozilla/5.0 (compatible; GPTBot/1.2)',
+        url: '/pricing',
+        response_status: 200,
+        country: 'US',
+      }),
+    );
     expect(parsed.requests).toHaveLength(1);
   });
 });

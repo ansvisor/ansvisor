@@ -176,7 +176,12 @@ describe('AI bot connections', () => {
     expect(fastly.endpoint).toBe('https://api.example.com/bots/ingest');
     expect(fastly.fastlyLogFormat).toContain('request_user_agent');
     expect(fastly.fastlyLogFormat).toContain('req.http.Fastly-Client-IP');
-    expect(fastly).toMatchObject({ workerScript: null, workerSecretName: null, logpushJob: null, vercelDrain: null });
+    expect(fastly).toMatchObject({
+      workerScript: null,
+      workerSecretName: null,
+      logpushJob: null,
+      vercelDrain: null,
+    });
     expect(inserted[3]).toMatchObject({ brand_id: 'b1', kind: 'fastly_log_stream' });
   });
 
