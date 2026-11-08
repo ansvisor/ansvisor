@@ -1,12 +1,19 @@
 /**
  * Every word the report card prints, by language (owner decision
  * 2026-11-04: the whole card in the target language). English is the
- * default; another language adds a CardCopy of its own (./copy-*.ts) and
- * is picked by the card's country in cardCopy(). Numbers, money and dates
- * are formatted by the copy's locale. Sentences are functions of their
+ * default; another language adds a CardCopy of its own (./copy-*.ts),
+ * picked by the language the form chose (owner decision 2026-11-09), else
+ * by the card's country, in cardCopy(). Numbers, money and dates are
+ * formatted by the copy's locale. Sentences are functions of their
  * figures, so a language orders them its own way.
  */
 
+import { de } from './copy-de';
+import { es } from './copy-es';
+import { fr } from './copy-fr';
+import { it } from './copy-it';
+import { nl } from './copy-nl';
+import { pt } from './copy-pt';
 import { tr } from './copy-tr';
 
 /** "A", "A and B", "A, B and C". */
@@ -51,6 +58,8 @@ export const en = {
   /** BCP 47 locale for numbers, money and dates. */
   locale: 'en-US',
   list: listEn,
+  /** The country as page 1's subtitle names it: "United States". */
+  countryName: (country: { code: string; name: string }) => country.name,
   /** The country as a sentence names it: "the United States", "Türkiye". */
   country: (country: { code: string; name: string }) =>
     WITH_THE.has(country.code.toUpperCase()) ? `the ${country.name}` : country.name,
@@ -415,13 +424,30 @@ export const en = {
 
 export type CardCopy = typeof en;
 
+/**
+ * The languages a card can be written in, whichever its questions were
+ * asked in (owner decision 2026-11-09); the server's form takes the same
+ * (server lib/report-card/countries.js REPORT_LANGUAGES). Chinese, Japanese
+ * and Arabic wait for fonts and right-to-left pages.
+ */
+export const REPORT_LANGUAGES = ['en', 'tr', 'fr', 'es', 'de', 'pt', 'it', 'nl'] as const;
+export type ReportLanguage = (typeof REPORT_LANGUAGES)[number];
+
+export const BY_LANGUAGE: Record<ReportLanguage, CardCopy> = { en, tr, fr, es, de, pt, it, nl };
+
+/** The language a country's card is written in when the form chose none. */
 const BY_COUNTRY: Record<string, CardCopy> = { TR: tr };
 
 /**
- * The card's words, by its country: Turkish for Türkiye, English
- * elsewhere. Another language adds a ./copy-*.ts and its countries here.
+ * The card's words: in the language the form chose, else by its country,
+ * Turkish for Türkiye and English elsewhere. Another language adds a
+ * ./copy-*.ts, here and in REPORT_LANGUAGES.
  */
-export function cardCopy(card?: { country: { code: string } }): CardCopy {
+export function cardCopy(
+  card?: { country: { code: string } },
+  language?: ReportLanguage | null,
+): CardCopy {
+  if (language) return BY_LANGUAGE[language];
   const code = card?.country.code.toUpperCase() ?? '';
   return BY_COUNTRY[code] ?? en;
 }

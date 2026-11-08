@@ -1,6 +1,7 @@
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ReportLanguage } from './copy';
 import type { ReportCardPayload } from './payload';
 import { SAMPLE_REPORT_CARD } from './sample';
 
@@ -52,8 +53,12 @@ afterEach(() => {
   container.remove();
 });
 
-function draw(card: ReportCardPayload) {
-  act(() => root.render(<ReportCardPdfDocument card={card} family="ReportCardInter-1" />));
+function draw(card: ReportCardPayload, language: ReportLanguage | null = null) {
+  act(() =>
+    root.render(
+      <ReportCardPdfDocument card={card} family="ReportCardInter-1" language={language} />,
+    ),
+  );
   return [...container.querySelectorAll('section')].map((page) => page.textContent ?? '');
 }
 
@@ -350,5 +355,24 @@ describe('ReportCardPdfDocument', () => {
     expect(pages[0]).toContain('Ücretsiz deneyin');
     expect(pages[3]).toContain('Ücretsiz denemeyi başlatın');
     expect(pages.join(' ')).not.toMatch(/How visible|Week one|Start a free trial/);
+  });
+  it('writes the card in the language the request chose, naming the country in it', () => {
+    const fr = draw(SAMPLE_REPORT_CARD, 'fr');
+    expect(fr[0]).toContain(
+      'Quelle visibilité pour Brewline Coffee dans les réponses de l’IA\u202f?',
+    );
+    expect(fr[0]).toContain('brewlinecoffee.example · États-Unis, en anglais · 4 nov. 2026');
+    expect(fr[0]).toContain('16\u00a0%');
+    expect(fr[1]).toContain('posées en anglais (pays\u00a0: États-Unis)');
+    expect(fr[2]).toContain('Dans Ansvisor · Content Editor');
+    expect(fr[3]).toContain('Commencer votre essai gratuit');
+    expect(fr.join(' ')).not.toMatch(/How visible|Week one|Start your free trial/);
+    // A Turkish card in German, and an American card in Turkish: the language wins.
+    const de = draw({ ...SAMPLE_REPORT_CARD, country: { code: 'TR', name: 'Türkiye' } }, 'de');
+    expect(de[0]).toContain('Wie sichtbar ist Brewline Coffee in KI-Antworten?');
+    expect(de[0]).toContain('Türkei, auf Englisch');
+    const tr = draw(SAMPLE_REPORT_CARD, 'tr');
+    expect(tr[0]).toContain('Amerika Birleşik Devletleri, İngilizce');
+    expect(tr[0]).toContain('%16');
   });
 });

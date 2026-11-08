@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { fetchPage, PageFetchError } from '../safe-fetch.js';
 import { estimatedCardUsd, reportCardLimits } from './config.js';
-import { countryLanguage, isCountry } from './countries.js';
+import { REPORT_LANGUAGES, countryLanguage, isCountry } from './countries.js';
 import {
   emailDomain,
   isFreeEmail,
@@ -61,6 +61,7 @@ export const FIELD_MESSAGES = {
   companySize: 'Please choose your company’s size.',
   industry: 'Please choose an industry from the list.',
   dealValue: 'Please enter an amount and a currency.',
+  reportLanguage: 'Please choose a report language from the list.',
   consentPrivacy: 'Please accept the Privacy Notice.',
   consentOwnSite: 'Please confirm this is your company’s website.',
   consentMarketing: 'Please tick the box or leave it empty.',
@@ -129,6 +130,14 @@ export const requestSchema = z.object({
     .nullable()
     .optional()
     .transform((value) => value ?? null),
+  // The PDF's and e-mail's language: "auto" or none keeps the country's rule (null).
+  reportLanguage: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .pipe(z.enum(['', 'auto', ...REPORT_LANGUAGES]))
+    .nullish()
+    .transform((value) => (value && value !== 'auto' ? value : null)),
   consentPrivacy: z.literal(true),
   consentOwnSite: z.literal(true),
   consentMarketing: z.boolean().optional().default(false),
@@ -250,6 +259,7 @@ export async function submitReportCardRequest(
     industry: input.industry,
     deal_value: input.dealValue?.amount ?? null,
     deal_currency: input.dealValue?.currency ?? null,
+    report_language: input.reportLanguage,
     consent_privacy: true,
     consent_own_site: true,
     consent_marketing: input.consentMarketing,

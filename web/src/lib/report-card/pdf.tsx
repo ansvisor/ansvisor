@@ -11,7 +11,8 @@ import {
   renderToBuffer,
 } from '@react-pdf/renderer';
 import { reportLook } from '@/lib/white-label/kit';
-import { cardCopy, type CardCopy } from './copy';
+import { cardCopy, type CardCopy, type ReportLanguage } from './copy';
+import { percentIn } from './copy-names';
 import type { ReportCardEngine, ReportCardPayload } from './payload';
 import {
   STARTER_ENGINES,
@@ -57,8 +58,8 @@ import {
 
 /**
  * The free AI visibility report card as a PDF (REPORT-CARD §1; the v5
- * layout, owner decisions 2026-11-04): four A4 pages, in the card's
- * language (./copy.ts):
+ * layout, owner decisions 2026-11-04): four A4 pages, in the language the
+ * request chose, else the card's country's (./copy.ts):
  *
  *   1. Status: a small trial button, a one-time snapshot, how the card read
  *      the site, the four figures, the starting point and first step,
@@ -403,7 +404,7 @@ function StatusPage({ card, t, font }: PageProps) {
         title={s.title(clip(card.companyName, 60))}
         subtitle={s.subtitle(
           clip(card.domain, 60),
-          card.country.name,
+          t.countryName(card.country),
           t.language(card.language),
           date,
         )}
@@ -433,7 +434,7 @@ function StatusPage({ card, t, font }: PageProps) {
       <View style={[styles.section, styles.row]} wrap={false}>
         <View style={styles.kpiBox}>
           <Text style={styles.kpiLabel}>{s.kpiVisibility}</Text>
-          <Text style={styles.kpiValue}>{headline.visibility}%</Text>
+          <Text style={styles.kpiValue}>{percentIn(t.locale, headline.visibility)}</Text>
           <Text style={styles.kpiSub}>
             {s.kpiVisibilitySub(
               mainNames,
@@ -1086,12 +1087,15 @@ function ValuePage({ card, t, font }: PageProps) {
 export function ReportCardPdfDocument({
   card,
   family = FAMILY,
+  language = null,
 }: {
   card: ReportCardPayload;
   /** The font family Inter was registered under for this card. */
   family?: string;
+  /** The language the request chose; null: by the card's country. */
+  language?: ReportLanguage | null;
 }) {
-  const t = cardCopy(card);
+  const t = cardCopy(card, language);
   const font = { fontFamily: family };
   return (
     <Document
@@ -1107,15 +1111,23 @@ export function ReportCardPdfDocument({
   );
 }
 
-/** The card's PDF. `fontDir` holds Inter-Regular.ttf and Inter-Bold.ttf: public/fonts by default. */
+/**
+ * The card's PDF, in `language` (null: by the card's country). `fontDir`
+ * holds Inter-Regular.ttf and Inter-Bold.ttf: public/fonts by default.
+ */
 export async function reportCardPdf(
   card: ReportCardPayload,
-  fontDir: string = path.join(process.cwd(), 'public', 'fonts'),
+  {
+    language = null,
+    fontDir = path.join(process.cwd(), 'public', 'fonts'),
+  }: { language?: ReportLanguage | null; fontDir?: string } = {},
 ): Promise<Uint8Array> {
   const family = registerFonts(fontDir);
   try {
     return new Uint8Array(
-      await renderToBuffer(<ReportCardPdfDocument card={card} family={family} />),
+      await renderToBuffer(
+        <ReportCardPdfDocument card={card} family={family} language={language} />,
+      ),
     );
   } finally {
     unregisterFonts(family);
