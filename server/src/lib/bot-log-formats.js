@@ -208,7 +208,11 @@ export async function readFastlyBody(text) {
     .map((l) => ({
       userAgent: l.request_user_agent,
       ip: l.client_ip,
-      url: l.url,
+      url: typeof l.url === 'string' && /^https?:\/\//i.test(l.url)
+        ? l.url
+        : typeof l.host === 'string' && l.host
+          ? `https://${l.host}${l.url ?? '/'}`
+          : l.url,
       status: l.response_status,
       at: logpushTime(l.timestamp),
       country: l.country,
