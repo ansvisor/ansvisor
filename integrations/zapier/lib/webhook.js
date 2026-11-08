@@ -41,10 +41,10 @@ function verifyWebhookRequest(bundle, expectedEvent) {
   try { payload = JSON.parse(rawRequest.content); }
   catch { throw new Error('The Ansvisor webhook body was not valid JSON.'); }
 
-  if (!payload || payload.event !== expectedEvent) {
+  if (!payload || (payload.event !== expectedEvent && payload.event !== 'webhook.test')) {
     throw new Error('This trigger received a different Ansvisor event than the one it handles.');
   }
-  if (expectedEvent === 'content_draft.sent') {
+  if (payload.event === 'content_draft.sent') {
     const signature = getHeader(rawRequest.headers, 'x-ansvisor-signature');
     if (!verifyContentDraftSignature(rawRequest.content, signature, secret)) {
       throw new Error('The Content Editor webhook signature is missing or invalid.');
@@ -64,8 +64,6 @@ function addZapierId(payload, expectedEvent, rawBody) {
     if (!id) id = payload.page && payload.page.draftId;
   } else if (expectedEvent === 'action_task.sent') {
     id = payload.task && payload.task.id;
-  } else if (expectedEvent === 'webhook.test') {
-    id = crypto.createHash('sha256').update(rawBody, 'utf8').digest('hex');
   }
   if (!id) throw new Error('The Ansvisor webhook did not contain the identifier required by Zapier.');
   return Object.assign({}, payload, { id: String(id) });
