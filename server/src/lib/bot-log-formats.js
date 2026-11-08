@@ -15,6 +15,9 @@
  *     those with a `proxy` object describe a request (clientIp, userAgent[],
  *     host, path, statusCode, timestamp in ms). Build and function output
  *     lines are skipped.
+ *   * Fastly HTTPS log stream (fastly_log_stream, #2164): JSON lines or one
+ *     JSON array with the fields in FASTLY_LOG_FORMAT: timestamp, client_ip,
+ *     request_user_agent, url, response_status and country.
  *   * Generic webhook (log_webhook, #2170): JSON lines, or one JSON array,
  *     with the documented fields: user_agent, ip, url (a full address, or a
  *     path) or host and path, status, time (RFC 3339, or seconds or
@@ -197,6 +200,23 @@ export async function readJsonLinesBody(text) {
   return { records: lines.length, requests };
 }
 
+/** Fastly HTTPS log stream: its custom JSON fields, as a request. */
+export async function readFastlyBody(text) {
+  const lines = await readLines(text);
+  const requests = lines
+    .filter((l) => l && typeof l === 'object' && 'request_user_agent' in l)
+    .map((l) => ({
+      userAgent: l.request_user_agent,
+      ip: l.client_ip,
+      url: l.url,
+      status: l.response_status,
+      at: logpushTime(l.timestamp),
+      country: l.country,
+    }))
+    .filter((r) => r.at !== undefined);
+  return { records: lines.length, requests };
+}
+
 const MONTHS = {
   Jan: '01',
   Feb: '02',
@@ -281,6 +301,7 @@ const READERS = {
   cloudflare_logpush: readLogpushBody,
   vercel_drain: readVercelBody,
   log_webhook: readJsonLinesBody,
+  fastly_log_stream: readFastlyBody,
   log_upload: readUploadBody,
 };
 
