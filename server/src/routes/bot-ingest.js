@@ -4,8 +4,8 @@
  * Vercel or Fastly, authenticated by its connection secret (Authorization: Bearer)
  * before its body is read, so a caller without one can't make the server
  * take in 20 MB. The body is read by the connection's kind
- * (bot-log-formats.js): a Worker's JSON batch, a Logpush file, or a Vercel
- * drain's log entries. A log sender's file is claimed, counted against the
+ * (bot-log-formats.js): a Worker's JSON batch, a Logpush file, a Vercel
+ * drain's entries or Fastly's JSON log stream. A log sender's file is claimed, counted against the
  * month's raw cap and written in one transaction, so a file it sends again
  * (after timing out, say) is read once, and a read that fails leaves nothing
  * for the retry to count twice.
