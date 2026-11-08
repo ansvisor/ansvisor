@@ -1,7 +1,7 @@
 /**
  * POST /bots/ingest — AI-bot requests from a brand's own edge (AT-010, spec
- * §6.1). Public, outside /api: the sender is the customer's Cloudflare or
- * Vercel, authenticated by its connection secret (Authorization: Bearer)
+ * §6.1). Public, outside /api: the sender is the customer's Cloudflare,
+ * Vercel or Fastly, authenticated by its connection secret (Authorization: Bearer)
  * before its body is read, so a caller without one can't make the server
  * take in 20 MB. The body is read by the connection's kind
  * (bot-log-formats.js): a Worker's JSON batch, a Logpush file, or a Vercel
@@ -31,6 +31,13 @@ import { botIngestLimiter } from '../middleware/rate-limiter.js';
 import { markBotSenderVerified } from '../middleware/verified-tokens.js';
 
 const router = Router();
+
+// Fastly's domain-control challenge (RFC 8615): `*` permits any Fastly service
+// to use the public endpoint. The actual ingest route still requires a
+// connection-specific bearer secret before it reads a request body.
+router.get('/.well-known/fastly/logging/challenge', (_req, res) => {
+  res.type('text/plain').send('*\\n');
+});
 
 // Raw: each kind has its own body, and a Logpush file comes gzipped. A body
 // sent with Content-Encoding: gzip is inflated here, within the limit.
