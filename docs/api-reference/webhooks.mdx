@@ -369,4 +369,4 @@ Requires the same brand access and role checks. This endpoint only removes confi
 
 Zapier calls the create endpoint when a Zap is enabled and the delete endpoint when it is disabled or removed. The webhook secret is stored on the brand-specific configuration and is used for X-Webhook-Secret and the Content Draft HMAC signature.
 
-The webhook.test event is sent to every active configuration, regardless of its selected event filter, so integrations can test their webhook URL and secret.
+The dashboard's Test Webhook action sends webhook.test to the Default webhook URL entered in the dashboard. It does not broadcast to API-managed Zapier subscriptions.
