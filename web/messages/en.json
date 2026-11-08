@@ -3804,7 +3804,6 @@
       "name": "Read What’s new",
       "step": "Read What’s new"
     },
-    "newSkill": { "name": "Save skills", "step": "Saved skill" },
     "memorySave": { "name": "Save to memory", "step": "Saved to memory" },
     "memoryForget": { "name": "Remove from memory", "step": "Removed from memory" },
     "callAgent": { "name": "Run another agent", "step": "Ran agent" },
