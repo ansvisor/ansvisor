@@ -1,0 +1,4 @@
+{
+  "event": "webhook.test",
+  "brand": { "id": "brand-123", "name": "Acme" }
+}

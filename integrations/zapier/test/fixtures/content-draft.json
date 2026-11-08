@@ -1,0 +1,23 @@
+{
+  "event": "content_draft.sent",
+  "schemaVersion": 1,
+  "delivery": { "id": "delivery-123", "batchId": null, "sentAt": "2026-11-08T10:00:00.000Z" },
+  "page": {
+    "draftId": "draft-123",
+    "title": "A practical guide",
+    "slug": "practical-guide",
+    "metaTitle": "A practical guide",
+    "metaDescription": "A short example description.",
+    "html": "<p>Example content</p>",
+    "jsonLd": [],
+    "author": "Acme Team",
+    "featuredImage": null,
+    "method": "create",
+    "sourceUrl": null,
+    "pageType": "guide",
+    "language": "en"
+  },
+  "brand": { "id": "brand-123", "name": "Acme", "domain": "acme.example", "industry": "Software" },
+  "callback_url": null,
+  "callback_method": null
+}
