@@ -19,7 +19,7 @@ Open **Content** for the brand and choose **Configure Webhook**. Enter the Produ
 
 ## Connect the trigger in n8n
 
-In n8n, add **Ansvisor Trigger** and create an **Ansvisor Webhook Secret** credential with the same secret you saved for that brand. Activate the workflow, copy its Production URL, and add that URL to the brand's webhook settings. Use a different credential for each brand; do not reuse one brand's secret for another.
+In n8n, add **Ansvisor Trigger** and create a credential containing the same secret you saved for that brand. Activate the workflow, copy its Production URL, and add that URL to the brand's webhook settings. Use a different credential for each brand; do not reuse one brand's secret for another.
 
 ## Choose which events to receive
 
