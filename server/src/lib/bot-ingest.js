@@ -1,5 +1,5 @@
 /**
- * AI-bot requests sent from a brand's own Cloudflare or Vercel (AT-010, spec
+ * AI-bot requests sent from a brand's own Cloudflare, Vercel or Fastly (AT-010, spec
  * §6). Each connection has its own secret: the sender presents it, only its
  * SHA-256 is stored, and the person sees it once when it is made.
  *
