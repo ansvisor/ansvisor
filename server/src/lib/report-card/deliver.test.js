@@ -125,7 +125,7 @@ describe('renderReportCardEmail', () => {
     expect(html.match(/ekte/g)).toHaveLength(1);
     expect(html).toContain('4 sayfada: nereden başladığınız');
     expect(html).toContain(
-      'Ansvisor’da Sohbet ve kullanıma hazır ajanlar ilk haftanın işlerini sizinle birlikte yapar.',
+      'Ansvisor’da Chat ve kullanıma hazır ajanlar ilk haftanın işlerini sizinle birlikte yapar.',
     );
     expect(html).toContain(
       'ChatGPT ve Microsoft Copilot (Ansvisor Starter’ın motorları) motorlarına Türkiye konumundan, alıcılarınızın sorduğu 25 soruyu sorduk.',

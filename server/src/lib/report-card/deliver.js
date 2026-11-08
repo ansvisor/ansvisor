@@ -116,7 +116,7 @@ const EMAIL_COPY = {
     cited: (answers) => `${answers} yanıttan sitenizi kaynak gösteren`,
     pages: (questions) =>
       `4 sayfada: nereden başladığınız ve yapay zekânın sizin yerinize kimi önerdiği, sorduğumuz ${questions} sorunun tamamı ve her motorun yanıtı, ilk haftanızda yapacaklarınız, yapay zekâ ziyaretlerinin değeri ve yan yana Starter ile Growth.`,
-    work: 'Ansvisor’da Sohbet ve kullanıma hazır ajanlar ilk haftanın işlerini sizinle birlikte yapar.',
+    work: 'Ansvisor’da Chat ve kullanıma hazır ajanlar ilk haftanın işlerini sizinle birlikte yapar.',
     button: 'Ücretsiz denemeyi başlatın',
     own: 'Kendi sorularınızı da ölçmek ister misiniz? Ücretsiz denemede Ansvisor bu karnenin sorularını ve sizinkileri her gün sorar, sıradaki işleri öncelik sırasıyla verir.',
     subject: (domain) => `Yapay zekâ görünürlük karneniz: ${domain}`,

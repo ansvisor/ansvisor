@@ -332,6 +332,20 @@ describe('ReportCardPdfDocument', () => {
     expect(pages[3]).toContain('Yapay zekâ kullanımı dahil.');
     expect(pages[3]).toContain('5 kat yapay zekâ kullanımı');
     expect(pages[3]).toContain('Ansvisor işi sizinle birlikte yapar');
+    // Ansvisor's feature names stay in English, as the app shows them.
+    expect(pages[2]).toContain('Ansvisor’da · Content Editor');
+    expect(pages[2]).toContain('her değişiklik Activity log’da');
+    expect(pages[2]).toContain('Full auto modunda');
+    expect(pages[3]).toContain('Chat ve her değişiklikten önce soran ajanlarıyla Agent Center.');
+    expect(pages[3]).toContain('Site Audit: ayda 100 sayfa.');
+    expect(pages[3]).toContain('Full auto: seçtiğiniz ajanlar kendi başına yayınlar.');
+    expect(pages[3]).toContain('ChatKendi Ansvisor verilerinizden');
+    expect(pages[3]).toContain('Agent CenterKullanıma hazır ajanlar ve 700’den fazla skill');
+    expect(pages[3]).toContain('Action Center’ı açın');
+    expect(pages[3]).toContain('Ansvisor’daki AI Traffic');
+    expect(pages.join(' ')).not.toMatch(
+      /Sohbet|Ajan Merkezi|Aksiyon Merkezi|Site Denetimi|Tam otomatik|Yapay Zekâ Trafiği|İçerik Editörü|beceri/,
+    );
     expect(pages[3]).toContain('Kendi sorularınızı ölçün');
     expect(pages[0]).toContain('Ücretsiz deneyin');
     expect(pages[3]).toContain('Ücretsiz denemeyi başlatın');

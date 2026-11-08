@@ -4,7 +4,10 @@ import type { CardCopy, TargetKind } from './copy';
  * The report card in Turkish, for Türkiye (owner decision 2026-11-04: the
  * whole card in the target language). Sentences never put a Turkish case
  * ending on a brand, a site or a question, which would need vowel harmony
- * for each name: "{marka} markası", "{site} sitesinde".
+ * for each name: "{marka} markası", "{site} sitesinde". Ansvisor's own
+ * product, feature and button names stay in English, as the app shows them
+ * (owner decision 2026-11-08), a suffix after an apostrophe as the English
+ * is said: "Action Center’ı", "Agent Center’da".
  */
 
 /** "A", "A ve B", "A, B ve C". */
@@ -235,11 +238,11 @@ export const tr: CardCopy = {
     weekOne: 'İlk hafta',
     inAnsvisor: 'Ansvisor’da',
     feature: {
-      contentEditor: 'İçerik Editörü',
-      citations: 'Kaynaklar',
-      siteAudit: 'Site Denetimi',
-      competitors: 'Rakipler',
-      brandVisibility: 'Görünürlük',
+      contentEditor: 'Content Editor',
+      citations: 'Citations',
+      siteAudit: 'Site Audit',
+      competitors: 'Competitors',
+      brandVisibility: 'Visibility',
     },
     targetsTitle: 'Yapay zekâ nereye bakıyor: yer alabileceğiniz siteler',
     targetsSub: 'Yanıtlarınızda kaynak gösterilen siteler, orada ne yapabileceğinize göre.',
@@ -257,10 +260,10 @@ export const tr: CardCopy = {
     howTitle: 'İş nasıl yürür',
     approveTitle: 'Her adımı siz onaylarsınız',
     approveBody:
-      'Ajanlar “Önce bana sor” ya da “Otomatik, değişiklikten önce sor” modunda başlar: bir şeyi değiştirecek çalışma “Sizi bekliyor” der ve onayınızı bekler. Hiçbir şey kendiliğinden açılmaz; her değişiklik Etkinlik kaydında, geri alınabilir. Tüm planlarda.',
+      'Ajanlar “Ask me first” ya da “Auto, ask before changes” modunda başlar: bir şeyi değiştirecek çalışma “Needs you” der ve onayınızı bekler. Hiçbir şey kendiliğinden açılmaz; her değişiklik Activity log’da, Undo ile geri alınabilir. Tüm planlarda.',
     autoTitle: 'Ya da ajanlar kendi başına yayınlasın',
     autoBody:
-      'Tam otomatik modda, bir yöneticinin açtığı iki ayarla, seçtiğiniz ajanlar sayfaları tıklamanız olmadan CMS’inize gönderir ya da yayınlar: günde 1 ile 20 arası. Kalite ya da marka bilgileri kontrolünden geçmeyen sayfa sizi bekler. Growth’ta.',
+      'Full auto modunda, bir Admin’in açtığı iki ayarla, seçtiğiniz ajanlar sayfaları tıklamanız olmadan CMS’inize gönderir ya da yayınlar: günde 1 ile 20 arası. Quality ya da marka bilgileri kontrolünden geçmeyen sayfa sizi bekler. Growth’ta.',
     examplePrompt: 'Ansvisor’ın sizin için her gün izleyeceği bir soru:',
   },
 
@@ -299,7 +302,7 @@ export const tr: CardCopy = {
       `Ortalama ${kind === 'order' ? 'sipariş' : 'anlaşma'} değeriniz: ${value}. Varsayım: yapay zekâ ziyaretlerinin ${low} ile ${high} arası ${kind === 'order' ? 'siparişe' : 'anlaşmaya'} dönüşür, diğer ziyaretlerden daha iyi değil.`,
     revenueRow: (visits, low, high) => `Ayda ${visits} yapay zekâ ziyareti: ayda ${low}–${high}`,
     scenarios:
-      'Senaryodur; tahmin ya da garanti değildir. Ansvisor’daki Yapay Zekâ Trafiği, kurulduktan sonra gerçek yapay zekâ ziyaretlerinizi ölçer.',
+      'Senaryodur; tahmin ya da garanti değildir. Ansvisor’daki AI Traffic, kurulduktan sonra gerçek yapay zekâ ziyaretlerinizi ölçer.',
     planTitle: 'Bu karne için planlar',
     planName: (plan) => `Ansvisor ${plan}`,
     starterTag: 'Bu karneye uyan',
@@ -318,21 +321,21 @@ export const tr: CardCopy = {
     planLimits: (prompts, brands) => `Her gün ${prompts} soru, ${brands} marka.`,
     aiIncluded: 'Yapay zekâ kullanımı dahil.',
     aiMore: (times) =>
-      `${times} kat yapay zekâ kullanımı: her ay daha çok içerik fırsatı ve taslak, daha çok ajan çalışması ve Aksiyon Merkezi önerisi.`,
-    siteAudits: (pages) => `Site Denetimi: ayda ${pages} sayfa.`,
-    starterAgents: 'Sohbet ve her değişiklikten önce soran ajanlarıyla Ajan Merkezi.',
-    growthAgents: 'Tam otomatik: seçtiğiniz ajanlar kendi başına yayınlar.',
+      `${times} kat yapay zekâ kullanımı: her ay daha çok içerik fırsatı ve taslak, daha çok ajan çalışması ve Action Center önerisi.`,
+    siteAudits: (pages) => `Site Audit: ayda ${pages} sayfa.`,
+    starterAgents: 'Chat ve her değişiklikten önce soran ajanlarıyla Agent Center.',
+    growthAgents: 'Full auto: seçtiğiniz ajanlar kendi başına yayınlar.',
     mcpRead: 'MCP: Ansvisor verilerinizi yapay zekâ araçlarından okuyun.',
     mcpReadWrite: 'MCP: Ansvisor verilerinizi yapay zekâ araçlarından okuyun ve yazın.',
     workTitle: 'Ansvisor işi sizinle birlikte yapar',
     work: [
       {
-        title: 'Sohbet',
+        title: 'Chat',
         body: 'Kendi Ansvisor verilerinizden yanıt verir, bu karnenin ilk hafta işlerini hazırlar ve eklediğiniz dosyaları okur.',
       },
       {
-        title: 'Ajan Merkezi',
-        body: 'Kullanıma hazır ajanlar ve 700’den fazla beceri: rutin yapay zekâ görünürlüğü işlerini bir takvime göre ya da bir şey değiştiğinde yürütür.',
+        title: 'Agent Center',
+        body: 'Kullanıma hazır ajanlar ve 700’den fazla skill: rutin yapay zekâ görünürlüğü işlerini bir takvime göre ya da bir şey değiştiğinde yürütür.',
       },
       {
         title: 'MCP',
@@ -345,7 +348,7 @@ export const tr: CardCopy = {
     steps: (domain, questions, country) => [
       `${domain} sitesini markanız olarak ekleyin: kurulum sihirbazı genellikle birkaç dakika sürer.`,
       `Bu karnenin ${questions} sorusunu ${country} için izlemeye alın, kendi sorularınızı ekleyin.`,
-      'İlk çalışmadan sonra Aksiyon Merkezi’ni açın: sıradaki işler, öncelik sırasıyla.',
+      'İlk çalışmadan sonra Action Center’ı açın: sıradaki işler, öncelik sırasıyla.',
     ],
     button: 'Ücretsiz denemeyi başlatın',
   },
