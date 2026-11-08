@@ -104,8 +104,6 @@ describe('readVercelBody', () => {
   });
 });
 
-
-
 describe('readFastlyBody (#2164)', () => {
   it('reads Fastly JSON lines and arrays into the shared request shape', async () => {
     const lines = fixture('fastly.jsonl');
@@ -133,7 +131,8 @@ describe('readFastlyBody (#2164)', () => {
       records: 1,
       requests: [expect.objectContaining({ ip: '20.171.206.9' })],
     });
-    expect((await readSenderBody('fastly_log_stream', Buffer.from(lines))).requests).toHaveLength(2);
+    const throughReader = await readSenderBody('fastly_log_stream', Buffer.from(lines));
+    expect(throughReader.requests).toHaveLength(2);
   });
 
   it('drops Fastly records without a readable timestamp', async () => {
