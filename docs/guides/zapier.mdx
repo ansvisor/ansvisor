@@ -34,7 +34,7 @@ The API key's user must be an admin or manager and the workspace must have webho
 
 Ansvisor webhook secrets are per brand. Use a separate Zapier connection for each brand's secret; the same API key can be used in those connections. The webhook secret is optional if the connection is used only for metrics actions.
 
-The **Test Webhook** control in Ansvisor sends a webhook.test event to every active webhook config. Each of the three Ansvisor triggers accepts that test event, so you can test the trigger without waiting for a real Daily Pulse, Content Draft or Action Center task.
+The **Test Webhook** control in Ansvisor tests the dashboard's Default webhook URL; it does not broadcast to API-managed Zapier subscriptions. Zapier uses the representative sample payload included with each trigger during setup. To verify live delivery, enable the Zap and send a real Daily Pulse, Content Draft or Action Center task.
 
 ## How webhook verification works
 
