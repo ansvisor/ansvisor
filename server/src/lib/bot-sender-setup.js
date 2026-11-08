@@ -15,6 +15,21 @@
 
 import { AI_BOTS } from './ai-bots.js';
 
+/**
+ * Fastly HTTPS logging endpoint format (#2164). `time.start.sec` is emitted
+ * as epoch seconds; the parser accepts it alongside the other sender times.
+ * The URL is the request path, which the ingest pipeline accepts for a
+ * brand's own edge. The server still verifies the user agent and source IP.
+ */
+export const FASTLY_LOG_FORMAT = `{
+  "timestamp": "%{time.start.sec}V",
+  "client_ip": "%{req.http.Fastly-Client-IP}V",
+  "request_user_agent": "%{json.escape(req.http.User-Agent)}V",
+  "url": "%{json.escape(req.url)}V",
+  "response_status": %{resp.status}V,
+  "country": "%{client.geo.country_code}V"
+}`;
+
 /** The http_requests fields bot-log-formats.js reads. */
 export const LOGPUSH_FIELDS = [
   'ClientRequestUserAgent',
