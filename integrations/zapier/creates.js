@@ -35,7 +35,7 @@ const visibilityTrend = (z, bundle) => {
     granularity: input.granularity,
     model: input.model,
     region: input.region,
-    topic_id: input.topic_id,
+    topic_id: input.topic_filter,
   });
 };
 
@@ -88,7 +88,7 @@ const creates = {
         { key: 'granularity', label: 'Granularity', type: 'string', required: false, choices: ['day', 'week'], default: 'day' },
         { key: 'model', label: 'AI model filter', type: 'string', required: false, helpText: 'Optional comma-separated model slugs.' },
         { key: 'region', label: 'Region filter', type: 'string', required: false },
-        { key: 'topic_id', label: 'Topic ID', type: 'string', required: false },
+        { key: 'topic_filter', label: 'Topic filter', type: 'string', required: false, helpText: 'Optional topic UUID.' },
       ],
       sample: { granularity: 'day', buckets: [{ date: '2026-11-01', ai_visibility_score: 42.5, total_mentions: 31, total_citations: 12 }] },
     },
