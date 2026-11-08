@@ -5,7 +5,7 @@ description: "Measure real visits to your site from AI answer engines, what they
 
 ## Why this exists
 
-Most analytics platforms (Google Analytics, Plausible, etc.) lump AI traffic into "direct" or "referral" buckets — they can't tell you a visitor arrived from ChatGPT vs. perplexity.ai. Ansvisor's tracking snippet reads the referrer, classifies AI sources by domain, and gives you a clean breakdown. Connect Google Analytics, Google Search Console and your Cloudflare, Vercel or server logs, and the same page shows what those visits are worth, whether AI is changing your Google traffic, and which AI bots read your pages.
+Most analytics platforms (Google Analytics, Plausible, etc.) lump AI traffic into "direct" or "referral" buckets — they can't tell you a visitor arrived from ChatGPT vs. perplexity.ai. Ansvisor's tracking snippet reads the referrer, classifies AI sources by domain, and gives you a clean breakdown. Connect Google Analytics, Google Search Console and your Cloudflare, Vercel, Fastly or server logs, and the same page shows what those visits are worth, whether AI is changing your Google traffic, and which AI bots read your pages.
 
 ## Data sources
 
@@ -16,7 +16,7 @@ The **AI Traffic Analytics** page (`/dashboard/traffic`, **AI Referral Traffic**
 | **Tracking snippet** | AI-referred visits, page by page, as they happen. Reads **Active · last visit …** once it has sent a visit in the last week, otherwise **Not detected**. |
 | **Google Analytics** | AI visits on days the snippet has none, plus engaged visits, key events, revenue and the AI share of all traffic. |
 | **Google Search Console** | Google clicks, the pages where AI may be taking them, and the Google queries you don't track yet. |
-| **AI bots** | Which AI bots read your pages, from your own Cloudflare, Vercel or any server's logs. Growth plan and above. |
+| **AI bots** | Which AI bots read your pages, from your own Cloudflare, Vercel, Fastly or any server's logs. Growth plan and above. |
 
 A section whose source isn't connected stays on the page with a **Needs …** tag and a **Connect** button, rather than hiding. Only admins and managers can connect a source.
 
@@ -142,7 +142,7 @@ The suggested redirect is a working page: a **Similar page**, **The page above i
 
 ### AI bots reading your site
 
-From your own Cloudflare, Vercel or any server's logs. Only verified bots count: the user agent and the operator's published IP ranges must both match. Today that's OpenAI's GPTBot, OAI-SearchBot and ChatGPT-User, Anthropic's ClaudeBot, Claude-SearchBot and Claude-User, and Perplexity's PerplexityBot and Perplexity-User.
+From your own Cloudflare, Vercel, Fastly or any server's logs. Only verified bots count: the user agent and the operator's published IP ranges must both match. Today that's OpenAI's GPTBot, OAI-SearchBot and ChatGPT-User, Anthropic's ClaudeBot, Claude-SearchBot and Claude-User, and Perplexity's PerplexityBot and Perplexity-User.
 
 - **By bot type** — hits, pages read and last seen for **Training**, **Search index** and **User fetch**, with the bots under each.
 - **Pages AI bots read** — hits per page, and when each type last read it.
@@ -384,7 +384,7 @@ With [conversions](#conversions-from-ai-visits) on, it stores one item, `ansviso
 
 **The visitor's IP address is never stored.** To group a visit's pageviews into one visit, Ansvisor keeps a one-way key made from the IP address, your brand and a random salt that changes every day. Each day's salt is deleted after two days. From then on, nothing links a key to an address, and one visitor's days can't be joined. A visit that runs past midnight (UTC) counts as two.
 
-AI-bot requests, from Cloudflare, Vercel, the webhook or an upload, are stored without IP addresses. An uploaded file isn't kept: only the verified bots' requests, and a fingerprint of the file for 7 days so it isn't read twice.
+AI-bot requests, from Cloudflare, Vercel, Fastly, the webhook or an upload, are stored without IP addresses. An uploaded file isn't kept: only the verified bots' requests, and a fingerprint of the file for 7 days so it isn't read twice.
 
 ## Common patterns
 
