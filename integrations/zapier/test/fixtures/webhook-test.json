@@ -1,4 +1,5 @@
 {
   "event": "webhook.test",
-  "brand": { "id": "brand-123", "name": "Acme" }
+  "message": "This is a test webhook from AEO platform.",
+  "timestamp": "2026-07-30T10:00:00.000Z"
 }
