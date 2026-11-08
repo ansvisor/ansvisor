@@ -12641,7 +12641,7 @@
         "fastly_log_stream": [
           "In Fastly, open your service and add an HTTPS logging endpoint.",
           "Set the endpoint URL below, use POST, set Content-Type to application/json, and add the custom header below (Authorization with the Bearer value).",
-          "Choose JSON log entries with Newline delimited output and a custom log line format. Paste the format below, then activate the service configuration."
+          "Choose JSON log entries with Newline delimited output and a custom log line format. Paste the format below, then activate the service configuration. Ansvisor automatically answers Fastly's domain-control challenge for its API endpoint; you do not need to add a DNS record."
         ],
         "log_webhook": [
           "In your log shipper (Vector, Fluent Bit, Logstash or your own script), add an HTTP output that POSTs to the endpoint below.",
