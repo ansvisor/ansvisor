@@ -374,6 +374,12 @@ interface ToolFields<S extends z.ZodObject> {
    */
   offerIn?(run: { agentRunId: string | null; parentRunId?: string | null }): Promise<boolean>;
   /**
+   * A read that runs only while a loaded skill names it (withSkillRefusal):
+   * offered as ever, so the run's tools stay the same for the cache, and
+   * refused at once anywhere else, before it reads anything.
+   */
+  withSkill?: true;
+  /**
    * What the change answers is untrusted data (another agent's words): the
    * run is tainted after it, so every later change shows a card (CHAT-20 §16a).
    */
