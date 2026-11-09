@@ -39,8 +39,9 @@ import { demoWriter } from './write.js';
  * 4: Chat's sample chats, one set per person (demo Chat).
  * 5: Agent Center's sample agents, their runs and the runs' chats (demo Agent Center).
  * 6: Copilot and Perplexity out, ChatGPT's sampled searches in (engines after Cloro, 00487).
+ * 7: Prompt tags on the Brewline prompts (prompt-tags).
  */
-export const DEMO_VERSION = 6;
+export const DEMO_VERSION = 7;
 
 /** Data older than this is rebuilt, so the demo's latest run stays recent. */
 export const DEMO_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
