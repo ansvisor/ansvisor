@@ -7727,6 +7727,7 @@
       "adding": "Adding…",
       "added": "Scanned · instructions only · admin review",
       "requested": "Scanned · instructions only · sent to your Admins for review",
+      "addedOn": "Added. /{name} is on for you; share it from My skills when it's ready for everyone.",
       "addFailed": "Couldn't add the skill. Try again.",
       "state": {
         "pending_review": "Pending approval",
@@ -7767,7 +7768,7 @@
       "license": "License",
       "licenseText": "License text",
       "attribution": "{repo} · MIT",
-      "addNote": "Adding it scans it again; an Admin reviews it before anyone uses it.",
+      "addNote": "Adding it scans it again and turns it on for you. Share it from My skills to give it to your team.",
       "requestNote": "Adding it asks your Admins to review it.",
       "blockedNote": "The scan blocks this skill, so it can't be added.",
       "openReview": "Open review"

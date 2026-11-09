@@ -203,7 +203,8 @@ describe('GET /api/chat/skills/marketplace', () => {
     expect(find(await page(q))).toEqual({ status: 'pending_review', skillId: 'skill-1' });
     as(PEOPLE.otherManager);
     expect(find(await page(q))).toEqual({ status: 'pending_review', skillId: null });
-    expect((await page()).can).toEqual({ add: 'request' });
+    // A Manager adds too: on at once for them (owner, 2026-11-09).
+    expect((await page()).can).toEqual({ add: 'add' });
     as(PEOPLE.analyst);
     expect((await page()).can).toEqual({ add: null });
   });
@@ -264,7 +265,7 @@ describe('GET /api/chat/skills/marketplace/skill', () => {
 });
 
 describe('POST /api/chat/skills/marketplace/skill', () => {
-  it('keeps an Admin’s Add as a Library skill waiting for their review', async () => {
+  it('keeps an Admin’s Add as a Library skill on for them at once, private (owner, 2026-11-09)', async () => {
     const { status, body } = await add(CLEANED.id);
     expect(status).toBe(200);
     expect(body).toEqual({
@@ -273,7 +274,7 @@ describe('POST /api/chat/skills/marketplace/skill', () => {
         id: expect.any(String),
         name: 'geo-brand-mentions',
         title: 'geo brand mentions',
-        status: 'pending_review',
+        status: 'approved',
         removed: ["1 line citing a competitor's research", 'scripts/ (1 file)'],
         warnings: [],
         blocks: [],
@@ -288,9 +289,11 @@ describe('POST /api/chat/skills/marketplace/skill', () => {
       commit_sha: CLEANED.source.commit,
       license: 'MIT',
       license_text: MIT,
-      status: 'pending_review',
+      status: 'approved',
       visibility: 'private',
-      enabled: false,
+      enabled: true,
+      approved_by: PEOPLE.admin,
+      approved_at: expect.any(String),
       created_by: PEOPLE.admin,
     });
     expect(skills()[0].body).not.toMatch(/profound/i);
@@ -302,19 +305,18 @@ describe('POST /api/chat/skills/marketplace/skill', () => {
     });
   });
 
-  it('turns a Manager’s Add into a request to the Admins', async () => {
+  it('turns a Manager’s Add on for them at once, private, asking no Admin (owner, 2026-11-09)', async () => {
     as(PEOPLE.manager);
     const { body } = await add(CLEANED.id);
-    expect(body.skill).toMatchObject({ status: 'pending_review', requested: true });
-    expect(requestAccess).toHaveBeenCalledWith(
-      expect.objectContaining({
-        draftedChange: {
-          kind: 'review_skill',
-          skill_id: body.skill.id,
-          name: 'geo-brand-mentions',
-        },
-      }),
-    );
+    expect(body.skill).toMatchObject({ status: 'approved', requested: false });
+    expect(skills()[0]).toMatchObject({
+      status: 'approved',
+      enabled: true,
+      visibility: 'private',
+      approved_by: PEOPLE.manager,
+      created_by: PEOPLE.manager,
+    });
+    expect(requestAccess).not.toHaveBeenCalled();
   });
 
   it('is for Admins and Managers on a paid plan, checked before GitHub is read', async () => {
@@ -347,7 +349,7 @@ describe('POST /api/chat/skills/marketplace/skill', () => {
     expect(skills()).toEqual([]);
   });
 
-  it('reads a Library skill’s YAML, and keeps a price for the review to show (owner, 2026-11-05)', async () => {
+  it('reads a Library skill’s YAML, and keeps a price for its page to show (owner, 2026-11-05)', async () => {
     const yaml = `---
 name: geo-brand-mentions
 description: >
@@ -361,7 +363,7 @@ Tools from $29 a month. Write to brand@example.com.
     gives(CLEANED, yaml);
     const { body } = await add(CLEANED.id);
     expect(body.skill).toMatchObject({
-      status: 'pending_review',
+      status: 'approved',
       blocks: [],
       warnings: expect.arrayContaining([
         'an email address',

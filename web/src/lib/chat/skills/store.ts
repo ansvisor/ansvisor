@@ -894,8 +894,12 @@ export interface ImportedSkill {
   id: string;
   name: string;
   title: string;
-  /** pending_review, or blocked: an Admin sees it, and can't approve it. */
-  status: 'pending_review' | 'blocked';
+  /**
+   * pending_review, or blocked: an Admin sees it, and can't approve it.
+   * approved: a Library skill, on at once for whoever added it (owner,
+   * 2026-11-09).
+   */
+  status: 'pending_review' | 'blocked' | 'approved';
   /** What was removed, and what the scan found. */
   removed: string[];
   warnings: string[];
@@ -940,9 +944,15 @@ export async function hasLibrarySkill(
  * self-hosted (not in the trial, Wave 3 decision 9), under the plan's
  * limit, never with an Ansvisor skill's name. It waits off and private,
  * `pending_review` (or `blocked`); a Manager's asks the Admins to review it
- * (chat_access_requests, through their own session). A skill added from
- * the Library (W4-19) is kept the same way, as `library` with the catalog
- * row it came from, once per workspace.
+ * (chat_access_requests, through their own session).
+ *
+ * A skill added from the Library (W4-19) is kept as `library` with the
+ * catalog row it came from, once per workspace, and is on at once for
+ * whoever added it, an Admin or a Manager (owner, 2026-11-09): Ansvisor
+ * scanned the catalog's skills, and this copy is scanned again (one the
+ * scan blocks is never kept). It stays private: sharing it with everyone
+ * is an Admin's, or a Manager's request to them (shareSkill). Uploads and
+ * GitHub imports still wait for an Admin's review.
  */
 export async function importSkill(
   viewer: SkillViewer,
@@ -961,6 +971,8 @@ export async function importSkill(
   if (limit !== null && (await countSkills(viewer.organizationId)) >= limit) {
     return skillRefusal('skill_limit', { limit });
   }
+  // A Library skill is on for whoever added it; anything else waits for an Admin.
+  const onAtOnce = !!libraryRef && parsed.status === 'pending_review';
   const { data, error } = await supabaseAdmin
     .from('chat_skills')
     .insert({
@@ -979,9 +991,15 @@ export async function importSkill(
       checksum_sha256: parsed.checksum,
       scan_json: parsed.scan,
       removed_json: parsed.removed,
-      status: parsed.status,
+      ...(onAtOnce
+        ? {
+            status: 'approved',
+            enabled: true,
+            approved_by: viewer.userId,
+            approved_at: new Date().toISOString(),
+          }
+        : { status: parsed.status, enabled: false }),
       visibility: 'private',
-      enabled: false,
       created_by: viewer.userId,
     })
     .select('id, name, title')
@@ -997,7 +1015,7 @@ export async function importSkill(
   const kept = data as { id: string; name: string; title: string };
 
   let requested = false;
-  if (viewer.role !== 'admin' && parsed.status === 'pending_review') {
+  if (!onAtOnce && viewer.role !== 'admin' && parsed.status === 'pending_review') {
     const sent = await requestAccess({
       asked: skillsT('review.asked', { name: kept.name }),
       ruleKind: 'role',
@@ -1013,7 +1031,7 @@ export async function importSkill(
       id: kept.id,
       name: kept.name,
       title: kept.title,
-      status: parsed.status,
+      status: onAtOnce ? 'approved' : parsed.status,
       removed: parsed.removed,
       warnings: parsed.scan.warns,
       blocks: parsed.scan.blocks,
