@@ -261,6 +261,30 @@ describe('MarketplaceTab', () => {
     expect(toast.error).toHaveBeenCalledWith('GitHub is busy.');
   });
 
+  it('turns an Add on for the person at once: Added, no review (owner, 2026-11-09)', async () => {
+    answer = (url, init) =>
+      url === '/api/chat/skills/marketplace/skill' && init?.method === 'POST'
+        ? Response.json({
+            ok: true,
+            skill: { id: 'skill-9', name: 'skill-0', status: 'approved', requested: false },
+          })
+        : null;
+    await render();
+    await click(
+      card('acme0/skills/skill-0').querySelector<HTMLElement>(
+        '[data-action="skills.library.add"]',
+      )!,
+    );
+    expect(toast.success).toHaveBeenCalledWith(
+      "Added. /skill-0 is on for you; share it from My skills when it's ready for everyone.",
+    );
+    expect(nav.push).not.toHaveBeenCalled();
+    const badge = card('acme0/skills/skill-0').querySelector<HTMLElement>(
+      '[data-slot="library-state"]',
+    )!;
+    expect(badge.textContent).toBe('Added');
+  });
+
   it('keeps an Admin’s Add for review and opens it', async () => {
     answer = (url, init) =>
       url === '/api/chat/skills/marketplace/skill' && init?.method === 'POST'

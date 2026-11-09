@@ -30,9 +30,9 @@ import { cn } from '@/lib/utils';
  * license" and the sort (Most stars, Most installs); 30 cards, then "Show
  * more (N)". A card: its name, its line, the repo's GitHub stars, its
  * installs on skills.sh, "owner · MIT" and Add; no likes or votes (item
- * 7). Clicking it opens its detail (library-skill.tsx). Add (an Admin)
- * keeps it for review and opens the review; a Manager's asks the Admins;
- * the card then says "Pending approval" or "Added". The cards come from
+ * 7). Clicking it opens its detail (library-skill.tsx). Add (an Admin or
+ * a Manager) turns it on for them at once, private, and the card says
+ * "Added" (owner, 2026-11-09). The cards come from
  * the API: the catalog never reaches the browser. The topic, the sort and
  * the search stay in the address, so Back returns to them.
  */
@@ -166,7 +166,13 @@ export function MarketplaceTab() {
       return;
     }
     const { skill } = added;
-    toast.success(skill.requested ? t('requested') : t('added'));
+    toast.success(
+      skill.status === 'approved'
+        ? t('addedOn', { name: skill.name })
+        : skill.requested
+          ? t('requested')
+          : t('added'),
+    );
     setRead((now) =>
       now && now.page !== 'failed'
         ? {
@@ -180,8 +186,11 @@ export function MarketplaceTab() {
           }
         : now,
     );
-    // An Admin reviews it now: its cleaned file, the scan, what was removed (CHAT-13 item 17).
-    if (page.can.add === 'add') router.push(`/dashboard/chat/skills/${skill.id}`);
+    // A skill still waiting: an Admin reviews it now (CHAT-13 item 17). A Library skill is on
+    // at once for whoever added it (owner, 2026-11-09): the card says Added.
+    if (skill.status !== 'approved' && page.can.add === 'add') {
+      router.push(`/dashboard/chat/skills/${skill.id}`);
+    }
   }
 
   const counts = page && page !== 'failed' ? page.counts : null;
