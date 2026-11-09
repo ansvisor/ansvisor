@@ -256,11 +256,12 @@ describe('the Competitors item', () => {
 // Execution (do the work) above Analytics (measure it); the Optimization
 // group is gone, its items moved under Execution.
 describe('the sidebar groups', () => {
-  it('runs Chat and Agent Center, Execution, Analytics, then Reports', () => {
+  // Analytics before Execution (owner, 2026-11-09): the data first, then the work.
+  it('runs Chat and Agent Center, Analytics, Execution, then Reports', () => {
     expect(dashboardNav.map((group) => group.title ?? null)).toEqual([
       null,
-      'Execution',
       'Analytics',
+      'Execution',
       null,
     ]);
     expect(dashboardNav[0].items.map((item) => item.href)).toEqual([
