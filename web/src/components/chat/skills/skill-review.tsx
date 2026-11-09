@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
+import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Link, useRouter } from '@/i18n/navigation';
@@ -40,6 +41,23 @@ export function SkillReview({ id }: { id: string }) {
   const [review, setReview] = useState<Review | null | 'failed' | 'missing'>(null);
   const [busy, setBusy] = useState(false);
   const [version, setVersion] = useState(0);
+  const { openUpgrade } = useUpgradeGate();
+
+  /**
+   * Why the person can't approve it, and who can (owner, 2026-11-09): only an
+   * Admin, named when the review knows them, or a plan to renew.
+   */
+  function waitingNote(waiting: Review['waiting']): string {
+    if (waiting?.why === 'read_only') return t('readOnlyNote');
+    if (waiting?.why === 'not_admin') {
+      const ask =
+        waiting.admins.length > 0
+          ? t('askAdmins', { names: format.list(waiting.admins, { type: 'disjunction' }) })
+          : t('askAnAdmin');
+      return `${t('notAdminNote', { role: waiting.role })} ${ask}`;
+    }
+    return t('waitingNote');
+  }
 
   useEffect(() => {
     let current = true;
@@ -271,9 +289,19 @@ export function SkillReview({ id }: { id: string }) {
                   : review.status === 'blocked'
                     ? t('blockedNote')
                     : review.status === 'pending_review' && !review.can.approve
-                      ? t('waitingNote')
+                      ? waitingNote(review.waiting)
                       : null}
               </span>
+              {review.status === 'pending_review' && review.waiting?.why === 'read_only' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  data-action="skillReview.seePlans"
+                  onClick={() => openUpgrade()}
+                >
+                  {t('seePlans')}
+                </Button>
+              )}
               <div className="ml-auto flex gap-2">
                 {review.can.reject && (
                   <Button

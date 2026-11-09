@@ -7667,6 +7667,11 @@
       "rejected": "Rejected. /{name} stays off.",
       "blockedNote": "The scan blocked this skill, so it can't be approved.",
       "waitingNote": "An Admin reviews it before anyone can use it.",
+      "notAdminNote": "Only an Admin can approve a skill, and you're {role, select, manager {a Manager} analyst {an Analyst} other {an Agency partner}} in this workspace.",
+      "askAdmins": "Ask {names} to review it.",
+      "askAnAdmin": "Ask an Admin of your workspace to review it.",
+      "readOnlyNote": "Your workspace's plan has ended, so no skill can be approved until it's renewed.",
+      "seePlans": "See plans",
       "decided": "{status} on {date}.",
       "failed": "The decision couldn't be saved. Try again."
     },
