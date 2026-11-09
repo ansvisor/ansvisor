@@ -104,7 +104,15 @@ const SYNONYMS: Record<string, readonly string[]> = {
   settings: ['settings'],
   'settings/billing': ['plan', 'subscription'],
   'settings/api-keys': ['api key', 'mcp'],
-  'settings/roles-access': ['roles and access', 'roles', 'permissions'],
+  // Team, roles & access: the team is there with the new Chat on (owner, 2026-11-09).
+  'settings/roles-access': [
+    'team roles and access',
+    'roles and access',
+    'roles',
+    'permissions',
+    'invite member',
+    'invitations',
+  ],
 };
 
 /** Pages the sidebar doesn't list but people go to, named as their page names them. */
@@ -143,7 +151,7 @@ const SETTINGS_NAMES: Partial<Record<(typeof SETTINGS_SECTIONS)[number], string>
   account: settingsT('account'),
   organization: settingsT('organization'),
   team: settingsT('team'),
-  'roles-access': settingsT('rolesAccess'),
+  'roles-access': settingsT('teamRolesAccess'),
   'menu-access': settingsT('menuAccess.title'),
   notifications: settingsT('notifications'),
   integrations: settingsT('integrations'),

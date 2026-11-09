@@ -171,7 +171,7 @@ export function MerchantCenterAccounts({
   const canRetry = current !== null && (current.error !== null || items.length === 0);
 
   return (
-    <div className="space-y-3 rounded-lg border p-4">
+    <div className="space-y-3 rounded-lg border bg-card p-4">
       <div>
         <p className="text-sm font-medium">{t('title', { brand: brand.name })}</p>
         <p className="text-xs text-muted-foreground">{t('hint')}</p>

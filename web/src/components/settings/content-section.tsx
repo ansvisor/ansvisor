@@ -99,7 +99,7 @@ export function ContentSection() {
           )}
           {read && read.brands.length > 0 && (
             <section className="space-y-2" aria-label={t('handOff')}>
-              <ul className="divide-y rounded-xl border">
+              <ul className="divide-y rounded-xl border bg-card">
                 {read.brands.map((brand) => (
                   <li key={brand.id} className="flex items-center gap-3 px-3 py-2.5">
                     <span

@@ -235,7 +235,7 @@ export function CatalogSourcesCard({
   };
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
+    <div className="space-y-4 rounded-lg border bg-card p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
           <Package className="h-5 w-5 text-muted-foreground" />
@@ -258,7 +258,7 @@ export function CatalogSourcesCard({
             {sources.length === 0 ? (
               <p className="text-sm text-muted-foreground">{t('empty')}</p>
             ) : (
-              <ul className="divide-y rounded-md border">
+              <ul className="divide-y rounded-md border bg-card">
                 {sources.map((source) => (
                   <li key={source.id} className="space-y-1 p-3 text-sm">
                     <div className="flex flex-wrap items-center justify-between gap-2">

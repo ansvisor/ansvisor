@@ -103,7 +103,7 @@ export function WordPressCard() {
   };
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
+    <div className="space-y-4 rounded-lg border bg-card p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
           <Newspaper className="h-5 w-5 text-muted-foreground" />

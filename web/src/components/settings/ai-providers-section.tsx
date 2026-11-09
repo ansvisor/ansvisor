@@ -367,7 +367,7 @@ export function AiProvidersSection() {
                   </p>
                 </div>
               )}
-              <div className="divide-y rounded-lg border">
+              <div className="divide-y rounded-lg border bg-card">
                 {AI_PROVIDERS.map((provider) => {
                   const row = byProvider.get(provider);
                   return (

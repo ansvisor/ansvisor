@@ -5804,7 +5804,6 @@
       "readOnly": "You're {role, select, manager {a Manager} analyst {an Analyst} other {an Agency partner}} · read-only here",
       "readOnlyNote": "Only Admins change roles",
       "members": "Members",
-      "manageInTeam": "Invite or remove in Team",
       "columns": {
         "member": "Member",
         "role": "Role",
@@ -14690,6 +14689,7 @@
     "apiKeys": "MCP & API Keys",
     "team": "Team",
     "rolesAccess": "Roles & access",
+    "teamRolesAccess": "Team, roles & access",
     "chatSettings": "Chat",
     "whiteLabel": {
       "title": "White label",
@@ -15844,6 +15844,7 @@
     "team_role_analyst": "Analyst",
     "team_role_agency_partner": "Agency Partner",
     "team_you": "You",
+    "team_roleLabel": "Role",
     "team_loadFailed": "Failed to load team",
     "team_roleUpdated": "Role updated",
     "team_roleUpdateFailed": "Failed to update role",

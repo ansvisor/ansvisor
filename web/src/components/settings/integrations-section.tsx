@@ -348,7 +348,7 @@ function IntegrationCard({
 
   return (
     <div id={anchor} className="scroll-mt-4 space-y-4">
-      <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+      <div className="flex items-center justify-between gap-4 rounded-lg border bg-card p-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
             {icon}
@@ -587,7 +587,7 @@ function PropertyMapping({
 
   if (loadFailed) {
     return (
-      <div className="rounded-lg border p-4 text-sm">
+      <div className="rounded-lg border bg-card p-4 text-sm">
         <p className="text-muted-foreground">Couldn&apos;t load {sourceName} properties.</p>
         <p className="mt-1 text-xs text-muted-foreground">
           {loadFailed === 'timeout' ? t('integrations_propertiesTimedOut') : loadFailed.message}
@@ -613,7 +613,7 @@ function PropertyMapping({
   ];
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
+    <div className="rounded-lg border bg-card p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">{t('integrations_propertyMapping')}</p>
         <span className="text-xs text-muted-foreground">
