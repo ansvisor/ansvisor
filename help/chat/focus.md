@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [focus, chat focus, focus areas, your focus, choose focus, suggestions for me, start with a question, starter questions, default view, simple start]
 synonyms: [interests, what I work on, tailor chat, personalize chat home, clean chat home, simpler chat home]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-09
+last_checked: 2026-11-09
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -31,7 +31,7 @@ When the Default view arrived, everyone started on it, people who had picked are
 
 With a focus, the chips under **For you now** come from your areas, taken in turn so each one shows: for example **Competitor moves**, **Fact check** or **Buyer questions**. **Complete tasks**, **Win back citations** and **Ready to publish** keep their counts and show only when there is something to do.
 
-**Start with a question** offers four questions from your areas, filled with your own competitors, topics and markets where Ansvisor knows them. Select one to start a new chat with it.
+**Start with a question** offers four questions from your areas, filled with your own competitors, topics and markets where Ansvisor knows them. Select one and its chat opens at once, with your question and Chat's first step.
 
 **New for you** lists up to four new skills for your areas, such as **Rival brief** or **Buyer questions**; select one to start a chat with it.
 
