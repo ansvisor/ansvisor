@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,16 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { listRoleMembers, type RoleMember } from '@/lib/actions/chat-access';
+import { MemberBrandsCell } from '@/components/chat-access/roles-access-section';
 import {
   listMembers,
   listInvitations,
@@ -94,8 +104,18 @@ function initials(name: string | null, email: string): string {
     .toUpperCase();
 }
 
-export function TeamSection() {
+export function TeamSection({
+  withChatAccess = false,
+}: {
+  /**
+   * In Team, roles & access (owner, 2026-11-09): the members in one table
+   * with how each role reaches Chat and when they last signed in (the roles
+   * read), where the roles below no longer list them again.
+   */
+  withChatAccess?: boolean;
+} = {}) {
   const t = useTranslations('settings');
+  const tAccess = useTranslations('chatAccess');
   const router = useRouter();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [invitations, setInvitations] = useState<TeamInvitation[]>([]);
@@ -124,6 +144,22 @@ export function TeamSection() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // The roles read's rows, by member: last sign-in and brands' names. Read
+  // again with the team; one that fails leaves those cells as "–".
+  const [chatRows, setChatRows] = useState<Map<string, RoleMember> | null>(null);
+  useEffect(() => {
+    if (!withChatAccess || isLoading) return;
+    let live = true;
+    listRoleMembers()
+      .then((read) => {
+        if (live && read.ok) setChatRows(new Map(read.members.map((m) => [m.userId, m])));
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [withChatAccess, isLoading, members]);
 
   const isAdmin = currentRole === 'admin';
   // Brands to choose only on a plan with more than one (BRAND-ACCESS §9 Q1).
@@ -163,18 +199,50 @@ export function TeamSection() {
             </div>
           ) : (
             <>
-              <div className="space-y-1">
-                {members.map((member) => (
-                  <MemberRow
-                    key={member.userId}
-                    member={member}
-                    isAdmin={isAdmin}
-                    showBrands={multiBrand && (isAdmin || member.isCurrentUser)}
-                    brands={brands}
-                    onChanged={loadData}
-                  />
-                ))}
-              </div>
+              {withChatAccess ? (
+                <div className="overflow-x-auto rounded-xl border bg-card">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{tAccess('roles.columns.member')}</TableHead>
+                        <TableHead>{tAccess('roles.columns.role')}</TableHead>
+                        <TableHead>{tAccess('roles.columns.brands')}</TableHead>
+                        <TableHead>{tAccess('roles.columns.throughChat')}</TableHead>
+                        <TableHead>{tAccess('roles.columns.lastActive')}</TableHead>
+                        <TableHead className="w-10">
+                          <span className="sr-only">{t('removeMember')}</span>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {members.map((member) => (
+                        <MemberTableRow
+                          key={member.userId}
+                          member={member}
+                          isAdmin={isAdmin}
+                          showBrands={multiBrand && (isAdmin || member.isCurrentUser)}
+                          brands={brands}
+                          chat={chatRows?.get(member.userId) ?? null}
+                          onChanged={loadData}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {members.map((member) => (
+                    <MemberRow
+                      key={member.userId}
+                      member={member}
+                      isAdmin={isAdmin}
+                      showBrands={multiBrand && (isAdmin || member.isCurrentUser)}
+                      brands={brands}
+                      onChanged={loadData}
+                    />
+                  ))}
+                </div>
+              )}
               {isAdmin && info && !info.canInvite && (
                 <div className="mt-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/50 dark:bg-amber-950/30">
                   <Lock className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
@@ -229,33 +297,14 @@ export function TeamSection() {
   );
 }
 
-function MemberRow({
-  member,
-  isAdmin,
-  showBrands,
-  brands,
-  onChanged,
-}: {
-  member: TeamMember;
-  isAdmin: boolean;
-  /** The member's brands: an admin sees everyone's, anyone else their own. */
-  showBrands: boolean;
-  brands: ShareableBrand[];
-  onChanged: () => void;
-}) {
-  const tBrands = useTranslations('settings.teamBrands');
+/** A member's role change and removal, for either layout. */
+function useMemberActions(member: TeamMember, onChanged: () => void) {
   const t = useTranslations('settings');
   const [pendingRole, setPendingRole] = useState<TeamRole | null>(null);
   const [removing, setRemoving] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
-  // A read-only workspace (plan not active): a role opens the upgrade dialog
-  // instead. Remove stays open: it ends a member's access.
-  const { guard } = useUpgradeGate();
-  const tActions = useTranslations('readOnly.actions');
 
-  const canEdit = isAdmin && !member.isCurrentUser;
-
-  async function handleRoleChange(role: TeamRole) {
+  async function changeRole(role: TeamRole) {
     if (role === member.role) return;
     setPendingRole(role);
     try {
@@ -269,7 +318,7 @@ function MemberRow({
     }
   }
 
-  async function handleRemove() {
+  async function remove() {
     setRemoving(true);
     try {
       await removeMember(member.userId);
@@ -283,8 +332,16 @@ function MemberRow({
     }
   }
 
+  return { pendingRole, changeRole, removing, remove, removeDialogOpen, setRemoveDialogOpen };
+}
+
+type MemberActions = ReturnType<typeof useMemberActions>;
+
+/** The member's name and e-mail, with their avatar. */
+function MemberName({ member }: { member: TeamMember }) {
+  const t = useTranslations('settings');
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2 hover:bg-muted/50">
+    <div className="flex min-w-0 items-center gap-3">
       <Avatar>
         {member.avatarUrl && <AvatarImage src={member.avatarUrl} />}
         <AvatarFallback>{initials(member.fullName, member.email)}</AvatarFallback>
@@ -302,73 +359,208 @@ function MemberRow({
           <p className="truncate text-xs text-muted-foreground">{member.email}</p>
         )}
       </div>
-
-      {showBrands &&
-        (canEdit && member.role !== 'admin' ? (
-          <EditBrandsDialog member={member} brands={brands} onChanged={onChanged} />
-        ) : (
-          <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-            {brandAccessLabel(tBrands, member.brandAccess)}
-          </span>
-        ))}
-
-      {canEdit ? (
-        <Select
-          items={roleOptions(t)}
-          value={member.role}
-          onValueChange={guard((v: string | null) => void handleRoleChange(v as TeamRole), {
-            action: tActions('changeRoles'),
-          })}
-          disabled={pendingRole !== null}
-        >
-          <SelectTrigger size="sm" className="w-36">
-            {pendingRole ? <Loader2 className="h-3 w-3 animate-spin" /> : <SelectValue />}
-          </SelectTrigger>
-          <SelectContent>
-            {roleOptions(t).map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : (
-        <Badge variant="outline">{roleLabel(t, member.role)}</Badge>
-      )}
-
-      {canEdit && (
-        <Dialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
-          <DialogTrigger
-            render={
-              <Button variant="ghost" size="icon-sm" aria-label={t('removeMember')}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            }
-          />
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t('team_removeDialogTitle')}</DialogTitle>
-              <DialogDescription>
-                {t('team_removeDialogDescription', { name: member.fullName || member.email })}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>{t('team_cancel')}</DialogClose>
-              <Button variant="destructive" onClick={handleRemove} disabled={removing}>
-                {removing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {t('team_removing')}
-                  </>
-                ) : (
-                  t('team_removeMemberConfirm')
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
+  );
+}
+
+/** An Admin's role picker for someone else; everyone else sees the role. */
+function MemberRole({
+  member,
+  canEdit,
+  actions,
+}: {
+  member: TeamMember;
+  canEdit: boolean;
+  actions: MemberActions;
+}) {
+  const t = useTranslations('settings');
+  // A read-only workspace (plan not active): a role opens the upgrade dialog
+  // instead. Remove stays open: it ends a member's access.
+  const { guard } = useUpgradeGate();
+  const tActions = useTranslations('readOnly.actions');
+  if (!canEdit) return <Badge variant="outline">{roleLabel(t, member.role)}</Badge>;
+  return (
+    <Select
+      items={roleOptions(t)}
+      value={member.role}
+      onValueChange={guard((v: string | null) => void actions.changeRole(v as TeamRole), {
+        action: tActions('changeRoles'),
+      })}
+      disabled={actions.pendingRole !== null}
+    >
+      <SelectTrigger size="sm" className="w-36" aria-label={t('team_roleLabel')}>
+        {actions.pendingRole ? <Loader2 className="h-3 w-3 animate-spin" /> : <SelectValue />}
+      </SelectTrigger>
+      <SelectContent>
+        {roleOptions(t).map((opt) => (
+          <SelectItem key={opt.value} value={opt.value}>
+            {opt.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
+/** The member's brands: an Admin edits someone else's; otherwise what they are. */
+function MemberBrandsControl({
+  member,
+  canEdit,
+  brands,
+  onChanged,
+}: {
+  member: TeamMember;
+  canEdit: boolean;
+  brands: ShareableBrand[];
+  onChanged: () => void;
+}) {
+  const tBrands = useTranslations('settings.teamBrands');
+  return canEdit && member.role !== 'admin' ? (
+    <EditBrandsDialog member={member} brands={brands} onChanged={onChanged} />
+  ) : (
+    <span className="text-xs text-muted-foreground">
+      {brandAccessLabel(tBrands, member.brandAccess)}
+    </span>
+  );
+}
+
+/** Remove, behind a confirmation. */
+function RemoveMember({ member, actions }: { member: TeamMember; actions: MemberActions }) {
+  const t = useTranslations('settings');
+  return (
+    <Dialog open={actions.removeDialogOpen} onOpenChange={actions.setRemoveDialogOpen}>
+      <DialogTrigger
+        render={
+          <Button variant="ghost" size="icon-sm" aria-label={t('removeMember')}>
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t('team_removeDialogTitle')}</DialogTitle>
+          <DialogDescription>
+            {t('team_removeDialogDescription', { name: member.fullName || member.email })}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>{t('team_cancel')}</DialogClose>
+          <Button variant="destructive" onClick={actions.remove} disabled={actions.removing}>
+            {actions.removing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {t('team_removing')}
+              </>
+            ) : (
+              t('team_removeMemberConfirm')
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MemberRow({
+  member,
+  isAdmin,
+  showBrands,
+  brands,
+  onChanged,
+}: {
+  member: TeamMember;
+  isAdmin: boolean;
+  /** The member's brands: an admin sees everyone's, anyone else their own. */
+  showBrands: boolean;
+  brands: ShareableBrand[];
+  onChanged: () => void;
+}) {
+  const actions = useMemberActions(member, onChanged);
+  const canEdit = isAdmin && !member.isCurrentUser;
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-transparent px-3 py-2 hover:bg-muted/50">
+      <div className="min-w-0 flex-1">
+        <MemberName member={member} />
+      </div>
+      {showBrands && (
+        <span className="hidden shrink-0 sm:inline">
+          <MemberBrandsControl
+            member={member}
+            canEdit={canEdit}
+            brands={brands}
+            onChanged={onChanged}
+          />
+        </span>
+      )}
+      <MemberRole member={member} canEdit={canEdit} actions={actions} />
+      {canEdit && <RemoveMember member={member} actions={actions} />}
+    </div>
+  );
+}
+
+/**
+ * A member's row in Team, roles & access's one table (owner, 2026-11-09):
+ * Team's controls (role, brands, remove) with what the roles read adds,
+ * how the role reaches Chat and when they last signed in.
+ */
+function MemberTableRow({
+  member,
+  isAdmin,
+  showBrands,
+  brands,
+  chat,
+  onChanged,
+}: {
+  member: TeamMember;
+  isAdmin: boolean;
+  showBrands: boolean;
+  brands: ShareableBrand[];
+  /** The roles read's row for them; null while it loads or when it couldn't be read. */
+  chat: RoleMember | null;
+  onChanged: () => void;
+}) {
+  const tAccess = useTranslations('chatAccess');
+  const format = useFormatter();
+  const actions = useMemberActions(member, onChanged);
+  const canEdit = isAdmin && !member.isCurrentUser;
+  return (
+    <TableRow>
+      <TableCell className="max-w-64">
+        <MemberName member={member} />
+      </TableCell>
+      <TableCell>
+        <MemberRole member={member} canEdit={canEdit} actions={actions} />
+      </TableCell>
+      <TableCell>
+        {showBrands ? (
+          <MemberBrandsControl
+            member={member}
+            canEdit={canEdit}
+            brands={brands}
+            onChanged={onChanged}
+          />
+        ) : chat ? (
+          <span className="text-xs text-muted-foreground">
+            <MemberBrandsCell brands={chat.brands} />
+          </span>
+        ) : (
+          <span className="text-muted-foreground">–</span>
+        )}
+      </TableCell>
+      <TableCell className="text-xs whitespace-normal text-muted-foreground">
+        {tAccess(`roles.throughChat.${member.role}`)}
+      </TableCell>
+      <TableCell className="text-xs whitespace-nowrap text-muted-foreground">
+        {!chat
+          ? '–'
+          : chat.lastActiveAt
+            ? format.relativeTime(new Date(chat.lastActiveAt))
+            : tAccess('roles.neverSignedIn')}
+      </TableCell>
+      <TableCell className="w-10 text-right">
+        {canEdit && <RemoveMember member={member} actions={actions} />}
+      </TableCell>
+    </TableRow>
   );
 }
 

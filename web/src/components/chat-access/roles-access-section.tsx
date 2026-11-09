@@ -51,9 +51,15 @@ import { CAPABILITIES_PATH } from './your-access-card';
  */
 export function RolesAccessSection({
   onRequestsChanged,
+  showMembers = true,
 }: {
   /** A request was decided or sent: Settings' count reads again. */
   onRequestsChanged?: () => void;
+  /**
+   * Its own members table. Team, roles & access leaves it out (owner,
+   * 2026-11-09): the team's table above has its columns.
+   */
+  showMembers?: boolean;
 } = {}) {
   const t = useTranslations('chatAccess');
   const [requestsVersion, setRequestsVersion] = useState(0);
@@ -65,7 +71,10 @@ export function RolesAccessSection({
 
   useEffect(() => {
     let live = true;
-    Promise.all([getChatAccess(), listRoleMembers()])
+    Promise.all([
+      getChatAccess(),
+      showMembers ? listRoleMembers() : Promise.resolve({ ok: true as const, members: [] }),
+    ])
       .then(([accessRead, membersRead]) => {
         if (!live) return;
         if (!accessRead.ok || !membersRead.ok) {
@@ -81,7 +90,7 @@ export function RolesAccessSection({
     return () => {
       live = false;
     };
-  }, [version]);
+  }, [version, showMembers]);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
 
   if (access === undefined) return <Skeleton className="h-96 w-full" />;
@@ -131,7 +140,7 @@ export function RolesAccessSection({
 
       <RequestsSection version={requestsVersion} onChanged={onRequestsChanged} />
 
-      <MembersTable members={members} isAdmin={isAdmin} onChanged={reload} />
+      {showMembers && <MembersTable members={members} isAdmin={isAdmin} onChanged={reload} />}
       <RoleMatrix role={access.role} />
       <AdminSwitches access={access} />
     </div>

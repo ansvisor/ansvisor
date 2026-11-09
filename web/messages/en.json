@@ -15844,6 +15844,7 @@
     "team_role_analyst": "Analyst",
     "team_role_agency_partner": "Agency Partner",
     "team_you": "You",
+    "team_roleLabel": "Role",
     "team_loadFailed": "Failed to load team",
     "team_roleUpdated": "Role updated",
     "team_roleUpdateFailed": "Failed to update role",

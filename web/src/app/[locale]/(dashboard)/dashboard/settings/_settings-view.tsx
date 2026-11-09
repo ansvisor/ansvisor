@@ -264,8 +264,12 @@ export function SettingsView({ section }: { section: SettingsSection }) {
           {/* Team, roles & access: the team and its invitations, then the roles and access. */}
           {active === 'roles-access' && chatAgentic && (
             <div className="space-y-6">
-              <TeamSection />
-              <RolesAccessSection onRequestsChanged={() => setRequestsRead((n) => n + 1)} />
+              {/* One members table: the team's, with the roles' columns (owner, 2026-11-09). */}
+              <TeamSection withChatAccess />
+              <RolesAccessSection
+                showMembers={false}
+                onRequestsChanged={() => setRequestsRead((n) => n + 1)}
+              />
             </div>
           )}
 

@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [CONTRIBUTING.md]
 ---
-Everyone in your workspace has one of four roles: **Admin**, **Manager**, **Analyst** or **Agency partner**. Admins set roles in **Settings › Team, roles & access** (**Team** where Chat is off). With Chat on, that page has the team and its invitations at the top, then each person's role, with a table of what each role can do in the app and in Chat. A button your role can't use isn't shown.
+Everyone in your workspace has one of four roles: **Admin**, **Manager**, **Analyst** or **Agency partner**. Admins set roles in **Settings › Team, roles & access** (**Team** where Chat is off). With Chat on, one table there lists each person with their role, brands, what the role does through Chat and when they last signed in, above the invitations and a table of what each role can do in the app and in Chat. A button your role can't use isn't shown.
 
 ## What everyone can do
 
