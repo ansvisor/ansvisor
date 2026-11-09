@@ -25,6 +25,7 @@ const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn(), success:
 vi.mock('sonner', () => ({ toast }));
 
 const { SkillReview } = await import('./skill-review');
+const { UpgradeDialogContext } = await import('@/components/providers/upgrade-gate');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -49,6 +50,7 @@ const review = (over: Partial<Review> = {}): Review => ({
   createdAt: '2026-11-02T10:00:00.000Z',
   approvedAt: null,
   can: { approve: true, reject: true },
+  waiting: null,
   ...over,
 });
 
@@ -179,5 +181,58 @@ describe('SkillReview', () => {
     root = createRoot(container);
     await render();
     expect(container.textContent).toContain("This skill isn't available to review.");
+  });
+});
+
+/** Why the person can't approve it, and who can (owner, 2026-11-09). */
+describe("SkillReview: why it can't be approved here", () => {
+  const note = () => page().querySelector('[data-slot="review-note"]')!.textContent;
+
+  it('names the role and the Admins to ask', async () => {
+    current = review({
+      mine: true,
+      can: { approve: false, reject: false },
+      waiting: { why: 'not_admin', role: 'manager', admins: ['Ayşe Yılmaz', 'Ben Ok'] },
+    });
+    await render();
+    expect(note()).toBe(
+      "Only an Admin can approve a skill, and you're a Manager in this workspace. Ask Ayşe Yılmaz or Ben Ok to review it.",
+    );
+    expect(action('skillReview.approve')).toBeNull();
+    expect(action('skillReview.seePlans')).toBeNull();
+  });
+
+  it('asks an Admin when it knows none by name', async () => {
+    current = review({
+      mine: true,
+      can: { approve: false, reject: false },
+      waiting: { why: 'not_admin', role: 'analyst', admins: [] },
+    });
+    await render();
+    expect(note()).toBe(
+      "Only an Admin can approve a skill, and you're an Analyst in this workspace. Ask an Admin of your workspace to review it.",
+    );
+  });
+
+  it('tells an Admin on an ended plan, with See plans', async () => {
+    const openUpgrade = vi.fn();
+    current = review({ can: { approve: false, reject: false }, waiting: { why: 'read_only' } });
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <UpgradeDialogContext.Provider
+            value={{ isLocked: true, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <SkillReview id={ID} />
+          </UpgradeDialogContext.Provider>
+        </NextIntlClientProvider>,
+      );
+    });
+    await settle();
+    expect(note()).toBe(
+      "Your workspace's plan has ended, so no skill can be approved until it's renewed.",
+    );
+    await act(async () => action('skillReview.seePlans')!.click());
+    expect(openUpgrade).toHaveBeenCalled();
   });
 });

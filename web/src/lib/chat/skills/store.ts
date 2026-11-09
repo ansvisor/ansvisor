@@ -1059,6 +1059,42 @@ export interface SkillReview {
   approvedAt: string | null;
   /** An Admin decides a skill waiting for review; a blocked one can only be rejected. */
   can: { approve: boolean; reject: boolean };
+  /**
+   * Why the person can't approve a skill waiting for review (owner,
+   * 2026-11-09): they aren't an Admin (their role, and the Admins to ask, by
+   * name), or the workspace's plan is read-only. Null when they can approve
+   * it, or when nothing waits.
+   */
+  waiting: SkillWaiting | null;
+}
+
+export type SkillWaiting =
+  | { why: 'not_admin'; role: TeamRole; admins: string[] }
+  | { why: 'read_only' };
+
+/** The most Admins a review names to ask. */
+const MAX_ADMINS_NAMED = 3;
+
+/**
+ * Why the viewer can't approve a skill waiting for review, or null. The
+ * Admins' names are read only for someone who isn't one; a read that fails
+ * names none, and the note asks "an Admin".
+ */
+async function waitingOn(viewer: SkillViewer, status: string): Promise<SkillWaiting | null> {
+  if (status !== 'pending_review') return null;
+  if (viewer.role === 'admin') return viewer.plan.writable ? null : { why: 'read_only' };
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('full_name')
+    .eq('organization_id', viewer.organizationId)
+    .eq('role', 'admin')
+    .order('created_at', { ascending: true })
+    .limit(MAX_ADMINS_NAMED);
+  if (error) console.error('[chat/skills] could not read the Admins to ask:', error.message);
+  const admins = ((data ?? []) as { full_name: string | null }[])
+    .map((row) => row.full_name?.trim() ?? '')
+    .filter(Boolean);
+  return { why: 'not_admin', role: viewer.role, admins };
 }
 
 const stringsOf = (value: unknown): string[] =>
@@ -1082,6 +1118,7 @@ export async function readSkillReview(
   }
   const scan = (row.scan_json ?? {}) as { blocks?: unknown; warns?: unknown };
   const deciding = viewer.role === 'admin' && viewer.plan.writable;
+  const waiting = await waitingOn(viewer, row.status);
   return {
     ok: true,
     value: {
@@ -1106,6 +1143,7 @@ export async function readSkillReview(
         approve: deciding && row.status === 'pending_review',
         reject: deciding && (row.status === 'pending_review' || row.status === 'blocked'),
       },
+      waiting,
     },
   };
 }
