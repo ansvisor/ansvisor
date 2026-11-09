@@ -241,14 +241,14 @@ describe('runnablePlatforms', () => {
     ).toEqual(['chatgpt-web', 'gemini-web']);
   });
 
-  // Copilot and Perplexity are no longer offered; a prompt saved with them
-  // still runs its other engines.
-  it('skips Copilot and Perplexity on a prompt that still lists them', () => {
+  // Perplexity is no longer offered; a prompt saved with it still runs its
+  // other engines. Copilot runs again, through Bing AI Mode.
+  it('skips Perplexity, but runs Copilot, on a prompt that lists both', () => {
     expect(
       runnablePlatforms(['copilot-web', 'chatgpt-web', 'perplexity-web'], {
         shoppingEnabled: true,
       }),
-    ).toEqual(['chatgpt-web']);
+    ).toEqual(['copilot-web', 'chatgpt-web']);
   });
 
   it('drops shopping unless the brand has it enabled', () => {

@@ -186,7 +186,7 @@ describe('cloro-scraper – parseScraperResponse', () => {
     });
 
     it('should fall back to text when markdown is missing', () => {
-      const parsed = parseScraperResponse({ text: 'text only', sources: [] }, 'copilot-web');
+      const parsed = parseScraperResponse({ text: 'text only', sources: [] }, 'grok-web');
       expect(parsed.text).toBe('text only');
     });
 
@@ -234,7 +234,7 @@ describe('cloro-scraper – parseScraperResponse', () => {
     it('keeps sources without the flag', () => {
       const parsed = parseScraperResponse(
         { markdown: 't', sources: [{ url: 'https://foo.com', label: 'Foo' }] },
-        'copilot-web',
+        'grok-web',
       );
       expect(parsed.citations).toHaveLength(1);
     });
@@ -256,16 +256,16 @@ describe('cloro-scraper – parseScraperResponse', () => {
   });
 
   describe('search_queries (observed query fan-out, #332)', () => {
-    it('maps Copilot string[] searchQueries to rich items tagged with the source platform', () => {
+    it('maps Grok string[] searchQueries to rich items tagged with the source platform', () => {
       const result = {
         markdown: 'text',
         sources: [],
         searchQueries: ['best running shoes 2026', 'running shoes flat feet'],
       };
-      const parsed = parseScraperResponse(result, 'copilot-web');
+      const parsed = parseScraperResponse(result, 'grok-web');
       expect(parsed.search_queries).toEqual([
-        { query: 'best running shoes 2026', source_platform: 'copilot-web' },
-        { query: 'running shoes flat feet', source_platform: 'copilot-web' },
+        { query: 'best running shoes 2026', source_platform: 'grok-web' },
+        { query: 'running shoes flat feet', source_platform: 'grok-web' },
       ]);
     });
 
@@ -304,10 +304,8 @@ describe('cloro-scraper – parseScraperResponse', () => {
         sources: [],
         searchQueries: ['ok query', '   ', '', 42, null],
       };
-      const parsed = parseScraperResponse(result, 'copilot-web');
-      expect(parsed.search_queries).toEqual([
-        { query: 'ok query', source_platform: 'copilot-web' },
-      ]);
+      const parsed = parseScraperResponse(result, 'grok-web');
+      expect(parsed.search_queries).toEqual([{ query: 'ok query', source_platform: 'grok-web' }]);
     });
 
     it('reads searches an engine joined by semicolons as each search, with its engine', () => {
@@ -342,7 +340,7 @@ describe('cloro-scraper – parseScraperResponse', () => {
       const read = (searchQueries) =>
         parseScraperResponse(
           { markdown: 't', sources: [], searchQueries },
-          'copilot-web',
+          'grok-web',
         ).search_queries.map((item) => item.query);
       expect(read(['what&#39;s new in aeo'])).toEqual(['what&#39;s new in aeo']);
       expect(read(['r&amp;d budget;aeo tools;what&#x27;s aeo'])).toEqual([
@@ -358,10 +356,10 @@ describe('cloro-scraper – parseScraperResponse', () => {
     it('trims surrounding whitespace so a sub-query has one canonical form', () => {
       const copilot = parseScraperResponse(
         { markdown: 't', sources: [], searchQueries: ['  spaced query  '] },
-        'copilot-web',
+        'grok-web',
       );
       expect(copilot.search_queries).toEqual([
-        { query: 'spaced query', source_platform: 'copilot-web' },
+        { query: 'spaced query', source_platform: 'grok-web' },
       ]);
 
       const perplexity = parseScraperResponse(
@@ -428,9 +426,9 @@ describe('cloro-scraper – parseScraperResponse', () => {
     it('does not let an empty search_model_queries hide a populated searchQueries', () => {
       const parsed = parseScraperResponse(
         { markdown: 't', sources: [], search_model_queries: [], searchQueries: ['kept'] },
-        'copilot-web',
+        'grok-web',
       );
-      expect(parsed.search_queries).toEqual([{ query: 'kept', source_platform: 'copilot-web' }]);
+      expect(parsed.search_queries).toEqual([{ query: 'kept', source_platform: 'grok-web' }]);
     });
 
     it('defaults to an empty array when the engine returns none', () => {
@@ -446,10 +444,14 @@ describe('cloro-scraper – parseScraperResponse', () => {
 });
 
 describe('cloro-scraper – buildRequestBody query fan-out (#332, #1119)', () => {
-  it('asks Copilot, Perplexity, Gemini and Grok for their searches', () => {
-    for (const scraperId of ['copilot-web', 'perplexity-web', 'gemini-web', 'grok-web']) {
+  it('asks Perplexity, Gemini and Grok for their searches', () => {
+    for (const scraperId of ['perplexity-web', 'gemini-web', 'grok-web']) {
       expect(buildRequestBody('p', scraperId, 'US').include.searchQueries).toBe(true);
     }
+  });
+
+  it("doesn't ask Copilot, whose Bing AI Mode task takes no such flag", () => {
+    expect(buildRequestBody('p', 'copilot-web', 'US').include).not.toHaveProperty('searchQueries');
   });
 
   it("doesn't ask ChatGPT, whose default interface no longer carries them", () => {
@@ -686,12 +688,68 @@ describe('cloro-scraper – submitPromptTask', () => {
     expect(sent()[0].payload).not.toHaveProperty('legacy');
   });
 
-  // Cloro rejects both with 400 MODEL_UNAVAILABLE; nothing is sent.
-  it('sends no Copilot or Perplexity task', async () => {
-    for (const scraperId of ['copilot-web', 'perplexity-web']) {
-      await expect(submitPromptTask({ ...task, scraperId })).rejects.toThrow(/Unknown scraper/);
-    }
+  // Cloro rejects it with 400 MODEL_UNAVAILABLE; nothing is sent.
+  it('sends no Perplexity task', async () => {
+    await expect(submitPromptTask({ ...task, scraperId: 'perplexity-web' })).rejects.toThrow(
+      /Unknown scraper/,
+    );
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('asks Copilot through Bing AI Mode', async () => {
+    await submitPromptTask({ ...task, scraperId: 'copilot-web' });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetch.mock.calls[0][1].body);
+    expect(body.taskType).toBe('BING_AIMODE');
+    expect(body.payload).toEqual({
+      prompt: 'best crm for startups',
+      country: 'US',
+      state: 'CA',
+      include: { html: false, markdown: true },
+    });
+  });
+});
+
+describe('cloro-scraper – Copilot through Bing AI Mode', () => {
+  it('sends only the fields Bing AI Mode takes', () => {
+    expect(buildRequestBody('p', 'copilot-web', 'TR')).toEqual({
+      prompt: 'p',
+      country: 'TR',
+      include: { html: false, markdown: true },
+    });
+  });
+
+  it('reads the answer nested under result, as a Copilot answer', () => {
+    const parsed = parseScraperResponse(
+      {
+        result: {
+          text: 'plain answer',
+          markdown: '## Answer\nwith [a link](https://a.com)',
+          sources: [
+            { position: 1, label: 'A', url: 'https://a.com', description: 'snippet' },
+            { position: 2, label: 'B', url: 'https://b.com' },
+          ],
+          citationPills: [{ position: 1, label: 'A', url: 'https://a.com', citationPillId: 1 }],
+        },
+      },
+      'copilot-web',
+    );
+    expect(parsed).toEqual({
+      text: '## Answer\nwith [a link](https://a.com)',
+      citations: [
+        { url: 'https://a.com', title: 'A', startIndex: 0, endIndex: 50 },
+        { url: 'https://b.com', title: 'B', startIndex: 100, endIndex: 150 },
+      ],
+      model: 'copilot-web',
+      shopping_cards: [],
+      search_queries: [],
+    });
+  });
+
+  it('falls back to the plain text without markdown', () => {
+    expect(
+      parseScraperResponse({ result: { text: 'plain', sources: [] } }, 'copilot-web').text,
+    ).toBe('plain');
   });
 });
 

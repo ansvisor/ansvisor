@@ -24,6 +24,8 @@ export const CLORO_COUNTRY_MODELS = {
   'chatgpt-shopping': 'chatgpt',
   'gemini-web': 'gemini',
   'google-aimode': 'aimode',
+  // Copilot is asked through Bing AI Mode (cloro-scraper.js), whose list this is.
+  'copilot-web': 'bing_aimode',
   // AI Overview is asked through Google Search; its own list says where one shows.
   'google-aio': 'aioverview',
 };
