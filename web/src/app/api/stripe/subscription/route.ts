@@ -271,7 +271,7 @@ export async function PATCH(req: NextRequest) {
       .eq('id', org.id);
 
     // Align prompts to the new plan's engine set so an upgrade actually
-    // expands (Starter → Growth: 2 → 4 engines) or trims (Growth → Starter:
+    // expands (Starter → Growth: 2 → 5 engines) or trims (Growth → Starter:
     // 4 → 2) the tracked engines. Same helper used by the Stripe success
     // route (#78) and the webhook (#79). We do it here too because PATCH
     // performs the optimistic plan write itself — by the time the matching

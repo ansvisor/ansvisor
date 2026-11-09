@@ -31,7 +31,8 @@ export async function getTrackingCountries(): Promise<TrackingCountry[]> {
   }
   const byCountry = new Map<string, string[]>();
   for (const { model, country } of rows) {
-    // An engine no longer tracked (Copilot, Perplexity) keeps its last list.
+    // An engine no longer tracked (Perplexity, Copilot's old `copilot` model)
+    // keeps its last list.
     if (!ENGINES.has(model)) continue;
     if (!byCountry.has(country)) byCountry.set(country, []);
     byCountry.get(country)!.push(model);

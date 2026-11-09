@@ -282,8 +282,8 @@ describe('query fan-out', () => {
   });
 
   it('never judges a paused platform, which runs nothing', () => {
-    // Copilot and Perplexity, which documented fan-out, are paused since
-    // 2026-11-06, and Grok before them: neither silence nor a fall is news.
+    // Perplexity, which documented fan-out, is paused since 2026-11-06, and
+    // Grok before it: neither silence nor a fall is news.
     const quiet = {
       answers: 400,
       withFanout: 0,
@@ -291,7 +291,7 @@ describe('query fan-out', () => {
       baselineAnswers: 1200,
       baselineRate: 0.3,
     };
-    for (const platform of ['copilot-web', 'perplexity-web', 'grok-web']) {
+    for (const platform of ['perplexity-web', 'grok-web']) {
       expect(fanoutDropped({ ...quiet, platform })).toBe(false);
     }
   });
@@ -405,7 +405,8 @@ describe('query fan-out', () => {
         platform: 'chatgpt-web',
         weekError: 'timeout',
       });
-      // The API model is still judged on its fall; Copilot, paused, isn't.
+      // The API model is still judged on its fall; Copilot, which shares no
+      // searches through Bing AI Mode, isn't expected to.
       expect(findIssues(report).filter((i) => i.includes('fan-out'))).toEqual([
         'chatgpt-web query fan-out could not be checked: timeout',
         "chatgpt returned no query fan-out on any of its 200 answers in the last 24h (30% the days before) — check what OpenAI's web_search returns",
