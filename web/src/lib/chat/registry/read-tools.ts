@@ -159,7 +159,7 @@ export const READ_TOOLS = [
     class: 'read',
     area: 'visibility',
     description:
-      'A brand\'s visibility over a period: results, average visibility (0–100), mentions, citations and the top competitors. For "how is my brand doing" questions.',
+      'A brand\'s visibility over a period: results, average visibility (0–100), mentions, citations and the top competitors. For "how is my brand doing" questions. totalMentions is the times AI names the brand (the app\'s Mentions); mentionAnswers is the answers naming it.',
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -190,7 +190,7 @@ export const READ_TOOLS = [
     class: 'read',
     area: 'visibility',
     description:
-      "A brand's visibility, mentions and citations over time, by day or week. For trend questions and charts.",
+      "A brand's visibility, mentions and citations over time, by day or week, for a topic too. For trend questions and charts. total_mentions is the times AI names the brand (the app's Mentions, a topic's Brand mentions); result_count is every answer recorded, not the answers naming it.",
     minRole: 'analyst',
     planGate: { platforms: true },
     brandOf: { input: 'brand_id' },
@@ -349,7 +349,7 @@ export const READ_TOOLS = [
     class: 'read',
     area: 'mentions',
     description:
-      'How often AI answers name the brand and how they speak of it, against the period before: mention rate, net sentiment (−100…+100) and the sentiment split. Under 20 mentions it is a low sample: say so.',
+      'How often AI answers name the brand and how they speak of it, against the period before: mention rate, net sentiment (−100…+100) and the sentiment split. Mentions, as the app counts them, are timesNamed: quote it for "how many mentions". mentions is the answers naming the brand at least once, the rate\'s base. Under 20 of those it is a low sample: say so.',
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },
