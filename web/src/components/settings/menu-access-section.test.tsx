@@ -167,11 +167,11 @@ describe('MenuAccessSection', () => {
       option.click();
     });
     expect(actions.setRoleMenu).toHaveBeenCalledWith('manager', [
-      'content',
-      'audit',
       'shopping',
       'prompts',
       'traffic',
+      'content',
+      'audit',
     ]);
     expect(box('Manager sees Content')?.getAttribute('aria-checked')).toBe('false');
   });
@@ -194,7 +194,7 @@ describe('MenuAccessSection', () => {
 
 describe('hiddenForSet', () => {
   it('hides what a ready-made set leaves out, never Action Center', () => {
-    expect(hiddenForSet('brand')).toEqual(['content', 'audit', 'shopping', 'prompts', 'traffic']);
+    expect(hiddenForSet('brand')).toEqual(['shopping', 'prompts', 'traffic', 'content', 'audit']);
     // The sets that don't compare the brand with others leave Competitors off.
     expect(hiddenForSet('content')).toContain('competitors');
     expect(hiddenForSet('all')).toEqual([]);

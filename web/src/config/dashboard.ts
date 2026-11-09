@@ -112,45 +112,13 @@ export const dashboardNav: NavGroup[] = [
     ],
   },
   /**
-   * New Ansvisor: the groups name the two things the product does. Execution
-   * does the work (actions, content, page fixes); Analytics shows where the
-   * brand stands in AI search.
+   * New Ansvisor: the groups name the two things the product does. Analytics
+   * shows where the brand stands in AI search; Execution does the work
+   * (actions, content, page fixes). Analytics first (owner, 2026-11-09): you
+   * see the data before you act on it. A new brand's answers come in about an
+   * hour, its actions about a day later, as Getting started's stages go; and
+   * Chat, above both, is where most work now starts.
    */
-  {
-    title: 'Execution',
-    items: [
-      {
-        title: 'Action Center',
-        href: '/dashboard/action-center',
-        icon: Target,
-      },
-      // Content Editor (CE-001): a group, like Prompts, and new as a whole.
-      // Its pages in the order the work goes: Opportunities (today's page,
-      // keeping /dashboard/content) finds what to write, the Plan says what
-      // to do next (CE-014), the Editor goes back to the draft last opened,
-      // else starts a new page, and the Library lists every page written or
-      // changed in Ansvisor.
-      {
-        title: 'Content',
-        href: '/dashboard/content',
-        icon: FileText,
-        requiredFeature: 'content_optimization',
-        children: [
-          { title: 'Opportunities', href: '/dashboard/content' },
-          { title: 'Plan', href: '/dashboard/content/plan' },
-          // A draft open in the editor (CE-004) is under it.
-          { title: 'Editor', href: '/dashboard/content/editor', keepsPage: true },
-          { title: 'Library', href: '/dashboard/content/library' },
-        ],
-      },
-      {
-        title: 'Site Audit',
-        href: '/dashboard/audit',
-        icon: Gauge,
-        requiredFeature: 'content_optimization',
-      },
-    ],
-  },
   {
     title: 'Analytics',
     items: [
@@ -200,6 +168,41 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/traffic',
         icon: LineChart,
         requiredFeature: 'advanced_analytics',
+      },
+    ],
+  },
+  {
+    title: 'Execution',
+    items: [
+      {
+        title: 'Action Center',
+        href: '/dashboard/action-center',
+        icon: Target,
+      },
+      // Content Editor (CE-001): a group, like Prompts, and new as a whole.
+      // Its pages in the order the work goes: Opportunities (today's page,
+      // keeping /dashboard/content) finds what to write, the Plan says what
+      // to do next (CE-014), the Editor goes back to the draft last opened,
+      // else starts a new page, and the Library lists every page written or
+      // changed in Ansvisor.
+      {
+        title: 'Content',
+        href: '/dashboard/content',
+        icon: FileText,
+        requiredFeature: 'content_optimization',
+        children: [
+          { title: 'Opportunities', href: '/dashboard/content' },
+          { title: 'Plan', href: '/dashboard/content/plan' },
+          // A draft open in the editor (CE-004) is under it.
+          { title: 'Editor', href: '/dashboard/content/editor', keepsPage: true },
+          { title: 'Library', href: '/dashboard/content/library' },
+        ],
+      },
+      {
+        title: 'Site Audit',
+        href: '/dashboard/audit',
+        icon: Gauge,
+        requiredFeature: 'content_optimization',
       },
     ],
   },

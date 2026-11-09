@@ -4763,7 +4763,7 @@
         "simplify sidebar"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-09",
       "sections": [
         {
           "heading": null,
@@ -4771,7 +4771,7 @@
         },
         {
           "heading": "Fold a group on your menu",
-          "text": "Click a group's title on the left menu, **Execution** or **Analytics**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Agent Center** sit above the groups, and **Reports** and **Competitors** below them, so they don't fold."
+          "text": "Click a group's title on the left menu, **Analytics** or **Execution**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Agent Center** sit above the groups, and **Reports** and **Competitors** below them, so they don't fold."
         },
         {
           "heading": "Who can change menus",
