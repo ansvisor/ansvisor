@@ -1,0 +1,90 @@
+{
+  "about": "Whether a draft covers a catalog category, so the category needs no buying guide: its shopping path holds the category (by its full name), or its title names the category's own name (every word of it, plurals as singulars). Plan › Shopping opportunities (shopping-plan.test.ts, coversCategory) and the Action Center's buying guide next to a live category page (server/src/lib/action-center/category-play.test.js, guideCovers) test the same cases.",
+  "cases": [
+    {
+      "category": "Shoes > Hiking Boots",
+      "draft": { "title": "The best hiking boots of 2026", "categories": [] },
+      "covers": true
+    },
+    {
+      "category": "Shoes > Hiking Boots",
+      "draft": { "title": "Hiking boot care", "categories": [] },
+      "covers": true
+    },
+    {
+      "category": "Shoes > Hiking Boots",
+      "draft": { "title": "Boots for long hikes", "categories": [] },
+      "covers": false
+    },
+    {
+      "category": "Shoes > Hiking Boots",
+      "draft": { "title": "Best boots", "categories": [] },
+      "covers": false
+    },
+    {
+      "category": "Rain Jackets",
+      "draft": { "title": "Spring news", "categories": ["Rain Jackets"] },
+      "covers": true
+    },
+    {
+      "category": "Outerwear > Rain Jackets",
+      "draft": { "title": "Spring news", "categories": ["Rain Jackets"] },
+      "covers": false
+    },
+    {
+      "category": "Apparel › Jackets / Rain jackets",
+      "draft": { "title": "Rain jackets for kids", "categories": [] },
+      "covers": true
+    },
+    {
+      "category": "Tents",
+      "draft": { "title": "Tents for two", "categories": [] },
+      "covers": true
+    },
+    {
+      "category": "Tents",
+      "draft": { "title": "Attentive service", "categories": [] },
+      "covers": false
+    },
+    {
+      "category": "TV",
+      "draft": { "title": "TV stands", "categories": [] },
+      "covers": false
+    },
+    {
+      "category": "TV",
+      "draft": { "title": "Spring news", "categories": ["TV"] },
+      "covers": true
+    },
+    {
+      "category": "Kadın > Kadın Ayakkabı",
+      "draft": { "title": "Kadın ayakkabı rehberi", "categories": [] },
+      "covers": true
+    },
+    {
+      "category": "Running Shoes",
+      "draft": { "title": "RUNNING SHOES: A GUIDE", "categories": [] },
+      "covers": true
+    },
+    {
+      "category": "Coffee > Cold Brew",
+      "draft": { "title": "Cold brew vs iced coffee", "categories": [] },
+      "covers": true
+    },
+    {
+      "category": "Coffee > Cold Brew",
+      "draft": { "title": "Brewing cold coffee", "categories": [] },
+      "covers": false
+    },
+    {
+      "category": "Shoes > Size 42",
+      "draft": { "title": "Size 42 fit guide", "categories": [] },
+      "covers": true
+    },
+    {
+      "category": "Socks",
+      "draft": { "title": "", "categories": [] },
+      "covers": false
+    }
+  ]
+}

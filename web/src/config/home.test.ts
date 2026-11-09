@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CHAT_HOME, DASHBOARD_HOME, isDashboardHomeItem, landingPageFor } from './home';
 import { ACTION_CENTER_TABS } from '@/lib/action-center/tabs';
 
@@ -29,17 +29,33 @@ describe('the dashboard home', () => {
   });
 });
 
-/** The free trial and the demo start on Chat Home (owner decision 2026-11-06). */
+/**
+ * Ansvisor starts on Chat Home, whatever the plan (owner decisions
+ * 2026-11-06: the trial and the demo; 2026-11-09: paid, ended and canceled
+ * plans too), on Ansvisor Cloud with the new Chat on and on the person's menu.
+ */
 describe('the landing page', () => {
-  it('is Chat Home for the trial and the demo, with the new Chat on', () => {
-    expect(CHAT_HOME).toBe('/dashboard/chat');
-    expect(landingPageFor({ chatOn: true, audience: 'trial' })).toBe(CHAT_HOME);
-    expect(landingPageFor({ chatOn: true, audience: 'demo' })).toBe(CHAT_HOME);
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   });
 
-  it('is the Action Center for everyone else, and while the new Chat is off', () => {
-    expect(landingPageFor({ chatOn: true, audience: null })).toBe(DASHBOARD_HOME);
-    expect(landingPageFor({ chatOn: false, audience: 'trial' })).toBe(DASHBOARD_HOME);
-    expect(landingPageFor({ chatOn: false, audience: 'demo' })).toBe(DASHBOARD_HOME);
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('is Chat Home with the new Chat on', () => {
+    expect(CHAT_HOME).toBe('/dashboard/chat');
+    expect(landingPageFor({ chatOn: true })).toBe(CHAT_HOME);
+    expect(landingPageFor({ chatOn: true, chatHidden: false })).toBe(CHAT_HOME);
+  });
+
+  it("is the Action Center while the new Chat is off, or off the person's menu", () => {
+    expect(landingPageFor({ chatOn: false })).toBe(DASHBOARD_HOME);
+    expect(landingPageFor({ chatOn: true, chatHidden: true })).toBe(DASHBOARD_HOME);
+  });
+
+  it('is the Action Center self-hosted', () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(landingPageFor({ chatOn: true })).toBe(DASHBOARD_HOME);
   });
 });

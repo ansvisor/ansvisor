@@ -2,7 +2,11 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getMyMenu } from '@/lib/actions/menu-access';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
-import { dashboardHomeFor } from '@/lib/dashboard-home';
+import {
+  dashboardHomeFor,
+  LANDING_PROFILE_COLUMNS,
+  type LandingProfile,
+} from '@/lib/dashboard-home';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import type { TeamRole } from '@/components/providers/role-provider';
@@ -23,12 +27,12 @@ export default async function WelcomePage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('full_name, role, organization_id, onboarding_completed, work_areas_asked_at')
+    .select(`full_name, onboarding_completed, ${LANDING_PROFILE_COLUMNS}`)
     .eq('id', user.id)
     .single();
   if (!profile?.organization_id || !profile.onboarding_completed) redirect('/dashboard/onboarding');
   if (profile.work_areas_asked_at)
-    redirect(await dashboardHomeFor(supabase, profile.organization_id));
+    redirect(await dashboardHomeFor(supabase, profile as LandingProfile));
 
   const [menu, { data: brands }, { data: org }] = await Promise.all([
     getMyMenu().catch(() => null),

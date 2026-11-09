@@ -60,6 +60,37 @@ describe('PlaySection', () => {
     expect(text).toContain('Write a best-of list · 60% of the AI searches');
   });
 
+  it('suggests a buying guide next to a live category page with none yet, linking it', async () => {
+    await render({
+      id: 'category_page',
+      assetType: 'category_page',
+      siteType: 'ecommerce',
+      reasons: [
+        {
+          kind: 'category',
+          category: 'Coffee > Cold Brew',
+          page: 'https://shop.example/collections/cold-brew',
+          inStock: 12,
+        },
+      ],
+      supporting: [
+        {
+          kind: 'category',
+          id: 'buying_guide',
+          assetType: 'buying_guide',
+          category: 'Coffee > Cold Brew',
+          linkTo: 'https://shop.example/collections/cold-brew',
+        },
+        { id: 'best_of', assetType: 'best_of', prompts: 3, of: 5, share: 0.6 },
+      ],
+    });
+    const items = [...container.querySelectorAll('li')].map((li) => li.textContent);
+    expect(items).toEqual([
+      'Write a buying guide next to /collections/cold-brew: no page of yours guides shoppers to your Coffee > Cold Brew category yet. Link it to that page and the category’s best sellers.',
+      'Write a best-of list · 60% of the AI searches',
+    ]);
+  });
+
   it('says why a store writes a buying guide for a category with no page (EC-1)', async () => {
     await render({
       id: 'buying_guide',

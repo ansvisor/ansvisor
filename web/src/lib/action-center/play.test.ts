@@ -81,4 +81,44 @@ describe('actionPlay', () => {
       ],
     });
   });
+
+  it('reads a buying guide next to a live category page, the page it links (AC plan P-7)', () => {
+    const guide = {
+      id: 'buying_guide',
+      assetType: 'buying_guide',
+      kind: 'category',
+      category: ' Coffee > Cold Brew ',
+      linkTo: 'https://shop.example/collections/cold-brew',
+    };
+    const play = actionPlay({
+      play: {
+        ...PLAY,
+        id: 'category_page',
+        assetType: 'category_page',
+        supporting: [guide, { id: 'best_of', assetType: 'best_of', prompts: 3, of: 5, share: 0.6 }],
+      },
+    });
+    expect(play?.supporting).toEqual([
+      {
+        kind: 'category',
+        id: 'buying_guide',
+        assetType: 'buying_guide',
+        category: 'Coffee > Cold Brew',
+        linkTo: 'https://shop.example/collections/cold-brew',
+      },
+      { id: 'best_of', assetType: 'best_of', prompts: 3, of: 5, share: 0.6 },
+    ]);
+    // Not a whole address to link, or no category: left out.
+    expect(
+      actionPlay({
+        play: {
+          ...PLAY,
+          supporting: [
+            { ...guide, linkTo: '/collections/cold-brew' },
+            { ...guide, category: ' ' },
+          ],
+        },
+      })?.supporting,
+    ).toEqual([]);
+  });
 });
