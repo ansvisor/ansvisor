@@ -1,4 +1,4 @@
-import { act, type ReactNode } from 'react';
+import { act, useEffect, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -1616,6 +1616,83 @@ describe('ChatThreadView', () => {
     await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
     expect(container.textContent).toContain('Two pages lost most of it.');
     expect(aiUsage.refresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+const { HomeDraftProvider, useHomeChat } = await import('./home-draft');
+
+/** Home's chat (owner, 2026-11-09): a message sent there shows as a chat's own page at once. */
+describe('ChatThreadView on Chat Home, once a chat starts', () => {
+  // What the probe last saw of Home's chat: kept from an effect, never during render.
+  const seen: { home: ReturnType<typeof useHomeChat> } = { home: null };
+  function Probe() {
+    const home = useHomeChat();
+    useEffect(() => {
+      seen.home = home;
+    });
+    return <output data-slot="started">{String(home?.started)}</output>;
+  }
+  async function renderHome() {
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <RoleProvider role="admin">
+            <HomeDraftProvider>
+              <Probe />
+              <ChatThreadView
+                thread={null}
+                variant="home"
+                defaultMode="ask_first"
+                fullAutoOpen={false}
+              />
+            </HomeDraftProvider>
+          </RoleProvider>
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+  const started = () => container.querySelector('[data-slot="started"]')?.textContent;
+  const composerClass = () =>
+    container.querySelector('[data-slot="thread-composer"]')?.className ?? '';
+
+  it("lays out as a chat page, its box at the bottom, from the box's first message", async () => {
+    await renderHome();
+    expect(started()).toBe('false');
+    expect(composerClass()).not.toContain('sticky');
+    await type('How did our citations change this week?');
+    await enter();
+    expect(started()).toBe('true');
+    expect(composerClass()).toContain('sticky');
+    expect(container.textContent).toContain('How did our citations change this week?');
+  });
+
+  it("sends a question picked on Home's page at once, with its shortcut", async () => {
+    await renderHome();
+    await act(async () => {
+      expect(seen.home?.send('Which competitor gained the most this month?', 'analyze')).toBe(true);
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(started()).toBe('true');
+    expect(container.textContent).toContain('Which competitor gained the most this month?');
+    const run = calls.find((call) => call.url === '/api/chat/runs');
+    expect(JSON.parse(String(run?.init?.body))).toMatchObject({
+      message: 'Which competitor gained the most this month?',
+      shortcutId: 'analyze',
+    });
+  });
+
+  it('shows Home again when the chat could not start', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      return new Response(JSON.stringify({ error: 'Down' }), { status: 500 });
+    });
+    await renderHome();
+    await act(async () => {
+      seen.home?.send('Are we winning in AI search this month?');
+    });
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    expect(started()).toBe('false');
+    expect(composerClass()).not.toContain('sticky');
   });
 });
 
