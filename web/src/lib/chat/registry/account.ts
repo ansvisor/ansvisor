@@ -27,7 +27,8 @@ export const ACCOUNT_READS = [
     brandOf: null,
     costClass: 'C0',
     labelKey: 'members',
-    route: '/dashboard/settings/team',
+    // Chat is on, so the team is in Team, roles & access (owner, 2026-11-09).
+    route: '/dashboard/settings/roles-access',
     mcpTool: null,
     specRow: '8',
     inputSchema: none,

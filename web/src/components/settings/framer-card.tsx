@@ -135,7 +135,7 @@ export function FramerCard() {
   };
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
+    <div className="space-y-4 rounded-lg border bg-card p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
           <LayoutTemplate className="h-5 w-5 text-muted-foreground" />
@@ -558,7 +558,7 @@ function FramerMapping({
       )}
 
       {collection && (
-        <div className="space-y-3 rounded-md border p-3">
+        <div className="space-y-3 rounded-md border bg-card p-3">
           <div>
             <p className="text-sm font-medium">{t('fieldsTitle')}</p>
             <p className="text-xs text-muted-foreground">{t('fieldsHint')}</p>

@@ -1,17 +1,17 @@
 ---
 title: Roles: who can do what
 route: /dashboard/settings/roles-access
-keywords: [roles, who can do what, admin, manager, analyst, agency partner, permissions, roles and access]
+keywords: [roles, who can do what, admin, manager, analyst, agency partner, permissions, roles and access, team roles and access, team, invite member, pending invitations]
 synonyms: [user roles, team permissions, why is a button missing, read-only role, access levels]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-09
+last_checked: 2026-11-09
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [CONTRIBUTING.md]
 ---
-Everyone in your workspace has one of four roles: **Admin**, **Manager**, **Analyst** or **Agency partner**. Admins set roles in **Settings › Team**. Where Chat is on, **Roles & access** in Settings lists each person's role, with a table of what each role can do in the app and in Chat. A button your role can't use isn't shown.
+Everyone in your workspace has one of four roles: **Admin**, **Manager**, **Analyst** or **Agency partner**. Admins set roles in **Settings › Team, roles & access** (**Team** where Chat is off). With Chat on, that page has the team and its invitations at the top, then each person's role, with a table of what each role can do in the app and in Chat. A button your role can't use isn't shown.
 
 ## What everyone can do
 

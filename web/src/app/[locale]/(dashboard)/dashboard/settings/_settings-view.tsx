@@ -38,6 +38,7 @@ import {
   SETTINGS_SECTIONS,
   hasSettingsSection,
   settingsSectionPath,
+  teamSection,
   type SettingsSection,
 } from './_sections';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
@@ -71,9 +72,20 @@ export function SettingsView({ section }: { section: SettingsSection }) {
     };
   }, [chatAgentic, requestsRead]);
   // Roles & access and Chat are the new Chat's: with it off, their addresses open Account.
-  const [active, setActive] = useState<SettingsSection>(
-    (section === 'roles-access' || section === 'chat') && !chatAgentic ? 'account' : section,
-  );
+  // With it on, Team's address opens Team, roles & access, where the team now is.
+  const opened: SettingsSection =
+    (section === 'roles-access' || section === 'chat') && !chatAgentic
+      ? 'account'
+      : section === 'team'
+        ? teamSection(chatAgentic)
+        : section;
+  const [active, setActive] = useState<SettingsSection>(opened);
+  // An old link to Team: the address names the section it opened.
+  useEffect(() => {
+    if (opened !== section) {
+      window.history.replaceState(null, '', settingsSectionPath(window.location.pathname, opened));
+    }
+  }, [opened, section]);
 
   const show = (next: SettingsSection) => {
     setActive(next);
@@ -115,7 +127,8 @@ export function SettingsView({ section }: { section: SettingsSection }) {
     organization: t('organization'),
     'white-label': t('whiteLabel.title'),
     team: t('team'),
-    'roles-access': t('rolesAccess'),
+    // The team is in it with the new Chat on (owner, 2026-11-09).
+    'roles-access': t('teamRolesAccess'),
     'menu-access': t('menuAccess.title'),
     authors: t('authors.title'),
     content: t('content.title'),
@@ -134,7 +147,9 @@ export function SettingsView({ section }: { section: SettingsSection }) {
     (id) =>
       hasSettingsSection(id, { isCloud }) &&
       (id !== 'menu-access' || canManageMenus) &&
-      ((id !== 'roles-access' && id !== 'chat') || chatAgentic),
+      ((id !== 'roles-access' && id !== 'chat') || chatAgentic) &&
+      // With the new Chat on, Team is in Team, roles & access.
+      (id !== 'team' || !chatAgentic),
   ).map((id) => ({ id, label: labels[id] }));
 
   return (
@@ -246,8 +261,12 @@ export function SettingsView({ section }: { section: SettingsSection }) {
           {/* Team */}
           {active === 'team' && <TeamSection />}
 
+          {/* Team, roles & access: the team and its invitations, then the roles and access. */}
           {active === 'roles-access' && chatAgentic && (
-            <RolesAccessSection onRequestsChanged={() => setRequestsRead((n) => n + 1)} />
+            <div className="space-y-6">
+              <TeamSection />
+              <RolesAccessSection onRequestsChanged={() => setRequestsRead((n) => n + 1)} />
+            </div>
           )}
 
           {active === 'menu-access' && <MenuAccessSection />}

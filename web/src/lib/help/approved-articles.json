@@ -4803,7 +4803,11 @@
         "analyst",
         "agency partner",
         "permissions",
-        "roles and access"
+        "roles and access",
+        "team roles and access",
+        "team",
+        "invite member",
+        "pending invitations"
       ],
       "synonyms": [
         "user roles",
@@ -4813,11 +4817,11 @@
         "access levels"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-09",
       "sections": [
         {
           "heading": null,
-          "text": "Everyone in your workspace has one of four roles: **Admin**, **Manager**, **Analyst** or **Agency partner**. Admins set roles in **Settings › Team**. Where Chat is on, **Roles & access** in Settings lists each person's role, with a table of what each role can do in the app and in Chat. A button your role can't use isn't shown."
+          "text": "Everyone in your workspace has one of four roles: **Admin**, **Manager**, **Analyst** or **Agency partner**. Admins set roles in **Settings › Team, roles & access** (**Team** where Chat is off). With Chat on, that page has the team and its invitations at the top, then each person's role, with a table of what each role can do in the app and in Chat. A button your role can't use isn't shown."
         },
         {
           "heading": "What everyone can do",
@@ -4852,11 +4856,11 @@
         "per brand access"
       ],
       "plan": "growth",
-      "updated": "2026-11-03",
+      "updated": "2026-11-09",
       "sections": [
         {
           "heading": null,
-          "text": "When several teams or agencies work in one workspace, each person can see every brand or only the brands they work on. Admins choose it in **Settings › Team**, when they invite someone and later with **Edit brands**. The plan, billing and the AI limit stay the workspace's."
+          "text": "When several teams or agencies work in one workspace, each person can see every brand or only the brands they work on. Admins choose it in **Settings › Team, roles & access** (**Team** where Chat is off), when they invite someone and later with **Edit brands**. The plan, billing and the AI limit stay the workspace's."
         },
         {
           "heading": "All brands or Selected brands",
@@ -4864,15 +4868,15 @@
         },
         {
           "heading": "Invite someone to some brands",
-          "text": "In **Settings › Team**, click **Invite member**, enter their e-mail and role, then choose **All brands** or **Selected brands** and tick their brands. Pick at least one. The invitation keeps the choice until it's accepted; a brand deleted in the meantime is left out."
+          "text": "In **Settings › Team, roles & access**, click **Invite member**, enter their e-mail and role, then choose **All brands** or **Selected brands** and tick their brands. Pick at least one. The invitation keeps the choice until it's accepted; a brand deleted in the meantime is left out."
         },
         {
           "heading": "Change someone's brands",
-          "text": "Each person's row in **Settings › Team** shows **All brands** or how many brands they see, for admins. Click it to open **Edit brands**, change the choice and click **Save**. They see the change on their next page.\n\nOnly admins change brand access, a manager's included. **Roles & access** and **Your access** show each person's brands too."
+          "text": "Each person's row in **Settings › Team, roles & access** shows **All brands** or how many brands they see, for admins. Click it to open **Edit brands**, change the choice and click **Save**. They see the change on their next page.\n\nOnly admins change brand access, a manager's included. The roles table under it and **Your access** show each person's brands too."
         },
         {
           "heading": "See who can see a brand",
-          "text": "A brand's **Settings › People** lists everyone who can see it, with their role. Admins also see why: **All brands**, or **Shared with them**. To change it, use **Edit brands** in **Settings › Team**."
+          "text": "A brand's **Settings › People** lists everyone who can see it, with their role. Admins also see why: **All brands**, or **Shared with them**. To change it, use **Edit brands** in **Settings › Team, roles & access**."
         }
       ]
     },

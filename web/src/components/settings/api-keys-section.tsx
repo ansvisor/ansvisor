@@ -188,7 +188,7 @@ export function ApiKeysSection() {
           <p className="text-sm text-muted-foreground py-6 text-center">{t('apiKeys_noKeys')}</p>
         ) : (
           <>
-            <div className="divide-y rounded-md border">
+            <div className="divide-y rounded-md border bg-card">
               {keys.map((k) => {
                 const revoked = !!k.revoked_at;
                 return (

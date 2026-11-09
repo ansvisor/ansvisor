@@ -156,16 +156,8 @@ function MembersTable({
         <Badge variant="secondary" className="tabular-nums">
           {members.length}
         </Badge>
-        {isAdmin && (
-          <Link
-            href="/dashboard/settings/team"
-            className="ml-auto text-xs font-medium underline-offset-2 hover:underline"
-          >
-            {t('roles.manageInTeam')}
-          </Link>
-        )}
       </div>
-      <div className="overflow-x-auto rounded-xl border">
+      <div className="overflow-x-auto rounded-xl border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -317,7 +309,7 @@ function RoleMatrix({ role }: { role: TeamRole }) {
           </Badge>
         </span>
       </div>
-      <div className="overflow-x-auto rounded-xl border">
+      <div className="overflow-x-auto rounded-xl border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -402,7 +394,7 @@ function AdminSwitches({ access }: { access: ChatAccess }) {
           {t('onlyAdmins')}
         </span>
       </div>
-      <ul className="divide-y rounded-xl border">
+      <ul className="divide-y rounded-xl border bg-card">
         {rows.map((row) => (
           <li key={row.key} className="flex items-center gap-3 px-3.5 py-2.5 text-sm">
             <span className="min-w-0 flex-1">
