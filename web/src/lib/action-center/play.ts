@@ -45,7 +45,8 @@ export interface CategoryReason {
 
 export type PlayReason = IntentReason | CategoryReason;
 
-export interface PlayOption {
+/** A play the same prompts ask for: how many of them, and their share of the AI searches. */
+export interface IntentOption {
   id: PlayId;
   assetType: string;
   prompts: number;
@@ -53,14 +54,33 @@ export interface PlayOption {
   share: number;
 }
 
+/**
+ * A buying guide next to a store's live category page, when the category has
+ * none yet (AC plan P-7): the category, and its page, which the guide links.
+ */
+export interface GuideOption {
+  kind: 'category';
+  id: PlayId;
+  assetType: string;
+  category: string;
+  linkTo: string;
+}
+
+export type PlayOption = IntentOption | GuideOption;
+
 export interface ActionPlay {
   id: PlayId;
   assetType: string;
   /** The brand's kind of site when it was picked. */
   siteType: SiteType;
   reasons: PlayReason[];
-  /** Up to two more worth doing for the same prompts. */
+  /** Up to two more worth doing here: a missing buying guide first, then the prompts' plays. */
   supporting: PlayOption[];
+}
+
+/** Whether an option is a buying guide next to a category page (above). */
+export function isGuideOption(option: PlayOption): option is GuideOption {
+  return 'kind' in option && option.kind === 'category';
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -74,6 +94,17 @@ const isPlayId = (value: unknown): value is PlayId =>
 
 function optionOf(value: unknown): PlayOption | null {
   if (!isRecord(value) || !isPlayId(value.id) || typeof value.assetType !== 'string') return null;
+  if (value.kind === 'category') {
+    if (typeof value.category !== 'string' || !value.category.trim()) return null;
+    if (typeof value.linkTo !== 'string' || !/^https?:\/\//i.test(value.linkTo)) return null;
+    return {
+      kind: 'category',
+      id: value.id,
+      assetType: value.assetType,
+      category: value.category.trim(),
+      linkTo: value.linkTo,
+    };
+  }
   const prompts = count(value.prompts);
   const of = count(value.of);
   const part = share(value.share);

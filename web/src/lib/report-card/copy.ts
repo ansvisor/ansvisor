@@ -1,12 +1,19 @@
 /**
  * Every word the report card prints, by language (owner decision
  * 2026-11-04: the whole card in the target language). English is the
- * default; another language adds a CardCopy of its own (./copy-*.ts) and
- * is picked by the card's country in cardCopy(). Numbers, money and dates
- * are formatted by the copy's locale. Sentences are functions of their
+ * default; another language adds a CardCopy of its own (./copy-*.ts),
+ * picked by the language the form chose (owner decision 2026-11-09), else
+ * by the card's country, in cardCopy(). Numbers, money and dates are
+ * formatted by the copy's locale. Sentences are functions of their
  * figures, so a language orders them its own way.
  */
 
+import { de } from './copy-de';
+import { es } from './copy-es';
+import { fr } from './copy-fr';
+import { it } from './copy-it';
+import { nl } from './copy-nl';
+import { pt } from './copy-pt';
 import { tr } from './copy-tr';
 
 /** "A", "A and B", "A, B and C". */
@@ -51,6 +58,8 @@ export const en = {
   /** BCP 47 locale for numbers, money and dates. */
   locale: 'en-US',
   list: listEn,
+  /** The country as page 1's subtitle names it: "United States". */
+  countryName: (country: { code: string; name: string }) => country.name,
   /** The country as a sentence names it: "the United States", "Türkiye". */
   country: (country: { code: string; name: string }) =>
     WITH_THE.has(country.code.toUpperCase()) ? `the ${country.name}` : country.name,
@@ -69,6 +78,8 @@ export const en = {
   // ─── Page 1 ────────────────────────────────────────────────────────────────
   status: {
     eyebrow: 'Free AI visibility report card',
+    /** The small trial button in page 1's top corner. */
+    trial: 'Start free trial',
     title: (company: string) => `How visible is ${company} in AI answers?`,
     subtitle: (domain: string, country: string, language: string, date: string) =>
       `${domain} · ${country}, in ${language} · ${date}`,
@@ -266,9 +277,18 @@ export const en = {
     legendMissed: 'Answered, didn’t name you',
     legendNone: 'No answer',
     colQuestion: 'Question',
-    colSearches: 'Searches',
+    colSearches: 'Searches/mo',
     colInstead: 'Named instead',
-    searchesNote: 'Searches: Google searches a month for the question’s keyword in your country.',
+    /**
+     * A question's searches a month as Google Keyword Planner's ranges
+     * (rules.ts searchesLabel), never an exact count: 1–99, 100–999,
+     * 1,000–9,999, 10,000–99,999, and 100,000 and up.
+     */
+    ranges: ['10–100', '100–1K', '1K–10K', '10K–100K', '100K+'] as readonly string[],
+    /** A keyword Google gave 0 or no searches for: too few to report, not none. */
+    low: 'Low',
+    searchesNote: (low: boolean) =>
+      `Searches/mo: Google searches a month for the question’s keyword in your country, as Google’s range. ${low ? 'Low: too few searches for Google to report; questions' : 'Questions'} people ask AI are longer than Google searches, so a keyword’s count undercounts them.`,
     groupCount: (n: number) => plural(n, 'question', 'questions'),
     related: 'a need your buyers also have',
     growthKey: 'Lighter columns: Google’s engines, in Growth',
@@ -316,11 +336,11 @@ export const en = {
   // ─── Page 4 ────────────────────────────────────────────────────────────────
   value: {
     eyebrow: 'What it’s worth',
-    title: 'What AI visits are worth, and the plan that matches this card',
+    title: 'What AI visits are worth, and the plans for this card',
     subtitle:
-      'AI visits priced at what the same clicks cost in Google Ads, and the plan this card measured.',
+      'AI visits priced at what the same clicks cost in Google Ads, the two plans side by side, and how Ansvisor helps.',
     demand: (searches: string, country: string, keywords: number) =>
-      `Your questions’ keywords get ${searches} Google searches a month in ${country} (${plural(keywords, 'keyword', 'keywords')} with a volume).`,
+      `Your questions’ keywords get about ${searches} Google searches a month in ${country} (${plural(keywords, 'keyword', 'keywords')} with a volume).`,
     cpcLine: (cpc: string, keywords: number, total: number) =>
       `Google Ads’ median cost per click for them: ${cpc} (${keywords} of ${total} keywords had one).`,
     colShare: 'If AI sent you',
@@ -350,18 +370,46 @@ export const en = {
       `${visits} AI visits a month: ${low}–${high} a month`,
     scenarios:
       'Scenarios, not a forecast or a guarantee. AI Traffic in Ansvisor measures your real AI visits once it’s set up.',
-    planTitle: 'The plan that matches this card',
+    planTitle: 'The plans for this card',
+    planName: (plan: string) => `Ansvisor ${plan}`,
+    starterTag: 'Matches this card',
+    growthTag: 'Adds Google’s engines',
+    perMonth: (price: string) => `${price}/month`,
+    yearly: (price: string) => `or ${price} a year, paid yearly: 20% off`,
     starterMatch: (engines: string, headed: boolean) =>
       headed
         ? `Tracks ${engines} every day: the engines this card’s visibility counts.`
         : `Tracks ${engines} every day.`,
-    perMonth: (price: string) => `${price}/month`,
-    yearly: (price: string) => `or ${price} a year, paid yearly: 20% off`,
-    starterLimits: (prompts: number, brands: number) =>
-      `${prompts} prompts tracked every day, ${plural(brands, 'brand', 'brands')}, Chat and Agent Center.`,
-    googleEngines: 'Gemini, Google AI Overviews and Google AI Mode',
-    growthLine: (engines: string, price: string, yearly: string, prompts: number, brands: number) =>
-      `Growth, ${price}/month or ${yearly} a year (20% off), adds ${engines} (the Growth band on page 1), ${prompts} prompts, ${plural(brands, 'brand', 'brands')} and Full auto agents.`,
+    growthAdds: (engines: string, banded: boolean) =>
+      banded
+        ? `Adds ${engines} every day: the Growth band on page 1.`
+        : `Adds ${engines} every day.`,
+    googleEngines: 'Google AI Overviews and Google AI Mode',
+    planLimits: (prompts: number, brands: number) =>
+      `${prompts} prompts tracked every day, ${plural(brands, 'brand', 'brands')}.`,
+    aiIncluded: 'AI usage included.',
+    aiMore: (times: number) =>
+      `${times}× the AI usage: more content opportunities and drafts, more agent runs and more Action Center suggestions every month.`,
+    siteAudits: (pages: number) => `Site Audit: ${pages} pages a month.`,
+    starterAgents: 'Chat, and Agent Center with agents that ask before every change.',
+    growthAgents: 'Full auto: the agents you choose publish on their own.',
+    mcpRead: 'MCP: read your Ansvisor data from AI tools.',
+    mcpReadWrite: 'MCP: read and write your Ansvisor data from AI tools.',
+    workTitle: 'Ansvisor does the work with you',
+    work: [
+      {
+        title: 'Chat',
+        body: 'Answers from your own Ansvisor data, prepares this card’s week-one work and reads the files you add.',
+      },
+      {
+        title: 'Agent Center',
+        body: 'Ready-to-use agents and more than 700 skills: they run routine AI-visibility work on a schedule or when something changes.',
+      },
+      {
+        title: 'MCP',
+        body: 'Use your Ansvisor data from Claude, ChatGPT, Cursor and other AI tools.',
+      },
+    ],
     ctaTitle: 'Measure your own questions',
     ctaBody: (prompts: number, engines: string, questions: number) =>
       `Start the free trial: Starter tracks ${prompts} prompts every day in ${engines}, so this card’s ${questions} questions and ${Math.max(prompts - questions, 0)} of your own fit in.`,
@@ -370,19 +418,36 @@ export const en = {
       `Track this card’s ${questions} questions as prompts in ${country}, and add your own.`,
       'Open the Action Center after the first run: what to do next, ranked.',
     ],
-    ctaLink: 'Start a free trial at app.ansvisor.com',
+    button: 'Start your free trial',
   },
 };
 
 export type CardCopy = typeof en;
 
+/**
+ * The languages a card can be written in, whichever its questions were
+ * asked in (owner decision 2026-11-09); the server's form takes the same
+ * (server lib/report-card/countries.js REPORT_LANGUAGES). Chinese, Japanese
+ * and Arabic wait for fonts and right-to-left pages.
+ */
+export const REPORT_LANGUAGES = ['en', 'tr', 'fr', 'es', 'de', 'pt', 'it', 'nl'] as const;
+export type ReportLanguage = (typeof REPORT_LANGUAGES)[number];
+
+export const BY_LANGUAGE: Record<ReportLanguage, CardCopy> = { en, tr, fr, es, de, pt, it, nl };
+
+/** The language a country's card is written in when the form chose none. */
 const BY_COUNTRY: Record<string, CardCopy> = { TR: tr };
 
 /**
- * The card's words, by its country: Turkish for Türkiye, English
- * elsewhere. Another language adds a ./copy-*.ts and its countries here.
+ * The card's words: in the language the form chose, else by its country,
+ * Turkish for Türkiye and English elsewhere. Another language adds a
+ * ./copy-*.ts, here and in REPORT_LANGUAGES.
  */
-export function cardCopy(card?: { country: { code: string } }): CardCopy {
+export function cardCopy(
+  card?: { country: { code: string } },
+  language?: ReportLanguage | null,
+): CardCopy {
+  if (language) return BY_LANGUAGE[language];
   const code = card?.country.code.toUpperCase() ?? '';
   return BY_COUNTRY[code] ?? en;
 }

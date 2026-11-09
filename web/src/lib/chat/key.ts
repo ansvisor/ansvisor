@@ -1,6 +1,11 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isCloud } from '@/config/plans';
-import { readActiveKey, readProviderKey, resolveAgentModelConfig } from '@/lib/agent/key';
+import {
+  readActiveKey,
+  readProviderKey,
+  resolveAgentModelConfig,
+  selfHostModelConfig,
+} from '@/lib/agent/key';
 import type { AgentModelConfig } from '@/lib/agent/model';
 import {
   isAiProvider,
@@ -181,6 +186,14 @@ export async function resolveChatModelKey(
     }
   }
 
+  // Self-host: the operator's env key is Ansvisor's here, with no budget to
+  // draw on (the server meters nothing), and the operator picks the
+  // provider via env — Anthropic, then OpenRouter, then Gemini.
+  if (!isCloud()) {
+    const config = selfHostModelConfig();
+    return config ? { source: 'ansvisor', config } : null;
+  }
+  // Cloud, app key: Anthropic first-party only; budget metering assumes it.
   const apiKey = process.env.ANTHROPIC_API_KEY;
   return apiKey
     ? { source: 'ansvisor', config: { provider: 'anthropic', apiKey, settings: {} } }

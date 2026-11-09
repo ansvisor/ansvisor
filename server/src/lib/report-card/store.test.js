@@ -70,3 +70,41 @@ describe('reportCardStore.spendSince', () => {
     );
   });
 });
+
+describe('reportCardStore, the request’s report language', () => {
+  /** A table that records what was asked of it and answers `rows`. */
+  function recordingDb(rows = []) {
+    const calls = [];
+    const query = new Proxy(
+      {},
+      {
+        get: (_, name) =>
+          name === 'then'
+            ? (resolve) => resolve({ data: rows, error: null })
+            : (...args) => {
+                calls.push([name, ...args]);
+                return query;
+              },
+      },
+    );
+    return { calls, db: { from: (table) => (calls.push(['from', table]), query) } };
+  }
+
+  it('keeps the language the form chose on the request', async () => {
+    const { calls, db } = recordingDb({ id: 'req-1' });
+    const row = { email: 'ayse@acme.example', report_language: 'fr', outcome: 'queued' };
+    await reportCardStore(db).insertRequest(row);
+    expect(calls).toContainEqual(['from', 'report_card_requests']);
+    expect(calls).toContainEqual(['insert', row]);
+  });
+
+  it('reads it with the e-mails waiting, so each goes out in its own language', async () => {
+    const { calls, db } = recordingDb([{ id: 'req-1', report_language: 'de' }]);
+    expect(await reportCardStore(db).undeliveredRequests(20)).toEqual([
+      { id: 'req-1', report_language: 'de' },
+    ]);
+    const select = calls.find(([name]) => name === 'select')[1];
+    expect(select).toMatch(/\breport_language\b/);
+    expect(select).toMatch(/\bcountry\b/);
+  });
+});

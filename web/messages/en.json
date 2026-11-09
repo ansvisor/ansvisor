@@ -2332,7 +2332,8 @@
         "categoryReason": "The topic is about your {category} category, whose page {page} is live with {inStock, plural, one {# product} other {# products}} in stock. Optimize it for the topic’s questions; its best sellers are picked for its shopping path.",
         "reason": "{prompts, number} of {of, plural, one {# prompt} other {# prompts}} {play, select, comparison {ask to compare options} best_of {ask for the best options} guide {ask how to do something or fix a problem} definition {ask what something is} other {ask for this}}: {share, number, percent} of their estimated AI searches.",
         "also": "Also worth doing here",
-        "alsoLine": "{name} · {share, number, percent} of the AI searches"
+        "alsoLine": "{name} · {share, number, percent} of the AI searches",
+        "alsoGuideLine": "{name} next to {page}: no page of yours guides shoppers to your {category} category yet. Link it to that page and the category’s best sellers."
       }
     },
     "gettingStarted": {
@@ -3804,7 +3805,6 @@
       "name": "Read What’s new",
       "step": "Read What’s new"
     },
-    "newSkill": { "name": "Save skills", "step": "Saved skill" },
     "memorySave": { "name": "Save to memory", "step": "Saved to memory" },
     "memoryForget": { "name": "Remove from memory", "step": "Removed from memory" },
     "callAgent": { "name": "Run another agent", "step": "Ran agent" },
