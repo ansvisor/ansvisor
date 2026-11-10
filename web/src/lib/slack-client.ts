@@ -14,12 +14,8 @@ import { INTEGRATION_READ_TIMEOUT_MS } from '@/lib/integrations-client';
 export const SLACK_SEND_KINDS = ['pulse', 'drops', 'suggestion', 'needsYou'] as const;
 export type SlackSendKind = (typeof SLACK_SEND_KINDS)[number];
 
-/**
- * The switches the card shows: the kinds Ansvisor posts today. The drop
- * alerts, the daily suggestion and "an agent needs you" each add theirs with
- * the server's send (#2139).
- */
-export const SLACK_SHOWN_KINDS: readonly SlackSendKind[] = ['pulse', 'drops', 'suggestion'];
+/** The switches the card shows: the kinds Ansvisor posts (server connection.js POSTED_KINDS). */
+export const SLACK_SHOWN_KINDS: readonly SlackSendKind[] = SLACK_SEND_KINDS;
 
 /**
  * Where the brand's Slack stands: none; posting (once a channel is picked);
