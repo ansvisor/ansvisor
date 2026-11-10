@@ -53,6 +53,11 @@ vi.mock('../../config/supabase.js', () => ({
 vi.mock('../access.js', () => ({ brandReaders: async () => readers.value }));
 vi.mock('../email.js', () => ({ deliverEmail }));
 vi.mock('../logger.js', () => ({ default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+// Inbox + Slack (#2139): lib/slack/needs-you.js posts; here, whom it was asked for and what it posted.
+const slack = vi.hoisted(() => ({ calls: [], posted: new Set() }));
+vi.mock('../slack/needs-you.js', () => ({
+  postNeedsYou: async (input, deps) => (slack.calls.push([input, deps]), slack.posted),
+}));
 
 const { renderNeedsYouEmail, tellNeedsYou } = await import('./needs-you.js');
 
@@ -62,6 +67,8 @@ const RUN = 'run-1';
 
 beforeEach(() => {
   deliverEmail.mockClear();
+  slack.calls = [];
+  slack.posted = new Set();
   readers.value = new Map([['person-1', new Set([BRAND])]]);
   db.tables = {
     chat_agent_runs: [
@@ -75,7 +82,7 @@ beforeEach(() => {
       },
     ],
     chat_agents: [{ id: 'agent-1', name: 'Weekly brief', owner_id: 'owner-1' }],
-    brands: [{ id: BRAND, name: 'Acme Coffee' }],
+    brands: [{ id: BRAND, name: 'Acme Coffee', organization_id: ORG, is_demo: false }],
     chat_conversations: [{ id: 'chat-1', agent_run_id: RUN }],
     profiles: [
       { id: 'person-1', organization_id: ORG },
@@ -130,6 +137,51 @@ describe('tellNeedsYou', () => {
       emails: 0,
     });
     expect(deliverEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('tellNeedsYou with Inbox + Slack (#2139)', () => {
+  beforeEach(() => {
+    db.tables.chat_user_prefs = [{ user_id: 'person-1', notify_via: 'inbox_slack' }];
+  });
+
+  it("posts to the brand's channel instead of the e-mail", async () => {
+    slack.posted = new Set(['person-1']);
+    expect(await tellNeedsYou({ orgId: ORG, agentRunId: RUN })).toEqual({
+      notices: 1,
+      emails: 0,
+      slack: 1,
+    });
+    expect(slack.calls).toHaveLength(1);
+    const [input, deps] = slack.calls[0];
+    expect(input).toEqual({
+      brand: { id: BRAND, name: 'Acme Coffee', organization_id: ORG, is_demo: false },
+      runId: RUN,
+      agent: 'Weekly brief',
+      runUrl: 'http://localhost:3000/dashboard/chat/chat-1',
+      people: ['person-1'],
+    });
+    expect(typeof deps.emailOf).toBe('function');
+    expect(deliverEmail).not.toHaveBeenCalled();
+  });
+
+  it("e-mails them when the brand's channel doesn't post it", async () => {
+    expect(await tellNeedsYou({ orgId: ORG, agentRunId: RUN })).toEqual({ notices: 1, emails: 1 });
+    expect(deliverEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ to: ['person-1@acme.test'] }),
+    );
+  });
+
+  it('asks Slack only for the people who chose it, and only once per run', async () => {
+    db.tables.chat_user_prefs = [];
+    await tellNeedsYou({ orgId: ORG, agentRunId: RUN });
+    expect(slack.calls).toEqual([]);
+    db.tables.chat_notices = [];
+    db.tables.chat_user_prefs = [{ user_id: 'person-1', notify_via: 'inbox_slack' }];
+    slack.posted = new Set(['person-1']);
+    await tellNeedsYou({ orgId: ORG, agentRunId: RUN });
+    await tellNeedsYou({ orgId: ORG, agentRunId: RUN });
+    expect(slack.calls).toHaveLength(1);
   });
 });
 

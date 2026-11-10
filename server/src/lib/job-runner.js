@@ -20,6 +20,7 @@ import { brandStopReason, brandStopReasons } from './active-subscriptions.js';
 import { processTrackingJob } from '../workers/tracking-worker.js';
 import { processContentJob } from '../workers/content-worker.js';
 import { generatePulseForBrand } from './pulse/engine.js';
+import { runSlackDrops } from './slack/drops.js';
 import { runFirstSignalPass, runSignalPass } from './signals/pass.js';
 import { sendFirstResultsEmail } from './first-results-email.js';
 import { emitToBrand } from './socket-rooms.js';
@@ -192,6 +193,12 @@ async function attemptTrackingJob(jobId, io, priority = false) {
         // eligibility checks, dedup and error handling inside.
         generatePulseForBrand(brandId).catch((err) => {
           logger.error({ err, brandId }, 'daily pulse trigger failed');
+        });
+        // Drop alerts in the brand's Slack channel (#2139): the last 7 days
+        // against the 7 before, beyond normal swing. A no-op for a brand
+        // that doesn't post them.
+        runSlackDrops(brandId).catch((err) => {
+          logger.error({ err, brandId }, '[slack] drop check trigger failed');
         });
         // Signal recording (Action Center) rides the same trigger but is
         // deliberately NOT inside the pulse engine: signals are a product

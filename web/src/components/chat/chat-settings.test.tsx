@@ -155,6 +155,24 @@ describe('ChatSettings', () => {
     expect(saved.patches).toEqual([{ notifyVia: 'inbox' }]);
   });
 
+  it('offers Inbox + Slack once a brand the person can see posts to Slack (#2139)', async () => {
+    await render(undefined, { ...OPEN, slack: true });
+    const select = action('chatSettings.notifyChannel')[0] as HTMLSelectElement;
+    expect([...select.options].map((option) => [option.textContent, option.disabled])).toEqual([
+      ['Inbox + email', false],
+      ['Inbox only', false],
+      ['Inbox + Slack', false],
+    ]);
+    expect(host.textContent).toContain(
+      'or with Inbox + Slack a message in the brand’s Slack channel that mentions you',
+    );
+    await act(async () => {
+      select.value = 'inbox_slack';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    expect(saved.patches).toEqual([{ notifyVia: 'inbox_slack' }]);
+  });
+
   it('offers the answer languages Chat reads, "Same as my question" first, and keeps a pick at once', async () => {
     await render();
     const select = action('chatSettings.answerLanguage')[0] as HTMLSelectElement;
