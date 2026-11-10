@@ -21,7 +21,7 @@ export const CANCEL_REASONS = [
   'other',
 ];
 
-const REASON_LABELS = {
+export const REASON_LABELS = {
   too_expensive: 'Too expensive',
   missing_feature: 'Missing a feature they need',
   no_results: 'Not seeing results',
@@ -72,7 +72,7 @@ export function feedbackRecipients(value = process.env.CANCEL_FEEDBACK_EMAILS) {
     .filter(Boolean);
 }
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -99,71 +99,12 @@ const formatMoment = (date) => {
   return `${formatDate(d)}, ${time} UTC`;
 };
 
-const numberFormat = new Intl.NumberFormat('en-US');
-
-/**
- * What the person who cancelled did lately, from PostHog
- * (posthog-person-summary.js): a few counts, their top pages and product
- * events, and a link to their profile and replays. { ok: false }: one line
- * saying PostHog didn't answer. None (PostHog isn't set up): nothing.
- */
-function activitySection(activity) {
-  if (!activity) return '';
-  if (activity.ok === false) {
-    return `<p style="margin:16px 0 0;font-size:14px;color:#464442;">PostHog didn't answer, so there is no activity summary.</p>\n`;
-  }
-  const cell = 'padding:4px 12px 4px 0;vertical-align:top;font-size:14px;';
-  const rows = [
-    ['Sessions', numberFormat.format(activity.sessions ?? 0)],
-    ['Active days', numberFormat.format(activity.activeDays ?? 0)],
-    ['Page views', numberFormat.format(activity.pageviews ?? 0)],
-    ['Last seen', activity.lastSeen ? formatMoment(activity.lastSeen) : 'Not in these days'],
-  ];
-  const list = (items, empty) =>
-    items?.length
-      ? `<ul style="margin:0;padding:0 0 0 20px;font-size:14px;">${items
-          .map(
-            ([text, n]) =>
-              `<li style="margin:0 0 2px;">${escapeHtml(text)} <span style="color:#464442;">· ${escapeHtml(numberFormat.format(n ?? 0))}</span></li>`,
-          )
-          .join('')}</ul>`
-      : `<p style="margin:0;font-size:14px;color:#464442;">${escapeHtml(empty)}</p>`;
-  const label = (text) =>
-    `<p style="margin:12px 0 4px;font-size:14px;color:#464442;">${escapeHtml(text)}</p>`;
-
-  return `<p style="margin:24px 0 8px;font-size:15px;font-weight:600;">Last ${escapeHtml(activity.days ?? 14)} days in Ansvisor</p>
-<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
-${rows
-  .map(
-    ([name, value]) =>
-      `<tr><td style="${cell}color:#464442;white-space:nowrap;">${escapeHtml(name)}</td><td style="${cell}">${escapeHtml(value)}</td></tr>`,
-  )
-  .join('\n')}
-</table>
-${label('Top pages')}
-${list(
-  activity.topPages?.map((page) => [page.path, page.views]),
-  'No pages viewed',
-)}
-${label('Top events')}
-${list(
-  activity.events?.map((item) => [item.event, item.count]),
-  'No product events',
-)}
-${
-  activity.personUrl
-    ? `<p style="margin:12px 0 0;font-size:14px;"><a href="${escapeHtml(activity.personUrl)}" style="color:#1C1A17;">Open their PostHog profile and replays</a></p>`
-    : ''
-}
-`;
-}
-
 /**
  * The e-mail to the team: what the customer chose in the subject, then who
- * they are, their plan, and what they said, then (with `activity`) what they
- * did in Ansvisor before. Plain tables and inline styles, for any mail client.
+ * they are, their plan, and what they said. Plain tables and inline styles,
+ * for any mail client.
  */
-export function buildCancelFeedbackEmail({ org, user, feedback, now = new Date(), activity }) {
+export function buildCancelFeedbackEmail({ org, user, feedback, now = new Date() }) {
   const orgName = org?.name || 'An organization';
   const wait = feedback.choice === 'wait';
   const subject = wait
@@ -205,7 +146,7 @@ ${rows
 <p style="margin:0;padding:12px;background:#F0EEEA;border-radius:8px;font-size:14px;white-space:pre-wrap;">${
     feedback.message ? escapeHtml(feedback.message) : '<em>No message</em>'
   }</p>
-${activitySection(activity)}<p style="margin:16px 0 0;font-size:12px;color:#464442;">Reply to this e-mail to answer the customer.</p>
+<p style="margin:16px 0 0;font-size:12px;color:#464442;">Reply to this e-mail to answer the customer.</p>
 </body></html>`;
 
   return { subject, html };
