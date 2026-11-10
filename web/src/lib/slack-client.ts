@@ -19,7 +19,7 @@ export type SlackSendKind = (typeof SLACK_SEND_KINDS)[number];
  * alerts, the daily suggestion and "an agent needs you" each add theirs with
  * the server's send (#2139).
  */
-export const SLACK_SHOWN_KINDS: readonly SlackSendKind[] = ['pulse'];
+export const SLACK_SHOWN_KINDS: readonly SlackSendKind[] = ['pulse', 'drops'];
 
 /**
  * Where the brand's Slack stands: none; posting (once a channel is picked);

@@ -72,7 +72,7 @@ export function pulseMessage({ brandName, metrics, insightsUrl, settingsUrl }) {
   const { kpis, highlights = [], warnings = [], degradedPlatforms = [], windowDays } = metrics;
   const weekly = windowDays === 7;
   const title = weekly ? 'Weekly Pulse' : 'Daily Pulse';
-  const text = `${brandName} ${title}: visibility ${kpis.visibilityRate} (${signed(kpis.weekTrend)} pts this week)`;
+  const text = `${mrkdwn(brandName)} ${title}: visibility ${kpis.visibilityRate} (${signed(kpis.weekTrend)} pts this week)`;
 
   const fields = [
     ['Visibility', String(kpis.visibilityRate)],

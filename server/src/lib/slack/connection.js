@@ -27,6 +27,13 @@ export const PROVIDER = 'slack';
 /** What a brand's channel may get, each on unless turned off. */
 export const SEND_KINDS = Object.freeze(['pulse', 'drops', 'suggestion', 'needsYou']);
 
+/**
+ * The kinds Ansvisor posts today (the card shows their switches): the Daily
+ * Pulse (deliver.js, pulse/engine.js) and the drop alerts (drops.js). The
+ * daily suggestion and "an agent needs you" join with their sends.
+ */
+export const POSTED_KINDS = Object.freeze(['pulse', 'drops']);
+
 /** Slack's channel ids: C… (G… for older private channels). */
 export const CHANNEL_ID = /^[CG][A-Z0-9]{6,20}$/;
 
@@ -238,10 +245,10 @@ export async function markRefused(accountId) {
  */
 export async function postConnectedMessage(
   connection,
-  { channelId, brand, by },
+  { channelId, brand, by, kinds },
   { post = slackPost } = {},
 ) {
-  const message = connectedMessage({ brand, by });
+  const message = connectedMessage({ brand, by, kinds });
   const data = await post(connection, 'chat.postMessage', {
     channel: channelId,
     ...message,
