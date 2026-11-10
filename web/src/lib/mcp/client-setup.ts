@@ -66,7 +66,9 @@ export function mcpClientSnippet(client: McpClient, url: string, token: string):
         mcpServers: { ansvisor: { serverUrl: url, headers: { Authorization: bearer } } },
       });
     case 'gemini-cli':
-      return `gemini mcp add --transport http \\\n  --header "Authorization: ${bearer}" \\\n  ansvisor ${url}`;
+      // Without --scope user, Gemini CLI writes .gemini/settings.json in the
+      // folder it runs from, so the key would land in that project.
+      return `gemini mcp add --scope user --transport http \\\n  --header "Authorization: ${bearer}" \\\n  ansvisor ${url}`;
     case 'hermes':
       return `mcp_servers:\n  ansvisor:\n    url: "${url}"\n    headers:\n      Authorization: "${bearer}"`;
     case 'openclaw':

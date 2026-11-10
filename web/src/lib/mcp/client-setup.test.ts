@@ -31,4 +31,10 @@ describe('mcpClientSnippet', () => {
     });
     expect(parse('zed').context_servers.ansvisor.url).toBe(URL_);
   });
+
+  it('gemini-cli writes the user’s settings, not the current folder’s', () => {
+    expect(mcpClientSnippet('gemini-cli', URL_, TOKEN)).toMatch(
+      /^gemini mcp add --scope user --transport http /,
+    );
+  });
 });

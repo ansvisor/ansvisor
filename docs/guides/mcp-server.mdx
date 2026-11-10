@@ -123,14 +123,37 @@ In the Cascade panel, open **… → Open MCP config file** and add:
 ### Gemini CLI
 
 ```bash
-gemini mcp add --transport http \
-  --header "Authorization: Bearer ${ANSVISOR_TOKEN}" \
+gemini mcp add --scope user --transport http \
+  --header 'Authorization: Bearer $ANSVISOR_TOKEN' \
   ansvisor https://app.ansvisor.com/api/mcp
 ```
 
-This writes the server to `~/.gemini/settings.json` with `httpUrl`. Use
-`httpUrl`, not `url`, if you edit the file by hand: `url` means the older SSE
-transport.
+`--scope user` writes the server to `~/.gemini/settings.json`. Without it,
+Gemini CLI writes `.gemini/settings.json` in the folder you run the command
+from, so the server only works in that project and the file can end up in a
+commit.
+
+Keep the single quotes. They write `$ANSVISOR_TOKEN` to the file as it is, and
+Gemini CLI fills it in from your environment when it loads its settings. With
+double quotes, your shell replaces it first and the key itself is written to
+the file.
+
+To edit the file by hand, merge this into any existing `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "ansvisor": {
+      "url": "https://app.ansvisor.com/api/mcp",
+      "type": "http",
+      "headers": { "Authorization": "Bearer $ANSVISOR_TOKEN" }
+    }
+  }
+}
+```
+
+Older Gemini CLI releases used `httpUrl` for this. It still works but is
+deprecated.
 
 ### Hermes Agent
 
