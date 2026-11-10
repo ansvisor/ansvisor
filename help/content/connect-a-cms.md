@@ -1,11 +1,11 @@
 ---
 title: Connect Webflow, WordPress, Framer or Wix
 route: /dashboard/settings/integrations
-keywords: [connect cms, webflow, wordpress, framer, wix, integrations, application password]
+keywords: [connect cms, webflow, wordpress, framer, wix, hubspot blog, integrations, application password]
 synonyms: [cms integration, link my blog, set up send to cms, connect my website]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-10
+last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -44,6 +44,10 @@ Pick the **Collection** your pages go to, then which field takes the title and t
 ## Connect Wix
 
 The site needs the Wix Blog: pages go there as draft posts. In Wix, the site's owner opens **Account Settings › API Keys Manager**, clicks **Generate API Key**, picks the site, gives the key **Manage Blog** and **Manage Ricos Document**, and copies it; Wix shows it once. In the **Wix** card, paste the **Site id** (or the whole address of the site's dashboard) and the **API key**, and click **Connect**. A Blog with no post can't be connected yet: write one post on it as the site's owner first.
+
+## Send to your HubSpot blog
+
+HubSpot is connected on its own card, under **CRM** (see **Connect HubSpot**), and comes with the Growth plan. To send pages there, turn on **Send pages to HubSpot as drafts** on that card, then pick the blog under **Blog posts go to** and click **Save**. If the card says HubSpot didn't give Ansvisor access to its blogs, click **Connect again** and approve the access in HubSpot.
 
 ## Replace or disconnect
 

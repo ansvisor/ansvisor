@@ -458,7 +458,8 @@ function CmsStatusMark({ status }: { status: CmsStatus }) {
     status.target === 'webflow' ||
       status.target === 'wordpress' ||
       status.target === 'framer' ||
-      status.target === 'wix'
+      status.target === 'wix' ||
+      status.target === 'hubspot'
       ? `${status.target}.${status.status}`
       : status.status,
     { when },

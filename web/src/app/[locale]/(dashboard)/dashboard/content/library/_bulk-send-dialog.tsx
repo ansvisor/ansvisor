@@ -120,6 +120,7 @@ export function BulkSendDialog({
     wordpress,
     framer,
     wix,
+    hubspot,
     target,
     pick,
     sent: keepTarget,
@@ -135,6 +136,7 @@ export function BulkSendDialog({
     ? framer.collection || tEditor('send.target.framer.collection')
     : '';
   const wixSite = wix?.ready ? wix.site : '';
+  const hubspotBlog = hubspot?.ready ? hubspot.blog : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -326,7 +328,9 @@ export function BulkSendDialog({
             ? 'inProgressFramer'
             : to === 'wix'
               ? 'inProgressWix'
-              : 'inProgress',
+              : to === 'hubspot'
+                ? 'inProgressHubspot'
+                : 'inProgress',
       );
     }
     // No CMS ready sent the pages to the webhook: what to fix is the one connected.
@@ -335,12 +339,14 @@ export function BulkSendDialog({
       !webflow?.ready &&
       !wordpress?.ready &&
       !framer?.ready &&
-      !wix?.ready
+      !wix?.ready &&
+      !hubspot?.ready
     ) {
       if (webflow) return tEditor('send.errors.no_webhookWebflow');
       if (wordpress) return tEditor('send.errors.no_webhookWordPress');
       if (framer) return tEditor('send.errors.no_webhookFramer');
       if (wix) return tEditor('send.errors.no_webhookWix');
+      if (hubspot) return tEditor('send.errors.no_webhookHubspot');
     }
     return tEditor(`send.errors.${code}`);
   };
@@ -372,18 +378,21 @@ export function BulkSendDialog({
                     ? t('descriptionFramer', { collection: framerCollection })
                     : target === 'wix'
                       ? t('descriptionWix', { site: wixSite })
-                      : t('description')}
+                      : target === 'hubspot'
+                        ? t('descriptionHubspot', { blog: hubspotBlog })
+                        : t('description')}
           </DialogDescription>
         </DialogHeader>
 
         {/* Where the pages go, before they go: a CMS once Settings has it ready. */}
-        {(webflow || wordpress || framer || wix) && target && !after && (
+        {(webflow || wordpress || framer || wix || hubspot) && target && !after && (
           <CmsTargetPicker
             value={target}
             webflow={webflow}
             wordpress={wordpress}
             framer={framer}
             wix={wix}
+            hubspot={hubspot}
             disabled={phase.kind === 'sending'}
             onChange={(next) => {
               pick(next);
