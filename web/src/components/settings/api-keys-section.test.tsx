@@ -12,6 +12,8 @@ import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
  */
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+// The Connected apps card's Choose a plan link (MCP over OAuth).
+vi.mock('@/i18n/navigation', () => ({ Link: () => null }));
 
 const { ApiKeysSection } = await import('./api-keys-section');
 
