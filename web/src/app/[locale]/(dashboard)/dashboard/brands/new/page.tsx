@@ -736,7 +736,7 @@ export default function NewBrandPage() {
       await bootstrapBrandVolumes(createdBrand.id);
 
       toast.success('Brand setup complete! Tracking is starting.');
-      // The person's start page: Chat Home in the free trial and the demo.
+      // The person's start page: Insights on a paid plan, Chat Home in the free trial.
       router.push('/dashboard');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save competitors');

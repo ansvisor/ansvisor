@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CHAT_HOME, DASHBOARD_HOME, isDashboardHomeItem, landingPageFor } from './home';
+import {
+  CHAT_HOME,
+  DASHBOARD_HOME,
+  INSIGHTS_HOME,
+  isDashboardHomeItem,
+  landingPageFor,
+} from './home';
 import { ACTION_CENTER_TABS } from '@/lib/action-center/tabs';
 
 /**
@@ -30,9 +36,10 @@ describe('the dashboard home', () => {
 });
 
 /**
- * Ansvisor starts on Chat Home, whatever the plan (owner decisions
- * 2026-11-06: the trial and the demo; 2026-11-09: paid, ended and canceled
- * plans too), on Ansvisor Cloud with the new Chat on and on the person's menu.
+ * On Ansvisor Cloud, a paid workspace starts on Insights while it is on the
+ * person's menu (owner decision 2026-11-10). Else Ansvisor starts on Chat
+ * Home with the new Chat on and on the person's menu (2026-11-06: the trial
+ * and the demo; 2026-11-09: a payment due, ended and canceled plans too).
  */
 describe('the landing page', () => {
   beforeEach(() => {
@@ -54,8 +61,30 @@ describe('the landing page', () => {
     expect(landingPageFor({ chatOn: true, chatHidden: true })).toBe(DASHBOARD_HOME);
   });
 
-  it('is the Action Center self-hosted', () => {
+  it('is Insights for a paid workspace, with the new Chat on or off', () => {
+    expect(INSIGHTS_HOME).toBe('/dashboard/insights');
+    expect(landingPageFor({ chatOn: true, paid: true })).toBe(INSIGHTS_HOME);
+    expect(landingPageFor({ chatOn: false, paid: true })).toBe(INSIGHTS_HOME);
+    expect(landingPageFor({ chatOn: true, chatHidden: true, paid: true })).toBe(INSIGHTS_HOME);
+  });
+
+  it("keeps Chat Home or the Action Center when Insights is off a paid person's menu", () => {
+    expect(landingPageFor({ chatOn: true, paid: true, insightsHidden: true })).toBe(CHAT_HOME);
+    expect(
+      landingPageFor({ chatOn: true, chatHidden: true, paid: true, insightsHidden: true }),
+    ).toBe(DASHBOARD_HOME);
+    expect(landingPageFor({ chatOn: false, paid: true, insightsHidden: true })).toBe(
+      DASHBOARD_HOME,
+    );
+  });
+
+  it('is Chat Home for a new buyer, asked without the plan (the checkout)', () => {
+    expect(landingPageFor({ chatOn: true })).toBe(CHAT_HOME);
+  });
+
+  it('is the Action Center self-hosted, paid or not', () => {
     vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
     expect(landingPageFor({ chatOn: true })).toBe(DASHBOARD_HOME);
+    expect(landingPageFor({ chatOn: true, paid: true })).toBe(DASHBOARD_HOME);
   });
 });

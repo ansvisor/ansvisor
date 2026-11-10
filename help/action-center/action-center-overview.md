@@ -4,14 +4,14 @@ route: /dashboard/action-center
 keywords: [action center, actions, signals, kpis, history, prioritized work]
 synonyms: [to-do list, work list, what to do next, recommendations, home page]
 plan: all
-updated: 2026-11-09
-last_checked: 2026-11-09
+updated: 2026-11-10
+last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Ansvisor opens on **Chat** when you sign in; it opens here instead when Chat isn't on your menu. Open it from **Action Center** in the main menu. Everything in it is per brand: switch brands to see another brand's work.
+The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. When you sign in, Ansvisor opens on **Visibility** on a paid plan, and on **Chat** otherwise, such as in the free trial. It opens here instead when neither that page nor Chat is on your menu. Open it from **Action Center** in the main menu. Everything in it is per brand: switch brands to see another brand's work.
 
 ## The tabs
 
