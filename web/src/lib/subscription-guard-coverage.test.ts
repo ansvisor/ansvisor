@@ -136,6 +136,9 @@ const OPEN_ROUTES: Record<string, string> = {
   'stripe/webhook:POST': "Stripe's own calls",
   'traffic/read:POST': 'reads only',
   'visibility/read:POST': 'reads only',
+  // Settings › Connected apps (MCP over OAuth, #2141): Disconnect ends one of
+  // the person's own connections.
+  'oauth/connections/[id]:DELETE': 'disconnecting an app takes back access',
   // Chat's runs: the engine answers 402 with the server's body itself
   // (startChatRun, prepareResume), but for a request to the Admins.
   'chat/conversations:POST':
