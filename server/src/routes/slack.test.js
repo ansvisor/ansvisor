@@ -477,13 +477,13 @@ describe('POST /api/slack/brands/:brandId/test', () => {
       brand: 'Northwind',
       by: 'Sam Lee',
       // The kinds Ansvisor posts that the brand has on.
-      kinds: ['pulse', 'drops'],
+      kinds: ['pulse', 'drops', 'suggestion'],
     });
     slackLib.brandSlack.mockResolvedValue(
       slack({ settings: { channel: CHANNEL, send: { ...ALL_ON, pulse: false } } }),
     );
     await send('POST', `/brands/${BRAND}/test`, {});
-    expect(slackLib.postConnectedMessage.mock.calls[1][1].kinds).toEqual(['drops']);
+    expect(slackLib.postConnectedMessage.mock.calls[1][1].kinds).toEqual(['drops', 'suggestion']);
   });
 
   it("posts nothing without a channel, or when whoever connected it can't see the brand", async () => {

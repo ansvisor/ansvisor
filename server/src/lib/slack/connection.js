@@ -29,10 +29,10 @@ export const SEND_KINDS = Object.freeze(['pulse', 'drops', 'suggestion', 'needsY
 
 /**
  * The kinds Ansvisor posts today (the card shows their switches): the Daily
- * Pulse (deliver.js, pulse/engine.js) and the drop alerts (drops.js). The
- * daily suggestion and "an agent needs you" join with their sends.
+ * Pulse (deliver.js, pulse/engine.js), the drop alerts (drops.js) and the
+ * daily suggestion (suggestion.js). "An agent needs you" joins with its send.
  */
-export const POSTED_KINDS = Object.freeze(['pulse', 'drops']);
+export const POSTED_KINDS = Object.freeze(['pulse', 'drops', 'suggestion']);
 
 /** Slack's channel ids: C… (G… for older private channels). */
 export const CHANNEL_ID = /^[CG][A-Z0-9]{6,20}$/;

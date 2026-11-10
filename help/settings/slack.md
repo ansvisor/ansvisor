@@ -1,7 +1,7 @@
 ---
 title: Send a brand's Daily Pulse and alerts to Slack
 route: /dashboard/settings/integrations
-keywords: [slack, slack channel, connect slack, pulse in slack, daily pulse, drop alert, notifications]
+keywords: [slack, slack channel, connect slack, pulse in slack, daily pulse, drop alert, daily suggestion, notifications]
 synonyms: [post to slack, slack integration, send updates to a channel, slack app, team chat alerts]
 plan: starter
 updated: 2026-11-10
@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: false
 sources: [docs/self-host/env-variables.mdx]
 ---
-Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, and an alert when visibility or citations drop more than usual. Each message links back to Ansvisor. Slack is on every paid plan.
+Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, an alert when visibility or citations drop more than usual, and one daily suggestion. Each message links back to Ansvisor. Slack is on every paid plan.
 
 ## Connect Slack
 
@@ -36,6 +36,10 @@ Each Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, t
 With **Drops beyond normal swing** on, Ansvisor checks the brand after each daily tracking run. When its visibility or its citation rate fell more than its usual swing, the last 7 days against the 7 before, it posts what fell, from what to what, and how far normal swing goes for these prompts.
 
 Only prompts tracked in both weeks count, so adding or removing prompts or engines isn't a drop. Each metric is alerted on at most once a week. Where the new Chat is on, **Ask Chat why** opens it with the question ready, to see what changed it.
+
+## Daily suggestion
+
+With **Daily suggestion** on, the channel gets one Action Center action a day for the brand. Daily suggestions are each person's own, in their Chat Inbox: the channel gets the action most of the brand's people were suggested that morning, with its priority, how long it has waited, and **Open in Action Center**. It is posted once a day, with the first suggestions of the day.
 
 ## When the card asks you to reconnect
 

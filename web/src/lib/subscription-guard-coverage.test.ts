@@ -185,6 +185,9 @@ const OPEN_ROUTES: Record<string, string> = {
   // The API server's report card queue (CRON_SECRET): Ansvisor's own free report card, no workspace.
   'internal/report-card/pdf:POST':
     "draws a free report card's PDF for the API server; no workspace, nothing written",
+  // The API server's daily suggestions job (CRON_SECRET): words an action for its Slack post (#2139).
+  'internal/slack/suggestion:POST':
+    "words an action for the API server's Slack post; reads only, nothing written",
 };
 
 /** What checks a route's plan before it writes. */
