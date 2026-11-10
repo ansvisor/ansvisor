@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   OWN_BRAND_COLOR,
@@ -40,6 +42,20 @@ describe('trendLines', () => {
 
   it('draws the strongest four at the end of the range without pins', () => {
     expect(trendLines(entities, points, []).map((l) => l.key)).toEqual(['you', 'a', 'b', 'e', 'c']);
+  });
+
+  it('colors competitors with theme tokens globals.css sets for light and dark', () => {
+    const css = readFileSync(join(__dirname, '../app/globals.css'), 'utf8');
+    const block = (selector: string) => css.slice(css.indexOf(`${selector} {`)).split('}')[0];
+    const lines = trendLines(entities, points, ['a', 'b', 'c', 'd', 'e']);
+
+    for (const { color } of lines.slice(1)) {
+      const token = /^var\((--chart-competitor-\d)\)$/.exec(color)?.[1];
+      expect(token).toBeDefined();
+      expect(block(':root')).toContain(`${token}:`);
+    }
+    // The first line's navy is lost on the dark card, so dark mode sets its own.
+    expect(block('.dark')).toContain('--chart-competitor-1:');
   });
 });
 

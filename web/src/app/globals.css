@@ -73,6 +73,13 @@
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
+  /* Competitor lines: the Insights trend's, in line order, and the
+     Competitors timeline's (the first). */
+  --chart-competitor-1: #1e3a8a;
+  --chart-competitor-2: #a855f7;
+  --chart-competitor-3: #f97316;
+  --chart-competitor-4: #ef4444;
+  --chart-competitor-5: #0d9488;
   --radius: 0.625rem;
   /* A step darker than the page, so the navigation reads as its own column;
      the hover tone sits below it so items still highlight. */
@@ -110,6 +117,11 @@
   --chart-3: oklch(0.546 0.245 262.881);
   --chart-4: oklch(0.488 0.243 264.376);
   --chart-5: oklch(0.424 0.199 265.638);
+  /* A light blue for the navy, which vanishes on the dark card, and a
+     lighter orange, so it differs from the red in lightness, not hue alone.
+     Every competitor line reads at 3:1 or more on the card. */
+  --chart-competitor-1: #93c5fd;
+  --chart-competitor-3: #fb923c;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);

@@ -80,7 +80,7 @@ export function PlatformVolumeChart({
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
           <XAxis
             type="number"
-            tick={{ fontSize: 10 }}
+            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
@@ -89,7 +89,7 @@ export function PlatformVolumeChart({
           <YAxis
             type="category"
             dataKey="name"
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"

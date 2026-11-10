@@ -153,13 +153,13 @@ export function TrendChart({ data }: { data: VisibilityTrendPoint[] }) {
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
           />
           <YAxis
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
@@ -346,7 +346,7 @@ export function VisibilityRateTrendChart({
           <XAxis
             dataKey="date"
             tickFormatter={(date: string) => labelOf.get(date) ?? date}
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
@@ -355,7 +355,7 @@ export function VisibilityRateTrendChart({
             domain={[0, yTop]}
             ticks={yTicks}
             tickFormatter={(v: number) => f.number(v)}
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"

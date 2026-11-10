@@ -30,7 +30,8 @@ export function OnboardingFrame({
       <div className="relative flex min-h-svh flex-col md:p-8">
         <div
           className={cn(
-            'm-auto w-full bg-background md:rounded-2xl md:border md:shadow-2xl',
+            // The outline is stronger in dark, where the default one is lost on the backdrop.
+            'm-auto w-full bg-background md:rounded-2xl md:border md:shadow-2xl dark:border-white/20',
             width === 'wide' && 'md:max-w-5xl',
             width === 'medium' && 'md:max-w-3xl',
             width === 'narrow' && 'md:max-w-xl',
