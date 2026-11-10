@@ -122,18 +122,14 @@ describe('AuthShell', () => {
     expect(flat).toContain('data-card="flat"');
   });
 
-  it('draws nothing behind the page unless asked: the agent animation or the starfield, before the content', () => {
+  it('draws nothing behind the page unless asked: the agent animation, before the content', () => {
     const none = html(
       <AuthShell>
         <p>the card</p>
       </AuthShell>,
     );
     expect(none).not.toContain('agent-backdrop');
-    expect(none).not.toContain('star-backdrop');
-    for (const [backdrop, slot] of [
-      ['agent', 'agent-backdrop'],
-      ['stars', 'star-backdrop'],
-    ] as const) {
+    for (const [backdrop, slot] of [['agent', 'agent-backdrop']] as const) {
       const host = document.createElement('div');
       host.innerHTML = html(
         <AuthShell backdrop={backdrop}>

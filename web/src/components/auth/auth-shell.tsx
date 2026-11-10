@@ -2,7 +2,6 @@ import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
-import { StarBackdrop } from '@/components/brand/star-backdrop';
 import { AgentBackdrop } from '@/components/auth/agent-backdrop';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
@@ -12,11 +11,11 @@ import { cn } from '@/lib/utils';
  * a header with the switch to the other auth page, and one centred column
  * with the page's card. Around the card, each page picks: a headline above
  * it (sign-up), the logo above it instead of in the header (sign-in), a
- * muted line below it, and what moves behind the page: the agent animation
- * (sign-up and sign-in) or the starfield (forgot and reset password). The
+ * muted line below it, and, on sign-up and sign-in only, the agent
+ * animation behind the page. The
  * card sits on a soft shadow, except under a headline (sign-up, option D).
  *
- * The text, links and card are marked data-keep-clear: the backdrops draw
+ * The text, links and card are marked data-keep-clear: the animation draws
  * nothing there ("column" for what is in the centred column).
  */
 export function AuthShell({
@@ -44,9 +43,9 @@ export function AuthShell({
   brandAboveCard?: boolean;
   /**
    * Behind the page, from xl (1280px) up, decoration only: the landing page's
-   * agent animation, or its starfield.
+   * agent animation. Sign-up and sign-in only (owner, 2026-11-10).
    */
-  backdrop?: 'agent' | 'stars';
+  backdrop?: 'agent';
   /** A wider column, for a card with more to say (the consent page). */
   wide?: boolean;
   children: React.ReactNode;
@@ -59,7 +58,6 @@ export function AuthShell({
       className="relative flex min-h-svh flex-col overflow-hidden bg-[#f7f5f1] dark:bg-background"
     >
       {backdrop === 'agent' && <AgentBackdrop />}
-      {backdrop === 'stars' && <StarBackdrop layout="auth" />}
 
       <header
         className={cn(

@@ -383,24 +383,3 @@
     }
   }
 }
-
-/*
- * The starfield behind the screens before the product (components/brand/
- * star-backdrop.tsx), as on the landing page's top bar: a slow twinkle, from
- * a star's own opacity (--star-o) down to a fifth of it and back. Each star
- * sets its own duration and delay; motion-reduce:animate-none keeps them all
- * still with reduced motion.
- */
-@theme {
-  --animate-star-twinkle: star-twinkle 4s ease-in-out infinite;
-
-  @keyframes star-twinkle {
-    0%,
-    100% {
-      opacity: var(--star-o, 1);
-    }
-    50% {
-      opacity: calc(var(--star-o, 1) * 0.2);
-    }
-  }
-}

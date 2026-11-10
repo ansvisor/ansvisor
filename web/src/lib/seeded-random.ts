@@ -1,7 +1,7 @@
 /**
  * A small seeded PRNG (mulberry32): the same numbers for the same seed, on
  * the server and in the browser. For decoration laid out at random but
- * identically on every render (the starfield, the agent animation's dots).
+ * identically on every render (the agent animation's dots).
  */
 export function seededRandom(seed: number): () => number {
   let a = seed >>> 0;

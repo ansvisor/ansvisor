@@ -6,7 +6,7 @@ export default function ResetPasswordPage() {
   const t = useTranslations('auth');
 
   return (
-    <AuthShell cta={{ href: '/sign-in', label: t('signIn') }} brandAboveCard backdrop="stars">
+    <AuthShell cta={{ href: '/sign-in', label: t('signIn') }} brandAboveCard>
       <AuthCard title={t('resetPasswordTitle')} subtitle={t('resetPasswordSubtitle')}>
         <ResetPasswordForm />
       </AuthCard>
