@@ -1,7 +1,7 @@
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { cleanClientName, type OAuthClient } from './clients';
 import { MAX_REDIRECT_URIS, checkRedirectUri } from './redirect-uris';
-import { SafeFetchError, fetchPublicJson } from './safe-fetch';
+import { SafeFetchError, fetchPublicJson, isIpHost } from './safe-fetch';
 
 /**
  * Client ID Metadata Documents (MCP authorization spec 2025-11-25, "SHOULD";
@@ -28,7 +28,10 @@ const MIN_CACHE_SECONDS = 5 * 60;
 const MAX_CACHE_SECONDS = 24 * 60 * 60;
 const DEFAULT_CACHE_SECONDS = 60 * 60;
 
-/** Whether a client id is a document's URL: https, a path, no query, fragment, credentials or dot segments. */
+/**
+ * Whether a client id is a document's URL: https, a host name (not an IP
+ * address), a path, no query, fragment, credentials or dot segments.
+ */
 export function isClientIdUrl(value: string): boolean {
   if (!value.startsWith('https://') || value.length > 2000) return false;
   let url: URL;
@@ -39,6 +42,7 @@ export function isClientIdUrl(value: string): boolean {
   }
   if (url.username || url.password || url.hash || url.search) return false;
   if (url.port && url.port !== '443') return false;
+  if (isIpHost(url)) return false;
   if (url.pathname === '/' || url.pathname === '') return false;
   // The URL as written must be the URL as parsed: no ./ or ../ the parser removed.
   return !/\/\.{1,2}(\/|$)/.test(value.slice(url.origin.length));

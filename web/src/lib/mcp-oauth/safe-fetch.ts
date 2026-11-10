@@ -9,10 +9,13 @@ import net from 'node:net';
  * against it). The checks of the API server's safe-fetch.js, for JSON:
  *
  *   * https only, on the standard port, with no credentials in the URL;
+ *   * a host written as an IP address is refused: it connects without a
+ *     DNS lookup, so the lookup's check below would never see it;
  *   * every address the host resolves to must be public, checked in the
  *     connection's own DNS lookup, so the address connected to is the one
  *     checked (no DNS rebinding between a check and the request);
- *   * no redirects followed; 5 seconds; 10 KB; JSON only.
+ *   * no redirects followed; 5 seconds for the whole request, however slowly
+ *     it trickles in; 10 KB; JSON only.
  */
 
 export const FETCH_TIMEOUT_MS = 5_000;
@@ -130,7 +133,17 @@ export function checkFetchUrl(value: string): URL {
   if (url.username || url.password || url.hash) {
     throw new SafeFetchError('invalid_url', 'No credentials or fragment');
   }
+  if (isIpHost(url)) throw new SafeFetchError('blocked', 'An IP address is not fetched');
   return url;
+}
+
+/**
+ * Whether a URL's host is an IP address rather than a name. The URL parser
+ * has already turned 2130706433 or 0x7f.1 into 127.0.0.1; an IPv6 host
+ * keeps its brackets.
+ */
+export function isIpHost(url: URL): boolean {
+  return net.isIP(url.hostname.replace(/^\[|\]$/g, '')) !== 0;
 }
 
 export interface RawResponse {
@@ -139,16 +152,43 @@ export interface RawResponse {
   body: Buffer;
 }
 
-/** The request itself, through publicOnlyLookup, stopped at the size and time limits. */
-export function httpsGet(url: URL): Promise<RawResponse> {
+export interface GetOptions {
+  /** https.request; a test passes http.request with an http URL. */
+  request?: typeof https.request;
+  lookup?: ReturnType<typeof publicOnlyLookup>;
+  timeoutMs?: number;
+}
+
+/**
+ * The request itself, through publicOnlyLookup, stopped at the size limit
+ * and at one deadline for the whole request (not a socket's idle time, which
+ * a server sending a byte at a time would keep resetting).
+ */
+export function httpsGet(
+  url: URL,
+  {
+    request = https.request,
+    lookup = publicOnlyLookup(),
+    timeoutMs = FETCH_TIMEOUT_MS,
+  }: GetOptions = {},
+): Promise<RawResponse> {
+  const signal = AbortSignal.timeout(timeoutMs);
   return new Promise((resolve, reject) => {
-    const req = https.request(
+    const fail = (err: unknown) =>
+      reject(
+        err instanceof SafeFetchError
+          ? err
+          : signal.aborted
+            ? new SafeFetchError('timeout', 'The document took too long')
+            : new SafeFetchError('unreachable', `Could not reach ${url.host}`),
+      );
+    const req = request(
       url,
       {
         method: 'GET',
         headers: { accept: 'application/json', 'user-agent': 'Ansvisor-OAuth/1.0' },
-        lookup: publicOnlyLookup() as unknown as typeof dns.lookup,
-        timeout: FETCH_TIMEOUT_MS,
+        lookup: lookup as unknown as typeof dns.lookup,
+        signal,
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -156,7 +196,8 @@ export function httpsGet(url: URL): Promise<RawResponse> {
         res.on('data', (chunk: Buffer) => {
           size += chunk.length;
           if (size > MAX_DOCUMENT_BYTES) {
-            req.destroy(new SafeFetchError('too_large', 'The document is larger than 10 KB'));
+            fail(new SafeFetchError('too_large', 'The document is larger than 10 KB'));
+            req.destroy();
             return;
           }
           chunks.push(chunk);
@@ -168,19 +209,14 @@ export function httpsGet(url: URL): Promise<RawResponse> {
             body: Buffer.concat(chunks),
           }),
         );
-        res.on('error', reject);
+        // Cut off part way, by the deadline or the server: never a partial document.
+        res.on('close', () => {
+          if (!res.complete) fail(new Error('incomplete'));
+        });
+        res.on('error', fail);
       },
     );
-    req.on('timeout', () =>
-      req.destroy(new SafeFetchError('timeout', 'The document took too long')),
-    );
-    req.on('error', (err) =>
-      reject(
-        err instanceof SafeFetchError
-          ? err
-          : new SafeFetchError('unreachable', `Could not reach ${url.host}`),
-      ),
-    );
+    req.on('error', (err) => fail(err.cause instanceof SafeFetchError ? err.cause : err));
     req.end();
   });
 }

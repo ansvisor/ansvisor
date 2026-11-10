@@ -83,6 +83,12 @@ describe('a client id that is a document URL', () => {
     ['https://claude.ai:8443/x', false],
     ['https://claude.ai/a/../b', false],
     ['https://claude.ai/a/./b', false],
+    // An IP host connects without the DNS lookup that checks addresses.
+    ['https://10.0.0.1/x', false],
+    ['https://169.254.169.254/x', false],
+    ['https://[fd00::1]/x', false],
+    ['https://2130706433/x', false],
+    ['https://8.8.8.8/x', false],
   ])('%s is one: %s', (value, ok) => {
     expect(isClientIdUrl(value)).toBe(ok);
   });
