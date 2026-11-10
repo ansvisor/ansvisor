@@ -78,4 +78,47 @@ describe('reportPdf', () => {
       squash("This page's last 5 audits scored 62 to 66, changes to the page included."),
     );
   }, 30_000);
+
+  it('prints HubSpot’s AI-sourced pipeline', async () => {
+    const withPipeline = report('October report', 'Brewline', 'Visibility rose.');
+    withPipeline.payload.aiPipeline = {
+      currency: 'USD',
+      syncedAt: '2026-10-31T06:00:00Z',
+      totals: {
+        contacts: 128,
+        contactsPrev: 100,
+        deals: 23,
+        wonDeals: 9,
+        wonRevenue: 62300,
+        wonRevenuePrev: 50000,
+        openDeals: 14,
+        openPipeline: 184500,
+      },
+      byEngine: [
+        {
+          source: 'chatgpt.com',
+          contacts: 71,
+          deals: 13,
+          wonDeals: 5,
+          wonRevenue: 38900,
+          openPipeline: 96000,
+        },
+      ],
+      byPage: [
+        {
+          page: 'https://acme.test/pricing',
+          contacts: 34,
+          deals: 9,
+          wonRevenue: 24100,
+          topSource: 'chatgpt.com',
+        },
+      ],
+      hubspotNative: { contacts: 12, deals: 2, wonRevenue: 4000 },
+    };
+    const text = await shown(await reportPdf(withPipeline, null, FONTS));
+    expect(text).toContain(squash('AI-sourced pipeline (HubSpot)'));
+    expect(text).toContain(squash('$62,300'));
+    expect(text).toContain(squash('ChatGPT71$38,900'));
+    expect(text).toContain(squash('HubSpot also counts 12 contacts'));
+  }, 30_000);
 });
