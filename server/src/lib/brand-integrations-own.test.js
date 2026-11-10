@@ -155,6 +155,74 @@ describe("a brand's choices on its sign-in (#2139)", () => {
   });
 });
 
+describe('HubSpot’s AI-sourced pipeline on a change of account (00520)', () => {
+  beforeEach(() => {
+    db.tables.integration_accounts.push(
+      account('hs-a', { provider: 'hubspot' }),
+      account('hs-b', { provider: 'hubspot' }),
+    );
+    db.tables.brand_integrations.push(
+      { brand_id: 'b1', provider: 'hubspot', account_id: 'hs-a', settings: {} },
+      { brand_id: 'b2', provider: 'hubspot', account_id: 'hs-b', settings: {} },
+    );
+    db.tables.hubspot_ai_contacts = [
+      { brand_id: 'b1', contact_id: '101' },
+      { brand_id: 'b2', contact_id: '201' },
+    ];
+    db.tables.hubspot_ai_deals = [
+      { brand_id: 'b1', deal_id: '9001' },
+      { brand_id: 'b2', deal_id: '9002' },
+    ];
+    withEmbeds();
+  });
+
+  const rowsOf = (brandId) => ({
+    contacts: db.tables.hubspot_ai_contacts.filter((r) => r.brand_id === brandId).length,
+    deals: db.tables.hubspot_ai_deals.filter((r) => r.brand_id === brandId).length,
+  });
+
+  it('goes when the brand uses another account, the other brands’ staying', async () => {
+    await useAccountForBrand(
+      { brand: BRAND, provider: 'hubspot', accountId: 'hs-b', brandIds: ['b1', 'b2'] },
+      { deleteRemote },
+    );
+    expect(rowsOf('b1')).toEqual({ contacts: 0, deals: 0 });
+    expect(rowsOf('b2')).toEqual({ contacts: 1, deals: 1 });
+  });
+
+  it('stays when the brand already uses that account', async () => {
+    await useAccountForBrand(
+      { brand: BRAND, provider: 'hubspot', accountId: 'hs-a', brandIds: ['b1', 'b2'] },
+      { deleteRemote },
+    );
+    expect(rowsOf('b1')).toEqual({ contacts: 1, deals: 1 });
+  });
+
+  it('goes when a new login of the brand’s own is activated', async () => {
+    db.tables.integration_accounts.push(
+      account('hs-new', { provider: 'hubspot', status: 'pending' }),
+    );
+    const status = vi.fn().mockResolvedValue('ACTIVE');
+    await activateBrandAccount(
+      { brand: BRAND, provider: 'hubspot', accountId: 'hs-new', userId: 'u1' },
+      { status, deleteRemote },
+    );
+    expect(rowsOf('b1')).toEqual({ contacts: 0, deals: 0 });
+    expect(rowsOf('b2')).toEqual({ contacts: 1, deals: 1 });
+  });
+
+  it('goes when the brand disconnects', async () => {
+    await removeBrandAccount({ brand: BRAND, provider: 'hubspot' }, { deleteRemote });
+    expect(rowsOf('b1')).toEqual({ contacts: 0, deals: 0 });
+    expect(rowsOf('b2')).toEqual({ contacts: 1, deals: 1 });
+  });
+
+  it('is no other product’s to clear', async () => {
+    await removeBrandAccount({ brand: BRAND, provider: 'google-analytics' }, { deleteRemote });
+    expect(rowsOf('b1')).toEqual({ contacts: 1, deals: 1 });
+  });
+});
+
 describe('useAccountForBrand', () => {
   it('uses the workspace’s account, and drops the brand’s own login nobody uses', async () => {
     withEmbeds();

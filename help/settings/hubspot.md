@@ -42,4 +42,4 @@ When another brand already uses a HubSpot account, pick it from **Use the accoun
 
 ## Disconnect, or a plan change
 
-**Disconnect** stops all reading and writing for the brand at once. The Ansvisor properties and their values stay in HubSpot. If the plan no longer includes HubSpot, the card says **Paused**: nothing is read or written until you upgrade, and the connection stays.
+**Disconnect** stops all reading and writing for the brand at once, and removes the AI-sourced contacts and deals Ansvisor read for it. The Ansvisor properties and their values stay in HubSpot. If the plan no longer includes HubSpot, the card says **Paused**: nothing is read or written until you upgrade, and the connection stays.
