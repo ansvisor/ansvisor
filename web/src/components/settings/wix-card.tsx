@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { useUserRole } from '@/hooks/use-user-role';
 import { connectWix, disconnectWix, readWix, type WixConnection } from '@/lib/wix-client';
+import { frictionFlow } from '@/lib/friction-events';
 import { useBrandStore } from '@/stores/use-brand-store';
 
 /**
@@ -219,6 +220,9 @@ export function WixCard() {
   );
 }
 
+/** cms_connect: the Connect below, until the CMS is connected. */
+const CONNECT = frictionFlow('cms_connect', { target: 'wix' });
+
 /** The site's id and an API key: the key goes to the API once, never shown again. */
 function SignInForm({
   brandId,
@@ -243,13 +247,16 @@ function SignInForm({
 
   const connect = async () => {
     setConnecting(true);
+    CONNECT.started();
     const result = await connectWix(brandId, { siteId: siteId.trim(), apiKey: apiKey.trim() });
     setConnecting(false);
     if (!result.ok) {
+      CONNECT.failed(result.code);
       if (result.code === 'subscription') openUpgrade();
       else toast.error(t(`errors.${result.code}`));
       return;
     }
+    CONNECT.completed();
     setApiKey('');
     toast.success(t('connectedToast'));
     onConnected(result.connection);

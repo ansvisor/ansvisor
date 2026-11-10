@@ -50,6 +50,7 @@ import {
   type HubspotRead,
   type HubspotBlog,
 } from '@/lib/hubspot-client';
+import { frictionFlow } from '@/lib/friction-events';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 
@@ -63,6 +64,9 @@ const RESUME_TRIES = 5;
 const SETUP_ERRORS = ['scopes', 'conflict', 'auth', 'forbidden'] as const;
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** cms_connect: Connect, through HubSpot's sign-in, until HubSpot is set up for the brand. */
+const CONNECT = frictionFlow('cms_connect', { target: 'hubspot' });
 
 /**
  * Settings › Integrations › CRM › HubSpot (#2140): the active brand's
@@ -137,19 +141,23 @@ export function HubspotCard() {
         if (pollGen.current !== gen) return;
         const done = await activateHubspot(brandId, { accountId, consent });
         if (done.ok && done.status === 'connected') {
+          CONNECT.completed();
           popup?.close();
           toast.success(t('connectedToast'));
           reload();
           return;
         }
         if (!done.ok && done.code !== 'failed' && done.code !== 'busy') {
+          CONNECT.failed(done.code);
           popup?.close();
           fail(done.code);
           return;
         }
         if (popup?.closed) break;
       }
-      if (pollGen.current === gen) toast.error(t('connectUnfinished'));
+      if (pollGen.current !== gen) return;
+      CONNECT.failed('unfinished');
+      toast.error(t('connectUnfinished'));
     },
     [fail, reload, t],
   );
@@ -185,10 +193,15 @@ export function HubspotCard() {
     const brandId = activeBrandId;
     const gen = ++pollGen.current;
     setBusy('connect');
+    CONNECT.started();
     try {
       if (accountId) {
         const used = await chooseHubspotAccount(brandId, { accountId, consent });
-        if (!used.ok) return fail(used.code);
+        if (!used.ok) {
+          CONNECT.failed(used.code);
+          return fail(used.code);
+        }
+        CONNECT.completed();
         setDialog(null);
         setValue(used);
         toast.success(t('connectedToast'));
@@ -198,7 +211,10 @@ export function HubspotCard() {
         callbackUrl: window.location.href.split('#')[0],
         consent,
       });
-      if (!started.ok) return fail(started.code);
+      if (!started.ok) {
+        CONNECT.failed(started.code);
+        return fail(started.code);
+      }
       setDialog(null);
       const popup = window.open(started.redirectUrl, 'hubspot-oauth', 'width=560,height=720');
       if (!popup) {

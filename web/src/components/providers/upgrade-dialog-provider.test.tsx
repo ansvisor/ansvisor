@@ -7,6 +7,7 @@ import { PlanProvider } from './plan-provider';
 import { RoleProvider, type TeamRole } from './role-provider';
 import { UpgradeDialogProvider, useUpgradeGate } from './upgrade-dialog-provider';
 import { DemoBrandProvider } from './demo-brand-provider';
+import { track } from '@/lib/analytics';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { Brand } from '@/types';
 
@@ -24,6 +25,8 @@ vi.hoisted(() => {
     },
   });
 });
+
+vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
 
 vi.mock('@/i18n/navigation', () => ({
   Link: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
@@ -435,5 +438,91 @@ describe('a server action refused as read-only', () => {
     const event = await reject(new Error('Failed to fetch'));
     expect(event.defaultPrevented).toBe(false);
     expect(dialog()).toBeNull();
+  });
+});
+
+describe('upgrade_wall_shown', () => {
+  const walls = () =>
+    vi.mocked(track).mock.calls.filter(([event]) => event === 'upgrade_wall_shown');
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ valid: false })),
+    );
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('counts the dialog once each time it opens, why and by what, never its label', async () => {
+    label = 'Adding prompts needs a plan';
+    await render({ active: false, status: 'canceled' });
+    await runAll();
+    // Another action while it is open: the same wall.
+    await runAll();
+    expect(walls()).toEqual([
+      ['upgrade_wall_shown', { feature: null, reason: 'read_only', source: 'action' }],
+    ]);
+    await act(async () => {
+      button('Close')!.click();
+    });
+    await vi.waitFor(() => expect(dialog()).toBeNull());
+    await runAll();
+    expect(walls()).toHaveLength(2);
+    expect(JSON.stringify(vi.mocked(track).mock.calls)).not.toContain('Adding prompts');
+  });
+
+  it('says a trial that never became a plan is read-only too', async () => {
+    await render({ active: false, status: null, everSubscribed: false });
+    await runAll();
+    expect(walls()).toEqual([
+      ['upgrade_wall_shown', { feature: null, reason: 'read_only', source: 'action' }],
+    ]);
+  });
+
+  it('names a payment being retried', async () => {
+    await render({ active: false, status: 'past_due' });
+    await runAll();
+    expect(walls()).toEqual([
+      ['upgrade_wall_shown', { feature: null, reason: 'payment_failed', source: 'action' }],
+    ]);
+  });
+
+  it('names the demo brand, and counts no wall where it offers no plan', async () => {
+    selectBrand('demo');
+    await render({ active: false, status: 'canceled' });
+    await runAll();
+    expect(walls()).toEqual([
+      ['upgrade_wall_shown', { feature: null, reason: 'demo', source: 'action' }],
+    ]);
+
+    vi.mocked(track).mockClear();
+    act(() => root.unmount());
+    root = createRoot(container);
+    // A plan active: the way back to the own brand, no plan offered.
+    await render({ active: true, status: 'active' });
+    await runAll();
+    expect(dialog()?.textContent).toContain('This is a demo brand');
+    expect(walls()).toEqual([]);
+  });
+
+  it('says when the server refused, though the page thought the plan active', async () => {
+    await render({ active: true, status: 'active' });
+    await act(async () => {
+      window.dispatchEvent(
+        Object.assign(new Event('unhandledrejection', { cancelable: true }), {
+          reason: Object.assign(new Error('masked'), { digest: 'subscription_inactive' }),
+        }),
+      );
+    });
+    expect(walls()).toEqual([
+      ['upgrade_wall_shown', { feature: null, reason: 'read_only', source: 'server' }],
+    ]);
+  });
+
+  it('counts nothing while the plan is active', async () => {
+    await render({ active: true, status: 'active' });
+    await runAll();
+    expect(track).not.toHaveBeenCalled();
   });
 });
