@@ -40,6 +40,10 @@ export const PLANS = {
         'shopping_analytics',
         'prompt_improve',
         'white_label',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
       ],
     },
   },
@@ -94,6 +98,8 @@ export const PLANS = {
         'api_access',
         'ai_agent',
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
       ],
     },
   },
@@ -142,6 +148,10 @@ export const PLANS = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
       ],
     },
   },
@@ -193,6 +203,10 @@ export const PLANS = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
       ],
     },
   },

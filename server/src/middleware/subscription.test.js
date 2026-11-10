@@ -164,6 +164,8 @@ describe('requireActiveSubscription', () => {
       ['DELETE', '/cms/brands/b1/wordpress'],
       ['DELETE', '/cms/brands/b1/framer'],
       ['DELETE', '/cms/brands/b1/wix'],
+      // A brand's Slack workspace (#2139): nothing more is posted.
+      ['DELETE', '/slack/brands/b1'],
       ['DELETE', '/bots/connections/b1/c1'],
       // A store's sign-in is revoked at the store as it is removed.
       ['DELETE', '/catalog/sources/9b2c1e40-0000-4000-8000-000000000003'],
@@ -198,6 +200,10 @@ describe('requireActiveSubscription', () => {
       ['DELETE', '/cms/brands/b1/framer/collections'],
       ['POST', '/cms/brands/b1/wix'],
       ['DELETE', '/cms/brands/b1/wix/extra'],
+      ['POST', '/slack/brands/b1/connect'],
+      ['POST', '/slack/brands/b1/test'],
+      ['PUT', '/slack/brands/b1'],
+      ['DELETE', '/slack/brands/b1/extra'],
       ['POST', '/bots/connections/b1'],
       ['DELETE', '/bots/connections/b1'],
       ['POST', '/catalog/sources'],
@@ -211,7 +217,7 @@ describe('requireActiveSubscription', () => {
       expect(res.status).toHaveBeenCalledWith(402);
     }
     // Both Google disconnects are one route.
-    expect(COST_STOPPING).toHaveLength(10);
+    expect(COST_STOPPING).toHaveLength(11);
   });
 
   it('lets an organization off a plan delete a brand, and nothing near it', async () => {
