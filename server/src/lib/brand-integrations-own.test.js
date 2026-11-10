@@ -115,6 +115,46 @@ function withEmbeds() {
   }
 }
 
+describe("a brand's choices on its sign-in (#2139)", () => {
+  beforeEach(() => {
+    db.tables.integration_accounts.push(
+      account('slack-a', { provider: 'slack' }),
+      account('slack-b', { provider: 'slack' }),
+    );
+    db.tables.brand_integrations.push(
+      {
+        brand_id: 'b1',
+        provider: 'slack',
+        account_id: 'slack-a',
+        settings: { channel: { id: 'C00000001', name: 'seo-alerts' } },
+      },
+      { brand_id: 'b2', provider: 'slack', account_id: 'slack-b', settings: {} },
+    );
+    withEmbeds();
+  });
+
+  const slackUse = () =>
+    db.tables.brand_integrations.find((u) => u.brand_id === 'b1' && u.provider === 'slack');
+
+  it('start over when the brand uses another workspace', async () => {
+    await useAccountForBrand(
+      { brand: BRAND, provider: 'slack', accountId: 'slack-b', brandIds: ['b1', 'b2'] },
+      { deleteRemote },
+    );
+    expect(slackUse()).toMatchObject({ account_id: 'slack-b', settings: {} });
+  });
+
+  it('stay when it already uses that one', async () => {
+    await useAccountForBrand(
+      { brand: BRAND, provider: 'slack', accountId: 'slack-a', brandIds: ['b1', 'b2'] },
+      { deleteRemote },
+    );
+    expect(slackUse().settings).toEqual({ channel: { id: 'C00000001', name: 'seo-alerts' } });
+    const upsert = db.writes.find((w) => w.op === 'upsert');
+    expect(upsert.payload).not.toHaveProperty('settings');
+  });
+});
+
 describe('useAccountForBrand', () => {
   it('uses the workspace’s account, and drops the brand’s own login nobody uses', async () => {
     withEmbeds();

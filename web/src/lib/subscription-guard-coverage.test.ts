@@ -127,6 +127,12 @@ const OPEN_ROUTES: Record<string, string> = {
   'keys/[id]:DELETE': 'revoking a key takes back access',
   'mcp:POST': 'its tools are gated one by one (gateWriteTools)',
   'mcp:DELETE': 'ends an MCP session',
+  // MCP over OAuth (#2141): no person is signed in here, and no workspace is
+  // known yet. The plan is checked at the consent page and on every MCP call.
+  'oauth/register:POST': 'an app registers itself, before any workspace: no cost',
+  'oauth/token:POST':
+    'an app redeems a code or refreshes its tokens; the MCP calls check the plan (oauthMcpAccess)',
+  'oauth/revoke:POST': 'an app ends its own connection: takes back access',
   'settings/ai-providers:DELETE': 'removing a key takes back access',
   'stripe/checkout:POST': 'billing: choosing a plan',
   'stripe/portal:POST': 'billing: the payment method',
