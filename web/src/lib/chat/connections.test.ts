@@ -330,6 +330,91 @@ describe('readBrandAgents', () => {
   });
 });
 
+describe('Slack (#2139)', () => {
+  const slack = (over = {}) => ({
+    ...NO_CONNECTION_ROWS,
+    slack: {
+      status: 'connected',
+      label: 'Acme Test (acme-test.slack.com)',
+      channel: 'seo-alerts',
+      connected_by: 'u1',
+      created_at: '2026-11-10T09:00:00Z',
+      ...over,
+    },
+  });
+
+  it('is a live tool of the team group, connected in Settings', () => {
+    expect(byKey(connectionRecords({ rows: NO_CONNECTION_ROWS }), 'slack')).toMatchObject({
+      category: 'team',
+      status: 'not_connected',
+      access: 'sends_messages',
+      uses: [],
+      suggested: false,
+      settingsHref: '/dashboard/settings/integrations#slack',
+      disconnect: null,
+    });
+  });
+
+  it('names its channel and workspace, who connected it and when', () => {
+    const records = connectionRecords({ rows: slack(), names: new Map([['u1', 'Sam Lee']]) });
+    expect(byKey(records, 'slack')).toMatchObject({
+      status: 'connected',
+      account: '#seo-alerts, Acme Test (acme-test.slack.com)',
+      connectedBy: 'Sam Lee',
+      connectedAt: '2026-11-10T09:00:00Z',
+    });
+    expect(byKey(connectionRecords({ rows: slack({ channel: null }) }), 'slack')?.account).toBe(
+      'Acme Test (acme-test.slack.com)',
+    );
+  });
+
+  it('fails when Slack refused the workspace, and is none while its install is pending', () => {
+    expect(
+      byKey(connectionRecords({ rows: slack({ status: 'auth_failed' }) }), 'slack')?.status,
+    ).toBe('failing');
+    expect(byKey(connectionRecords({ rows: slack({ status: 'pending' }) }), 'slack')?.status).toBe(
+      'not_connected',
+    );
+  });
+
+  it("is read from the brand's sign-in in the pool", async () => {
+    fake().tables.brand_integrations = [
+      {
+        brand_id: BRAND,
+        provider: 'slack',
+        settings: { channel: { id: 'C00000001', name: 'seo-alerts' } },
+        account: {
+          status: 'connected',
+          label: 'Acme Test',
+          connected_by: 'u1',
+          created_at: '2026-11-10T09:00:00Z',
+        },
+      },
+      {
+        brand_id: BRAND,
+        provider: 'google-analytics',
+        settings: {},
+        account: { status: 'connected' },
+      },
+    ];
+    fake().tables.profiles = [{ id: 'u1', organization_id: ORG, full_name: 'Sam Lee' }];
+    fake().tables.chat_agents = [];
+    const records = await readConnections({
+      organizationId: ORG,
+      brandId: BRAND,
+      viewer: { userId: 'u1', role: 'admin', brandAccess: 'all' },
+      merchantCenterOffered: false,
+    });
+    expect(byKey(records, 'slack')).toMatchObject({
+      status: 'connected',
+      account: '#seo-alerts, Acme Test',
+      connectedBy: 'Sam Lee',
+    });
+    // No agent asks for Slack: it adds no kind.
+    expect(await readBrandConnections(BRAND)).toEqual(new Set());
+  });
+});
+
 describe('readConnections and readBrandConnections', () => {
   it('read the same rows: the agents’ kinds and the page’s records agree', async () => {
     fake().tables.brands = [
