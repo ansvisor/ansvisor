@@ -7,14 +7,14 @@ import type { HubspotConnection, HubspotError, HubspotRead } from '@/lib/hubspot
 
 const client = vi.hoisted(() => ({
   readHubspot: vi.fn(),
+  listHubspotBlogs: vi.fn(),
+  saveHubspotBlog: vi.fn(),
   startHubspotConnect: vi.fn(),
   activateHubspot: vi.fn(),
   chooseHubspotAccount: vi.fn(),
   saveHubspotConsent: vi.fn(),
   retryHubspotSetup: vi.fn(),
   disconnectHubspot: vi.fn(),
-  listHubspotBlogs: vi.fn(),
-  saveHubspotBlog: vi.fn(),
   rememberPending: vi.fn(),
   takePending: vi.fn(),
 }));
