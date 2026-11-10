@@ -32,6 +32,16 @@ const toast = vi.hoisted(() =>
   Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), warning: vi.fn() }),
 );
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
+/** The content_generate events sent, in order. */
+const flows = () =>
+  analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
+const STARTED = ['flow_started', { flow: 'content_generate' }];
+const failed = (code: string | null) => [
+  'flow_failed',
+  { flow: 'content_generate', error_code: code },
+];
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -98,6 +108,7 @@ beforeEach(() => {
   push.mockReset();
   onOpenChange.mockReset();
   toast.error.mockReset();
+  analytics.track.mockClear();
 });
 
 afterEach(() => {
@@ -165,6 +176,8 @@ describe('WriteThisDialog', () => {
     });
     expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d9');
     expect(toast.error).not.toHaveBeenCalled();
+    expect(flows()).toEqual([STARTED, ['flow_completed', { flow: 'content_generate' }]]);
+    expect(JSON.stringify(analytics.track.mock.calls)).not.toContain('coffee');
   });
 
   it('reads an existing page first, and has the agent suggest changes to it', async () => {
@@ -217,6 +230,7 @@ describe('WriteThisDialog', () => {
       "/espresso couldn't be read, so there's nothing to suggest changes to yet. Send to Editor starts it from its title.",
     );
     expect(button('Write this').disabled).toBe(false);
+    expect(flows()).toEqual([STARTED, failed('page_unread')]);
   });
 
   it('keeps the draft in the Library, to open, when the agent can’t start', async () => {
@@ -229,6 +243,7 @@ describe('WriteThisDialog', () => {
       "This month's AI usage is spent, so the agent didn't start. The draft is in the Library for you to write.",
       expect.objectContaining({ action: expect.objectContaining({ label: 'Open draft' }) }),
     );
+    expect(flows()).toEqual([STARTED, failed('ai_budget')]);
   });
 
   it('says it couldn’t start when the draft can’t be made', async () => {
@@ -238,5 +253,6 @@ describe('WriteThisDialog', () => {
     await click(button('Write this'));
     expect(startAgentWriting).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalledWith(messages.contentEditor.newContent.start.failed);
+    expect(flows()).toEqual([STARTED, failed(null)]);
   });
 });

@@ -4,14 +4,14 @@ route: /dashboard/insights
 keywords: [brand visibility, overview tab, mentions tab, citations tab, product visibility tab, answer engine insights, visibility score, key metrics, leaderboard, by AI platform, topics vs competitors, opportunities, filters]
 synonyms: [visibility page, AI visibility report, analytics hub, insights page, dashboard overview, visibility dashboard]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-10
+last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/answer-engine-insights.mdx, docs/guides/competitors.mdx, docs/guides/prompts.mdx]
 ---
-**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next.
+**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next. On a paid plan, and from the second day of a free trial, Ansvisor opens on it each time you come back.
 
 ## The tabs and how to reach them
 

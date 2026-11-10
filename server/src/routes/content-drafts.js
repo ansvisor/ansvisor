@@ -19,6 +19,7 @@ import { checkFramerPublished } from '../lib/cms/framer-status.js';
 import { checkWebflowPublished } from '../lib/cms/webflow-status.js';
 import { checkWordPressPublished } from '../lib/cms/wordpress-status.js';
 import { checkWixPublished } from '../lib/cms/wix-status.js';
+import { checkHubspotPublished } from '../lib/cms/hubspot-status.js';
 import { liveAddress, publishDraft } from '../lib/content-published.js';
 import {
   auditEstimateLimiter,
@@ -67,7 +68,7 @@ async function assertSender(userId) {
 
 /**
  * POST /api/content-drafts/send
- * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }], viaAgentRunId? }
+ * Body: { brandId, target?: 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix' | 'hubspot', pages: [{ draftId, title, slug, metaTitle, metaDescription, html, author, featuredImage }], viaAgentRunId? }
  * viaAgentRunId: Chat's click on a card in an agent run's chat (00480), kept
  * on the deliveries once it is the workspace's run on the brand.
  * One page is sent before this answers: { deliveries: [{ id, status, http_status, error }] };
@@ -413,6 +414,42 @@ router.post('/wix-status', cmsStatusLimiter, async (req, res) => {
     }
     req.log.error({ err: { name: err?.name, code: err?.code } }, 'content draft wix status error');
     return res.status(502).json({ error: 'Wix could not be read', code: 'failed' });
+  }
+});
+
+/** A brand's HubSpot blog posts read at most this often on demand (the daily sweep reads them too). */
+const hubspotChecked = new Map();
+
+/**
+ * POST /api/content-drafts/hubspot-status
+ * Body: { brandId }. Pages the brand sent to its HubSpot blog, published
+ * there since, marked published at the post's address
+ * (cms/hubspot-status.js, #2140). As /wix-status: any member, a brand at
+ * most every two minutes.
+ */
+router.post('/hubspot-status', cmsStatusLimiter, async (req, res) => {
+  const parsed = webflowStatusBody.safeParse(req.body ?? {});
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request', code: 'invalid' });
+  const { brandId } = parsed.data;
+  try {
+    await assertBrandAccess(brandId, req.user.id);
+    const last = hubspotChecked.get(brandId) ?? 0;
+    if (Date.now() - last < WEBFLOW_STATUS_EVERY_MS) {
+      return res.json({ checked: 0, published: [], recent: true });
+    }
+    hubspotChecked.set(brandId, Date.now());
+    return res.json(await checkHubspotPublished(brandId));
+  } catch (err) {
+    if (ERROR_CODES[err?.status]) {
+      return res
+        .status(err.status)
+        .json({ error: err.message, code: err.code ?? ERROR_CODES[err.status] });
+    }
+    req.log.error(
+      { err: { name: err?.name, code: err?.code } },
+      'content draft hubspot status error',
+    );
+    return res.status(502).json({ error: 'HubSpot could not be read', code: 'failed' });
   }
 });
 

@@ -7,6 +7,8 @@ import type { HubspotConnection, HubspotError, HubspotRead } from '@/lib/hubspot
 
 const client = vi.hoisted(() => ({
   readHubspot: vi.fn(),
+  listHubspotBlogs: vi.fn(),
+  saveHubspotBlog: vi.fn(),
   startHubspotConnect: vi.fn(),
   activateHubspot: vi.fn(),
   chooseHubspotAccount: vi.fn(),
@@ -44,6 +46,11 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
+/** The cms_connect events sent, in order. */
+const flows = () =>
+  analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
 const openUpgrade = vi.hoisted(() => vi.fn());
 const gate = vi.hoisted(() => ({ isLocked: false }));
 vi.mock('@/components/providers/upgrade-gate', () => ({
@@ -81,6 +88,7 @@ const CONNECTION: HubspotConnection = {
   portal: { id: 4412893, currency: 'USD', uiDomain: 'app-eu1.hubspot.com' },
   sharedWith: ['b2'],
   consent: { contacts: true, pages: false, by: 'Ayşe Demir', at: '2026-11-09T10:00:00.000Z' },
+  blog: null,
   properties: { ready: true, at: '2026-11-09T10:00:01.000Z', error: null },
   sync: null,
   syncing: false,
@@ -128,6 +136,9 @@ const checkbox = (label: string) => {
   const name = [...document.querySelectorAll('label')].find((l) => l.textContent === label)!;
   return document.getElementById(name.htmlFor)!;
 };
+/** The id of the control a label names. */
+const labelFor = (label: string) =>
+  [...document.querySelectorAll('label')].find((l) => l.textContent === label)!.htmlFor;
 const switchFor = (label: string) =>
   document.querySelector<HTMLButtonElement>(`[role="switch"][aria-label="${label}"]`)!;
 
@@ -140,10 +151,12 @@ beforeEach(() => {
   gate.isLocked = false;
   for (const fn of Object.values(client)) fn.mockReset();
   client.takePending.mockReturnValue(null);
+  client.listHubspotBlogs.mockResolvedValue({ ok: true, blogs: [], picked: null });
   client.readHubspot.mockResolvedValue(read());
   toast.error.mockReset();
   toast.success.mockReset();
   openUpgrade.mockReset();
+  analytics.track.mockClear();
 });
 
 afterEach(async () => {
@@ -228,6 +241,10 @@ describe('HubspotCard', () => {
     expect(popup.close).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('HubSpot connected');
     expect(badges()).toEqual(['Connected']);
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'hubspot' }],
+      ['flow_completed', { flow: 'cms_connect', target: 'hubspot' }],
+    ]);
   });
 
   it('goes to HubSpot in this tab when the popup is blocked, and finishes on return', async () => {
@@ -248,6 +265,8 @@ describe('HubspotCard', () => {
       consent: { contacts: false, pages: true },
     });
     expect(toast.success).toHaveBeenCalledWith('HubSpot connected');
+    // Started before the tab went to HubSpot: completed here, on return.
+    expect(flows()).toEqual([['flow_completed', { flow: 'cms_connect', target: 'hubspot' }]]);
   });
 
   it('uses the HubSpot account another brand uses, with consent', async () => {
@@ -273,6 +292,10 @@ describe('HubspotCard', () => {
     });
     expect(client.startHubspotConnect).not.toHaveBeenCalled();
     expect(badges()).toEqual(['Connected']);
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'hubspot' }],
+      ['flow_completed', { flow: 'cms_connect', target: 'hubspot' }],
+    ]);
   });
 
   it('shows a member the state only', async () => {
@@ -353,6 +376,63 @@ describe('HubspotCard', () => {
     expect(text()).toContain('Connect HubSpot for Acme');
   });
 
+  it('picks the HubSpot blog Send to CMS writes draft posts to', async () => {
+    const pages = { ...CONNECTION, consent: { ...CONNECTION.consent, pages: true } };
+    client.readHubspot.mockResolvedValue(read({ connection: pages }));
+    client.listHubspotBlogs.mockResolvedValue({
+      ok: true,
+      blogs: [
+        { id: '1234567890', name: 'Acme blog', url: null },
+        { id: '2233445566', name: 'Acme news', url: null },
+      ],
+      picked: null,
+    });
+    client.saveHubspotBlog.mockResolvedValue(
+      read({ connection: { ...pages, blog: { id: '2233445566', name: 'Acme news' } } }),
+    );
+    await render();
+    expect(client.listHubspotBlogs).toHaveBeenCalledWith('b1');
+    expect(text()).toContain("No blog picked yet: pages can't go to HubSpot until one is.");
+    await click(document.getElementById(labelFor('Blog posts go to')));
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent === 'Acme news',
+    )!;
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await click(option);
+    await click(button('Save'));
+    expect(client.saveHubspotBlog).toHaveBeenCalledWith('b1', '2233445566');
+    expect(toast.success).toHaveBeenCalledWith('Blog saved');
+    expect(text()).toContain('Send to CMS writes draft posts to Acme news.');
+  });
+
+  it('asks to connect again when HubSpot gave no access to its blogs', async () => {
+    const pages = { ...CONNECTION, consent: { ...CONNECTION.consent, pages: true } };
+    client.readHubspot.mockResolvedValue(read({ connection: pages }));
+    client.listHubspotBlogs.mockResolvedValue({ ok: false, code: 'scopes' });
+    await render();
+    expect(text()).toContain("HubSpot didn't give Ansvisor access to its blogs.");
+    await click(button('Connect again'));
+    expect(text()).toContain('Connect HubSpot for Acme');
+  });
+
+  it('shows a member the blog picked, reading no list', async () => {
+    role.canManage = false;
+    client.readHubspot.mockResolvedValue(
+      read({
+        connection: {
+          ...CONNECTION,
+          consent: { ...CONNECTION.consent, pages: true },
+          blog: { id: '1234567890', name: 'Acme blog' },
+        },
+      }),
+    );
+    await render();
+    expect(text()).toContain('Send to CMS writes draft posts to Acme blog.');
+    expect(client.listHubspotBlogs).not.toHaveBeenCalled();
+  });
+
   it('disconnects after saying what stays in HubSpot', async () => {
     client.readHubspot.mockResolvedValue(read({ connection: CONNECTION }));
     client.disconnectHubspot.mockResolvedValue({ ok: true, success: true });
@@ -385,6 +465,39 @@ describe('HubspotCard', () => {
     await click(checkbox('Mark contacts who came from an AI answer'));
     await click(button('Continue to HubSpot'));
     expect(toast.error).toHaveBeenCalledWith(ERROR_TEXTS.plan);
+    // Read-only, nothing started; the plan's refusal started and failed.
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'hubspot' }],
+      ['flow_failed', { flow: 'cms_connect', target: 'hubspot', error_code: 'plan' }],
+    ]);
+  });
+
+  it('fails a sign-in the window was closed on, unfinished', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const popup = { closed: false, close: vi.fn() };
+    vi.stubGlobal(
+      'open',
+      vi.fn(() => popup),
+    );
+    client.startHubspotConnect.mockResolvedValue({
+      ok: true,
+      redirectUrl: 'https://hs.test/auth',
+      accountId: 'acc-new',
+    });
+    client.activateHubspot.mockResolvedValue({ ok: true, status: 'pending' });
+    await render();
+    await click(button('Connect HubSpot'));
+    await click(checkbox('Mark contacts who came from an AI answer'));
+    await click(button('Continue to HubSpot'));
+    popup.closed = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(toast.error).toHaveBeenCalledWith(messages.settings.hubspot.connectUnfinished);
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'hubspot' }],
+      ['flow_failed', { flow: 'cms_connect', target: 'hubspot', error_code: 'unfinished' }],
+    ]);
   });
 
   it('says when the connection can’t be read, with Try again', async () => {

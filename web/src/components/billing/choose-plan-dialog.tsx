@@ -266,7 +266,6 @@ export function ChoosePlanDialog({
             choice={choice}
             onChange={setChoice}
             trialOffered={trialOffered && canAdmin}
-            offer={offer}
           />
 
           {canAdmin &&

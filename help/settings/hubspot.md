@@ -22,6 +22,10 @@ Open **Settings › Integrations** and find **HubSpot** under **CRM**. Admins an
 
 Tick at least one, click **Continue to HubSpot**, then sign in to HubSpot and approve the access in the window that opens.
 
+## Send pages to your HubSpot blog
+
+With **Send pages to HubSpot as drafts** on, the card has **Blog posts go to**: pick one of the HubSpot account's blogs and click **Save**. **Send to CMS** then offers HubSpot, and each page goes to that blog as a draft post. You publish it in HubSpot. If HubSpot didn't give Ansvisor access to its blogs, the card asks you to connect HubSpot again.
+
 ## What Ansvisor never does
 
 Ansvisor never deletes contacts or deals, never changes your own properties, never publishes a page, and never copies names or emails into Ansvisor. Nothing is written to HubSpot without the choices above.
@@ -38,4 +42,4 @@ When another brand already uses a HubSpot account, pick it from **Use the accoun
 
 ## Disconnect, or a plan change
 
-**Disconnect** stops all reading and writing for the brand at once. The Ansvisor properties and their values stay in HubSpot. If the plan no longer includes HubSpot, the card says **Paused**: nothing is read or written until you upgrade, and the connection stays.
+**Disconnect** stops all reading and writing for the brand at once, and removes the AI-sourced contacts and deals Ansvisor read for it. The Ansvisor properties and their values stay in HubSpot. If the plan no longer includes HubSpot, the card says **Paused**: nothing is read or written until you upgrade, and the connection stays.

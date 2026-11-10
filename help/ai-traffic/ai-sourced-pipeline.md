@@ -29,3 +29,5 @@ HubSpot marks some contacts with its own **AI Referrals** traffic source. Those 
 ## When it updates
 
 Ansvisor reads HubSpot once a day. Admins and managers can read it again with **Sync now** on the HubSpot card in **Settings › Integrations**. Until the first read, the section says it's reading HubSpot.
+
+When the brand switches to another HubSpot account, or disconnects HubSpot, the contacts and deals read from the old account are removed at once. With a new account, the section fills again after its first read.

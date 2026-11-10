@@ -72,6 +72,7 @@ export function OAuthButtons({ next }: { next?: string | null } = {}) {
       <Button
         variant="outline"
         type="button"
+        className="h-11"
         disabled={loadingProvider !== null}
         onClick={() => handleOAuth('github')}
       >
@@ -85,6 +86,7 @@ export function OAuthButtons({ next }: { next?: string | null } = {}) {
       <Button
         variant="outline"
         type="button"
+        className="h-11"
         disabled={loadingProvider !== null}
         onClick={() => handleOAuth('google')}
       >

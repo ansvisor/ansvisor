@@ -95,6 +95,7 @@ import { formatRegionDisplay } from '@/lib/region';
 import { RECHECK_TARGETS } from '@/lib/shopping/recheck';
 import { readinessChecklist } from '@/lib/shopping/readiness';
 import { formatNumber } from '@/lib/format';
+import { useUpgradeWallShown } from '@/lib/friction-events';
 import { googleSourceStatus } from '@/lib/traffic-sources';
 import { readUrlChoice, writeUrlParams } from '@/lib/url-state';
 import { CatalogNote } from './_catalog-note';
@@ -986,6 +987,7 @@ function UpgradeCard({
   t: ReturnType<typeof useTranslations<'shopping'>>;
   requiredPlan: string;
 }) {
+  useUpgradeWallShown({ reason: 'plan', feature: 'shopping_analytics', source: 'shopping' });
   return (
     <Card>
       <CardContent className="flex flex-col items-start gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">

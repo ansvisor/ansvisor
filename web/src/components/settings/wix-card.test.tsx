@@ -28,6 +28,11 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
+/** The cms_connect events sent, in order. */
+const flows = () =>
+  analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
 // The read-only workspace's upgrade dialog.
 const openUpgrade = vi.hoisted(() => vi.fn());
 const gate = vi.hoisted(() => ({ isLocked: false }));
@@ -105,6 +110,7 @@ const submit = async () => {
 };
 
 beforeEach(() => {
+  analytics.track.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -137,6 +143,10 @@ describe('WixCard', () => {
       apiKey: KEY,
     });
     expect(toast.success).toHaveBeenCalledWith('Wix connected');
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'wix' }],
+      ['flow_completed', { flow: 'cms_connect', target: 'wix' }],
+    ]);
     expect(container.textContent).toContain('Site: Acme Coffee');
     expect(container.textContent).toContain("Pages go to Acme Coffee's Blog as draft posts.");
     expect(container.querySelector('input[type="password"]')).toBeNull();
@@ -150,6 +160,10 @@ describe('WixCard', () => {
     await submit();
     expect(toast.error).toHaveBeenCalledWith(ERROR_TEXTS.no_blog);
     expect(field('API key').value).toBe(KEY);
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'wix' }],
+      ['flow_failed', { flow: 'cms_connect', target: 'wix', error_code: 'no_blog' }],
+    ]);
   });
 
   it('says the key needs the Ricos permission when Wix’s converter refuses it', async () => {

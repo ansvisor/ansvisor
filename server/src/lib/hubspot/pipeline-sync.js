@@ -2,7 +2,7 @@ import supabaseAdmin from '../../config/supabase.js';
 import { getPlan, hasFeature } from '../../config/plans.js';
 import { activeOrgFilter } from '../active-subscriptions.js';
 import { classifyAiSource } from '../ai-sources.js';
-import { connectedBrands } from '../brand-integrations.js';
+import { brandConnection, connectedBrands } from '../brand-integrations.js';
 import { selectInChunks } from '../chunked-in.js';
 import { isHubspotConfigured } from '../composio.js';
 import { logger } from '../logger.js';
@@ -328,10 +328,19 @@ async function brandDomains(brandId) {
     .filter(Boolean);
 }
 
+/** Whether the brand still reads HubSpot through the connection's sign-in. */
+async function stillUses(connection) {
+  const current = await brandConnection(connection.brandId, HUBSPOT);
+  return current?.accountId === connection.accountId;
+}
+
 /**
  * Syncs one brand's pipeline on its connection, and keeps how it went on
  * the brand's HubSpot settings (`sync`). HubSpot refusing the sign-in marks
- * it for reconnecting. Answers the counts, or the refusal's code.
+ * it for reconnecting. Answers the counts, or the refusal's code. A brand
+ * that moved to another HubSpot account, or disconnected, while this read
+ * the old one keeps nothing of it (`account_changed`): moving cleared its
+ * rows (brand-integrations.js), and the old account's aren't the brand's.
  */
 export async function syncBrandPipeline(connection, { settings, now = Date.now() } = {}) {
   const syncedAt = new Date(now).toISOString();
@@ -344,6 +353,9 @@ export async function syncBrandPipeline(connection, { settings, now = Date.now()
       currency: settings?.portal?.currency ?? null,
       now,
     });
+    if (connection.accountId && !(await stillUses(connection))) {
+      return { at: syncedAt, contacts: null, deals: null, error: 'account_changed' };
+    }
     await replaceRows('hubspot_ai_contacts', connection.brandId, contacts, syncedAt);
     await replaceRows('hubspot_ai_deals', connection.brandId, deals, syncedAt);
     const sync = { at: syncedAt, contacts: contacts.length, deals: deals.length, error: null };

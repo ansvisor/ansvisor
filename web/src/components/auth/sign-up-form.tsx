@@ -71,8 +71,8 @@ export function SignUpForm() {
   }
 
   return (
-    <div className="space-y-6">
-      <form onSubmit={handleSubmit} className="space-y-5">
+    <div className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="fullName">{t('fullName')}</Label>
           <Input
@@ -89,7 +89,7 @@ export function SignUpForm() {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">{t('workEmail')}</Label>
+          <Label htmlFor="email">{t('email')}</Label>
           <Input
             id="email"
             type="email"
@@ -98,9 +98,14 @@ export function SignUpForm() {
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="email"
+            aria-describedby="email-hint"
             disabled={isLoading || Boolean(invitedEmail)}
             className="h-11"
           />
+          {/* A suggestion only: any address can sign up. */}
+          <p id="email-hint" className="text-sm text-muted-foreground">
+            {t('workEmailSuggested')}
+          </p>
         </div>
 
         <div className="space-y-2">

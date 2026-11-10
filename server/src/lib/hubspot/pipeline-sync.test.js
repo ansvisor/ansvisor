@@ -77,7 +77,11 @@ const conn = vi.hoisted(() => ({
 }));
 vi.mock('./connection.js', () => ({ HUBSPOT: 'hubspot', ...conn }));
 const connected = vi.hoisted(() => vi.fn());
-vi.mock('../brand-integrations.js', () => ({ connectedBrands: (...a) => connected(...a) }));
+const current = vi.hoisted(() => vi.fn());
+vi.mock('../brand-integrations.js', () => ({
+  brandConnection: (...a) => current(...a),
+  connectedBrands: (...a) => connected(...a),
+}));
 const active = vi.hoisted(() => ({ orgs: new Set(['org-1']) }));
 vi.mock('../active-subscriptions.js', () => ({
   activeOrgFilter: async () => (id) => active.orgs.has(id),
@@ -140,6 +144,7 @@ beforeEach(() => {
   for (const fn of Object.values(conn)) fn.mockReset();
   conn.brandHubspotSettings.mockResolvedValue(SETTINGS);
   connected.mockReset().mockResolvedValue([CONNECTION]);
+  current.mockReset().mockResolvedValue(CONNECTION);
   vi.stubEnv('IS_CLOUD', 'true');
 });
 
@@ -312,6 +317,20 @@ describe('syncBrandPipeline', () => {
     expect(db.tables.hubspot_ai_contacts.map((r) => r.contact_id)).toEqual(['101', '102', '201']);
     expect(db.tables.hubspot_ai_deals.every((r) => r.brand_id === BRAND)).toBe(true);
     expect(conn.writeHubspotSync).toHaveBeenCalledWith(BRAND, sync);
+  });
+
+  it('keeps nothing when the brand moved to another account, or disconnected, during the read', async () => {
+    for (const after of [{ ...CONNECTION, accountId: 'acc-2', composioAccountId: 'ca_2' }, null]) {
+      db.calls = [];
+      conn.writeHubspotSync.mockReset();
+      current.mockResolvedValue(after);
+      const sync = await syncBrandPipeline(CONNECTION, { settings: SETTINGS, now: NOW });
+      expect(sync).toMatchObject({ error: 'account_changed', contacts: null, deals: null });
+      expect(current).toHaveBeenCalledWith(BRAND, 'hubspot');
+      // Not a row of the old account written, nor its sync on the new one's settings.
+      expect(db.calls).toEqual([]);
+      expect(conn.writeHubspotSync).not.toHaveBeenCalled();
+    }
   });
 
   it('marks a refused sign-in, and keeps why the read failed', async () => {

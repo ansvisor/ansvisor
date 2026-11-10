@@ -118,6 +118,7 @@ export function SendDialog({
     wordpress,
     framer,
     wix,
+    hubspot,
     target,
     pick,
     sent: keepTarget,
@@ -129,6 +130,7 @@ export function SendDialog({
   const site = wordpress?.ready ? wordpress.site : '';
   const framerCollection = framer?.ready ? framer.collection || t('target.framer.collection') : '';
   const wixSite = wix?.ready ? wix.site : '';
+  const hubspotBlog = hubspot?.ready ? hubspot.blog : '';
 
   useEffect(() => {
     let cancelled = false;
@@ -249,6 +251,8 @@ export function SendDialog({
       toast.success(delivery?.updated ? t('sentFramerUpdated') : t('sentFramer'), {
         description: notes.length ? notes.join(' ') : undefined,
       });
+    } else if (target === 'hubspot') {
+      toast.success(delivery?.updated ? t('sentHubspotUpdated') : t('sentHubspot'));
     } else if (target === 'wix') {
       // Images don't go to Wix (only its Media Manager's show).
       const images = delivery?.changed?.images ?? 0;
@@ -269,6 +273,7 @@ export function SendDialog({
         wordpress: 'errors.wordpressFailed',
         framer: 'errors.framerFailed',
         wix: 'errors.wixFailed',
+        hubspot: 'errors.hubspotFailed',
         webhook: 'errors.webhookFailed',
       } as const;
       return t(failed[shown.target], { reason: shown.failed });
@@ -283,12 +288,14 @@ export function SendDialog({
       !webflow?.ready &&
       !wordpress?.ready &&
       !framer?.ready &&
-      !wix?.ready
+      !wix?.ready &&
+      !hubspot?.ready
     ) {
       if (webflow) return t('errors.no_webhookWebflow');
       if (wordpress) return t('errors.no_webhookWordPress');
       if (framer) return t('errors.no_webhookFramer');
       if (wix) return t('errors.no_webhookWix');
+      if (hubspot) return t('errors.no_webhookHubspot');
     }
     if (code === 'in_progress' && shown.target === 'wordpress') {
       return t('errors.in_progressWordPress');
@@ -298,6 +305,9 @@ export function SendDialog({
     }
     if (code === 'in_progress' && shown.target === 'wix') {
       return t('errors.in_progressWix');
+    }
+    if (code === 'in_progress' && shown.target === 'hubspot') {
+      return t('errors.in_progressHubspot');
     }
     // The server names the path ("pages.0.slug"); the field is its last part.
     if (code === 'invalid' && field) {
@@ -328,17 +338,20 @@ export function SendDialog({
                     ? t('descriptionFramer', { collection: framerCollection })
                     : target === 'wix'
                       ? t('descriptionWix', { site: wixSite })
-                      : t('description')}
+                      : target === 'hubspot'
+                        ? t('descriptionHubspot', { blog: hubspotBlog })
+                        : t('description')}
           </DialogDescription>
         </DialogHeader>
 
-        {(webflow || wordpress || framer || wix) && target && (
+        {(webflow || wordpress || framer || wix || hubspot) && target && (
           <CmsTargetPicker
             value={target}
             webflow={webflow}
             wordpress={wordpress}
             framer={framer}
             wix={wix}
+            hubspot={hubspot}
             disabled={sending}
             onChange={(next) => {
               pick(next);
@@ -468,7 +481,9 @@ export function SendDialog({
                       ? `lastFramer.${last.status}`
                       : last.target === 'wix'
                         ? `lastWix.${last.status}`
-                        : `last.${last.status}`,
+                        : last.target === 'hubspot'
+                          ? `lastHubspot.${last.status}`
+                          : `last.${last.status}`,
                 {
                   when: format.dateTime(new Date(last.at), {
                     dateStyle: 'medium',
