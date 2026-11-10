@@ -34,14 +34,14 @@ export function VisibilityTrendChartView({
 
       <XAxis
         dataKey="date"
-        tick={{ fontSize: 11 }}
+        tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
         tickLine={false}
         axisLine={false}
         className="fill-muted-foreground"
       />
 
       <YAxis
-        tick={{ fontSize: 11 }}
+        tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
         tickLine={false}
         axisLine={false}
         className="fill-muted-foreground"

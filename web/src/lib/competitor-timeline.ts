@@ -9,8 +9,8 @@
 
 /** Weeks the chart shows, the current one last. */
 export const TIMELINE_WEEKS = 12;
-/** The competitor's line: the Insights trend's first competitor color. */
-export const COMPETITOR_COLOR = '#1e3a8a';
+/** The competitor's line: the Insights trend's first competitor color (a theme token). */
+export const COMPETITOR_COLOR = 'var(--chart-competitor-1)';
 
 export interface TimelineWeek {
   /** The week's Monday, YYYY-MM-DD (UTC). */
