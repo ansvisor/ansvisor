@@ -57,6 +57,10 @@ const getAiUsage = vi.fn();
 const getDraftAiUsage = vi.fn();
 const getOrgIdForUser = vi.fn();
 const assertBrandAccess = vi.fn();
+const readPersonSummary = vi.fn();
+vi.mock('../lib/posthog-person-summary.js', () => ({
+  readPersonSummary: (...args) => readPersonSummary(...args),
+}));
 vi.mock('../lib/access.js', () => ({
   assertBrandAccess: (...args) => assertBrandAccess(...args),
 }));
@@ -95,6 +99,8 @@ beforeEach(async () => {
   inserted.length = 0;
   updated.length = 0;
   deliverEmail.mockReset().mockResolvedValue('sent');
+  // PostHog not set up, as on a self-hosted install.
+  readPersonSummary.mockReset().mockResolvedValue(null);
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -146,6 +152,59 @@ describe('POST /api/billing/cancel-feedback', () => {
     expect(mail.replyTo).toBe('ada@acme.example');
     expect(mail.subject).toBe('Acme Coffee asks us to act within 3 days before cancelling');
     expect(updated).toEqual([{ email_status: 'sent' }]);
+  });
+
+  it('adds the person’s last 14 days from PostHog to the e-mail', async () => {
+    readPersonSummary.mockResolvedValue({
+      ok: true,
+      days: 14,
+      pageviews: 42,
+      sessions: 5,
+      activeDays: 3,
+      lastSeen: '2026-11-09T16:45:00.000Z',
+      topPages: [{ path: '/dashboard', views: 12 }],
+      events: [{ event: 'cancel_dialog_opened', count: 2 }],
+      personUrl: 'https://us.posthog.com/project/1/person/u1',
+    });
+    const res = await send({ choice: 'cancel' });
+    expect(res.status).toBe(201);
+    // The signed-in user, as the web identifies them.
+    expect(readPersonSummary).toHaveBeenCalledTimes(1);
+    expect(readPersonSummary).toHaveBeenCalledWith('u1');
+    const { html } = deliverEmail.mock.calls[0][0];
+    expect(html).toContain('Last 14 days in Ansvisor');
+    expect(html).toContain('cancel_dialog_opened');
+    expect(html).toContain('https://us.posthog.com/project/1/person/u1');
+    // What is kept is the same as before.
+    expect(inserted[0]).not.toHaveProperty('activity');
+    expect(updated).toEqual([{ email_status: 'sent' }]);
+  });
+
+  it('still e-mails the team when PostHog fails, saying so', async () => {
+    readPersonSummary.mockResolvedValue({ ok: false });
+    const res = await send({ reasons: ['no_results'], choice: 'wait' });
+    expect(res.status).toBe(201);
+    expect(deliverEmail).toHaveBeenCalledTimes(1);
+    expect(deliverEmail.mock.calls[0][0].html).toContain("PostHog didn't answer");
+    expect(updated).toEqual([{ email_status: 'sent' }]);
+  });
+
+  it('leaves the activity out when PostHog isn’t set up', async () => {
+    expect((await send({ choice: 'cancel' })).status).toBe(201);
+    expect(readPersonSummary).toHaveBeenCalledWith('u1');
+    expect(deliverEmail.mock.calls[0][0].html).not.toContain('PostHog');
+  });
+
+  it('reads nothing from PostHog when the team has no addresses set', async () => {
+    vi.stubEnv('CANCEL_FEEDBACK_EMAILS', '');
+    deliverEmail.mockResolvedValue('skipped');
+    const res = await send({ choice: 'cancel' });
+    expect(res.status).toBe(201);
+    expect(readPersonSummary).not.toHaveBeenCalled();
+    // As before: the send is skipped for no one to send to, and the answer kept.
+    expect(deliverEmail.mock.calls[0][0].to).toEqual([]);
+    expect(inserted).toHaveLength(1);
+    expect(updated).toEqual([{ email_status: 'skipped' }]);
   });
 
   it('still keeps the answer when the e-mail does not go out', async () => {
