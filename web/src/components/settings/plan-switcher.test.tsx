@@ -557,6 +557,12 @@ describe('choosing a plan once the old one has ended', () => {
     expect(cardText().Starter).toContain('$24.50first monththen $49/mo');
     expect(dueToday('Starter')).toBe('$24.50');
     expect(cardText().Starter).toContain('Secure checkout with Stripe · Cancel any time');
+    // The offer is on the cards, not by Monthly; and no demo, which is onboarding's.
+    expect([...container.querySelectorAll('[data-choice]')].map((b) => b.textContent)).toEqual([
+      'Monthly',
+      'YearlySave 20%',
+    ]);
+    expect(container.textContent).not.toContain('Demo · no card');
     expect(container.querySelector('[data-choice="trial"]')).toBeNull();
     expect(startButton('Starter', 'trial')).toBeNull();
     expect(container.textContent).not.toContain('free trial');
@@ -610,8 +616,9 @@ describe('choosing a plan once the old one has ended', () => {
         .filter((b) => b.classList.contains('bg-primary'))
         .map((b) => b.dataset.choice);
 
-    // Monthly at first, where the first-month offer is.
+    // Monthly at first, where the first-month offer is; no demo, which is onboarding's.
     expect(choices().map((b) => b.dataset.choice)).toEqual(['trial', 'month', 'year']);
+    expect(container.querySelector('[data-slot="start-choice-divider"]')).toBeNull();
     expect(chosen()).toEqual(['month']);
     expect(filled()).toEqual(['month']);
     expect(container.querySelector('[data-choice="month"]')!.className).toContain(

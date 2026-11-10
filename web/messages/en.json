@@ -388,8 +388,8 @@
       "label": "How to start",
       "trial": "{days}-day trial",
       "month": "Monthly",
-      "monthOffer": "{discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}",
-      "year": "Yearly"
+      "year": "Yearly",
+      "demo": "Demo <note>· no card</note>"
     },
     "dueToday": "Due today",
     "freeUntil": "Free until {date}, then {price}/month",
@@ -418,10 +418,12 @@
       "failed": "Couldn't open the demo brand. Try again."
     },
     "onboarding": {
-      "title": "Not ready to add a card? Explore a demo brand",
-      "body": "See Ansvisor with sample data: prompts, AI answers, content and reports. No card needed. {brand} stays saved, and tracking starts when you pick a plan.",
-      "yourBrand": "Your brand",
-      "cta": "Explore the demo"
+      "title": "Look around a sample brand",
+      "badge": "{demoBrand} · sample data",
+      "body": "You'll explore <b>{demoBrand}</b>, a made-up brand with sample data, not <b>{brand}</b>. You can open every page, but nothing runs or changes there. {named, select, yes {{brand}} other {Your brand}} stays saved, and tracking starts when you pick a plan. No card needed.",
+      "yourBrand": "your brand",
+      "cta": "Explore the sample brand",
+      "notReady": "Not ready for a card? <link>Explore a sample brand first →</link>"
     },
     "seeTheDemo": "See the demo",
     "settingUp": "Setting up the demo…",

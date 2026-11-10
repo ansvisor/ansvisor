@@ -100,8 +100,9 @@ import {
   type SuggestFailure,
 } from '@/lib/ai-brand-setup';
 import { DashboardPreview } from '@/components/onboarding/dashboard-preview';
-import { ExploreDemoCard } from '@/components/onboarding/explore-demo-card';
-import { usePreloadDemo } from '@/hooks/use-explore-demo';
+import { ExploreDemoChoice, ExploreDemoLine } from '@/components/onboarding/explore-demo-card';
+import { DemoSetupDialog } from '@/components/demo/demo-setup-dialog';
+import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
 import { wantsDemoAhead } from '@/lib/demo/demo-ahead';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
 import { WorkAreasStep } from '@/components/onboarding/work-areas-step';
@@ -422,6 +423,12 @@ export default function OnboardingPage() {
       cancelled = true;
     };
   }, [step, organizationId]);
+  usePreloadDemo(step === PLAN_STEP && demoMissing);
+  // The demo brand, the plan step's other way in: chosen in the switch above
+  // the plans (its card then shows in their place), or straight from the line
+  // under them. Both run the one explore action, with its setup screen.
+  const [demoChosen, setDemoChosen] = useState(false);
+  const exploreDemo = useExploreDemo();
 
   // A new workspace's demo brand is built as soon as the organization exists,
   // while its admin sets up their own brand: the first build takes a few
@@ -1924,52 +1931,72 @@ export default function OnboardingPage() {
             </div>
           </div>
 
-          {/* How the plan starts: the trial, monthly with the offer, or a year */}
+          {/* How the plan starts: the trial, monthly, or a year; or the demo first */}
           <div className="mb-5 flex">
             <StartChoicePicker
               choice={choice}
-              onChange={setChoice}
+              onChange={(next) => {
+                setDemoChosen(false);
+                setChoice(next);
+              }}
               trialOffered={trialOffered}
-              offer={offer}
               centered
+              demo={{ chosen: demoChosen, onChoose: () => setDemoChosen(true) }}
             />
           </div>
 
-          {/* Plan cards */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            {SUBSCRIBABLE_PLANS.map((planId) => (
-              <PlanStartCard
-                key={planId}
-                planId={planId}
-                choice={choice}
-                offer={offer}
-                details={planDetails}
-              >
-                <PlanStart
-                  planId={planId}
-                  choice={choice}
-                  offer={offer}
-                  trialOffered={trialOffered}
-                  opening={checkout?.planId === planId ? checkout.mode : null}
-                  disabled={!organizationId || checkout != null}
-                  error={failed?.planId === planId ? failed.message : null}
-                  onStart={(mode) => handleCheckout(planId, mode)}
+          {demoChosen ? (
+            // The demo, chosen above: its card in place of the plans.
+            <ExploreDemoChoice
+              brandName={planBrandName}
+              opening={exploreDemo.opening}
+              onExplore={() => void exploreDemo.explore()}
+            />
+          ) : (
+            <>
+              {/* Plan cards */}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {SUBSCRIBABLE_PLANS.map((planId) => (
+                  <PlanStartCard
+                    key={planId}
+                    planId={planId}
+                    choice={choice}
+                    offer={offer}
+                    details={planDetails}
+                  >
+                    <PlanStart
+                      planId={planId}
+                      choice={choice}
+                      offer={offer}
+                      trialOffered={trialOffered}
+                      opening={checkout?.planId === planId ? checkout.mode : null}
+                      disabled={!organizationId || checkout != null}
+                      error={failed?.planId === planId ? failed.message : null}
+                      onStart={(mode) => handleCheckout(planId, mode)}
+                    />
+                  </PlanStartCard>
+                ))}
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span data-slot="card-note">
+                  {tOffer('cardNote', { both: trialOffered ? 'yes' : 'no' })}
+                </span>
+                <PlanDetailsToggle
+                  open={planDetails}
+                  onToggle={() => setPlanDetails((open) => !open)}
                 />
-              </PlanStartCard>
-            ))}
-          </div>
+              </div>
 
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span data-slot="card-note">
-              {tOffer('cardNote', { both: trialOffered ? 'yes' : 'no' })}
-            </span>
-            <PlanDetailsToggle
-              open={planDetails}
-              onToggle={() => setPlanDetails((open) => !open)}
-            />
-          </div>
-
-          <ExploreDemoCard brandName={planBrandName} preload={demoMissing} />
+              {/* Not ready for a card: the demo, straight from one line. */}
+              <ExploreDemoLine
+                className="mt-5"
+                opening={exploreDemo.opening}
+                onExplore={() => void exploreDemo.explore()}
+              />
+            </>
+          )}
+          <DemoSetupDialog {...exploreDemo.setupDialog} />
         </div>
 
         <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-5">
