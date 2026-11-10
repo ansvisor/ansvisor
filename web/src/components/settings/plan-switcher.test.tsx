@@ -8,9 +8,11 @@ import { RoleProvider } from '@/components/providers/role-provider';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { sendCancelFeedback } from '@/lib/actions/cancel-feedback';
+import { track } from '@/lib/analytics';
 import { PlanSwitcher } from './plan-switcher';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
+vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
 vi.mock('@/lib/actions/cancel-feedback', () => ({
   sendCancelFeedback: vi.fn(async () => ({ ok: true })),
 }));
@@ -699,5 +701,31 @@ describe('cancelling', () => {
       }),
     );
     expect(sendCancelFeedback).toHaveBeenCalledWith({ reasons: [], message: '', choice: 'cancel' });
+    expect(vi.mocked(track).mock.calls).toEqual([
+      ['cancel_dialog_opened', { plan: 'growth', interval: 'month', days_left: null }],
+      [
+        'subscription_canceled',
+        { reasons: [], reason_count: 0, has_message: false, wait_offered: false },
+      ],
+    ]);
+  });
+
+  it('counts a cancelled plan set to renew again', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({ status: 'active', currentPeriodEnd: '2026-11-20T00:00:00Z' }),
+      ),
+    );
+    await render('growth', { cancelAtPeriodEnd: true, interval: 'year' });
+    await click('Reactivate Subscription');
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/stripe/subscription',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ reactivate: true }) }),
+    );
+    expect(track).toHaveBeenCalledWith('subscription_reactivated', {
+      plan: 'growth',
+      interval: 'year',
+    });
   });
 });

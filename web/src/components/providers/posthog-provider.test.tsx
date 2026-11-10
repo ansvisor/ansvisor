@@ -47,6 +47,17 @@ describe('PostHogProvider', () => {
     expect(config.session_recording.maskAllInputs).toBe(true);
   });
 
+  it('records heatmaps, and no dead-click events with element text, whatever the project says', () => {
+    vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', 'phc_test');
+    act(() => root.render(<PostHogProvider />));
+    const [, config] = posthog.init.mock.calls[0];
+    expect(config).toMatchObject({
+      autocapture: false,
+      enable_heatmaps: true,
+      capture_dead_clicks: false,
+    });
+  });
+
   it('starts nothing without a key', () => {
     vi.stubEnv('NEXT_PUBLIC_POSTHOG_KEY', '');
     act(() => root.render(<PostHogProvider />));
