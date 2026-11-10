@@ -36,9 +36,11 @@ import {
   activateHubspot,
   chooseHubspotAccount,
   disconnectHubspot,
+  listHubspotBlogs,
   readHubspot,
   rememberPending,
   retryHubspotSetup,
+  saveHubspotBlog,
   saveHubspotConsent,
   startHubspotConnect,
   takePending,
@@ -46,6 +48,7 @@ import {
   type HubspotConsent,
   type HubspotError,
   type HubspotRead,
+  type HubspotBlog,
 } from '@/lib/hubspot-client';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -367,6 +370,16 @@ export function HubspotCard() {
             { action: tActions('connectIntegrations') },
           )}
         />
+        {consent.pages && !refused && activeBrandId && (
+          <BlogPicker
+            brandId={activeBrandId}
+            picked={connection.blog}
+            canPick={canManage && !paused}
+            onSaved={setValue}
+            onConnectAgain={() => openDialog(null)}
+            onRefusal={fail}
+          />
+        )}
         {consent.at && (consent.contacts || consent.pages) && (
           <p className="text-xs text-muted-foreground">
             {t(consent.by ? 'allowedBy' : 'allowedOn', {
@@ -512,6 +525,106 @@ function ConsentRow({
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
       <SettingsSwitch checked={checked} label={title} disabled={disabled} onChange={onChange} />
+    </div>
+  );
+}
+
+/**
+ * Send to CMS's HubSpot blog (00522): the blog draft posts go to. Admins and
+ * managers pick it from the account's blogs; others see the one picked.
+ * Without HubSpot's content scope (a sign-in made without it), it asks to
+ * connect HubSpot again.
+ */
+function BlogPicker({
+  brandId,
+  picked,
+  canPick,
+  onSaved,
+  onConnectAgain,
+  onRefusal,
+}: {
+  brandId: string;
+  picked: { id: string; name: string | null } | null;
+  canPick: boolean;
+  onSaved: (next: HubspotRead) => void;
+  onConnectAgain: () => void;
+  onRefusal: (code: HubspotError) => void;
+}) {
+  const t = useTranslations('settings.hubspot.blog');
+  const id = useId();
+  const [read, setRead] = useState<HubspotBlog[] | HubspotError | null>(null);
+  const [choice, setChoice] = useState<string | null>(picked?.id ?? null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!canPick) return;
+    let cancelled = false;
+    listHubspotBlogs(brandId).then((result) => {
+      if (!cancelled) setRead(result.ok ? result.blogs : result.code);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [brandId, canPick]);
+
+  if (!canPick) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        {picked ? t('goesTo', { blog: picked.name ?? picked.id }) : t('notPicked')}
+      </p>
+    );
+  }
+  if (read === null) return <Skeleton className="h-8 w-64" />;
+  if (typeof read === 'string') {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <Note tone="amber">{read === 'scopes' ? t('scopes') : t('unavailable')}</Note>
+        {(read === 'scopes' || read === 'refused') && (
+          <Button size="sm" variant="outline" onClick={onConnectAgain}>
+            {t('connectAgain')}
+          </Button>
+        )}
+      </div>
+    );
+  }
+  if (read.length === 0) return <p className="text-xs text-muted-foreground">{t('none')}</p>;
+
+  const items = read.map((blog) => ({ value: blog.id, label: blog.name }));
+  const save = async () => {
+    if (!choice) return;
+    setSaving(true);
+    const result = await saveHubspotBlog(brandId, choice);
+    setSaving(false);
+    if (!result.ok) return onRefusal(result.code);
+    onSaved(result);
+    toast.success(t('saved'));
+  };
+  return (
+    <div className="space-y-1.5">
+      <label htmlFor={id} className="text-sm font-medium">
+        {t('label')}
+      </label>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select items={items} value={choice} onValueChange={(v) => setChoice(v ?? null)}>
+          <SelectTrigger id={id} className="h-8 w-64 max-w-full text-xs">
+            <SelectValue placeholder={t('placeholder')} />
+          </SelectTrigger>
+          <SelectContent>
+            {items.map((item) => (
+              <SelectItem key={item.value} value={item.value}>
+                {item.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button size="sm" onClick={save} disabled={!choice || choice === picked?.id || saving}>
+          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          {t('save')}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {picked ? t('goesTo', { blog: picked.name ?? picked.id }) : t('notPicked')}
+      </p>
     </div>
   );
 }

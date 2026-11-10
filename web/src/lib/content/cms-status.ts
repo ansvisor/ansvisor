@@ -34,7 +34,8 @@ export function lastSend(row: {
       row.target === 'webflow' ||
       row.target === 'wordpress' ||
       row.target === 'framer' ||
-      row.target === 'wix'
+      row.target === 'wix' ||
+      row.target === 'hubspot'
         ? row.target
         : 'webhook',
     at: row.taken_down_at ?? row.published_at ?? row.sent_at ?? row.created_at,

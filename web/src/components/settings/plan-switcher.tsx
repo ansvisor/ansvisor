@@ -48,6 +48,7 @@ import { useRouter } from '@/i18n/navigation';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
+import { trackCancelOpened, trackReactivated } from '@/lib/billing/cancel-events';
 import {
   aiUsageMultiple,
   usePlanCardsChatMetered,
@@ -218,6 +219,7 @@ export function PlanSwitcher({
         currentPeriodEnd: data.currentPeriodEnd,
       });
       router.refresh();
+      trackReactivated({ plan: currentPlanId, interval: currentInterval });
       toast.success(t('subscriptionReactivated'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to reactivate');
@@ -649,7 +651,13 @@ export function PlanSwitcher({
           <Button
             variant="ghost"
             className="text-destructive hover:text-destructive"
-            onClick={() => setCancelOpen(true)}
+            onClick={() => {
+              trackCancelOpened(
+                { plan: currentPlanId, interval: currentInterval },
+                subscription.currentPeriodEnd,
+              );
+              setCancelOpen(true);
+            }}
           >
             {t('cancelSubscription')}
           </Button>

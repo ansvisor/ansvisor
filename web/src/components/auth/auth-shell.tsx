@@ -14,11 +14,17 @@ import { cn } from '@/lib/utils';
 export function AuthShell({
   prompt,
   cta,
+  aside,
+  pitch = true,
   children,
 }: {
   /** The question beside the header button, e.g. "Don't have an account?" */
   prompt?: string;
-  cta: { href: '/sign-in' | '/sign-up'; label: string };
+  cta?: { href: '/sign-in' | '/sign-up'; label: string };
+  /** Shown at the header's right instead of a button, e.g. who is signed in (the consent page). */
+  aside?: React.ReactNode;
+  /** The product pitch on the left; off, the card stands alone in the middle. */
+  pitch?: boolean;
   children: React.ReactNode;
 }) {
   const t = useTranslations('auth');
@@ -52,14 +58,22 @@ export function AuthShell({
           {prompt && (
             <span className="hidden text-sm text-muted-foreground sm:inline">{prompt}</span>
           )}
-          <Link href={cta.href} className={buttonVariants({ className: 'h-10 px-5' })}>
-            {cta.label}
-          </Link>
+          {cta && (
+            <Link href={cta.href} className={buttonVariants({ className: 'h-10 px-5' })}>
+              {cta.label}
+            </Link>
+          )}
+          {aside}
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto grid w-full max-w-7xl flex-1 items-center gap-12 px-4 py-8 sm:px-8 lg:grid-cols-2 lg:gap-16">
-        <Pitch />
+      <main
+        className={cn(
+          'relative z-10 mx-auto grid w-full max-w-7xl flex-1 items-center gap-12 px-4 py-8 sm:px-8',
+          pitch && 'lg:grid-cols-2 lg:gap-16',
+        )}
+      >
+        {pitch && <Pitch />}
         <div className="mx-auto w-full max-w-lg">{children}</div>
       </main>
 

@@ -43,6 +43,7 @@ import {
   refreshFramerPublished,
   refreshWebflowPublished,
   refreshWixPublished,
+  refreshHubspotPublished,
   refreshWordPressPublished,
   type CmsStatus,
 } from '@/lib/content/cms-send-client';
@@ -260,10 +261,12 @@ export default function ContentLibraryPage() {
   const inWordPress = sentTo('wordpress');
   const inFramer = sentTo('framer');
   const inWix = sentTo('wix');
+  const inHubspot = sentTo('hubspot');
   const webflowRead = useRef(new Set<string>());
   const wordpressRead = useRef(new Set<string>());
   const framerRead = useRef(new Set<string>());
   const wixRead = useRef(new Set<string>());
+  const hubspotRead = useRef(new Set<string>());
   useEffect(() => {
     if (isLocked || !inWebflow || !activeBrandId || webflowRead.current.has(activeBrandId)) return;
     webflowRead.current.add(activeBrandId);
@@ -299,6 +302,16 @@ export default function ContentLibraryPage() {
       if (published.length) setAttempt((n) => n + 1);
     });
   }, [isLocked, inWix, activeBrandId]);
+  useEffect(() => {
+    if (isLocked || !inHubspot || !activeBrandId || hubspotRead.current.has(activeBrandId)) {
+      return;
+    }
+    hubspotRead.current.add(activeBrandId);
+    // As Webflow's: not cancelled with the effect.
+    void refreshHubspotPublished(activeBrandId).then((published) => {
+      if (published.length) setAttempt((n) => n + 1);
+    });
+  }, [isLocked, inHubspot, activeBrandId]);
 
   const reload = () => setAttempt((n) => n + 1);
   const titleOf = (draft: ContentDraftListItem) => draft.title.trim() || t('untitled');

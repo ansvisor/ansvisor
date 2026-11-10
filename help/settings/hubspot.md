@@ -22,6 +22,10 @@ Open **Settings › Integrations** and find **HubSpot** under **CRM**. Admins an
 
 Tick at least one, click **Continue to HubSpot**, then sign in to HubSpot and approve the access in the window that opens.
 
+## Send pages to your HubSpot blog
+
+With **Send pages to HubSpot as drafts** on, the card has **Blog posts go to**: pick one of the HubSpot account's blogs and click **Save**. **Send to CMS** then offers HubSpot, and each page goes to that blog as a draft post. You publish it in HubSpot. If HubSpot didn't give Ansvisor access to its blogs, the card asks you to connect HubSpot again.
+
 ## What Ansvisor never does
 
 Ansvisor never deletes contacts or deals, never changes your own properties, never publishes a page, and never copies names or emails into Ansvisor. Nothing is written to HubSpot without the choices above.

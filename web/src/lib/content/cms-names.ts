@@ -6,6 +6,7 @@ export const CMS_NAMES: Record<CmsTarget, string> = {
   wordpress: 'WordPress',
   framer: 'Framer',
   wix: 'Wix',
+  hubspot: 'HubSpot',
   webhook: 'Webhook',
 };
 

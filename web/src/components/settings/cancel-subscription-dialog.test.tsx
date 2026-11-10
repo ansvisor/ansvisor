@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 import messages from '../../../messages/en.json';
 import { sendCancelFeedback } from '@/lib/actions/cancel-feedback';
+import { track } from '@/lib/analytics';
 import { CancelSubscriptionDialog } from './cancel-subscription-dialog';
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }) }));
 vi.mock('@/lib/actions/cancel-feedback', () => ({ sendCancelFeedback: vi.fn() }));
+vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
 
 (
   globalThis as typeof globalThis & {
@@ -173,5 +175,64 @@ describe('giving the team three days', () => {
       act(() => root.unmount());
       root = createRoot(container);
     }
+  });
+});
+
+describe('product events', () => {
+  it('counts a cancellation with its reasons, never the message', async () => {
+    await render();
+    await click('Too expensive');
+    write('Too pricey for a team of two.');
+    await click('Send and cancel');
+    expect(track).toHaveBeenCalledTimes(1);
+    expect(track).toHaveBeenCalledWith('subscription_canceled', {
+      reasons: ['too_expensive'],
+      reason_count: 1,
+      has_message: true,
+      wait_offered: true,
+    });
+    expect(JSON.stringify(vi.mocked(track).mock.calls)).not.toContain('pricey');
+  });
+
+  it('counts nothing when cancelling failed', async () => {
+    onCancel.mockResolvedValue(false);
+    await render();
+    await click('Cancel Subscription');
+    expect(track).not.toHaveBeenCalled();
+  });
+
+  it('counts the three days asked for, once they are granted', async () => {
+    await render();
+    await click('Missing a feature I need');
+    await click('Send and give us 3 days');
+    expect(track).toHaveBeenCalledWith('cancel_wait_requested', {
+      reasons: ['missing_feature'],
+      reason_count: 1,
+      has_message: false,
+    });
+    // Closing the thank-you isn't a dialog left without a choice.
+    await click('Close');
+    expect(track).toHaveBeenCalledTimes(1);
+
+    vi.clearAllMocks();
+    vi.mocked(sendCancelFeedback).mockResolvedValue({ error: 'too_many' });
+    act(() => root.unmount());
+    root = createRoot(container);
+    await render();
+    write('Please call me.');
+    await click('Send and give us 3 days');
+    expect(track).not.toHaveBeenCalledWith('cancel_wait_requested', expect.anything());
+  });
+
+  it('counts a dialog closed without cancelling or waiting, with the reasons ticked', async () => {
+    await render();
+    await click('Not seeing results');
+    await click('Close');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(track).toHaveBeenCalledWith('cancel_dialog_closed', {
+      reasons: ['no_results'],
+      reason_count: 1,
+      has_message: false,
+    });
   });
 });

@@ -33,12 +33,18 @@ const DEFAULTS: Record<string, () => Row> = {
     revoked_at: null,
   }),
   oauth_codes: () => ({ created_at: new Date().toISOString(), used_at: null, grant_id: null }),
+  oauth_authorization_requests: () => ({
+    id: randomUUID(),
+    created_at: new Date().toISOString(),
+    user_id: null,
+  }),
   oauth_events: () => ({ created_at: new Date().toISOString() }),
 };
 
-/** The embeds the code uses: child table → [parent table, foreign key column]. */
-const EMBEDS: Record<string, [string, string]> = {
-  oauth_grants: ['oauth_grants', 'grant_id'],
+/** The embeds the code uses: embedded table → [its table, the foreign key column, the key it names]. */
+const EMBEDS: Record<string, [string, string, string]> = {
+  oauth_grants: ['oauth_grants', 'grant_id', 'id'],
+  oauth_clients: ['oauth_clients', 'client_id', 'client_id'],
 };
 
 export function createFakeDb() {
@@ -72,12 +78,12 @@ export function createFakeDb() {
         return { data: matched, error: null };
       }
       if (!embed) return { data: matched.map((row) => ({ ...row })), error: null };
-      const [parent, column] = EMBEDS[embed];
+      const [parent, column, key] = EMBEDS[embed];
       return {
         data: matched
           .map((row) => ({
             ...row,
-            [embed!]: table(parent).find((p) => p.id === row[column]) ?? null,
+            [embed!]: table(parent).find((p) => p[key] === row[column]) ?? null,
           }))
           .filter((row) => row[embed!] !== null),
         error: null,
