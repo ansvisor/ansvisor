@@ -40,6 +40,8 @@ export const PLANS = {
         'shopping_analytics',
         'prompt_improve',
         'white_label',
+        // HubSpot (#2140), with the server's own Composio keys.
+        'crm_integrations',
       ],
     },
   },
@@ -142,6 +144,8 @@ export const PLANS = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        // HubSpot (#2140): Growth and above (owner, 2026-11-09).
+        'crm_integrations',
       ],
     },
   },
@@ -193,6 +197,8 @@ export const PLANS = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        // HubSpot (#2140): Growth and above (owner, 2026-11-09).
+        'crm_integrations',
       ],
     },
   },

@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sdk = {
   initiate: vi.fn(),
+  link: vi.fn(),
   list: vi.fn(),
   delete: vi.fn(),
   execute: vi.fn(),
@@ -14,6 +15,7 @@ vi.mock('@composio/core', () => ({
   Composio: class {
     connectedAccounts = {
       initiate: (...args) => sdk.initiate(...args),
+      link: (...args) => sdk.link(...args),
       list: (...args) => sdk.list(...args),
       delete: (...args) => sdk.delete(...args),
     };
@@ -30,7 +32,9 @@ const {
   executeWebflowTool,
   forgetWebflowAccounts,
   getActiveConnection,
+  isHubspotConfigured,
   isWebflowConfigured,
+  linkHubspot,
   listGaProperties,
   listGscSites,
   proxyRequest,
@@ -244,5 +248,55 @@ describe('proxyRequest (#1270)', () => {
     const refused = Object.assign(new Error('403 No permission'), { status: 403 });
     sdk.proxyExecute.mockRejectedValueOnce(refused);
     await expect(proxyRequest('ca_1', { endpoint: ENDPOINT })).rejects.toBe(refused);
+  });
+});
+
+describe('proxyRequest writes (#2140)', () => {
+  const ENDPOINT = 'https://api.hubapi.com/crm/v3/properties/contacts/groups';
+
+  it('sends a write with its method and JSON body; a GET sends no body', async () => {
+    sdk.proxyExecute.mockResolvedValue({ status: 201, headers: {}, data: { name: 'ansvisor' } });
+    await expect(
+      proxyRequest('ca_1', { endpoint: ENDPOINT, method: 'POST', body: { name: 'ansvisor' } }),
+    ).resolves.toEqual({ status: 201, headers: {}, data: { name: 'ansvisor' } });
+    expect(sdk.proxyExecute).toHaveBeenLastCalledWith(
+      {
+        endpoint: ENDPOINT,
+        method: 'POST',
+        parameters: [],
+        body: { name: 'ansvisor' },
+        connectedAccountId: 'ca_1',
+      },
+      undefined,
+    );
+    await proxyRequest('ca_1', { endpoint: ENDPOINT, body: { ignored: true } });
+    expect(sdk.proxyExecute.mock.calls.at(-1)[0]).not.toHaveProperty('body');
+    await expect(proxyRequest('ca_1', { endpoint: ENDPOINT, method: 'TRACE' })).rejects.toThrow(
+      'Unsupported proxy method',
+    );
+  });
+});
+
+describe('HubSpot on Composio (#2140)', () => {
+  it('is configured only with the API key and its own auth config', () => {
+    vi.stubEnv('COMPOSIO_HUBSPOT_AUTH_CONFIG_ID', '');
+    expect(isHubspotConfigured()).toBe(false);
+    vi.stubEnv('COMPOSIO_HUBSPOT_AUTH_CONFIG_ID', 'ac_hubspot');
+    expect(isHubspotConfigured()).toBe(true);
+    vi.stubEnv('COMPOSIO_API_KEY', '');
+    expect(isHubspotConfigured()).toBe(false);
+  });
+
+  it("starts a brand's sign-in as one more account under the entity", async () => {
+    vi.stubEnv('COMPOSIO_HUBSPOT_AUTH_CONFIG_ID', 'ac_hubspot');
+    sdk.link.mockResolvedValueOnce({ redirectUrl: 'https://hs.test/auth', id: 'ca_new' });
+    await expect(linkHubspot('org_org-1', 'https://app.test/back')).resolves.toEqual({
+      redirectUrl: 'https://hs.test/auth',
+      connectedAccountId: 'ca_new',
+    });
+    expect(sdk.link).toHaveBeenCalledWith('org_org-1', 'ac_hubspot', {
+      callbackUrl: 'https://app.test/back',
+      allowMultiple: true,
+    });
   });
 });

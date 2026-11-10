@@ -139,6 +139,9 @@ export async function deleteConnection(connectedAccountId) {
   await getClient().connectedAccounts.delete(connectedAccountId);
 }
 
+/** The methods a proxied call may use: Composio's own list. */
+const PROXY_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
+
 /**
  * A call to a provider's own API through Composio's proxy (#1270), on one
  * connected account: Composio adds the account's OAuth token on its side,
@@ -146,15 +149,28 @@ export async function deleteConnection(connectedAccountId) {
  * (a toolkit's ready-made tools may call an older one). Composio doesn't
  * retry it: the caller decides what a 429 means.
  *
+ * GET by default (Merchant Center's reads). A write (HubSpot, #2140) names
+ * its `method` and sends `body` as JSON; a GET sends none.
+ *
  * Returns the API's own answer, whatever its status: `{ status, headers, data }`.
  * Throws when Composio itself refuses the call (an account no longer active).
  */
-export async function proxyRequest(connectedAccountId, { endpoint, query = {}, signal }) {
+export async function proxyRequest(
+  connectedAccountId,
+  { endpoint, method = 'GET', query = {}, body, signal },
+) {
+  if (!PROXY_METHODS.has(method)) throw new Error(`Unsupported proxy method: ${method}`);
   const parameters = Object.entries(query)
     .filter(([, value]) => value != null && value !== '')
     .map(([name, value]) => ({ in: 'query', name, value: String(value) }));
   const res = await getClient().tools.proxyExecute(
-    { endpoint, method: 'GET', parameters, connectedAccountId },
+    {
+      endpoint,
+      method,
+      parameters,
+      ...(body !== undefined && method !== 'GET' ? { body } : {}),
+      connectedAccountId,
+    },
     signal ? { signal } : undefined,
   );
   return { status: res.status, headers: res.headers ?? {}, data: res.data ?? null };
@@ -393,4 +409,40 @@ export async function executeWebflowTool(slug, { entityId, accountId }, args) {
     throw new Error(result?.error || `${slug} failed`);
   }
   return result?.data ?? {};
+}
+
+// ─── HubSpot (#2140) ─────────────────────────────────────────────────────────
+
+/**
+ * HubSpot signs in with OAuth (Composio's managed app for now; our own app
+ * for HubSpot's App Marketplace later, through the same env var). Each
+ * brand connects on its own (BRAND-ACCESS, lib/brand-integrations.js): a
+ * HubSpot sign-in is one more connected account under the Account's entity.
+ * Not in PROVIDERS: those are the workspace's own sign-ins, which every
+ * brand of the Account uses; a HubSpot account is a brand's. Its calls go
+ * through proxyRequest (lib/hubspot/client.js).
+ */
+const HUBSPOT_AUTH_CONFIG_ENV = 'COMPOSIO_HUBSPOT_AUTH_CONFIG_ID';
+
+/** Whether this server can connect HubSpot: the API key and HubSpot's auth config. */
+export function isHubspotConfigured() {
+  return Boolean(process.env.COMPOSIO_API_KEY && process.env[HUBSPOT_AUTH_CONFIG_ENV]);
+}
+
+/**
+ * Starts HubSpot's sign-in for `entityId`: the address to open and the
+ * pending connected account's id. More than one is allowed, as a brand's own
+ * Google login is (initiateConnection): several brands may use several
+ * HubSpot accounts under the Account's entity.
+ */
+export async function linkHubspot(entityId, callbackUrl) {
+  const request = await getClient().connectedAccounts.link(
+    entityId,
+    process.env[HUBSPOT_AUTH_CONFIG_ENV],
+    { callbackUrl, allowMultiple: true },
+  );
+  return {
+    redirectUrl: request.redirectUrl,
+    connectedAccountId: request.connectedAccountId ?? request.id ?? null,
+  };
 }

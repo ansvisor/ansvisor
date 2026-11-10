@@ -15180,7 +15180,12 @@
       "growth": {
         "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
         "engines": "ChatGPT, Gemini, Google AI Mode and Google AI Overviews tracking",
-        "extras": ["Multi-region tracking", "White-label reports & exports", "Looker Studio"],
+        "extras": [
+          "Multi-region tracking",
+          "White-label reports & exports",
+          "Looker Studio",
+          "HubSpot integration"
+        ],
         "extrasChat": ["Chat and Agent Center", "Full auto, with agents that publish on their own"]
       },
       "brands": "{count, plural, one {# brand} other {# brands}}",
@@ -15352,6 +15357,7 @@
     "integrations_selectProperty": "Select a property",
     "integrations_stores": "Stores and marketplaces",
     "integrations_cms": "Content management systems",
+    "integrations_crm": "CRM",
     "integrations_description": "Connect external data sources. Connections are shared with your whole organization.",
     "catalog": {
       "title": "Product catalog",
@@ -15732,6 +15738,99 @@
         "session": "Your session expired. Sign in again.",
         "workspace": "This brand isn't in your workspace.",
         "failed": "Couldn't reach Framer. Try again later."
+      }
+    },
+    "hubspot": {
+      "title": "HubSpot",
+      "description": "See which contacts, deals and revenue {brand}'s AI answers bring. Ansvisor marks the HubSpot contacts who came from an AI answer, and can send pages to HubSpot as drafts.",
+      "noBrand": "Pick a brand to connect its HubSpot account.",
+      "unavailable": "Couldn't read the HubSpot connection right now.",
+      "retry": "Try again",
+      "notConfiguredBadge": "Not configured",
+      "notConfigured": "HubSpot isn't set up on this server. Set <code>COMPOSIO_API_KEY</code> and <code>COMPOSIO_HUBSPOT_AUTH_CONFIG_ID</code> in the server environment to enable it.",
+      "lockedTitle": "HubSpot comes with the {plan} plan",
+      "lockedDescription": "See the contacts, deals and revenue your AI visibility brings.",
+      "upgrade": "Upgrade",
+      "askAdmin": "Ask an admin to upgrade.",
+      "connected": "Connected",
+      "paused": "Paused",
+      "pausedNote": "Your plan no longer includes HubSpot. Nothing is read from or written to HubSpot until you upgrade. Your data stays.",
+      "reconnectBadge": "Reconnect",
+      "reconnectNote": "HubSpot no longer accepts Ansvisor's access. Connect it again.",
+      "connectAgain": "Connect again",
+      "connect": "Connect HubSpot",
+      "connecting": "Connecting…",
+      "or": "or",
+      "usePlaceholder": "Use the account another brand uses",
+      "accountUsedBy": "{label} · used by {brands}",
+      "anAccount": "A HubSpot account",
+      "asksFirst": "Ansvisor asks before it writes anything to HubSpot.",
+      "notConnectedMember": "Not connected. Admins and managers can connect HubSpot.",
+      "account": "Account: {label}",
+      "sharedWith": "Also used by {brands}",
+      "changeAccount": "Change account",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect HubSpot from {brand}?",
+      "disconnectStops": "Ansvisor stops reading from and writing to HubSpot for {brand} right away.",
+      "disconnectKeeps": "The Ansvisor properties and their values stay in HubSpot. Delete them there if you want to.",
+      "disconnectShared": "{brands} still {count, plural, one {uses} other {use}} this HubSpot account.",
+      "cancel": "Cancel",
+      "disconnected": "HubSpot disconnected",
+      "connectedToast": "HubSpot connected",
+      "connectUnfinished": "HubSpot's sign-in wasn't finished. Try again.",
+      "propertiesReady": "Property group \"Ansvisor\" ready in HubSpot, with 6 contact properties.",
+      "propertiesNotMade": "The Ansvisor properties aren't in HubSpot yet.",
+      "propertiesFailed": {
+        "scopes": "HubSpot didn't give Ansvisor the access to make the Ansvisor properties. Connect HubSpot again.",
+        "conflict": "HubSpot has an archived property with the same name as an Ansvisor one. Restore or delete it in HubSpot, then try again.",
+        "auth": "HubSpot no longer accepts Ansvisor's access. Connect it again.",
+        "forbidden": "HubSpot refused to make the Ansvisor properties. Ask a HubSpot super admin, then try again.",
+        "other": "Couldn't make the Ansvisor properties in HubSpot just now."
+      },
+      "contacts": {
+        "title": "Mark contacts who came from an AI answer",
+        "description": "Ansvisor fills its properties on contacts who first came from an AI answer, and reads them for its report."
+      },
+      "pages": {
+        "title": "Send pages to HubSpot as drafts",
+        "description": "Lets Send to CMS create draft pages in HubSpot. You publish them in HubSpot."
+      },
+      "allowedBy": "Allowed by {name} on {date}: {what}.",
+      "allowedOn": "Allowed on {date}: {what}.",
+      "allowedWhat": {
+        "both": "marking contacts and sending pages as drafts",
+        "contacts": "marking contacts",
+        "pages": "sending pages as drafts"
+      },
+      "consent": {
+        "title": "Connect HubSpot for {brand}",
+        "description": "Choose what Ansvisor may do in your HubSpot account. You can change it later on this card.",
+        "accountLabel": "HubSpot account",
+        "newAccount": "Sign in to a HubSpot account",
+        "contactsTitle": "Mark contacts who came from an AI answer",
+        "contactsNow": "Now: create a property group \"Ansvisor\" with 6 contact properties (AI source, AI landing page, AI first visit, AI converted, Ansvisor brand, and a hidden brand id).",
+        "contactsThen": "Then: fill them on a contact who first came from an AI answer and then sent a form or was identified. A contact that already has an AI source keeps it.",
+        "contactsRead": "Read those contacts and their deals, for the AI-sourced pipeline report.",
+        "pagesTitle": "Send pages to HubSpot as drafts",
+        "pagesWhat": "When someone uses Send to CMS, create a draft page. You publish it in HubSpot.",
+        "never": "Ansvisor never deletes contacts or deals, never changes your own properties, never publishes a page, and never copies names or emails into Ansvisor.",
+        "pickOne": "Choose at least one to continue.",
+        "next": "Next, you sign in to HubSpot and approve the access there.",
+        "cancel": "Cancel",
+        "continue": "Continue to HubSpot",
+        "useAccount": "Use this account"
+      },
+      "errors": {
+        "consent_required": "Choose what Ansvisor may do in HubSpot first.",
+        "not_configured": "HubSpot isn't set up on this server.",
+        "forbidden": "Only admins and managers can change HubSpot.",
+        "not_connected": "Connect HubSpot first.",
+        "unknown_account": "That HubSpot account isn't one this brand can use.",
+        "session": "Your session has ended. Sign in again.",
+        "workspace": "This brand isn't one you can change.",
+        "busy": "Too many requests. Try again in a minute.",
+        "plan": "HubSpot comes with the Growth plan.",
+        "failed": "Something went wrong. Try again."
       }
     },
     "wix": {

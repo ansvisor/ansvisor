@@ -85,6 +85,9 @@ vi.mock('./catalog-category-pages', () => ({
 }));
 vi.mock('./webflow-card', () => ({ WebflowCard: () => <div data-card="webflow">Webflow</div> }));
 vi.mock('./wix-card', () => ({ WixCard: () => <div data-card="wix">Wix</div> }));
+vi.mock('./hubspot-card', () => ({
+  HubspotCard: () => <div data-card="hubspot">HubSpot</div>,
+}));
 
 const { IntegrationsSection } = await import('./integrations-section');
 const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
@@ -174,6 +177,7 @@ describe('IntegrationsSection', () => {
     expect(headings().map((h) => [h.tagName, h.textContent])).toEqual([
       ['H3', 'Stores and marketplaces'],
       ['H3', 'Content management systems'],
+      ['H3', 'CRM'],
     ]);
     for (const heading of headings()) {
       expect(heading.closest('section')?.getAttribute('aria-labelledby')).toBe(heading.id);
@@ -189,6 +193,8 @@ describe('IntegrationsSection', () => {
     expect(groupOf(container.querySelector('[data-card="webflow"]'))).toBe(
       'Content management systems',
     );
+    // HubSpot (#2140) in a group of its own, last.
+    expect(groupOf(container.querySelector('[data-card="hubspot"]'))).toBe('CRM');
     // The Google data sources come first, in no group.
     expect(groupOf(byText('Google Search Console'))).toBeNull();
     expect(groupOf(byText('Google Analytics'))).toBeNull();

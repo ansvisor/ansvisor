@@ -137,6 +137,13 @@ export const DEMO_GUARDED = [
   guard('POST /cms/brands/:brandId/indexnow', brandIn('path')),
   guard('POST /cms/brands/:brandId/indexnow/check', brandIn('path')),
   guard('DELETE /cms/brands/:brandId/indexnow', brandIn('path')),
+  // HubSpot (hubspot.js, #2140): connecting, the account used, what Ansvisor may write, disconnecting.
+  guard('POST /hubspot/brands/:brandId/connect', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/activate', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/use', brandIn('path')),
+  guard('PUT /hubspot/brands/:brandId/settings', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/setup', brandIn('path')),
+  guard('DELETE /hubspot/brands/:brandId', brandIn('path')),
 
   // Content Editor (content-drafts.js): the draft's brand is in the body;
   // the draft itself is checked too.

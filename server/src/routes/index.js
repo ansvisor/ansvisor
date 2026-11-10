@@ -22,6 +22,7 @@ import cmsWordPressRoutes from './cms-wordpress.js';
 import cmsFramerRoutes from './cms-framer.js';
 import cmsWixRoutes from './cms-wix.js';
 import cmsIndexNowRoutes from './cms-indexnow.js';
+import hubspotRoutes from './hubspot.js';
 import demoRoutes from './demo.js';
 import chatOutboundRoutes from './chat-outbound.js';
 
@@ -50,6 +51,7 @@ router.use('/cms', cmsWordPressRoutes);
 router.use('/cms', cmsFramerRoutes);
 router.use('/cms', cmsWixRoutes);
 router.use('/cms', cmsIndexNowRoutes);
+router.use('/hubspot', hubspotRoutes);
 router.use('/demo', demoRoutes);
 router.use('/chat-outbound', chatOutboundRoutes);
 
