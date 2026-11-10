@@ -28,7 +28,12 @@ function SignInView({
   const t = useTranslations('auth');
 
   return (
-    <AuthShell prompt={t('noAccount')} cta={{ href: '/sign-up', label: t('createAccount') }}>
+    <AuthShell
+      prompt={t('noAccount')}
+      cta={{ href: '/sign-up', label: t('signUp') }}
+      brandAboveCard
+      backdrop="orbit"
+    >
       <div className="flex flex-col gap-6">
         {connecting && <ConnectingBanner app={connecting} />}
         {showVerificationBanner && <VerificationBanner />}

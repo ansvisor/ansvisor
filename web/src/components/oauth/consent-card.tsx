@@ -28,11 +28,7 @@ const BILLING = '/dashboard/settings/billing';
 
 /** AuthCard's frame, with the page's own heading. */
 function Panel({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="rounded-2xl border border-black/5 bg-card p-6 shadow-[0_12px_40px_rgba(60,45,30,0.06)] sm:p-8 dark:border-border dark:shadow-none">
-      {children}
-    </div>
-  );
+  return <AuthCard>{children}</AuthCard>;
 }
 
 function AppTiles({ app }: { app: ConsentApp }) {

@@ -6,8 +6,13 @@ export default function SignUpPage() {
   const t = useTranslations('auth');
 
   return (
-    <AuthShell prompt={t('hasAccount')} cta={{ href: '/sign-in', label: t('signIn') }}>
-      <AuthCard title={t('signUp')} subtitle={t('signUpSubtitle')}>
+    <AuthShell
+      prompt={t('hasAccount')}
+      cta={{ href: '/sign-in', label: t('signIn') }}
+      headline={t('signUpHeadline')}
+      footnote={t('tracksEngines')}
+    >
+      <AuthCard>
         <SignUpForm />
       </AuthCard>
     </AuthShell>
