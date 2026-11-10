@@ -302,7 +302,8 @@ function valueOf(metric: WhyMetric, parts: { num: number; den: number }[]): numb
 
 /**
  * The change's standard error over the stable cells, or null when it can't
- * be measured. A rate: the pooled rate of the two periods, p(1−p)(1/Na + 1/Nb).
+ * be measured. The server's Slack drop alerts (lib/slack/drops.js) use the
+ * same rule for visibility and the citation rate: keep the two in step. A rate: the pooled rate of the two periods, p(1−p)(1/Na + 1/Nb).
  * The average position: the cells' spread around the mean, with enough cells.
  */
 export function changeSe(

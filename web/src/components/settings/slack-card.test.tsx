@@ -225,9 +225,12 @@ describe('SlackCard', () => {
     expect(client.listSlackChannels).not.toHaveBeenCalled();
     expect(
       switches().map((s) => [s.getAttribute('aria-label'), s.getAttribute('aria-checked')]),
-    ).toEqual([['Daily Pulse', 'true']]);
+    ).toEqual([
+      ['Daily Pulse', 'true'],
+      ['Drops beyond normal swing', 'true'],
+    ]);
     // Only what is posted today: the other kinds' switches come with their sends.
-    expect(text()).not.toContain('Drops beyond normal swing');
+    expect(text()).not.toContain('Daily suggestion');
   });
 
   it('lists the channels when the picker opens, and saves the one picked', async () => {
@@ -265,6 +268,15 @@ describe('SlackCard', () => {
     });
     expect(client.saveSlack).toHaveBeenCalledWith('b1', { send: { pulse: false } });
     expect(switches()[0].getAttribute('aria-checked')).toBe('false');
+  });
+
+  it('turns the drop alerts off on their own', async () => {
+    await render();
+    await act(async () => {
+      switches()[1].click();
+    });
+    expect(client.saveSlack).toHaveBeenCalledWith('b1', { send: { drops: false } });
+    expect(switches().map((s) => s.getAttribute('aria-checked'))).toEqual(['true', 'false']);
   });
 
   it('sends a test message, and says why one failed', async () => {
@@ -374,7 +386,7 @@ describe('SlackCard', () => {
     role.canManage = false;
     await render();
     expect(text()).toContain(
-      'Northwind’s Daily Pulse goes to #seo-alerts. Admins and managers can change this.',
+      'Northwind’s Slack messages go to #seo-alerts. Admins and managers can change this.',
     );
     expect(button('Send a test message')).toBeUndefined();
     expect(button('Disconnect')).toBeUndefined();
@@ -430,7 +442,7 @@ describe('SlackCard', () => {
     await render();
     expect(client.readSlack).not.toHaveBeenCalled();
     expect(badges()).toEqual(['Connected', 'Sample data']);
-    expect(text()).toContain('Northwind’s Daily Pulse goes to #ai-search-alerts.');
+    expect(text()).toContain('Northwind’s Slack messages go to #ai-search-alerts.');
     await act(async () => {
       button('Send a test message')!.click();
     });

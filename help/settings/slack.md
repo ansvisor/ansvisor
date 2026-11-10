@@ -1,7 +1,7 @@
 ---
-title: Send a brand's Daily Pulse to Slack
+title: Send a brand's Daily Pulse and alerts to Slack
 route: /dashboard/settings/integrations
-keywords: [slack, slack channel, connect slack, pulse in slack, daily pulse, notifications]
+keywords: [slack, slack channel, connect slack, pulse in slack, daily pulse, drop alert, notifications]
 synonyms: [post to slack, slack integration, send updates to a channel, slack app, team chat alerts]
 plan: starter
 updated: 2026-11-10
@@ -11,14 +11,14 @@ app_version: 0.3.0
 approved: false
 sources: [docs/self-host/env-variables.mdx]
 ---
-Each brand can post its **Daily Pulse** to one Slack channel: the same numbers, highlights and warnings as the Pulse e-mail, with links back to Ansvisor. Slack is on every paid plan.
+Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, and an alert when visibility or citations drop more than usual. Each message links back to Ansvisor. Slack is on every paid plan.
 
 ## Connect Slack
 
 In **Settings › Integrations**, find **Slack** under **Team and alerts**, for the brand open now. Admins and managers can connect it.
 
 1. Click **Connect Slack**. Slack opens in a new window: pick your workspace and allow the Ansvisor app.
-2. Back in Ansvisor, pick the **Channel** the brand's Pulse goes to. Search by name.
+2. Back in Ansvisor, pick the **Channel** the brand's messages go to. Search by name.
 3. Click **Send a test message** to check it arrives.
 
 A public channel works right away. A private channel shows in the list once the Ansvisor app is in it: in Slack, type /invite @Ansvisor in that channel.
@@ -31,6 +31,12 @@ With **Daily Pulse** on under the channel, the Pulse is posted as often as it go
 
 Each Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day.
 
+## Drop alerts
+
+With **Drops beyond normal swing** on, Ansvisor checks the brand after each daily tracking run. When its visibility or its citation rate fell more than its usual swing, the last 7 days against the 7 before, it posts what fell, from what to what, and how far normal swing goes for these prompts.
+
+Only prompts tracked in both weeks count, so adding or removing prompts or engines isn't a drop. Each metric is alerted on at most once a week. Where the new Chat is on, **Ask Chat why** opens it with the question ready, to see what changed it.
+
 ## When the card asks you to reconnect
 
 - **Reconnect**: Slack no longer accepts the connection, for example because the app was removed from the workspace. Click **Reconnect Slack**.
@@ -39,6 +45,6 @@ Each Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, t
 
 ## Disconnect
 
-**Disconnect** stops posting the brand's Pulse. Other brands that use the same workspace keep theirs, and messages already posted stay in Slack. Disconnecting works even when your plan has ended.
+**Disconnect** stops posting the brand's messages. Other brands that use the same workspace keep theirs, and messages already posted stay in Slack. Disconnecting works even when your plan has ended.
 
-People who aren't admins or managers see which channel the brand's Pulse goes to. On the sample brand, Slack shows as connected with sample data. If Ansvisor runs on your own server, the card says **Not configured** until Slack is set up there.
+People who aren't admins or managers see which channel the brand's messages go to. On the sample brand, Slack shows as connected with sample data. If Ansvisor runs on your own server, the card says **Not configured** until Slack is set up there.
