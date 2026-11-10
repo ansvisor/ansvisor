@@ -143,6 +143,7 @@ export const DEMO_GUARDED = [
   guard('POST /hubspot/brands/:brandId/use', brandIn('path')),
   guard('PUT /hubspot/brands/:brandId/settings', brandIn('path')),
   guard('POST /hubspot/brands/:brandId/setup', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/sync', brandIn('path')),
   guard('DELETE /hubspot/brands/:brandId', brandIn('path')),
 
   // Content Editor (content-drafts.js): the draft's brand is in the body;

@@ -12794,6 +12794,59 @@
       "cited": "{count, plural, one {# page is cited in AI answers but gets no clicks.} other {# pages are cited in AI answers but get no clicks.}}",
       "untracked": "{shown} Google {count, plural, one {query} other {queries}} with clicks {count, plural, one {isn't} other {aren't}} tracked as prompts."
     },
+    "aiPipeline": {
+      "title": "AI-sourced pipeline",
+      "needs": "Needs HubSpot",
+      "subtitle": "Contacts, deals and revenue from visitors who first came from an AI answer",
+      "kpis": {
+        "contacts": "AI-sourced contacts",
+        "deals": "AI-influenced deals",
+        "openPipeline": "Open pipeline",
+        "wonRevenue": "Won revenue"
+      },
+      "change": {
+        "up": "▲ {pct}% vs the period before",
+        "down": "▼ {pct}% vs the period before",
+        "same": "Same as the period before",
+        "new": "New in this range"
+      },
+      "dealsSub": "{won} won · {open} open now",
+      "openSub": "{count, plural, one {# open deal} other {# open deals}}",
+      "wonSub": "{count, plural, one {# deal closed won} other {# deals closed won}}",
+      "byEngine": "By AI engine",
+      "byPage": "By landing page",
+      "columns": {
+        "engine": "Engine",
+        "contacts": "Contacts",
+        "deals": "Deals",
+        "wonRevenue": "Won revenue",
+        "openPipeline": "Open pipeline",
+        "page": "Landing page",
+        "topEngine": "Top engine"
+      },
+      "emptyTable": "None in this range.",
+      "legend": "A contact counts when their first visit came from an AI answer, up to 30 days before they converted. A deal counts once, in full, when any of its contacts did, and goes to the earliest one's engine and page. Won revenue: deals closed won in the range. Open pipeline: deals open now. In your HubSpot currency.",
+      "synced": "From HubSpot, synced {when}.",
+      "native": "HubSpot also counts {contacts, plural, one {# contact} other {# contacts}} from its own AI Referrals source on your domains, with {deals, plural, one {# deal} other {# deals}} and {revenue} won. Ansvisor didn't mark them, so they aren't in the figures above.",
+      "states": {
+        "lockedTitle": "Comes with {plan}",
+        "lockedBody": "See the contacts, deals and revenue your AI visibility brings, by engine and page.",
+        "upgrade": "Upgrade",
+        "askAdmin": "Ask an admin to upgrade.",
+        "notConnectedTitle": "HubSpot isn't connected",
+        "notConnectedBody": "Connect HubSpot to see which contacts, deals and revenue AI answers bring {brand}.",
+        "connect": "Connect in Settings",
+        "notConnectedMember": "Admins and managers connect it in Settings › Integrations.",
+        "noConsentTitle": "Marking contacts is off",
+        "noConsentBody": "Turn on marking contacts on the HubSpot card in Settings › Integrations to see this report.",
+        "openSettings": "Open Settings",
+        "firstSyncTitle": "Reading HubSpot",
+        "firstSyncBody": "The first read of HubSpot runs within a day. Admins and managers can start it now with Sync now on the HubSpot card.",
+        "syncFailed": "The last read of HubSpot failed. See the HubSpot card in Settings › Integrations.",
+        "empty": "No AI-sourced contacts or deals in this range yet.",
+        "failed": "Couldn't load the AI-sourced pipeline."
+      }
+    },
     "conversions": {
       "title": "Where AI visitors convert",
       "rankedByKeyEvents": "Ranked by key events from AI visits",
@@ -15795,6 +15848,12 @@
         "title": "Send pages to HubSpot as drafts",
         "description": "Lets Send to CMS create draft pages in HubSpot. You publish them in HubSpot."
       },
+      "syncNow": "Sync now",
+      "syncing": "Reading HubSpot…",
+      "synced": "Read from HubSpot {when}: {contacts, plural, one {# AI-sourced contact} other {# AI-sourced contacts}}, {deals, plural, one {# deal} other {# deals}}.",
+      "syncFailed": "The last read of HubSpot failed. Try Sync now, or connect HubSpot again.",
+      "notSynced": "Not read from HubSpot yet. The first read runs within a day.",
+      "syncStarted": "Reading HubSpot. AI Traffic's AI-sourced pipeline updates in a minute or two.",
       "allowedBy": "Allowed by {name} on {date}: {what}.",
       "allowedOn": "Allowed on {date}: {what}.",
       "allowedWhat": {

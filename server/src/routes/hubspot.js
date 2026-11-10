@@ -28,6 +28,7 @@ import {
   propertiesReady,
   writeHubspotSettings,
 } from '../lib/hubspot/connection.js';
+import { runHubspotPipelineSync } from '../lib/hubspot/pipeline-sync.js';
 import { PROPERTIES_VERSION } from '../lib/hubspot/properties.js';
 import { ensureProperties, portalLabel, readPortal } from '../lib/hubspot/setup.js';
 import { PlanLimitError, enforceFeature, requireFeature } from '../lib/plan-guard.js';
@@ -198,6 +199,9 @@ async function cardOf(req, brand) {
             at: settings.properties?.at ?? null,
             error: settings.properties?.error ?? null,
           },
+          // The AI-sourced pipeline's last read of HubSpot (00520).
+          sync: settings.sync ?? null,
+          syncing: syncing.has(brand.id),
         }
       : null,
     // HubSpot accounts other brands the person can see use, which this one could use too.
@@ -385,6 +389,44 @@ router.post('/brands/:brandId/setup', needsPlan, async (req, res) => {
     return res.json(await cardOf(req, brand));
   } catch (err) {
     return sendError(req, res, err, 'hubspot setup error');
+  }
+});
+
+/** Brands whose Sync now is running, and when each last started. */
+const syncing = new Set();
+const syncStarted = new Map();
+/** How often a brand's Sync now may start. */
+export const SYNC_NOW_EVERY_MS = 5 * 60 * 1000;
+
+/**
+ * POST /api/hubspot/brands/:brandId/sync
+ * Sync now: reads the brand's AI-sourced contacts and deals from HubSpot
+ * again (lib/hubspot/pipeline-sync.js), in the background: 202 at once, and
+ * the card and AI Traffic read the result when it's done. Once every few
+ * minutes a brand (429 `busy` meanwhile). Needs consent to mark contacts,
+ * which covers reading them back.
+ */
+router.post('/brands/:brandId/sync', needsPlan, async (req, res) => {
+  try {
+    assertConfigured();
+    const brand = await brandFor(req, { write: true });
+    const connection = await hubspotConnection(brand.id);
+    if (!connection?.connected) throw httpError('Connect HubSpot first.', 409, 'not_connected');
+    if (!connection.settings.consent.contacts) {
+      throw httpError('Allow marking contacts first.', 409, 'consent_required');
+    }
+    const last = syncStarted.get(brand.id) ?? 0;
+    if (syncing.has(brand.id) || Date.now() - last < SYNC_NOW_EVERY_MS) {
+      return res.status(429).json({ error: 'HubSpot was synced a moment ago.', code: 'busy' });
+    }
+    syncing.add(brand.id);
+    syncStarted.set(brand.id, Date.now());
+    runHubspotPipelineSync({ brandId: brand.id })
+      .catch((err) => req.log.error({ err: { name: err?.name } }, 'hubspot sync now error'))
+      .finally(() => syncing.delete(brand.id));
+    return res.status(202).json({ started: true });
+  } catch (err) {
+    return sendError(req, res, err, 'hubspot sync now error');
   }
 });
 

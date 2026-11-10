@@ -32,6 +32,15 @@ export interface HubspotConnection {
   consent: HubspotConsent & { by: string | null; at: string | null };
   /** The "Ansvisor" property group and its properties in HubSpot. */
   properties: { ready: boolean; at: string | null; error: string | null };
+  /** The AI-sourced pipeline's last read of HubSpot (00520), or none yet. */
+  sync: {
+    at: string | null;
+    contacts: number | null;
+    deals: number | null;
+    error: string | null;
+  } | null;
+  /** A Sync now is running. */
+  syncing: boolean;
 }
 
 /** A HubSpot account other brands use, which this brand could use too. */
@@ -67,6 +76,7 @@ export type HubspotError =
   | 'failed';
 
 const KNOWN: readonly HubspotError[] = [
+  'busy',
   'consent_required',
   'not_configured',
   'forbidden',
@@ -173,6 +183,11 @@ export function saveHubspotConsent(brandId: string, consent: HubspotConsent) {
 /** Tries the setup again: the account and the Ansvisor properties. */
 export function retryHubspotSetup(brandId: string) {
   return call<HubspotRead>(brandId, '/setup', json('POST'));
+}
+
+/** Sync now: reads the AI-sourced pipeline from HubSpot again, in the background. */
+export function syncHubspot(brandId: string) {
+  return call<{ started: boolean }>(brandId, '/sync', json('POST'));
 }
 
 /** Disconnects: nothing is read from or written to HubSpot for the brand any more. */

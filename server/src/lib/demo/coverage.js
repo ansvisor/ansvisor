@@ -36,6 +36,10 @@ export const SKIPPED = {
     'The demo catalog is built from a public product feed and has no order history; order line items must not imply a merchant’s real purchases.',
   catalog_item_issues:
     "Merchant Center's item issues: the demo's catalog comes from a product feed, and Merchant Center shows as Soon in the demo.",
+  hubspot_ai_contacts:
+    "HubSpot's AI-sourced contacts (00520), read from a connected HubSpot account: the demo brand connects none, so AI Traffic's pipeline section says HubSpot isn't connected.",
+  hubspot_ai_deals:
+    "The deals of HubSpot's AI-sourced contacts (00520): the demo brand connects no HubSpot account, so it has none.",
   catalog_item_matches:
     "GA items matched to the catalog after a GA sync (00493): the demo's Analytics is sample data that is never synced, so nothing is matched.",
   topic_catalog_categories:
