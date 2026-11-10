@@ -13,8 +13,17 @@ const AUTO_COMPETITORS = 4;
 const MAX_MARKERS = 3;
 
 export const OWN_BRAND_COLOR = '#22c55e';
-/** Competitor colors in line order: pin order, or rank without pins. */
-const COMPETITOR_PALETTE = ['#1e3a8a', '#a855f7', '#f97316', '#ef4444', '#0d9488'];
+/**
+ * Competitor colors in line order: pin order, or rank without pins. Theme
+ * tokens (globals.css), so dark mode gets shades that read on its card.
+ */
+const COMPETITOR_PALETTE = [
+  'var(--chart-competitor-1)',
+  'var(--chart-competitor-2)',
+  'var(--chart-competitor-3)',
+  'var(--chart-competitor-4)',
+  'var(--chart-competitor-5)',
+];
 
 interface Entity {
   key: string;

@@ -1,50 +1,116 @@
 'use client';
 
-import { Loader2, PlayCircle } from 'lucide-react';
+import { useId } from 'react';
+import { CirclePlay, Loader2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import { DemoSetupDialog } from '@/components/demo/demo-setup-dialog';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
+import { DEMO_BRAND_NAME } from '@/lib/demo/setup-steps';
+import { cn } from '@/lib/utils';
 
 /**
- * Under onboarding's plan cards, the other way in: the demo brand, with
- * sample data and no card. The person's own brand stays as set up, and its
- * tracking starts once a plan is picked. One slim row, so the plan step fits
- * a laptop screen. With `preload` (an admin with no demo brand yet), its
- * setup starts as the card shows; one still being prepared on the click
- * shows the setup screen until it is ready.
+ * Onboarding's plan step, the other way in: the demo brand, a made-up brand
+ * with sample data and no card. The person's own brand stays as set up, and
+ * its tracking starts once a plan is picked. The page holds the one explore
+ * action (useExploreDemo) both of these run, and its setup screen.
  */
-export function ExploreDemoCard({
+
+/**
+ * The demo, chosen in the switch above the plans: one card in their place,
+ * saying the demo is a made-up sample brand, not the person's own, where
+ * nothing runs or changes, with the way in.
+ */
+export function ExploreDemoChoice({
   brandName,
-  preload = false,
+  opening,
+  onExplore,
 }: {
   brandName: string | null;
-  preload?: boolean;
+  /** The demo is being opened: the button waits. */
+  opening: boolean;
+  onExplore: () => void;
 }) {
   const t = useTranslations('demo.onboarding');
   const tDemo = useTranslations('demo');
-  const { explore, opening, setupDialog } = useExploreDemo();
-  usePreloadDemo(preload);
+  const headingId = useId();
   return (
-    <div className="mt-4" data-slot="explore-demo">
-      <div className="flex flex-col gap-3 rounded-xl border bg-card px-4 py-3 sm:flex-row sm:items-center">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold">{t('title')}</h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {t('body', { brand: brandName || t('yourBrand') })}
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          className="shrink-0"
-          onClick={() => void explore()}
-          disabled={opening}
+    <section
+      data-slot="demo-choice"
+      aria-labelledby={headingId}
+      className="mx-auto flex w-full max-w-lg flex-col gap-4 rounded-2xl border bg-card p-6"
+    >
+      <div className="flex items-center gap-3.5">
+        <span
+          aria-hidden
+          className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-muted text-foreground"
         >
-          {opening ? <Loader2 className="animate-spin" aria-hidden /> : <PlayCircle aria-hidden />}
-          {opening ? tDemo('settingUp') : t('cta')}
-        </Button>
+          <CirclePlay className="size-5" />
+        </span>
+        <div className="flex min-w-0 flex-col items-start gap-1">
+          <h3 id={headingId} className="text-xl font-bold tracking-tight">
+            {t('title')}
+          </h3>
+          <Badge variant="outline" className="text-muted-foreground">
+            {t('badge', { demoBrand: DEMO_BRAND_NAME })}
+          </Badge>
+        </div>
       </div>
-      <DemoSetupDialog {...setupDialog} />
-    </div>
+      <p className="text-sm leading-relaxed text-muted-foreground">
+        {t.rich('body', {
+          demoBrand: DEMO_BRAND_NAME,
+          brand: brandName || t('yourBrand'),
+          named: brandName ? 'yes' : 'no',
+          b: (chunks) => <strong className="font-semibold text-foreground">{chunks}</strong>,
+        })}
+      </p>
+      <Button
+        className="h-11 w-full text-[15px] font-semibold"
+        onClick={onExplore}
+        disabled={opening}
+      >
+        {opening && <Loader2 className="animate-spin" aria-hidden />}
+        {opening ? tDemo('settingUp') : t('cta')}
+      </Button>
+    </section>
+  );
+}
+
+/** Under the plans, for someone not ready to add a card: one line, straight into the demo. */
+export function ExploreDemoLine({
+  opening,
+  onExplore,
+  className,
+}: {
+  opening: boolean;
+  onExplore: () => void;
+  className?: string;
+}) {
+  const t = useTranslations('demo.onboarding');
+  const tDemo = useTranslations('demo');
+  return (
+    <p
+      data-slot="explore-demo"
+      className={cn('text-center text-sm text-muted-foreground', className)}
+    >
+      {t.rich('notReady', {
+        link: (chunks) => (
+          <button
+            type="button"
+            onClick={onExplore}
+            disabled={opening}
+            className="inline-flex items-center gap-1 rounded-sm font-semibold text-foreground underline underline-offset-4 outline-none hover:decoration-2 focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default disabled:no-underline"
+          >
+            {opening ? (
+              <>
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                {tDemo('settingUp')}
+              </>
+            ) : (
+              chunks
+            )}
+          </button>
+        ),
+      })}
+    </p>
   );
 }

@@ -48,7 +48,7 @@ export default async function ConsentPage({
       ? (error as ConsentErrorCode)
       : 'invalid_request';
     return (
-      <AuthShell pitch={false}>
+      <AuthShell backdrop="orbit" wide>
         <ConsentErrorCard code={code} />
       </AuthShell>
     );
@@ -65,13 +65,13 @@ export default async function ConsentPage({
   }
   if (state.kind === 'error') {
     return (
-      <AuthShell pitch={false}>
+      <AuthShell backdrop="orbit" wide>
         <ConsentErrorCard code={state.code} />
       </AuthShell>
     );
   }
   return (
-    <AuthShell pitch={false} aside={<SignedInAs email={state.view.email} />}>
+    <AuthShell backdrop="orbit" wide aside={<SignedInAs email={state.view.email} />}>
       <ConsentCard view={state.view} actions={ACTIONS} />
     </AuthShell>
   );

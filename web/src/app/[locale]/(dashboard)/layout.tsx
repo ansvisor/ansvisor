@@ -219,7 +219,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <>
-      <AuthProvider user={user} />
+      <AuthProvider
+        user={user}
+        person={{
+          organizationId: profile.organization_id,
+          plan: planId,
+          subscriptionStatus,
+          cancelAtPeriodEnd: Boolean(org?.cancel_at_period_end),
+          role,
+        }}
+      />
       <BrandLoader brands={listedBrands} />
       <PlanProvider
         planId={planId}

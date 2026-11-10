@@ -89,7 +89,7 @@ export function CompetitorTimelineChart({
           <XAxis
             dataKey="week"
             tickFormatter={label}
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
@@ -97,7 +97,7 @@ export function CompetitorTimelineChart({
           <YAxis
             allowDecimals={false}
             tickFormatter={(v: number) => formatNumber(v)}
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"

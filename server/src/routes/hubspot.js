@@ -19,6 +19,7 @@ import {
   linkHubspot,
 } from '../lib/composio.js';
 import { HubspotError, INTERACTIVE_WAIT_MS, hubspotClient } from '../lib/hubspot/client.js';
+import { listBlogs } from '../lib/cms/hubspot-blog.js';
 import {
   HUBSPOT,
   hubspotConnection,
@@ -58,6 +59,7 @@ const consentBody = z.object({ contacts: z.boolean(), pages: z.boolean() });
 const connectBody = z.object({ callbackUrl: z.string().max(2048), consent: consentBody });
 const accountBody = z.object({ accountId: z.guid(), consent: consentBody });
 const settingsBody = z.object({ consent: consentBody });
+const blogBody = z.object({ blogId: z.string().regex(/^\d{1,20}$/) });
 
 function httpError(message, status, code) {
   return Object.assign(new Error(message), { status, ...(code ? { code } : {}) });
@@ -193,6 +195,8 @@ async function cardOf(req, brand) {
             by: allowedBy,
             at: settings.consent.at,
           },
+          // The blog Send to CMS writes draft posts to (00522).
+          blog: settings.blog ?? null,
           properties: {
             ready: propertiesReady(settings),
             at: settings.properties?.at ?? null,
@@ -227,6 +231,83 @@ router.get('/brands/:brandId', async (req, res) => {
     return res.json(await cardOf(req, brand));
   } catch (err) {
     return sendError(req, res, err, 'hubspot read error');
+  }
+});
+
+/**
+ * The brand's connected HubSpot, for picking its blog: a live sign-in the
+ * person reaches (it reads every brand's on it), with consent to send pages
+ * as drafts. 409 otherwise.
+ */
+async function blogConnection(req, brand) {
+  const connection = await hubspotConnection(brand.id);
+  if (!connection?.connected) throw httpError('Connect HubSpot first.', 409, 'not_connected');
+  if (!connection.settings.consent.pages) {
+    throw httpError('Allow sending pages as drafts first.', 409, 'consent_required');
+  }
+  await assertSignInReach(req.user.id, { accountId: connection.accountId });
+  return connection;
+}
+
+/** HubSpot's refusal of a blog read, as the card names it: the content scope, the sign-in, or else. */
+async function blogRefusal(err, connection) {
+  if (!(err instanceof HubspotError)) throw err;
+  if (err.code === 'auth' && connection.accountId) await markSignInRefused(connection.accountId);
+  const code =
+    err.code === 'scopes' ? 'scopes' : err.code === 'auth' ? 'refused' : 'hubspot_failed';
+  return httpError("HubSpot didn't list the blogs.", 409, code);
+}
+
+/**
+ * GET /api/hubspot/brands/:brandId/blogs
+ * The blogs of the brand's HubSpot account, for Send to CMS's draft posts
+ * (00522), and the one picked. Needs HubSpot's `content` scope: without it,
+ * 409 `scopes` (connect HubSpot again).
+ */
+router.get('/brands/:brandId/blogs', needsPlan, async (req, res) => {
+  try {
+    const brand = await brandFor(req, { write: true });
+    const connection = await blogConnection(req, brand);
+    const request = hubspotClient(connection.composioAccountId, { maxWaitMs: INTERACTIVE_WAIT_MS });
+    let blogs;
+    try {
+      blogs = await listBlogs(request);
+    } catch (err) {
+      throw await blogRefusal(err, connection);
+    }
+    return res.json({ blogs, picked: connection.settings.blog?.id ?? null });
+  } catch (err) {
+    return sendError(req, res, err, 'hubspot blogs error');
+  }
+});
+
+/**
+ * PUT /api/hubspot/brands/:brandId/blog  { blogId }
+ * The HubSpot blog Send to CMS writes the brand's pages to, as draft posts.
+ * One of the account's blogs (read again to check it, and keep its name).
+ */
+router.put('/brands/:brandId/blog', needsPlan, async (req, res) => {
+  try {
+    const body = blogBody.safeParse(req.body ?? {});
+    if (!body.success) return res.status(400).json({ error: 'Invalid request' });
+    const brand = await brandFor(req, { write: true });
+    const connection = await blogConnection(req, brand);
+    const request = hubspotClient(connection.composioAccountId, { maxWaitMs: INTERACTIVE_WAIT_MS });
+    let blogs;
+    try {
+      blogs = await listBlogs(request);
+    } catch (err) {
+      throw await blogRefusal(err, connection);
+    }
+    const blog = blogs.find((b) => b.id === body.data.blogId);
+    if (!blog) throw httpError("That blog isn't in the HubSpot account.", 404, 'blog_not_found');
+    await writeHubspotSettings(brand.id, {
+      ...connection.settings,
+      blog: { id: blog.id, name: blog.name },
+    });
+    return res.json(await cardOf(req, brand));
+  } catch (err) {
+    return sendError(req, res, err, 'hubspot blog error');
   }
 });
 

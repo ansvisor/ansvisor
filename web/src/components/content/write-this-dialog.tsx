@@ -24,12 +24,16 @@ import { percentLabel } from '@/lib/billing/ai-usage';
 import { agentWriteRequest, useRuleDescriber } from '@/lib/content/agent-write';
 import { cleanHtml } from '@/lib/content/clean-html';
 import { contentEditorPath } from '@/lib/content/drafts';
+import { frictionFlow } from '@/lib/friction-events';
 import { pagePath } from '@/lib/content/overlap';
 import type { SiteType } from '@/lib/content/page-types';
 import { startingRules } from '@/lib/content/rules';
 import { writeThisPrompts, writeThisStart } from '@/lib/content/write-this';
 import { useBrandStore } from '@/stores/use-brand-store';
 import type { ContentOpportunity } from '@/types';
+
+/** content_generate: Write this, until the Content Agent writes the page. */
+const CONTENT_GENERATE = frictionFlow('content_generate');
 
 /**
  * Write this (customer priorities item 9): an opportunity to a page to
@@ -71,6 +75,7 @@ export function WriteThisDialog({
   const write = async () => {
     if (!opportunity || !start || !brandId) return;
     setStarting(true);
+    CONTENT_GENERATE.started();
     let id: string;
     let bodyHtml: string | undefined;
     try {
@@ -78,6 +83,7 @@ export function WriteThisDialog({
       if (start.page) {
         const read = await importContentPage(brandId, start.page.url);
         if (!('page' in read)) {
+          CONTENT_GENERATE.failed('page_unread');
           toast.error(t('pageUnread', { page: pagePath(start.page.url) }));
           setStarting(false);
           return;
@@ -95,6 +101,7 @@ export function WriteThisDialog({
       });
     } catch (err) {
       console.error('Failed to start a draft for Write this:', err);
+      CONTENT_GENERATE.failed();
       toast.error(tStart('failed'));
       setStarting(false);
       return;
@@ -125,12 +132,14 @@ export function WriteThisDialog({
       started = { error: 'failed' };
     }
     if ('error' in started) {
+      CONTENT_GENERATE.failed(started.error);
       // The draft stays in the Library, to open and start again.
       setStarting(false);
       onOpenChange(false);
       toast.error(tStart(`agentErrors.${started.error}`), { action: openDraft });
       return;
     }
+    CONTENT_GENERATE.completed();
     // As Start's Agent: the dialog stays busy until the editor shows the agent at work.
     router.push(contentEditorPath(id));
   };

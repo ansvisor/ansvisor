@@ -21,7 +21,7 @@ export const CANCEL_REASONS = [
   'other',
 ];
 
-const REASON_LABELS = {
+export const REASON_LABELS = {
   too_expensive: 'Too expensive',
   missing_feature: 'Missing a feature they need',
   no_results: 'Not seeing results',
@@ -72,7 +72,7 @@ export function feedbackRecipients(value = process.env.CANCEL_FEEDBACK_EMAILS) {
     .filter(Boolean);
 }
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

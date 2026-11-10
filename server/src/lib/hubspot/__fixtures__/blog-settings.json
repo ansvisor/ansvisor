@@ -1,0 +1,23 @@
+{
+  "total": 2,
+  "results": [
+    {
+      "id": "1234567890",
+      "name": "Acme blog",
+      "slug": "blog",
+      "absoluteUrl": "https://www.acme.test/blog",
+      "publicTitle": "Acme blog",
+      "language": "en",
+      "created": "2025-03-01T10:00:00.000Z",
+      "updated": "2026-10-01T10:00:00.000Z"
+    },
+    {
+      "id": 2233445566,
+      "name": "",
+      "slug": "news",
+      "absoluteUrl": "https://www.acme.test/news",
+      "publicTitle": "Acme news",
+      "language": "en"
+    }
+  ]
+}

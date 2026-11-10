@@ -146,11 +146,11 @@
         "home page"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
-          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Ansvisor opens on **Chat** when you sign in; it opens here instead when Chat isn't on your menu. Open it from **Action Center** in the main menu. Everything in it is per brand: switch brands to see another brand's work."
+          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. When you sign in, Ansvisor opens on **Visibility** on a paid plan and from the second day of a free trial, and on **Chat** otherwise, such as on a trial's first day. It opens here instead when neither that page nor Chat is on your menu. Open it from **Action Center** in the main menu. Everything in it is per brand: switch brands to see another brand's work."
         },
         {
           "heading": "The tabs",
@@ -1207,11 +1207,11 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
-          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Ansvisor opens on Chat each time you come back, on any plan. If an Admin took Chat off your menu, or the work areas you picked leave it out, it opens on the Action Center. Every chat is saved, so you can come back to it later and pick up where you left off."
+          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Visibility** while your plan is paid or your free trial is past its first day, and on Chat otherwise, such as on the trial's first day or once a plan has ended. If Visibility isn't on your menu, it opens on Chat instead. If an Admin took Chat off your menu, or the work areas you picked leave it out, it opens on the Action Center. Every chat is saved, so you can come back to it later and pick up where you left off."
         },
         {
           "heading": "Chat Home",
@@ -2577,6 +2577,7 @@
         "wordpress",
         "framer",
         "wix",
+        "hubspot blog",
         "integrations",
         "application password"
       ],
@@ -2587,7 +2588,7 @@
         "connect my website"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
@@ -2612,6 +2613,10 @@
         {
           "heading": "Connect Wix",
           "text": "The site needs the Wix Blog: pages go there as draft posts. In Wix, the site's owner opens **Account Settings › API Keys Manager**, clicks **Generate API Key**, picks the site, gives the key **Manage Blog** and **Manage Ricos Document**, and copies it; Wix shows it once. In the **Wix** card, paste the **Site id** (or the whole address of the site's dashboard) and the **API key**, and click **Connect**. A Blog with no post can't be connected yet: write one post on it as the site's owner first."
+        },
+        {
+          "heading": "Send to your HubSpot blog",
+          "text": "HubSpot is connected on its own card, under **CRM** (see **Connect HubSpot**), and comes with the Growth plan. To send pages there, turn on **Send pages to HubSpot as drafts** on that card, then pick the blog under **Blog posts go to** and click **Save**. If the card says HubSpot didn't give Ansvisor access to its blogs, click **Connect again** and approve the access in HubSpot."
         },
         {
           "heading": "Replace or disconnect",
@@ -3218,11 +3223,11 @@
         "reviewer field"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
-          "text": "**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Send to CMS never publishes: you publish in your CMS. Only admins and managers can send pages."
+          "text": "**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site, your Wix site's Blog or your HubSpot blog as a draft post, or to your workflow tool, which creates the post in your CMS. Send to CMS never publishes: you publish in your CMS. Only admins and managers can send pages."
         },
         {
           "heading": "Send one page",
@@ -3230,7 +3235,7 @@
         },
         {
           "heading": "Choose where it goes",
-          "text": "The dialog offers each CMS that is connected and ready, Webflow, WordPress, Framer, then Wix, beside **Your workflow**. Your choice is remembered for the brand in your browser.\n\nA CMS that is connected but not ready shows what to fix and can't be picked, for example when its sign-in is refused or no collection is picked. If the dialog can't check a CMS you chose just then, the page goes to your workflow, and the dialog says so with **Try again**."
+          "text": "The dialog offers each CMS that is connected and ready, Webflow, WordPress, Framer, Wix, then HubSpot, beside **Your workflow**. HubSpot shows once its card allows **Send pages to HubSpot as drafts** and has a blog picked; it comes with the Growth plan. Tags and the author don't go to HubSpot: set them there. Your choice is remembered for the brand in your browser.\n\nA CMS that is connected but not ready shows what to fix and can't be picked, for example when its sign-in is refused or no collection is picked. If the dialog can't check a CMS you chose just then, the page goes to your workflow, and the dialog says so with **Try again**."
         },
         {
           "heading": "What holds a send",
@@ -3246,7 +3251,7 @@
         },
         {
           "heading": "When a page becomes Published",
-          "text": "Once you publish the item in Webflow or Framer, or the post in WordPress or Wix, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one."
+          "text": "Once you publish the item in Webflow or Framer, or the post in WordPress, Wix or HubSpot, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one."
         },
         {
           "heading": "Take a published page down",
@@ -3254,7 +3259,7 @@
         },
         {
           "heading": "Sending a page again",
-          "text": "Sending a page again updates the same Webflow or Framer item, the same WordPress draft post, or the same Wix post (a published one gets a new draft version in Wix). Changes to a published Webflow or Framer item go live with your next publish there. WordPress has no draft of a published post, so a page whose post is published, scheduled or private goes as a new draft post: move the text over in WordPress."
+          "text": "Sending a page again updates the same Webflow or Framer item, the same WordPress draft post, the same Wix post (a published one gets a new draft version in Wix), or the same HubSpot post (a published one keeps what people read until you publish its changes in HubSpot). Changes to a published Webflow or Framer item go live with your next publish there. WordPress has no draft of a published post, so a page whose post is published, scheduled or private goes as a new draft post: move the text over in WordPress."
         },
         {
           "heading": "What each CMS leaves out",
@@ -3335,7 +3340,7 @@
         "add another brand"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
@@ -3367,7 +3372,7 @@
         },
         {
           "heading": "Step 7 on the cloud: Plan and checkout",
-          "text": "The final step picks your plan, **Starter** or **Growth**, and starts checkout.\n\nWhile a free trial is on offer, **Choose how to start** lets you pick the trial, **Monthly** or **Yearly**. With the trial you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. **Buy now**, or a plan without a trial, starts the plan the same day.\n\nNot ready to add a card? **Explore the demo** opens a demo brand with sample data. Your brand stays saved, and its tracking starts when you pick a plan.\n\nA self-hosted install skips this step."
+          "text": "The final step picks your plan, **Starter** or **Growth**, and starts checkout.\n\nWhile a free trial is on offer, **Choose how to start** lets you pick the trial, **Monthly** or **Yearly**. With the trial you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. **Buy now**, or a plan without a trial, starts the plan the same day.\n\nNot ready to add a card? Pick **Demo**, after **Yearly**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The demo is a made-up brand with sample data: you can open every page, but nothing runs or changes. Your brand stays saved, and its tracking starts when you pick a plan.\n\nA self-hosted install skips this step."
         },
         {
           "heading": "Add another brand later",
@@ -3396,11 +3401,11 @@
         "how long until results"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
-          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. In the free trial Ansvisor opens on **Chat**; with a plan bought, on the **Action Center**. If you explore the demo brand instead, it opens on **Chat** with the demo's sample data, and your brand's first run starts when you pick a plan."
+          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. Either way, Ansvisor then opens on **Chat**. From the next day, in the free trial or on a paid plan, it opens on **Visibility** each time you come back. If you explore the demo brand instead, it opens on **Chat** with the demo's sample data, and your brand's first run starts when you pick a plan."
         },
         {
           "heading": "How long the first run takes",
@@ -5377,11 +5382,11 @@
         "visibility dashboard"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
-          "text": "**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next."
+          "text": "**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next. On a paid plan, and from the second day of a free trial, Ansvisor opens on it each time you come back."
         },
         {
           "heading": "The tabs and how to reach them",

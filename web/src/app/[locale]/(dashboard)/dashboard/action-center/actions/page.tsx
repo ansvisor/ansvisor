@@ -873,7 +873,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
   if (!actions?.length && !startedActive) {
     return frame(
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center">
+      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-20 text-center dark:border-white/20">
         <ListChecks className="h-8 w-8 text-muted-foreground" />
         <h2 className="mt-4 font-semibold">{t('empty.title')}</h2>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">{t('empty.description')}</p>

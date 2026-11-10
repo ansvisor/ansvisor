@@ -264,14 +264,14 @@ export function ReferralTrendChart({
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
             tickFormatter={(v: string) => formatTrafficBucketDate(v)}
           />
           <YAxis
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
@@ -398,14 +398,14 @@ export function GoogleTrendChart({
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
           <XAxis
             dataKey="date"
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
             tickFormatter={(v: string) => formatTrafficBucketDate(v)}
           />
           <YAxis
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"

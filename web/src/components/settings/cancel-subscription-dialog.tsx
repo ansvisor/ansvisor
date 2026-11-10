@@ -22,6 +22,7 @@ import {
   waitUntil,
   type CancelReason,
 } from '@/lib/billing/cancel-feedback';
+import { trackCancelClosed, trackCanceled, trackWaitRequested } from '@/lib/billing/cancel-events';
 import { cn } from '@/lib/utils';
 
 const formatDate = (date: Date) =>
@@ -33,6 +34,9 @@ const formatDate = (date: Date) =>
  * (at the end of the period, as before) or gives the team three days to put
  * it right, the plan unchanged. Waiting isn't offered when the plan renews
  * within those days, so no one is charged while they wait.
+ *
+ * Each way out is a product event (cancel-events.ts): cancelled, waiting, or
+ * closed without either.
  */
 export function CancelSubscriptionDialog({
   open,
@@ -74,6 +78,7 @@ export function CancelSubscriptionDialog({
     setBusy('cancel');
     try {
       if (!(await onCancel())) return;
+      trackCanceled({ reasons, message }, offerWait);
       // The plan is cancelled either way: a message that doesn't reach the
       // team isn't worth an error now.
       await sendCancelFeedback({ reasons, message, choice: 'cancel' }).catch(() => null);
@@ -89,6 +94,7 @@ export function CancelSubscriptionDialog({
     try {
       const result = await sendCancelFeedback({ reasons, message, choice: 'wait' });
       if ('ok' in result) {
+        trackWaitRequested({ reasons, message });
         setAnswerBy(waitUntil());
       } else if (result.error === 'too_late' || result.error === 'not_sent') {
         setWaitRefused(true);
@@ -110,6 +116,8 @@ export function CancelSubscriptionDialog({
       open={open}
       onOpenChange={(next) => {
         if (busy) return;
+        // Closed before cancelling or waiting: the reasons ticked still count.
+        if (!next && !answerBy) trackCancelClosed({ reasons, message });
         onOpenChange(next);
         if (!next) reset();
       }}

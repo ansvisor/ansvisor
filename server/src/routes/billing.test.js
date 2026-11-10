@@ -3,7 +3,8 @@ import express from 'express';
 
 /**
  * Cancel Subscription's answers: kept, then e-mailed to the team with replies
- * going to the customer; a few a day per organization.
+ * going to the customer; a few a day per organization. With PostHog set up,
+ * an analysis follows that e-mail in its thread, after the answer.
  */
 
 let profile;
@@ -57,6 +58,17 @@ const getAiUsage = vi.fn();
 const getDraftAiUsage = vi.fn();
 const getOrgIdForUser = vi.fn();
 const assertBrandAccess = vi.fn();
+// The analysis reads PostHog and asks the AI: both stand in here, the rest is real.
+const readPersonRows = vi.fn();
+vi.mock('../lib/cancel-analysis/posthog.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  readPersonRows: (...args) => readPersonRows(...args),
+}));
+const analyseCancel = vi.fn();
+vi.mock('../lib/cancel-analysis/ai.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  analyseCancel: (...args) => analyseCancel(...args),
+}));
 vi.mock('../lib/access.js', () => ({
   assertBrandAccess: (...args) => assertBrandAccess(...args),
 }));
@@ -76,6 +88,7 @@ vi.mock('../lib/plan-guard.js', () => ({
 }));
 
 const { default: router } = await import('./billing.js');
+const { buildCancelFeedbackEmail } = await import('../lib/cancel-feedback.js');
 
 let server;
 let baseUrl;
@@ -95,6 +108,12 @@ beforeEach(async () => {
   inserted.length = 0;
   updated.length = 0;
   deliverEmail.mockReset().mockResolvedValue('sent');
+  // PostHog not set up, as on a self-hosted install.
+  vi.stubEnv('POSTHOG_PERSONAL_API_KEY', '');
+  vi.stubEnv('POSTHOG_PROJECT_ID', '');
+  vi.stubEnv('RESEND_FROM_EMAIL', 'Ansvisor <hello@mail.example>');
+  readPersonRows.mockReset().mockResolvedValue({ ok: false });
+  analyseCancel.mockReset().mockResolvedValue({ ok: false });
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -113,6 +132,9 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   await new Promise((resolve) => server.close(resolve));
 });
+
+/** A moment for whatever the route left to run after its answer. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
 const send = (body) =>
   fetch(`${baseUrl}/cancel-feedback`, {
@@ -146,6 +168,138 @@ describe('POST /api/billing/cancel-feedback', () => {
     expect(mail.replyTo).toBe('ada@acme.example');
     expect(mail.subject).toBe('Acme Coffee asks us to act within 3 days before cancelling');
     expect(updated).toEqual([{ email_status: 'sent' }]);
+  });
+
+  it('sends the first e-mail as it was when PostHog isn’t set up, and nothing after it', async () => {
+    const res = await send({
+      reasons: ['too_expensive'],
+      message: 'Too pricey.',
+      choice: 'cancel',
+    });
+    expect(res.status).toBe(201);
+    expect(deliverEmail).toHaveBeenCalledTimes(1);
+    const { subject, html } = buildCancelFeedbackEmail({
+      org,
+      user: { name: 'Ada', email: 'ada@acme.example', role: 'admin' },
+      feedback: { reasons: ['too_expensive'], message: 'Too pricey.', choice: 'cancel' },
+    });
+    // Exactly the e-mail and the call there were before the analysis: no headers.
+    expect(deliverEmail.mock.calls[0][0]).toEqual({
+      to: ['owner@example.com', 'support@example.com'],
+      subject,
+      html,
+      replyTo: 'ada@acme.example',
+    });
+    await settle();
+    expect(readPersonRows).not.toHaveBeenCalled();
+    expect(analyseCancel).not.toHaveBeenCalled();
+    expect(deliverEmail).toHaveBeenCalledTimes(1);
+  });
+
+  describe('with PostHog set up', () => {
+    beforeEach(() => {
+      vi.stubEnv('POSTHOG_PERSONAL_API_KEY', 'phx_test');
+      vi.stubEnv('POSTHOG_PROJECT_ID', '12345');
+    });
+
+    it('answers first, then follows the e-mail in its thread with the analysis', async () => {
+      let release;
+      readPersonRows.mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+      );
+      analyseCancel.mockResolvedValue({ ok: true, why: 'Veri az.', fixes: [] });
+      const res = await send({ reasons: ['no_results'], choice: 'cancel' });
+      // The customer has their answer while PostHog is still being read.
+      expect(res.status).toBe(201);
+      expect(await res.json()).toEqual({ ok: true });
+      expect(deliverEmail).toHaveBeenCalledTimes(1);
+
+      // The first e-mail is the same, with a Message-ID for the follow-up to answer.
+      const first = deliverEmail.mock.calls[0][0];
+      expect(first.subject).toBe('Acme Coffee cancelled their plan');
+      expect(first.replyTo).toBe('ada@acme.example');
+      expect(first.headers).toEqual({ 'Message-ID': '<cancel-feedback-f1@mail.example>' });
+      expect(first.html).toBe(
+        buildCancelFeedbackEmail({
+          org,
+          user: { name: 'Ada', email: 'ada@acme.example', role: 'admin' },
+          feedback: { reasons: ['no_results'], message: '', choice: 'cancel' },
+        }).html,
+      );
+
+      await vi.waitFor(() => expect(readPersonRows).toHaveBeenCalledWith('u1', undefined));
+      release({ ok: false });
+      await vi.waitFor(() => expect(deliverEmail).toHaveBeenCalledTimes(2));
+      const followUp = deliverEmail.mock.calls[1][0];
+      expect(followUp.to).toEqual(['owner@example.com', 'support@example.com']);
+      expect(followUp.subject).toBe('Re: Acme Coffee cancelled their plan');
+      expect(followUp.headers).toEqual({
+        'In-Reply-To': '<cancel-feedback-f1@mail.example>',
+        References: '<cancel-feedback-f1@mail.example>',
+      });
+      expect(followUp).not.toHaveProperty('replyTo');
+      expect(followUp.html).toContain('Veri az.');
+      // The model got the answer, not who gave it.
+      const facts = analyseCancel.mock.calls[0][0];
+      expect(facts).toMatchObject({ reasons: ['Not seeing results'], plan: 'starter' });
+      expect(JSON.stringify(facts)).not.toMatch(/Acme|Ada|acme\.example/);
+      // What is kept is the first e-mail's outcome only.
+      expect(updated).toEqual([{ email_status: 'sent' }]);
+    });
+
+    it('answers a wait as before, and follows it only when the team was told', async () => {
+      const res = await send({ reasons: ['no_results'], choice: 'wait' });
+      expect(res.status).toBe(201);
+      await vi.waitFor(() => expect(deliverEmail).toHaveBeenCalledTimes(2));
+      expect(deliverEmail.mock.calls[1][0].subject).toBe(
+        'Re: Acme Coffee asks us to act within 3 days before cancelling',
+      );
+
+      for (const status of ['skipped', 'refused']) {
+        deliverEmail.mockReset().mockResolvedValue(status);
+        readPersonRows.mockClear();
+        const refused = await send({ reasons: ['no_results'], choice: 'wait' });
+        expect(refused.status).toBe(503);
+        expect((await refused.json()).code).toBe('not_sent');
+        await settle();
+        expect(readPersonRows).not.toHaveBeenCalled();
+        expect(deliverEmail).toHaveBeenCalledTimes(1);
+      }
+    });
+
+    it('lets nothing in the follow-up change the answer or what is kept', async () => {
+      analyseCancel.mockRejectedValue(new Error('boom'));
+      const res = await send({ choice: 'cancel' });
+      expect(res.status).toBe(201);
+      await vi.waitFor(() => expect(analyseCancel).toHaveBeenCalled());
+      await settle();
+      expect(deliverEmail).toHaveBeenCalledTimes(1);
+      expect(updated).toEqual([{ email_status: 'sent' }]);
+
+      // A follow-up Resend refuses isn't kept either.
+      updated.length = 0;
+      analyseCancel.mockResolvedValue({ ok: false });
+      deliverEmail.mockResolvedValueOnce('sent').mockResolvedValueOnce('refused');
+      expect((await send({ choice: 'cancel' })).status).toBe(201);
+      await vi.waitFor(() => expect(deliverEmail).toHaveBeenCalledTimes(3));
+      expect(updated).toEqual([{ email_status: 'sent' }]);
+    });
+
+    it('reads nothing when the team has no addresses set', async () => {
+      vi.stubEnv('CANCEL_FEEDBACK_EMAILS', '');
+      deliverEmail.mockResolvedValue('skipped');
+      const res = await send({ choice: 'cancel' });
+      expect(res.status).toBe(201);
+      // As before: the send is skipped for no one to send to, and the answer kept.
+      expect(deliverEmail.mock.calls[0][0].to).toEqual([]);
+      expect(deliverEmail.mock.calls[0][0]).not.toHaveProperty('headers');
+      await settle();
+      expect(readPersonRows).not.toHaveBeenCalled();
+      expect(analyseCancel).not.toHaveBeenCalled();
+      expect(updated).toEqual([{ email_status: 'skipped' }]);
+    });
   });
 
   it('still keeps the answer when the e-mail does not go out', async () => {
