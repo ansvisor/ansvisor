@@ -20,7 +20,15 @@ let container: HTMLDivElement;
 let root: Root;
 
 /** Lets sonner's list of toasts catch up: it updates on a timer, a dismissal on a frame. */
-const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 40)));
+const settle = (ms = 40) => act(() => new Promise((resolve) => setTimeout(resolve, ms)));
+
+/**
+ * A dismissed toast leaves the list 200 ms later (sonner's TIME_BEFORE_UNMOUNT).
+ * Each test waits that out before the next starts, or the environment is gone.
+ * A timer left running past the file's end otherwise fails the whole run with
+ * "window is not defined" on a slow machine.
+ */
+const SONNER_UNMOUNT_MS = 250;
 
 const errorShown = () => vi.mocked(track).mock.calls.filter(([event]) => event === 'error_shown');
 
@@ -37,7 +45,7 @@ afterEach(async () => {
   await act(async () => {
     toast.dismiss();
   });
-  await settle();
+  await settle(SONNER_UNMOUNT_MS);
   act(() => root.unmount());
   container.remove();
 });
