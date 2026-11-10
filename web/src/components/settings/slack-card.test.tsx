@@ -228,9 +228,10 @@ describe('SlackCard', () => {
     ).toEqual([
       ['Daily Pulse', 'true'],
       ['Drops beyond normal swing', 'true'],
+      ['Daily suggestion', 'true'],
     ]);
     // Only what is posted today: the other kinds' switches come with their sends.
-    expect(text()).not.toContain('Daily suggestion');
+    expect(text()).not.toContain('Agents that need someone');
   });
 
   it('lists the channels when the picker opens, and saves the one picked', async () => {
@@ -276,7 +277,11 @@ describe('SlackCard', () => {
       switches()[1].click();
     });
     expect(client.saveSlack).toHaveBeenCalledWith('b1', { send: { drops: false } });
-    expect(switches().map((s) => s.getAttribute('aria-checked'))).toEqual(['true', 'false']);
+    expect(switches().map((s) => s.getAttribute('aria-checked'))).toEqual([
+      'true',
+      'false',
+      'true',
+    ]);
   });
 
   it('sends a test message, and says why one failed', async () => {
