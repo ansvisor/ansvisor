@@ -5,6 +5,8 @@ import { brandOutsiders, brandReaders } from '../access.js';
 import { dispatchBrandWebhook } from '../webhook-dispatch.js';
 import { computePulseMetrics } from './metrics.js';
 import { renderPulseEmail, sendPulseEmail } from './email.js';
+import { deliverToSlack } from '../slack/deliver.js';
+import { pulseMessage } from '../slack/blocks/pulse.js';
 
 /**
  * Daily Pulse orchestration (#540).
@@ -12,8 +14,9 @@ import { renderPulseEmail, sendPulseEmail } from './email.js';
  * generatePulseForBrand runs after a brand's daily tracking job finishes.
  * It decides eligibility, computes the digest, records it in sent_pulses
  * (which doubles as the "already sent today" dedup and the 7-day warning
- * cooldown log), then delivers: email via Resend on cloud, and the
- * `daily_pulse.created` webhook event everywhere.
+ * cooldown log), then delivers: email via Resend on cloud, the
+ * `daily_pulse.created` webhook event everywhere, and the brand's Slack
+ * channel where it picked one (#2139, lib/slack/deliver.js).
  *
  * Everything is best-effort — a pulse failure must never fail the
  * tracking job that triggered it.
@@ -321,11 +324,39 @@ export async function generatePulseForBrand(brandId, { pulseDate: pulseDateOverr
       })
       .eq('id', pulseRow.id);
 
+    // Slack leg — cloud and self-host alike (#2139): the brand's channel, when
+    // it picked one and has the Pulse on there. Never throws; recorded apart
+    // from the legs above, so a database without 00515 still records them.
+    const slack = await deliverToSlack({
+      brand,
+      kind: 'pulse',
+      dedupeKey: `pulse:${pulseDate}`,
+      message: () => pulseMessage({ brandName: brand.name, metrics, insightsUrl, settingsUrl }),
+    });
+    const slackSent = slack.status === 'sent';
+    if (slackSent) {
+      const { error: slackError } = await supabaseAdmin
+        .from('sent_pulses')
+        .update({ slack_sent: true })
+        .eq('id', pulseRow.id);
+      if (slackError) {
+        logger.warn({ brandId, code: slackError.code ?? null }, 'pulse slack_sent not recorded');
+      }
+    }
+
     logger.info(
-      { brandId, pulseDate, frequency, emailSent, recipientCount, webhooksSent: sent },
+      {
+        brandId,
+        pulseDate,
+        frequency,
+        emailSent,
+        recipientCount,
+        webhooksSent: sent,
+        slack: slack.status === 'skipped' ? `skipped:${slack.reason}` : slack.status,
+      },
       'daily pulse generated',
     );
-    return { generated: true, emailSent, webhooksSent: sent };
+    return { generated: true, emailSent, webhooksSent: sent, slackSent };
   } catch (err) {
     logger.error({ err, brandId }, 'daily pulse generation failed');
     return { error: true };

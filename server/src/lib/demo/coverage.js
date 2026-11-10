@@ -12,6 +12,8 @@ export const SKIPPED = {
   cloro_pending_tasks: "Tracking's queue of scraper tasks: a demo brand is never tracked.",
   jobs: 'The tracking and content job queue: no job runs for a demo brand.',
   sent_pulses: 'Pulse e-mails sent: nobody is mailed about a demo brand.',
+  slack_posts:
+    "Messages posted to a brand's Slack channel (00515): a demo brand never posts to Slack; its card shows sample data from the web's own list (web lib/demo/integrations.ts).",
   pulse_settings:
     'Pulse e-mail settings: a demo brand is never mailed; its settings show the defaults.',
   ai_traffic_digests: 'Weekly AI traffic e-mails sent: never for a demo brand.',
