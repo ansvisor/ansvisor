@@ -24,6 +24,11 @@ export const FEATURES = [
   // Positions panel → Improve tab: AI-generated, platform-specific
   // suggestions to improve a prompt's position (PROMPT-003). Growth+.
   'prompt_improve',
+  // Slack (#2139): alerts, the Pulse and the daily suggestion in a brand's
+  // channel on every paid plan; approving an agent's step from Slack on
+  // Growth and up.
+  'slack_notifications',
+  'slack_approvals',
   // CRM integrations, HubSpot first (#2140): AI-sourced contacts, deals and
   // revenue, and pages to the CRM's CMS. Growth and above (owner, 2026-11-09);
   // self-host gets it, with its own Composio keys.
@@ -177,6 +182,10 @@ export const PLANS: Record<PlanId, Plan> = {
         'shopping_analytics',
         'prompt_improve',
         'white_label',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
         // HubSpot (#2140), with the server's own Composio keys.
         'crm_integrations',
       ],
@@ -232,6 +241,8 @@ export const PLANS: Record<PlanId, Plan> = {
         'ai_agent',
         // Improve, on Starter's AI budget (above).
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
       ],
     },
   },
@@ -284,6 +295,10 @@ export const PLANS: Record<PlanId, Plan> = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
         // HubSpot (#2140): Growth and above (owner, 2026-11-09).
         'crm_integrations',
       ],
@@ -342,6 +357,10 @@ export const PLANS: Record<PlanId, Plan> = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
         // HubSpot (#2140): Growth and above (owner, 2026-11-09).
         'crm_integrations',
       ],

@@ -25,6 +25,7 @@ import cmsIndexNowRoutes from './cms-indexnow.js';
 import hubspotRoutes from './hubspot.js';
 import demoRoutes from './demo.js';
 import chatOutboundRoutes from './chat-outbound.js';
+import slackRoutes from './slack.js';
 
 const router = Router();
 
@@ -54,6 +55,7 @@ router.use('/cms', cmsIndexNowRoutes);
 router.use('/hubspot', hubspotRoutes);
 router.use('/demo', demoRoutes);
 router.use('/chat-outbound', chatOutboundRoutes);
+router.use('/slack', slackRoutes);
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok', user: req.user?.id });

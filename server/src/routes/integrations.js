@@ -13,6 +13,7 @@ import {
   connectedAccountStatus,
   listGscSites,
   listGaProperties,
+  isSlackConfigured,
 } from '../lib/composio.js';
 import {
   BRAND_GOOGLE_PROVIDERS,
@@ -136,6 +137,8 @@ export function integrationsConfig() {
     googleSearchConsole: isComposioConfigured(GSC),
     googleAnalytics: isComposioConfigured(GA),
     googleMerchantCenter: isComposioConfigured(GMC),
+    // A brand's Slack (#2139): the API key and the Slack auth config.
+    slack: isSlackConfigured(),
     dataForSeo: Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
   };
 }
