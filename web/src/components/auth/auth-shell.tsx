@@ -2,6 +2,7 @@ import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
+import { AgentBackdrop } from '@/components/auth/agent-backdrop';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
 
@@ -10,7 +11,12 @@ import { cn } from '@/lib/utils';
  * a header with the switch to the other auth page, and one centred column
  * with the page's card. Around the card, each page picks: a headline above
  * it (sign-up), the logo above it instead of in the header (sign-in), a
- * muted line below it, and the orbit drawn behind the page.
+ * muted line below it, and, on sign-up and sign-in only, the agent
+ * animation behind the page. The
+ * card sits on a soft shadow, except under a headline (sign-up, option D).
+ *
+ * The text, links and card are marked data-keep-clear: the animation draws
+ * nothing there ("column" for what is in the centred column).
  */
 export function AuthShell({
   prompt,
@@ -19,7 +25,7 @@ export function AuthShell({
   headline,
   footnote,
   brandAboveCard = false,
-  backdrop = 'none',
+  backdrop,
   wide = false,
   children,
 }: {
@@ -35,8 +41,11 @@ export function AuthShell({
   footnote?: string;
   /** The logo above the card, and none in the header. */
   brandAboveCard?: boolean;
-  /** 'orbit': two thin rings and five dots behind the page; decoration only. */
-  backdrop?: 'orbit' | 'none';
+  /**
+   * Behind the page, from xl (1280px) up, decoration only: the landing page's
+   * agent animation. Sign-up and sign-in only (owner, 2026-11-10).
+   */
+  backdrop?: 'agent';
   /** A wider column, for a card with more to say (the consent page). */
   wide?: boolean;
   children: React.ReactNode;
@@ -45,10 +54,10 @@ export function AuthShell({
 
   return (
     <div
-      data-backdrop={backdrop}
+      data-card={headline ? 'flat' : 'raised'}
       className="relative flex min-h-svh flex-col overflow-hidden bg-[#f7f5f1] dark:bg-background"
     >
-      {backdrop === 'orbit' && <Orbit />}
+      {backdrop === 'agent' && <AgentBackdrop />}
 
       <header
         className={cn(
@@ -58,7 +67,7 @@ export function AuthShell({
       >
         {!brandAboveCard && <Brand />}
 
-        <div className="flex items-center gap-3.5 text-sm">
+        <div data-keep-clear="" className="flex items-center gap-3.5 text-sm">
           {prompt && (
             <span className={cn('text-muted-foreground', !brandAboveCard && 'hidden sm:inline')}>
               {prompt}
@@ -84,15 +93,19 @@ export function AuthShell({
         {headline && (
           <h1
             data-slot="auth-headline"
+            data-keep-clear="column"
             className="max-w-3xl text-balance text-center font-[family-name:var(--font-jakarta)] text-4xl font-bold leading-[1.05] tracking-[-0.03em] sm:text-[52px]"
           >
             {headline}
           </h1>
         )}
-        <div className={cn('w-full', wide ? 'max-w-lg' : 'max-w-[420px]')}>{children}</div>
+        <div data-keep-clear="column" className={cn('w-full', wide ? 'max-w-lg' : 'max-w-[420px]')}>
+          {children}
+        </div>
         {footnote && (
           <p
             data-slot="auth-footnote"
+            data-keep-clear="column"
             className="max-w-xl text-balance text-center text-[13px] text-muted-foreground"
           >
             {footnote}
@@ -101,7 +114,7 @@ export function AuthShell({
       </main>
 
       <footer className="relative z-10 w-full px-4 py-6 text-center text-xs text-muted-foreground sm:px-8">
-        <p className="text-balance">
+        <p data-keep-clear="" className="text-balance">
           &copy; {new Date().getFullYear()} {siteConfig.name}. {t('footer.openSource')}{' '}
           <a
             href="https://github.com/ansvisor/ansvisor/blob/main/LICENSE"
@@ -148,7 +161,7 @@ export function AuthCard({
   return (
     <div
       data-slot="auth-card"
-      className="rounded-2xl border bg-card p-6 sm:p-8 in-data-[backdrop=orbit]:shadow-[0_30px_80px_rgba(60,45,30,0.10)] dark:in-data-[backdrop=orbit]:shadow-[0_30px_80px_rgba(0,0,0,0.6)]"
+      className="rounded-2xl border bg-card p-6 sm:p-8 in-data-[card=raised]:shadow-[0_30px_80px_rgba(60,45,30,0.10)] dark:in-data-[card=raised]:shadow-[0_30px_80px_rgba(0,0,0,0.6)]"
     >
       {title && (
         <div className="mb-6 text-center">
@@ -170,6 +183,7 @@ function Brand({ large = false }: { large?: boolean }) {
       href={siteConfig.url}
       data-slot="auth-brand"
       data-place={large ? 'above-card' : 'header'}
+      data-keep-clear={large ? 'column' : ''}
       className="flex items-center gap-3"
     >
       <Image
@@ -194,40 +208,5 @@ function Brand({ large = false }: { large?: boolean }) {
         {siteConfig.name}
       </span>
     </a>
-  );
-}
-
-/** Where the orbit's dots sit on the outer ring: 45° apart, with three gaps. */
-const ORBIT_DOTS = [
-  'left-[85.36%] top-[14.64%]',
-  'left-full top-1/2',
-  'left-[85.36%] top-[85.36%]',
-  'left-[14.64%] top-[85.36%]',
-  'left-0 top-1/2',
-];
-
-/** Two thin rings round the middle of the page and five dots on the outer one; decoration only. */
-function Orbit() {
-  const ring = 'rounded-full border border-[rgba(60,45,30,0.10)] dark:border-white/[0.07]';
-
-  return (
-    <div
-      aria-hidden
-      data-slot="auth-orbit"
-      className="pointer-events-none absolute inset-0 flex items-center justify-center"
-    >
-      <div className={cn(ring, 'relative size-[600px] shrink-0 sm:size-[900px]')}>
-        <div className={cn(ring, 'absolute inset-[16.667%]')} />
-        {ORBIT_DOTS.map((place) => (
-          <span
-            key={place}
-            className={cn(
-              'absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[rgba(60,45,30,0.25)] dark:bg-white/[0.22]',
-              place,
-            )}
-          />
-        ))}
-      </div>
-    </div>
   );
 }

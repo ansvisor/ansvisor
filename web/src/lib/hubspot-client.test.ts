@@ -17,6 +17,7 @@ const {
   retryHubspotSetup,
   saveHubspotConsent,
   startHubspotConnect,
+  syncHubspot,
   takePending,
 } = await import('./hubspot-client');
 
@@ -48,6 +49,7 @@ describe('hubspot-client', () => {
     await chooseHubspotAccount('b1', { accountId: ACCOUNT, consent: CONSENT });
     await saveHubspotConsent('b1', CONSENT);
     await retryHubspotSetup('b1');
+    await syncHubspot('b1');
     await disconnectHubspot('b1');
     const calls = fetchMock.mock.calls.slice(1).map(([url, init]) => [url, init.method, init.body]);
     expect(calls).toEqual([
@@ -60,12 +62,19 @@ describe('hubspot-client', () => {
       [`${BASE}/use`, 'POST', JSON.stringify({ accountId: ACCOUNT, consent: CONSENT })],
       [`${BASE}/settings`, 'PUT', JSON.stringify({ consent: CONSENT })],
       [`${BASE}/setup`, 'POST', undefined],
+      [`${BASE}/sync`, 'POST', undefined],
       [BASE, 'DELETE', undefined],
     ]);
   });
 
   it("names the API's reasons, and the general ones", async () => {
-    for (const code of ['consent_required', 'not_configured', 'forbidden', 'not_connected']) {
+    for (const code of [
+      'busy',
+      'consent_required',
+      'not_configured',
+      'forbidden',
+      'not_connected',
+    ]) {
       answer(400, { code, error: 'x' });
       expect(await saveHubspotConsent('b1', CONSENT)).toEqual({ ok: false, code });
     }

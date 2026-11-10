@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { createReport, getReports, deleteReport, type ReportListItem } from '@/lib/actions/reports';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -28,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Check, FileBarChart, Loader2, Plus, Trash2 } from 'lucide-react';
+import { Check, Crown, FileBarChart, Loader2, Plus, Trash2 } from 'lucide-react';
 import { formatDate } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import {
@@ -101,6 +102,10 @@ export default function ReportsPage() {
   const pickableSections = ALL_REPORT_SECTIONS.filter(
     (s) => s !== 'shoppingVisibility' || reportBrand?.shoppingModeEnabled,
   );
+  // HubSpot's AI-sourced pipeline (#2140) comes with the plan's
+  // crm_integrations: below it, shown off with the plan it needs.
+  const { canUse, requiredPlanFor } = useFeatureGate();
+  const lockedSection = (s: ReportSection) => s === 'aiPipeline' && !canUse('crm_integrations');
 
   const selectTemplate = (id: ReportTemplateId) => {
     setTemplate(id);
@@ -166,7 +171,7 @@ export default function ReportsPage() {
         dateTo,
         title: reportTitle || undefined,
         template,
-        sections: pickableSections.filter((s) => sections.has(s)),
+        sections: pickableSections.filter((s) => sections.has(s) && !lockedSection(s)),
       });
       toast.success(t('generated'));
       setDialogOpen(false);
@@ -407,13 +412,14 @@ export default function ReportsPage() {
               <p className="text-sm font-medium">{t('sectionsLabel')}</p>
               <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                 {pickableSections.map((s) => {
-                  const on = sections.has(s);
+                  const locked = lockedSection(s);
+                  const on = sections.has(s) && !locked;
                   return (
                     <button
                       key={s}
                       type="button"
                       onClick={() => toggleSection(s)}
-                      disabled={generating}
+                      disabled={generating || locked}
                       className={cn(
                         'flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-xs transition-colors',
                         on
@@ -432,6 +438,12 @@ export default function ReportsPage() {
                         {on && <Check className="h-2.5 w-2.5" />}
                       </span>
                       {t(`sections.${s}`)}
+                      {locked && (
+                        <span className="ml-auto inline-flex items-center gap-0.5 rounded border px-1 text-[10px] font-medium">
+                          <Crown aria-hidden className="h-2.5 w-2.5" />
+                          {requiredPlanFor('crm_integrations')}
+                        </span>
+                      )}
                     </button>
                   );
                 })}

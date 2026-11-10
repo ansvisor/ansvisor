@@ -19,6 +19,7 @@ export const TRAFFIC_READS = [
   'logs',
   'pages',
   'conversions',
+  'aiPipeline',
   'googleTotals',
   'googleTrend',
   'googlePages',
@@ -52,6 +53,7 @@ export const getTrafficTrend = via<typeof traffic.getTrafficTrend>('trend');
 export const getTrafficLogs = via<typeof traffic.getTrafficLogs>('logs');
 const readTrafficPages = via<typeof traffic.getTrafficPages>('pages');
 export const getTrafficConversions = via<typeof traffic.getTrafficConversions>('conversions');
+export const getTrafficAiPipeline = via<typeof traffic.getTrafficAiPipeline>('aiPipeline');
 export const getTrafficGoogleTotals = via<typeof traffic.getTrafficGoogleTotals>('googleTotals');
 export const getTrafficGoogleTrend = via<typeof traffic.getTrafficGoogleTrend>('googleTrend');
 export const getTrafficGooglePages = via<typeof traffic.getTrafficGooglePages>('googlePages');

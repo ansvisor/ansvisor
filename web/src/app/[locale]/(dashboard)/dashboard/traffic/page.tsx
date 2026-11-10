@@ -37,6 +37,7 @@ import {
 } from '@/components/filters/date-range-filter';
 import { PagesCard } from './_pages-card';
 import { ConversionsSection } from './_conversions';
+import { AiPipelineSection } from './_ai-pipeline';
 import { TrafficKpis } from './_kpis';
 import { VisitListSourceNote } from './_visit-list-note';
 import { EngagedCell, KeyEventsCell, PlatformValueNote } from './_platform-value';
@@ -661,6 +662,16 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
     />
   );
 
+  // HubSpot's AI-sourced contacts, deals and revenue (#2140), after the conversions.
+  const pipelineSection = (
+    <AiPipelineSection
+      brandId={brand.id}
+      brandName={brand.name}
+      dateWindow={dateWindow}
+      rangeLabel={rangeSubLabel}
+    />
+  );
+
   const pagesCard = (
     <PagesCard
       brandId={brand.id}
@@ -1060,6 +1071,7 @@ function TrafficPageContent({ brand }: { brand: Brand }) {
               that has none (or some again) keeps these sections and their
               data rather than mounting them anew and reading it again. */}
           {conversionsSection}
+          {pipelineSection}
           {pagesCard}
           {googleSection}
           {botsSection}

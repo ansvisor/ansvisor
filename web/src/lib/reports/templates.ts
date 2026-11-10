@@ -28,6 +28,7 @@ export type ReportSection =
   | 'mentionEvidence'
   | 'queryFanout'
   | 'aiTraffic'
+  | 'aiPipeline'
   | 'shoppingVisibility'
   | 'auditScore'
   | 'citations'
@@ -37,7 +38,10 @@ export type ReportSection =
  * Every pickable section, in report render order — drives the section
  * checkboxes in the generate dialog. `shoppingVisibility` is additionally
  * gated on the brand's shopping mode (hidden entirely when off, mirroring
- * the sidebar's `requiresBrandPref` rule).
+ * the sidebar's `requiresBrandPref` rule). `aiPipeline` (HubSpot's
+ * AI-sourced contacts, deals and revenue, #2140) needs the plan's
+ * crm_integrations, and is left out for a brand that hasn't connected HubSpot
+ * with consent to mark contacts.
  */
 export const ALL_REPORT_SECTIONS: ReportSection[] = [
   'kpis',
@@ -49,6 +53,7 @@ export const ALL_REPORT_SECTIONS: ReportSection[] = [
   'mentionEvidence',
   'queryFanout',
   'aiTraffic',
+  'aiPipeline',
   'shoppingVisibility',
   'auditScore',
   'citations',
@@ -81,6 +86,7 @@ export const REPORT_TEMPLATES: ReportTemplateDef[] = [
       'mentionEvidence',
       'queryFanout',
       'aiTraffic',
+      'aiPipeline',
       'shoppingVisibility',
       'auditScore',
       'citations',

@@ -20,7 +20,9 @@ import { PROPERTIES_VERSION } from './properties.js';
  *     id and name, picked on the card;
  *   - portal: the HubSpot account (Hub ID, currency, time zone, address);
  *   - properties: the definitions made in HubSpot (their version and the AI
- *     source list's), or why the last try failed.
+ *     source list's), or why the last try failed;
+ *   - sync: the AI-sourced pipeline's last read of HubSpot (pipeline-sync.js,
+ *     00520): when, how many contacts and deals, or why it failed.
  * Consent is per brand: a brand that starts using another brand's HubSpot
  * account is asked again.
  */
@@ -37,6 +39,8 @@ export function readSettings(raw) {
   const blog = s.blog && typeof s.blog === 'object' ? s.blog : null;
   const portal = s.portal && typeof s.portal === 'object' ? s.portal : null;
   const properties = s.properties && typeof s.properties === 'object' ? s.properties : null;
+  const sync = s.sync && typeof s.sync === 'object' ? s.sync : null;
+  const count = (value) => (Number.isInteger(value) && value >= 0 ? value : null);
   return {
     consent: {
       contacts: bool(consent.contacts),
@@ -62,6 +66,14 @@ export function readSettings(raw) {
             : null,
           at: text(properties.at, 40),
           error: text(properties.error, 40),
+        }
+      : null,
+    sync: sync
+      ? {
+          at: text(sync.at, 40),
+          contacts: count(sync.contacts),
+          deals: count(sync.deals),
+          error: text(sync.error, 40),
         }
       : null,
   };
@@ -126,6 +138,24 @@ export async function writeHubspotSettings(brandId, settings) {
     .eq('brand_id', brandId)
     .eq('provider', HUBSPOT);
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Keeps how the pipeline's last read of HubSpot went (pipeline-sync.js) on
+ * the brand's settings, leaving the rest as it is. Nothing when the brand no
+ * longer uses HubSpot (disconnected meanwhile).
+ */
+export async function writeHubspotSync(brandId, sync) {
+  const { data, error } = await supabaseAdmin
+    .from('brand_integrations')
+    .select('settings')
+    .eq('brand_id', brandId)
+    .eq('provider', HUBSPOT)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return;
+  const raw = data.settings && typeof data.settings === 'object' ? data.settings : {};
+  await writeHubspotSettings(brandId, { ...raw, sync });
 }
 
 /** Names the sign-in on cards: its Hub ID. */

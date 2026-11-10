@@ -16,6 +16,7 @@ describe('readSettings', () => {
       blog: null,
       portal: null,
       properties: null,
+      sync: null,
     };
     expect(readSettings(undefined)).toEqual(none);
     expect(readSettings([])).toEqual(none);
@@ -30,6 +31,7 @@ describe('readSettings', () => {
       blog: { id: '1234567890', name: 'Acme blog' },
       portal: { id: 4412893, currency: 'USD', timeZone: 'Europe/Istanbul', uiDomain: 'app.x' },
       properties: { version: 1, sourcesVersion: 3, at: '2026-11-10T09:00:01.000Z', error: null },
+      sync: { at: '2026-11-10T06:00:00.000Z', contacts: 42, deals: 7, error: null },
     };
     expect(readSettings(stored)).toEqual(stored);
   });

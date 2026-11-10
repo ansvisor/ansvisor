@@ -15,6 +15,7 @@ export default function SignUpPage() {
         cta={{ href: '/sign-in', label: t('signIn') }}
         headline={t('signUpHeadline')}
         footnote={t('tracksEngines')}
+        backdrop="agent"
       >
         <AuthCard>
           <SignUpForm />

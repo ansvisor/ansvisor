@@ -69,7 +69,10 @@ export async function approveConnection(formData: FormData): Promise<void> {
     allowChanges && request.scopes.includes(MCP_WRITE_SCOPE)
       ? [MCP_READ_SCOPE, MCP_WRITE_SCOPE]
       : [MCP_READ_SCOPE];
-  const app = appOf(request.client_name, request.redirect_uri);
+  const app = appOf(request.client_name, request.redirect_uri, {
+    kind: request.client_kind,
+    clientId: request.client_id,
+  });
   const code = newSecret(AUTHORIZATION_CODE_PREFIX);
   const { error } = await supabaseAdmin.from('oauth_codes').insert({
     code_hash: hashSecret(code),

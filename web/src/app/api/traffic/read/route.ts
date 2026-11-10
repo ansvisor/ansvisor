@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import {
+  getTrafficAiPipeline,
   getTrafficBots,
   getTrafficConversions,
   getTrafficGooglePages,
@@ -37,6 +38,7 @@ const READS: Record<TrafficRead, (brandId: string, ...rest: any[]) => Promise<un
   logs: getTrafficLogs,
   pages: getTrafficPages,
   conversions: getTrafficConversions,
+  aiPipeline: getTrafficAiPipeline,
   googleTotals: getTrafficGoogleTotals,
   googleTrend: getTrafficGoogleTrend,
   googlePages: getTrafficGooglePages,

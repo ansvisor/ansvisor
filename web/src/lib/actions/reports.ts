@@ -19,6 +19,9 @@ import {
 } from '@/lib/actions/tracking';
 import { getCitationsOverview, type CitationsSourceBreakdown } from '@/lib/actions/citations';
 import { getShoppingKpis } from '@/lib/actions/shopping';
+import { getTrafficAiPipeline, type TrafficAiPipeline } from '@/lib/actions/traffic';
+import { getOrgPlan } from '@/lib/guards/plan-guard';
+import { hasFeature } from '@/config/plans';
 import { type SourceCategory } from '@/lib/citations/classify';
 import { auditSnapshotFrom, type AuditSnapshotRow } from '@/lib/reports/audit-score';
 import { readEarlierPageAudits } from '@/lib/audit/page-trend';
@@ -149,6 +152,45 @@ export interface ReportAiTraffic {
   topPages: { url: string; visits: number }[];
 }
 
+/**
+ * HubSpot's AI-sourced contacts, deals and revenue in the period (#2140),
+ * as AI Traffic's pipeline section reads them (brand_ai_pipeline, 00520):
+ * the totals, the top engines and pages, and HubSpot's own AI Referrals.
+ */
+export interface ReportAiPipeline {
+  currency: string | null;
+  totals: TrafficAiPipeline['totals'];
+  byEngine: TrafficAiPipeline['byEngine'];
+  byPage: TrafficAiPipeline['byPage'];
+  hubspotNative: TrafficAiPipeline['hubspotNative'];
+  /** When HubSpot was last read, as of the report. */
+  syncedAt: string | null;
+}
+
+/** Engines and pages a report keeps. */
+const PIPELINE_ROWS = 5;
+
+/**
+ * The pipeline for the report's period, or null when the brand has nothing
+ * to read: HubSpot not connected, marking contacts off, or not read yet.
+ */
+async function getPipelineSnapshot(
+  brandId: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<ReportAiPipeline | null> {
+  const pipeline = await getTrafficAiPipeline(brandId, { dateFrom, dateTo });
+  if (!pipeline?.connected || !pipeline.contactsConsent || !pipeline.syncedAt) return null;
+  return {
+    currency: pipeline.currency,
+    totals: pipeline.totals,
+    byEngine: pipeline.byEngine.slice(0, PIPELINE_ROWS),
+    byPage: pipeline.byPage.slice(0, PIPELINE_ROWS),
+    hubspotNative: pipeline.hubspotNative,
+    syncedAt: pipeline.syncedAt,
+  };
+}
+
 export interface ReportShoppingVisibility {
   /** Own share of all shopping cards in the window, as a percentage. */
   shoppingSovPct: number;
@@ -238,6 +280,8 @@ export interface ReportPayload {
   topicPerformance?: ReportTopicPerf[];
   /** Real AI-referred visits in the period. */
   aiTraffic?: ReportAiTraffic;
+  /** HubSpot's AI-sourced pipeline (#2140): only for a brand with HubSpot read. */
+  aiPipeline?: ReportAiPipeline;
   /** Shopping card presence (only gathered when the brand's shopping mode is on). */
   shoppingVisibility?: ReportShoppingVisibility;
   /** Latest completed Site Audit as of the period end. */
@@ -813,7 +857,7 @@ export async function createReport(
   // it (mirrors the sidebar's requiresBrandPref rule).
   const { data: brand } = await supabase
     .from('brands')
-    .select('name, shopping_mode_enabled')
+    .select('name, shopping_mode_enabled, organization_id')
     .eq('id', brandId)
     .single();
   const brandName = (brand?.name as string) ?? 'Brand';
@@ -823,6 +867,16 @@ export async function createReport(
   );
   const sectionSet = new Set<ReportSection>(picked);
   if (!brand?.shopping_mode_enabled) sectionSet.delete('shoppingVisibility');
+  // HubSpot's pipeline (#2140) is the plan's crm_integrations, as on AI Traffic.
+  if (
+    sectionSet.has('aiPipeline') &&
+    !(
+      brand?.organization_id &&
+      hasFeature(await getOrgPlan(brand.organization_id as string), 'crm_integrations')
+    )
+  ) {
+    sectionSet.delete('aiPipeline');
+  }
   const has = (s: ReportSection) => sectionSet.has(s);
 
   // 1. Gather the metric snapshot through the existing analytics actions —
@@ -865,6 +919,7 @@ export async function createReport(
     queryFanout,
     topicPerformance,
     aiTraffic,
+    aiPipeline,
     shoppingVisibility,
     auditScore,
   ] = await Promise.all([
@@ -877,6 +932,7 @@ export async function createReport(
     pick('queryFanout', () => getFanoutSnapshot(brandId, dateFrom, dateTo)),
     pick('topicPerformance', () => getTopicPerformance(brandId, dateFrom, dateTo)),
     pick('aiTraffic', () => getTrafficSnapshot(brandId, dateFrom, dateTo)),
+    pick('aiPipeline', () => getPipelineSnapshot(brandId, dateFrom, dateTo)),
     pick('shoppingVisibility', () => getShoppingSnapshot(brandId, dateFrom, dateTo)),
     pick('auditScore', () => getAuditSnapshot(brandId, dateTo)),
   ]);
@@ -920,6 +976,7 @@ export async function createReport(
       : {}),
     ...(topicPerformance && topicPerformance.length > 0 ? { topicPerformance } : {}),
     ...(aiTraffic ? { aiTraffic } : {}),
+    ...(aiPipeline ? { aiPipeline } : {}),
     ...(shoppingVisibility ? { shoppingVisibility } : {}),
     ...(auditScore ? { auditScore } : {}),
     ...(sov
