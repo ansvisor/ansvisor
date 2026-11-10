@@ -8632,6 +8632,28 @@
       "signOutError": "Failed to sign out. Please try again."
     },
     "tracksEngines": "Tracks ChatGPT · Claude · Gemini · Google AI Overviews · Google AI Mode · Bing AI Mode",
+    "agent": {
+      "name": "Ansvisor",
+      "hubs": {
+        "chatgpt": "ChatGPT",
+        "gemini": "Gemini",
+        "googleAiOverviews": "Google AI Overviews",
+        "googleAiMode": "Google AI Mode",
+        "claude": "Claude",
+        "bingAiMode": "Bing AI Mode"
+      },
+      "tags": {
+        "citation": "+1 citation",
+        "mentioned": "mentioned",
+        "firstAnswer": "#1 answer",
+        "cited": "cited",
+        "mention": "+1 mention",
+        "topThree": "top 3",
+        "traffic": "New traffic",
+        "demand": "New demand",
+        "revenue": "+$ revenue"
+      }
+    },
     "footer": {
       "openSource": "Open source under",
       "mitLicense": "MIT license",
