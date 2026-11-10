@@ -257,6 +257,20 @@ export const cmsLimiter = rateLimit({
   },
 });
 
+// A brand's Slack (#2139): connecting, listing channels and test messages
+// each reach Slack through Composio, so a member's are few.
+export const slackLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  keyGenerator: apiLimiterKey,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many requests, please try again later.',
+  },
+});
+
 // The Library's checks whether pages sent to a CMS were published there:
 // four each time it opens, answered from a two-minute memory per brand. A
 // bucket of their own, so opening the Library never uses up a member's

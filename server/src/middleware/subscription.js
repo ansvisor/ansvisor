@@ -70,6 +70,8 @@ export const COST_STOPPING = [
   { method: 'DELETE', path: /^\/cms\/brands\/[^/]+\/framer\/?$/ },
   // Disconnects a brand's Wix site (cms-wix.js): its API key is deleted.
   { method: 'DELETE', path: /^\/cms\/brands\/[^/]+\/wix\/?$/ },
+  // Disconnects a brand's Slack workspace (slack.js, #2139): nothing more is posted.
+  { method: 'DELETE', path: /^\/slack\/brands\/[^/]+\/?$/ },
   // Removes an AI-bot log connection (bots.js): its secret stops working.
   { method: 'DELETE', path: /^\/bots\/connections\/[^/]+\/[^/]+\/?$/ },
   // Removes a store from the catalog (catalog.js): its sign-in is revoked at
