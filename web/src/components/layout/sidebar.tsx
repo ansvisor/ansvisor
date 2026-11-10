@@ -25,6 +25,7 @@ import {
 import { brandVisibilityTabOf, isEcommerceBrand } from '@/lib/brand-visibility';
 import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
+import { useAdsEnabled } from '@/components/providers/ads-provider';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useChatRailStore } from '@/stores/use-chat-rail-store';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -40,6 +41,7 @@ import { Separator } from '@/components/ui/separator';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import { UserProfileNavItem } from '@/components/layout/user-profile-nav-item';
 import { ThemeToggle } from '@/components/layout/theme-toggle';
+import { NewPill } from '@/components/agentic/new-pill';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { menuSectionOf } from '@/lib/menu-access';
 import {
@@ -196,13 +198,14 @@ export function Sidebar() {
   const brandPrefs = { ecommerce: isEcommerceBrand(activeBrand) };
   const childGates = { brandPrefs, canUse };
   // The items the viewer sees, and the groups that keep one: a group whose
-  // sections are all off their menu goes, title and all.
+  // sections are all off their menu goes, title and all. Ads only with Ads on.
   const hiddenSections = useHiddenMenuSections();
+  const ads = useAdsEnabled();
   const visibleNav = dashboardNav
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
-        shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic, canUse),
+        shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic, canUse, ads),
       ),
     }))
     .filter((group) => group.items.length > 0);
@@ -677,6 +680,7 @@ export function Sidebar() {
                                   {effectiveBadge}
                                 </Badge>
                               )}
+                              {item.newPill && <NewPill className="ml-auto" />}
                             </>
                           )}
                         </span>

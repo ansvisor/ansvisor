@@ -517,7 +517,8 @@
     "sourceBrand": "Brand",
     "sourceCompetitors": "Competitors",
     "sourceThirdParty": "Third-Party",
-    "all": "All"
+    "all": "All",
+    "upgrade": "Upgrade"
   },
   "nav": {
     "overview": "Overview",
@@ -527,6 +528,7 @@
     "actionCenter": "Action Center",
     "insights": "Visibility",
     "traffic": "AI Referral Traffic",
+    "ads": "Ads",
     "prompts": "Prompts",
     "content": "Content",
     "audit": "Audit",
@@ -13142,6 +13144,35 @@
           "query": "Missing addresses have a query: no redirect suggested"
         }
       }
+    }
+  },
+  "ads": {
+    "title": "Ads",
+    "description": "Earn the answer, pay for it, or both.",
+    "tabs": {
+      "label": "Ads",
+      "ov": "Overview",
+      "op": "Opportunities",
+      "sov": "Paid SoV",
+      "sovTip": "Paid Share of Voice: your share of sponsored ads shown in AI answers",
+      "cmp": "Campaigns",
+      "con": "Connections"
+    },
+    "period": "Period",
+    "export": "Export",
+    "noDataYet": "Available once Ads has data",
+    "empty": {
+      "title": "Coming soon in this preview",
+      "ov": "The Overview will count your buying-intent prompts and show which you earn in AI answers, which you pay for, and which need both.",
+      "op": "Opportunities will list your buying-intent prompts, each with a reason to earn the answer with content, pay for an ad, or do both.",
+      "sov": "Paid SoV will show your share of the sponsored ads in AI answers, only on the platforms where Ansvisor can see them.",
+      "cmp": "Campaigns will list your ad campaigns once an ad account is connected.",
+      "con": "Connections will let you connect ChatGPT Ads, Google Ads and Microsoft Advertising, read-only to start."
+    },
+    "locked": {
+      "title": "Ads is included from the {plan} plan",
+      "titleTrial": "Ads is included from the {plan} plan, after the free trial",
+      "description": "See which buying-intent prompts to win with content, which to pay for, and where to do both."
     }
   },
   "prompts": {

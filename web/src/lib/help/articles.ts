@@ -22,6 +22,7 @@ export const HELP_AREAS = [
   'reports',
   'settings',
   'chat',
+  'ads',
 ] as const;
 export type HelpArea = (typeof HELP_AREAS)[number];
 

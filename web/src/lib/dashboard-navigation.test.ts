@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Bot, Sparkles } from 'lucide-react';
+import { Bot, Megaphone, Sparkles } from 'lucide-react';
 import messages from '../../messages/en.json';
 import { dashboardNav } from '@/config/dashboard';
 import {
@@ -108,6 +108,67 @@ describe('shouldShowDashboardNavItem', () => {
     // Chat stays either way: its old page answers while the new Chat is off.
     expect(shouldShowDashboardNavItem(chat, prefs, new Set(), false)).toBe(true);
     expect(shouldShowDashboardNavItem(chat, prefs, new Set(['agents']), true)).toBe(true);
+  });
+
+  it('shows Ads only with Ads on, and not when the viewer’s menu hides it', () => {
+    const items = dashboardNav.flatMap((group) => group.items);
+    const ads = items.find((item) => item.href === '/dashboard/ads')!;
+    const traffic = items.find((item) => item.href === '/dashboard/traffic')!;
+    const prefs = { ecommerce: false };
+    const all = () => true;
+
+    // Off by default, whatever else is on.
+    expect(shouldShowDashboardNavItem(ads, prefs)).toBe(false);
+    expect(shouldShowDashboardNavItem(ads, prefs, new Set(), true, all)).toBe(false);
+    expect(shouldShowDashboardNavItem(ads, prefs, new Set(), true, all, false)).toBe(false);
+    // On, with or without the new Chat; off again when the menu leaves it out.
+    expect(shouldShowDashboardNavItem(ads, prefs, new Set(), false, all, true)).toBe(true);
+    expect(shouldShowDashboardNavItem(ads, prefs, new Set(), true, all, true)).toBe(true);
+    expect(shouldShowDashboardNavItem(ads, prefs, new Set(['ads']), true, all, true)).toBe(false);
+    // Every other item stays as it is either way.
+    for (const item of items.filter((i) => !i.requiresAds)) {
+      for (const chatOn of [false, true]) {
+        expect(shouldShowDashboardNavItem(item, prefs, new Set(), chatOn, all, true)).toBe(
+          shouldShowDashboardNavItem(item, prefs, new Set(), chatOn, all, false),
+        );
+      }
+    }
+    expect(shouldShowDashboardNavItem(traffic, prefs, new Set(), false, all, true)).toBe(true);
+  });
+});
+
+// Ads (ADS-01 §9 item 1, owner A1): under Analytics, after AI Referral
+// Traffic and before Reports, with an outlined "New" pill; only with
+// ADS_ENABLED on. Nothing else on the menu moves.
+describe('the Ads item', () => {
+  const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
+
+  it('closes Analytics, right after AI Referral Traffic, before the Reports group', () => {
+    expect(analytics.map((item) => item.title)).toEqual([
+      'Visibility',
+      'Prompts',
+      'AI Referral Traffic',
+      'Ads',
+    ]);
+    const hrefs = dashboardNav.flatMap((group) => group.items.map((item) => item.href));
+    expect(hrefs.indexOf('/dashboard/ads')).toBe(hrefs.indexOf('/dashboard/traffic') + 1);
+    expect(hrefs.indexOf('/dashboard/ads')).toBeLessThan(hrefs.indexOf('/dashboard/reports'));
+  });
+
+  it('is new, behind Ads’ flag, and locked by no plan on the menu (its page shows the lock)', () => {
+    const ads = analytics.find((item) => item.title === 'Ads')!;
+    expect(ads).toEqual({
+      title: 'Ads',
+      href: '/dashboard/ads',
+      icon: Megaphone,
+      requiresAds: true,
+      newPill: true,
+    });
+    expect(getDashboardNavLabel('Ads', translateNav)).toBe('nav.ads');
+    expect(messages.nav.ads).toBe('Ads');
+    // No other item is behind it or marked new.
+    const others = dashboardNav.flatMap((group) => group.items).filter((item) => item !== ads);
+    expect(others.some((item) => item.requiresAds || item.newPill)).toBe(false);
   });
 });
 

@@ -6,7 +6,8 @@ import messages from '../../../messages/en.json';
 
 /**
  * The dashboard drawn behind the onboarding wizard: its menu is the one the
- * wizard leads to, Agent Center in it only with the new Chat on.
+ * wizard leads to, Agent Center in it only with the new Chat on, Ads only
+ * with Ads on.
  */
 
 vi.mock('next/image', () => ({
@@ -16,6 +17,7 @@ vi.mock('next-themes', () => ({ useTheme: () => ({ resolvedTheme: 'light' }) }))
 
 const { DashboardPreview } = await import('./dashboard-preview');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
+const { AdsProvider } = await import('@/components/providers/ads-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -34,18 +36,20 @@ afterEach(() => {
   container.remove();
 });
 
-async function render(chatAgentic: boolean) {
+async function render(chatAgentic: boolean, ads = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <ChatAgenticProvider enabled={chatAgentic}>
-          <DashboardPreview
-            brandName="Acme Coffee"
-            domain=""
-            topics={[]}
-            promptCount={0}
-            competitors={[]}
-          />
+          <AdsProvider enabled={ads}>
+            <DashboardPreview
+              brandName="Acme Coffee"
+              domain=""
+              topics={[]}
+              promptCount={0}
+              competitors={[]}
+            />
+          </AdsProvider>
         </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
@@ -66,5 +70,13 @@ describe('DashboardPreview', () => {
     await render(false);
     expect(menu()).toContain('Chat');
     expect(menu()).not.toContain('Agent Center');
+  });
+
+  it('has Ads after AI Referral Traffic only with Ads on (ADS_ENABLED)', async () => {
+    await render(true);
+    expect(menu()).not.toContain('Ads');
+    await render(true, true);
+    const items = menu();
+    expect(items.indexOf('Ads')).toBe(items.indexOf('AI Referral Traffic') + 1);
   });
 });

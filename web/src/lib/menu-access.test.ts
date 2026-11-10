@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ShoppingBag } from 'lucide-react';
 import { dashboardNav } from '@/config/dashboard';
 import {
+  ADS_SECTIONS,
   ALWAYS_ON_SECTION,
   CHAT_AGENTIC_SECTIONS,
   MENU_SECTIONS,
@@ -42,10 +43,12 @@ describe('menuSectionOf', () => {
 });
 
 describe('MENU_SECTIONS', () => {
-  // Analytics before Execution (owner, 2026-11-09): Action Center opens Execution.
+  // Analytics before Execution (owner, 2026-11-09): Action Center opens
+  // Execution. Ads (ADS-01) closes Analytics, after AI Referral Traffic.
   it('lists the left menu, Chat and Agent Center first, Analytics, then Execution from Action Center', () => {
     expect(MENU_SECTIONS.slice(0, 3)).toEqual(['agent', 'agents', 'insights']);
-    expect(MENU_SECTIONS.indexOf(ALWAYS_ON_SECTION)).toBe(MENU_SECTIONS.indexOf('traffic') + 1);
+    expect(MENU_SECTIONS.indexOf('ads')).toBe(MENU_SECTIONS.indexOf('traffic') + 1);
+    expect(MENU_SECTIONS.indexOf(ALWAYS_ON_SECTION)).toBe(MENU_SECTIONS.indexOf('ads') + 1);
     expect(MENU_SECTIONS).toEqual(
       expect.arrayContaining(['agent', 'content', 'audit', 'insights', 'shopping', 'reports']),
     );
@@ -113,7 +116,7 @@ describe('hiddenMenuSections', () => {
 
   it('narrows the menu to the work areas', () => {
     expect(hidden({ workAreas: ['brand'] }).sort()).toEqual(
-      ['audit', 'content', 'prompts', 'shopping', 'traffic'].sort(),
+      ['ads', 'audit', 'content', 'prompts', 'shopping', 'traffic'].sort(),
     );
   });
 
@@ -146,7 +149,7 @@ describe('hiddenMenuSections', () => {
     expect(hidden({ role: 'admin', roleHidden: ['content'], hidden: ['reports'] })).toEqual([]);
     expect(
       hidden({ role: 'admin', roleHidden: ['mentions'], workAreas: ['brand'] }).sort(),
-    ).toEqual(['audit', 'content', 'prompts', 'shopping', 'traffic'].sort());
+    ).toEqual(['ads', 'audit', 'content', 'prompts', 'shopping', 'traffic'].sort());
   });
 });
 
@@ -158,8 +161,10 @@ describe('Agent Center', () => {
 
   it('is the one section only the new Chat has', () => {
     expect(CHAT_AGENTIC_SECTIONS).toEqual(['agents']);
-    expect(menuSectionsFor(true)).toEqual(MENU_SECTIONS);
-    expect(chatOff).toEqual(MENU_SECTIONS.filter((section) => section !== 'agents'));
+    expect(menuSectionsFor(true, true)).toEqual(MENU_SECTIONS);
+    expect(menuSectionsFor(false, true)).toEqual(
+      MENU_SECTIONS.filter((section) => section !== 'agents'),
+    );
   });
 
   it('is in the work areas Chat is in, right after it', () => {
@@ -213,6 +218,64 @@ describe('Agent Center', () => {
   });
 });
 
+// Ads (ADS-01), in development behind ADS_ENABLED: a section of its own
+// while it is on, which roles, people and work areas hide as they hide any
+// other; off, it is on no menu and in no count or list.
+describe('Ads', () => {
+  const adsOff = menuSectionsFor(true);
+  const adsOn = menuSectionsFor(true, true);
+  const profile = {
+    role: 'analyst' as const,
+    work_areas: [],
+    work_areas_asked_at: null,
+    menu_shown: [],
+    menu_hidden: [],
+    can_manage_menus: null,
+  };
+
+  it('is the one section only Ads has, off unless asked for', () => {
+    expect(ADS_SECTIONS).toEqual(['ads']);
+    expect(adsOff).toEqual(MENU_SECTIONS.filter((section) => section !== 'ads'));
+    expect(menuSectionsFor(false)).not.toContain('ads');
+    expect(adsOn).toEqual(MENU_SECTIONS);
+    expect(menuSectionsFor(false, true)).toContain('ads');
+  });
+
+  it('is on every role’s menu while it is on, until a role or a person hides it', () => {
+    expect(menuOfProfile(profile, [], adsOn).hidden).toEqual([]);
+    expect(menuOfProfile(profile, ['ads'], adsOn).hidden).toEqual(['ads']);
+    expect(menuOfProfile({ ...profile, menu_hidden: ['ads'] }, [], adsOn).hidden).toEqual(['ads']);
+    // Shown for the person although the role hides it.
+    expect(menuOfProfile({ ...profile, menu_shown: ['ads'] }, ['ads'], adsOn).hidden).toEqual([]);
+    expect(cleanMenuSections(['reports', 'ads', 'traffic'])).toEqual(['traffic', 'ads', 'reports']);
+  });
+
+  it('is for Founders & leaders, Growth and Analytics, right after AI Referral Traffic', () => {
+    const withAds = WORK_AREAS.filter((area) =>
+      (area.sections as readonly string[]).includes('ads'),
+    );
+    expect(withAds.map((area) => area.id)).toEqual(['leaders', 'growth', 'analytics']);
+    for (const area of withAds) {
+      const sections = area.sections as readonly string[];
+      expect(sections.indexOf('ads'), area.id).toBe(sections.indexOf('traffic') + 1);
+    }
+    const byAreas = (work_areas: string[]) =>
+      menuOfProfile({ ...profile, work_areas }, [], adsOn).hidden;
+    expect(byAreas(['growth'])).not.toContain('ads');
+    expect(byAreas(['content'])).toContain('ads');
+    expect(byAreas(['content', 'analytics'])).not.toContain('ads');
+  });
+
+  it('is off every count and list while it is off', () => {
+    expect(menuOfProfile(profile, ['ads'], adsOff).hidden).toEqual([]);
+    expect(menuOfProfile({ ...profile, work_areas: ['content'] }, [], adsOff).hidden).not.toContain(
+      'ads',
+    );
+    expect(hiddenWithWorkAreas(['ads'], ['content'], adsOff)).not.toContain('ads');
+    expect(hiddenWithWorkAreas([], ['content'], adsOn)).toContain('ads');
+  });
+});
+
 describe('workAreaSections', () => {
   it('joins the areas’ sections', () => {
     const sections = workAreaSections(['developers', 'brand']);
@@ -233,6 +296,7 @@ describe('hiddenWithWorkAreas', () => {
       'shopping',
       'prompts',
       'traffic',
+      'ads',
       'content',
       'audit',
     ]);
@@ -252,7 +316,7 @@ describe('menuOfProfile', () => {
 
   it('builds the menu from the profile and the role’s row', () => {
     expect(menuOfProfile(profile, ['citations'])).toEqual({
-      hidden: ['citations', 'shopping', 'prompts', 'traffic', 'content', 'audit'],
+      hidden: ['citations', 'shopping', 'prompts', 'traffic', 'ads', 'content', 'audit'],
       hiddenByAdmin: ['citations'],
       workAreas: ['brand'],
       workAreasAsked: false,
