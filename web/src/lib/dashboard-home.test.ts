@@ -46,7 +46,10 @@ const session = vi.hoisted(() => ({
   profile: null as unknown,
   select: '' as string,
   /** The organization's row; `error` is what its read returns, `throws` makes it throw. */
-  org: { subscription_status: 'trialing' } as { subscription_status: string | null } | null,
+  org: { subscription_status: 'trialing' } as {
+    subscription_status: string | null;
+    subscription_ends_at?: string | null;
+  } | null,
   orgError: null as { message: string } | null,
   orgThrows: false,
   orgReads: [] as string[],
@@ -174,6 +177,29 @@ describe('dashboardHomeFor', () => {
     await expect(
       dashboardHomeFor(client as never, member({ menu_shown: [INSIGHTS_MENU_SECTION] })),
     ).resolves.toBe(INSIGHTS);
+  });
+
+  it('starts a free trial on Insights from its second day, and on Chat on its first', async () => {
+    const DAY = 86_400_000;
+    // A 14-day trial ends 14 days after it began.
+    session.org = {
+      subscription_status: 'trialing',
+      subscription_ends_at: new Date(Date.now() - 2 * DAY + 14 * DAY).toISOString(),
+    };
+    await expect(dashboardHomeFor(client as never, member())).resolves.toBe(INSIGHTS);
+    await expect(
+      dashboardHomeFor(client as never, member({ menu_hidden: [INSIGHTS_MENU_SECTION] })),
+    ).resolves.toBe(CHAT);
+    session.org = {
+      subscription_status: 'trialing',
+      subscription_ends_at: new Date(Date.now() + 14 * DAY).toISOString(),
+    };
+    await expect(dashboardHomeFor(client as never, member())).resolves.toBe(CHAT);
+  });
+
+  it("reads the person's time zone with their menu", async () => {
+    await dashboardHome();
+    expect(session.select).toContain('time_zone');
   });
 
   it.each(['trialing', 'past_due', 'unpaid', 'canceled', 'inactive', null])(

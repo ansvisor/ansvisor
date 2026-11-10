@@ -150,7 +150,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. When you sign in, Ansvisor opens on **Visibility** on a paid plan, and on **Chat** otherwise, such as in the free trial. It opens here instead when neither that page nor Chat is on your menu. Open it from **Action Center** in the main menu. Everything in it is per brand: switch brands to see another brand's work."
+          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. When you sign in, Ansvisor opens on **Visibility** on a paid plan and from the second day of a free trial, and on **Chat** otherwise, such as on a trial's first day. It opens here instead when neither that page nor Chat is on your menu. Open it from **Action Center** in the main menu. Everything in it is per brand: switch brands to see another brand's work."
         },
         {
           "heading": "The tabs",
@@ -1211,7 +1211,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Visibility** while your plan is paid, and on Chat otherwise, such as in the free trial or once a plan has ended. If Visibility isn't on your menu, it opens on Chat instead. If an Admin took Chat off your menu, or the work areas you picked leave it out, it opens on the Action Center. Every chat is saved, so you can come back to it later and pick up where you left off."
+          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Visibility** while your plan is paid or your free trial is past its first day, and on Chat otherwise, such as on the trial's first day or once a plan has ended. If Visibility isn't on your menu, it opens on Chat instead. If an Admin took Chat off your menu, or the work areas you picked leave it out, it opens on the Action Center. Every chat is saved, so you can come back to it later and pick up where you left off."
         },
         {
           "heading": "Chat Home",
@@ -3400,7 +3400,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. Either way, Ansvisor then opens on **Chat**. Once your plan is paid, it opens on **Visibility** each time you come back. If you explore the demo brand instead, it opens on **Chat** with the demo's sample data, and your brand's first run starts when you pick a plan."
+          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. Either way, Ansvisor then opens on **Chat**. From the next day, in the free trial or on a paid plan, it opens on **Visibility** each time you come back. If you explore the demo brand instead, it opens on **Chat** with the demo's sample data, and your brand's first run starts when you pick a plan."
         },
         {
           "heading": "How long the first run takes",
@@ -5381,7 +5381,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next. On a paid plan, Ansvisor opens on it each time you come back."
+          "text": "**Visibility** is the main analytics page for a brand (it used to be called Brand Visibility, and before that Answer Engine Insights). It has three tabs, **Overview**, **Mentions** and **Citations**, and a fourth, **Product Visibility**, for brands that sell online. The Overview, described here, is your daily view of how AI answers treat your brand across your tracked prompts, and where to act next. On a paid plan, and from the second day of a free trial, Ansvisor opens on it each time you come back."
         },
         {
           "heading": "The tabs and how to reach them",

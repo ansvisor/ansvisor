@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/add-your-first-brand.mdx]
 ---
-When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. Either way, Ansvisor then opens on **Chat**. Once your plan is paid, it opens on **Visibility** each time you come back. If you explore the demo brand instead, it opens on **Chat** with the demo's sample data, and your brand's first run starts when you pick a plan.
+When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. Either way, Ansvisor then opens on **Chat**. From the next day, in the free trial or on a paid plan, it opens on **Visibility** each time you come back. If you explore the demo brand instead, it opens on **Chat** with the demo's sample data, and your brand's first run starts when you pick a plan.
 
 ## How long the first run takes
 

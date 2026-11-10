@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json, web/src/components/chat/agents-for-you.tsx, web/src/lib/chat/agents-for-you.ts, web/src/lib/actions/agents-for-you.ts]
 ---
-Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Visibility** while your plan is paid, and on Chat otherwise, such as in the free trial or once a plan has ended. If Visibility isn't on your menu, it opens on Chat instead. If an Admin took Chat off your menu, or the work areas you picked leave it out, it opens on the Action Center. Every chat is saved, so you can come back to it later and pick up where you left off.
+Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Visibility** while your plan is paid or your free trial is past its first day, and on Chat otherwise, such as on the trial's first day or once a plan has ended. If Visibility isn't on your menu, it opens on Chat instead. If an Admin took Chat off your menu, or the work areas you picked leave it out, it opens on the Action Center. Every chat is saved, so you can come back to it later and pick up where you left off.
 
 ## Chat Home
 

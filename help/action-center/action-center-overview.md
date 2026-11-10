@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [docs/guides/action-center.mdx]
 ---
-The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. When you sign in, Ansvisor opens on **Visibility** on a paid plan, and on **Chat** otherwise, such as in the free trial. It opens here instead when neither that page nor Chat is on your menu. Open it from **Action Center** in the main menu. Everything in it is per brand: switch brands to see another brand's work.
+The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. When you sign in, Ansvisor opens on **Visibility** on a paid plan and from the second day of a free trial, and on **Chat** otherwise, such as on a trial's first day. It opens here instead when neither that page nor Chat is on your menu. Open it from **Action Center** in the main menu. Everything in it is per brand: switch brands to see another brand's work.
 
 ## The tabs
 
