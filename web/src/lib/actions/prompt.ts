@@ -1,6 +1,7 @@
 'use server';
 
 import { z } from 'zod';
+import { normalizeTags } from '../prompt-tags';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import type { PromptSet, Prompt, AIPlatform, PromptVolume } from '@/types';
@@ -89,6 +90,7 @@ function mapPromptRow(row: Record<string, unknown>): Prompt {
     platforms: ((row.platforms as string[]) ?? []) as AIPlatform[],
     regions: (row.regions as string[]) ?? [],
     models: (row.models as string[]) ?? [],
+    tags: normalizeTags((row.tags as string[]) ?? []),
     isActive: row.is_active as boolean,
     workStatus: (row.work_status as Prompt['workStatus']) ?? null,
     targetUrlCount: Array.isArray(row.prompt_target_urls) ? row.prompt_target_urls.length : 0,
@@ -331,6 +333,7 @@ export async function updatePrompt(
     category?: string;
     platforms?: string[];
     models?: string[];
+    tags?: string[];
   },
 ): Promise<Prompt> {
   await assertWritable();
@@ -339,6 +342,7 @@ export async function updatePrompt(
   const payload: Record<string, unknown> = {};
   if (updates.text !== undefined) payload.text = updates.text;
   if (updates.category !== undefined) payload.category = updates.category || null;
+  if (updates.tags !== undefined) payload.tags = normalizeTags(updates.tags);
 
   // Both the category and the platform/model branch need context from the
   // prompt's row (its brand, org and shopping pref) — one fetch serves them.

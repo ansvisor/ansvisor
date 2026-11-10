@@ -50,11 +50,13 @@ import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-c
 import { CatalogCategoryPages } from './catalog-category-pages';
 import { TopicCategories } from './topic-categories';
 import { FramerCard } from './framer-card';
+import { HubspotCard } from './hubspot-card';
 import { IndexNowCard } from './indexnow-card';
 import { GoogleAccountsOverview } from '@/components/settings/google-accounts-overview';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
 import { WebflowCard } from './webflow-card';
 import { SampleDataBadge } from './sample-data-badge';
+import { SlackCard } from './slack-card';
 import { WixCard } from './wix-card';
 import { WordPressCard } from './wordpress-card';
 import { useIntegrationConnect } from '@/hooks/use-integration-connect';
@@ -80,7 +82,8 @@ import {
  * Stores and marketplaces (#1270): Google Merchant Center connects the same
  * way, then each brand picks its account, whose products land in the
  * product catalog card below it. Content management systems: where Send to
- * CMS puts a brand's pages.
+ * CMS puts a brand's pages. Team and alerts (#2139): the Slack channel a
+ * brand's Pulse and alerts go to.
  *
  * Every card reads on its own, from the browser or with a timeout, so a slow
  * or failing one never holds up the rest: each says when it couldn't be read.
@@ -213,6 +216,21 @@ export function IntegrationsSection() {
             upcomingDemoIntegrations('cms').map((id) => (
               <UpcomingIntegrationCard key={id} id={id} />
             ))}
+        </IntegrationGroup>
+
+        {/* Where a brand's alerts go (#2139): a team tool's card goes in this group. */}
+        <IntegrationGroup title={t('integrations_team')}>
+          {/* Chat's Connections opens it by name (#slack). */}
+          <div id="slack" className="scroll-mt-4">
+            <SlackCard />
+          </div>
+        </IntegrationGroup>
+
+        {/* CRM (#2140): HubSpot, per brand, with consent before any write. */}
+        <IntegrationGroup title={t('integrations_crm')}>
+          <div id="hubspot" className="scroll-mt-4">
+            <HubspotCard />
+          </div>
         </IntegrationGroup>
       </CardContent>
     </Card>
@@ -348,7 +366,7 @@ function IntegrationCard({
 
   return (
     <div id={anchor} className="scroll-mt-4 space-y-4">
-      <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+      <div className="flex items-center justify-between gap-4 rounded-lg border bg-card p-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
             {icon}
@@ -587,7 +605,7 @@ function PropertyMapping({
 
   if (loadFailed) {
     return (
-      <div className="rounded-lg border p-4 text-sm">
+      <div className="rounded-lg border bg-card p-4 text-sm">
         <p className="text-muted-foreground">Couldn&apos;t load {sourceName} properties.</p>
         <p className="mt-1 text-xs text-muted-foreground">
           {loadFailed === 'timeout' ? t('integrations_propertiesTimedOut') : loadFailed.message}
@@ -613,7 +631,7 @@ function PropertyMapping({
   ];
 
   return (
-    <div className="rounded-lg border p-4 space-y-3">
+    <div className="rounded-lg border bg-card p-4 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-medium">{t('integrations_propertyMapping')}</p>
         <span className="text-xs text-muted-foreground">

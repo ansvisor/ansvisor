@@ -15,8 +15,9 @@ export interface SnippetReading {
   checkedAt: string | null;
 }
 
-/** Postgres' code for a column that doesn't exist (00433 not applied yet). */
-const UNDEFINED_COLUMN = '42703';
+/** Codes for a column the database doesn't know yet (00433 not applied): 42703 from
+ * Postgres, PGRST204 from PostgREST's schema cache. */
+const MISSING_COLUMN_CODES = ['42703', 'PGRST204'];
 
 export async function readSnippet(
   supabase: SupabaseClient,
@@ -38,7 +39,8 @@ export async function readSnippet(
   ]);
   if (lastVisit.error) throw new Error(lastVisit.error.message);
   // Before 00433 is applied, no check is kept: the visits alone say.
-  if (check.error && check.error.code !== UNDEFINED_COLUMN) throw new Error(check.error.message);
+  if (check.error && !MISSING_COLUMN_CODES.includes(check.error.code ?? ''))
+    throw new Error(check.error.message);
   const row = (check.error ? null : check.data) as {
     snippet_found_at?: string | null;
     snippet_checked_at?: string | null;

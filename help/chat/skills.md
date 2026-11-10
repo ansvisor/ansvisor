@@ -1,11 +1,11 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [skills, skill, setup guide, /setup, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, skill from skills.sh, skills.sh, review a skill, skill update, update available, library, skill library, library skills, add a skill from the library, third-party skills, mit skills, pending approval, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, fan-out gaps, fanout, sub-questions ai searches, prompt portfolio, prompts to add, prompts to pause]
+keywords: [manager adds library skill, skills, skill, setup guide, /setup, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, skill from skills.sh, skills.sh, review a skill, skill update, update available, library, skill library, library skills, add a skill from the library, third-party skills, mit skills, pending approval, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, fan-out gaps, fanout, sub-questions ai searches, prompt portfolio, prompts to add, prompts to pause]
 synonyms: [slash commands, playbooks, how-tos, templates, marketplace, skills directory]
 plan: all
-updated: 2026-11-07
-last_checked: 2026-11-07
+updated: 2026-11-09
+last_checked: 2026-11-09
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -47,6 +47,10 @@ Admins and Managers on a paid plan can bring in a skill from outside. On the **S
 
 An imported skill stays off until an Admin reviews it. **Review** shows the cleaned file with any hidden characters marked, what the safety scan found, what was removed and where it came from. The Admin approves or rejects it; a skill the scan blocks can't be approved. A Manager's import asks the Admins to review it.
 
+## Why you can't approve a skill
+
+Only an Admin approves a skill, while the workspace's plan is active. Anyone else who opens **Review** sees why they can't, and the Admins to ask by name. On a plan that ended, an Admin sees why too, with **See plans**.
+
 ## The Library
 
 The **Library** tab lists 701 skills that other people share on GitHub under the MIT license, for SEO, content, brand, analytics, social, CRO, email, paid ads, growth and go-to-market work. Pick a topic, or search by a skill's name, what it does or its repository. **Most stars** sorts by the repository's GitHub stars, **Most installs** by its installs on skills.sh. The first 30 show; **Show more** adds 30 at a time.
@@ -55,9 +59,9 @@ Click a skill to read it before you add it: its SKILL.md at the version the Libr
 
 ## Add a skill from the Library
 
-Admins and Managers on a paid plan can click **Add**. The skill comes in as an imported skill does: instructions only, cleaned, scanned and kept with its license and source. It stays off until an Admin reviews it. An Admin's **Add** opens the review; a Manager's asks the Admins. The card then says **Pending approval**, then **Added** once an Admin approves it, and the skill is under **My skills**, on for whoever added it.
+Admins and Managers on a paid plan can click **Add**. The skill comes in as an imported skill does: instructions only, cleaned, scanned again and kept with its license and source. Ansvisor already checked the Library, so no Admin's review is needed: it's on at once for you, private, under **My skills**, and the card says **Added**. Share it there to give it to your team; a Manager's share asks the Admins. Uploads and GitHub imports still wait for an Admin.
 
-Each skill is added once per workspace and stays at the version it was added at. Analysts and Agency partners can browse the Library but can't add. Its review lists a price, an email address or a tracking link in the skill as worth a look. A skill the scan blocks as unsafe, or whose file Ansvisor can't read, can't be added: its page says why.
+Each skill is added once per workspace and stays at the version it was added at. Analysts and Agency partners can browse the Library but can't add. Its page lists a price, an email address or a tracking link in the skill as worth a look. A skill the scan blocks as unsafe, or whose file Ansvisor can't read, can't be added: its page says why.
 
 ## Updates to an imported skill
 

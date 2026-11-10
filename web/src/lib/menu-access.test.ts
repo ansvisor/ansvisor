@@ -42,8 +42,10 @@ describe('menuSectionOf', () => {
 });
 
 describe('MENU_SECTIONS', () => {
-  it('lists the left menu, Chat and Agent Center first and Action Center right after', () => {
-    expect(MENU_SECTIONS.slice(0, 3)).toEqual(['agent', 'agents', ALWAYS_ON_SECTION]);
+  // Analytics before Execution (owner, 2026-11-09): Action Center opens Execution.
+  it('lists the left menu, Chat and Agent Center first, Analytics, then Execution from Action Center', () => {
+    expect(MENU_SECTIONS.slice(0, 3)).toEqual(['agent', 'agents', 'insights']);
+    expect(MENU_SECTIONS.indexOf(ALWAYS_ON_SECTION)).toBe(MENU_SECTIONS.indexOf('traffic') + 1);
     expect(MENU_SECTIONS).toEqual(
       expect.arrayContaining(['agent', 'content', 'audit', 'insights', 'shopping', 'reports']),
     );
@@ -227,12 +229,12 @@ describe('workAreaSections', () => {
 describe('hiddenWithWorkAreas', () => {
   it('keeps what the admin takes off and narrows the rest to the areas', () => {
     expect(hiddenWithWorkAreas(['mentions'], ['brand'])).toEqual([
-      'content',
-      'audit',
       'mentions',
       'shopping',
       'prompts',
       'traffic',
+      'content',
+      'audit',
     ]);
     expect(hiddenWithWorkAreas(['mentions'], [])).toEqual(['mentions']);
   });
@@ -250,7 +252,7 @@ describe('menuOfProfile', () => {
 
   it('builds the menu from the profile and the role’s row', () => {
     expect(menuOfProfile(profile, ['citations'])).toEqual({
-      hidden: ['content', 'audit', 'citations', 'shopping', 'prompts', 'traffic'],
+      hidden: ['citations', 'shopping', 'prompts', 'traffic', 'content', 'audit'],
       hiddenByAdmin: ['citations'],
       workAreas: ['brand'],
       workAreasAsked: false,

@@ -6,6 +6,8 @@ describe('the demo brand’s integrations', () => {
     expect(demoIntegration('google-search-console')).toBe('connected');
     expect(demoIntegration('google-analytics')).toBe('connected');
     expect(demoIntegration('webflow')).toBe('connected');
+    // Slack (#2139): posting to a sample channel.
+    expect(demoIntegration('slack')).toBe('connected');
     for (const id of ['google-merchant-center', 'shopify']) {
       expect(demoIntegration(id)).toBe('soon');
     }

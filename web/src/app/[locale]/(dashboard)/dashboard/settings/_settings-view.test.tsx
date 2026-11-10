@@ -97,24 +97,63 @@ describe('SettingsView', () => {
     expect(list.some((s) => s?.startsWith('Menu access'))).toBe(false);
   });
 
-  it('lists Roles & access, after Team, only while the new Chat is on', async () => {
+  it('lists Team, roles & access in place of Team only while the new Chat is on', async () => {
     chatAgentic = true;
     const list = await sections();
-    expect(list.indexOf('Roles & access')).toBe(list.indexOf('Team') + 1);
-    expect(list.at(-1)).toBe('Chat');
+    expect(list).toContain('Team, roles & access');
+    expect(list).not.toContain('Team');
     chatAgentic = false;
     const off = await sections();
-    expect(off).not.toContain('Roles & access');
+    expect(off).toContain('Team');
+    expect(off).not.toContain('Team, roles & access');
     expect(off).not.toContain('Chat');
   });
 
-  it('lists White label after Organization, on the cloud and on a self-host', async () => {
+  it('orders the sections: yours, the workspace and its bill, people, Chat, then keys (2026-11-09)', async () => {
+    chatAgentic = true;
+    isCloud = true;
+    const order = [
+      'Account',
+      'Notifications',
+      'Organization',
+      'Billing',
+      'Team, roles & access',
+      'Chat',
+      'Integrations',
+      'AI Providers',
+      'MCP & API Keys',
+    ];
+    expect((await sections()).filter((s) => order.includes(s ?? ''))).toEqual(order);
+    chatAgentic = false;
+    isCloud = false;
+  });
+
+  it('lists White label after the keys, with brand and content, on the cloud and on a self-host', async () => {
     for (const cloud of [true, false]) {
       isCloud = cloud;
       const list = await sections();
-      expect(list.indexOf('White label'), String(cloud)).toBe(list.indexOf('Organization') + 1);
+      expect(list.indexOf('White label'), String(cloud)).toBe(list.indexOf('MCP & API Keys') + 1);
     }
     isCloud = false;
+  });
+
+  it("opens Team's address on Team, roles & access, the team above the roles, with the new Chat on", async () => {
+    chatAgentic = true;
+    window.history.replaceState(null, '', '/dashboard/settings/team');
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <SettingsView section="team" />
+        </NextIntlClientProvider>,
+      );
+    });
+    const mocks = [...container.querySelectorAll('[data-mock]')].map((m) =>
+      m.getAttribute('data-mock'),
+    );
+    expect(mocks.indexOf('TeamSection')).toBeGreaterThanOrEqual(0);
+    expect(mocks.indexOf('RolesAccessSection')).toBeGreaterThan(mocks.indexOf('TeamSection'));
+    expect(window.location.pathname).toBe('/dashboard/settings/roles-access');
+    chatAgentic = false;
   });
 
   it('shows the time zone on Account, with the name and sign-in details', async () => {
@@ -124,10 +163,10 @@ describe('SettingsView', () => {
     expect(container.querySelector('#name')).not.toBeNull();
   });
 
-  it("counts an Admin's waiting access requests on Roles & access", async () => {
+  it("counts an Admin's waiting access requests on Team, roles & access", async () => {
     chatAgentic = true;
     pendingRequests = 2;
-    expect(await sections()).toContain('Roles & access2');
+    expect(await sections()).toContain('Team, roles & access2');
     chatAgentic = false;
     pendingRequests = 0;
   });

@@ -147,7 +147,7 @@ export function ChatSettingsSection() {
 
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">{t('switches.title')}</h3>
-        <ul className="divide-y rounded-xl border">
+        <ul className="divide-y rounded-xl border bg-card">
           {(
             [
               ['fullAutoForMembers', 'fullAuto', view.fullAutoForMembers],
@@ -203,7 +203,7 @@ export function ChatSettingsSection() {
       <section className="space-y-2">
         <h3 className="text-sm font-semibold">{tAgentWork('title')}</h3>
         <p className="text-xs text-muted-foreground">{tAgentWork('lead')}</p>
-        <div className="max-w-xl rounded-xl border px-3.5 py-3">
+        <div className="max-w-xl rounded-xl border bg-card px-3.5 py-3">
           <AgentWorkPanel
             key={`${view.agentWork.value}:${view.agentWork.lastChange?.at ?? ''}`}
             view={view.agentWork}
@@ -218,7 +218,7 @@ export function ChatSettingsSection() {
           <h3 className="text-sm font-semibold">{t('precedence.title')}</h3>
           <span className="text-xs text-muted-foreground">{t('precedence.note')}</span>
         </div>
-        <ol className="divide-y rounded-xl border">
+        <ol className="divide-y rounded-xl border bg-card">
           {PRECEDENCE.map((step, i) => (
             <li key={step} className="flex items-start gap-3 px-3.5 py-2 text-sm">
               <span className="w-4 shrink-0 text-xs text-muted-foreground tabular-nums">
@@ -252,7 +252,7 @@ export function ChatSettingsSection() {
             </Button>
           )}
         </div>
-        <div className="overflow-x-auto rounded-xl border">
+        <div className="overflow-x-auto rounded-xl border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -309,7 +309,7 @@ export function ChatSettingsSection() {
           <h3 className="text-sm font-semibold">{t('providers.title')}</h3>
           <p className="text-xs text-muted-foreground">{t('providers.note')}</p>
         </div>
-        <ul className="divide-y rounded-xl border">
+        <ul className="divide-y rounded-xl border bg-card">
           {view.modelProviders.map((provider) => (
             <li
               key={provider.id}
@@ -355,7 +355,7 @@ export function ChatSettingsSection() {
             {t(view.goLive ? 'execute.noteGoLive' : 'execute.note')}
           </p>
         </div>
-        <ul className="divide-y rounded-xl border">
+        <ul className="divide-y rounded-xl border bg-card">
           {EXECUTE_GROUPS.map((group) => {
             const allowed = !view.managerExecuteOff.includes(group);
             return (
@@ -400,11 +400,11 @@ export function ChatSettingsSection() {
           <p className="text-xs text-muted-foreground">{t('autoChoices.note')}</p>
         </div>
         {view.autoChoices.length === 0 ? (
-          <p className="rounded-xl border px-3.5 py-3 text-sm text-muted-foreground">
+          <p className="rounded-xl border bg-card px-3.5 py-3 text-sm text-muted-foreground">
             {t('autoChoices.empty')}
           </p>
         ) : (
-          <ul className="divide-y rounded-xl border">
+          <ul className="divide-y rounded-xl border bg-card">
             {view.autoChoices.map((key) => (
               <li key={key} className="flex items-center gap-3 px-3.5 py-2 text-sm">
                 <span className="min-w-0 flex-1">{tTools(`${key}.name`)}</span>

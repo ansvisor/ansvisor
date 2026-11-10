@@ -1,7 +1,9 @@
+import { z } from 'zod';
 import supabaseAdmin from '../../config/supabase.js';
 import { categoryPages } from '../catalog/category-pages.js';
 import { isInStock, stockKey } from '../catalog/stock.js';
 import { topicCategories } from '../catalog/topic-categories.js';
+import { logger } from '../logger.js';
 import { PRODUCTS_FOR } from '../shopping-path.js';
 
 /**
@@ -19,7 +21,9 @@ import { PRODUCTS_FOR } from '../shopping-path.js';
  *
  * A topic whose categories have products in stock but no live page writes
  * a buying guide for it instead (EC-1, spec §6.2): a new page, its shopping
- * path starting with the category's best sellers.
+ * path starting with the category's best sellers. One whose category page
+ * is live but has no buying guide yet (`guideMissing`) is told to write one
+ * next to that page, linking it, beside the page's own work.
  */
 
 /** The page type a category page is written as (content-page-types.js). */
@@ -31,6 +35,102 @@ const CANDIDATES = 40;
 /** Days of AI visits and orders the best sellers are ranked by. */
 const SALES_DAYS = 30;
 const DAY_MS = 86_400_000;
+/**
+ * A category needs this many products in stock for a buying guide, as Plan ›
+ * Shopping opportunities asks (web/src/lib/content/shopping-plan.ts, MIN_IN_STOCK).
+ */
+export const GUIDE_MIN_IN_STOCK = 3;
+/** The newest drafts read, as the Plan reads them (lib/actions/shopping-plan.ts, DRAFT_LIMIT). */
+const DRAFTS_READ = 1000;
+
+/** The words the Plan leaves out of a text's (web/src/lib/content/sources.ts, STOP_WORDS). */
+const STOP_WORDS = new Set(
+  (
+    'the and for with what which how are is was were you your our from that this does do did can ' +
+    'vs not but has have had who why when where will would should could into about than then there ' +
+    'their they them its it as at by of on in to or be an a'
+  ).split(' '),
+);
+
+/**
+ * A text's words as the Plan matches them (sources.ts, wordsOf), not as
+ * catalog/category-pages.js does: lowercased, three letters or more,
+ * plurals as singulars.
+ */
+function planWordsOf(text) {
+  const words = String(text ?? '')
+    .toLowerCase()
+    .match(/[\p{L}\p{N}]+/gu);
+  return (words ?? [])
+    .filter((w) => (w.length >= 3 || /^\d+$/.test(w)) && !STOP_WORDS.has(w))
+    .map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w));
+}
+
+/** A category's own name: "Hiking Boots" of "Shoes > Hiking Boots". */
+export function categoryLeaf(name) {
+  const text = String(name ?? '');
+  const steps = text
+    .split(/\s*[>›/|]\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return steps.at(-1) ?? text.trim();
+}
+
+/**
+ * Whether a draft covers a category, so it needs no buying guide: the draft's
+ * shopping path holds it (by its full name), or every word of its own name
+ * is in the draft's title. Plan › Shopping opportunities' rule (web/src/lib/
+ * content/shopping-plan.ts, coversCategory), kept in step with it: both
+ * sides test the cases in web/src/lib/content/__fixtures__/guide-covering.json.
+ *
+ * @param {{ title: string, categories: string[] }} draft
+ * @param {string} category the category's full name
+ */
+export function guideCovers(draft, category) {
+  if ((draft.categories ?? []).includes(category)) return true;
+  const leafWords = [...new Set(planWordsOf(categoryLeaf(category)))];
+  const titleWords = new Set(planWordsOf(draft.title));
+  return leafWords.length > 0 && leafWords.every((w) => titleWords.has(w));
+}
+
+/**
+ * Whether a category is missing its buying guide: enough products in stock
+ * for one, and no draft of the brand, written or published, covers it (the
+ * Plan's guide row with no draft to open).
+ *
+ * @param {{ category: { name: string, inStock: number },
+ *   drafts: { title: string, categories: string[] }[] }} input
+ */
+export function guideMissing({ category, drafts = [] }) {
+  if (!(category.inStock >= GUIDE_MIN_IN_STOCK)) return false;
+  return !drafts.some((draft) => guideCovers(draft, category.name));
+}
+
+/** A draft's shopping path's categories, by name, as the Plan reads them; none when unreadable. */
+const pathCategories = z
+  .array(z.object({ name: z.string() }).passthrough())
+  .catch([])
+  .transform((list) => list.map((c) => c.name));
+
+/**
+ * Whether the brand's category is missing its buying guide (above), read
+ * from its drafts as the Plan reads them: not archived, the newest first.
+ */
+export async function categoryGuideMissing(brandId, category, { db = supabaseAdmin } = {}) {
+  const { data, error } = await db
+    .from('content_drafts')
+    .select('title, shopping_categories:shopping_path->categories')
+    .eq('brand_id', brandId)
+    .is('archived_at', null)
+    .order('updated_at', { ascending: false })
+    .limit(DRAFTS_READ);
+  if (error) throw new Error(`content_drafts read: ${error.message}`);
+  const drafts = (data ?? []).map((row) => ({
+    title: row.title ?? '',
+    categories: pathCategories.parse(row.shopping_categories),
+  }));
+  return guideMissing({ category, drafts });
+}
 
 /**
  * The category whose page the action optimizes: the first, in the topics'
@@ -131,6 +231,9 @@ export async function categoryBestSellers(
  * The category for a store's topic action, and its best sellers, as many
  * as its page links (a category page's, or a buying guide's when it has
  * no page): null when none of its topics' categories has a product in stock.
+ * With a live page, whether the category is missing its buying guide too
+ * (`guideMissing`); best effort: a failed read says it isn't, and the page's
+ * play goes ahead.
  */
 export async function categoryPageFor(
   brandId,
@@ -144,10 +247,21 @@ export async function categoryPageFor(
   ]);
   const category = pickCategoryPage({ topicIds, topics: links.topics, pages });
   if (!category) return null;
-  const products = await categoryBestSellers(brandId, category.id, {
-    db,
-    now,
-    max: PRODUCTS_FOR[category.url ? CATEGORY_PAGE_TYPE : BUYING_GUIDE_TYPE],
-  });
-  return { category, products };
+  const [products, missing] = await Promise.all([
+    categoryBestSellers(brandId, category.id, {
+      db,
+      now,
+      max: PRODUCTS_FOR[category.url ? CATEGORY_PAGE_TYPE : BUYING_GUIDE_TYPE],
+    }),
+    category.url
+      ? categoryGuideMissing(brandId, category, { db }).catch((err) => {
+          logger.warn(
+            { brandId, err: err.message },
+            "[actions] category's buying guide not looked for",
+          );
+          return false;
+        })
+      : false,
+  ]);
+  return { category, products, guideMissing: missing };
 }

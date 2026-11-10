@@ -23,6 +23,8 @@ vi.mock('@/lib/framer-client', () => ({ readFramer }));
 // And its Wix site (00372): none unless a test gives one.
 const readWix = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/wix-client', () => ({ readWix }));
+const readHubspot = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/hubspot-client', () => ({ readHubspot }));
 
 const { SendDialog } = await import('./send-to-cms-dialog');
 
@@ -88,6 +90,14 @@ beforeEach(() => {
   readWordPress.mockReset().mockResolvedValue({ ok: true, configured: true, connection: null });
   readFramer.mockReset().mockResolvedValue({ ok: true, configured: true, connection: null });
   readWix.mockReset().mockResolvedValue({ ok: true, configured: true, connection: null });
+  readHubspot.mockReset().mockResolvedValue({
+    ok: true,
+    brandId: 'brand-1',
+    configured: true,
+    allowed: true,
+    connection: null,
+    usable: [],
+  });
   // The send target remembered per brand, in this browser.
   const kept = new Map<string, string>();
   vi.stubGlobal('localStorage', {
@@ -977,6 +987,80 @@ describe('SendDialog', () => {
       expect(toast.success).toHaveBeenCalledWith('Sent to Wix as a draft post', {
         description: "2 images weren't sent: add them in Wix.",
       });
+    });
+
+    /** HubSpot (#2140, 00522): its blog, a draft post, once a blog is picked and pages allowed. */
+    it('sends to the HubSpot blog as a draft post', async () => {
+      const hubspotConnection = {
+        accountId: 'acc-1',
+        label: 'Hub ID 4412893',
+        status: 'connected',
+        connected: true,
+        portal: null,
+        sharedWith: [],
+        consent: { contacts: false, pages: true, by: null, at: null },
+        blog: { id: '1234567890', name: 'Acme blog' },
+        properties: { ready: false, at: null, error: null },
+      };
+      readHubspot.mockResolvedValue({
+        ok: true,
+        brandId: 'brand-1',
+        configured: true,
+        allowed: true,
+        connection: hubspotConnection,
+        usable: [],
+      });
+      await render();
+      expect(radios().map((r) => r.textContent)).toEqual([
+        'HubSpotA draft blog post on Acme blog',
+        "Your workflowThe brand's webhook (Zapier, Make, n8n)",
+      ]);
+      expect(radio('HubSpot')!.getAttribute('aria-checked')).toBe('true');
+      expect(dialog().textContent).toContain(
+        'The page goes to Acme blog, your HubSpot blog, as a draft post',
+      );
+      sentWith({ updated: false, live: false, changed: {} });
+      await act(async () => button('Send').click());
+      expect(sendPagesToCms).toHaveBeenCalledWith('brand-1', expect.any(Array), 'hubspot');
+      expect(toast.success).toHaveBeenCalledWith('Sent to HubSpot as a draft blog post');
+    });
+
+    it('shows HubSpot off without a blog, and not at all without consent to send pages', async () => {
+      const base = {
+        accountId: 'acc-1',
+        label: null,
+        status: 'connected',
+        connected: true,
+        portal: null,
+        sharedWith: [],
+        consent: { contacts: true, pages: true, by: null, at: null },
+        blog: null,
+        properties: { ready: true, at: null, error: null },
+      };
+      readHubspot.mockResolvedValue({
+        ok: true,
+        brandId: 'brand-1',
+        configured: true,
+        allowed: true,
+        connection: base,
+        usable: [],
+      });
+      await render();
+      expect(radio('HubSpot')!.disabled).toBe(true);
+      expect(radio('HubSpot')!.textContent).toContain('Not ready: pick the blog');
+
+      readHubspot.mockResolvedValue({
+        ok: true,
+        brandId: 'brand-1',
+        configured: true,
+        allowed: true,
+        connection: { ...base, consent: { ...base.consent, pages: false } },
+        usable: [],
+      });
+      await act(async () => root.unmount());
+      root = createRoot(container);
+      await render();
+      expect(radio('HubSpot')).toBeUndefined();
     });
 
     it('says “your collection” when the collection has no name', async () => {

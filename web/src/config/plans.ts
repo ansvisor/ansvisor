@@ -24,6 +24,15 @@ export const FEATURES = [
   // Positions panel → Improve tab: AI-generated, platform-specific
   // suggestions to improve a prompt's position (PROMPT-003). Growth+.
   'prompt_improve',
+  // Slack (#2139): alerts, the Pulse and the daily suggestion in a brand's
+  // channel on every paid plan; approving an agent's step from Slack on
+  // Growth and up.
+  'slack_notifications',
+  'slack_approvals',
+  // CRM integrations, HubSpot first (#2140): AI-sourced contacts, deals and
+  // revenue, and pages to the CRM's CMS. Growth and above (owner, 2026-11-09);
+  // self-host gets it, with its own Composio keys.
+  'crm_integrations',
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -173,6 +182,12 @@ export const PLANS: Record<PlanId, Plan> = {
         'shopping_analytics',
         'prompt_improve',
         'white_label',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
+        // HubSpot (#2140), with the server's own Composio keys.
+        'crm_integrations',
       ],
       // Self-host runs against the operator's own infrastructure / API
       // keys — no platform quota to enforce.
@@ -226,6 +241,8 @@ export const PLANS: Record<PlanId, Plan> = {
         'ai_agent',
         // Improve, on Starter's AI budget (above).
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
       ],
     },
   },
@@ -238,10 +255,11 @@ export const PLANS: Record<PlanId, Plan> = {
     limits: {
       maxBrands: 4,
       maxPrompts: 200,
-      // The engines Growth tracks: ChatGPT, Gemini, Google AI Overviews and
-      // Google AI Mode, since Copilot and Perplexity went (2026-11-06).
-      // ChatGPT Shopping feeds Product Visibility and isn't counted.
-      maxPlatforms: 4,
+      // The engines Growth tracks: ChatGPT, Gemini, Google AI Overviews,
+      // Google AI Mode and Microsoft Copilot (through Bing AI Mode since
+      // Perplexity went, 2026-11-06). ChatGPT Shopping feeds Product
+      // Visibility and isn't counted.
+      maxPlatforms: 5,
       maxTeamMembers: -1,
       maxDomainsPerBrand: 10,
       maxVolumeAnalyses: 10,
@@ -277,6 +295,12 @@ export const PLANS: Record<PlanId, Plan> = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
+        // HubSpot (#2140): Growth and above (owner, 2026-11-09).
+        'crm_integrations',
       ],
     },
   },
@@ -288,8 +312,8 @@ export const PLANS: Record<PlanId, Plan> = {
     limits: {
       maxBrands: -1,
       maxPrompts: -1,
-      // Growth's four engines plus Claude, set per contract.
-      maxPlatforms: 5,
+      // Growth's five engines plus Claude, set per contract.
+      maxPlatforms: 6,
       maxTeamMembers: -1,
       maxDomainsPerBrand: -1,
       maxVolumeAnalyses: -1,
@@ -333,6 +357,12 @@ export const PLANS: Record<PlanId, Plan> = {
         'ai_agent',
         'shopping_analytics',
         'prompt_improve',
+        // Alerts, the Pulse and the daily suggestion in a brand's Slack channel (#2139): every paid plan.
+        'slack_notifications',
+        // Approving an agent's step from Slack (#2139): Growth and up.
+        'slack_approvals',
+        // HubSpot (#2140): Growth and above (owner, 2026-11-09).
+        'crm_integrations',
       ],
       // Enterprise — no platform quota; usage governed by contract.
     },

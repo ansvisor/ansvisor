@@ -6,7 +6,7 @@ export default function ForgotPasswordPage() {
   const t = useTranslations('auth');
 
   return (
-    <AuthShell cta={{ href: '/sign-in', label: t('signIn') }}>
+    <AuthShell cta={{ href: '/sign-in', label: t('signIn') }} brandAboveCard backdrop="orbit">
       <AuthCard title={t('forgotPasswordTitle')} subtitle={t('forgotPasswordSubtitle')}>
         <ForgotPasswordForm />
       </AuthCard>

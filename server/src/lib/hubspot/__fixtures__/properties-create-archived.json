@@ -1,0 +1,15 @@
+{
+  "status": "COMPLETE",
+  "results": [],
+  "numErrors": 1,
+  "errors": [
+    {
+      "status": "error",
+      "category": "OBJECT_ALREADY_EXISTS",
+      "message": "A property named 'ansvisor_brand' was archived. Restore it, or use another name.",
+      "context": { "name": ["ansvisor_brand"] }
+    }
+  ],
+  "startedAt": "2026-11-10T09:00:00.000Z",
+  "completedAt": "2026-11-10T09:00:00.200Z"
+}

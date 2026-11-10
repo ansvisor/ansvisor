@@ -127,6 +127,12 @@ const OPEN_ROUTES: Record<string, string> = {
   'keys/[id]:DELETE': 'revoking a key takes back access',
   'mcp:POST': 'its tools are gated one by one (gateWriteTools)',
   'mcp:DELETE': 'ends an MCP session',
+  // MCP over OAuth (#2141): no person is signed in here, and no workspace is
+  // known yet. The plan is checked at the consent page and on every MCP call.
+  'oauth/register:POST': 'an app registers itself, before any workspace: no cost',
+  'oauth/token:POST':
+    'an app redeems a code or refreshes its tokens; the MCP calls check the plan (oauthMcpAccess)',
+  'oauth/revoke:POST': 'an app ends its own connection: takes back access',
   'settings/ai-providers:DELETE': 'removing a key takes back access',
   'stripe/checkout:POST': 'billing: choosing a plan',
   'stripe/portal:POST': 'billing: the payment method',
@@ -136,6 +142,9 @@ const OPEN_ROUTES: Record<string, string> = {
   'stripe/webhook:POST': "Stripe's own calls",
   'traffic/read:POST': 'reads only',
   'visibility/read:POST': 'reads only',
+  // Settings › Connected apps (MCP over OAuth, #2141): Disconnect ends one of
+  // the person's own connections.
+  'oauth/connections/[id]:DELETE': 'disconnecting an app takes back access',
   // Chat's runs: the engine answers 402 with the server's body itself
   // (startChatRun, prepareResume), but for a request to the Admins.
   'chat/conversations:POST':
@@ -179,6 +188,9 @@ const OPEN_ROUTES: Record<string, string> = {
   // The API server's report card queue (CRON_SECRET): Ansvisor's own free report card, no workspace.
   'internal/report-card/pdf:POST':
     "draws a free report card's PDF for the API server; no workspace, nothing written",
+  // The API server's daily suggestions job (CRON_SECRET): words an action for its Slack post (#2139).
+  'internal/slack/suggestion:POST':
+    "words an action for the API server's Slack post; reads only, nothing written",
 };
 
 /** What checks a route's plan before it writes. */

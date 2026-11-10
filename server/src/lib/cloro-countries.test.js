@@ -218,7 +218,7 @@ describe('the provider models on both sides (PROMPT-015e)', () => {
   it('names every model the API reads a list for, and no other', () => {
     const labels = web.match(/ENGINE_LABELS[^=]*=\s*\{([^}]*)\}/);
     expect(labels).not.toBeNull();
-    const named = [...labels[1].matchAll(/^\s*'?([a-z]+)'?:/gm)].map((m) => m[1]);
+    const named = [...labels[1].matchAll(/^\s*'?([a-z_]+)'?:/gm)].map((m) => m[1]);
     expect(named.sort()).toEqual([...models].sort());
   });
 
@@ -226,7 +226,7 @@ describe('the provider models on both sides (PROMPT-015e)', () => {
     const mapped = web.match(/PLATFORM_MODELS[^=]*=\s*\{([^}]*)\}/);
     expect(mapped).not.toBeNull();
     const pairs = Object.fromEntries(
-      [...mapped[1].matchAll(/'([a-z-]+)':\s*'([a-z]+)'/g)].map((m) => [m[1], m[2]]),
+      [...mapped[1].matchAll(/'([a-z-]+)':\s*'([a-z_]+)'/g)].map((m) => [m[1], m[2]]),
     );
     expect(pairs).toEqual(CLORO_COUNTRY_MODELS);
   });

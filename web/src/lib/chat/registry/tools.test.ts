@@ -1267,3 +1267,15 @@ describe("save_skill's draft card (W3-08)", () => {
     expect(tool().doneStep!(input as never, { ok: false })).toBeNull();
   });
 });
+
+/** The query fan-out reads run only within a skill that names them (owner decision 2026-11-09). */
+describe('the reads that run only within a skill', () => {
+  it('are both fan-out reads, and nothing else', () => {
+    expect(CHAT_TOOLS.filter((tool) => tool.withSkill).map((tool) => tool.name)).toEqual([
+      'get_fanouts',
+      'get_fanout_gaps',
+    ]);
+    expect(chatTool('get_fanouts')?.class).toBe('read');
+    expect(chatTool('get_fanout_gaps')?.class).toBe('read');
+  });
+});

@@ -7,23 +7,31 @@ import { whiteLabelOffered } from '@/lib/white-label/kit';
  * Providers when no key is set.
  */
 export const SETTINGS_SECTIONS = [
+  // Yours (owner, 2026-11-09: personal, then the workspace and its bill, then
+  // people and access, Chat, connections and keys, then brand and content).
   'account',
+  'notifications',
+  // The workspace and its plan.
   'organization',
-  // White label (00429): where a plan can have it (whiteLabelOffered).
-  'white-label',
+  'billing',
+  // People and access. Team: its own section while the new Chat is off. With
+  // it on, Team is in Team, roles & access (owner, 2026-11-09), and /team
+  // opens that.
   'team',
-  // Roles & access (CHAT-20 §4a): listed only while the new Chat is on.
+  // Roles & access (CHAT-20 §4a): listed only while the new Chat is on, as
+  // Team, roles & access: the team, its invitations, the roles and access.
   'roles-access',
   'menu-access',
-  'authors',
-  'content',
-  'notifications',
-  'integrations',
-  'api-keys',
-  'ai-providers',
-  'billing',
   // Settings › Chat (CHAT-20 §5): listed only while the new Chat is on.
   'chat',
+  // Connections and keys.
+  'integrations',
+  'ai-providers',
+  'api-keys',
+  // Brand and content. White label (00429): where a plan can have it (whiteLabelOffered).
+  'white-label',
+  'content',
+  'authors',
 ] as const;
 
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
@@ -71,4 +79,12 @@ export function hasSettingsSection(section: SettingsSection, { isCloud }: { isCl
 export function settingsSectionPath(pathname: string, section: SettingsSection): string {
   const base = pathname.replace(/\/dashboard\/settings(\/.*)?$/, '/dashboard/settings');
   return `${base}/${section}`;
+}
+
+/**
+ * Where the team is managed (owner, 2026-11-09): Team, roles & access with
+ * the new Chat on, else Team. /dashboard/settings/team opens it either way.
+ */
+export function teamSection(chatAgentic: boolean): SettingsSection {
+  return chatAgentic ? 'roles-access' : 'team';
 }

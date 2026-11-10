@@ -7364,6 +7364,7 @@ export type Database = {
           regions: string[]
           source_data: Json | null
           text: string
+          tags: string[]
           topic_id: string | null
           work_status: string | null
         }
@@ -7378,6 +7379,7 @@ export type Database = {
           regions?: string[]
           source_data?: Json | null
           text: string
+          tags?: string[]
           topic_id?: string | null
           work_status?: string | null
         }
@@ -7392,6 +7394,7 @@ export type Database = {
           regions?: string[]
           source_data?: Json | null
           text?: string
+          tags?: string[]
           topic_id?: string | null
           work_status?: string | null
         }

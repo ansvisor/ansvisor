@@ -105,11 +105,11 @@ export function RequestsSection({
         </span>
       </div>
       {data.requests.length === 0 ? (
-        <p className="rounded-xl border px-3.5 py-3 text-sm text-muted-foreground">
+        <p className="rounded-xl border bg-card px-3.5 py-3 text-sm text-muted-foreground">
           {data.isAdmin ? t('empty') : t('emptyYours')}
         </p>
       ) : (
-        <ul className="divide-y rounded-xl border">
+        <ul className="divide-y rounded-xl border bg-card">
           {data.requests.map((request) => (
             <li
               key={request.id}

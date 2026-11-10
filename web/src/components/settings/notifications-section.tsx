@@ -126,7 +126,7 @@ export function NotificationsSection() {
           <p className="text-sm text-muted-foreground">{t('pulseNoBrands')}</p>
         ) : (
           brands.map((brand) => (
-            <div key={brand.brandId} className="space-y-3 rounded-md border p-4">
+            <div key={brand.brandId} className="space-y-3 rounded-md border bg-card p-4">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium">{brand.brandName}</p>
                 <Select

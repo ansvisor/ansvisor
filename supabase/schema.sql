@@ -61727,6 +61727,33 @@ create policy "topic_catalog_categories: member select"
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00495_report_card_request_language.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00495: the language a report card request's PDF and e-mail are written in
+-- ============================================================================
+-- The free report card's form on www.ansvisor.com may choose the report's
+-- language (owner decision 2026-11-09): English, Turkish, French, Spanish,
+-- German, Portuguese, Italian or Dutch. The questions are still asked in the
+-- target country's main language (report_cards.language, 00472), so the
+-- card's figures and cost don't change: only the words of its PDF and e-mail
+-- do. The PDF isn't kept but drawn for each e-mail (server
+-- lib/report-card/deliver.js), so the language is the request's, not the
+-- card's: two people at one company may get the same card in two languages.
+--
+-- Null is the form's "Auto": Turkish for a Türkiye card, English elsewhere,
+-- as before. The check is on the code's form (ISO 639-1), not a list, so a
+-- language added later needs no migration; the API checks the code against
+-- the languages it writes.
+
+alter table public.report_card_requests
+  add column if not exists report_language text
+    check (report_language ~ '^[a-z]{2}$');
+
+comment on column public.report_card_requests.report_language is
+  'The language the request''s PDF and e-mail are written in, as the form chose it (ISO 639-1; 00495); null: by the card''s country, Turkish for TR and English elsewhere.';
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00496_prompt_source_data.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -61797,6 +61824,471 @@ alter table public.topic_suggestions add constraint topic_suggestions_source_dat
 
 comment on column public.topic_suggestions.source_data is
   'For a topic suggested from a catalog category (source catalog, AC plan P-8, 00496): {category, categoryId, products, inStock}. Null for the model''s ideas.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00497_prompt_tags.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- Multiple custom tags on a tracked prompt, cutting across Topics (#2151).
+-- A prompt keeps its one topic_id; tags are many-per-prompt, cross-cutting
+-- labels (campaign, funnel stage, product line, priority) so grouping does
+-- not have to duplicate prompts or mint near-duplicate topics. A text[]
+-- column matches the house style of prompts.platforms, models and regions,
+-- and a GIN index serves the "has any of / has all of" filters on the
+-- prompts list. The Chat agents' Signal trigger filter already declares
+-- entity_filter.prompt_tags (web/src/lib/chat/agent-rules.ts); its matcher
+-- stubs the filter false today because prompts kept no tags yet.
+
+alter table public.prompts
+  add column if not exists tags text[] not null default '{}'::text[];
+
+comment on column public.prompts.tags is
+  'Cross-cutting labels many-per-prompt, orthogonal to topic_id (campaign, funnel stage, product line, priority).';
+
+create index if not exists idx_prompts_tags on public.prompts using gin (tags);
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00510_mcp_oauth.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00510: MCP over OAuth: apps, connections, codes, tokens, their log (#2141)
+-- ============================================================================
+-- Claude, ChatGPT and other MCP apps connect to /api/mcp by signing the person
+-- in (OAuth 2.1), instead of a pasted ans_ key (00003), which keeps working.
+-- Ansvisor is its own small authorization server: the tokens it issues are
+-- opaque, kept here only as sha256 hashes like api_keys.key_hash, and good for
+-- the MCP endpoint alone. Behind MCP_OAUTH_ENABLED: nothing writes these
+-- tables while it is off.
+--
+--   * oauth_clients: the apps. A DCR client registers itself (RFC 7591) and
+--     gets an ansc_ id; a public one (token_endpoint_auth_method 'none',
+--     PKCE only) has no secret, a confidential one a hashed secret. Nothing
+--     in metadata is fetched or shown (logo_uri, client_uri…).
+--   * oauth_authorization_requests: a request to connect, checked and kept
+--     while the person signs in and decides (10 minutes): the consent page's
+--     address holds only its id. user_id is the person who opened it.
+--   * oauth_codes: an approved request's one-time code (5 minutes), with what
+--     the token request must match. grant_id is set when it is redeemed: a
+--     second use revokes that connection (OAuth 2.1 §4.1.2).
+--   * oauth_grants: a connection: one person, the organization they were in
+--     when they approved it, one app, its scopes (mcp:read, and mcp:write
+--     when they allowed changes) and the resource (the MCP endpoint's URL).
+--     Revoking it ends every token at once; revoked_reason says why.
+--   * oauth_tokens: access tokens (1 hour) and refresh tokens (30 days,
+--     rotated on every use: rotated_at), hashed.
+--   * oauth_events: the log: a connection made, refused or ended, a code or
+--     refresh token used twice.
+--   * oauth_rate_limits and oauth_rate_hit(): fixed-window counters for the
+--     registration, token and consent endpoints.
+--
+-- Only the server reads and writes them, with the service role: RLS is on
+-- with no policy, and anon and authenticated get nothing. Settings lists a
+-- person's connections through an API route that reads them as the service
+-- role for that person. No brand_id: a connection carries its person's brand
+-- access, read again on every call (BRAND-ACCESS §5.3), as an API key does.
+
+-- ─── Apps ───────────────────────────────────────────────────────────────────
+
+create table if not exists public.oauth_clients (
+  id uuid primary key default gen_random_uuid(),
+  client_id text not null unique check (char_length(client_id) between 8 and 2000),
+  -- 'dcr': registered at /api/oauth/register.
+  kind text not null default 'dcr' check (kind in ('dcr')),
+  -- Self-asserted: the consent page shows it as the app's own word.
+  client_name text check (client_name is null or char_length(client_name) between 1 and 100),
+  -- https://… or a loopback http://… address, matched exactly (a loopback one
+  -- on any port, RFC 8252 §7.3).
+  redirect_uris text[] not null check (cardinality(redirect_uris) between 1 and 5),
+  token_endpoint_auth_method text not null default 'none'
+    check (token_endpoint_auth_method in ('none', 'client_secret_post', 'client_secret_basic')),
+  client_secret_hash text check (client_secret_hash is null or client_secret_hash ~ '^[0-9a-f]{64}$'),
+  -- The rest of the registration as sent, for support: never fetched or shown.
+  metadata jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata) = 'object'),
+  created_at timestamptz not null default now(),
+  -- The last time a person connected it: a client never connected is
+  -- removed after a day.
+  last_used_at timestamptz,
+  constraint oauth_clients_secret_check
+    check ((token_endpoint_auth_method = 'none') = (client_secret_hash is null))
+);
+
+create index if not exists oauth_clients_unused_idx
+  on public.oauth_clients (created_at)
+  where last_used_at is null;
+
+-- ─── Requests to connect ───────────────────────────────────────────────────
+
+create table if not exists public.oauth_authorization_requests (
+  id uuid primary key default gen_random_uuid(),
+  client_id text not null references public.oauth_clients (client_id) on delete cascade,
+  redirect_uri text not null check (char_length(redirect_uri) <= 2000),
+  -- S256 only: base64url of a sha256, 43 characters.
+  code_challenge text not null check (code_challenge ~ '^[A-Za-z0-9_-]{43}$'),
+  scopes text[] not null
+    check (scopes <@ array['mcp:read', 'mcp:write']::text[] and 'mcp:read' = any (scopes)),
+  state text check (state is null or char_length(state) <= 1000),
+  resource text not null check (char_length(resource) <= 2000),
+  user_id uuid references auth.users (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+
+create index if not exists oauth_authorization_requests_expires_idx
+  on public.oauth_authorization_requests (expires_at);
+
+-- ─── Connections ───────────────────────────────────────────────────────────
+
+create table if not exists public.oauth_grants (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  client_id text not null references public.oauth_clients (client_id) on delete cascade,
+  -- As the consent page showed them.
+  client_name text check (client_name is null or char_length(client_name) <= 100),
+  redirect_host text not null check (char_length(redirect_host) between 1 and 255),
+  scopes text[] not null
+    check (scopes <@ array['mcp:read', 'mcp:write']::text[] and 'mcp:read' = any (scopes)),
+  resource text not null check (char_length(resource) <= 2000),
+  created_at timestamptz not null default now(),
+  last_used_at timestamptz,
+  revoked_at timestamptz,
+  -- person: Disconnect in Settings; client: the app at /api/oauth/revoke;
+  -- member_left: no longer in the organization; code_reuse / refresh_reuse:
+  -- a code or a rotated refresh token used again; expired: unused 30 days.
+  revoked_reason text check (
+    revoked_reason in ('person', 'client', 'member_left', 'code_reuse', 'refresh_reuse', 'expired')
+  ),
+  constraint oauth_grants_revoked_check check ((revoked_at is null) = (revoked_reason is null))
+);
+
+create index if not exists oauth_grants_user_idx
+  on public.oauth_grants (user_id, created_at desc)
+  where revoked_at is null;
+
+-- ─── Codes and tokens ──────────────────────────────────────────────────────
+
+create table if not exists public.oauth_codes (
+  code_hash text primary key check (code_hash ~ '^[0-9a-f]{64}$'),
+  client_id text not null references public.oauth_clients (client_id) on delete cascade,
+  user_id uuid not null references auth.users (id) on delete cascade,
+  organization_id uuid not null references public.organizations (id) on delete cascade,
+  redirect_uri text not null check (char_length(redirect_uri) <= 2000),
+  code_challenge text not null check (code_challenge ~ '^[A-Za-z0-9_-]{43}$'),
+  scopes text[] not null
+    check (scopes <@ array['mcp:read', 'mcp:write']::text[] and 'mcp:read' = any (scopes)),
+  resource text not null check (char_length(resource) <= 2000),
+  client_name text check (client_name is null or char_length(client_name) <= 100),
+  redirect_host text not null check (char_length(redirect_host) between 1 and 255),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  grant_id uuid references public.oauth_grants (id) on delete cascade
+);
+
+create index if not exists oauth_codes_expires_idx on public.oauth_codes (expires_at);
+
+create table if not exists public.oauth_tokens (
+  id uuid primary key default gen_random_uuid(),
+  grant_id uuid not null references public.oauth_grants (id) on delete cascade,
+  kind text not null check (kind in ('access', 'refresh')),
+  token_hash text not null unique check (token_hash ~ '^[0-9a-f]{64}$'),
+  scopes text[] not null
+    check (scopes <@ array['mcp:read', 'mcp:write']::text[] and 'mcp:read' = any (scopes)),
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  -- A refresh token swapped for a new pair: the old one is dead from then on.
+  rotated_at timestamptz,
+  revoked_at timestamptz
+);
+
+create index if not exists oauth_tokens_grant_idx on public.oauth_tokens (grant_id);
+create index if not exists oauth_tokens_expires_idx on public.oauth_tokens (expires_at);
+
+-- ─── The log ───────────────────────────────────────────────────────────────
+
+create table if not exists public.oauth_events (
+  id bigint generated always as identity primary key,
+  organization_id uuid references public.organizations (id) on delete cascade,
+  -- Null once the person's account is deleted: the row stays for the admins.
+  user_id uuid references auth.users (id) on delete set null,
+  grant_id uuid references public.oauth_grants (id) on delete set null,
+  client_id text check (client_id is null or char_length(client_id) <= 2000),
+  event text not null check (
+    event in (
+      'client_registered',
+      'consent_granted',
+      'consent_denied',
+      'blocked_trial',
+      'blocked_ended',
+      'code_reuse',
+      'refresh_reuse',
+      'revoked_by_person',
+      'revoked_by_client',
+      'revoked_member_left'
+    )
+  ),
+  -- The address shortened (IPv4 /24, IPv6 /48), and the client's user agent.
+  ip text check (ip is null or char_length(ip) <= 64),
+  user_agent text check (user_agent is null or char_length(user_agent) <= 200),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists oauth_events_org_idx
+  on public.oauth_events (organization_id, created_at desc);
+
+-- ─── Rate limits ───────────────────────────────────────────────────────────
+
+create table if not exists public.oauth_rate_limits (
+  key text not null check (char_length(key) between 1 and 200),
+  window_start timestamptz not null,
+  hits integer not null default 0,
+  primary key (key, window_start)
+);
+
+-- One hit on key in the current window of p_window_seconds: true while the
+-- window holds p_max hits or fewer. Windows older than a day are cleared now
+-- and then. The server's only (service role).
+create or replace function public.oauth_rate_hit(p_key text, p_window_seconds integer, p_max integer)
+returns boolean
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_start timestamptz :=
+    to_timestamp(floor(extract(epoch from now()) / p_window_seconds) * p_window_seconds);
+  v_hits integer;
+begin
+  insert into public.oauth_rate_limits as r (key, window_start, hits)
+  values (p_key, v_start, 1)
+  on conflict (key, window_start) do update set hits = r.hits + 1
+  returning r.hits into v_hits;
+  if random() < 0.01 then
+    delete from public.oauth_rate_limits where window_start < now() - interval '1 day';
+  end if;
+  return v_hits <= p_max;
+end;
+$$;
+
+revoke all on function public.oauth_rate_hit(text, integer, integer) from public, anon, authenticated;
+grant execute on function public.oauth_rate_hit(text, integer, integer) to service_role;
+
+-- ─── Access: the server's only ─────────────────────────────────────────────
+
+alter table public.oauth_clients enable row level security;
+alter table public.oauth_authorization_requests enable row level security;
+alter table public.oauth_grants enable row level security;
+alter table public.oauth_codes enable row level security;
+alter table public.oauth_tokens enable row level security;
+alter table public.oauth_events enable row level security;
+alter table public.oauth_rate_limits enable row level security;
+
+revoke all on table
+  public.oauth_clients,
+  public.oauth_authorization_requests,
+  public.oauth_grants,
+  public.oauth_codes,
+  public.oauth_tokens,
+  public.oauth_events,
+  public.oauth_rate_limits
+from anon, authenticated;
+
+grant all on table
+  public.oauth_clients,
+  public.oauth_authorization_requests,
+  public.oauth_grants,
+  public.oauth_codes,
+  public.oauth_tokens,
+  public.oauth_events,
+  public.oauth_rate_limits
+to service_role;
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00515_slack_posts.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00515: Slack posts — what Ansvisor posted to a brand's Slack channel (#2139)
+-- ============================================================================
+-- A brand posts to the Slack channel it picked (brand_integrations.settings,
+-- 00470; server lib/slack/connection.js). Each message is kept here once,
+-- before it is sent, so the same message never goes twice however the job
+-- that sends it is retried or run on two servers (unique per brand and
+-- dedupe key), and so a message can be found again (its channel and Slack's
+-- ts) and the next one held back for a while (the drop alerts' 7 days).
+--
+--   * kind: what it was. The Daily Pulse first; the drop alert, the daily
+--     suggestion and "an agent needs you" follow in their own pull requests,
+--     so they are allowed here from the start.
+--   * dedupe_key: the message's own key within the brand, e.g. pulse:{date}.
+--   * status: sending while Slack is asked, then sent or failed. A failed
+--     post is tried once more (a 429 after Slack's Retry-After, a 5xx or a
+--     timeout after 2 seconds); error_code is Slack's code, or ours, never
+--     its words.
+--
+-- Server only: the service role writes and reads it, after checking the
+-- brand, its plan and the person who connected its workspace. No member
+-- reads it (the brand's card reads brand_integrations), so it has no policy.
+--
+-- sent_pulses.slack_sent: whether the Pulse went to the brand's channel, as
+-- email_sent and webhook_sent say for its other legs.
+
+create table if not exists public.slack_posts (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null
+    constraint slack_posts_organization_id_fkey
+    references public.organizations(id) on delete cascade,
+  brand_id uuid not null
+    constraint slack_posts_brand_id_fkey
+    references public.brands(id) on delete cascade,
+  -- The workspace's sign-in it went through; null once that is gone.
+  account_id uuid
+    constraint slack_posts_account_id_fkey
+    references public.integration_accounts(id) on delete set null,
+  kind text not null check (kind in ('pulse', 'drop', 'suggestion', 'needs_you')),
+  dedupe_key text not null check (char_length(dedupe_key) between 1 and 200),
+  channel_id text not null check (channel_id ~ '^[CG][A-Z0-9]{6,20}$'),
+  status text not null default 'sending' check (status in ('sending', 'sent', 'failed')),
+  -- Slack's id of the message in its channel, once sent.
+  message_ts text check (message_ts is null or message_ts ~ '^[0-9]{1,12}\.[0-9]{1,8}$'),
+  error_code text check (error_code is null or char_length(error_code) between 1 and 100),
+  attempts smallint not null default 0 check (attempts between 0 and 5),
+  created_at timestamptz not null default now(),
+  sent_at timestamptz,
+  constraint slack_posts_brand_dedupe_key unique (brand_id, dedupe_key),
+  check ((status = 'sent') = (message_ts is not null and sent_at is not null))
+);
+
+-- The brand's latest posts of a kind (a cooldown, the message to update).
+create index if not exists slack_posts_brand_kind_created_idx
+  on public.slack_posts (brand_id, kind, created_at desc);
+-- The sign-in's posts, for its delete's set null.
+create index if not exists slack_posts_account_id_idx
+  on public.slack_posts (account_id) where account_id is not null;
+create index if not exists slack_posts_organization_id_idx
+  on public.slack_posts (organization_id);
+
+comment on table public.slack_posts is
+  'Slack (00515, #2139): each message posted to a brand''s Slack channel, kept once before it is sent (unique per brand and dedupe_key): its kind, channel, Slack''s ts, and Slack''s error code if it failed. Server only.';
+comment on column public.slack_posts.dedupe_key is
+  'The message''s key within the brand, e.g. pulse:{date}: the same message is never posted twice.';
+comment on column public.slack_posts.error_code is
+  'Slack''s error code (channel_not_found, ratelimited…) or ours (slack_unavailable, timeout), never a message''s words.';
+
+alter table public.slack_posts enable row level security;
+revoke all on table public.slack_posts from anon, authenticated;
+grant all on table public.slack_posts to service_role;
+
+alter table public.sent_pulses
+  add column if not exists slack_sent boolean not null default false;
+
+comment on column public.sent_pulses.slack_sent is
+  'Whether the Pulse was posted to the brand''s Slack channel (00515, #2139).';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00522_cms_hubspot_blog.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00522: HubSpot blog posts for Send to CMS (#2140)
+-- ============================================================================
+-- After Webflow (00283, 00284), WordPress (00294), Framer (00295) and Wix
+-- (00372), a brand sends pages to its HubSpot blog, as draft posts, through
+-- the HubSpot account it connected in Settings › Integrations (per brand,
+-- brand_integrations provider 'hubspot'; no migration made that). The blog
+-- pages go to is the brand's HubSpot setting (brand_integrations.settings),
+-- and nothing goes without the consent to send pages as drafts.
+--
+--   * content_draft_deliveries.target takes 'hubspot'. `target_collection`
+--     keeps the HubSpot blog's id the post was written to; its id is
+--     external_id, so the page's next send updates that post's draft.
+--   * reserve_content_deliveries: as 00372, a page already queued for the
+--     same CMS (HubSpot among them) isn't sent there again meanwhile.
+--
+-- 00521 is kept for marking HubSpot contacts (#2140, part 2).
+
+alter table public.content_draft_deliveries
+  drop constraint if exists content_draft_deliveries_target_check,
+  add constraint content_draft_deliveries_target_check
+    check (target in ('webhook', 'webflow', 'wordpress', 'framer', 'wix', 'hubspot'));
+
+comment on column public.content_draft_deliveries.target is
+  'Where the page was sent (00284, 00294, 00295, 00372, 00522): the brand''s webhook, its Webflow collection, its WordPress site, its Framer collection, its Wix site''s Blog or its HubSpot blog.';
+comment on column public.content_draft_deliveries.target_collection is
+  'The Webflow or Framer collection (00284, 00295), the WordPress site''s address (00294), the Wix site''s id (00372) or the HubSpot blog''s id (00522) the page''s item or post was written to; its id is external_id.';
+
+-- ----------------------------------------------------------------------------
+-- As 00372, with HubSpot among the CMSs a page isn't sent to twice at once.
+-- ----------------------------------------------------------------------------
+create or replace function public.reserve_content_deliveries(
+  p_organization_id uuid,
+  p_brand_id uuid,
+  p_sent_by uuid,
+  p_batch_id uuid,
+  p_items jsonb,
+  p_limit integer,
+  p_target text default 'webhook'
+)
+returns setof public.content_draft_deliveries
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  used integer;
+  room integer;
+begin
+  perform pg_advisory_xact_lock(hashtext('content_deliveries:' || p_organization_id::text));
+
+  -- sent_at stays empty: it was never sent, and its time stays its own.
+  update public.content_draft_deliveries
+  set status = 'failed', error = 'Not sent: interrupted'
+  where organization_id = p_organization_id
+    and status = 'queued'
+    and created_at < now() - interval '30 minutes';
+
+  select count(*) into used
+  from public.content_draft_deliveries
+  where organization_id = p_organization_id
+    and created_at > now() - interval '24 hours';
+
+  room := greatest(0, p_limit - used);
+  if room = 0 or jsonb_typeof(p_items) <> 'array' then
+    return;
+  end if;
+
+  -- Under the lock, so two sends of one page can't both pass: both would
+  -- make an item (Webflow refuses the second on its slug) or a post.
+  if p_target in ('webflow', 'wordpress', 'framer', 'wix', 'hubspot') and exists (
+    select 1
+    from public.content_draft_deliveries d
+    join jsonb_array_elements(p_items) as items(item)
+      on d.draft_id = (item ->> 'draft_id')::uuid
+    where d.organization_id = p_organization_id
+      and d.target = p_target
+      and d.status = 'queued'
+  ) then
+    raise exception 'delivery_in_progress' using errcode = 'P0001';
+  end if;
+
+  return query
+  insert into public.content_draft_deliveries
+    (organization_id, brand_id, draft_id, sent_by, batch_id, title, slug, target)
+  select p_organization_id, p_brand_id, (item ->> 'draft_id')::uuid, p_sent_by, p_batch_id,
+         left(item ->> 'title', 300), nullif(left(item ->> 'slug', 200), ''),
+         coalesce(p_target, 'webhook')
+  from jsonb_array_elements(p_items) with ordinality as items(item, position)
+  order by position
+  limit room
+  returning *;
+end;
+$$;
+
+revoke all on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  from public, anon, authenticated;
+grant execute on function public.reserve_content_deliveries(uuid, uuid, uuid, uuid, jsonb, integer, text)
+  to service_role;
 
 notify pgrst, 'reload schema';
 

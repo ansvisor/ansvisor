@@ -4,14 +4,14 @@ route: /dashboard/settings/notifications
 keywords: [daily pulse, digest, notifications, email summary, highlights, warnings]
 synonyms: [daily email, weekly email, brand digest, visibility alerts, stop the emails]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-10
+last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/daily-pulse.mdx]
 ---
-The Daily Pulse is a short digest for each brand that goes out after its scheduled tracking run. It shows the headline numbers for the period, then lists what went well (highlights) and what needs attention (warnings). It comes by email on Ansvisor Cloud, and can also go to your webhook, on cloud and self-hosted alike.
+The Daily Pulse is a short digest for each brand that goes out after its scheduled tracking run. It shows the headline numbers for the period, then lists what went well (highlights) and what needs attention (warnings). It comes by email on Ansvisor Cloud, and can also go to your webhook and to the brand's Slack channel (set in **Settings › Integrations**), on cloud and self-hosted alike.
 
 ## Choose how often it comes
 
@@ -20,7 +20,7 @@ Open **Settings › Notifications**. Every active brand has its own row with a f
 - **Daily** (the default): after every scheduled daily tracking run.
 - **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.
 - **Only when notable**: like Daily, but skipped when there are no highlights and no warnings.
-- **Off**: no email and no webhook.
+- **Off**: no email, no webhook and no Slack post.
 
 ## Choose who gets it
 

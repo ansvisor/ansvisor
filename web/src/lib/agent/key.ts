@@ -2,7 +2,12 @@ import { supabaseAdmin } from '@/lib/supabase/admin';
 import { isCloud } from '@/config/plans';
 import { decryptApiKey } from '@/lib/agent/key-encryption';
 import type { AgentModelConfig } from '@/lib/agent/model';
-import { isAiProvider, type AiProvider, type AiProviderSettings } from '@/lib/agent/providers';
+import {
+  isAiProvider,
+  OPENROUTER_MODEL_EXAMPLE,
+  type AiProvider,
+  type AiProviderSettings,
+} from '@/lib/agent/providers';
 
 /**
  * The organization's active key in Settings › AI Providers (cloud): none
@@ -57,6 +62,37 @@ function keyReadOf(
 }
 
 /**
+ * The operator's env-configured key for a self-host instance, in the order
+ * the docs name them: Anthropic first, then OpenRouter (one key, any model;
+ * `OPENROUTER_MODEL` picks it, defaulting to the Settings-page example),
+ * then Gemini behind `AGENT_ALLOW_GOOGLE_KEY` (Google's SDKs read
+ * `GOOGLE_GENERATIVE_AI_API_KEY` for other features too, so the agent runs
+ * on it only when the operator asks). Null when none is set. Cloud never
+ * calls this: there the org's key decides, and the vendor's Anthropic key
+ * stays the only app-level one.
+ */
+export function selfHostModelConfig(): AgentModelConfig | null {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  if (anthropicKey) return { provider: 'anthropic', apiKey: anthropicKey, settings: {} };
+  const openrouterKey = process.env.OPENROUTER_API_KEY;
+  if (openrouterKey)
+    return {
+      provider: 'openrouter',
+      apiKey: openrouterKey,
+      settings: { model: process.env.OPENROUTER_MODEL || OPENROUTER_MODEL_EXAMPLE },
+    };
+  // No paid-provider key on this box? Run the agent on the operator's
+  // Google AI Studio key (Gemini), but only when the operator says so:
+  // GOOGLE_GENERATIVE_AI_API_KEY serves other features on this box too,
+  // and setting it for one of them shouldn't turn the agent on.
+  const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (googleKey && process.env.AGENT_ALLOW_GOOGLE_KEY === 'true') {
+    return { provider: 'google', apiKey: googleKey, settings: {} };
+  }
+  return null;
+}
+
+/**
  * Resolve the provider and API key that the agent should use for this org.
  *
  * - **Self-host** (`isCloud() === false`): falls back to the operator's
@@ -74,8 +110,7 @@ export async function resolveAgentModelConfig(
   organizationId: string,
 ): Promise<AgentModelConfig | null> {
   if (!isCloud()) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    return apiKey ? { provider: 'anthropic', apiKey, settings: {} } : null;
+    return selfHostModelConfig();
   }
   const key = await readActiveKey(organizationId);
   return key.state === 'ready' ? key.config : null;
@@ -88,7 +123,11 @@ export async function resolveAgentModelConfig(
  */
 export async function isAgentKeyConfigured(organizationId: string): Promise<boolean> {
   if (!isCloud()) {
-    return !!process.env.ANTHROPIC_API_KEY;
+    return !!(
+      process.env.ANTHROPIC_API_KEY ||
+      process.env.OPENROUTER_API_KEY ||
+      (process.env.GOOGLE_GENERATIVE_AI_API_KEY && process.env.AGENT_ALLOW_GOOGLE_KEY === 'true')
+    );
   }
   const { data } = await supabaseAdmin
     .from('organization_ai_keys')

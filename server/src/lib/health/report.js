@@ -177,15 +177,16 @@ async function checkCloro(now) {
  *  - `off` (the self-host default): nothing asks, so it isn't judged.
  *
  * A platform Cloro cannot deliver (UNAVAILABLE_PLATFORMS) runs nothing, so it
- * isn't judged either. Copilot and Perplexity, the two FANOUT_EXPECTED names,
- * are paused since 2026-11-06: until they come back, only ChatGPT's sample
- * and the drop rule below can flag anything.
+ * isn't judged either. Perplexity, the one FANOUT_EXPECTED name, is paused
+ * since 2026-11-06: until it comes back, only ChatGPT's sample and the drop
+ * rule below can flag anything. Copilot left the list when it moved to Bing
+ * AI Mode, which shares no searches.
  */
 // `chatgpt`, the OpenAI API model's answers (the tracking worker's
 // resolveModelPlatform), isn't expected: its web_search calls carry their
 // queries, but gpt-5-chat-latest may search rarely or not at all, so a silent
 // day is no news. It's judged on a drop only, like any other platform.
-export const FANOUT_EXPECTED = ['copilot-web', 'perplexity-web'];
+export const FANOUT_EXPECTED = ['perplexity-web'];
 export const FANOUT_DROP_RATIO = 0.25;
 /** Fewer answers than this, on either side, are too few to judge. */
 export const FANOUT_MIN_ANSWERS = 20;

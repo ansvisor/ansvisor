@@ -26,6 +26,12 @@ const team = vi.hoisted(() => ({
   setMemberBrands: vi.fn(),
 }));
 vi.mock('@/lib/actions/team', () => team);
+// The roles read Team, roles & access's one table adds (owner, 2026-11-09).
+const access = vi.hoisted(() => ({ listRoleMembers: vi.fn() }));
+vi.mock('@/lib/actions/chat-access', () => access);
+vi.mock('@/components/chat-access/roles-access-section', () => ({
+  MemberBrandsCell: ({ brands }: { brands: { scope: string } }) => <>{brands.scope}</>,
+}));
 vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -94,14 +100,14 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-async function render(isLocked: boolean) {
+async function render(isLocked: boolean, withChatAccess = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
         <UpgradeDialogContext.Provider
           value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
         >
-          <TeamSection />
+          <TeamSection withChatAccess={withChatAccess} />
         </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
@@ -289,5 +295,81 @@ describe('TeamSection: brands each person sees', () => {
     expect(document.querySelector('button[aria-label="Edit brands for Bob"]')).toBeNull();
     await click(byText('Invite member'));
     expect(radio('All brands')).toBeUndefined();
+  });
+});
+
+/** Team, roles & access (owner, 2026-11-09): the members in one table, with the roles' columns. */
+describe('TeamSection in Team, roles & access', () => {
+  beforeEach(() => {
+    access.listRoleMembers.mockResolvedValue({
+      ok: true,
+      members: [
+        {
+          userId: 'u1',
+          name: 'Ada Admin',
+          email: 'ada@acme.test',
+          role: 'admin',
+          lastActiveAt: null,
+          isYou: true,
+          brands: { scope: 'all', names: null },
+        },
+        {
+          userId: 'u2',
+          name: 'Bob',
+          email: 'bob@acme.test',
+          role: 'analyst',
+          lastActiveAt: null,
+          isYou: false,
+          brands: { scope: 'all', names: null },
+        },
+      ],
+    });
+  });
+
+  it('lists each member once, in a table with Through Chat and Last active', async () => {
+    await render(false, true);
+    await act(async () => undefined);
+    const heads = [...document.querySelectorAll('thead th')].map((th) => th.textContent);
+    expect(heads).toEqual([
+      'Member',
+      'Role',
+      'Brands',
+      'Through Chat',
+      'Last active',
+      'Remove team member',
+    ]);
+    const rows = [...document.querySelectorAll('tbody tr')];
+    expect(rows).toHaveLength(2);
+    expect(rows[1].textContent).toContain('Bob');
+    expect(rows[1].textContent).toContain('Read-only composer · asks an Admin');
+    expect(rows[1].textContent).toContain('Not yet');
+    expect(access.listRoleMembers).toHaveBeenCalled();
+  });
+
+  it("keeps Team's controls in the row: an Admin changes Bob's role, his brands, or removes him", async () => {
+    await render(false, true);
+    await act(async () => undefined);
+    const bob = [...document.querySelectorAll('tbody tr')][1];
+    expect(bob.querySelector('[aria-label="Role"]')).not.toBeNull();
+    expect(bob.querySelector('[aria-label="Remove team member"]')).not.toBeNull();
+    // Your own row: no role picker and no Remove.
+    const me = [...document.querySelectorAll('tbody tr')][0];
+    expect(me.querySelector('[aria-label="Remove team member"]')).toBeNull();
+    await click(byLabel('Remove team member'));
+    expect(dialog()?.textContent).toContain('Bob');
+  });
+
+  it('leaves Last active as "–" when the roles read fails', async () => {
+    access.listRoleMembers.mockResolvedValue({ ok: false, failure: 'error' });
+    await render(false, true);
+    await act(async () => undefined);
+    const bob = [...document.querySelectorAll('tbody tr')][1];
+    expect(bob.querySelectorAll('td')[4].textContent).toBe('–');
+  });
+
+  it('keeps the list without the roles read on Team alone', async () => {
+    await render(false);
+    expect(document.querySelector('table')).toBeNull();
+    expect(access.listRoleMembers).not.toHaveBeenCalled();
   });
 });

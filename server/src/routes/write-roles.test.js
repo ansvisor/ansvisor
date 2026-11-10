@@ -48,6 +48,7 @@ const OPEN = {
   'POST /api/content-drafts/wordpress-status': 'Reads where a page stands in WordPress.',
   'POST /api/content-drafts/framer-status': 'Reads where a page stands in Framer.',
   'POST /api/content-drafts/wix-status': 'Reads where a page stands in Wix.',
+  'POST /api/content-drafts/hubspot-status': 'Reads where a page stands in HubSpot.',
   'POST /api/content-pages/import': 'Imports a page into the editor.',
   'POST /api/content-pages/links': "Reads the draft's links.",
   'POST /api/content-pages/source-classes': "Classifies the draft's sources.",

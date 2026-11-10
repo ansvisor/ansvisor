@@ -122,7 +122,10 @@ export function WorkAreasStep({
                   <span
                     className={cn(
                       'ml-auto flex h-4 w-4 shrink-0 items-center justify-center rounded-full border',
-                      on && 'border-foreground bg-foreground text-background',
+                      // The empty circle needs a stronger ring on the dark card.
+                      on
+                        ? 'border-foreground bg-foreground text-background'
+                        : 'dark:border-foreground/40',
                     )}
                   >
                     {on && <Check className="h-3 w-3" />}

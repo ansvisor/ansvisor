@@ -18,6 +18,37 @@ const nextConfig: NextConfig = {
     // The free report card's PDF, for the API server's e-mail.
     '/api/internal/report-card/pdf': ['./public/fonts/**/*'],
   },
+  // MCP over OAuth (#2141): the consent page is never framed (another site
+  // can't overlay its Allow button), never cached, and sends no referrer to
+  // the app it hands the person back to.
+  async headers() {
+    const consent = [
+      { key: 'X-Frame-Options', value: 'DENY' },
+      { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+      { key: 'Referrer-Policy', value: 'no-referrer' },
+      { key: 'Cache-Control', value: 'no-store' },
+    ];
+    return [
+      { source: '/oauth/:path*', headers: consent },
+      { source: '/en/oauth/:path*', headers: consent },
+    ];
+  },
+  // MCP over OAuth (#2141): the discovery documents sit at the root's
+  // /.well-known, where RFC 9728 and RFC 8414 put them; their handlers are
+  // API routes. The proxy skips both (a dot in the path, /api).
+  async rewrites() {
+    return [
+      {
+        source: '/.well-known/oauth-protected-resource/api/mcp',
+        destination: '/api/oauth/protected-resource',
+      },
+      {
+        source: '/.well-known/oauth-protected-resource',
+        destination: '/api/oauth/protected-resource',
+      },
+      { source: '/.well-known/oauth-authorization-server', destination: '/api/oauth/metadata' },
+    ];
+  },
   // The Prompts area has a route per view (PROMPT-001). Older links and
   // bookmarks — /dashboard/prompts and its ?tab= / ?view= shapes — land on
   // the matching route; their other query params come along.

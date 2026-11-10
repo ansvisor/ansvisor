@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { AuthProvider } from '@/components/providers/auth-provider';
 import { OnboardingSignOutButton } from '@/components/auth/onboarding-sign-out-button';
+import { NewUserTheme } from '@/components/theme/new-user-theme';
 import { isCloud } from '@/config/plans';
 import { evaluateSubscriptionAccess } from '@/lib/billing/subscription-access';
 import type { TeamRole } from '@/components/providers/role-provider';
@@ -51,6 +52,9 @@ export default async function OnboardingLayout({ children }: { children: React.R
   return (
     <>
       <AuthProvider user={user} />
+      {/* Onboarding and the welcome page: also a new person signed up with
+          Google from the sign-in page, or invited (config/theme.ts). */}
+      <NewUserTheme />
       <OnboardingSignOutButton />
       {children}
     </>

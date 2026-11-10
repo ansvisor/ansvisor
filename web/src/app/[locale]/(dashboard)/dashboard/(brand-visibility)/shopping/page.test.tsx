@@ -63,6 +63,8 @@ vi.mock('@/hooks/use-integration-connect', () => ({
 }));
 vi.mock('../../traffic/_bots-connect', () => ({ BotsSource: () => null }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
 
 // The charts measure their box; this jsdom has no ResizeObserver.
 vi.stubGlobal(
@@ -175,6 +177,7 @@ beforeEach(() => {
   answer();
   access.plan = true;
   access.canManage = true;
+  analytics.track.mockClear();
   window.localStorage.clear();
   useBrandStore.setState({ brands: [shop as never], activeBrandId: BRAND, loaded: true });
   container = document.createElement('div');
@@ -262,6 +265,10 @@ describe('the Product Visibility tab', () => {
     expect(reads.getShoppingDestinations).not.toHaveBeenCalled();
     expect(reads.getShoppingAiOrders).not.toHaveBeenCalled();
     expect(container.textContent).toContain('Upgrade for full shopping analytics');
+    // The plan gate shown, counted once, by its feature.
+    expect(analytics.track.mock.calls).toEqual([
+      ['upgrade_wall_shown', { feature: 'shopping_analytics', reason: 'plan', source: 'shopping' }],
+    ]);
   });
 
   it('offers to turn Shopping mode on for an e-commerce brand that has it off, to admins and managers', async () => {

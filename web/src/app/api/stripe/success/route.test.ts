@@ -252,8 +252,8 @@ describe('GET /api/stripe/success and the demo brand', () => {
 });
 
 /**
- * Where the person lands (owner decision 2026-11-06): the free trial on Chat
- * Home, a paid plan on the Action Center, while the new Chat is on.
+ * Where the person lands (owner decisions 2026-11-06 and 2026-11-09): Chat
+ * Home while the new Chat is on, whatever the plan; else the Action Center.
  */
 describe('GET /api/stripe/success, the start page', () => {
   const checkout = (status: string, planId = 'starter') => ({
@@ -283,14 +283,14 @@ describe('GET /api/stripe/success, the start page', () => {
     expect(location.searchParams.get('jobId')).toBe('job-s');
   });
 
-  it('opens the Action Center for a plan bought without a trial, or an Enterprise trial', async () => {
+  it('opens Chat Home for a plan bought without a trial, and an Enterprise trial, too', async () => {
     stripeApi.retrieveSession.mockResolvedValue(checkout('active'));
     let res = await back();
-    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/action-center/actions');
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/chat');
 
     stripeApi.retrieveSession.mockResolvedValue(checkout('trialing', 'enterprise'));
     res = await back();
-    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/action-center/actions');
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/chat');
   });
 
   it('keeps the Action Center while the new Chat is off', async () => {

@@ -87,7 +87,7 @@ export function MentionTrendChart({
             dataKey="day"
             tickFormatter={(day: string) => dayLabel(day, locale)}
             minTickGap={24}
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"
@@ -110,7 +110,7 @@ export function MentionTrendChart({
                   ? f.percent(v, 0)
                   : f.number(v)
             }
-            tick={{ fontSize: 11 }}
+            tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }}
             tickLine={false}
             axisLine={false}
             className="fill-muted-foreground"

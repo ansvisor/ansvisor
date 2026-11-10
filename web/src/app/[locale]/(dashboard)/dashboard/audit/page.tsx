@@ -52,6 +52,7 @@ import {
 } from '@/lib/actions/audits';
 import { pct, scoreColor, CATEGORY_META } from '@/components/audit/audit-report';
 import { formatMonthDay, formatNumber } from '@/lib/format';
+import { frictionFlow } from '@/lib/friction-events';
 import { SiteTrustCard } from './_site-trust-card';
 import { ScoreTrendChart } from './_charts';
 import { AuditPagesTable } from './_pages-table';
@@ -83,6 +84,9 @@ const RANGE_DAYS: Record<RangePreset, number | null> = { '7d': 7, '30d': 30, '90
 
 /** Pages one bulk request may audit (the server's BULK_AUDIT_MAX). */
 const BULK_REQUEST_MAX = 50;
+
+/** site_audit_run: Run audit, or the pages or opportunities picked, until the audits run. */
+const SITE_AUDIT_RUN = frictionFlow('site_audit_run');
 
 /** A tab's count, as the mockup's grey pill. */
 function TabCount({ count }: { count: number }) {
@@ -319,8 +323,10 @@ export default function SiteAuditPage() {
         askOne(started.recent, () => void startAudit(brandId, target, true));
         return;
       }
+      SITE_AUDIT_RUN.completed();
       router.push(`/dashboard/audit/${started.audit.id}`);
     } catch (err) {
+      SITE_AUDIT_RUN.failed();
       toast.error(err instanceof Error ? err.message : t('failed'));
       setRunning(false);
     }
@@ -336,6 +342,7 @@ export default function SiteAuditPage() {
         toast.error(t('urlRequired'));
         return;
       }
+      SITE_AUDIT_RUN.started();
       await startAudit(activeBrandId, url.trim());
     },
     { action: tActions('runAudit') },
@@ -453,12 +460,15 @@ export default function SiteAuditPage() {
   const handleBulkReaudit = async (urls: string[]) => {
     if (!activeBrandId || urls.length === 0) return;
     setStartingBulk(true);
+    SITE_AUDIT_RUN.started();
     try {
       await auditUrls(activeBrandId, urls);
+      SITE_AUDIT_RUN.completed();
       setSelected(new Set());
       setConfirm(null);
       await reloadInPlace(activeBrandId);
     } catch (err) {
+      SITE_AUDIT_RUN.failed();
       toast.error(err instanceof Error ? err.message : t('failed'));
     } finally {
       setStartingBulk(false);
@@ -506,12 +516,15 @@ export default function SiteAuditPage() {
   const handleAuditOpps = async (urls: string[]) => {
     if (!activeBrandId || urls.length === 0) return;
     setStartingBulk(true);
+    SITE_AUDIT_RUN.started();
     try {
       await auditUrls(activeBrandId, urls);
+      SITE_AUDIT_RUN.completed();
       setOppSelected(new Set());
       setConfirm(null);
       await reloadInPlace(activeBrandId);
     } catch (err) {
+      SITE_AUDIT_RUN.failed();
       toast.error(err instanceof Error ? err.message : t('failed'));
     } finally {
       setStartingBulk(false);

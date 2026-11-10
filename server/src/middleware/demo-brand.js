@@ -137,6 +137,14 @@ export const DEMO_GUARDED = [
   guard('POST /cms/brands/:brandId/indexnow', brandIn('path')),
   guard('POST /cms/brands/:brandId/indexnow/check', brandIn('path')),
   guard('DELETE /cms/brands/:brandId/indexnow', brandIn('path')),
+  // HubSpot (hubspot.js, #2140): connecting, the account used, what Ansvisor may write, disconnecting.
+  guard('PUT /hubspot/brands/:brandId/blog', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/connect', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/activate', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/use', brandIn('path')),
+  guard('PUT /hubspot/brands/:brandId/settings', brandIn('path')),
+  guard('POST /hubspot/brands/:brandId/setup', brandIn('path')),
+  guard('DELETE /hubspot/brands/:brandId', brandIn('path')),
 
   // Content Editor (content-drafts.js): the draft's brand is in the body;
   // the draft itself is checked too.
@@ -148,6 +156,7 @@ export const DEMO_GUARDED = [
   guard('POST /content-drafts/wordpress-status', brandIn('body')),
   guard('POST /content-drafts/framer-status', brandIn('body')),
   guard('POST /content-drafts/wix-status', brandIn('body')),
+  guard('POST /content-drafts/hubspot-status', brandIn('body')),
   guard(
     'POST /content-drafts/:draftId/brief',
     brandIn('body'),
@@ -212,6 +221,13 @@ export const DEMO_GUARDED = [
   guard('POST /integrations/:provider/brands/:brandId/connect', brandIn('path')),
   guard('POST /integrations/:provider/brands/:brandId/activate', brandIn('path')),
   guard('DELETE /integrations/:provider/brands/:brandId', brandIn('path')),
+  // A brand's Slack (slack.js, #2139): the demo brand connects nothing (the route refuses it too).
+  guard('POST /slack/brands/:brandId/connect', brandIn('path')),
+  guard('POST /slack/brands/:brandId/activate', brandIn('path')),
+  guard('POST /slack/brands/:brandId/use', brandIn('path')),
+  guard('PUT /slack/brands/:brandId', brandIn('path')),
+  guard('POST /slack/brands/:brandId/test', brandIn('path')),
+  guard('DELETE /slack/brands/:brandId', brandIn('path')),
 
   // Mentions (mentions.js).
   guard('POST /mentions/action', brandIn('body')),

@@ -38,8 +38,13 @@ import { NO_CONNECTION_ROWS, readConnectionRows, type ConnectionRows } from './c
 export const CONNECTION_CATEGORIES = ['search', 'cms', 'ecommerce', 'crm', 'team'] as const;
 export type ConnectionCategory = (typeof CONNECTION_CATEGORIES)[number];
 
-/** What a connected tool lets Ansvisor do: read only, write drafts, or send pages out. */
-export const CONNECTION_ACCESS = ['read_only', 'read_write_drafts', 'sends_pages'] as const;
+/** What a connected tool lets Ansvisor do: read only, write drafts, send pages out, or post messages. */
+export const CONNECTION_ACCESS = [
+  'read_only',
+  'read_write_drafts',
+  'sends_pages',
+  'sends_messages',
+] as const;
 export type ConnectionAccess = (typeof CONNECTION_ACCESS)[number];
 
 /** How a brand lets go of a tool from Chat: its CMS site, or its Google property. Null: in Settings. */
@@ -60,6 +65,8 @@ export interface ConnectionTool {
 }
 
 const INTEGRATIONS = '/dashboard/settings/integrations';
+/** Slack's kind (#2139): no agent asks for it; it carries the brand's messages. */
+const SLACK_CONNECTION = 'slack';
 /** Stores, feeds and uploads share Settings › Integrations' product catalog card. */
 const CATALOG_CARD = `${INTEGRATIONS}#product-catalog` as const;
 
@@ -120,7 +127,8 @@ export const CONNECTION_TOOLS: readonly ConnectionTool[] = [
   soon('stripe', 'crm'),
   soon('google_sheets', 'team'),
   soon('looker_studio', 'team'),
-  soon('slack', 'team'),
+  // Where a brand's Pulse and alerts go (#2139): its workspace and channel.
+  tool('slack', 'team', SLACK_CONNECTION, 'sends_messages'),
   soon('microsoft_teams', 'team'),
   soon('zapier', 'team'),
 ];
@@ -262,6 +270,18 @@ function stateOf(t: ConnectionTool, input: RecordInput): ToolState {
       account: site.site_name?.trim() || null,
       connectedById: site.connected_by ?? null,
       connectedAt: site.created_at ?? null,
+    };
+  }
+  if (t.key === 'slack') {
+    const slack = rows.slack;
+    if (!slack || (slack.status !== 'connected' && slack.status !== 'auth_failed')) {
+      return NOT_CONNECTED;
+    }
+    return {
+      status: slack.status === 'connected' ? 'connected' : 'failing',
+      account: accountsLine([slack.channel ? `#${slack.channel}` : null, slack.label]),
+      connectedById: slack.connected_by ?? null,
+      connectedAt: slack.created_at ?? null,
     };
   }
   if (t.key === 'webhook') {
@@ -476,6 +496,7 @@ function connectorIds(rows: ConnectionRows, signIns: readonly SignInRow[]): (str
   return [
     ...rows.cms.map((c) => c.connected_by ?? null),
     ...rows.catalog.map((c) => c.created_by ?? null),
+    rows.slack?.connected_by ?? null,
     ...signIns.map((s) => s.connected_by),
   ];
 }

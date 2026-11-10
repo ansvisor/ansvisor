@@ -56,6 +56,7 @@ import {
   shouldPause,
 } from './rules.js';
 import { buildSummary } from './summary.js';
+import { postDailySuggestion } from '../slack/suggestion.js';
 
 const DAY_MS = 86_400_000;
 /** Rows a read pages through at a time (PostgREST's default ceiling). */
@@ -214,7 +215,7 @@ async function markFirstSinceUse(db, { brandId, userIds }) {
  * today's suggestions written. Counts and events go to `tally` as they
  * happen, so a failure later in the brand keeps what was done before it.
  */
-async function runBrand(db, { orgId, brandId, people, zones, now, tally }) {
+async function runBrand(db, { orgId, brandId, people, zones, now, tally, postSuggestion }) {
   const at = now.toISOString();
 
   const feeds = await readAll('feeds read', () =>
@@ -354,6 +355,18 @@ async function runBrand(db, { orgId, brandId, people, zones, now, tally }) {
     });
   }
   await markFirstSinceUse(db, { brandId, userIds: firsts });
+
+  // The brand's Slack channel gets one of today's suggestions (#2139): the
+  // first run that writes some for the brand posts it; never throws.
+  const posted = (sent ?? []).map((row) => pickOf.get(row.user_id)).filter(Boolean);
+  if (posted.length > 0) {
+    await postSuggestion({
+      orgId,
+      brandId,
+      picks: posted.map(({ action, pick }) => ({ action, pick })),
+      now,
+    });
+  }
 }
 
 /**
@@ -365,7 +378,7 @@ async function runBrand(db, { orgId, brandId, people, zones, now, tally }) {
  * counted and logged, and the next one goes on; the people's access unread
  * fails the workspace, and nothing is written for it this hour.
  */
-async function runWorkspace(db, { orgId, brands, now, tally }) {
+async function runWorkspace(db, { orgId, brands, now, tally, postSuggestion }) {
   const people = await loadPeople(db, orgId);
   if (people.length === 0) return;
   const zones = resolveZones(await loadAnswerZones(db, orgId, now), people);
@@ -380,7 +393,15 @@ async function runWorkspace(db, { orgId, brands, now, tally }) {
     const seeing = morning.filter((person) => readers.get(person.id)?.has(brand.id));
     if (seeing.length === 0) continue;
     try {
-      await runBrand(db, { orgId, brandId: brand.id, people: seeing, zones, now, tally });
+      await runBrand(db, {
+        orgId,
+        brandId: brand.id,
+        people: seeing,
+        zones,
+        now,
+        tally,
+        postSuggestion,
+      });
     } catch (err) {
       tally.failed++;
       logger.error(
@@ -396,7 +417,9 @@ async function runWorkspace(db, { orgId, brands, now, tally }) {
  * that fails is counted and logged, and the next one goes on. The run's
  * events are sent once, at its end, whatever failed.
  *
- * @param {{ db?: object, now?: Date, capture?: typeof captureProductEvents }} [options]
+ * @param {{ db?: object, now?: Date, capture?: typeof captureProductEvents,
+ *   postSuggestion?: typeof postDailySuggestion }} [options] postSuggestion: the brand's
+ *   Slack post of the day (#2139)
  * @returns {Promise<{ workspaces: number, feedsMade: number, sent: number, paused: number,
  *   deleted: number, failed: number }>}
  */
@@ -404,6 +427,7 @@ export async function runDailySuggestions({
   db = supabaseAdmin,
   now = new Date(),
   capture = captureProductEvents,
+  postSuggestion = postDailySuggestion,
 } = {}) {
   const tally = {
     workspaces: 0,
@@ -443,7 +467,7 @@ export async function runDailySuggestions({
     for (const [orgId, orgBrands] of byOrg) {
       if (!active.has(orgId)) continue;
       try {
-        await runWorkspace(db, { orgId, brands: orgBrands, now, tally });
+        await runWorkspace(db, { orgId, brands: orgBrands, now, tally, postSuggestion });
         tally.workspaces++;
       } catch (err) {
         tally.failed++;

@@ -27,6 +27,7 @@ import {
   readWordPress,
   type WordPressConnection,
 } from '@/lib/wordpress-client';
+import { frictionFlow } from '@/lib/friction-events';
 import { useBrandStore } from '@/stores/use-brand-store';
 
 /**
@@ -103,7 +104,7 @@ export function WordPressCard() {
   };
 
   return (
-    <div className="space-y-4 rounded-lg border p-4">
+    <div className="space-y-4 rounded-lg border bg-card p-4">
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted/50">
           <Newspaper className="h-5 w-5 text-muted-foreground" />
@@ -227,6 +228,9 @@ export function WordPressCard() {
   );
 }
 
+/** cms_connect: the Connect below, until the CMS is connected. */
+const CONNECT = frictionFlow('cms_connect', { target: 'wordpress' });
+
 /** The site, its user and an Application Password: the password goes to the API once, never shown again. */
 function SignInForm({
   brandId,
@@ -254,6 +258,7 @@ function SignInForm({
 
   const connect = async () => {
     setConnecting(true);
+    CONNECT.started();
     const result = await connectWordPress(brandId, {
       siteUrl: siteUrl.trim(),
       username: username.trim(),
@@ -261,10 +266,12 @@ function SignInForm({
     });
     setConnecting(false);
     if (!result.ok) {
+      CONNECT.failed(result.code);
       if (result.code === 'subscription') openUpgrade();
       else toast.error(t(`errors.${result.code}`));
       return;
     }
+    CONNECT.completed();
     setPassword('');
     toast.success(t('connectedToast'));
     onConnected(result.connection);

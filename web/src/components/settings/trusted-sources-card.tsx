@@ -59,7 +59,7 @@ export function TrustedSourcesCard({
         <CardDescription>{t('description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <ul className="divide-y rounded-xl border">
+        <ul className="divide-y rounded-xl border bg-card">
           {read.brands.map((brand) =>
             editing?.brandId === brand.id ? (
               <li key={brand.id} className="space-y-2 px-3 py-2.5">

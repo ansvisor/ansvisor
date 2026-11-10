@@ -73,6 +73,43 @@ describe('resolveAgentModelConfig', () => {
     });
     expect(eqs).toHaveLength(0);
   });
+
+  it('tries Anthropic, then OpenRouter, then Gemini on self-host', async () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    vi.stubEnv('ANTHROPIC_API_KEY', '');
+    vi.stubEnv('OPENROUTER_API_KEY', 'or-key');
+    vi.stubEnv('OPENROUTER_MODEL', 'z-ai/glm-4.6:free');
+    expect(await resolveAgentModelConfig('org1')).toEqual({
+      provider: 'openrouter',
+      apiKey: 'or-key',
+      settings: { model: 'z-ai/glm-4.6:free' },
+    });
+    expect(eqs).toHaveLength(0);
+    // No OPENROUTER_MODEL: the Settings-page example.
+    vi.stubEnv('OPENROUTER_MODEL', '');
+    expect(await resolveAgentModelConfig('org1')).toEqual({
+      provider: 'openrouter',
+      apiKey: 'or-key',
+      settings: { model: 'openai/gpt-5.5' },
+    });
+    // Then Gemini, but only when the operator opted in: the Google key
+    // serves other features on this box too.
+    vi.stubEnv('OPENROUTER_API_KEY', '');
+    vi.stubEnv('GOOGLE_GENERATIVE_AI_API_KEY', 'g-key');
+    expect(await resolveAgentModelConfig('org1')).toBeNull();
+    expect(await isAgentKeyConfigured('org1')).toBe(false);
+    vi.stubEnv('AGENT_ALLOW_GOOGLE_KEY', 'true');
+    expect(await resolveAgentModelConfig('org1')).toEqual({
+      provider: 'google',
+      apiKey: 'g-key',
+      settings: {},
+    });
+    expect(await isAgentKeyConfigured('org1')).toBe(true);
+    // And none of them: null.
+    vi.stubEnv('GOOGLE_GENERATIVE_AI_API_KEY', '');
+    expect(await resolveAgentModelConfig('org1')).toBeNull();
+    expect(await isAgentKeyConfigured('org1')).toBe(false);
+  });
 });
 
 describe('readActiveKey', () => {

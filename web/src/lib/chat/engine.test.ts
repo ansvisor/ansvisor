@@ -345,6 +345,13 @@ vi.mock('./registry/tools', async (importOriginal) => {
     audit,
     // The same read as one of the workspace's own drafts (WORKSPACE_READS): scanned, never tainting.
     { ...readVisibility, name: 'get_draft' },
+    // A heavy read that runs only within a skill naming it (the fan-outs, 2026-11-09).
+    {
+      ...readVisibility,
+      name: 'get_fanout_gaps',
+      labelKey: 'fanoutGaps',
+      withSkill: true as const,
+    },
     ...real.CHAT_TOOLS.filter(
       (t) =>
         t.class !== 'read' ||
@@ -693,6 +700,7 @@ describe('a turn', () => {
       'list_citations',
       'list_site_audit_issues',
       'get_draft',
+      'get_fanout_gaps',
       'check_draft_rules',
       'fetch_page',
       'explain_change',
@@ -6573,6 +6581,27 @@ describe('skills (W2-04, CHAT-13 items 3–6)', () => {
       'refresh',
       'compare',
     ]);
+  });
+
+  it('reads fan-out gaps only within a skill that names them, and refuses them at once elsewhere', async () => {
+    // A general question (Chat Home's): the read is refused before it reads anything.
+    const { haiku } = useModels(
+      [calls(toolCall('f1', 'get_fanout_gaps', { brand_id: BRAND })), READY],
+      [text('Ok.')],
+    );
+    await turn(ADMIN, 'Are we winning in AI search this month?');
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    const refused = JSON.stringify(haiku.seen[1].prompt);
+    expect(refused).toContain('not_available');
+    expect(refused).toContain('runs only within a loaded skill');
+
+    // /fanout names the read: it runs.
+    useModels(
+      [calls(toolCall('f2', 'get_fanout_gaps', { brand_id: BRAND })), READY],
+      [text('Ok.')],
+    );
+    await turn(ADMIN, '/fanout fill our gaps');
+    expect(fakes.readRun).toHaveBeenCalledTimes(1);
   });
 
   it("loads no skill the model picks after outside text was read; the person's /name still loads", async () => {

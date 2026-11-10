@@ -388,8 +388,8 @@
       "label": "How to start",
       "trial": "{days}-day trial",
       "month": "Monthly",
-      "monthOffer": "{discount} off {duration, select, once {the first month} repeating {the first {months, plural, one {month} other {# months}}} other {every month}}",
-      "year": "Yearly"
+      "year": "Yearly",
+      "demo": "Demo <note>· no card</note>"
     },
     "dueToday": "Due today",
     "freeUntil": "Free until {date}, then {price}/month",
@@ -418,10 +418,12 @@
       "failed": "Couldn't open the demo brand. Try again."
     },
     "onboarding": {
-      "title": "Not ready to add a card? Explore a demo brand",
-      "body": "See Ansvisor with sample data: prompts, AI answers, content and reports. No card needed. {brand} stays saved, and tracking starts when you pick a plan.",
-      "yourBrand": "Your brand",
-      "cta": "Explore the demo"
+      "title": "Look around a sample brand",
+      "badge": "{demoBrand} · sample data",
+      "body": "You'll explore <b>{demoBrand}</b>, a made-up brand with sample data, not <b>{brand}</b>. You can open every page, but nothing runs or changes there. {named, select, yes {{brand}} other {Your brand}} stays saved, and tracking starts when you pick a plan. No card needed.",
+      "yourBrand": "your brand",
+      "cta": "Explore the sample brand",
+      "notReady": "Not ready for a card? <link>Explore a sample brand first →</link>"
     },
     "seeTheDemo": "See the demo",
     "settingUp": "Setting up the demo…",
@@ -2332,7 +2334,8 @@
         "categoryReason": "The topic is about your {category} category, whose page {page} is live with {inStock, plural, one {# product} other {# products}} in stock. Optimize it for the topic’s questions; its best sellers are picked for its shopping path.",
         "reason": "{prompts, number} of {of, plural, one {# prompt} other {# prompts}} {play, select, comparison {ask to compare options} best_of {ask for the best options} guide {ask how to do something or fix a problem} definition {ask what something is} other {ask for this}}: {share, number, percent} of their estimated AI searches.",
         "also": "Also worth doing here",
-        "alsoLine": "{name} · {share, number, percent} of the AI searches"
+        "alsoLine": "{name} · {share, number, percent} of the AI searches",
+        "alsoGuideLine": "{name} next to {page}: no page of yours guides shoppers to your {category} category yet. Link it to that page and the category’s best sellers."
       }
     },
     "gettingStarted": {
@@ -5729,7 +5732,7 @@
       },
       "notify": {
         "label": "Notify me when an agent needs me",
-        "note": "When an agent stops to ask you or wait for your OK: your Inbox always, and an email once per run",
+        "note": "When an agent stops to ask you or wait for your OK: your Inbox always, and once per run an email, or with Inbox + Slack a message in the brand’s Slack channel that mentions you",
         "inbox_email": "Inbox + email",
         "inbox": "Inbox only",
         "inbox_slack": "Inbox + Slack",
@@ -5803,7 +5806,6 @@
       "readOnly": "You're {role, select, manager {a Manager} analyst {an Analyst} other {an Agency partner}} · read-only here",
       "readOnlyNote": "Only Admins change roles",
       "members": "Members",
-      "manageInTeam": "Invite or remove in Team",
       "columns": {
         "member": "Member",
         "role": "Role",
@@ -7667,6 +7669,11 @@
       "rejected": "Rejected. /{name} stays off.",
       "blockedNote": "The scan blocked this skill, so it can't be approved.",
       "waitingNote": "An Admin reviews it before anyone can use it.",
+      "notAdminNote": "Only an Admin can approve a skill, and you're {role, select, manager {a Manager} analyst {an Analyst} other {an Agency partner}} in this workspace.",
+      "askAdmins": "Ask {names} to review it.",
+      "askAnAdmin": "Ask an Admin of your workspace to review it.",
+      "readOnlyNote": "Your workspace's plan has ended, so no skill can be approved until it's renewed.",
+      "seePlans": "See plans",
       "decided": "{status} on {date}.",
       "failed": "The decision couldn't be saved. Try again."
     },
@@ -7726,6 +7733,7 @@
       "adding": "Adding…",
       "added": "Scanned · instructions only · admin review",
       "requested": "Scanned · instructions only · sent to your Admins for review",
+      "addedOn": "Added. /{name} is on for you; share it from My skills when it's ready for everyone.",
       "addFailed": "Couldn't add the skill. Try again.",
       "state": {
         "pending_review": "Pending approval",
@@ -7766,7 +7774,7 @@
       "license": "License",
       "licenseText": "License text",
       "attribution": "{repo} · MIT",
-      "addNote": "Adding it scans it again; an Admin reviews it before anyone uses it.",
+      "addNote": "Adding it scans it again and turns it on for you. Share it from My skills to give it to your team.",
       "requestNote": "Adding it asks your Admins to review it.",
       "blockedNote": "The scan blocks this skill, so it can't be added.",
       "openReview": "Open review"
@@ -8574,10 +8582,11 @@
     "signIn": "Sign in",
     "signUp": "Sign up",
     "signInSubtitle": "Welcome back! Continue to your workspace.",
-    "signUpSubtitle": "Create your account to start tracking your brand across AI platforms.",
+    "signUpHeadline": "Be the answer AI gives.",
     "signOut": "Sign out",
     "email": "Email",
     "workEmail": "Work email",
+    "workEmailSuggested": "Work email suggested",
     "password": "Password",
     "forgotPassword": "Forgot password?",
     "noAccount": "Don't have an account?",
@@ -8622,32 +8631,78 @@
       "emailNotConfirmed": "Please verify your email address first. Check your inbox for the confirmation link.",
       "signOutError": "Failed to sign out. Please try again."
     },
-    "pitch": {
-      "eyebrow": "AI visibility platform",
-      "titleLead": "Improve AI Visibility and",
-      "titleAccent": "Drive Growth.",
-      "subtitle": "Track your brand's presence across ChatGPT, Gemini, Google AI and more.",
-      "features": {
-        "monitor": {
-          "title": "Monitor brand mentions and citations",
-          "body": "See how and where your brand appears across AI search."
-        },
-        "discover": {
-          "title": "Discover new opportunities",
-          "body": "Find high-potential topics and prompts to grow visibility."
-        },
-        "act": {
-          "title": "Turn insights into growth strategies",
-          "body": "Prioritize actions and track your impact over time."
-        }
-      }
-    },
+    "tracksEngines": "Tracks ChatGPT · Claude · Gemini · Google AI Overviews · Google AI Mode · Bing AI Mode",
     "footer": {
       "openSource": "Open source under",
       "mitLicense": "MIT license",
       "terms": "Terms",
       "privacy": "Privacy"
-    }
+    },
+    "oauthSignInLine": "<b>Sign in to connect {app} to Ansvisor.</b> Next, you'll choose what it can do.",
+    "oauthSignInLineUnchecked": "<b>Sign in to connect an app to Ansvisor.</b> Next, you'll choose what it can do."
+  },
+  "oauthConsent": {
+    "metaTitle": "Connect an app",
+    "signedInAs": "Signed in as {email}",
+    "title": "Connect {app} to Ansvisor",
+    "titleUnchecked": "Connect “{app}” to Ansvisor",
+    "titleNoName": "Connect an app to Ansvisor",
+    "theApp": "the app",
+    "recognised": "Recognised app",
+    "unchecked": "Not checked by Ansvisor",
+    "backTo": "You'll go back to <b>{host}</b>",
+    "backToComputer": "You'll go back to <b>{host}</b> (this computer)",
+    "uncheckedWarningTitle": "Allow it only if you started this connection.",
+    "uncheckedWarningName": "The name “{app}” comes from the app itself.",
+    "uncheckedWarningNoName": "Ansvisor doesn't know who made this app.",
+    "uncheckedWarningComputer": "It runs on your computer, and any program there could use this address.",
+    "account": "Signed in as",
+    "role": {
+      "admin": "Admin",
+      "manager": "Manager",
+      "analyst": "Analyst",
+      "agency_partner": "Agency partner",
+      "none": "No role"
+    },
+    "switchAccount": "Switch account",
+    "workspace": "Workspace",
+    "plan": "{plan} plan",
+    "brands": "Brands",
+    "brandsAll": "All brands ({count})",
+    "brandsSelected": "{count, plural, =0 {No brands shared with you yet} one {# brand shared with you} other {# brands shared with you}}",
+    "brandsNote": "{app} sees what you see. A change to your access counts from its next request.",
+    "willBeAbleTo": "{app} will be able to",
+    "readTitle": "Read your Ansvisor data",
+    "readBody": "Visibility, mentions, citations, prompts, content, Site Audits, shopping and the Action Center, for your brands.",
+    "writeTitle": "Make changes you ask for",
+    "writeBody": "Accept suggestions, write drafts, start Site Audits, update tasks. Some use credits. {app} is told to change things only when you ask.",
+    "writePlanNote": "On {plan}, apps can read. Changes need Growth: Ansvisor refuses them and says why.",
+    "fine": "It can do only what your role allows. Nothing is ever published to your website. You can disconnect it any time in Settings › MCP & API Keys.",
+    "cancel": "Cancel",
+    "allow": "Allow",
+    "trialTitle": "Connecting apps needs a paid plan",
+    "trialBody": "Your workspace is in its free trial. {app} can connect by sign-in once you choose Starter, Growth or Enterprise.",
+    "trialKeyNote": "In the trial you can still connect with an API key, which reads your data: Settings › MCP & API Keys.",
+    "choosePlan": "Choose a plan",
+    "endedTitle": "Your workspace's plan has ended",
+    "endedBody": "{app} can connect by sign-in again once an admin chooses a plan.",
+    "endedAdmin": "Choose a plan in Settings › Billing, then connect again from the app.",
+    "askAdmin": "Ask an admin of {workspace} to choose a plan in Settings › Billing.",
+    "noWorkspaceTitle": "Finish setting up your workspace first",
+    "noWorkspaceBody": "Your account isn't in a workspace yet. Open Ansvisor to finish, then connect again from the app.",
+    "backToApp": "Back to {app}",
+    "openAnsvisor": "Open Ansvisor",
+    "errorTitle": "This connection request can't be used",
+    "errors": {
+      "unknown_client": "Ansvisor doesn't know this app. Nothing was shared.",
+      "invalid_redirect_uri": "The app asked to send you back to an address it never registered with Ansvisor. Nothing was shared.",
+      "invalid_request": "The app's request is missing something Ansvisor needs. Nothing was shared.",
+      "expired": "This request has expired. Nothing was shared.",
+      "other_person": "This request was opened with another Ansvisor account. Nothing was shared.",
+      "rate_limited": "Too many requests to connect in a short time. Wait a few minutes. Nothing was shared."
+    },
+    "errorRetry": "Start the connection again from the app. If it keeps happening, the app may not support signing in to Ansvisor: use an API key instead.",
+    "errorCode": "Code: {code}"
   },
   "dashboard": {
     "overview": "Overview",
@@ -9329,6 +9384,13 @@
           "published": "Published {when}",
           "taken_down": "Taken down {when}: a draft post in Wix again"
         },
+        "hubspot": {
+          "queued": "Sending to HubSpot since {when}",
+          "sent": "In HubSpot as a draft blog post since {when}",
+          "failed": "The last send to HubSpot failed, {when}",
+          "published": "Published {when}",
+          "taken_down": "Taken down {when}: a draft blog post in HubSpot again"
+        },
         "framer": {
           "queued": "Sending to Framer since {when}",
           "sent": "In Framer as a draft item since {when}",
@@ -9348,6 +9410,7 @@
         "descriptionWebflow": "Each page goes to {collection} in Webflow as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWordPress": "Each page goes to {site} in WordPress as a draft post, as it is ready to publish, with the slug and meta description (as its excerpt) of its last send, else the page's. Open a page in the editor to change them. A page whose post is already published or scheduled goes as a new draft post. The meta title and JSON-LD aren't sent: set them in your SEO plugin.",
         "descriptionWix": "Each page goes to {site}'s Wix Blog as a draft post, as it is ready to publish, with its slug, meta title, meta description and JSON-LD as the post's SEO settings. Images aren't sent: add them in Wix. A page whose post is already published updates its draft there; you publish the changes in Wix.",
+        "descriptionHubspot": "Each page goes to {blog}, your HubSpot blog, as a draft post, as it is ready to publish, with its slug, meta title and meta description, its JSON-LD in the post's head and its featured image. A page sent before updates its post's draft there; you publish it in HubSpot.",
         "descriptionFramer": "Each page goes to {collection} in Framer as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them. A page whose item isn't a draft is updated there: the change goes live with your next publish of the site. Images aren't sent yet.",
         "readFailed": "Couldn't read the pages. Try again.",
         "retry": "Try again",
@@ -9381,6 +9444,7 @@
         "inProgress": "A page is already on its way to Webflow. Wait for it, then send again.",
         "inProgressWordPress": "A page is already on its way to WordPress. Wait for it, then send again.",
         "inProgressWix": "A page is already on its way to Wix. Wait for it, then send again.",
+        "inProgressHubspot": "A page is already on its way to HubSpot. Wait for it, then send again.",
         "inProgressFramer": "A page is already on its way to Framer. Wait for it, then send again.",
         "close": "Close",
         "cancel": "Cancel",
@@ -10586,12 +10650,13 @@
       },
       "send": {
         "button": "Send to CMS",
-        "hint": "Send the page to your CMS: Webflow, WordPress, Framer, Wix, or your workflow through the brand's webhook",
+        "hint": "Send the page to your CMS: Webflow, WordPress, Framer, Wix, HubSpot, or your workflow through the brand's webhook",
         "title": "Send to CMS",
         "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
         "descriptionWebflow": "The page goes to {collection} in Webflow as a draft item, with its slug and meta. You publish it in Webflow.",
         "descriptionWordPress": "The page goes to {site} in WordPress as a draft post, with its slug, and its meta description as the excerpt. The meta title isn't sent: set it in your SEO plugin. You publish it in WordPress.",
         "descriptionWix": "The page goes to {site}'s Wix Blog as a draft post, with its slug, and its meta title, meta description and JSON-LD as the post's SEO settings. You publish it in Wix.",
+        "descriptionHubspot": "The page goes to {blog}, your HubSpot blog, as a draft post, with its slug, meta title and meta description, its JSON-LD in the post's head and its featured image. You publish it in HubSpot.",
         "descriptionFramer": "The page goes to {collection} in Framer as a draft item, with its slug and meta. Images aren't sent yet. You publish it in Framer.",
         "descriptionReading": "The page goes to your CMS with its slug and meta, kept on the page.",
         "target": {
@@ -10618,6 +10683,11 @@
             "hint": "A draft post on {site}'s Blog",
             "notReady": "API key refused: connect Wix again in Settings › Integrations"
           },
+          "hubspot": {
+            "title": "HubSpot",
+            "hint": "A draft blog post on {blog}",
+            "notReady": "Not ready: pick the blog, or connect HubSpot again, in Settings › Integrations"
+          },
           "webhook": {
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
@@ -10625,6 +10695,7 @@
           "unchecked": "Couldn't check Webflow just now, so this send goes to your workflow.",
           "uncheckedWordPress": "Couldn't check WordPress just now, so this send goes to your workflow.",
           "uncheckedWix": "Couldn't check Wix just now, so this send goes to your workflow.",
+          "uncheckedHubspot": "Couldn't check HubSpot just now, so this send goes to your workflow.",
           "uncheckedFramer": "Couldn't check Framer just now, so this send goes to your workflow.",
           "retry": "Try again"
         },
@@ -10675,6 +10746,12 @@
           "failed": "The last send to Wix failed, {when}.",
           "published": "Published {when}."
         },
+        "lastHubspot": {
+          "queued": "Last sent to HubSpot {when}, still on its way.",
+          "sent": "In HubSpot as a draft blog post since {when}.",
+          "failed": "The last send to HubSpot failed, {when}.",
+          "published": "Published {when}."
+        },
         "lastFramer": {
           "queued": "Last sent to Framer {when}, still on its way.",
           "sent": "In Framer as a draft item since {when}.",
@@ -10702,6 +10779,15 @@
           "no_webhookWebflow": "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations.",
           "wordpressFailed": "WordPress didn't take the page: {reason}",
           "wixFailed": "Wix didn't take the page: {reason}",
+          "hubspotFailed": "HubSpot didn't take the page: {reason}",
+          "hubspot_not_configured": "HubSpot isn't set up on this server. Send to your workflow instead.",
+          "no_hubspot": "Connect HubSpot in Settings › Integrations first.",
+          "hubspot_plan": "Sending pages to HubSpot comes with the Growth plan.",
+          "hubspot_refused": "HubSpot refused the sign-in. Connect it again in Settings › Integrations.",
+          "hubspot_no_consent": "Allow sending pages as drafts on the HubSpot card in Settings › Integrations.",
+          "hubspot_not_ready": "Pick the HubSpot blog pages go to in Settings › Integrations.",
+          "in_progressHubspot": "This page is already on its way to HubSpot. Wait for it, then send again.",
+          "no_webhookHubspot": "This brand's HubSpot isn't ready, and it has no webhook. Pick its blog, or connect HubSpot again, in Settings › Integrations.",
           "wordpress_not_configured": "WordPress isn't set up on this server. Send to your workflow instead.",
           "no_wordpress": "Connect WordPress in Settings › Integrations first.",
           "wordpress_refused": "WordPress refused the sign-in. Connect it again in Settings › Integrations.",
@@ -10737,6 +10823,8 @@
         "framerLive": "The item isn't a draft in Framer, so the change goes live with your next publish of the site.",
         "sentWix": "Sent to Wix as a draft post",
         "sentWixUpdated": "Draft post updated in Wix",
+        "sentHubspot": "Sent to HubSpot as a draft blog post",
+        "sentHubspotUpdated": "Draft blog post updated in HubSpot",
         "wixImages": "{images, plural, one {# image wasn't sent: add it in Wix.} other {# images weren't sent: add them in Wix.}}"
       },
       "rulesChip": "{met}/{total} rules",
@@ -12982,6 +13070,13 @@
     }
   },
   "prompts": {
+    "tags": {
+      "label": "Tags",
+      "removeTag": "Remove tag {tag}",
+      "placeholder": "Add a tag and press Enter",
+      "hint": "Up to 10 tags, 50 characters each.",
+      "allTags": "All tags"
+    },
     "loadError": "Couldn't load your prompts.",
     "visibilityDegraded": "Visibility figures are temporarily unavailable — showing prompts without them.",
     "positions": {
@@ -13153,7 +13248,7 @@
       "enginesLegend": "Coloured: shared searches for this prompt in the window. Faded: tracked, but shared none.",
       "engineEmptyTitle": "No {engine} searches in the {range}",
       "engineEmptyBody": "{engine} usually shares the searches behind its answers. Try a longer date range.",
-      "sourceNote": "Copilot and Perplexity are no longer tracked, so these searches come from ChatGPT only, which shares them on some days. There are fewer of them than before.",
+      "sourceNote": "Perplexity is no longer tracked and Microsoft Copilot doesn't share its searches, so these come from ChatGPT only, which shares them on some days. There are fewer of them than before.",
       "emptyTitle": "No fan-out captured yet",
       "emptyBody": "ChatGPT's searches are sampled on some days, and the ChatGPT API shares them when it searches. Google AI Overviews, AI Mode and Gemini don't share them. Once those engines run for your prompts, the searches will appear here.",
       "coverageTooltip": "Of {total} tracked answers in this window, {withFanout} came with the searches the engine ran. ChatGPT's are sampled on some days, and the ChatGPT API shares them when it searches."
@@ -14699,6 +14794,7 @@
     "apiKeys": "MCP & API Keys",
     "team": "Team",
     "rolesAccess": "Roles & access",
+    "teamRolesAccess": "Team, roles & access",
     "chatSettings": "Chat",
     "whiteLabel": {
       "title": "White label",
@@ -15220,6 +15316,35 @@
     "apiKeys_connectTitle": "Connect a client",
     "apiKeys_copySnippet": "Copy setup",
     "apiKeys_connectHint": "The setup includes this key, so copy it now. The <link>MCP guide</link> shows how to keep the key in an environment variable instead.",
+    "apiKeys_mcpEndpointHintSignIn": "<b>Claude and ChatGPT:</b> add this address as a connector and sign in. <b>Other clients:</b> create a key to get a ready-to-paste setup. See the <link>MCP guide</link>.",
+    "apiKeys_planNoteSignIn": "Signing in from an app needs a paid plan.",
+    "connectedApps": {
+      "title": "Connected apps",
+      "description": "AI apps you connected by signing in. They act as you, with your role and your brands.",
+      "anApp": "An app",
+      "recognised": "Recognised",
+      "unchecked": "Not checked",
+      "readWrite": "Read and changes",
+      "readOnly": "Read only",
+      "via": "via {host}",
+      "viaComputer": "on this computer ({host})",
+      "connected": "Connected {date}",
+      "lastUsed": "Last used {date}",
+      "notUsed": "Not used yet",
+      "disconnect": "Disconnect",
+      "cancel": "Cancel",
+      "disconnectTitle": "Disconnect {app}?",
+      "disconnectBody": "{app} loses access to Ansvisor at once. To use it again, connect it again from {app}.",
+      "disconnected": "{app} disconnected",
+      "disconnectFailed": "Could not disconnect, try again",
+      "empty": "No connected apps.",
+      "emptyHint": "In Claude or ChatGPT, add <b>{url}</b> as a connector and sign in.",
+      "idleNote": "An app you haven't used for 30 days is disconnected on its own.",
+      "trialNote": "Signing in from an app needs a paid plan. In the free trial, use an API key below: it reads your data.",
+      "endedNote": "Your workspace's plan has ended. Connected apps work again once an admin chooses a plan.",
+      "askAdmin": "Ask an admin to choose a plan.",
+      "choosePlan": "Choose a plan"
+    },
     "apiKeysConnectWhere": {
       "claude-code": "Run in your terminal.",
       "claude-desktop": "In Claude, open Settings → Connectors → Add custom connector and fill in these fields.",
@@ -15348,6 +15473,8 @@
     "integrations_selectProperty": "Select a property",
     "integrations_stores": "Stores and marketplaces",
     "integrations_cms": "Content management systems",
+    "integrations_team": "Team and alerts",
+    "integrations_crm": "CRM",
     "integrations_description": "Connect external data sources. Connections are shared with your whole organization.",
     "catalog": {
       "title": "Product catalog",
@@ -15512,6 +15639,99 @@
         "duplicate": "This account is added to the brand already.",
         "not_configured": "Merchant Center isn't set up correctly on this server, or this Google account can't open Merchant Center. Ask whoever runs your Ansvisor server, or check the account's users in Merchant Center.",
         "failed": "Couldn't read the Merchant Center accounts."
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "Post {brand}’s Daily Pulse and alerts to a Slack channel.",
+      "noBrand": "Pick a brand to connect Slack.",
+      "unavailable": "Couldn’t read the Slack connection right now.",
+      "retry": "Try again",
+      "notConfigured": "This server has no Slack app set up. Set <code>COMPOSIO_API_KEY</code> and <code>COMPOSIO_SLACK_AUTH_CONFIG_ID</code> in the server environment to enable it.",
+      "badges": {
+        "notConfigured": "Not configured",
+        "connected": "Connected",
+        "pickChannel": "Pick a channel",
+        "reconnect": "Reconnect",
+        "paused": "Paused"
+      },
+      "connect": "Connect Slack",
+      "reconnect": "Reconnect Slack",
+      "connecting": "Waiting for Slack…",
+      "connectNote": "Connect Slack opens Slack to add the Ansvisor app to your workspace. You pick the channel next.",
+      "connectingNote": "Finish in the Slack window. If you closed it, connect again.",
+      "useSame": "Use the same workspace as…",
+      "useSameLabel": "Use the Slack workspace another brand uses",
+      "unnamedWorkspace": "your Slack workspace",
+      "workspace": "Workspace: {workspace}",
+      "connectedBy": "connected by {name} on {date}",
+      "connectedOn": "connected on {date}",
+      "alsoUsedBy": "also used by {brands}",
+      "channel": "Channel",
+      "pickChannel": "Pick a channel",
+      "pickChannelNote": "Last step: pick the channel {brand}’s messages go to. Nothing is posted until then.",
+      "searchChannels": "Search channels",
+      "noChannels": "No channel found",
+      "loadingChannels": "Loading channels…",
+      "channelsFailed": "Couldn’t list the channels.",
+      "privateHint": "A private channel shows here once the app is in it: in Slack, type /invite @Ansvisor there.",
+      "members": "{count, plural, one {# member} other {# members}}",
+      "sendLabel": "What goes to Slack",
+      "send": {
+        "pulse": {
+          "label": "Daily Pulse",
+          "note": "As often as the brand’s Pulse goes out: change it in Notifications"
+        },
+        "drops": {
+          "label": "Drops beyond normal swing",
+          "note": "Visibility or citations down more than usual, the last 7 days against the 7 before"
+        },
+        "suggestion": {
+          "label": "Daily suggestion",
+          "note": "One Action Center action a day for the brand, the one most of its people got"
+        },
+        "needsYou": {
+          "label": "Agents that need someone",
+          "note": "For people who chose Inbox + Slack in their Chat settings; they’re mentioned"
+        }
+      },
+      "test": "Send a test message",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect Slack from {brand}?",
+      "disconnectDescription": "Ansvisor stops posting {brand}’s messages to Slack. Other brands that use the same workspace keep theirs. Messages already posted stay in Slack.",
+      "cancel": "Cancel",
+      "refusedNote": "Slack no longer accepts this connection: the app may have been removed from {workspace}. Reconnect to keep posting.",
+      "accessLostNote": "{name} connected Slack and can no longer see {brand}, so nothing is posted for it. Reconnect, or use another brand’s workspace.",
+      "accessLostNoteUnknown": "Whoever connected Slack can no longer see {brand}, so nothing is posted for it. Reconnect, or use another brand’s workspace.",
+      "memberNotConnected": "Not connected. Admins and managers can connect Slack.",
+      "memberPostsTo": "{brand}’s Slack messages go to #{channel}. Admins and managers can change this.",
+      "memberNoChannel": "Slack is connected. An admin or manager picks the channel.",
+      "memberProblem": "Slack needs an admin or manager to reconnect it. Nothing is posted until then.",
+      "toast": {
+        "connected": "Slack connected. Now pick a channel.",
+        "connectUnfinished": "Slack wasn’t connected. Try again.",
+        "switched": "Saved. Now pick a channel in that workspace.",
+        "channelSaved": "Messages go to #{channel} now.",
+        "testSent": "Test message sent to #{channel}.",
+        "disconnected": "Slack disconnected."
+      },
+      "errors": {
+        "not_configured": "Slack isn’t set up on this server.",
+        "invalid": "That didn’t work. Reload the page and try again.",
+        "forbidden": "Only admins and managers can change Slack.",
+        "not_connected": "Connect Slack first.",
+        "refused": "Slack no longer accepts this connection. Reconnect it.",
+        "not_in_channel": "The Ansvisor app isn’t in that channel. In Slack, type /invite @Ansvisor there, then try again.",
+        "channel_gone": "That channel was archived or deleted. Pick another one.",
+        "no_channel": "Pick a channel first.",
+        "access_lost": "Whoever connected Slack can’t see this brand any more. Reconnect it.",
+        "connector_no_access": "Whoever connected that workspace can’t see this brand. Connect Slack for it instead.",
+        "unknown_account": "That workspace isn’t one this brand can use.",
+        "rate_limited": "Slack asked us to wait. Try again in a minute.",
+        "session": "Your session ended. Sign in again.",
+        "workspace": "This brand isn’t in your workspace.",
+        "busy": "Too many tries. Wait a minute and try again.",
+        "failed": "Something went wrong with Slack. Try again."
       }
     },
     "webflow": {
@@ -15730,6 +15950,115 @@
         "failed": "Couldn't reach Framer. Try again later."
       }
     },
+    "hubspot": {
+      "title": "HubSpot",
+      "description": "See which contacts, deals and revenue {brand}'s AI answers bring. Ansvisor marks the HubSpot contacts who came from an AI answer, and can send pages to HubSpot as drafts.",
+      "noBrand": "Pick a brand to connect its HubSpot account.",
+      "unavailable": "Couldn't read the HubSpot connection right now.",
+      "retry": "Try again",
+      "notConfiguredBadge": "Not configured",
+      "notConfigured": "HubSpot isn't set up on this server. Set <code>COMPOSIO_API_KEY</code> and <code>COMPOSIO_HUBSPOT_AUTH_CONFIG_ID</code> in the server environment to enable it.",
+      "lockedTitle": "HubSpot comes with the {plan} plan",
+      "lockedDescription": "See the contacts, deals and revenue your AI visibility brings.",
+      "upgrade": "Upgrade",
+      "askAdmin": "Ask an admin to upgrade.",
+      "connected": "Connected",
+      "paused": "Paused",
+      "pausedNote": "Your plan no longer includes HubSpot. Nothing is read from or written to HubSpot until you upgrade. Your data stays.",
+      "reconnectBadge": "Reconnect",
+      "reconnectNote": "HubSpot no longer accepts Ansvisor's access. Connect it again.",
+      "connectAgain": "Connect again",
+      "connect": "Connect HubSpot",
+      "connecting": "Connecting…",
+      "or": "or",
+      "usePlaceholder": "Use the account another brand uses",
+      "accountUsedBy": "{label} · used by {brands}",
+      "anAccount": "A HubSpot account",
+      "asksFirst": "Ansvisor asks before it writes anything to HubSpot.",
+      "notConnectedMember": "Not connected. Admins and managers can connect HubSpot.",
+      "account": "Account: {label}",
+      "sharedWith": "Also used by {brands}",
+      "changeAccount": "Change account",
+      "blog": {
+        "label": "Blog posts go to",
+        "placeholder": "Pick a blog",
+        "save": "Save",
+        "saved": "Blog saved",
+        "goesTo": "Send to CMS writes draft posts to {blog}.",
+        "notPicked": "No blog picked yet: pages can't go to HubSpot until one is.",
+        "none": "This HubSpot account has no blog yet. Create one in HubSpot first.",
+        "scopes": "HubSpot didn't give Ansvisor access to its blogs. Connect HubSpot again to allow it.",
+        "unavailable": "Couldn't read the HubSpot blogs just now.",
+        "connectAgain": "Connect again"
+      },
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect HubSpot from {brand}?",
+      "disconnectStops": "Ansvisor stops reading from and writing to HubSpot for {brand} right away.",
+      "disconnectKeeps": "The Ansvisor properties and their values stay in HubSpot. Delete them there if you want to.",
+      "disconnectShared": "{brands} still {count, plural, one {uses} other {use}} this HubSpot account.",
+      "cancel": "Cancel",
+      "disconnected": "HubSpot disconnected",
+      "connectedToast": "HubSpot connected",
+      "connectUnfinished": "HubSpot's sign-in wasn't finished. Try again.",
+      "propertiesReady": "Property group \"Ansvisor\" ready in HubSpot, with 6 contact properties.",
+      "propertiesNotMade": "The Ansvisor properties aren't in HubSpot yet.",
+      "propertiesFailed": {
+        "scopes": "HubSpot didn't give Ansvisor the access to make the Ansvisor properties. Connect HubSpot again.",
+        "conflict": "HubSpot has an archived property with the same name as an Ansvisor one. Restore or delete it in HubSpot, then try again.",
+        "auth": "HubSpot no longer accepts Ansvisor's access. Connect it again.",
+        "forbidden": "HubSpot refused to make the Ansvisor properties. Ask a HubSpot super admin, then try again.",
+        "other": "Couldn't make the Ansvisor properties in HubSpot just now."
+      },
+      "contacts": {
+        "title": "Mark contacts who came from an AI answer",
+        "description": "Ansvisor fills its properties on contacts who first came from an AI answer, and reads them for its report."
+      },
+      "pages": {
+        "title": "Send pages to HubSpot as drafts",
+        "description": "Lets Send to CMS create draft pages in HubSpot. You publish them in HubSpot."
+      },
+      "allowedBy": "Allowed by {name} on {date}: {what}.",
+      "allowedOn": "Allowed on {date}: {what}.",
+      "allowedWhat": {
+        "both": "marking contacts and sending pages as drafts",
+        "contacts": "marking contacts",
+        "pages": "sending pages as drafts"
+      },
+      "consent": {
+        "title": "Connect HubSpot for {brand}",
+        "description": "Choose what Ansvisor may do in your HubSpot account. You can change it later on this card.",
+        "accountLabel": "HubSpot account",
+        "newAccount": "Sign in to a HubSpot account",
+        "contactsTitle": "Mark contacts who came from an AI answer",
+        "contactsNow": "Now: create a property group \"Ansvisor\" with 6 contact properties (AI source, AI landing page, AI first visit, AI converted, Ansvisor brand, and a hidden brand id).",
+        "contactsThen": "Then: fill them on a contact who first came from an AI answer and then sent a form or was identified. A contact that already has an AI source keeps it.",
+        "contactsRead": "Read those contacts and their deals, for the AI-sourced pipeline report.",
+        "pagesTitle": "Send pages to HubSpot as drafts",
+        "pagesWhat": "When someone uses Send to CMS, create a draft page. You publish it in HubSpot.",
+        "never": "Ansvisor never deletes contacts or deals, never changes your own properties, never publishes a page, and never copies names or emails into Ansvisor.",
+        "pickOne": "Choose at least one to continue.",
+        "next": "Next, you sign in to HubSpot and approve the access there.",
+        "cancel": "Cancel",
+        "continue": "Continue to HubSpot",
+        "useAccount": "Use this account"
+      },
+      "errors": {
+        "consent_required": "Choose what Ansvisor may do in HubSpot first.",
+        "not_configured": "HubSpot isn't set up on this server.",
+        "forbidden": "Only admins and managers can change HubSpot.",
+        "not_connected": "Connect HubSpot first.",
+        "unknown_account": "That HubSpot account isn't one this brand can use.",
+        "scopes": "HubSpot didn't give Ansvisor access to its blogs. Connect HubSpot again to allow it.",
+        "refused": "HubSpot refused the sign-in. Connect it again.",
+        "hubspot_failed": "HubSpot answered an error. Try again in a moment.",
+        "blog_not_found": "That blog isn't in the HubSpot account any more. Pick another one.",
+        "session": "Your session has ended. Sign in again.",
+        "workspace": "This brand isn't one you can change.",
+        "busy": "Too many requests. Try again in a minute.",
+        "plan": "HubSpot comes with the Growth plan.",
+        "failed": "Something went wrong. Try again."
+      }
+    },
     "wix": {
       "title": "Wix",
       "description": "Send to CMS puts {brand}'s pages on its Wix site's Blog as draft posts. You publish them in Wix.",
@@ -15853,6 +16182,7 @@
     "team_role_analyst": "Analyst",
     "team_role_agency_partner": "Agency Partner",
     "team_you": "You",
+    "team_roleLabel": "Role",
     "team_loadFailed": "Failed to load team",
     "team_roleUpdated": "Role updated",
     "team_roleUpdateFailed": "Failed to update role",
@@ -16356,7 +16686,7 @@
       },
       "slack": {
         "name": "Slack",
-        "description": "Inbox items and reports in a channel."
+        "description": "The brand’s Pulse and alerts in a channel."
       },
       "microsoft_teams": {
         "name": "Microsoft Teams",
@@ -16433,7 +16763,8 @@
     "access": {
       "read_only": "read-only",
       "read_write_drafts": "read + write drafts",
-      "sends_pages": "sends pages"
+      "sends_pages": "sends pages",
+      "sends_messages": "sends messages"
     },
     "categories": {
       "search": "Search & analytics",

@@ -248,8 +248,9 @@ export function copyValues(item: ReadinessItem): Record<string, string | number>
 
 /**
  * The AI channels a shop sells through, in the spec's priority order.
- * Microsoft Copilot is left out while Cloro doesn't serve it (#2181): it
- * would always read "Not tracked".
+ * Microsoft Copilot is left out: since #2181 it is asked through Bing AI
+ * Mode, which returns no product cards, so it would always read "Not
+ * showing".
  */
 export const READINESS_CHANNELS = [
   'chatgpt-shopping',

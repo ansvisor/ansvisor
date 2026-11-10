@@ -3,16 +3,23 @@ import { FANOUT_SHARING_PLATFORMS, fanoutSharing } from './fanout-platforms';
 
 /** How the Query Fan-out page reads each engine's searches (#332). */
 describe('fanoutSharing', () => {
-  it('expects searches from no engine now that Copilot and Perplexity are no longer tracked', () => {
-    // They shared theirs; their past answers read as an ordinary engine's,
-    // so a window without their searches is never flagged.
-    expect(fanoutSharing('copilot-web')).toBe('unknown');
+  it('expects searches from no engine now that Perplexity is no longer tracked', () => {
+    // It shared its own; its past answers read as an ordinary engine's, so a
+    // window without its searches is never flagged.
     expect(fanoutSharing('perplexity-web')).toBe('unknown');
     expect(FANOUT_SHARING_PLATFORMS).toEqual([]);
   });
 
   it('reads the engines that never send them, or whose searches we miss, as not shared', () => {
-    for (const platform of ['google-aio', 'google-aimode', 'gemini-web', 'claude', 'gemini']) {
+    // Copilot among them: asked through Bing AI Mode, it shares none.
+    for (const platform of [
+      'google-aio',
+      'google-aimode',
+      'gemini-web',
+      'copilot-web',
+      'claude',
+      'gemini',
+    ]) {
       expect(fanoutSharing(platform)).toBe('not-shared');
     }
   });

@@ -6,8 +6,9 @@ import logger from '../logger.js';
  * Telling the Admins that the workspace's own AI key fails (AGENT-OWN-KEY
  * §5.3, 00441): a notice at the top of each Admin's Inbox, and an e-mail by
  * their "Notify me when an agent needs me" (chat_user_prefs.notify_via,
- * 00408): Inbox and e-mail (the default), Inbox only, or Inbox only until
- * Slack exists. Once per failure episode, and one reminder after 3 days
+ * 00408): Inbox and e-mail (the default), or Inbox only. Inbox + Slack
+ * carries an agent's "needs you" to Slack (#2139); this notice still comes
+ * by e-mail with it. Once per failure episode, and one reminder after 3 days
  * still failing. Through Resend (email.js), a silent no-op where it isn't
  * configured. The notice and the e-mail name no brand.
  */
@@ -142,6 +143,15 @@ export async function adminsOf(orgId) {
   return ids.map((id) => ({ id, notifyVia: via.get(id) ?? 'inbox_email' }));
 }
 
+/**
+ * Whether a person's "Notify me when an agent needs me" (00408) gets the
+ * e-mail of a notice Slack doesn't carry: every pick but Inbox only.
+ * Inbox + Slack used to send none (#2139).
+ */
+export function wantsEmail(notifyVia) {
+  return (notifyVia ?? 'inbox_email') !== 'inbox';
+}
+
 export async function emailOf(id) {
   const { data } = await supabaseAdmin.auth.admin.getUserById(id);
   return data?.user?.email ?? null;
@@ -192,8 +202,8 @@ export async function notifyOwnKeyFailure(
   });
   let emails = 0;
   for (const admin of admins) {
-    // Inbox only, and Inbox only until Slack exists, send no e-mail.
-    if (admin.notifyVia !== 'inbox_email' || !told.has(admin.id)) continue;
+    // Inbox only sends no e-mail; Inbox + Slack does for this notice, which Slack doesn't carry.
+    if (!wantsEmail(admin.notifyVia) || !told.has(admin.id)) continue;
     const to = await emailOf(admin.id);
     if (!to) continue;
     const outcome = await deliverEmail({ to: [to], subject, html });

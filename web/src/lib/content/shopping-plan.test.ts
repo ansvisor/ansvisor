@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { CategoryPage } from '@/lib/catalog-client';
+import guideCovering from './__fixtures__/guide-covering.json';
 import { planPriorityLevel } from './plan';
 import type { DraftShopping } from './shopping-check';
 import {
   MAX_GUIDES,
   MIN_IN_STOCK,
   categoryLeaf,
+  coversCategory,
   fixScore,
   guideScore,
   shoppingOpportunities,
@@ -52,6 +54,26 @@ describe('categoryLeaf', () => {
     expect(categoryLeaf('Apparel › Jackets / Rain jackets')).toBe('Rain jackets');
     expect(categoryLeaf('Boots')).toBe('Boots');
   });
+});
+
+// The Action Center asks the same before it suggests a guide next to a live
+// category page (server/src/lib/action-center/category-play.test.js, guideCovers).
+describe('coversCategory (guide-covering.json)', () => {
+  it.each(guideCovering.cases)(
+    '$draft.title / $draft.categories covers $category: $covers',
+    ({ category: name, draft, covers }) => {
+      expect(coversCategory(draft, name)).toBe(covers);
+      // And the section reads it so: a covering draft being written takes the guide's row.
+      const rows = shoppingOpportunities({
+        categories: [category(name)],
+        drafts: [{ id: 'd1', status: 'draft', shopping: { state: 'none' }, ...draft }],
+        prompts: [],
+      });
+      expect(rows).toEqual([
+        expect.objectContaining({ kind: 'guide', draft: covers ? expect.anything() : null }),
+      ]);
+    },
+  );
 });
 
 describe('scores', () => {

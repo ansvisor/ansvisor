@@ -30,6 +30,11 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
+/** The cms_connect events sent, in order. */
+const flows = () =>
+  analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
 // The read-only workspace's upgrade dialog.
 const openUpgrade = vi.hoisted(() => vi.fn());
 const gate = vi.hoisted(() => ({ isLocked: false }));
@@ -196,6 +201,7 @@ const connectedWith = (connection: FramerConnection | null) =>
   client.readFramer.mockResolvedValue({ ok: true, configured: true, connection });
 
 beforeEach(() => {
+  analytics.track.mockClear();
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -236,6 +242,10 @@ describe('FramerCard', () => {
       apiKey: KEY,
     });
     expect(toast.success).toHaveBeenCalledWith('Framer connected');
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'framer' }],
+      ['flow_completed', { flow: 'cms_connect', target: 'framer' }],
+    ]);
     expect(container.querySelector('input[type="password"]')).toBeNull();
     expect(container.textContent).toContain('Connected');
     expect(container.textContent).toContain(
@@ -326,6 +336,10 @@ describe('FramerCard', () => {
     expect(toast.error).toHaveBeenCalledWith(ERROR_TEXTS.no_access);
     expect(field('Project address').value).toBe(PROJECT_ID);
     expect(field('API key').value).toBe(KEY);
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'framer' }],
+      ['flow_failed', { flow: 'cms_connect', target: 'framer', error_code: 'no_access' }],
+    ]);
 
     client.connectFramer.mockResolvedValue({ ok: false, code: 'invalid' });
     await submit();

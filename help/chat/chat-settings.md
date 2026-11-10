@@ -1,11 +1,11 @@
 ---
 title: Change your Chat settings
 route: /dashboard/chat/settings
-keywords: [chat settings, default mode, product tour, take the tour, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, thought for, thinking time, ask chat on every page, full auto]
+keywords: [chat settings, default mode, product tour, take the tour, your focus, answer language, chat language, notify me, agent needs me, email when an agent waits, slack when an agent waits, thought for, thinking time, ask chat on every page, full auto]
 synonyms: [chat preferences, chat options, run mode default]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-10
+last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -27,7 +27,7 @@ sources: [web/messages/en.json]
 
 ## Notify me when an agent needs me
 
-When one of your agents stops to ask you something or to wait for your OK on a change, its chat moves to **Needs you** in your Inbox. **Notify me when an agent needs me** sets whether you also get an email: **Inbox + email**, the default, sends one email per run, with a link to open it; **Inbox only** sends none. **Inbox + Slack** comes once Slack can be connected.
+When one of your agents stops to ask you something or to wait for your OK on a change, its chat moves to **Needs you** in your Inbox. **Notify me when an agent needs me** sets what else you get, once per run, with a link to open it: **Inbox + email**, the default, sends an email; **Inbox only** sends nothing more; **Inbox + Slack** posts in the brand's Slack channel and mentions you. **Inbox + Slack** can be picked once a brand you can see posts to Slack. For a brand that doesn't, you get the email instead, and notices Slack doesn't carry, such as an agent going live, still come by email.
 
 ## Thought for N s
 

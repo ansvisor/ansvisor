@@ -28,6 +28,7 @@ import { Copy, KeyRound, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { formatDate } from '@/lib/format';
 import { isCloud } from '@/config/plans';
+import { ConnectedAppsCard } from '@/components/settings/connected-apps-card';
 import { siteConfig } from '@/config/site';
 import {
   MCP_CLIENTS,
@@ -68,6 +69,8 @@ export function ApiKeysSection() {
   const mcpEndpoint = getMcpEndpoint();
   const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
   const [client, setClient] = useState<McpClient>('claude-code');
+  // Whether apps can connect by signing in (MCP over OAuth): the Connected apps card says.
+  const [appSignIn, setAppSignIn] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -131,7 +134,7 @@ export function ApiKeysSection() {
     toast.success('Copied to clipboard');
   };
 
-  return (
+  const keysCard = (
     <Card>
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
@@ -163,7 +166,8 @@ export function ApiKeysSection() {
             </Button>
           </div>
           <p className="text-muted-foreground">
-            {t.rich('apiKeys_mcpEndpointHint', {
+            {t.rich(appSignIn ? 'apiKeys_mcpEndpointHintSignIn' : 'apiKeys_mcpEndpointHint', {
+              b: (chunks) => <b className="font-medium text-foreground">{chunks}</b>,
               link: (chunks) => (
                 <a href={MCP_GUIDE_URL} target="_blank" rel="noreferrer" className="underline">
                   {chunks}
@@ -175,6 +179,7 @@ export function ApiKeysSection() {
           {isCloud() && (
             <p data-slot="mcp-plan-note" className="text-muted-foreground">
               {t('apiKeys_planNote')}
+              {appSignIn && <> {t('apiKeys_planNoteSignIn')}</>}
             </p>
           )}
         </div>
@@ -188,7 +193,7 @@ export function ApiKeysSection() {
           <p className="text-sm text-muted-foreground py-6 text-center">{t('apiKeys_noKeys')}</p>
         ) : (
           <>
-            <div className="divide-y rounded-md border">
+            <div className="divide-y rounded-md border bg-card">
               {keys.map((k) => {
                 const revoked = !!k.revoked_at;
                 return (
@@ -361,5 +366,13 @@ export function ApiKeysSection() {
         </DialogContent>
       </Dialog>
     </Card>
+  );
+
+  // Connected apps (MCP over OAuth) first: hidden while app sign-in is off.
+  return (
+    <div className="space-y-6">
+      <ConnectedAppsCard endpoint={mcpEndpoint} onAvailable={setAppSignIn} />
+      {keysCard}
+    </div>
   );
 }

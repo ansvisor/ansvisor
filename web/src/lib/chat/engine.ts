@@ -1,4 +1,5 @@
 import { createTranslator } from 'next-intl';
+import { withSkillRefusal } from './with-skill';
 import {
   Output,
   streamText,
@@ -2936,6 +2937,9 @@ async function handleCall(
   if (!tool || (phase === 'read' && tool.class !== 'read')) {
     return result(call, { code: 'not_available' }, true);
   }
+  // A heavy read only within a skill that names it (the fan-outs): refused before it reads.
+  const skillOnly = withSkillRefusal(tool, loadedSkillList(rc));
+  if (skillOnly) return result(call, skillOnly, true);
   const parsed = tool.inputSchema.safeParse(call.input);
   if (!parsed.success) {
     const issues = parsed.error.issues.slice(0, 5).map((i) => `${i.path.join('.')}: ${i.message}`);
