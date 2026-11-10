@@ -267,3 +267,68 @@ describe('ReportDetailPage › Site Audit Score', () => {
     expect(card.textContent).not.toContain('±');
   });
 });
+
+describe('ReportDetailPage › AI-sourced pipeline (#2140)', () => {
+  const pipelineCard = () =>
+    [...container.querySelectorAll('[data-slot="card"]')].find((c) =>
+      c.textContent?.startsWith('AI-sourced pipeline'),
+    );
+
+  it('shows HubSpot’s contacts, deals and revenue, by engine and page', async () => {
+    getReport.mockResolvedValue({
+      ...report,
+      payload: {
+        ...report.payload,
+        aiPipeline: {
+          currency: 'USD',
+          syncedAt: '2026-10-31T06:00:00Z',
+          totals: {
+            contacts: 128,
+            contactsPrev: 100,
+            deals: 23,
+            wonDeals: 9,
+            wonRevenue: 62300,
+            wonRevenuePrev: 50000,
+            openDeals: 14,
+            openPipeline: 184500,
+          },
+          byEngine: [
+            {
+              source: 'chatgpt.com',
+              contacts: 71,
+              deals: 13,
+              wonDeals: 5,
+              wonRevenue: 38900,
+              openPipeline: 96000,
+            },
+          ],
+          byPage: [
+            {
+              page: 'https://acme.test/pricing',
+              contacts: 34,
+              deals: 9,
+              wonRevenue: 24100,
+              topSource: 'chatgpt.com',
+            },
+          ],
+          hubspotNative: { contacts: 12, deals: 2, wonRevenue: 4000 },
+        },
+      },
+    });
+    await render();
+    const card = pipelineCard()!;
+    expect(card.textContent).toContain('From HubSpot');
+    expect(card.textContent).toContain('AI-sourced contacts128+28%');
+    expect(card.textContent).toContain('Open pipeline$184,500');
+    expect(card.textContent).toContain('Won revenue$62,300+25%');
+    expect(card.textContent).toContain('ChatGPT71 contacts · $38,900');
+    expect(card.textContent).toContain('https://acme.test/pricing$24,100');
+    expect(card.textContent).toContain('HubSpot also counts 12 contacts');
+  });
+
+  it('shows nothing on a report without it', async () => {
+    getReport.mockResolvedValue(report);
+    await render();
+    expect(pipelineCard()).toBeUndefined();
+  });
+});

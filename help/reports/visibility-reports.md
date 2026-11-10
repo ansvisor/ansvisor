@@ -4,7 +4,7 @@ route: /dashboard/reports
 keywords: [reports, generate report, report templates, PDF, executive summary, snapshot, site audit score]
 synonyms: [monthly report, client report, export a report, download PDF, report for my boss, score range, plus or minus]
 plan: all
-updated: 2026-11-05
+updated: 2026-11-10
 last_checked: 2026-11-05
 owner: Cihan
 app_version: 0.3.0
@@ -26,7 +26,7 @@ Click **Generate Report** and pick a template. A template is a default set of se
 
 ## Sections
 
-The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts, Mention Evidence, Fan-out, AI Traffic, Product Visibility, Audit Score, Citations and Citation Evidence. **Product Visibility** appears only for brands with Shopping mode on. The AI executive summary is always included: it isn't a section you pick. If it can't be written, the report is saved with its figures and no summary.
+The full picker offers KPIs, Trend, Share of Voice, Competitors, Topics, Prompts, Mention Evidence, Fan-out, AI Traffic, AI-sourced pipeline, Product Visibility, Audit Score, Citations and Citation Evidence. **Product Visibility** appears only for brands with Shopping mode on. **AI-sourced pipeline** comes with the Growth plan and above. The AI executive summary is always included: it isn't a section you pick. If it can't be written, the report is saved with its figures and no summary.
 
 ## Read a report
 
@@ -35,6 +35,10 @@ A report opens with its **Executive Summary**: a short account of what changed v
 ## Site Audit Score
 
 **Site Audit Score** shows your latest audit of one page as of the report's end date, scored 0 to 100 as in Site Audit, with the change in points since that page's audit before it. It isn't compared with the previous period. Once the page has three audits by the end date, the score shows its range, such as **64 ± 2**, worked out as in Site Audit's report: half the gap between the lowest and highest score of its last five audits. A line below gives those two scores. Reports made before the range was added don't show it.
+
+## AI-sourced pipeline
+
+**AI-sourced pipeline** shows the HubSpot contacts, deals and revenue that came from AI answers in the period, as on the AI Traffic page: AI-sourced contacts and won revenue against the previous period, AI-influenced deals, open pipeline, the top AI engines and landing pages, and HubSpot's own AI Referrals contacts on a line of their own. A report includes it only for a brand that connected HubSpot with **Mark contacts who came from an AI answer** on, once HubSpot has been read.
 
 ## Download a PDF
 

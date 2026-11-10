@@ -19,7 +19,7 @@ import {
 import { CHOOSE_PLAN_HREF } from '@/components/providers/upgrade-gate';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useUserRole } from '@/hooks/use-user-role';
-import { formatNumber } from '@/lib/format';
+import { formatMoney, formatNumber } from '@/lib/format';
 import { formatRelative } from '@/lib/format-relative';
 import { getPlatformName } from '@/lib/traffic-platforms';
 import { getTrafficAiPipeline } from '@/lib/traffic-reads';
@@ -44,20 +44,7 @@ import { useRangeReady } from './_range-ready';
 export const HUBSPOT_SETTINGS_PATH = '/dashboard/settings/integrations#hubspot';
 
 /** An amount in the HubSpot account's currency, whole; without one, as a number. */
-export function money(amount: number, currency: string | null): string {
-  if (currency) {
-    try {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency,
-        maximumFractionDigits: 0,
-      }).format(amount);
-    } catch {
-      // A currency code Intl doesn't know: the number alone.
-    }
-  }
-  return formatNumber(Math.round(amount));
-}
+export const money = formatMoney;
 
 /** A landing page as the AI Traffic tables show one: its path. */
 export function pathOf(page: string): string {
