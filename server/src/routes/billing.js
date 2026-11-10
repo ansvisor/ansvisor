@@ -4,7 +4,8 @@
  *
  * POST /api/billing/cancel-feedback — { reasons, message, choice } → kept and
  *                                     e-mailed to CANCEL_FEEDBACK_EMAILS, with
- *                                     replies going to the customer
+ *                                     replies going to the customer and the
+ *                                     person's last 14 days from PostHog
  * GET  /api/billing/ai-usage        — this period's AI usage (getAiUsage), for
  *                                     the Billing page's meter, with what
  *                                     Write this typically takes
@@ -28,6 +29,7 @@ import {
   cancelFeedbackSchema,
   feedbackRecipients,
 } from '../lib/cancel-feedback.js';
+import { readPersonSummary } from '../lib/posthog-person-summary.js';
 
 const router = Router();
 
@@ -162,13 +164,20 @@ router.post('/cancel-feedback', async (req, res) => {
       .single();
     if (error) throw new Error(error.message);
 
+    const recipients = feedbackRecipients();
+    // What they did in the last 14 days, from PostHog, for the team to read:
+    // only when the e-mail goes to someone. null when PostHog isn't set up
+    // (no section); { ok: false } when it fails or takes over 6 s, and the
+    // e-mail still goes.
+    const activity = recipients.length ? await readPersonSummary(req.user.id) : null;
     const { subject, html } = buildCancelFeedbackEmail({
       org,
       user: { name: profile.full_name, email: req.user.email, role: profile.role },
       feedback,
+      activity,
     });
     const emailStatus = await deliverEmail({
-      to: feedbackRecipients(),
+      to: recipients,
       subject,
       html,
       replyTo: req.user.email || undefined,
