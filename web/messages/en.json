@@ -5730,7 +5730,7 @@
       },
       "notify": {
         "label": "Notify me when an agent needs me",
-        "note": "When an agent stops to ask you or wait for your OK: your Inbox always, and an email once per run",
+        "note": "When an agent stops to ask you or wait for your OK: your Inbox always, and once per run an email, or with Inbox + Slack a message in the brand’s Slack channel that mentions you",
         "inbox_email": "Inbox + email",
         "inbox": "Inbox only",
         "inbox_slack": "Inbox + Slack",
@@ -15405,6 +15405,7 @@
     "integrations_selectProperty": "Select a property",
     "integrations_stores": "Stores and marketplaces",
     "integrations_cms": "Content management systems",
+    "integrations_team": "Team and alerts",
     "integrations_crm": "CRM",
     "integrations_description": "Connect external data sources. Connections are shared with your whole organization.",
     "catalog": {
@@ -15570,6 +15571,99 @@
         "duplicate": "This account is added to the brand already.",
         "not_configured": "Merchant Center isn't set up correctly on this server, or this Google account can't open Merchant Center. Ask whoever runs your Ansvisor server, or check the account's users in Merchant Center.",
         "failed": "Couldn't read the Merchant Center accounts."
+      }
+    },
+    "slack": {
+      "title": "Slack",
+      "description": "Post {brand}’s Daily Pulse and alerts to a Slack channel.",
+      "noBrand": "Pick a brand to connect Slack.",
+      "unavailable": "Couldn’t read the Slack connection right now.",
+      "retry": "Try again",
+      "notConfigured": "This server has no Slack app set up. Set <code>COMPOSIO_API_KEY</code> and <code>COMPOSIO_SLACK_AUTH_CONFIG_ID</code> in the server environment to enable it.",
+      "badges": {
+        "notConfigured": "Not configured",
+        "connected": "Connected",
+        "pickChannel": "Pick a channel",
+        "reconnect": "Reconnect",
+        "paused": "Paused"
+      },
+      "connect": "Connect Slack",
+      "reconnect": "Reconnect Slack",
+      "connecting": "Waiting for Slack…",
+      "connectNote": "Connect Slack opens Slack to add the Ansvisor app to your workspace. You pick the channel next.",
+      "connectingNote": "Finish in the Slack window. If you closed it, connect again.",
+      "useSame": "Use the same workspace as…",
+      "useSameLabel": "Use the Slack workspace another brand uses",
+      "unnamedWorkspace": "your Slack workspace",
+      "workspace": "Workspace: {workspace}",
+      "connectedBy": "connected by {name} on {date}",
+      "connectedOn": "connected on {date}",
+      "alsoUsedBy": "also used by {brands}",
+      "channel": "Channel",
+      "pickChannel": "Pick a channel",
+      "pickChannelNote": "Last step: pick the channel {brand}’s messages go to. Nothing is posted until then.",
+      "searchChannels": "Search channels",
+      "noChannels": "No channel found",
+      "loadingChannels": "Loading channels…",
+      "channelsFailed": "Couldn’t list the channels.",
+      "privateHint": "A private channel shows here once the app is in it: in Slack, type /invite @Ansvisor there.",
+      "members": "{count, plural, one {# member} other {# members}}",
+      "sendLabel": "What goes to Slack",
+      "send": {
+        "pulse": {
+          "label": "Daily Pulse",
+          "note": "As often as the brand’s Pulse goes out: change it in Notifications"
+        },
+        "drops": {
+          "label": "Drops beyond normal swing",
+          "note": "Visibility or citations down more than usual, the last 7 days against the 7 before"
+        },
+        "suggestion": {
+          "label": "Daily suggestion",
+          "note": "One Action Center action a day for the brand, the one most of its people got"
+        },
+        "needsYou": {
+          "label": "Agents that need someone",
+          "note": "For people who chose Inbox + Slack in their Chat settings; they’re mentioned"
+        }
+      },
+      "test": "Send a test message",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect Slack from {brand}?",
+      "disconnectDescription": "Ansvisor stops posting {brand}’s messages to Slack. Other brands that use the same workspace keep theirs. Messages already posted stay in Slack.",
+      "cancel": "Cancel",
+      "refusedNote": "Slack no longer accepts this connection: the app may have been removed from {workspace}. Reconnect to keep posting.",
+      "accessLostNote": "{name} connected Slack and can no longer see {brand}, so nothing is posted for it. Reconnect, or use another brand’s workspace.",
+      "accessLostNoteUnknown": "Whoever connected Slack can no longer see {brand}, so nothing is posted for it. Reconnect, or use another brand’s workspace.",
+      "memberNotConnected": "Not connected. Admins and managers can connect Slack.",
+      "memberPostsTo": "{brand}’s Slack messages go to #{channel}. Admins and managers can change this.",
+      "memberNoChannel": "Slack is connected. An admin or manager picks the channel.",
+      "memberProblem": "Slack needs an admin or manager to reconnect it. Nothing is posted until then.",
+      "toast": {
+        "connected": "Slack connected. Now pick a channel.",
+        "connectUnfinished": "Slack wasn’t connected. Try again.",
+        "switched": "Saved. Now pick a channel in that workspace.",
+        "channelSaved": "Messages go to #{channel} now.",
+        "testSent": "Test message sent to #{channel}.",
+        "disconnected": "Slack disconnected."
+      },
+      "errors": {
+        "not_configured": "Slack isn’t set up on this server.",
+        "invalid": "That didn’t work. Reload the page and try again.",
+        "forbidden": "Only admins and managers can change Slack.",
+        "not_connected": "Connect Slack first.",
+        "refused": "Slack no longer accepts this connection. Reconnect it.",
+        "not_in_channel": "The Ansvisor app isn’t in that channel. In Slack, type /invite @Ansvisor there, then try again.",
+        "channel_gone": "That channel was archived or deleted. Pick another one.",
+        "no_channel": "Pick a channel first.",
+        "access_lost": "Whoever connected Slack can’t see this brand any more. Reconnect it.",
+        "connector_no_access": "Whoever connected that workspace can’t see this brand. Connect Slack for it instead.",
+        "unknown_account": "That workspace isn’t one this brand can use.",
+        "rate_limited": "Slack asked us to wait. Try again in a minute.",
+        "session": "Your session ended. Sign in again.",
+        "workspace": "This brand isn’t in your workspace.",
+        "busy": "Too many tries. Wait a minute and try again.",
+        "failed": "Something went wrong with Slack. Try again."
       }
     },
     "webflow": {
@@ -16514,7 +16608,7 @@
       },
       "slack": {
         "name": "Slack",
-        "description": "Inbox items and reports in a channel."
+        "description": "The brand’s Pulse and alerts in a channel."
       },
       "microsoft_teams": {
         "name": "Microsoft Teams",
@@ -16591,7 +16685,8 @@
     "access": {
       "read_only": "read-only",
       "read_write_drafts": "read + write drafts",
-      "sends_pages": "sends pages"
+      "sends_pages": "sends pages",
+      "sends_messages": "sends messages"
     },
     "categories": {
       "search": "Search & analytics",
