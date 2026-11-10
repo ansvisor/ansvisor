@@ -6,6 +6,7 @@ import {
   sweepExpiredRequests,
   type ConsentErrorCode,
 } from '@/lib/mcp-oauth/authorize';
+import { isClientIdUrl, resolveCimdClient } from '@/lib/mcp-oauth/cimd';
 import { findClient } from '@/lib/mcp-oauth/clients';
 import { mcpResourceUrl } from '@/lib/mcp-oauth/config';
 import { enabledIssuer, ipKey, notFound } from '@/lib/mcp-oauth/http';
@@ -36,7 +37,12 @@ export async function GET(req: Request) {
 
   const params = new URL(req.url).searchParams;
   try {
-    const client = await findClient(params.get('client_id') ?? '');
+    // A client id that is a URL names its metadata document (CIMD): fetched,
+    // checked and cached; any other is a registered client.
+    const clientId = params.get('client_id') ?? '';
+    const client = isClientIdUrl(clientId)
+      ? await resolveCimdClient(clientId)
+      : await findClient(clientId);
     const check = checkAuthorizeRequest(params, client, mcpResourceUrl(issuer));
     if (!check.ok) {
       if ('page' in check) return errorPage(check.page);

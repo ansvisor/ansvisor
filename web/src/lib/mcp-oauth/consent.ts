@@ -69,18 +69,35 @@ export interface PendingRequest {
   user_id: string | null;
   expires_at: string;
   client_name: string | null;
+  client_kind: 'dcr' | 'cimd';
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function appOf(clientName: string | null, redirectUri: string): ConsentApp {
+/**
+ * The app as the page names it. A registered app by where its code goes; an
+ * app known by its metadata document by that document's host (the spec:
+ * the client_id URL's host, not the name the document gives itself), which
+ * vouches for its redirect URIs.
+ */
+export function appOf(
+  clientName: string | null,
+  redirectUri: string,
+  client?: { kind: 'dcr' | 'cimd'; clientId: string },
+): ConsentApp {
   const host = redirectHost(redirectUri);
+  const loopback = isLoopbackHost(host);
+  if (client?.kind === 'cimd') {
+    const documentHost = new URL(client.clientId).hostname;
+    const known = knownAppName(documentHost);
+    return { name: known ?? documentHost, host, recognised: !!known, loopback };
+  }
   const known = knownAppName(host);
   return {
     name: known ?? clientName,
     host,
     recognised: !!known,
-    loopback: isLoopbackHost(host),
+    loopback,
   };
 }
 
@@ -90,19 +107,24 @@ export async function readPendingRequest(requestId: string | null | undefined) {
   const { data, error } = await supabaseAdmin
     .from('oauth_authorization_requests')
     .select(
-      'id, client_id, redirect_uri, code_challenge, scopes, state, resource, user_id, expires_at, oauth_clients!inner(client_name)',
+      'id, client_id, redirect_uri, code_challenge, scopes, state, resource, user_id, expires_at, oauth_clients!inner(client_name, kind)',
     )
     .eq('id', requestId)
     .maybeSingle();
   if (error) throw new Error(`Could not read the request: ${error.message}`);
   if (!data) return null;
-  const row = data as unknown as Omit<PendingRequest, 'client_name'> & {
-    oauth_clients: { client_name: string | null } | { client_name: string | null }[];
+  type Client = { client_name: string | null; kind: 'dcr' | 'cimd' };
+  const row = data as unknown as Omit<PendingRequest, 'client_name' | 'client_kind'> & {
+    oauth_clients: Client | Client[];
   };
   if (Date.parse(row.expires_at) <= Date.now()) return null;
   const client = Array.isArray(row.oauth_clients) ? row.oauth_clients[0] : row.oauth_clients;
   const { oauth_clients: _client, ...request } = row;
-  return { ...request, client_name: client?.client_name ?? null } as PendingRequest;
+  return {
+    ...request,
+    client_name: client?.client_name ?? null,
+    client_kind: client?.kind ?? 'dcr',
+  } as PendingRequest;
 }
 
 /**
@@ -186,7 +208,10 @@ export async function loadConsent(
     kind: 'ready',
     view: {
       requestId,
-      app: appOf(request.client_name, request.redirect_uri),
+      app: appOf(request.client_name, request.redirect_uri, {
+        kind: request.client_kind,
+        clientId: request.client_id,
+      }),
       email: person.email,
       role: connecting.role,
       isAdmin: connecting.role === 'admin',
@@ -215,7 +240,12 @@ export async function appForSignIn(next: string | null | undefined): Promise<Con
   if (url.origin !== 'https://app.invalid' || url.pathname !== '/oauth/consent') return null;
   try {
     const request = await readPendingRequest(url.searchParams.get('request'));
-    return request ? appOf(request.client_name, request.redirect_uri) : null;
+    return request
+      ? appOf(request.client_name, request.redirect_uri, {
+          kind: request.client_kind,
+          clientId: request.client_id,
+        })
+      : null;
   } catch {
     return null;
   }
