@@ -283,7 +283,6 @@ export function PlanSwitcher({
             choice={choice}
             onChange={setChoice}
             trialOffered={trialOffered && canAdmin}
-            offer={offer}
           />
         ) : (
           <div

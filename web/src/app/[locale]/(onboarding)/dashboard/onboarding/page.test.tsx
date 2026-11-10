@@ -86,6 +86,16 @@ vi.mock('@/lib/demo/demo-client', () => ({
   demoPreparation: () => null,
   setDemoHidden: vi.fn(),
 }));
+// The demo's one explore action: the setup ahead (usePreloadDemo) stays real.
+const exploreDemo = vi.hoisted(() => ({ explore: vi.fn(async () => {}), opening: false }));
+vi.mock('@/hooks/use-explore-demo', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/hooks/use-explore-demo')>()),
+  useExploreDemo: () => ({
+    explore: exploreDemo.explore,
+    opening: exploreDemo.opening,
+    setupDialog: { setup: null, onRetry: exploreDemo.explore, onClose: () => {} },
+  }),
+}));
 vi.mock('@/lib/actions/topic', () => ({
   getTopics: vi.fn(async () => [{ id: 't1', name: 'Coffee' }]),
   createTopics: vi.fn(async () => undefined),
@@ -149,6 +159,7 @@ beforeEach(() => {
   db.onboarded = false;
   db.brandFilters = [];
   db.hasDemo = false;
+  exploreDemo.opening = false;
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
@@ -337,7 +348,7 @@ describe('the plan step', () => {
     [...container.querySelectorAll(`[data-slot="${slot}"]`)].map((el) => el.textContent);
   const choices = () =>
     [...container.querySelectorAll('[data-choice]')].map((el) => el.textContent);
-  async function choose(choice: 'trial' | 'month' | 'year') {
+  async function choose(choice: 'trial' | 'month' | 'year' | 'demo') {
     await act(async () => {
       container.querySelector<HTMLButtonElement>(`[data-choice="${choice}"]`)!.click();
     });
@@ -359,19 +370,74 @@ describe('the plan step', () => {
     getCompetitors.mockResolvedValue([]);
   });
 
-  it('offers the demo brand under the plans, for someone not ready to add a card', async () => {
+  it('offers the demo brand in one line under the plans, for someone not ready to add a card', async () => {
     db.onboarded = true;
     await render();
     expect(text()).toContain('Choose how to start');
-    const card = container.querySelector('[data-slot="explore-demo"]')!;
-    expect(card.textContent).toContain('Not ready to add a card? Explore a demo brand');
+    const line = container.querySelector('[data-slot="explore-demo"]')!;
+    expect(line.textContent).toBe('Not ready for a card? Explore a sample brand first →');
+    // The old box is gone.
+    expect(text()).not.toContain('Explore a demo brand');
     // The own brand, read without the demo brand.
-    expect(card.textContent).toContain('Acme stays saved');
     expect(db.brandFilters).toContainEqual([
       ['organization_id', 'org-1'],
       ['is_demo', false],
     ]);
-    expect(button('Explore the demo')).toBeDefined();
+    await act(async () => button('Explore a sample brand first →')!.click());
+    expect(exploreDemo.explore).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the demo as the last choice: its card in place of the plans, the same action', async () => {
+    await render();
+    expect(container.querySelector('[data-slot="start-choice-divider"]')).not.toBeNull();
+    expect(container.querySelector('[data-choice="demo"]')?.textContent).toBe('Demo · no card');
+    expect(container.querySelector('[data-slot="demo-choice"]')).toBeNull();
+
+    await choose('demo');
+    const pressed = () =>
+      [...container.querySelectorAll('[data-choice][aria-pressed="true"]')].map(
+        (el) => (el as HTMLElement).dataset.choice,
+      );
+    expect(pressed()).toEqual(['demo']);
+    const card = container.querySelector('[data-slot="demo-choice"]')!;
+    expect(card.querySelector('h3')?.textContent).toBe('Look around a sample brand');
+    expect(card.textContent).toContain('Brewline Coffee · sample data');
+    // A made-up brand, not the own one, which stays saved.
+    expect(card.textContent).toContain(
+      "You'll explore Brewline Coffee, a made-up brand with sample data, not Acme. You can open every page, but nothing runs or changes there. Acme stays saved, and tracking starts when you pick a plan. No card needed.",
+    );
+    // In place of the plans, their note and the line under them.
+    expect(container.querySelector('[data-plan]')).toBeNull();
+    expect(container.querySelector('[data-slot="card-note"]')).toBeNull();
+    expect(container.querySelector('[data-slot="explore-demo"]')).toBeNull();
+    const explore = [...card.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Explore the sample brand',
+    )!;
+    await act(async () => explore.click());
+    expect(exploreDemo.explore).toHaveBeenCalledTimes(1);
+    // No Checkout for the demo.
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContain('/api/stripe/checkout');
+
+    // Monthly again: the plans are back, as they were.
+    await choose('month');
+    expect(pressed()).toEqual(['month']);
+    expect(container.querySelector('[data-slot="demo-choice"]')).toBeNull();
+    expect(slots('due-amount')).toEqual(['$24.50', '$124.50']);
+    expect(container.querySelector('[data-slot="explore-demo"]')).not.toBeNull();
+  });
+
+  it('waits while the demo opens, on its card and on the line', async () => {
+    exploreDemo.opening = true;
+    await render();
+    const line = container.querySelector<HTMLButtonElement>('[data-slot="explore-demo"] button')!;
+    expect(line.disabled).toBe(true);
+    expect(line.textContent).toBe('Setting up the demo…');
+    await choose('demo');
+    const cardButton = container.querySelector<HTMLButtonElement>(
+      '[data-slot="demo-choice"] button',
+    )!;
+    expect(cardButton.disabled).toBe(true);
+    expect(cardButton.textContent).toBe('Setting up the demo…');
   });
 
   it('offers one choice of how to start, then one button on each plan, a card for both', async () => {
@@ -379,7 +445,9 @@ describe('the plan step', () => {
     expect(text()).toContain('Choose how to start');
     expect(text()).not.toContain('Start Your 14-Day Free Trial');
     expect(text()).not.toContain('No charge today');
-    expect(choices()).toEqual(['14-day trial', 'Monthly50% off the first month', 'YearlySave 20%']);
+    // The first-month offer is on the cards, not by Monthly; the demo comes last.
+    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
+    expect(text()).not.toContain('50% off the first month');
     // Monthly first, with the first-month offer: its price large on the card.
     expect(modeButtons('buy').map((b) => b.textContent)).toEqual(['Buy now', 'Buy now']);
     expect(modeButtons('trial')).toEqual([]);
@@ -398,7 +466,7 @@ describe('the plan step', () => {
     expect(text()).toContain('For small teams getting started with AI visibility');
     expect(text()).toContain('50 prompts tracked');
     expect(text()).not.toContain('Core Platform Features');
-    // The demo card stays below the plans.
+    // The demo's line stays below the plans.
     expect(container.querySelector('[data-slot="explore-demo"]')).not.toBeNull();
   });
 
@@ -510,7 +578,7 @@ describe('the plan step', () => {
         : answer(url),
     );
     await act(async () => modeButtons('trial')[0].click());
-    expect(choices()).toEqual(['Monthly50% off the first month', 'YearlySave 20%']);
+    expect(choices()).toEqual(['Monthly', 'YearlySave 20%', 'Demo · no card']);
     expect(container.querySelector('[data-plan="starter"] [role="alert"]')?.textContent).toBe(
       "This workspace's free trial has been used. Buy now to start the plan.",
     );
@@ -530,7 +598,7 @@ describe('the plan step', () => {
     trialAvailable.value = false;
     await render();
     expect(text()).toContain('Choose Your Plan');
-    expect(choices()).toEqual(['Monthly50% off the first month', 'YearlySave 20%']);
+    expect(choices()).toEqual(['Monthly', 'YearlySave 20%', 'Demo · no card']);
     expect(modeButtons('trial')).toEqual([]);
     expect(slots('start-terms')).toEqual([]);
     expect(container.querySelector('[data-slot="card-note"]')?.textContent).toBe('Card required.');
@@ -539,7 +607,7 @@ describe('the plan step', () => {
   it('shows the plain price with the first-month offer off', async () => {
     vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
     await render();
-    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%']);
+    expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
     expect(modeButtons('buy').map((b) => b.textContent)).toEqual([
       'Choose Starter',
       'Choose Growth',
