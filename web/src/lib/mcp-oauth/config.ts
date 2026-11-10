@@ -5,12 +5,13 @@
  * (00510_mcp_oauth.sql): the issuer is the app's own address, and the tokens
  * it issues are good for the MCP endpoint alone.
  *
- * Off unless MCP_OAUTH_ENABLED is "true" and the app's address can be an
- * issuer: https, or http on this computer for development (MCP authorization
- * spec 2025-11-25: "All authorization server endpoints MUST be served over
- * HTTPS"), with no path, so the RFC 8414 / RFC 9728 well-known addresses sit
- * at its root. While off, API keys work exactly as before and no OAuth token
- * is accepted.
+ * On wherever the app's address can be an issuer: https, or http on this
+ * computer for development (MCP authorization spec 2025-11-25: "All
+ * authorization server endpoints MUST be served over HTTPS"), with no path,
+ * so the RFC 8414 / RFC 9728 well-known addresses sit at its root. A
+ * self-hosted install on plain http elsewhere stays off.
+ * MCP_OAUTH_ENABLED=false is the kill switch. While off, API keys work
+ * exactly as before and no OAuth token is accepted.
  */
 
 /** How long each piece lives, in seconds. */
@@ -48,9 +49,16 @@ export function oauthIssuer(): string | null {
   return url.origin;
 }
 
-/** Whether apps may connect to the MCP endpoint by signing in. */
+/** What switches app sign-in off: "false", and the other ways people write off. */
+const SWITCHED_OFF = new Set(['false', '0', 'off', 'no']);
+
+/**
+ * Whether apps may connect to the MCP endpoint by signing in: on by default
+ * with an issuer, off with MCP_OAUTH_ENABLED=false (any case).
+ */
 export function mcpOAuthEnabled(): boolean {
-  return process.env.MCP_OAUTH_ENABLED === 'true' && oauthIssuer() !== null;
+  const flag = process.env.MCP_OAUTH_ENABLED?.trim().toLowerCase() ?? '';
+  return !SWITCHED_OFF.has(flag) && oauthIssuer() !== null;
 }
 
 /** The protected resource: the MCP endpoint's URL, as a person types it into Claude or ChatGPT. */

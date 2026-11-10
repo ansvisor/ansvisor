@@ -66,8 +66,9 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * MCP endpoints are intended to be hit by long-lived external clients, so we
  * intentionally don't fall back to the dashboard's session cookie. With
  * `allowOAuth` (the MCP endpoint alone, the resource its tokens are for) and
- * MCP_OAUTH_ENABLED on, it also takes an app's access token (`ans_oat_`),
- * and its 401s carry the WWW-Authenticate that starts an app's sign-in.
+ * MCP over OAuth on (mcpOAuthEnabled: unless MCP_OAUTH_ENABLED=false), it
+ * also takes an app's access token (`ans_oat_`), and its 401s carry the
+ * WWW-Authenticate that starts an app's sign-in.
  *
  * A key belongs to a person, so it carries their brand access (BRAND-ACCESS
  * §5.3): All brands, or the ones shared with them, read once per request

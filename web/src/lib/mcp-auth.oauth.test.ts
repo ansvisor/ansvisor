@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * authenticateMcpRequest with an app's sign-in (MCP over OAuth, #2141): only
- * at the MCP endpoint and with MCP_OAUTH_ENABLED; the token's connection,
- * then its person read fresh; a member who left loses the connection; the
- * plan says whether the connection may work; 401s carry the challenge that
- * starts sign-in. API keys work as before.
+ * at the MCP endpoint and while it is on (unless MCP_OAUTH_ENABLED=false);
+ * the token's connection, then its person read fresh; a member who left
+ * loses the connection; the plan says whether the connection may work; 401s
+ * carry the challenge that starts sign-in. API keys work as before.
  */
 
 const TOKEN = 'ans_oat_valid';
@@ -80,7 +80,8 @@ const CHALLENGE =
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.ansvisor.com');
-  vi.stubEnv('MCP_OAUTH_ENABLED', 'true');
+  // App sign-in is on by default (MCP_OAUTH_ENABLED unset), with an https issuer.
+  vi.stubEnv('MCP_OAUTH_ENABLED', undefined);
   profile = { organization_id: 'org-1', role: 'manager', brand_scope: 'all' };
   org = { plan: 'growth', subscription_status: 'active' };
   apiKey = { id: 'key-1', user_id: 'user-1', revoked_at: null };
@@ -163,7 +164,7 @@ describe('an app signed in at the MCP endpoint', () => {
 });
 
 describe('where an app token is refused', () => {
-  it('everywhere while MCP_OAUTH_ENABLED is off, without a challenge', async () => {
+  it('everywhere once switched off (MCP_OAUTH_ENABLED=false), without a challenge', async () => {
     vi.stubEnv('MCP_OAUTH_ENABLED', 'false');
     const res = (await mcp(TOKEN)) as Response;
     expect(res.status).toBe(401);
@@ -212,7 +213,7 @@ describe('API keys at the MCP endpoint', () => {
     expect(res.headers.get('www-authenticate')).toContain('error="invalid_token"');
   });
 
-  it('answer without a challenge while MCP_OAUTH_ENABLED is off, as before', async () => {
+  it('answer without a challenge once switched off (MCP_OAUTH_ENABLED=false), as before', async () => {
     vi.stubEnv('MCP_OAUTH_ENABLED', 'false');
     const res = (await mcp()) as Response;
     expect(res.status).toBe(401);

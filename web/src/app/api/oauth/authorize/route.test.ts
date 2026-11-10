@@ -62,7 +62,8 @@ const location = (res: Response) => new URL(res.headers.get('location')!);
 beforeEach(() => {
   db.current = createFakeDb();
   vi.stubEnv('NEXT_PUBLIC_APP_URL', ISSUER);
-  vi.stubEnv('MCP_OAUTH_ENABLED', 'true');
+  // App sign-in is on by default (MCP_OAUTH_ENABLED unset), with an https issuer.
+  vi.stubEnv('MCP_OAUTH_ENABLED', undefined);
   addClient();
 });
 afterEach(() => vi.unstubAllEnvs());

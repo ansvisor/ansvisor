@@ -138,7 +138,8 @@ beforeEach(() => {
   session.signOut.mockClear();
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('NEXT_PUBLIC_APP_URL', ISSUER);
-  vi.stubEnv('MCP_OAUTH_ENABLED', 'true');
+  // App sign-in is on by default (MCP_OAUTH_ENABLED unset), with an https issuer.
+  vi.stubEnv('MCP_OAUTH_ENABLED', undefined);
 });
 afterEach(() => vi.unstubAllEnvs());
 

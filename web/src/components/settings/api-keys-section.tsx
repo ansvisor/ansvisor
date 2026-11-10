@@ -334,7 +334,12 @@ export function ApiKeysSection() {
                   </SelectContent>
                 </Select>
               </div>
-              <p className="text-xs text-muted-foreground">{t(`apiKeysConnectWhere.${client}`)}</p>
+              <p data-slot="mcp-connect-where" className="text-xs text-muted-foreground">
+                {/* Claude can sign in instead of taking the key (MCP over OAuth). */}
+                {appSignIn && client === 'claude-desktop'
+                  ? t('apiKeys_connectWhereClaudeDesktopSignIn')
+                  : t(`apiKeysConnectWhere.${client}`)}
+              </p>
               <div className="flex items-start gap-2">
                 <pre className="ph-no-capture max-h-56 min-w-0 flex-1 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs whitespace-pre">
                   {mcpClientSnippet(client, mcpEndpoint, revealedToken)}

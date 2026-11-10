@@ -61,7 +61,8 @@ beforeEach(() => {
   fetched.error = null;
   fetched.calls = 0;
   vi.stubEnv('NEXT_PUBLIC_APP_URL', ISSUER);
-  vi.stubEnv('MCP_OAUTH_ENABLED', 'true');
+  // App sign-in is on by default (MCP_OAUTH_ENABLED unset), with an https issuer.
+  vi.stubEnv('MCP_OAUTH_ENABLED', undefined);
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 afterEach(() => {

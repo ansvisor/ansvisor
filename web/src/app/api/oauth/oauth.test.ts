@@ -132,7 +132,8 @@ const redeem = (clientId: string, code: string, extra: Record<string, string> = 
 beforeEach(() => {
   db.current = createFakeDb();
   vi.stubEnv('NEXT_PUBLIC_APP_URL', ISSUER);
-  vi.stubEnv('MCP_OAUTH_ENABLED', 'true');
+  // App sign-in is on by default (MCP_OAUTH_ENABLED unset), with an https issuer.
+  vi.stubEnv('MCP_OAUTH_ENABLED', undefined);
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 afterEach(() => {

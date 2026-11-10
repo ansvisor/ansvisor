@@ -15397,6 +15397,7 @@
     "apiKeys_connectHint": "The setup includes this key, so copy it now. The <link>MCP guide</link> shows how to keep the key in an environment variable instead.",
     "apiKeys_mcpEndpointHintSignIn": "<b>Claude and ChatGPT:</b> add this address as a connector and sign in. <b>Other clients:</b> create a key to get a ready-to-paste setup. See the <link>MCP guide</link>.",
     "apiKeys_planNoteSignIn": "Signing in from an app needs a paid plan.",
+    "apiKeys_connectWhereClaudeDesktopSignIn": "In Claude, open Settings → Connectors → Add custom connector and fill in these fields. Or enter only the name and URL, and sign in to Ansvisor instead of using a key.",
     "connectedApps": {
       "title": "Connected apps",
       "description": "AI apps you connected by signing in. They act as you, with your role and your brands.",

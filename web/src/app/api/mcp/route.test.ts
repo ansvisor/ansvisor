@@ -55,7 +55,8 @@ const call = (name: string) => ({
 
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.ansvisor.com');
-  vi.stubEnv('MCP_OAUTH_ENABLED', 'true');
+  // App sign-in is on by default (MCP_OAUTH_ENABLED unset), with an https issuer.
+  vi.stubEnv('MCP_OAUTH_ENABLED', undefined);
   auth.value = { ...base };
   auth.options = [];
 });

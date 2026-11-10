@@ -24,10 +24,10 @@ async function readBody(req: Request): Promise<unknown> {
 /**
  * Streamable HTTP entry point for the Ansvisor MCP server. Claude Desktop,
  * Claude Code, Cursor, Zed, and other MCP-aware clients hit this URL with a
- * Bearer API key, or, with MCP_OAUTH_ENABLED, an app's access token from
- * signing in (MCP over OAuth, #2141). Each request gets a fresh `McpServer` +
- * transport bound to the caller's user context, then is discarded —
- * stateless, no session memory between requests.
+ * Bearer API key, or an app's access token from signing in (MCP over OAuth,
+ * #2141; on unless MCP_OAUTH_ENABLED=false). Each request gets a fresh
+ * `McpServer` + transport bound to the caller's user context, then is
+ * discarded — stateless, no session memory between requests.
  */
 async function handle(req: Request): Promise<Response> {
   // Every MCP call is a POST: its tools are gated one by one (createMcpServer).
