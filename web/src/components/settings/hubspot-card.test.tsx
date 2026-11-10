@@ -13,6 +13,8 @@ const client = vi.hoisted(() => ({
   saveHubspotConsent: vi.fn(),
   retryHubspotSetup: vi.fn(),
   disconnectHubspot: vi.fn(),
+  listHubspotBlogs: vi.fn(),
+  saveHubspotBlog: vi.fn(),
   rememberPending: vi.fn(),
   takePending: vi.fn(),
 }));
@@ -80,6 +82,7 @@ const CONNECTION: HubspotConnection = {
   portal: { id: 4412893, currency: 'USD', uiDomain: 'app-eu1.hubspot.com' },
   sharedWith: ['b2'],
   consent: { contacts: true, pages: false, by: 'Ayşe Demir', at: '2026-11-09T10:00:00.000Z' },
+  blog: null,
   properties: { ready: true, at: '2026-11-09T10:00:01.000Z', error: null },
 };
 const read = (over: Partial<HubspotRead> = {}): { ok: true } & HubspotRead => ({
@@ -125,6 +128,9 @@ const checkbox = (label: string) => {
   const name = [...document.querySelectorAll('label')].find((l) => l.textContent === label)!;
   return document.getElementById(name.htmlFor)!;
 };
+/** The id of the control a label names. */
+const labelFor = (label: string) =>
+  [...document.querySelectorAll('label')].find((l) => l.textContent === label)!.htmlFor;
 const switchFor = (label: string) =>
   document.querySelector<HTMLButtonElement>(`[role="switch"][aria-label="${label}"]`)!;
 
@@ -137,6 +143,7 @@ beforeEach(() => {
   gate.isLocked = false;
   for (const fn of Object.values(client)) fn.mockReset();
   client.takePending.mockReturnValue(null);
+  client.listHubspotBlogs.mockResolvedValue({ ok: true, blogs: [], picked: null });
   client.readHubspot.mockResolvedValue(read());
   toast.error.mockReset();
   toast.success.mockReset();
@@ -348,6 +355,63 @@ describe('HubspotCard', () => {
     expect(text()).toContain("HubSpot no longer accepts Ansvisor's access.");
     await click(button('Connect again'));
     expect(text()).toContain('Connect HubSpot for Acme');
+  });
+
+  it('picks the HubSpot blog Send to CMS writes draft posts to', async () => {
+    const pages = { ...CONNECTION, consent: { ...CONNECTION.consent, pages: true } };
+    client.readHubspot.mockResolvedValue(read({ connection: pages }));
+    client.listHubspotBlogs.mockResolvedValue({
+      ok: true,
+      blogs: [
+        { id: '1234567890', name: 'Acme blog', url: null },
+        { id: '2233445566', name: 'Acme news', url: null },
+      ],
+      picked: null,
+    });
+    client.saveHubspotBlog.mockResolvedValue(
+      read({ connection: { ...pages, blog: { id: '2233445566', name: 'Acme news' } } }),
+    );
+    await render();
+    expect(client.listHubspotBlogs).toHaveBeenCalledWith('b1');
+    expect(text()).toContain("No blog picked yet: pages can't go to HubSpot until one is.");
+    await click(document.getElementById(labelFor('Blog posts go to')));
+    const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent === 'Acme news',
+    )!;
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await click(option);
+    await click(button('Save'));
+    expect(client.saveHubspotBlog).toHaveBeenCalledWith('b1', '2233445566');
+    expect(toast.success).toHaveBeenCalledWith('Blog saved');
+    expect(text()).toContain('Send to CMS writes draft posts to Acme news.');
+  });
+
+  it('asks to connect again when HubSpot gave no access to its blogs', async () => {
+    const pages = { ...CONNECTION, consent: { ...CONNECTION.consent, pages: true } };
+    client.readHubspot.mockResolvedValue(read({ connection: pages }));
+    client.listHubspotBlogs.mockResolvedValue({ ok: false, code: 'scopes' });
+    await render();
+    expect(text()).toContain("HubSpot didn't give Ansvisor access to its blogs.");
+    await click(button('Connect again'));
+    expect(text()).toContain('Connect HubSpot for Acme');
+  });
+
+  it('shows a member the blog picked, reading no list', async () => {
+    role.canManage = false;
+    client.readHubspot.mockResolvedValue(
+      read({
+        connection: {
+          ...CONNECTION,
+          consent: { ...CONNECTION.consent, pages: true },
+          blog: { id: '1234567890', name: 'Acme blog' },
+        },
+      }),
+    );
+    await render();
+    expect(text()).toContain('Send to CMS writes draft posts to Acme blog.');
+    expect(client.listHubspotBlogs).not.toHaveBeenCalled();
   });
 
   it('disconnects after saying what stays in HubSpot', async () => {

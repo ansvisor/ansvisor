@@ -69,6 +69,8 @@ vi.mock('../lib/composio.js', () => ({
   isHubspotConfigured: (...a) => composio.isHubspotConfigured(...a),
   linkHubspot: (...a) => composio.linkHubspot(...a),
 }));
+const blogs = vi.hoisted(() => ({ list: vi.fn() }));
+vi.mock('../lib/cms/hubspot-blog.js', () => ({ listBlogs: (...a) => blogs.list(...a) }));
 vi.mock('../lib/hubspot/connection.js', async (importOriginal) => ({
   ...(await importOriginal()),
   ...Object.fromEntries(Object.entries(conn).map(([k, fn]) => [k, (...a) => fn(...a)])),
@@ -209,6 +211,7 @@ describe('GET /api/hubspot/brands/:brandId', () => {
           by: 'Ayşe Demir',
           at: '2026-11-09T10:00:00.000Z',
         },
+        blog: null,
         properties: { ready: true, at: READY.at, error: null },
       },
       usable: [{ accountId: NEW_ACCOUNT, label: 'Hub ID 7', brandIds: [OTHER] }],
@@ -238,6 +241,65 @@ describe('GET /api/hubspot/brands/:brandId', () => {
     const res = await send('GET', '');
     expect(res.status).toBe(403);
     expect((await res.json()).code).toBe('no_brand_access');
+  });
+});
+
+describe('the blog Send to CMS writes to (00522)', () => {
+  const BLOGS = [
+    { id: '1234567890', name: 'Acme blog', url: 'https://www.acme.test/blog' },
+    { id: '2233445566', name: 'Acme news', url: null },
+  ];
+  const pagesAllowed = (over = {}) =>
+    connected({ consent: { contacts: false, pages: true, by: 'u1', at: 'x' }, ...over });
+
+  beforeEach(() => {
+    blogs.list.mockReset().mockResolvedValue(BLOGS);
+    conn.hubspotConnection.mockResolvedValue(pagesAllowed());
+  });
+
+  it('lists the HubSpot account’s blogs for an admin or manager who reaches its brands', async () => {
+    const res = await send('GET', '/blogs');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ blogs: BLOGS, picked: null });
+    expect(reach).toHaveBeenCalledWith('u1', { accountId: ACCOUNT });
+  });
+
+  it('keeps the blog picked, with its name', async () => {
+    const res = await send('PUT', '/blog', { blogId: '2233445566' });
+    expect(res.status).toBe(200);
+    expect(stored().blog).toEqual({ id: '2233445566', name: 'Acme news' });
+    // Not one of the account's: refused.
+    const other = await send('PUT', '/blog', { blogId: '999' });
+    expect(other.status).toBe(404);
+    expect((await other.json()).code).toBe('blog_not_found');
+    expect((await send('PUT', '/blog', { blogId: 'not-an-id' })).status).toBe(400);
+  });
+
+  it('needs consent to send pages, and says when the content scope is missing', async () => {
+    conn.hubspotConnection.mockResolvedValue(connected());
+    let res = await send('GET', '/blogs');
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('consent_required');
+
+    conn.hubspotConnection.mockResolvedValue(pagesAllowed());
+    blogs.list.mockRejectedValue(new HubspotError('scopes', '403'));
+    res = await send('GET', '/blogs');
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('scopes');
+
+    blogs.list.mockRejectedValue(new HubspotError('auth', '401'));
+    res = await send('PUT', '/blog', { blogId: '1234567890' });
+    expect((await res.json()).code).toBe('refused');
+    expect(conn.markSignInRefused).toHaveBeenCalledWith(ACCOUNT);
+  });
+
+  it('is for admins and managers, on the plan', async () => {
+    access.mockResolvedValue({ brand: brand(), role: 'member' });
+    expect((await send('GET', '/blogs')).status).toBe(403);
+    access.mockResolvedValue({ brand: brand(), role: 'manager' });
+    plan.allowed = false;
+    expect((await send('PUT', '/blog', { blogId: '1234567890' })).status).toBe(403);
+    expect(blogs.list).not.toHaveBeenCalled();
   });
 });
 

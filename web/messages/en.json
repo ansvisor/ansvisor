@@ -9335,6 +9335,13 @@
           "published": "Published {when}",
           "taken_down": "Taken down {when}: a draft post in Wix again"
         },
+        "hubspot": {
+          "queued": "Sending to HubSpot since {when}",
+          "sent": "In HubSpot as a draft blog post since {when}",
+          "failed": "The last send to HubSpot failed, {when}",
+          "published": "Published {when}",
+          "taken_down": "Taken down {when}: a draft blog post in HubSpot again"
+        },
         "framer": {
           "queued": "Sending to Framer since {when}",
           "sent": "In Framer as a draft item since {when}",
@@ -9354,6 +9361,7 @@
         "descriptionWebflow": "Each page goes to {collection} in Webflow as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them.",
         "descriptionWordPress": "Each page goes to {site} in WordPress as a draft post, as it is ready to publish, with the slug and meta description (as its excerpt) of its last send, else the page's. Open a page in the editor to change them. A page whose post is already published or scheduled goes as a new draft post. The meta title and JSON-LD aren't sent: set them in your SEO plugin.",
         "descriptionWix": "Each page goes to {site}'s Wix Blog as a draft post, as it is ready to publish, with its slug, meta title, meta description and JSON-LD as the post's SEO settings. Images aren't sent: add them in Wix. A page whose post is already published updates its draft there; you publish the changes in Wix.",
+        "descriptionHubspot": "Each page goes to {blog}, your HubSpot blog, as a draft post, as it is ready to publish, with its slug, meta title and meta description, its JSON-LD in the post's head and its featured image. A page sent before updates its post's draft there; you publish it in HubSpot.",
         "descriptionFramer": "Each page goes to {collection} in Framer as a draft item, as it is ready to publish, with the slug and meta of its last send, else the page's. Open a page in the editor to change them. A page whose item isn't a draft is updated there: the change goes live with your next publish of the site. Images aren't sent yet.",
         "readFailed": "Couldn't read the pages. Try again.",
         "retry": "Try again",
@@ -9387,6 +9395,7 @@
         "inProgress": "A page is already on its way to Webflow. Wait for it, then send again.",
         "inProgressWordPress": "A page is already on its way to WordPress. Wait for it, then send again.",
         "inProgressWix": "A page is already on its way to Wix. Wait for it, then send again.",
+        "inProgressHubspot": "A page is already on its way to HubSpot. Wait for it, then send again.",
         "inProgressFramer": "A page is already on its way to Framer. Wait for it, then send again.",
         "close": "Close",
         "cancel": "Cancel",
@@ -10592,12 +10601,13 @@
       },
       "send": {
         "button": "Send to CMS",
-        "hint": "Send the page to your CMS: Webflow, WordPress, Framer, Wix, or your workflow through the brand's webhook",
+        "hint": "Send the page to your CMS: Webflow, WordPress, Framer, Wix, HubSpot, or your workflow through the brand's webhook",
         "title": "Send to CMS",
         "description": "The page goes to the brand's webhook, for your workflow tool (Zapier, Make, n8n) to publish it in your CMS.",
         "descriptionWebflow": "The page goes to {collection} in Webflow as a draft item, with its slug and meta. You publish it in Webflow.",
         "descriptionWordPress": "The page goes to {site} in WordPress as a draft post, with its slug, and its meta description as the excerpt. The meta title isn't sent: set it in your SEO plugin. You publish it in WordPress.",
         "descriptionWix": "The page goes to {site}'s Wix Blog as a draft post, with its slug, and its meta title, meta description and JSON-LD as the post's SEO settings. You publish it in Wix.",
+        "descriptionHubspot": "The page goes to {blog}, your HubSpot blog, as a draft post, with its slug, meta title and meta description, its JSON-LD in the post's head and its featured image. You publish it in HubSpot.",
         "descriptionFramer": "The page goes to {collection} in Framer as a draft item, with its slug and meta. Images aren't sent yet. You publish it in Framer.",
         "descriptionReading": "The page goes to your CMS with its slug and meta, kept on the page.",
         "target": {
@@ -10624,6 +10634,11 @@
             "hint": "A draft post on {site}'s Blog",
             "notReady": "API key refused: connect Wix again in Settings › Integrations"
           },
+          "hubspot": {
+            "title": "HubSpot",
+            "hint": "A draft blog post on {blog}",
+            "notReady": "Not ready: pick the blog, or connect HubSpot again, in Settings › Integrations"
+          },
           "webhook": {
             "title": "Your workflow",
             "hint": "The brand's webhook (Zapier, Make, n8n)"
@@ -10631,6 +10646,7 @@
           "unchecked": "Couldn't check Webflow just now, so this send goes to your workflow.",
           "uncheckedWordPress": "Couldn't check WordPress just now, so this send goes to your workflow.",
           "uncheckedWix": "Couldn't check Wix just now, so this send goes to your workflow.",
+          "uncheckedHubspot": "Couldn't check HubSpot just now, so this send goes to your workflow.",
           "uncheckedFramer": "Couldn't check Framer just now, so this send goes to your workflow.",
           "retry": "Try again"
         },
@@ -10681,6 +10697,12 @@
           "failed": "The last send to Wix failed, {when}.",
           "published": "Published {when}."
         },
+        "lastHubspot": {
+          "queued": "Last sent to HubSpot {when}, still on its way.",
+          "sent": "In HubSpot as a draft blog post since {when}.",
+          "failed": "The last send to HubSpot failed, {when}.",
+          "published": "Published {when}."
+        },
         "lastFramer": {
           "queued": "Last sent to Framer {when}, still on its way.",
           "sent": "In Framer as a draft item since {when}.",
@@ -10708,6 +10730,15 @@
           "no_webhookWebflow": "This brand's Webflow isn't ready, and it has no webhook. Connect Webflow again or pick its collection in Settings › Integrations.",
           "wordpressFailed": "WordPress didn't take the page: {reason}",
           "wixFailed": "Wix didn't take the page: {reason}",
+          "hubspotFailed": "HubSpot didn't take the page: {reason}",
+          "hubspot_not_configured": "HubSpot isn't set up on this server. Send to your workflow instead.",
+          "no_hubspot": "Connect HubSpot in Settings › Integrations first.",
+          "hubspot_plan": "Sending pages to HubSpot comes with the Growth plan.",
+          "hubspot_refused": "HubSpot refused the sign-in. Connect it again in Settings › Integrations.",
+          "hubspot_no_consent": "Allow sending pages as drafts on the HubSpot card in Settings › Integrations.",
+          "hubspot_not_ready": "Pick the HubSpot blog pages go to in Settings › Integrations.",
+          "in_progressHubspot": "This page is already on its way to HubSpot. Wait for it, then send again.",
+          "no_webhookHubspot": "This brand's HubSpot isn't ready, and it has no webhook. Pick its blog, or connect HubSpot again, in Settings › Integrations.",
           "wordpress_not_configured": "WordPress isn't set up on this server. Send to your workflow instead.",
           "no_wordpress": "Connect WordPress in Settings › Integrations first.",
           "wordpress_refused": "WordPress refused the sign-in. Connect it again in Settings › Integrations.",
@@ -10743,6 +10774,8 @@
         "framerLive": "The item isn't a draft in Framer, so the change goes live with your next publish of the site.",
         "sentWix": "Sent to Wix as a draft post",
         "sentWixUpdated": "Draft post updated in Wix",
+        "sentHubspot": "Sent to HubSpot as a draft blog post",
+        "sentHubspotUpdated": "Draft blog post updated in HubSpot",
         "wixImages": "{images, plural, one {# image wasn't sent: add it in Wix.} other {# images weren't sent: add them in Wix.}}"
       },
       "rulesChip": "{met}/{total} rules",
@@ -15764,6 +15797,18 @@
       "account": "Account: {label}",
       "sharedWith": "Also used by {brands}",
       "changeAccount": "Change account",
+      "blog": {
+        "label": "Blog posts go to",
+        "placeholder": "Pick a blog",
+        "save": "Save",
+        "saved": "Blog saved",
+        "goesTo": "Send to CMS writes draft posts to {blog}.",
+        "notPicked": "No blog picked yet: pages can't go to HubSpot until one is.",
+        "none": "This HubSpot account has no blog yet. Create one in HubSpot first.",
+        "scopes": "HubSpot didn't give Ansvisor access to its blogs. Connect HubSpot again to allow it.",
+        "unavailable": "Couldn't read the HubSpot blogs just now.",
+        "connectAgain": "Connect again"
+      },
       "disconnect": "Disconnect",
       "disconnectTitle": "Disconnect HubSpot from {brand}?",
       "disconnectStops": "Ansvisor stops reading from and writing to HubSpot for {brand} right away.",
@@ -15821,6 +15866,10 @@
         "forbidden": "Only admins and managers can change HubSpot.",
         "not_connected": "Connect HubSpot first.",
         "unknown_account": "That HubSpot account isn't one this brand can use.",
+        "scopes": "HubSpot didn't give Ansvisor access to its blogs. Connect HubSpot again to allow it.",
+        "refused": "HubSpot refused the sign-in. Connect it again.",
+        "hubspot_failed": "HubSpot answered an error. Try again in a moment.",
+        "blog_not_found": "That blog isn't in the HubSpot account any more. Pick another one.",
         "session": "Your session has ended. Sign in again.",
         "workspace": "This brand isn't one you can change.",
         "busy": "Too many requests. Try again in a minute.",

@@ -30,6 +30,8 @@ export interface HubspotConnection {
   sharedWith: string[];
   /** What was allowed, by whom (their name) and when. */
   consent: HubspotConsent & { by: string | null; at: string | null };
+  /** The blog Send to CMS writes draft posts to (00522), or none picked yet. */
+  blog: { id: string; name: string | null } | null;
   /** The "Ansvisor" property group and its properties in HubSpot. */
   properties: { ready: boolean; at: string | null; error: string | null };
 }
@@ -57,6 +59,13 @@ export type HubspotError =
   | 'forbidden'
   | 'not_connected'
   | 'unknown_account'
+  /** HubSpot didn't give the sign-in its content scope (blogs): connect again. */
+  | 'scopes'
+  /** HubSpot refused the sign-in. */
+  | 'refused'
+  /** HubSpot answered another error. */
+  | 'hubspot_failed'
+  | 'blog_not_found'
   | 'session'
   | 'workspace'
   | 'busy'
@@ -72,6 +81,10 @@ const KNOWN: readonly HubspotError[] = [
   'forbidden',
   'not_connected',
   'unknown_account',
+  'scopes',
+  'refused',
+  'hubspot_failed',
+  'blog_not_found',
 ];
 
 export type HubspotResult<T> = ({ ok: true } & T) | { ok: false; code: HubspotError };
@@ -163,6 +176,25 @@ export function chooseHubspotAccount(
   { accountId, consent }: { accountId: string; consent: HubspotConsent },
 ) {
   return call<HubspotRead>(brandId, '/use', json('POST', { accountId, consent }));
+}
+
+/** A blog of the brand's HubSpot account, for Send to CMS's draft posts. */
+export interface HubspotBlog {
+  id: string;
+  name: string;
+  url: string | null;
+}
+
+/** The HubSpot account's blogs, and the one the brand picked. */
+export function listHubspotBlogs(brandId: string) {
+  return call<{ blogs: HubspotBlog[]; picked: string | null }>(brandId, '/blogs', {
+    signal: AbortSignal.timeout(INTEGRATION_READ_TIMEOUT_MS),
+  });
+}
+
+/** The blog Send to CMS writes the brand's pages to. */
+export function saveHubspotBlog(brandId: string, blogId: string) {
+  return call<HubspotRead>(brandId, '/blog', json('PUT', { blogId }));
 }
 
 /** Changes what Ansvisor may write in HubSpot. */

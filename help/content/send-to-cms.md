@@ -4,14 +4,14 @@ route: /dashboard/content/library
 keywords: [send to cms, webflow, wordpress, framer, draft post, last send, qualified reviewer, reviewer metadata, reviewed by, take down, unpublish]
 synonyms: [push to cms, publish to blog, send to website, export to cms, send reviewer, reviewer field]
 plan: all
-updated: 2026-11-02
-last_checked: 2026-11-02
+updated: 2026-11-10
+last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/send-to-cms.mdx, docs/guides/content-editor.mdx]
 ---
-**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Send to CMS never publishes: you publish in your CMS. Only admins and managers can send pages.
+**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site, your Wix site's Blog or your HubSpot blog as a draft post, or to your workflow tool, which creates the post in your CMS. Send to CMS never publishes: you publish in your CMS. Only admins and managers can send pages.
 
 ## Send one page
 
@@ -21,7 +21,7 @@ The dialog fills the **Slug**, **Meta title** and **Meta description** from the 
 
 ## Choose where it goes
 
-The dialog offers each CMS that is connected and ready, Webflow, WordPress, Framer, then Wix, beside **Your workflow**. Your choice is remembered for the brand in your browser.
+The dialog offers each CMS that is connected and ready, Webflow, WordPress, Framer, Wix, then HubSpot, beside **Your workflow**. HubSpot shows once its card allows **Send pages to HubSpot as drafts** and has a blog picked; it comes with the Growth plan. Tags and the author don't go to HubSpot: set them there. Your choice is remembered for the brand in your browser.
 
 A CMS that is connected but not ready shows what to fix and can't be picked, for example when its sign-in is refused or no collection is picked. If the dialog can't check a CMS you chose just then, the page goes to your workflow, and the dialog says so with **Try again**.
 
@@ -45,7 +45,7 @@ The **Last send** filter beside **Created** lists the pages that were **Never se
 
 ## When a page becomes Published
 
-Once you publish the item in Webflow or Framer, or the post in WordPress or Wix, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one.
+Once you publish the item in Webflow or Framer, or the post in WordPress, Wix or HubSpot, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one.
 
 ## Take a published page down
 
@@ -55,7 +55,7 @@ Admins and managers can take a page down, even when publishing is off for manage
 
 ## Sending a page again
 
-Sending a page again updates the same Webflow or Framer item, the same WordPress draft post, or the same Wix post (a published one gets a new draft version in Wix). Changes to a published Webflow or Framer item go live with your next publish there. WordPress has no draft of a published post, so a page whose post is published, scheduled or private goes as a new draft post: move the text over in WordPress.
+Sending a page again updates the same Webflow or Framer item, the same WordPress draft post, the same Wix post (a published one gets a new draft version in Wix), or the same HubSpot post (a published one keeps what people read until you publish its changes in HubSpot). Changes to a published Webflow or Framer item go live with your next publish there. WordPress has no draft of a published post, so a page whose post is published, scheduled or private goes as a new draft post: move the text over in WordPress.
 
 ## What each CMS leaves out
 

@@ -138,6 +138,7 @@ export const DEMO_GUARDED = [
   guard('POST /cms/brands/:brandId/indexnow/check', brandIn('path')),
   guard('DELETE /cms/brands/:brandId/indexnow', brandIn('path')),
   // HubSpot (hubspot.js, #2140): connecting, the account used, what Ansvisor may write, disconnecting.
+  guard('PUT /hubspot/brands/:brandId/blog', brandIn('path')),
   guard('POST /hubspot/brands/:brandId/connect', brandIn('path')),
   guard('POST /hubspot/brands/:brandId/activate', brandIn('path')),
   guard('POST /hubspot/brands/:brandId/use', brandIn('path')),
@@ -155,6 +156,7 @@ export const DEMO_GUARDED = [
   guard('POST /content-drafts/wordpress-status', brandIn('body')),
   guard('POST /content-drafts/framer-status', brandIn('body')),
   guard('POST /content-drafts/wix-status', brandIn('body')),
+  guard('POST /content-drafts/hubspot-status', brandIn('body')),
   guard(
     'POST /content-drafts/:draftId/brief',
     brandIn('body'),

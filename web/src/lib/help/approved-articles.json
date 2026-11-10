@@ -2576,6 +2576,7 @@
         "wordpress",
         "framer",
         "wix",
+        "hubspot blog",
         "integrations",
         "application password"
       ],
@@ -2586,7 +2587,7 @@
         "connect my website"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
@@ -2611,6 +2612,10 @@
         {
           "heading": "Connect Wix",
           "text": "The site needs the Wix Blog: pages go there as draft posts. In Wix, the site's owner opens **Account Settings › API Keys Manager**, clicks **Generate API Key**, picks the site, gives the key **Manage Blog** and **Manage Ricos Document**, and copies it; Wix shows it once. In the **Wix** card, paste the **Site id** (or the whole address of the site's dashboard) and the **API key**, and click **Connect**. A Blog with no post can't be connected yet: write one post on it as the site's owner first."
+        },
+        {
+          "heading": "Send to your HubSpot blog",
+          "text": "HubSpot is connected on its own card, under **CRM** (see **Connect HubSpot**), and comes with the Growth plan. To send pages there, turn on **Send pages to HubSpot as drafts** on that card, then pick the blog under **Blog posts go to** and click **Save**. If the card says HubSpot didn't give Ansvisor access to its blogs, click **Connect again** and approve the access in HubSpot."
         },
         {
           "heading": "Replace or disconnect",
@@ -3217,11 +3222,11 @@
         "reviewer field"
       ],
       "plan": "all",
-      "updated": "2026-11-02",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
-          "text": "**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site or your Wix site's Blog as a draft post, or to your workflow tool, which creates the post in your CMS. Send to CMS never publishes: you publish in your CMS. Only admins and managers can send pages."
+          "text": "**Send to CMS** sends a Content Editor page to your CMS: into a Webflow or Framer collection as a draft item, to your WordPress site, your Wix site's Blog or your HubSpot blog as a draft post, or to your workflow tool, which creates the post in your CMS. Send to CMS never publishes: you publish in your CMS. Only admins and managers can send pages."
         },
         {
           "heading": "Send one page",
@@ -3229,7 +3234,7 @@
         },
         {
           "heading": "Choose where it goes",
-          "text": "The dialog offers each CMS that is connected and ready, Webflow, WordPress, Framer, then Wix, beside **Your workflow**. Your choice is remembered for the brand in your browser.\n\nA CMS that is connected but not ready shows what to fix and can't be picked, for example when its sign-in is refused or no collection is picked. If the dialog can't check a CMS you chose just then, the page goes to your workflow, and the dialog says so with **Try again**."
+          "text": "The dialog offers each CMS that is connected and ready, Webflow, WordPress, Framer, Wix, then HubSpot, beside **Your workflow**. HubSpot shows once its card allows **Send pages to HubSpot as drafts** and has a blog picked; it comes with the Growth plan. Tags and the author don't go to HubSpot: set them there. Your choice is remembered for the brand in your browser.\n\nA CMS that is connected but not ready shows what to fix and can't be picked, for example when its sign-in is refused or no collection is picked. If the dialog can't check a CMS you chose just then, the page goes to your workflow, and the dialog says so with **Try again**."
         },
         {
           "heading": "What holds a send",
@@ -3245,7 +3250,7 @@
         },
         {
           "heading": "When a page becomes Published",
-          "text": "Once you publish the item in Webflow or Framer, or the post in WordPress or Wix, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one."
+          "text": "Once you publish the item in Webflow or Framer, or the post in WordPress, Wix or HubSpot, the page becomes **Published** and its address shows in the Library. Ansvisor checks when you open the Library and once a day, for sends from the last 60 days. A page sent to your workflow becomes Published when the workflow reports where it went live. A page whose item or post you deleted reads as removed: send it again to make a new one."
         },
         {
           "heading": "Take a published page down",
@@ -3253,7 +3258,7 @@
         },
         {
           "heading": "Sending a page again",
-          "text": "Sending a page again updates the same Webflow or Framer item, the same WordPress draft post, or the same Wix post (a published one gets a new draft version in Wix). Changes to a published Webflow or Framer item go live with your next publish there. WordPress has no draft of a published post, so a page whose post is published, scheduled or private goes as a new draft post: move the text over in WordPress."
+          "text": "Sending a page again updates the same Webflow or Framer item, the same WordPress draft post, the same Wix post (a published one gets a new draft version in Wix), or the same HubSpot post (a published one keeps what people read until you publish its changes in HubSpot). Changes to a published Webflow or Framer item go live with your next publish there. WordPress has no draft of a published post, so a page whose post is published, scheduled or private goes as a new draft post: move the text over in WordPress."
         },
         {
           "heading": "What each CMS leaves out",
