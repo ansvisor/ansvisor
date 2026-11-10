@@ -245,6 +245,22 @@ async function clearBrandProperty(brandId, provider) {
   if (error) throw new Error(error.message);
 }
 
+/**
+ * The brand's use of `accountId` for `provider`, as brand_integrations keeps
+ * it. Its `settings` are the brand's choices on the sign-in it used (a Slack
+ * channel, #2139): with another sign-in they no longer apply and start
+ * over; kept when the brand already uses this one.
+ */
+function useRow(brandId, provider, accountId, before) {
+  return {
+    brand_id: brandId,
+    provider,
+    account_id: accountId,
+    ...(before?.accountId !== accountId ? { settings: {} } : {}),
+    updated_at: new Date().toISOString(),
+  };
+}
+
 /** How long a login that was started but never finished is kept. */
 const PENDING_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -372,15 +388,9 @@ export async function useAccountForBrand(
     throw httpError('That sign-in is not one this brand can use.', 404, 'unknown_account');
   }
   const before = await brandConnection(brand.id, provider);
-  const { error } = await supabaseAdmin.from('brand_integrations').upsert(
-    {
-      brand_id: brand.id,
-      provider,
-      account_id: accountId,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'brand_id,provider' },
-  );
+  const { error } = await supabaseAdmin
+    .from('brand_integrations')
+    .upsert(useRow(brand.id, provider, accountId, before), { onConflict: 'brand_id,provider' });
   if (error) throw new Error(error.message);
   if (before?.accountId !== accountId) await clearBrandProperty(brand.id, provider);
   if (before?.accountId && before.accountId !== accountId) {
@@ -452,15 +462,9 @@ export async function activateBrandAccount(
     if (updateError) throw new Error(updateError.message);
   }
   const before = await brandConnection(brand.id, provider);
-  const { error: useError } = await supabaseAdmin.from('brand_integrations').upsert(
-    {
-      brand_id: brand.id,
-      provider,
-      account_id: accountId,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'brand_id,provider' },
-  );
+  const { error: useError } = await supabaseAdmin
+    .from('brand_integrations')
+    .upsert(useRow(brand.id, provider, accountId, before), { onConflict: 'brand_id,provider' });
   if (useError) throw new Error(useError.message);
   if (before?.accountId !== accountId) await clearBrandProperty(brand.id, provider);
   if (before?.accountId && before.accountId !== accountId) {

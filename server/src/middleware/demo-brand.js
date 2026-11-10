@@ -212,6 +212,13 @@ export const DEMO_GUARDED = [
   guard('POST /integrations/:provider/brands/:brandId/connect', brandIn('path')),
   guard('POST /integrations/:provider/brands/:brandId/activate', brandIn('path')),
   guard('DELETE /integrations/:provider/brands/:brandId', brandIn('path')),
+  // A brand's Slack (slack.js, #2139): the demo brand connects nothing (the route refuses it too).
+  guard('POST /slack/brands/:brandId/connect', brandIn('path')),
+  guard('POST /slack/brands/:brandId/activate', brandIn('path')),
+  guard('POST /slack/brands/:brandId/use', brandIn('path')),
+  guard('PUT /slack/brands/:brandId', brandIn('path')),
+  guard('POST /slack/brands/:brandId/test', brandIn('path')),
+  guard('DELETE /slack/brands/:brandId', brandIn('path')),
 
   // Mentions (mentions.js).
   guard('POST /mentions/action', brandIn('body')),

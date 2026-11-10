@@ -97,7 +97,12 @@ export async function initiateConnection(
 ) {
   // A brand's own Google login (BRAND-ACCESS PR 15) is one more account under
   // the Account's entity: link refuses a second ACTIVE one without allowMultiple.
-  const request = await getClient().connectedAccounts.link(entityId, authConfigId(provider), {
+  return linkAccount(authConfigId(provider), entityId, callbackUrl, { allowMultiple });
+}
+
+/** The hosted sign-in on one auth config, for an entity: its URL and pending account. */
+async function linkAccount(configId, entityId, callbackUrl, { allowMultiple = false } = {}) {
+  const request = await getClient().connectedAccounts.link(entityId, configId, {
     callbackUrl,
     ...(allowMultiple ? { allowMultiple: true } : {}),
   });
@@ -146,15 +151,32 @@ export async function deleteConnection(connectedAccountId) {
  * (a toolkit's ready-made tools may call an older one). Composio doesn't
  * retry it: the caller decides what a 429 means.
  *
+ * A GET by default; a POST (Slack's writes, #2139) sends `body` as JSON.
  * Returns the API's own answer, whatever its status: `{ status, headers, data }`.
  * Throws when Composio itself refuses the call (an account no longer active).
  */
-export async function proxyRequest(connectedAccountId, { endpoint, query = {}, signal }) {
+export async function proxyRequest(
+  connectedAccountId,
+  { endpoint, method = 'GET', query = {}, body, signal },
+) {
   const parameters = Object.entries(query)
     .filter(([, value]) => value != null && value !== '')
     .map(([name, value]) => ({ in: 'query', name, value: String(value) }));
+  if (body !== undefined) {
+    parameters.push({
+      in: 'header',
+      name: 'Content-Type',
+      value: 'application/json; charset=utf-8',
+    });
+  }
   const res = await getClient().tools.proxyExecute(
-    { endpoint, method: 'GET', parameters, connectedAccountId },
+    {
+      endpoint,
+      method,
+      parameters,
+      ...(body !== undefined ? { body } : {}),
+      connectedAccountId,
+    },
     signal ? { signal } : undefined,
   );
   return { status: res.status, headers: res.headers ?? {}, data: res.data ?? null };
@@ -393,4 +415,33 @@ export async function executeWebflowTool(slug, { entityId, accountId }, args) {
     throw new Error(result?.error || `${slug} failed`);
   }
   return result?.data ?? {};
+}
+
+// ─── Slack (alerts, the Pulse and approvals in a channel, #2139) ────────────
+
+/**
+ * A brand posts to a Slack channel through the workspace's install of
+ * Ansvisor's own Slack app, made through Composio's Slackbot toolkit with
+ * our app as its auth config (Composio's managed app works too, as a
+ * fallback and on self-host). Composio keeps the bot token; we keep the
+ * connected account's id in the pool (integration_accounts, 00470), as for
+ * a brand's own Google login. Not in PROVIDERS: the shared connect flow
+ * there is the workspace's Google sign-in. Calls go through proxyRequest
+ * (lib/slack/api.js), so no toolkit version is pinned.
+ */
+const SLACK_AUTH_CONFIG_ENV = 'COMPOSIO_SLACK_AUTH_CONFIG_ID';
+
+export function isSlackConfigured() {
+  return Boolean(process.env.COMPOSIO_API_KEY && process.env[SLACK_AUTH_CONFIG_ENV]);
+}
+
+/**
+ * Starts Slack's install of the app for one more connected account under
+ * `entityId` (several Slack workspaces, and Google logins, share the
+ * Account's entity). The URL to open and the pending account's id.
+ */
+export function initiateSlackConnection(entityId, callbackUrl) {
+  return linkAccount(process.env[SLACK_AUTH_CONFIG_ENV], entityId, callbackUrl, {
+    allowMultiple: true,
+  });
 }
