@@ -75,6 +75,30 @@ describe('scrubEvent', () => {
     expect(event.properties.count).toBe(3);
   });
 
+  it("cleans the addresses a heatmap's points are kept by, and merges those that meet", () => {
+    const click = { x: 10, y: 20, target_fixed: false, type: 'click' };
+    const move = { x: 1, y: 2, target_fixed: false, type: 'mousemove' };
+    const event = {
+      event: '$$heatmap',
+      properties: {
+        $current_url: 'https://app.ansvisor.com/sign-up?invite=tok&email=a%40b.co',
+        $heatmap_data: {
+          'https://app.ansvisor.com/sign-up?invite=tok&email=a%40b.co': [click],
+          'https://app.ansvisor.com/sign-up?invite=other': [move],
+          'https://app.ansvisor.com/invite/abc123': [click],
+          'https://app.ansvisor.com/dashboard/insights': [move],
+        },
+      },
+    } as unknown as CaptureResult;
+    const scrubbed = scrubEvent(event)!;
+    expect(scrubbed.properties.$heatmap_data).toEqual({
+      'https://app.ansvisor.com/sign-up': [click, move],
+      'https://app.ansvisor.com/invite/[token]': [click],
+      'https://app.ansvisor.com/dashboard/insights': [move],
+    });
+    expect(JSON.stringify(scrubbed)).not.toMatch(/=tok|=other|a%40b|abc123/);
+  });
+
   it('passes a dropped event on', () => {
     expect(scrubEvent(null)).toBeNull();
   });

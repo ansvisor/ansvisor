@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { UpgradeDialogContext } from '@/components/providers/upgrade-gate';
+import { track } from '@/lib/analytics';
 import type { ChatStep } from '@/lib/chat/events';
 import { PlanCard, planStepPill, type PlanStep } from './plan-card';
 import { ApprovalCard, APPROVAL_CARD_STATUSES } from './approval-card';
@@ -32,6 +33,7 @@ vi.mock('@/i18n/navigation', () => ({
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -46,6 +48,7 @@ beforeEach(() => {
   root = createRoot(container);
   openUpgrade.mockReset();
   toast.success.mockReset();
+  vi.mocked(track).mockClear();
 });
 
 afterEach(() => {
@@ -609,6 +612,36 @@ describe('DenialCard', () => {
     expect($('[data-part="who"]')!.textContent).toBe('Admins can change the plan.');
     expect(action('plan.upgrade')!.getAttribute('href')).toBe('/dashboard/settings/billing');
     expect(action('plan.compare')!.getAttribute('href')).toBe('/dashboard/settings/billing');
+  });
+
+  it('counts a plan gate as an upgrade wall shown, once, and a read-only refusal too', async () => {
+    const gate = {
+      title: 'Full auto needs Growth',
+      asked: 'Run /winback in Full auto.',
+      why: 'Full auto needs Growth. Your plan: Starter.',
+      whoCan: 'Admins can change the plan.',
+    };
+    await render(<DenialCard {...gate} nextActions={['ask_admin', 'compare_plans']} />);
+    // Drawn again as the run goes on: the same wall.
+    await render(<DenialCard {...gate} nextActions={['ask_admin', 'compare_plans']} />);
+    expect(vi.mocked(track).mock.calls).toEqual([
+      ['upgrade_wall_shown', { feature: null, reason: 'plan', source: 'chat' }],
+    ]);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    vi.mocked(track).mockClear();
+    await render(<DenialCard {...gate} nextActions={['choose_plan']} />);
+    expect(vi.mocked(track).mock.calls).toEqual([
+      ['upgrade_wall_shown', { feature: null, reason: 'read_only', source: 'chat' }],
+    ]);
+  });
+
+  it('counts no wall for a denial that offers no plan', async () => {
+    await render(
+      <DenialCard {...role} nextActions={[...role.nextActions]} onAskAdmin={() => {}} />,
+    );
+    expect(track).not.toHaveBeenCalled();
   });
 
   it('shows See tool policy only once its page has an address', async () => {

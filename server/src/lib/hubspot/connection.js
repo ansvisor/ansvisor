@@ -16,6 +16,8 @@ import { PROPERTIES_VERSION } from './properties.js';
  *     "Ansvisor" properties and fill them on contacts who came from an AI
  *     answer) and `pages` (Send to CMS makes draft pages), with who last
  *     allowed one and when. Nothing is written without it;
+ *   - blog: the HubSpot blog Send to CMS writes draft posts to (00522), its
+ *     id and name, picked on the card;
  *   - portal: the HubSpot account (Hub ID, currency, time zone, address);
  *   - properties: the definitions made in HubSpot (their version and the AI
  *     source list's), or why the last try failed;
@@ -34,6 +36,7 @@ const text = (value, max) => (typeof value === 'string' && value ? value.slice(0
 export function readSettings(raw) {
   const s = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const consent = s.consent && typeof s.consent === 'object' ? s.consent : {};
+  const blog = s.blog && typeof s.blog === 'object' ? s.blog : null;
   const portal = s.portal && typeof s.portal === 'object' ? s.portal : null;
   const properties = s.properties && typeof s.properties === 'object' ? s.properties : null;
   const sync = s.sync && typeof s.sync === 'object' ? s.sync : null;
@@ -45,6 +48,7 @@ export function readSettings(raw) {
       by: text(consent.by, 64),
       at: text(consent.at, 40),
     },
+    blog: blog && text(blog.id, 64) ? { id: text(blog.id, 64), name: text(blog.name, 300) } : null,
     portal:
       portal && Number.isInteger(portal.id)
         ? {

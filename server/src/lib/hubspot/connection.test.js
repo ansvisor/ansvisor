@@ -13,6 +13,7 @@ describe('readSettings', () => {
   it('reads nothing allowed from nothing, or from anything malformed', () => {
     const none = {
       consent: { contacts: false, pages: false, by: null, at: null },
+      blog: null,
       portal: null,
       properties: null,
       sync: null,
@@ -27,6 +28,7 @@ describe('readSettings', () => {
   it('reads what was stored', () => {
     const stored = {
       consent: { contacts: true, pages: false, by: 'u1', at: '2026-11-10T09:00:00.000Z' },
+      blog: { id: '1234567890', name: 'Acme blog' },
       portal: { id: 4412893, currency: 'USD', timeZone: 'Europe/Istanbul', uiDomain: 'app.x' },
       properties: { version: 1, sourcesVersion: 3, at: '2026-11-10T09:00:01.000Z', error: null },
       sync: { at: '2026-11-10T06:00:00.000Z', contacts: 42, deals: 7, error: null },

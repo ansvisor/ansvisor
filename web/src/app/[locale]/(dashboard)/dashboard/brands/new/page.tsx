@@ -16,6 +16,7 @@ import { bootstrapBrandVolumes } from '@/lib/actions/volumes';
 import { usePlanContext } from '@/components/providers/plan-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { getFaviconUrl } from '@/lib/favicon';
+import { frictionFlow } from '@/lib/friction-events';
 import { useBrandStore } from '@/stores/use-brand-store';
 import {
   REGIONS,
@@ -231,6 +232,9 @@ const COMPETITOR_LOADING_MESSAGES = [
 
 const TOTAL_STEPS = 5;
 
+/** brand_add: from this page's first step to Finish. */
+const BRAND_ADD = frictionFlow('brand_add');
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function NewBrandPage() {
@@ -243,6 +247,7 @@ export default function NewBrandPage() {
 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  useEffect(() => BRAND_ADD.started(), []);
 
   // Step 1
   const [brandName, setBrandName] = useState('');
@@ -448,6 +453,7 @@ export default function NewBrandPage() {
           domains: domain ? [{ domain, isPrimary: true }] : [],
         });
         if ('error' in result) {
+          BRAND_ADD.failed(result.code);
           toast.error(result.error);
           return;
         }
@@ -465,6 +471,7 @@ export default function NewBrandPage() {
         fetchTopicSuggestions();
       }
     } catch (err) {
+      BRAND_ADD.failed();
       toast.error(err instanceof Error ? err.message : 'Failed to save brand');
     } finally {
       setIsLoading(false);
@@ -545,6 +552,7 @@ export default function NewBrandPage() {
       setStep(4);
     } catch (err) {
       console.error('Prompt generation error:', err);
+      BRAND_ADD.failed();
       toast.error('Failed to generate prompts from topics');
     } finally {
       setLoadingPrompts(false);
@@ -580,6 +588,7 @@ export default function NewBrandPage() {
         prompts: allPrompts,
       });
       if ('error' in result) {
+        BRAND_ADD.failed(result.code);
         // No technical toasts on this step: actionable failures (plan limit)
         // show verbatim inline, anything else gets a friendly retry message.
         setSaveError(
@@ -593,6 +602,7 @@ export default function NewBrandPage() {
       setStep(5);
       fetchCompetitorSuggestions();
     } catch {
+      BRAND_ADD.failed();
       setSaveError("We couldn't save your prompts — please try again.");
     } finally {
       setIsLoading(false);
@@ -735,10 +745,12 @@ export default function NewBrandPage() {
       // in flight would be cancelled by the navigation below.
       await bootstrapBrandVolumes(createdBrand.id);
 
+      BRAND_ADD.completed();
       toast.success('Brand setup complete! Tracking is starting.');
-      // The person's start page: Chat Home in the free trial and the demo.
+      // The person's start page: Insights on a paid plan, Chat Home in the free trial.
       router.push('/dashboard');
     } catch (err) {
+      BRAND_ADD.failed();
       toast.error(err instanceof Error ? err.message : 'Failed to save competitors');
       setSavingCompetitors(false);
     }

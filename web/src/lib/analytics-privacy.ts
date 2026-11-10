@@ -1,5 +1,5 @@
 /**
- * What keeps secrets out of PostHog's events and session replays (SEC-10a).
+ * What keeps secrets out of PostHog's events, heatmaps and session replays (SEC-10a).
  *
  * In a replay, an element with the `ph-no-capture` class is left out: the
  * viewer sees an empty box of the same size. Every place that shows a secret
@@ -93,10 +93,28 @@ function scrubProperties(properties: Record<string, unknown> | undefined): void 
   }
 }
 
+/**
+ * The heatmap's points are kept by the page's address (`$heatmap_data`:
+ * { url: points }), which PostHog takes as it is: each address loses its
+ * secrets too, and two that become the same share their points.
+ */
+function scrubHeatmapData(properties: Record<string, unknown> | undefined): void {
+  const data = properties?.$heatmap_data;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+  const scrubbed: Record<string, unknown[]> = {};
+  for (const [url, points] of Object.entries(data as Record<string, unknown>)) {
+    const key = scrubUrl(url);
+    const list = Array.isArray(points) ? points : [];
+    scrubbed[key] = [...(scrubbed[key] ?? []), ...list];
+  }
+  properties.$heatmap_data = scrubbed;
+}
+
 /** PostHog's before_send: each event's URLs, and the person's, without secrets. */
 export function scrubEvent(event: CaptureResult | null): CaptureResult | null {
   if (!event) return event;
   scrubProperties(event.properties);
+  scrubHeatmapData(event.properties);
   scrubProperties(event.properties?.$set);
   scrubProperties(event.properties?.$set_once);
   scrubProperties(event.$set);

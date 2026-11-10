@@ -40,6 +40,7 @@ import {
   type FramerError,
   type FramerFieldMap,
 } from '@/lib/framer-client';
+import { frictionFlow } from '@/lib/friction-events';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { Picker } from './webflow-card';
 
@@ -280,6 +281,9 @@ export function FramerCard() {
   );
 }
 
+/** cms_connect: the Connect below, until the CMS is connected. */
+const CONNECT = frictionFlow('cms_connect', { target: 'framer' });
+
 /** The project and an API key made in it: the key goes to the API once, never shown again. */
 function KeyForm({
   brandId,
@@ -308,9 +312,11 @@ function KeyForm({
 
   const connect = async () => {
     setConnecting(true);
+    CONNECT.started();
     const result = await connectFramer(brandId, { project: project.trim(), apiKey: key });
     setConnecting(false);
     if (!result.ok) {
+      CONNECT.failed(result.code);
       if (result.code === 'subscription') openUpgrade();
       else
         toast.error(
@@ -318,6 +324,7 @@ function KeyForm({
         );
       return;
     }
+    CONNECT.completed();
     setApiKey('');
     // A new key for the same project keeps its collection; else the setup's last step is left.
     toast.success(t(result.connection.collectionId ? 'connectedToast' : 'connectedSetupToast'));

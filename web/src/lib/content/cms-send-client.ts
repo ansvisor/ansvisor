@@ -15,7 +15,7 @@ import type { FirstAiCrawl } from '@/lib/content/first-ai-crawl';
  * Where pages go: the brand's webhook (phase 1), its Webflow collection, its
  * WordPress site, its Framer collection or its Wix site's Blog (phase 2).
  */
-export type CmsTarget = 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix';
+export type CmsTarget = 'webhook' | 'webflow' | 'wordpress' | 'framer' | 'wix' | 'hubspot';
 
 /** Why a send didn't go, as the server names it. */
 export type CmsSendError =
@@ -41,6 +41,14 @@ export type CmsSendError =
   | 'wix_not_configured'
   | 'no_wix'
   | 'wix_refused'
+  // HubSpot (#2140, 00522): not on this server, not connected, not on the
+  // plan, its sign-in refused, sending pages not allowed, or no blog picked.
+  | 'hubspot_not_configured'
+  | 'no_hubspot'
+  | 'hubspot_plan'
+  | 'hubspot_refused'
+  | 'hubspot_no_consent'
+  | 'hubspot_not_ready'
   | 'in_progress'
   | 'daily_limit'
   | 'forbidden'
@@ -105,6 +113,12 @@ const KNOWN: readonly CmsSendError[] = [
   'wix_not_configured',
   'no_wix',
   'wix_refused',
+  'hubspot_not_configured',
+  'no_hubspot',
+  'hubspot_plan',
+  'hubspot_refused',
+  'hubspot_no_consent',
+  'hubspot_not_ready',
   'in_progress',
   'daily_limit',
   'forbidden',
@@ -165,7 +179,7 @@ export async function sendPagesToCms(
  */
 async function refreshPublished(
   brandId: string,
-  route: 'webflow-status' | 'wordpress-status' | 'framer-status' | 'wix-status',
+  route: 'webflow-status' | 'wordpress-status' | 'framer-status' | 'wix-status' | 'hubspot-status',
   label: string,
 ): Promise<string[]> {
   try {
@@ -200,6 +214,11 @@ export function refreshWebflowPublished(brandId: string): Promise<string[]> {
 /** The brand's pages sent to WordPress as draft posts, published there since (00294). */
 export function refreshWordPressPublished(brandId: string): Promise<string[]> {
   return refreshPublished(brandId, 'wordpress-status', 'WordPress');
+}
+
+/** The brand's pages sent to its HubSpot blog as draft posts, published there since (00522). */
+export function refreshHubspotPublished(brandId: string): Promise<string[]> {
+  return refreshPublished(brandId, 'hubspot-status', 'HubSpot');
 }
 
 /** The brand's pages sent to Wix as draft posts, published there since (00372). */

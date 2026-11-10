@@ -4,8 +4,8 @@ route: /dashboard/brands/new
 keywords: [add brand, onboarding, setup wizard, first brand, brand setup, target market, free trial]
 synonyms: [get started, create a brand, set up my account, onboard, add another brand]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-10
+last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -75,7 +75,7 @@ The final step picks your plan, **Starter** or **Growth**, and starts checkout.
 
 While a free trial is on offer, **Choose how to start** lets you pick the trial, **Monthly** or **Yearly**. With the trial you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. **Buy now**, or a plan without a trial, starts the plan the same day.
 
-Not ready to add a card? **Explore the demo** opens a demo brand with sample data. Your brand stays saved, and its tracking starts when you pick a plan.
+Not ready to add a card? Pick **Demo**, after **Yearly**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The demo is a made-up brand with sample data: you can open every page, but nothing runs or changes. Your brand stays saved, and its tracking starts when you pick a plan.
 
 A self-hosted install skips this step.
 
