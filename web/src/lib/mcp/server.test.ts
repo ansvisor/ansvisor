@@ -43,6 +43,13 @@ describe('the MCP server', () => {
     expect(MCP_INSTRUCTIONS).toContain('call one only when the user asked for that change');
   });
 
+  it('names only the engines Ansvisor tracks', () => {
+    expect(MCP_INSTRUCTIONS).toContain(
+      'ChatGPT, Claude, Gemini, Google AI Overviews, Google AI Mode and Bing AI Mode',
+    );
+    expect(MCP_INSTRUCTIONS).not.toMatch(/Perplexity|Copilot|Grok/);
+  });
+
   it('gives every tool a title and says whether it reads or changes, and what a change does', async () => {
     const client = await connect();
     const { tools } = await client.listTools();
