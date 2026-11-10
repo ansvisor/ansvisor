@@ -1,0 +1,93 @@
+---
+title: "Gemini CLI extension"
+description: "Install the Ansvisor extension for Gemini CLI: the MCP server plus a context file, with sign-in or an API key."
+---
+
+The Ansvisor extension for [Gemini CLI](https://github.com/google-gemini/gemini-cli)
+adds Ansvisor's [MCP server](/guides/mcp-server) (`https://app.ansvisor.com/api/mcp`)
+and a short context file that tells Gemini what each tool is for, which ones
+change data, and what the plans and roles allow. Nothing runs on your computer.
+
+## Install
+
+```bash
+gemini extensions install https://github.com/ansvisor/gemini-cli-extension
+```
+
+Gemini CLI shows what the extension adds and asks you to confirm, then
+installs it for every folder. Restart Gemini CLI. It starts MCP servers only in
+folders you trust, so trust the folder you work in when it asks.
+
+<Note>
+  The extension's source is
+  [`integrations/gemini-cli`](https://github.com/ansvisor/ansvisor/tree/main/integrations/gemini-cli)
+  in this repository. Gemini CLI installs extensions only from a repository
+  whose root holds `gemini-extension.json`, so
+  `ansvisor/gemini-cli-extension` carries a copy. From a clone of this
+  repository you can also run `gemini extensions install ./integrations/gemini-cli`.
+</Note>
+
+## Connect
+
+<Steps>
+  <Step title="Sign in">
+    When Gemini CLI first connects, Ansvisor asks it to sign in and Gemini CLI
+    asks to open your browser. Or run `/mcp auth ansvisor`. Sign in, choose
+    whether Gemini CLI may make changes you ask for, and click **Allow**.
+    Gemini CLI registers itself, so the consent page marks it **Not checked by
+    Ansvisor** and sends you back to this computer. Gemini CLI keeps the
+    sign-in and renews it; it shows under **Settings → MCP & API Keys →
+    Connected apps**, where you can disconnect it.
+  </Step>
+  <Step title="Or use an API key">
+    Signing in needs a paid plan. In the free trial, on a self-hosted
+    Ansvisor, or while `/mcp auth ansvisor` can't discover how to sign in (your
+    Ansvisor doesn't offer sign-in for apps yet), use an
+    [API key](/guides/mcp-server):
+
+    ```bash
+    export ANSVISOR_TOKEN=ans_...
+    gemini mcp add --scope user --transport http \
+      --header 'Authorization: Bearer $ANSVISOR_TOKEN' \
+      ansvisor https://app.ansvisor.com/api/mcp
+    ```
+
+    A server in your settings named `ansvisor`, as the extension's is, takes
+    its place, so Gemini CLI sends the key instead of signing in. The single
+    quotes keep the key out of `~/.gemini/settings.json`; Gemini CLI reads
+    `$ANSVISOR_TOKEN` when it starts. Self-hosted, use your own host's address.
+    `gemini mcp remove --scope user ansvisor` goes back to signing in.
+  </Step>
+  <Step title="Check it">
+    Run `/mcp` to see the `ansvisor` server and its tools, then ask _"List my
+    Ansvisor brands."_
+  </Step>
+</Steps>
+
+The extension has no API key setting: Gemini CLI sends a header the extension
+declares in place of its own sign-in, even an empty one.
+
+## What you can ask
+
+- _"What's my visibility score on ChatGPT for the last 7 days?"_
+- _"Which competitors gained share of voice this month?"_
+- _"Which sources does AI cite for us, and which cite competitors?"_
+- _"What should I write or fix next?"_
+- _"What's in the Action Center for this brand, highest priority first?"_
+
+Gemini CLI asks before it runs each tool unless you choose to always allow it.
+Reading works on every plan. Changes, runs and anything that uses credits need
+Growth or above and the right role, as for any [MCP client](/guides/mcp-server).
+A sign-in connection in the free trial, or once the plan has ended, gets
+`oauth_plan_required` from every tool; an API key still reads.
+
+## Update or remove
+
+```bash
+gemini extensions update ansvisor
+gemini extensions uninstall ansvisor
+```
+
+Gemini CLI checks the extension's repository for a newer version and offers
+the update. Uninstalling leaves a server you added with `gemini mcp add`; remove it
+with `gemini mcp remove --scope user ansvisor`.
