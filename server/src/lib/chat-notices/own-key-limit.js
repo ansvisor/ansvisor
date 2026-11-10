@@ -1,7 +1,7 @@
 import supabaseAdmin from '../../config/supabase.js';
 import { deliverEmail } from '../email.js';
 import logger from '../logger.js';
-import { adminsOf, appOrigin, emailOf, escapeHtml } from './own-key.js';
+import { adminsOf, appOrigin, emailOf, escapeHtml, wantsEmail } from './own-key.js';
 
 /**
  * Warning the Admins about the key guard (AGENT-OWN-KEY §4.2 item 4, PR 10):
@@ -152,8 +152,8 @@ async function tell(orgId, level, spend) {
   });
   let emails = 0;
   for (const admin of admins) {
-    // Inbox only, and Inbox only until Slack exists, send no e-mail.
-    if (admin.notifyVia !== 'inbox_email' || !told.has(admin.id)) continue;
+    // Inbox only sends no e-mail; Inbox + Slack does for this notice, which Slack doesn't carry.
+    if (!wantsEmail(admin.notifyVia) || !told.has(admin.id)) continue;
     const to = await emailOf(admin.id);
     if (!to) continue;
     const outcome = await deliverEmail({ to: [to], subject, html });

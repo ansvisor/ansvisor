@@ -127,6 +127,11 @@ describe('warnOwnKeyLimit', () => {
     });
   });
 
+  it('e-mails an Admin who chose Inbox + Slack (#2139)', async () => {
+    db.tables.chat_user_prefs = [{ user_id: 'admin-2', notify_via: 'inbox_slack' }];
+    expect(await warnOwnKeyLimit(ORG, spend(205))).toEqual({ notices: 2, emails: 2, resolved: 0 });
+  });
+
   it('warns once a period, however often the guard is read', async () => {
     await warnOwnKeyLimit(ORG, spend(205));
     expect(await warnOwnKeyLimit(ORG, spend(210))).toEqual({ notices: 0, emails: 0, resolved: 0 });

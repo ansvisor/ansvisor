@@ -29,6 +29,7 @@ export const DEMO_INTEGRATIONS: readonly DemoIntegration[] = [
   { id: 'google-merchant-center', state: 'soon' },
   { id: 'shopify', state: 'soon', group: 'stores' },
   { id: 'webflow', state: 'connected' },
+  { id: 'slack', state: 'connected' },
 ];
 
 /** What an integration's card shows on the demo brand; null when the list doesn't name it. */
@@ -51,3 +52,6 @@ export const DEMO_ANALYTICS_PROPERTY_ID = '100000000';
 
 /** The Webflow collection the demo brand's pages go to. */
 export const DEMO_WEBFLOW_COLLECTION = 'Blog Posts';
+
+/** The Slack channel the demo brand's messages would go to (#2139). */
+export const DEMO_SLACK_CHANNEL = 'ai-search-alerts';

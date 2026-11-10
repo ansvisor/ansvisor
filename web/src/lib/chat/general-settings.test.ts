@@ -103,6 +103,63 @@ describe('readChatGeneral', () => {
   });
 });
 
+describe('readChatGeneral: "Inbox + Slack" (#2139)', () => {
+  const BRAND = 'bbbbbbbb-0000-4000-8000-000000000001';
+  const OTHER = 'bbbbbbbb-0000-4000-8000-000000000002';
+  const slackUse = (over: Record<string, unknown> = {}) => ({
+    brand_id: BRAND,
+    provider: 'slack',
+    settings: { channel: { id: 'C00000001', name: 'seo-alerts' }, send: {} },
+    account: { status: 'connected' },
+    ...over,
+  });
+  const slack = async (userId: string = PEOPLE.manager) =>
+    (await general.readChatGeneral({ userId, organizationId: ORG }))?.access.slack;
+
+  beforeEach(() => {
+    db.tables.brands = [
+      { id: BRAND, organization_id: ORG, is_demo: false },
+      { id: OTHER, organization_id: ORG, is_demo: false },
+    ];
+    db.tables.brand_integrations = [slackUse()];
+    db.tables.member_brands = [];
+    db.tables.profiles = db.tables.profiles.map((p) => ({ ...p, brand_scope: 'all' }));
+  });
+
+  it('opens once a brand the person can see posts "needs you" to a channel', async () => {
+    expect(await slack()).toBe(true);
+    // Its switch on by default; off, or no channel, or a refused workspace: closed.
+    db.tables.brand_integrations = [slackUse({ settings: { channel: null, send: {} } })];
+    expect(await slack()).toBe(false);
+    db.tables.brand_integrations = [
+      slackUse({
+        settings: { channel: { id: 'C00000001', name: 'seo-alerts' }, send: { needsYou: false } },
+      }),
+    ];
+    expect(await slack()).toBe(false);
+    db.tables.brand_integrations = [slackUse({ account: { status: 'auth_failed' } })];
+    expect(await slack()).toBe(false);
+    db.tables.brand_integrations = [];
+    expect(await slack()).toBe(false);
+  });
+
+  it('counts only the brands the person can see', async () => {
+    db.tables.profiles = db.tables.profiles.map((p) =>
+      p.id === PEOPLE.manager ? { ...p, brand_scope: 'selected' } : p,
+    );
+    expect(await slack()).toBe(false);
+    db.tables.member_brands = [{ user_id: PEOPLE.manager, brand_id: BRAND, organization_id: ORG }];
+    expect(await slack()).toBe(true);
+    // An Admin sees every brand.
+    expect(await slack(PEOPLE.admin)).toBe(true);
+  });
+
+  it('stays closed while the plan has ended', async () => {
+    db.tables.organizations[0].subscription_status = 'canceled';
+    expect(await slack()).toBe(false);
+  });
+});
+
 describe('generalFromRow', () => {
   it('reads anything it does not know as the default', () => {
     expect(

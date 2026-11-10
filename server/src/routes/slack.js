@@ -18,6 +18,7 @@ import {
 } from '../lib/brand-integrations.js';
 import {
   CHANNEL_ID,
+  POSTED_KINDS,
   PROVIDER,
   SEND_KINDS,
   brandSlack,
@@ -446,6 +447,7 @@ router.post('/brands/:brandId/test', slackLimiter, async (req, res) => {
       channelId: slack.settings.channel.id,
       brand: brand.name,
       by: names.get(req.user.id) ?? null,
+      kinds: POSTED_KINDS.filter((kind) => slack.settings.send[kind]),
     });
     return res.json({ sent: true, channel: slack.settings.channel });
   } catch (err) {
