@@ -8582,10 +8582,11 @@
     "signIn": "Sign in",
     "signUp": "Sign up",
     "signInSubtitle": "Welcome back! Continue to your workspace.",
-    "signUpSubtitle": "Create your account to start tracking your brand across AI platforms.",
+    "signUpHeadline": "Be the answer AI gives.",
     "signOut": "Sign out",
     "email": "Email",
     "workEmail": "Work email",
+    "workEmailSuggested": "Work email suggested",
     "password": "Password",
     "forgotPassword": "Forgot password?",
     "noAccount": "Don't have an account?",
@@ -8630,26 +8631,7 @@
       "emailNotConfirmed": "Please verify your email address first. Check your inbox for the confirmation link.",
       "signOutError": "Failed to sign out. Please try again."
     },
-    "pitch": {
-      "eyebrow": "AI visibility platform",
-      "titleLead": "Improve AI Visibility and",
-      "titleAccent": "Drive Growth.",
-      "subtitle": "Track your brand's presence across ChatGPT, Gemini, Google AI and more.",
-      "features": {
-        "monitor": {
-          "title": "Monitor brand mentions and citations",
-          "body": "See how and where your brand appears across AI search."
-        },
-        "discover": {
-          "title": "Discover new opportunities",
-          "body": "Find high-potential topics and prompts to grow visibility."
-        },
-        "act": {
-          "title": "Turn insights into growth strategies",
-          "body": "Prioritize actions and track your impact over time."
-        }
-      }
-    },
+    "tracksEngines": "Tracks ChatGPT · Claude · Gemini · Google AI Overviews · Google AI Mode · Bing AI Mode",
     "footer": {
       "openSource": "Open source under",
       "mitLicense": "MIT license",

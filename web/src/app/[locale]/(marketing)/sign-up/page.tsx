@@ -10,8 +10,13 @@ export default function SignUpPage() {
     <>
       {/* Before the page: a new person starts on the dark theme, for a while (config/theme.ts). */}
       <NewUserTheme />
-      <AuthShell prompt={t('hasAccount')} cta={{ href: '/sign-in', label: t('signIn') }}>
-        <AuthCard title={t('signUp')} subtitle={t('signUpSubtitle')}>
+      <AuthShell
+        prompt={t('hasAccount')}
+        cta={{ href: '/sign-in', label: t('signIn') }}
+        headline={t('signUpHeadline')}
+        footnote={t('tracksEngines')}
+      >
+        <AuthCard>
           <SignUpForm />
         </AuthCard>
       </AuthShell>

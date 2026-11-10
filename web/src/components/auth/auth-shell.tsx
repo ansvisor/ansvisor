@@ -1,65 +1,77 @@
 import Image from 'next/image';
 import { useTranslations } from 'next-intl';
-import { BarChart3, Compass, Zap } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
 
 /**
- * The frame every auth page shares: a header with the switch to the other
- * auth page, the product pitch on the left (wide screens only) and the page's
- * card on the right.
+ * The frame every auth page shares (the owner's options D and E, 2026-11-10):
+ * a header with the switch to the other auth page, and one centred column
+ * with the page's card. Around the card, each page picks: a headline above
+ * it (sign-up), the logo above it instead of in the header (sign-in), a
+ * muted line below it, and the orbit drawn behind the page.
  */
 export function AuthShell({
   prompt,
   cta,
   aside,
-  pitch = true,
+  headline,
+  footnote,
+  brandAboveCard = false,
+  backdrop = 'none',
+  wide = false,
   children,
 }: {
   /** The question beside the header button, e.g. "Don't have an account?" */
   prompt?: string;
+  /** The header's outlined button to the other auth page. */
   cta?: { href: '/sign-in' | '/sign-up'; label: string };
   /** Shown at the header's right instead of a button, e.g. who is signed in (the consent page). */
   aside?: React.ReactNode;
-  /** The product pitch on the left; off, the card stands alone in the middle. */
-  pitch?: boolean;
+  /** The page's heading, large above the card; the card then goes untitled. */
+  headline?: string;
+  /** One muted line under the card. */
+  footnote?: string;
+  /** The logo above the card, and none in the header. */
+  brandAboveCard?: boolean;
+  /** 'orbit': two thin rings and five dots behind the page; decoration only. */
+  backdrop?: 'orbit' | 'none';
+  /** A wider column, for a card with more to say (the consent page). */
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   const t = useTranslations('auth');
 
   return (
-    <div className="relative flex min-h-svh flex-col overflow-hidden bg-[#f7f5f1] dark:bg-background">
-      <Backdrop />
+    <div
+      data-backdrop={backdrop}
+      className="relative flex min-h-svh flex-col overflow-hidden bg-[#f7f5f1] dark:bg-background"
+    >
+      {backdrop === 'orbit' && <Orbit />}
 
-      <header className="relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-6 sm:px-8">
-        <a href={siteConfig.url} className="flex items-center gap-2.5">
-          <Image
-            src="/logo_light.svg"
-            alt=""
-            width={36}
-            height={36}
-            className="h-9 w-9 shrink-0 dark:hidden"
-            priority
-          />
-          <Image
-            src="/logo_dark.svg"
-            alt=""
-            width={36}
-            height={36}
-            className="hidden h-9 w-9 shrink-0 dark:block"
-            priority
-          />
-          <span className="text-2xl font-semibold tracking-tight">{siteConfig.name}</span>
-        </a>
+      <header
+        className={cn(
+          'relative z-10 flex w-full items-center gap-4 px-4 py-5 sm:px-8 sm:py-7 lg:px-14',
+          brandAboveCard ? 'justify-end' : 'justify-between',
+        )}
+      >
+        {!brandAboveCard && <Brand />}
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3.5 text-sm">
           {prompt && (
-            <span className="hidden text-sm text-muted-foreground sm:inline">{prompt}</span>
+            <span className={cn('text-muted-foreground', !brandAboveCard && 'hidden sm:inline')}>
+              {prompt}
+            </span>
           )}
           {cta && (
-            <Link href={cta.href} className={buttonVariants({ className: 'h-10 px-5' })}>
+            <Link
+              href={cta.href}
+              className={cn(
+                buttonVariants({ variant: 'outline' }),
+                'h-9 border-black/10 bg-transparent px-4 dark:border-input dark:bg-input/30',
+              )}
+            >
               {cta.label}
             </Link>
           )}
@@ -67,18 +79,29 @@ export function AuthShell({
         </div>
       </header>
 
-      <main
-        className={cn(
-          'relative z-10 mx-auto grid w-full max-w-7xl flex-1 items-center gap-12 px-4 py-8 sm:px-8',
-          pitch && 'lg:grid-cols-2 lg:gap-16',
+      <main className="relative z-10 flex w-full flex-1 flex-col items-center justify-center gap-6 px-4 pb-8 pt-2 sm:px-8">
+        {brandAboveCard && <Brand large />}
+        {headline && (
+          <h1
+            data-slot="auth-headline"
+            className="max-w-3xl text-balance text-center font-[family-name:var(--font-jakarta)] text-4xl font-bold leading-[1.05] tracking-[-0.03em] sm:text-[52px]"
+          >
+            {headline}
+          </h1>
         )}
-      >
-        {pitch && <Pitch />}
-        <div className="mx-auto w-full max-w-lg">{children}</div>
+        <div className={cn('w-full', wide ? 'max-w-lg' : 'max-w-[420px]')}>{children}</div>
+        {footnote && (
+          <p
+            data-slot="auth-footnote"
+            className="max-w-xl text-balance text-center text-[13px] text-muted-foreground"
+          >
+            {footnote}
+          </p>
+        )}
       </main>
 
-      <footer className="relative z-10 mx-auto flex w-full max-w-7xl flex-col items-center justify-between gap-3 px-4 py-6 text-sm text-muted-foreground sm:flex-row sm:px-8">
-        <p>
+      <footer className="relative z-10 w-full px-4 py-6 text-center text-xs text-muted-foreground sm:px-8">
+        <p className="text-balance">
           &copy; {new Date().getFullYear()} {siteConfig.name}. {t('footer.openSource')}{' '}
           <a
             href="https://github.com/ansvisor/ansvisor/blob/main/LICENSE"
@@ -88,9 +111,7 @@ export function AuthShell({
           >
             {t('footer.mitLicense')}
           </a>
-          .
-        </p>
-        <div className="flex items-center gap-8">
+          <span aria-hidden> · </span>
           <a
             href={siteConfig.legal.terms}
             target="_blank"
@@ -99,6 +120,7 @@ export function AuthShell({
           >
             {t('footer.terms')}
           </a>
+          <span aria-hidden> · </span>
           <a
             href={siteConfig.legal.privacy}
             target="_blank"
@@ -107,103 +129,105 @@ export function AuthShell({
           >
             {t('footer.privacy')}
           </a>
-        </div>
+        </p>
       </footer>
     </div>
   );
 }
 
-/** The white card holding a page's form. */
+/** The card holding a page's form; untitled under a shell headline. */
 export function AuthCard({
   title,
   subtitle,
   children,
 }: {
-  title: string;
+  title?: string;
   subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-black/5 bg-card p-6 shadow-[0_12px_40px_rgba(60,45,30,0.06)] sm:p-10 dark:border-border dark:shadow-none">
-      <div className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-2 text-muted-foreground">{subtitle}</p>}
-      </div>
+    <div
+      data-slot="auth-card"
+      className="rounded-2xl border bg-card p-6 sm:p-8 in-data-[backdrop=orbit]:shadow-[0_30px_80px_rgba(60,45,30,0.10)] dark:in-data-[backdrop=orbit]:shadow-[0_30px_80px_rgba(0,0,0,0.6)]"
+    >
+      {title && (
+        <div className="mb-6 text-center">
+          <h1 className="text-[22px] font-semibold tracking-[-0.01em]">{title}</h1>
+          {subtitle && <p className="mt-1.5 text-sm text-muted-foreground">{subtitle}</p>}
+        </div>
+      )}
       {children}
     </div>
   );
 }
 
-const FEATURES = [
-  { key: 'monitor', icon: BarChart3 },
-  { key: 'discover', icon: Compass },
-  { key: 'act', icon: Zap },
-] as const;
-
-function Pitch() {
-  const t = useTranslations('auth.pitch');
+/** The logo and name, linking to the website: in the header, or larger above the card. */
+function Brand({ large = false }: { large?: boolean }) {
+  const logo = cn('shrink-0', large ? 'size-10' : 'size-8.5');
 
   return (
-    <section className="hidden lg:block">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-        {t('eyebrow')}
-      </p>
-      <h2 className="mt-6 text-6xl font-semibold leading-[1.05] tracking-tight">
-        {t('titleLead')}{' '}
-        <span className="relative inline-block">
-          {t('titleAccent')}
-          <svg
-            aria-hidden
-            viewBox="0 0 300 12"
-            preserveAspectRatio="none"
-            className="absolute -bottom-3 left-0 h-3 w-full text-[#e4d8c6] dark:text-white/15"
-          >
-            <path
-              d="M2 8 C 80 2, 200 2, 298 6"
-              stroke="currentColor"
-              strokeWidth="6"
-              strokeLinecap="round"
-              fill="none"
-            />
-          </svg>
-        </span>
-      </h2>
-      <p className="mt-10 max-w-md text-2xl leading-snug text-muted-foreground">{t('subtitle')}</p>
-
-      <ul className="mt-10 space-y-7">
-        {FEATURES.map(({ key, icon: Icon }) => (
-          <li key={key} className="flex gap-6">
-            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[#efe9df] text-[#3d2f22] dark:bg-white/5 dark:text-foreground">
-              <Icon className="h-6 w-6" />
-            </span>
-            <div className="max-w-xs">
-              <p className="text-lg font-medium leading-snug">{t(`features.${key}.title`)}</p>
-              <p className="mt-1 text-muted-foreground">{t(`features.${key}.body`)}</p>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </section>
+    <a
+      href={siteConfig.url}
+      data-slot="auth-brand"
+      data-place={large ? 'above-card' : 'header'}
+      className="flex items-center gap-3"
+    >
+      <Image
+        src="/logo_light.svg"
+        alt=""
+        width={40}
+        height={40}
+        className={cn(logo, 'dark:hidden')}
+        priority
+      />
+      <Image
+        src="/logo_dark.svg"
+        alt=""
+        width={40}
+        height={40}
+        className={cn(logo, 'hidden dark:block')}
+        priority
+      />
+      <span
+        className={cn('font-semibold tracking-[-0.01em]', large ? 'text-[22px]' : 'text-[19px]')}
+      >
+        {siteConfig.name}
+      </span>
+    </a>
   );
 }
 
-/** Soft circles and a dot grid behind the page; decoration only. */
-function Backdrop() {
-  const circle = 'absolute rounded-full bg-[#efebe4] dark:bg-white/[0.03]';
-  const dots = cn(
-    'absolute hidden lg:block',
-    'bg-[radial-gradient(circle,rgba(0,0,0,0.12)_1px,transparent_1.5px)] bg-[length:16px_16px]',
-    'dark:bg-[radial-gradient(circle,rgba(255,255,255,0.12)_1px,transparent_1.5px)]',
-  );
+/** Where the orbit's dots sit on the outer ring: 45° apart, with three gaps. */
+const ORBIT_DOTS = [
+  'left-[85.36%] top-[14.64%]',
+  'left-full top-1/2',
+  'left-[85.36%] top-[85.36%]',
+  'left-[14.64%] top-[85.36%]',
+  'left-0 top-1/2',
+];
+
+/** Two thin rings round the middle of the page and five dots on the outer one; decoration only. */
+function Orbit() {
+  const ring = 'rounded-full border border-[rgba(60,45,30,0.10)] dark:border-white/[0.07]';
 
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0">
-      <div className={cn(circle, '-left-64 top-16 h-[28rem] w-[28rem]')} />
-      <div className={cn(circle, '-left-72 bottom-[-12rem] h-[30rem] w-[30rem]')} />
-      <div className={cn(circle, 'bottom-[-26rem] left-1/3 h-[40rem] w-[40rem]')} />
-      <div className={cn(circle, '-right-56 bottom-[-6rem] h-[34rem] w-[34rem]')} />
-      <div className={cn(dots, 'left-[44%] top-48 h-28 w-28')} />
-      <div className={cn(dots, 'bottom-56 right-4 h-28 w-20')} />
+    <div
+      aria-hidden
+      data-slot="auth-orbit"
+      className="pointer-events-none absolute inset-0 flex items-center justify-center"
+    >
+      <div className={cn(ring, 'relative size-[600px] shrink-0 sm:size-[900px]')}>
+        <div className={cn(ring, 'absolute inset-[16.667%]')} />
+        {ORBIT_DOTS.map((place) => (
+          <span
+            key={place}
+            className={cn(
+              'absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[rgba(60,45,30,0.25)] dark:bg-white/[0.22]',
+              place,
+            )}
+          />
+        ))}
+      </div>
     </div>
   );
 }
