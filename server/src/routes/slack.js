@@ -259,6 +259,12 @@ async function slackFailure(req, res, err, { brandId, slack }, what) {
 }
 
 function fail(req, res, err, what) {
+  // A plan without Slack: answered as requireFeature answers it, so the web opens the plan dialog.
+  if (err?.code === 'plan_limit') {
+    return res
+      .status(err.status)
+      .json({ success: false, error: 'plan_limit', message: err.message, code: 'plan_limit' });
+  }
   if (err?.status && err.status < 500 && !(err instanceof SlackError)) {
     return res.status(err.status).json({ error: err.message, code: err.code ?? 'forbidden' });
   }

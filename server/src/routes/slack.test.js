@@ -279,7 +279,7 @@ describe('writes', () => {
       });
       const res = await send(method, path, body);
       expect(res.status).toBe(403);
-      expect(await res.json()).toMatchObject({ code: 'plan_limit' });
+      expect(await res.json()).toMatchObject({ error: 'plan_limit', code: 'plan_limit' });
     },
   );
 
