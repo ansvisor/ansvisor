@@ -32,6 +32,7 @@ function SignInView({
       prompt={t('noAccount')}
       cta={{ href: '/sign-up', label: t('signUp') }}
       brandAboveCard
+      backdrop="agent"
     >
       <div className="flex flex-col gap-6">
         {connecting && <ConnectingBanner app={connecting} />}

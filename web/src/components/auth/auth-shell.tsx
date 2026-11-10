@@ -2,6 +2,8 @@ import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
+import { StarBackdrop } from '@/components/brand/star-backdrop';
+import { AgentBackdrop } from '@/components/auth/agent-backdrop';
 import { siteConfig } from '@/config/site';
 import { cn } from '@/lib/utils';
 
@@ -9,9 +11,13 @@ import { cn } from '@/lib/utils';
  * The frame every auth page shares (the owner's options D and E, 2026-11-10):
  * a header with the switch to the other auth page, and one centred column
  * with the page's card. Around the card, each page picks: a headline above
- * it (sign-up), the logo above it instead of in the header (sign-in) and a
- * muted line below it. The card sits on a soft shadow, except under a
- * headline (sign-up, option D).
+ * it (sign-up), the logo above it instead of in the header (sign-in), a
+ * muted line below it, and what moves behind the page: the agent animation
+ * (sign-up and sign-in) or the starfield (forgot and reset password). The
+ * card sits on a soft shadow, except under a headline (sign-up, option D).
+ *
+ * The text, links and card are marked data-keep-clear: the backdrops draw
+ * nothing there ("column" for what is in the centred column).
  */
 export function AuthShell({
   prompt,
@@ -20,6 +26,7 @@ export function AuthShell({
   headline,
   footnote,
   brandAboveCard = false,
+  backdrop,
   wide = false,
   children,
 }: {
@@ -35,6 +42,11 @@ export function AuthShell({
   footnote?: string;
   /** The logo above the card, and none in the header. */
   brandAboveCard?: boolean;
+  /**
+   * Behind the page, from xl (1280px) up, decoration only: the landing page's
+   * agent animation, or its starfield.
+   */
+  backdrop?: 'agent' | 'stars';
   /** A wider column, for a card with more to say (the consent page). */
   wide?: boolean;
   children: React.ReactNode;
@@ -46,6 +58,9 @@ export function AuthShell({
       data-card={headline ? 'flat' : 'raised'}
       className="relative flex min-h-svh flex-col overflow-hidden bg-[#f7f5f1] dark:bg-background"
     >
+      {backdrop === 'agent' && <AgentBackdrop />}
+      {backdrop === 'stars' && <StarBackdrop layout="auth" />}
+
       <header
         className={cn(
           'relative z-10 flex w-full items-center gap-4 px-4 py-5 sm:px-8 sm:py-7 lg:px-14',
@@ -54,7 +69,7 @@ export function AuthShell({
       >
         {!brandAboveCard && <Brand />}
 
-        <div className="flex items-center gap-3.5 text-sm">
+        <div data-keep-clear="" className="flex items-center gap-3.5 text-sm">
           {prompt && (
             <span className={cn('text-muted-foreground', !brandAboveCard && 'hidden sm:inline')}>
               {prompt}
@@ -80,15 +95,19 @@ export function AuthShell({
         {headline && (
           <h1
             data-slot="auth-headline"
+            data-keep-clear="column"
             className="max-w-3xl text-balance text-center font-[family-name:var(--font-jakarta)] text-4xl font-bold leading-[1.05] tracking-[-0.03em] sm:text-[52px]"
           >
             {headline}
           </h1>
         )}
-        <div className={cn('w-full', wide ? 'max-w-lg' : 'max-w-[420px]')}>{children}</div>
+        <div data-keep-clear="column" className={cn('w-full', wide ? 'max-w-lg' : 'max-w-[420px]')}>
+          {children}
+        </div>
         {footnote && (
           <p
             data-slot="auth-footnote"
+            data-keep-clear="column"
             className="max-w-xl text-balance text-center text-[13px] text-muted-foreground"
           >
             {footnote}
@@ -97,7 +116,7 @@ export function AuthShell({
       </main>
 
       <footer className="relative z-10 w-full px-4 py-6 text-center text-xs text-muted-foreground sm:px-8">
-        <p className="text-balance">
+        <p data-keep-clear="" className="text-balance">
           &copy; {new Date().getFullYear()} {siteConfig.name}. {t('footer.openSource')}{' '}
           <a
             href="https://github.com/ansvisor/ansvisor/blob/main/LICENSE"
@@ -166,6 +185,7 @@ function Brand({ large = false }: { large?: boolean }) {
       href={siteConfig.url}
       data-slot="auth-brand"
       data-place={large ? 'above-card' : 'header'}
+      data-keep-clear={large ? 'column' : ''}
       className="flex items-center gap-3"
     >
       <Image

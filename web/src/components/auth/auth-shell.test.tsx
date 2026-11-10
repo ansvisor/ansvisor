@@ -122,6 +122,65 @@ describe('AuthShell', () => {
     expect(flat).toContain('data-card="flat"');
   });
 
+  it('draws nothing behind the page unless asked: the agent animation or the starfield, before the content', () => {
+    const none = html(
+      <AuthShell>
+        <p>the card</p>
+      </AuthShell>,
+    );
+    expect(none).not.toContain('agent-backdrop');
+    expect(none).not.toContain('star-backdrop');
+    for (const [backdrop, slot] of [
+      ['agent', 'agent-backdrop'],
+      ['stars', 'star-backdrop'],
+    ] as const) {
+      const host = document.createElement('div');
+      host.innerHTML = html(
+        <AuthShell backdrop={backdrop}>
+          <p>the card</p>
+        </AuthShell>,
+      );
+      const shell = host.querySelector('[data-card]')!;
+      // First in the frame, so the header, the column and the footer (z-10) sit above it.
+      expect(shell.firstElementChild!.getAttribute('data-slot')).toBe(slot);
+      expect(shell.firstElementChild!.getAttribute('aria-hidden')).toBe('true');
+      expect(shell.firstElementChild!.getAttribute('class')).toContain('pointer-events-none');
+      for (const part of shell.querySelectorAll(':scope > header, :scope > main, :scope > footer'))
+        expect(part.className).toMatch(/\brelative z-10\b/);
+    }
+  });
+
+  it('marks the text, links and card the backdrops keep clear of', () => {
+    const host = document.createElement('div');
+    host.innerHTML = html(
+      <AuthShell
+        prompt="Already have an account?"
+        cta={{ href: '/sign-in', label: 'Sign in' }}
+        headline="Be the answer AI gives."
+        footnote="Tracks ChatGPT · Claude"
+        backdrop="agent"
+      >
+        <p>the card</p>
+      </AuthShell>,
+    );
+    const marked = (value: string) =>
+      [...host.querySelectorAll(`[data-keep-clear="${value}"]`)].map((el) =>
+        (el.textContent ?? '').trim().slice(0, 24),
+      );
+    // In the header: the logo, and the question with its button; and the footer line.
+    expect(marked('')).toEqual([
+      'Ansvisor',
+      'Already have an account?',
+      `© ${new Date().getFullYear()} Ansvisor. Open so`,
+    ]);
+    // In the column: the headline, the card and the line under it.
+    expect(marked('column')).toEqual([
+      'Be the answer AI gives.',
+      'the card',
+      'Tracks ChatGPT · Claude',
+    ]);
+  });
+
   it('widens the column for a card with more to say', () => {
     const markup = html(
       <AuthShell wide>

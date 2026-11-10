@@ -1,10 +1,12 @@
+import { StarBackdrop } from '@/components/brand/star-backdrop';
 import { cn } from '@/lib/utils';
 
 /**
  * Onboarding's page shell: the wizard step sits in a card over a blurred
  * preview of the dashboard it is setting up. Below md the preview is dropped
  * and the step fills the screen as a plain page — a blurred sidebar has no
- * room to read as a dashboard on a phone.
+ * room to read as a dashboard on a phone. Between the two, beside the card,
+ * the landing page's starfield (xl and up).
  */
 export function OnboardingFrame({
   preview,
@@ -26,6 +28,8 @@ export function OnboardingFrame({
         <div className="h-full w-full scale-[1.02] blur-[3px]">{preview}</div>
         <div className="absolute inset-0 bg-background/50" />
       </div>
+
+      <StarBackdrop layout="onboarding" window={width} />
 
       <div className="relative flex min-h-svh flex-col md:p-8">
         <div
