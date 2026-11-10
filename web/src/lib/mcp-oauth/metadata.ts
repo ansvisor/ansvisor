@@ -13,7 +13,8 @@ import { MCP_SCOPES } from './scopes';
  *   * the authorization server's metadata (RFC 8414): its endpoints and what
  *     it supports. S256 only; public clients ("none") with PKCE; the `iss`
  *     of RFC 9207 in every authorization response, which ChatGPT needs for
- *     its stable redirect address and the MCP spec 2026-07-28 asks for.
+ *     its stable redirect address and the MCP spec 2026-07-28 asks for;
+ *     Client ID Metadata Documents, which Claude and ChatGPT prefer.
  */
 
 export const OAUTH_PATHS = {
@@ -57,6 +58,9 @@ export function authorizationServerMetadata(issuer: string) {
     token_endpoint_auth_methods_supported: [...TOKEN_ENDPOINT_AUTH_METHODS],
     revocation_endpoint_auth_methods_supported: [...TOKEN_ENDPOINT_AUTH_METHODS],
     code_challenge_methods_supported: ['S256'],
+    // Client ID Metadata Documents (cimd.ts): with "none" above, Claude and
+    // ChatGPT name themselves by URL instead of registering.
+    client_id_metadata_document_supported: true,
     authorization_response_iss_parameter_supported: true,
     service_documentation: DOCS,
     op_policy_uri: siteConfig.legal.privacy,

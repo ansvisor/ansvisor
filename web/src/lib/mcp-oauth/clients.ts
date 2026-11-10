@@ -16,6 +16,8 @@ import { CLIENT_SECRET_PREFIX, hashSecret, newClientId, newSecret, safeEqual } f
 
 export interface OAuthClient {
   client_id: string;
+  /** 'dcr': registered here; 'cimd': known by its metadata document's URL (cimd.ts). */
+  kind: 'dcr' | 'cimd';
   client_name: string | null;
   redirect_uris: string[];
   token_endpoint_auth_method: TokenEndpointAuthMethod;
@@ -23,7 +25,7 @@ export interface OAuthClient {
 }
 
 const CLIENT_COLUMNS =
-  'client_id, client_name, redirect_uris, token_endpoint_auth_method, client_secret_hash';
+  'client_id, kind, client_name, redirect_uris, token_endpoint_auth_method, client_secret_hash';
 
 /** How long a client nobody connected is kept. */
 export const UNUSED_CLIENT_TTL_SECONDS = 24 * 60 * 60;
