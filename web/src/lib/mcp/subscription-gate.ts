@@ -1,7 +1,12 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { NextResponse } from 'next/server';
 import { isCloud, isSubscriptionActive } from '@/config/plans';
-import { planFactsFromOrgRow, planGateLock, type OrgPlanRow } from '@/lib/chat/plan-facts';
+import {
+  planFactsFromOrgRow,
+  planGateLock,
+  type OrgPlanRow,
+  type PlanFacts,
+} from '@/lib/chat/plan-facts';
 import { ORG_PLAN_COLUMNS } from '@/lib/guards/plan-row';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import {
@@ -81,6 +86,69 @@ export async function mcpWriteAccess(organizationId: string | null): Promise<Mcp
   return planGateLock(facts, { minPlan: MCP_WRITE_PLAN }) ? 'plan' : 'ok';
 }
 
+/**
+ * Whether an app may use a sign-in connection (MCP over OAuth, #2141; owner,
+ * 2026-11-09): on every paid plan, not in the free trial, not once the plan
+ * has ended; always self-hosted. A plan-ranked gate (planGateLock, minPlan
+ * Starter) is exactly "paid": it locks in the trial and nowhere else, and an
+ * Enterprise trial, a deal's, counts as paid as everywhere else. Not a plan
+ * feature: features follow the entitled plan, which the trial has.
+ * API keys don't ask this: they read in the trial and on an ended plan.
+ */
+export type OAuthMcpAccess = 'ok' | 'trial' | 'ended';
+
+export function oauthAccessFromFacts(facts: PlanFacts): OAuthMcpAccess {
+  if (facts.selfHosted) return 'ok';
+  if (!facts.writable) return 'ended';
+  return planGateLock(facts, { minPlan: 'starter' }) ? 'trial' : 'ok';
+}
+
+/** oauthAccessFromFacts from one read of the organization's plan. A read that fails throws. */
+export async function oauthMcpAccess(organizationId: string): Promise<OAuthMcpAccess> {
+  if (!isCloud()) return 'ok';
+  const { data, error } = await supabaseAdmin
+    .from('organizations')
+    .select(ORG_PLAN_COLUMNS)
+    .eq('id', organizationId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return oauthAccessFromFacts(planFactsFromOrgRow(data as OrgPlanRow));
+}
+
+/**
+ * Every tool's answer, reads too, over a sign-in connection whose workspace
+ * isn't on a paid plan: a tool error that says why, for the app to tell the
+ * person. Not a 401, which would send them through sign-in again for
+ * nothing; the connection works again once a plan is chosen.
+ */
+export const OAUTH_PLAN_REQUIRED = {
+  trial: {
+    error: 'plan_limit',
+    code: 'oauth_plan_required',
+    message:
+      'Apps connect to Ansvisor by sign-in on paid plans, and this workspace is in its free ' +
+      'trial. An admin can choose a plan in Settings › Billing. Until then, an API key from ' +
+      'Settings › MCP & API Keys can read.',
+  },
+  ended: {
+    error: 'plan_limit',
+    code: 'oauth_plan_required',
+    message:
+      "Apps connect to Ansvisor by sign-in on paid plans, and this workspace's plan isn't " +
+      'active. An admin can choose a plan in Settings › Billing, and this connection works ' +
+      'again as soon as they do. Until then, an API key from Settings › MCP & API Keys can read.',
+  },
+} as const;
+
+export function oauthPlanToolResult(access: Exclude<OAuthMcpAccess, 'ok'>) {
+  return {
+    content: [
+      { type: 'text' as const, text: JSON.stringify(OAUTH_PLAN_REQUIRED[access], null, 2) },
+    ],
+    isError: true,
+  };
+}
+
 /** Whether the organization may write: always self-hosted, and for a key without one. */
 export async function subscriptionActiveFor(organizationId: string | null): Promise<boolean> {
   if (!isCloud() || !organizationId) return true;
@@ -133,24 +201,33 @@ type LooseRegisterTool = (name: string, config: unknown, cb: AnyToolCallback) =>
  * (plan_required). The plan that can't be read refuses the call too
  * (mcpWriteAccess throws). The plan is read once per server, which the MCP
  * route builds per request, and only when a gated tool is called.
+ * With `refuseAll` (a sign-in connection off a paid plan, oauthMcpAccess),
+ * every tool answers it instead, reads too.
  */
-export function gateWriteTools(server: McpServer, organizationId: string | null): McpServer {
+export function gateWriteTools(
+  server: McpServer,
+  organizationId: string | null,
+  { refuseAll }: { refuseAll?: ReturnType<typeof oauthPlanToolResult> } = {},
+): McpServer {
   let access: Promise<McpWriteAccess> | null = null;
   const register = server.registerTool.bind(server) as unknown as LooseRegisterTool;
   const gated: LooseRegisterTool = (name, config, cb) =>
     register(
       name,
       config,
-      isReadTool(name)
-        ? cb
-        : async (...args: unknown[]) => {
-            if (await callOnDemoBrand(name, organizationId, args[0])) return demoBrandToolResult();
-            access ??= mcpWriteAccess(organizationId);
-            const allowed = await access;
-            if (allowed === 'inactive') return subscriptionInactiveToolResult();
-            if (allowed === 'plan') return planRequiredToolResult();
-            return cb(...args);
-          },
+      refuseAll
+        ? async () => refuseAll
+        : isReadTool(name)
+          ? cb
+          : async (...args: unknown[]) => {
+              if (await callOnDemoBrand(name, organizationId, args[0]))
+                return demoBrandToolResult();
+              access ??= mcpWriteAccess(organizationId);
+              const allowed = await access;
+              if (allowed === 'inactive') return subscriptionInactiveToolResult();
+              if (allowed === 'plan') return planRequiredToolResult();
+              return cb(...args);
+            },
     );
   server.registerTool = gated as unknown as McpServer['registerTool'];
   // The SDK's older tool() would register around the gate: refused, so every
