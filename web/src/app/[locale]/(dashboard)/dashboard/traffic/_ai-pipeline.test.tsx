@@ -134,11 +134,7 @@ describe('AiPipelineSection', () => {
     expect(t).toContain('Won revenue$62,300▲ 9% vs the period before 9 deals closed won');
     // By engine, by name; an engine with nothing won shows a dash.
     const rows = [...container.querySelectorAll('tbody tr')].map((r) => r.textContent);
-    expect(rows).toEqual([
-      'ChatGPT7113$38,900$96,000',
-      'Copilot40——',
-      '/pricing349$24,100ChatGPT',
-    ]);
+    expect(rows).toEqual(['ChatGPT7113$38,900$96,000', 'Copilot40——', '/pricing349$24,100ChatGPT']);
     expect(t).toContain('A deal counts once, in full');
     expect(t).toContain('From HubSpot, synced');
   });

@@ -5874,6 +5874,108 @@ export type Database = {
         }
         Relationships: []
       }
+      hubspot_ai_contacts: {
+        Row: {
+          ai_source: string
+          brand_id: string
+          contact_id: string
+          converted_at: string | null
+          first_at: string | null
+          hs_created_at: string | null
+          landing_key: string | null
+          landing_url: string | null
+          origin: string
+          synced_at: string
+        }
+        Insert: {
+          ai_source: string
+          brand_id: string
+          contact_id: string
+          converted_at?: string | null
+          first_at?: string | null
+          hs_created_at?: string | null
+          landing_url?: string | null
+          origin: string
+          synced_at?: string
+        }
+        Update: {
+          ai_source?: string
+          brand_id?: string
+          contact_id?: string
+          converted_at?: string | null
+          first_at?: string | null
+          hs_created_at?: string | null
+          landing_url?: string | null
+          origin?: string
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubspot_ai_contacts_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      hubspot_ai_deals: {
+        Row: {
+          ai_source: string
+          amount: number | null
+          brand_id: string
+          close_date: string | null
+          contact_id: string
+          currency: string | null
+          deal_id: string
+          hs_created_at: string | null
+          is_closed: boolean
+          is_won: boolean
+          landing_key: string | null
+          landing_url: string | null
+          origin: string
+          synced_at: string
+        }
+        Insert: {
+          ai_source: string
+          amount?: number | null
+          brand_id: string
+          close_date?: string | null
+          contact_id: string
+          currency?: string | null
+          deal_id: string
+          hs_created_at?: string | null
+          is_closed?: boolean
+          is_won?: boolean
+          landing_url?: string | null
+          origin: string
+          synced_at?: string
+        }
+        Update: {
+          ai_source?: string
+          amount?: number | null
+          brand_id?: string
+          close_date?: string | null
+          contact_id?: string
+          currency?: string | null
+          deal_id?: string
+          hs_created_at?: string | null
+          is_closed?: boolean
+          is_won?: boolean
+          landing_url?: string | null
+          origin?: string
+          synced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hubspot_ai_deals_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       impact_control_sets: {
         Row: {
           cell_count: number
@@ -8515,6 +8617,14 @@ export type Database = {
       }
       brand_ai_conversions: {
         Args: { p_brand_id: string; p_days?: number }
+        Returns: Json
+      }
+      brand_ai_pipeline: {
+        Args: {
+          p_brand_id: string
+          p_since: string | null
+          p_until: string | null
+        }
         Returns: Json
       }
       can_access_brand: {
