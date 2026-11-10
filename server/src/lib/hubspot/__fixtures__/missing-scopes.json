@@ -1,0 +1,13 @@
+{
+  "status": "error",
+  "message": "This app hasn't been granted all required scopes to make this call. Read more about required scopes here: https://developers.hubspot.com/scopes.",
+  "correlationId": "00000000-0000-4000-8000-000000000002",
+  "errors": [
+    {
+      "message": "One or more of the following scopes are required.",
+      "context": { "requiredGranularScopes": ["crm.schemas.contacts.write"] }
+    }
+  ],
+  "links": { "scopes": "https://developers.hubspot.com/scopes" },
+  "category": "MISSING_SCOPES"
+}

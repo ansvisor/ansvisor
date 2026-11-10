@@ -1,0 +1,6 @@
+{
+  "status": "error",
+  "message": "Unable to find property group ansvisor for object type 0-1",
+  "correlationId": "00000000-0000-4000-8000-000000000001",
+  "category": "OBJECT_NOT_FOUND"
+}

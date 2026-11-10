@@ -29,6 +29,10 @@ export const FEATURES = [
   // Growth and up.
   'slack_notifications',
   'slack_approvals',
+  // CRM integrations, HubSpot first (#2140): AI-sourced contacts, deals and
+  // revenue, and pages to the CRM's CMS. Growth and above (owner, 2026-11-09);
+  // self-host gets it, with its own Composio keys.
+  'crm_integrations',
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -182,6 +186,8 @@ export const PLANS: Record<PlanId, Plan> = {
         'slack_notifications',
         // Approving an agent's step from Slack (#2139): Growth and up.
         'slack_approvals',
+        // HubSpot (#2140), with the server's own Composio keys.
+        'crm_integrations',
       ],
       // Self-host runs against the operator's own infrastructure / API
       // keys — no platform quota to enforce.
@@ -293,6 +299,8 @@ export const PLANS: Record<PlanId, Plan> = {
         'slack_notifications',
         // Approving an agent's step from Slack (#2139): Growth and up.
         'slack_approvals',
+        // HubSpot (#2140): Growth and above (owner, 2026-11-09).
+        'crm_integrations',
       ],
     },
   },
@@ -353,6 +361,8 @@ export const PLANS: Record<PlanId, Plan> = {
         'slack_notifications',
         // Approving an agent's step from Slack (#2139): Growth and up.
         'slack_approvals',
+        // HubSpot (#2140): Growth and above (owner, 2026-11-09).
+        'crm_integrations',
       ],
       // Enterprise — no platform quota; usage governed by contract.
     },

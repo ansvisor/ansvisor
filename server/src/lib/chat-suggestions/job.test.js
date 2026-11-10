@@ -3,6 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 vi.mock('../logger.js', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 vi.mock('node-cron', () => ({ default: { schedule: vi.fn() } }));
+// The brand's Slack post of the day (#2139): lib/slack/suggestion.js decides and posts.
+const slackPost = vi.hoisted(() => ({ fn: null }));
+vi.mock('../slack/suggestion.js', () => ({
+  postDailySuggestion: (...args) => slackPost.fn(...args),
+}));
 // Who sees which brand (brand access, lib/access.js): everyone every brand, unless a test says.
 const access = vi.hoisted(() => ({ readers: null, error: null, calls: [] }));
 vi.mock('../access.js', () => ({
@@ -268,6 +273,7 @@ beforeEach(() => {
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
   vi.stubEnv('IS_CLOUD', 'true');
   capture = vi.fn(async (events) => events.length);
+  slackPost.fn = vi.fn(async () => ({ status: 'skipped', reason: 'not_posting' }));
   logger.error.mockClear();
   access.readers = null;
   access.error = null;
@@ -359,6 +365,20 @@ describe('runDailySuggestions: who and what', () => {
         variety: false,
       },
     });
+  });
+
+  it("hands the brand's suggestions of the day to its Slack channel (#2139)", async () => {
+    const db = fakeDb(world());
+    await run(db);
+    expect(slackPost.fn).toHaveBeenCalledTimes(1);
+    const [{ orgId, brandId, picks, now }] = slackPost.fn.mock.calls[0];
+    expect({ orgId, brandId, now }).toEqual({ orgId: ORG, brandId: 'b1', now: NOW });
+    expect(picks.map((p) => p.action.id)).toEqual(['a-top', 'a-top']);
+    expect(picks[0].pick).toMatchObject({ wait: { days: expect.any(Number) } });
+    // A second run the same morning writes nothing new, and hands nothing on.
+    slackPost.fn.mockClear();
+    await run(db);
+    expect(slackPost.fn).not.toHaveBeenCalled();
   });
 
   it('makes a feed for admins and managers only; analysts and partners who didn’t turn it on get none', async () => {

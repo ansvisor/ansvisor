@@ -116,6 +116,15 @@ describe('notifyOwnKeyFailure', () => {
     expect(deliverEmail).toHaveBeenCalledTimes(1);
   });
 
+  it('e-mails an Admin who chose Inbox + Slack: Slack carries only an agent’s "needs you" (#2139)', async () => {
+    db.tables.chat_user_prefs = [{ user_id: 'admin-2', notify_via: 'inbox_slack' }];
+    expect(await tell()).toEqual({ notices: 2, emails: 2 });
+    expect(deliverEmail.mock.calls.map(([mail]) => mail.to)).toEqual([
+      ['admin-1@acme.test'],
+      ['admin-2@acme.test'],
+    ]);
+  });
+
   it('tells nothing for a key that works again, or another episode', async () => {
     db.tables.organization_ai_keys[0].failing_since = null;
     expect(await tell()).toEqual({ notices: 0, emails: 0 });

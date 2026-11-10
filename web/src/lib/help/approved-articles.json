@@ -1446,6 +1446,7 @@
         "notify me",
         "agent needs me",
         "email when an agent waits",
+        "slack when an agent waits",
         "thought for",
         "thinking time",
         "ask chat on every page",
@@ -1457,7 +1458,7 @@
         "run mode default"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
@@ -1477,7 +1478,7 @@
         },
         {
           "heading": "Notify me when an agent needs me",
-          "text": "When one of your agents stops to ask you something or to wait for your OK on a change, its chat moves to **Needs you** in your Inbox. **Notify me when an agent needs me** sets whether you also get an email: **Inbox + email**, the default, sends one email per run, with a link to open it; **Inbox only** sends none. **Inbox + Slack** comes once Slack can be connected."
+          "text": "When one of your agents stops to ask you something or to wait for your OK on a change, its chat moves to **Needs you** in your Inbox. **Notify me when an agent needs me** sets what else you get, once per run, with a link to open it: **Inbox + email**, the default, sends an email; **Inbox only** sends nothing more; **Inbox + Slack** posts in the brand's Slack channel and mentions you. **Inbox + Slack** can be picked once a brand you can see posts to Slack. For a brand that doesn't, you get the email instead, and notices Slack doesn't carry, such as an agent going live, still come by email."
         },
         {
           "heading": "Thought for N s",
@@ -4191,15 +4192,15 @@
         "stop the emails"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
-          "text": "The Daily Pulse is a short digest for each brand that goes out after its scheduled tracking run. It shows the headline numbers for the period, then lists what went well (highlights) and what needs attention (warnings). It comes by email on Ansvisor Cloud, and can also go to your webhook, on cloud and self-hosted alike."
+          "text": "The Daily Pulse is a short digest for each brand that goes out after its scheduled tracking run. It shows the headline numbers for the period, then lists what went well (highlights) and what needs attention (warnings). It comes by email on Ansvisor Cloud, and can also go to your webhook and to the brand's Slack channel (set in **Settings › Integrations**), on cloud and self-hosted alike."
         },
         {
           "heading": "Choose how often it comes",
-          "text": "Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily** (the default): after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable**: like Daily, but skipped when there are no highlights and no warnings.\n- **Off**: no email and no webhook."
+          "text": "Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily** (the default): after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable**: like Daily, but skipped when there are no highlights and no warnings.\n- **Off**: no email, no webhook and no Slack post."
         },
         {
           "heading": "Choose who gets it",
