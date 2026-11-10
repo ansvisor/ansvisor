@@ -248,7 +248,7 @@ describe('postConnectedMessage', () => {
     await expect(
       postConnectedMessage(
         CONNECTION,
-        { channelId: 'C00000001', brand: 'Northwind <Ltd>', by: 'Sam Lee' },
+        { channelId: 'C00000001', brand: 'Northwind <Ltd>', by: 'Sam Lee', kinds: ['pulse'] },
         { post },
       ),
     ).resolves.toEqual({ channel: 'C00000001', ts: '1762770000.000100' });
@@ -258,7 +258,9 @@ describe('postConnectedMessage', () => {
       unfurl_links: false,
       unfurl_media: false,
     });
-    expect(body.text).toContain('Northwind <Ltd>’s Daily Pulse');
+    expect(body.text).toBe(
+      'Ansvisor is connected. Northwind &lt;Ltd&gt;’s Daily Pulse will be posted here.',
+    );
     // Slack's markup characters escaped in the blocks.
     expect(body.blocks[0].text.text).toContain('Northwind &lt;Ltd&gt;’s');
     expect(body.blocks[1].elements[0].text).toBe('Sent by Sam Lee from Settings › Integrations');
@@ -268,14 +270,34 @@ describe('postConnectedMessage', () => {
     const { post, proxy } = recorded(FIX['chat.postMessage'], FIX['error:not_in_channel']);
     await postConnectedMessage(
       CONNECTION,
-      { channelId: 'C00000001', brand: 'N', by: null },
+      { channelId: 'C00000001', brand: 'N', by: null, kinds: [] },
       { post },
     );
     expect(proxy.mock.calls[0][1].body.blocks[1].elements[0].text).toBe(
       'Sent from Settings › Integrations',
     );
+    // Nothing on: it says where to choose.
+    expect(proxy.mock.calls[0][1].body.text).toBe(
+      'Ansvisor is connected. Nothing is turned on for N yet: choose what to post in Settings › Integrations.',
+    );
     await expect(
-      postConnectedMessage(CONNECTION, { channelId: 'C00000001', brand: 'N', by: null }, { post }),
+      postConnectedMessage(
+        CONNECTION,
+        { channelId: 'C00000001', brand: 'N', by: null, kinds: ['pulse'] },
+        { post },
+      ),
     ).rejects.toMatchObject({ code: 'not_in_channel' });
+  });
+
+  it('names every kind the brand will get', async () => {
+    const { post, proxy } = recorded(FIX['chat.postMessage']);
+    await postConnectedMessage(
+      CONNECTION,
+      { channelId: 'C00000001', brand: 'N', by: null, kinds: ['pulse', 'drops'] },
+      { post },
+    );
+    expect(proxy.mock.calls[0][1].body.text).toBe(
+      'Ansvisor is connected. N’s Daily Pulse and drop alerts will be posted here.',
+    );
   });
 });

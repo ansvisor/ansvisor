@@ -39,7 +39,9 @@
           "num_members": 12
         }
       ],
-      "response_metadata": { "next_cursor": "dGVhbTpDMDAwMDAwMDM=" }
+      "response_metadata": {
+        "next_cursor": "dGVhbTpDMDAwMDAwMDM="
+      }
     }
   },
   "conversations.list:2": {
@@ -66,7 +68,9 @@
           "num_members": 0
         }
       ],
-      "response_metadata": { "next_cursor": "" }
+      "response_metadata": {
+        "next_cursor": ""
+      }
     }
   },
   "conversations.info": {
@@ -99,25 +103,69 @@
       }
     }
   },
+  "users.lookupByEmail": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": true,
+      "user": {
+        "id": "U00000SAM",
+        "team_id": "T00000001",
+        "name": "sam.lee",
+        "deleted": false,
+        "is_bot": false,
+        "profile": {
+          "real_name": "Sam Lee",
+          "display_name": "sam.lee"
+        }
+      }
+    }
+  },
+  "error:users_not_found": {
+    "status": 200,
+    "headers": {},
+    "data": {
+      "ok": false,
+      "error": "users_not_found"
+    }
+  },
   "error:not_in_channel": {
     "status": 200,
     "headers": {},
-    "data": { "ok": false, "error": "not_in_channel" }
+    "data": {
+      "ok": false,
+      "error": "not_in_channel"
+    }
   },
   "error:channel_not_found": {
     "status": 200,
     "headers": {},
-    "data": { "ok": false, "error": "channel_not_found" }
+    "data": {
+      "ok": false,
+      "error": "channel_not_found"
+    }
   },
   "error:token_revoked": {
     "status": 200,
     "headers": {},
-    "data": { "ok": false, "error": "token_revoked" }
+    "data": {
+      "ok": false,
+      "error": "token_revoked"
+    }
   },
   "error:ratelimited": {
     "status": 429,
-    "headers": { "retry-after": "30" },
-    "data": { "ok": false, "error": "ratelimited" }
+    "headers": {
+      "retry-after": "30"
+    },
+    "data": {
+      "ok": false,
+      "error": "ratelimited"
+    }
   },
-  "error:unavailable": { "status": 503, "headers": {}, "data": null }
+  "error:unavailable": {
+    "status": 503,
+    "headers": {},
+    "data": null
+  }
 }
