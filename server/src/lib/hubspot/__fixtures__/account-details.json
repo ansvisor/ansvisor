@@ -1,0 +1,11 @@
+{
+  "portalId": 4412893,
+  "accountType": "STANDARD",
+  "timeZone": "Europe/Istanbul",
+  "companyCurrency": "USD",
+  "additionalCurrencies": [],
+  "utcOffset": "+03:00",
+  "utcOffsetMilliseconds": 10800000,
+  "uiDomain": "app-eu1.hubspot.com",
+  "dataHostingLocation": "eu1"
+}

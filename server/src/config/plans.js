@@ -44,6 +44,8 @@ export const PLANS = {
         'slack_notifications',
         // Approving an agent's step from Slack (#2139): Growth and up.
         'slack_approvals',
+        // HubSpot (#2140), with the server's own Composio keys.
+        'crm_integrations',
       ],
     },
   },
@@ -152,6 +154,8 @@ export const PLANS = {
         'slack_notifications',
         // Approving an agent's step from Slack (#2139): Growth and up.
         'slack_approvals',
+        // HubSpot (#2140): Growth and above (owner, 2026-11-09).
+        'crm_integrations',
       ],
     },
   },
@@ -207,6 +211,8 @@ export const PLANS = {
         'slack_notifications',
         // Approving an agent's step from Slack (#2139): Growth and up.
         'slack_approvals',
+        // HubSpot (#2140): Growth and above (owner, 2026-11-09).
+        'crm_integrations',
       ],
     },
   },

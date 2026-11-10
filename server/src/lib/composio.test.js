@@ -34,7 +34,9 @@ const {
   getActiveConnection,
   initiateSlackConnection,
   isSlackConfigured,
+  isHubspotConfigured,
   isWebflowConfigured,
+  linkHubspot,
   listGaProperties,
   listGscSites,
   proxyRequest,
@@ -304,6 +306,45 @@ describe('Slack on Composio (#2139)', () => {
     });
     expect(sdk.link).toHaveBeenCalledWith('org_org-1', 'ac_slack', {
       callbackUrl: 'https://app.test/dashboard/settings/integrations',
+      allowMultiple: true,
+    });
+  });
+});
+
+describe('proxyRequest writes HubSpot calls (#2140)', () => {
+  it('sends the method HubSpot asks for, with the body as JSON', async () => {
+    sdk.proxyExecute.mockResolvedValueOnce({ status: 200, headers: {}, data: { name: 'x' } });
+    const endpoint = 'https://api.hubapi.com/crm/v3/properties/contacts/ansvisor_ai_source';
+    await expect(
+      proxyRequest('ca_1', { endpoint, method: 'PATCH', body: { options: [] } }),
+    ).resolves.toEqual({ status: 200, headers: {}, data: { name: 'x' } });
+    expect(sdk.proxyExecute).toHaveBeenLastCalledWith(
+      expect.objectContaining({ endpoint, method: 'PATCH', body: { options: [] } }),
+      undefined,
+    );
+  });
+});
+
+describe('HubSpot on Composio (#2140)', () => {
+  it('is configured only with the API key and its own auth config', () => {
+    vi.stubEnv('COMPOSIO_HUBSPOT_AUTH_CONFIG_ID', '');
+    expect(isHubspotConfigured()).toBe(false);
+    vi.stubEnv('COMPOSIO_HUBSPOT_AUTH_CONFIG_ID', 'ac_hubspot');
+    expect(isHubspotConfigured()).toBe(true);
+    vi.stubEnv('COMPOSIO_API_KEY', '');
+    expect(isHubspotConfigured()).toBe(false);
+  });
+
+  it("starts a brand's sign-in as one more account under the entity", async () => {
+    vi.stubEnv('COMPOSIO_HUBSPOT_AUTH_CONFIG_ID', 'ac_hubspot');
+    sdk.link.mockResolvedValueOnce({ redirectUrl: 'https://hs.test/auth', id: 'ca_new' });
+    await expect(linkHubspot('org_org-1', 'https://app.test/back')).resolves.toEqual({
+      redirectUrl: 'https://hs.test/auth',
+      connectedAccountId: 'ca_new',
+      status: 'INITIATED',
+    });
+    expect(sdk.link).toHaveBeenCalledWith('org_org-1', 'ac_hubspot', {
+      callbackUrl: 'https://app.test/back',
       allowMultiple: true,
     });
   });

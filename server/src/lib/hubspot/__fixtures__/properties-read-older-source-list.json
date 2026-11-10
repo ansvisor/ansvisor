@@ -1,0 +1,43 @@
+{
+  "status": "COMPLETE",
+  "results": [
+    {
+      "updatedAt": "2026-11-01T10:00:00.000Z",
+      "createdAt": "2026-11-01T10:00:00.000Z",
+      "name": "ansvisor_ai_source",
+      "label": "AI source",
+      "type": "enumeration",
+      "fieldType": "select",
+      "description": "The AI assistant whose answer first brought this contact to the site, as Ansvisor saw it.",
+      "groupName": "ansvisor",
+      "options": [
+        { "label": "ChatGPT", "value": "chatgpt.com", "displayOrder": 0, "hidden": false },
+        { "label": "Perplexity", "value": "perplexity.ai", "displayOrder": 1, "hidden": false }
+      ],
+      "displayOrder": -1,
+      "calculated": false,
+      "externalOptions": false,
+      "hasUniqueValue": false,
+      "hidden": false,
+      "hubspotDefined": false,
+      "modificationMetadata": { "archivable": true, "readOnlyDefinition": false, "readOnlyValue": false },
+      "formField": false,
+      "dataSensitivity": "non_sensitive"
+    },
+    {
+      "updatedAt": "2026-11-01T10:00:00.000Z",
+      "createdAt": "2026-11-01T10:00:00.000Z",
+      "name": "ansvisor_ai_landing_page",
+      "label": "AI landing page",
+      "type": "string",
+      "fieldType": "text",
+      "groupName": "ansvisor",
+      "options": [],
+      "displayOrder": -1,
+      "hidden": false,
+      "formField": false
+    }
+  ],
+  "startedAt": "2026-11-10T09:00:00.000Z",
+  "completedAt": "2026-11-10T09:00:00.120Z"
+}

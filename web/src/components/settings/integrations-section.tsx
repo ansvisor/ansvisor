@@ -50,6 +50,7 @@ import { CatalogSourcesCard, type CatalogSourcesRead } from './catalog-sources-c
 import { CatalogCategoryPages } from './catalog-category-pages';
 import { TopicCategories } from './topic-categories';
 import { FramerCard } from './framer-card';
+import { HubspotCard } from './hubspot-card';
 import { IndexNowCard } from './indexnow-card';
 import { GoogleAccountsOverview } from '@/components/settings/google-accounts-overview';
 import { MerchantCenterAccounts } from './merchant-center-accounts';
@@ -222,6 +223,13 @@ export function IntegrationsSection() {
           {/* Chat's Connections opens it by name (#slack). */}
           <div id="slack" className="scroll-mt-4">
             <SlackCard />
+          </div>
+        </IntegrationGroup>
+
+        {/* CRM (#2140): HubSpot, per brand, with consent before any write. */}
+        <IntegrationGroup title={t('integrations_crm')}>
+          <div id="hubspot" className="scroll-mt-4">
+            <HubspotCard />
           </div>
         </IntegrationGroup>
       </CardContent>
