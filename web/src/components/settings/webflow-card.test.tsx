@@ -29,6 +29,11 @@ vi.mock('@/components/providers/demo-brand-provider', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
+/** The cms_connect events sent, in order. */
+const flows = () =>
+  analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
 // The read-only workspace's upgrade dialog.
 const openUpgrade = vi.hoisted(() => vi.fn());
 const gate = vi.hoisted(() => ({ isLocked: false }));
@@ -117,6 +122,7 @@ async function typeToken(value: string) {
 }
 
 beforeEach(() => {
+  analytics.track.mockClear();
   role.canManage = true;
   gate.isLocked = false;
   openUpgrade.mockClear();
@@ -174,6 +180,12 @@ describe('WebflowCard', () => {
     expect(toast.success).toHaveBeenCalledWith(
       'Webflow connected. Now pick a collection and save.',
     );
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'webflow' }],
+      ['flow_completed', { flow: 'cms_connect', target: 'webflow' }],
+    ]);
+    // The token stays out of what is sent.
+    expect(JSON.stringify(analytics.track.mock.calls)).not.toContain('wf-token');
     expect(container.querySelector('input[type="password"]')).toBeNull();
     expect(client.listWebflowCollections).toHaveBeenCalledWith('b1', 's1');
     // The setup's last step: the collection picker, focused.
@@ -322,6 +334,10 @@ describe('WebflowCard', () => {
       'The token needs CMS: Read and write and Sites: Read-only. Generate a new one with them.',
     );
     expect(container.querySelector('input[type="password"]')).not.toBeNull();
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'webflow' }],
+      ['flow_failed', { flow: 'cms_connect', target: 'webflow', error_code: 'missing_scopes' }],
+    ]);
   });
 
   it('asks for a new token when Webflow refused the saved one', async () => {

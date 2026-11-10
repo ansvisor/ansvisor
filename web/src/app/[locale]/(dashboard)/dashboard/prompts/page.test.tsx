@@ -113,6 +113,8 @@ const toast = vi.hoisted(() =>
   }),
 );
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
 
 const { default: PromptsPage } = await import('./page');
 const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
@@ -375,6 +377,67 @@ describe('Add Prompt on a brand without topics', () => {
     expect(actions.importPrompts).toHaveBeenCalled();
     expect(dialog()?.textContent).toContain('Add a topic first');
     expect(addTopic()).toBeDefined();
+  });
+});
+
+describe("Add Prompt's prompt_add flow", () => {
+  const flows = () =>
+    analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
+  const typePrompt = async (text: string) => {
+    const input = dialog()!.querySelector<HTMLInputElement>('input')!;
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(input, text);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  };
+  async function save(text = 'Best espresso beans?') {
+    await render(false);
+    await act(async () => button('Add prompt')!.click());
+    await typePrompt(text);
+    await act(async () => button('Save & close')!.click());
+  }
+
+  it('starts as the dialog opens and completes once prompts are added, never sending them', async () => {
+    actions.importPrompts.mockResolvedValue({
+      importedIdx: [0],
+      promptIds: ['p2'],
+      analysisStarted: true,
+    });
+    await save();
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'prompt_add' }],
+      ['flow_completed', { flow: 'prompt_add' }],
+    ]);
+    expect(JSON.stringify(analytics.track.mock.calls)).not.toContain('espresso');
+  });
+
+  it('fails with the server’s code, and with none when the save broke', async () => {
+    actions.importPrompts.mockResolvedValueOnce({ error: 'Add a topic first.', code: 'no_topics' });
+    await save();
+    act(() => root.unmount());
+    root = createRoot(container);
+    actions.importPrompts.mockRejectedValueOnce(new Error('Failed to fetch'));
+    await save();
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'prompt_add' }],
+      ['flow_failed', { flow: 'prompt_add', error_code: 'no_topics' }],
+      ['flow_started', { flow: 'prompt_add' }],
+      ['flow_failed', { flow: 'prompt_add', error_code: null }],
+    ]);
+  });
+
+  it('fails as nothing added when the limit or duplicates take every prompt', async () => {
+    actions.importPrompts.mockResolvedValue({
+      importedIdx: [],
+      promptIds: [],
+      analysisStarted: false,
+    });
+    await save();
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'prompt_add' }],
+      ['flow_failed', { flow: 'prompt_add', error_code: 'none_added' }],
+    ]);
   });
 });
 

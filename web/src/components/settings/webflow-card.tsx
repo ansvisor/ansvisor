@@ -47,6 +47,7 @@ import {
   type WebflowFieldMap,
   type WebflowSite,
 } from '@/lib/webflow-client';
+import { frictionFlow } from '@/lib/friction-events';
 import { useBrandStore } from '@/stores/use-brand-store';
 
 /** The parts of a map whose field is still one of that part's choices, each field once. */
@@ -331,6 +332,9 @@ export function WebflowCard() {
 /** Making a site token in Webflow, in order (en.json settings.webflow.tokenSteps). */
 const TOKEN_STEPS = ['open', 'name', 'permissions', 'copy'] as const;
 
+/** cms_connect: the Connect below, until the CMS is connected. */
+const CONNECT = frictionFlow('cms_connect', { target: 'webflow' });
+
 /** The site token, pasted once: it goes to the API and is never shown again. */
 function TokenForm({
   brandId,
@@ -350,14 +354,17 @@ function TokenForm({
 
   const connect = async () => {
     setConnecting(true);
+    CONNECT.started();
     const result = await connectWebflow(brandId, token.trim());
     setConnecting(false);
     if (!result.ok) {
+      CONNECT.failed(result.code);
       if (result.code === 'subscription') openUpgrade();
       else
         toast.error(t(result.code === 'invalid' ? 'errors.invalidToken' : `errors.${result.code}`));
       return;
     }
+    CONNECT.completed();
     setToken('');
     // A new token for the same site keeps its collection; else the setup's last step is left,
     // with the site to pick first when the token reaches several (none saved then).

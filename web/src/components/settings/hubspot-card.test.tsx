@@ -45,6 +45,11 @@ vi.mock('@/stores/use-brand-store', () => ({
 }));
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
+const analytics = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => analytics);
+/** The cms_connect events sent, in order. */
+const flows = () =>
+  analytics.track.mock.calls.filter(([event]) => String(event).startsWith('flow_'));
 const openUpgrade = vi.hoisted(() => vi.fn());
 const gate = vi.hoisted(() => ({ isLocked: false }));
 vi.mock('@/components/providers/upgrade-gate', () => ({
@@ -148,6 +153,7 @@ beforeEach(() => {
   toast.error.mockReset();
   toast.success.mockReset();
   openUpgrade.mockReset();
+  analytics.track.mockClear();
 });
 
 afterEach(async () => {
@@ -232,6 +238,10 @@ describe('HubspotCard', () => {
     expect(popup.close).toHaveBeenCalled();
     expect(toast.success).toHaveBeenCalledWith('HubSpot connected');
     expect(badges()).toEqual(['Connected']);
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'hubspot' }],
+      ['flow_completed', { flow: 'cms_connect', target: 'hubspot' }],
+    ]);
   });
 
   it('goes to HubSpot in this tab when the popup is blocked, and finishes on return', async () => {
@@ -252,6 +262,8 @@ describe('HubspotCard', () => {
       consent: { contacts: false, pages: true },
     });
     expect(toast.success).toHaveBeenCalledWith('HubSpot connected');
+    // Started before the tab went to HubSpot: completed here, on return.
+    expect(flows()).toEqual([['flow_completed', { flow: 'cms_connect', target: 'hubspot' }]]);
   });
 
   it('uses the HubSpot account another brand uses, with consent', async () => {
@@ -277,6 +289,10 @@ describe('HubspotCard', () => {
     });
     expect(client.startHubspotConnect).not.toHaveBeenCalled();
     expect(badges()).toEqual(['Connected']);
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'hubspot' }],
+      ['flow_completed', { flow: 'cms_connect', target: 'hubspot' }],
+    ]);
   });
 
   it('shows a member the state only', async () => {
@@ -446,6 +462,39 @@ describe('HubspotCard', () => {
     await click(checkbox('Mark contacts who came from an AI answer'));
     await click(button('Continue to HubSpot'));
     expect(toast.error).toHaveBeenCalledWith(ERROR_TEXTS.plan);
+    // Read-only, nothing started; the plan's refusal started and failed.
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'hubspot' }],
+      ['flow_failed', { flow: 'cms_connect', target: 'hubspot', error_code: 'plan' }],
+    ]);
+  });
+
+  it('fails a sign-in the window was closed on, unfinished', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const popup = { closed: false, close: vi.fn() };
+    vi.stubGlobal(
+      'open',
+      vi.fn(() => popup),
+    );
+    client.startHubspotConnect.mockResolvedValue({
+      ok: true,
+      redirectUrl: 'https://hs.test/auth',
+      accountId: 'acc-new',
+    });
+    client.activateHubspot.mockResolvedValue({ ok: true, status: 'pending' });
+    await render();
+    await click(button('Connect HubSpot'));
+    await click(checkbox('Mark contacts who came from an AI answer'));
+    await click(button('Continue to HubSpot'));
+    popup.closed = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+    expect(toast.error).toHaveBeenCalledWith(messages.settings.hubspot.connectUnfinished);
+    expect(flows()).toEqual([
+      ['flow_started', { flow: 'cms_connect', target: 'hubspot' }],
+      ['flow_failed', { flow: 'cms_connect', target: 'hubspot', error_code: 'unfinished' }],
+    ]);
   });
 
   it('says when the connection can’t be read, with Try again', async () => {

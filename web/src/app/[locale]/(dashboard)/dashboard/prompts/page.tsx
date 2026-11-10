@@ -197,6 +197,7 @@ import {
 } from '@/lib/prompt-bulk-actions';
 import { toCsv } from '@/lib/csv';
 import { formatRelative } from '@/lib/format-relative';
+import { frictionFlow } from '@/lib/friction-events';
 import {
   compareNullsLast,
   comparePromptSortRows,
@@ -660,6 +661,9 @@ function brandLocation(region: string | undefined, state: string | undefined): s
 
 // ─── Tracked prompt limit (PROMPT-009) ────────────────────────────────────────
 
+/** prompt_add: from Add prompt's opening to prompts added. */
+const PROMPT_ADD = frictionFlow('prompt_add');
+
 /**
  * Quick-add dialog for the active brand (#460). Same mechanism as the Add
  * Prompt card on brands/[id]/prompts: topic select + the grouped
@@ -721,6 +725,7 @@ function AddPromptDialog({
   // dialog must cost zero requests until it is actually opened.
   useEffect(() => {
     if (!open) return;
+    PROMPT_ADD.started();
     setText('');
     setError(null);
     setNoTopics(false);
@@ -801,6 +806,7 @@ function AddPromptDialog({
         })),
       );
       if ('error' in result) {
+        PROMPT_ADD.failed(result.code);
         if (isNoTopics(result)) setNoTopics(true);
         else setError(result.error);
         return;
@@ -808,6 +814,7 @@ function AddPromptDialog({
       const added = result.importedIdx.length;
       const skipped = toSave.length - added;
       if (added === 0) {
+        PROMPT_ADD.failed('none_added');
         setError(
           'Nothing was added: your plan limit is reached, or these prompts are already tracked.',
         );
@@ -821,11 +828,13 @@ function AddPromptDialog({
             : 'They will be picked up by the next tracking run.',
         },
       );
+      PROMPT_ADD.completed();
       setStaged([]);
       setText('');
       if (closeAfter) onClose();
       onAdded();
     } catch {
+      PROMPT_ADD.failed();
       setError('Failed to add prompts. Please try again.');
     } finally {
       setSaving(false);
@@ -999,6 +1008,7 @@ function AddPromptDialog({
                   locationQuota ? <PromptLimitActions planId={locationQuota.planId} /> : null
                 }
                 onImported={() => {
+                  PROMPT_ADD.completed();
                   onClose();
                   onAdded();
                 }}
