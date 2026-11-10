@@ -84,6 +84,10 @@ vi.mock('../lib/hubspot/client.js', async (importOriginal) => ({
   ...(await importOriginal()),
   hubspotClient: (accountId) => ({ accountId }),
 }));
+const pipeline = vi.hoisted(() => ({ run: vi.fn() }));
+vi.mock('../lib/hubspot/pipeline-sync.js', () => ({
+  runHubspotPipelineSync: (...a) => pipeline.run(...a),
+}));
 vi.mock('../lib/plan-guard.js', () => {
   class PlanLimitError extends Error {
     constructor(message, statusCode = 403) {
@@ -213,6 +217,8 @@ describe('GET /api/hubspot/brands/:brandId', () => {
         },
         blog: null,
         properties: { ready: true, at: READY.at, error: null },
+        sync: null,
+        syncing: false,
       },
       usable: [{ accountId: NEW_ACCOUNT, label: 'Hub ID 7', brandIds: [OTHER] }],
     });
@@ -524,5 +530,41 @@ describe('DELETE /api/hubspot/brands/:brandId', () => {
     access.mockResolvedValue({ brand: brand({ is_demo: true }), role: 'admin' });
     expect((await send('DELETE', '')).status).toBe(409);
     expect(lib.removeBrandAccount).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/hubspot/brands/:brandId/sync', () => {
+  const OTHER_BRAND = '66666666-6666-4666-8666-666666666666';
+
+  it('reads the pipeline again in the background, once every few minutes a brand', async () => {
+    let finish;
+    pipeline.run.mockReset().mockReturnValue(new Promise((resolve) => (finish = resolve)));
+    const res = await send('POST', '/sync');
+    expect(res.status).toBe(202);
+    expect(pipeline.run).toHaveBeenCalledWith({ brandId: BRAND });
+    // While it runs, the card says so.
+    expect((await (await send('GET', '')).json()).connection.syncing).toBe(true);
+    finish({ synced: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const again = await send('POST', '/sync');
+    expect(again.status).toBe(429);
+    expect((await again.json()).code).toBe('busy');
+    expect(pipeline.run).toHaveBeenCalledOnce();
+  });
+
+  it('needs a live connection with consent to mark contacts, and an admin or manager', async () => {
+    access.mockResolvedValue({ brand: brand({ id: OTHER_BRAND }), role: 'manager' });
+    conn.hubspotConnection.mockResolvedValue(
+      connected({ consent: { contacts: false, pages: true } }),
+    );
+    let res = await send('POST', '/sync');
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('consent_required');
+    conn.hubspotConnection.mockResolvedValue({ ...connected(), connected: false });
+    expect((await send('POST', '/sync')).status).toBe(409);
+    access.mockResolvedValue({ brand: brand({ id: OTHER_BRAND }), role: 'member' });
+    expect((await send('POST', '/sync')).status).toBe(403);
+    plan.allowed = false;
+    expect((await send('POST', '/sync')).status).toBe(403);
   });
 });

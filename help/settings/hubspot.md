@@ -34,10 +34,12 @@ Ansvisor never deletes contacts or deals, never changes your own properties, nev
 
 The HubSpot card has a switch for each choice. Turning one off stops it at once. The card says who allowed the writes, and when. If the Ansvisor properties couldn't be created, the card says why, with **Try again**.
 
+With marking contacts on, the card also says when Ansvisor last read HubSpot for the AI-sourced pipeline on the AI Traffic page. **Sync now** reads it again.
+
 ## Share one HubSpot account between brands
 
 When another brand already uses a HubSpot account, pick it from **Use the account another brand uses**. Each brand still chooses what Ansvisor may write. The card lists the other brands on the same account.
 
 ## Disconnect, or a plan change
 
-**Disconnect** stops all reading and writing for the brand at once. The Ansvisor properties and their values stay in HubSpot. If the plan no longer includes HubSpot, the card says **Paused**: nothing is read or written until you upgrade, and the connection stays.
+**Disconnect** stops all reading and writing for the brand at once, and removes the AI-sourced contacts and deals Ansvisor read for it. The Ansvisor properties and their values stay in HubSpot. If the plan no longer includes HubSpot, the card says **Paused**: nothing is read or written until you upgrade, and the connection stays.

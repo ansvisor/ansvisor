@@ -1,0 +1,32 @@
+{
+  "total": 3,
+  "results": [
+    {
+      "id": "102",
+      "properties": {
+        "hs_analytics_source_data_1": "perplexity.ai",
+        "hs_analytics_first_url": "https://acme.test/blog/ai-crm-guide",
+        "createdate": "2026-10-20T10:00:00.000Z",
+        "hs_object_id": "102"
+      }
+    },
+    {
+      "id": "201",
+      "properties": {
+        "hs_analytics_source_data_1": "chatgpt.com",
+        "hs_analytics_first_url": "https://www.acme.test/compare/acme-vs-zenith?ref=x",
+        "createdate": "2026-11-01T12:00:00.000Z",
+        "hs_object_id": "201"
+      }
+    },
+    {
+      "id": "202",
+      "properties": {
+        "hs_analytics_source_data_1": "gemini.google.com",
+        "hs_analytics_first_url": "https://other-brand.test/",
+        "createdate": "2026-11-01T12:00:00.000Z",
+        "hs_object_id": "202"
+      }
+    }
+  ]
+}

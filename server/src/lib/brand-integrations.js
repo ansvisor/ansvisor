@@ -230,12 +230,25 @@ const PROPERTY_COLUMN = Object.freeze({
   'google-analytics': 'ga_property_id',
 });
 
+/** The tables of rows a product's sync read for the brand through its sign-in. */
+const SYNCED_TABLES = Object.freeze({
+  // The AI-sourced pipeline (lib/hubspot/pipeline-sync.js, 00520).
+  hubspot: Object.freeze(['hubspot_ai_contacts', 'hubspot_ai_deals']),
+});
+
 /**
- * The brand's property was picked from the sign-in it used: once it reads
- * through another account, or none, the pick no longer applies and is
- * cleared, so nothing syncs a property the new account may not see.
+ * What the brand got through the sign-in it used, cleared once it reads
+ * through another account, or none. Its property was picked from that
+ * sign-in: the pick no longer applies, so nothing syncs a property the new
+ * account may not see. The rows a sync read came from that account: they go,
+ * so no page shows the old account's contacts, deals and revenue as the new
+ * one's until a sync of it succeeds, or ever when it keeps failing.
  */
-async function clearBrandProperty(brandId, provider) {
+async function clearSignInReads(brandId, provider) {
+  for (const table of SYNCED_TABLES[provider] ?? []) {
+    const { error } = await supabaseAdmin.from(table).delete().eq('brand_id', brandId);
+    if (error) throw new Error(error.message);
+  }
   const column = PROPERTY_COLUMN[provider];
   if (!column) return;
   const { error } = await supabaseAdmin
@@ -392,7 +405,7 @@ export async function useAccountForBrand(
     .from('brand_integrations')
     .upsert(useRow(brand.id, provider, accountId, before), { onConflict: 'brand_id,provider' });
   if (error) throw new Error(error.message);
-  if (before?.accountId !== accountId) await clearBrandProperty(brand.id, provider);
+  if (before?.accountId !== accountId) await clearSignInReads(brand.id, provider);
   if (before?.accountId && before.accountId !== accountId) {
     await forgetUnusedAccount(before.accountId, { deleteRemote });
   }
@@ -466,7 +479,7 @@ export async function activateBrandAccount(
     .from('brand_integrations')
     .upsert(useRow(brand.id, provider, accountId, before), { onConflict: 'brand_id,provider' });
   if (useError) throw new Error(useError.message);
-  if (before?.accountId !== accountId) await clearBrandProperty(brand.id, provider);
+  if (before?.accountId !== accountId) await clearSignInReads(brand.id, provider);
   if (before?.accountId && before.accountId !== accountId) {
     await forgetUnusedAccount(before.accountId, { deleteRemote });
   }
@@ -485,6 +498,6 @@ export async function removeBrandAccount({ brand, provider }, { deleteRemote }) 
     .eq('brand_id', brand.id)
     .eq('provider', provider);
   if (error) throw new Error(error.message);
-  await clearBrandProperty(brand.id, provider);
+  await clearSignInReads(brand.id, provider);
   if (before?.accountId) await forgetUnusedAccount(before.accountId, { deleteRemote });
 }

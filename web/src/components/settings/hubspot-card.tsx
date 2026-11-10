@@ -32,6 +32,7 @@ import { CHOOSE_PLAN_HREF, useUpgradeGate } from '@/components/providers/upgrade
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useUserRole } from '@/hooks/use-user-role';
 import { formatDate } from '@/lib/format';
+import { formatRelative } from '@/lib/format-relative';
 import {
   activateHubspot,
   chooseHubspotAccount,
@@ -43,8 +44,10 @@ import {
   saveHubspotBlog,
   saveHubspotConsent,
   startHubspotConnect,
+  syncHubspot,
   takePending,
   type HubspotAccount,
+  type HubspotConnection,
   type HubspotConsent,
   type HubspotError,
   type HubspotRead,
@@ -94,7 +97,11 @@ export function HubspotCard() {
   const [reads, setReads] = useState(0);
   // The consent dialog, for the brand it was opened for: a new sign-in (null) or an account to use.
   const [dialog, setDialog] = useState<{ brandId: string; accountId: string | null } | null>(null);
-  const [busy, setBusy] = useState<'connect' | 'consent' | 'setup' | 'disconnect' | null>(null);
+  const [busy, setBusy] = useState<'connect' | 'consent' | 'setup' | 'sync' | 'disconnect' | null>(
+    null,
+  );
+  // Sync now started here, for the brand: the line says HubSpot is being read.
+  const [syncStartedFor, setSyncStartedFor] = useState<string | null>(null);
   // Bumped to stop a sign-in's checks: a newer one, or the card unmounting.
   const pollGen = useRef(0);
   useEffect(() => {
@@ -246,6 +253,17 @@ export function HubspotCard() {
     setValue(result);
   };
 
+  const syncNow = async () => {
+    if (!activeBrandId) return;
+    const brandId = activeBrandId;
+    setBusy('sync');
+    const result = await syncHubspot(brandId);
+    setBusy(null);
+    if (!result.ok) return fail(result.code);
+    setSyncStartedFor(brandId);
+    toast.success(t('syncStarted'));
+  };
+
   const disconnect = async () => {
     if (!activeBrandId) return;
     setBusy('disconnect');
@@ -376,6 +394,15 @@ export function HubspotCard() {
             { action: tActions('connectIntegrations') },
           )}
         />
+        {consent.contacts && !refused && (
+          <SyncLine
+            sync={connection.sync}
+            syncing={connection.syncing || syncStartedFor === activeBrandId}
+            canSync={canManage && !paused}
+            busy={busy !== null}
+            onSync={guard(() => void syncNow(), { action: tActions('connectIntegrations') })}
+          />
+        )}
         <ConsentRow
           title={t('pages.title')}
           description={t('pages.description')}
@@ -517,6 +544,46 @@ function Note({ tone, children }: { tone: 'amber'; children: ReactNode }) {
     >
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       <span>{children}</span>
+    </div>
+  );
+}
+
+/** The AI-sourced pipeline's last read of HubSpot, with Sync now. */
+function SyncLine({
+  sync,
+  syncing,
+  canSync,
+  busy,
+  onSync,
+}: {
+  sync: HubspotConnection['sync'];
+  syncing: boolean;
+  canSync: boolean;
+  busy: boolean;
+  onSync: () => void;
+}) {
+  const t = useTranslations('settings.hubspot');
+  const tCommon = useTranslations('common');
+  const line = syncing
+    ? t('syncing')
+    : sync?.error
+      ? t('syncFailed')
+      : sync?.at
+        ? t('synced', {
+            when: formatRelative(sync.at, tCommon),
+            contacts: sync.contacts ?? 0,
+            deals: sync.deals ?? 0,
+          })
+        : t('notSynced');
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <p className="text-xs text-muted-foreground">{line}</p>
+      {canSync && (
+        <Button size="sm" variant="ghost" onClick={onSync} disabled={busy || syncing}>
+          {syncing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+          {t('syncNow')}
+        </Button>
+      )}
     </div>
   );
 }

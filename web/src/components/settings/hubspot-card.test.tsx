@@ -15,6 +15,7 @@ const client = vi.hoisted(() => ({
   saveHubspotConsent: vi.fn(),
   retryHubspotSetup: vi.fn(),
   disconnectHubspot: vi.fn(),
+  syncHubspot: vi.fn(),
   rememberPending: vi.fn(),
   takePending: vi.fn(),
 }));
@@ -89,6 +90,8 @@ const CONNECTION: HubspotConnection = {
   consent: { contacts: true, pages: false, by: 'Ayşe Demir', at: '2026-11-09T10:00:00.000Z' },
   blog: null,
   properties: { ready: true, at: '2026-11-09T10:00:01.000Z', error: null },
+  sync: null,
+  syncing: false,
 };
 const read = (over: Partial<HubspotRead> = {}): { ok: true } & HubspotRead => ({
   ok: true,
@@ -503,5 +506,32 @@ describe('HubspotCard', () => {
     expect(text()).toContain("Couldn't read the HubSpot connection right now.");
     await click(button('Try again'));
     expect(client.readHubspot).toHaveBeenCalledTimes(2);
+  });
+
+  it('says when HubSpot was last read, and reads it again with Sync now', async () => {
+    client.readHubspot.mockResolvedValue(
+      read({
+        connection: {
+          ...CONNECTION,
+          sync: { at: new Date().toISOString(), contacts: 42, deals: 7, error: null },
+        },
+      }),
+    );
+    client.syncHubspot.mockResolvedValue({ ok: true, started: true });
+    await render();
+    expect(text()).toContain(': 42 AI-sourced contacts, 7 deals.');
+    await click(button('Sync now'));
+    expect(client.syncHubspot).toHaveBeenCalledWith('b1');
+    expect(toast.success).toHaveBeenCalledWith(
+      "Reading HubSpot. AI Traffic's AI-sourced pipeline updates in a minute or two.",
+    );
+    expect(text()).toContain('Reading HubSpot…');
+
+    client.syncHubspot.mockResolvedValue({ ok: false, code: 'busy' });
+    client.readHubspot.mockResolvedValue(read({ connection: CONNECTION }));
+    await renderAgain();
+    expect(text()).toContain('Not read from HubSpot yet.');
+    await click(button('Sync now'));
+    expect(toast.error).toHaveBeenCalledWith(ERROR_TEXTS.busy);
   });
 });

@@ -1,0 +1,44 @@
+{
+  "status": "COMPLETE",
+  "results": [
+    {
+      "id": "9001",
+      "properties": {
+        "amount": "11000",
+        "amount_in_home_currency": "12000.5",
+        "hs_is_closed": "true",
+        "hs_is_closed_won": "true",
+        "closedate": "2026-11-08T17:00:00.000Z",
+        "createdate": "2026-11-03T10:00:00.000Z",
+        "hs_object_id": "9001"
+      },
+      "archived": false
+    },
+    {
+      "id": "9002",
+      "properties": {
+        "amount": "50000",
+        "amount_in_home_currency": null,
+        "hs_is_closed": "false",
+        "hs_is_closed_won": "false",
+        "closedate": "2026-12-15T17:00:00.000Z",
+        "createdate": "2026-11-05T10:00:00.000Z",
+        "hs_object_id": "9002"
+      },
+      "archived": false
+    },
+    {
+      "id": "9003",
+      "properties": {
+        "amount": "3000",
+        "amount_in_home_currency": "3000",
+        "hs_is_closed": "true",
+        "hs_is_closed_won": "true",
+        "closedate": "2026-11-06T17:00:00.000Z",
+        "createdate": "2026-11-02T10:00:00.000Z",
+        "hs_object_id": "9003"
+      },
+      "archived": false
+    }
+  ]
+}

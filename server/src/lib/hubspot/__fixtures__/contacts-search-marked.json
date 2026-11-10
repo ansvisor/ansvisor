@@ -1,0 +1,33 @@
+{
+  "total": 2,
+  "results": [
+    {
+      "id": "101",
+      "properties": {
+        "ansvisor_ai_source": "chatgpt.com",
+        "ansvisor_ai_landing_page": "https://acme.test/pricing",
+        "ansvisor_ai_first_visit_at": "2026-11-02T14:12:00.000Z",
+        "ansvisor_ai_converted_at": "2026-11-03T09:40:00.000Z",
+        "createdate": "2026-11-03T09:40:05.000Z",
+        "hs_object_id": "101"
+      },
+      "createdAt": "2026-11-03T09:40:05.000Z",
+      "updatedAt": "2026-11-03T09:41:00.000Z",
+      "archived": false
+    },
+    {
+      "id": "102",
+      "properties": {
+        "ansvisor_ai_source": "perplexity.ai",
+        "ansvisor_ai_landing_page": "https://acme.test/blog/ai-crm-guide?utm_source=perplexity",
+        "ansvisor_ai_first_visit_at": "2026-11-04T08:00:00.000Z",
+        "ansvisor_ai_converted_at": "2026-11-04T08:20:00.000Z",
+        "createdate": "2026-10-20T10:00:00.000Z",
+        "hs_object_id": "102"
+      },
+      "createdAt": "2026-10-20T10:00:00.000Z",
+      "updatedAt": "2026-11-04T08:21:00.000Z",
+      "archived": false
+    }
+  ]
+}
