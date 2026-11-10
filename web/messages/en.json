@@ -5730,7 +5730,7 @@
       },
       "notify": {
         "label": "Notify me when an agent needs me",
-        "note": "When an agent stops to ask you or wait for your OK: your Inbox always, and an email once per run",
+        "note": "When an agent stops to ask you or wait for your OK: your Inbox always, and once per run an email, or with Inbox + Slack a message in the brand’s Slack channel that mentions you",
         "inbox_email": "Inbox + email",
         "inbox": "Inbox only",
         "inbox_slack": "Inbox + Slack",
@@ -15567,6 +15567,10 @@
         "suggestion": {
           "label": "Daily suggestion",
           "note": "One Action Center action a day for the brand, the one most of its people got"
+        },
+        "needsYou": {
+          "label": "Agents that need someone",
+          "note": "For people who chose Inbox + Slack in their Chat settings; they’re mentioned"
         }
       },
       "test": "Send a test message",

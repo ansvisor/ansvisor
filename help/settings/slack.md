@@ -1,7 +1,7 @@
 ---
 title: Send a brand's Daily Pulse and alerts to Slack
 route: /dashboard/settings/integrations
-keywords: [slack, slack channel, connect slack, pulse in slack, daily pulse, drop alert, daily suggestion, notifications]
+keywords: [slack, slack channel, connect slack, pulse in slack, daily pulse, drop alert, daily suggestion, agent needs me, notifications]
 synonyms: [post to slack, slack integration, send updates to a channel, slack app, team chat alerts]
 plan: starter
 updated: 2026-11-10
@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: false
 sources: [docs/self-host/env-variables.mdx]
 ---
-Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, an alert when visibility or citations drop more than usual, and one daily suggestion. Each message links back to Ansvisor. Slack is on every paid plan.
+Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, an alert when visibility or citations drop more than usual, one daily suggestion, and a message when an agent needs someone. Each message links back to Ansvisor. Slack is on every paid plan.
 
 ## Connect Slack
 
@@ -40,6 +40,10 @@ Only prompts tracked in both weeks count, so adding or removing prompts or engin
 ## Daily suggestion
 
 With **Daily suggestion** on, the channel gets one Action Center action a day for the brand. Daily suggestions are each person's own, in their Chat Inbox: the channel gets the action most of the brand's people were suggested that morning, with its priority, how long it has waited, and **Open in Action Center**. It is posted once a day, with the first suggestions of the day.
+
+## Agents that need someone
+
+With **Agents that need someone** on, when an agent's run on the brand stops to ask someone or wait for their OK, the channel gets a message that mentions them, with **Open the run**. Only for people who chose **Inbox + Slack** under **Notify me when an agent needs me** in their Chat settings, and only once per run. Ansvisor finds their Slack account by their email; when it can't, the message names them. If the brand doesn't post these, they get the email instead.
 
 ## When the card asks you to reconnect
 
