@@ -11,6 +11,7 @@ const configured = vi.hoisted(() => new Set());
 vi.mock('../config/supabase.js', () => ({ default: {} }));
 vi.mock('../lib/composio.js', () => ({
   isComposioConfigured: (provider) => configured.has(provider),
+  isSlackConfigured: () => configured.has('slack'),
 }));
 vi.mock('../lib/ga-sync.js', () => ({ runGaSync: vi.fn() }));
 vi.mock('../lib/gsc-sync.js', () => ({ runGscSync: vi.fn() }));
@@ -33,5 +34,11 @@ describe('integrationsConfig', () => {
       googleAnalytics: false,
       googleMerchantCenter: true,
     });
+  });
+
+  it('says Slack is offered only with its auth config (#2139)', () => {
+    expect(integrationsConfig()).toMatchObject({ slack: false });
+    configured.add('slack');
+    expect(integrationsConfig()).toMatchObject({ slack: true });
   });
 });

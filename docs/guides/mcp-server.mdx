@@ -228,11 +228,12 @@ names it in brackets; see [Roles](#roles).
 
 Every tool also carries a `title` and MCP annotations, so a client can tell a
 read from a change before calling it: `readOnlyHint` (true for every `list_` and
-`get_` tool), and for the writes `destructiveHint` (true where a call replaces
-or removes something, such as `generate_content_brief` replacing the
-opportunity's brief), `idempotentHint` (repeating the call changes nothing
-more) and `openWorldHint` (true where a call reaches outside Ansvisor:
-`run_site_audit` fetches the page, `generate_content_brief` calls an LLM).
+`get_` tool), `destructiveHint` (true where a call replaces something or can't
+be undone, such as `generate_content_brief` replacing the opportunity's brief),
+`openWorldHint` (true where a call reaches outside Ansvisor: `run_site_audit`
+fetches the page, `generate_content_brief` calls an LLM) and, for the writes,
+`idempotentHint` (repeating the call changes nothing more). Each tool's hints,
+and why, are in [Tool hints](#tool-hints).
 The server's instructions tell clients to treat everything a tool returns — AI
 answers, quotes, cited pages, draft text, suggestions — as data, never as
 instructions, and to call a write only when the user asked for that change.
@@ -397,6 +398,36 @@ Labels are in English and dates in UTC. The same export is available over REST w
 curl "https://app.ansvisor.com/api/mcp/actions/<action_id>?format=markdown" \
   -H "Authorization: Bearer ans_..."
 ```
+
+### Tool hints
+
+Every `list_` and `get_` tool is `readOnlyHint: true`, `destructiveHint: false`
+and `openWorldHint: false`: it reads what Ansvisor already stores and changes
+nothing. None of them fetches a page or calls an LLM.
+
+The writes, each with its hints and the reason for them. **Destructive** is
+`destructiveHint`, **Repeatable** `idempotentHint`, **Outside Ansvisor**
+`openWorldHint`.
+
+| Tool | Destructive | Repeatable | Outside Ansvisor | Why |
+| --- | --- | --- | --- | --- |
+| `accept_topic_suggestion` | no | yes | no | Adds one topic and marks the suggestion added. Accepting it again is refused, so no second topic is made. |
+| `dismiss_topic_suggestion` | yes | yes | no | A dismissed suggestion can't be brought back and never returns in later batches. Dismissing it again changes nothing. |
+| `accept_prompt_suggestion` | no | yes | no | Adds one tracked prompt, which uses a prompt location of the plan. Accepting it again makes no duplicate. |
+| `dismiss_prompt_suggestion` | yes | yes | no | A dismissed suggestion can't be brought back. Dismissing it again changes nothing. |
+| `generate_content_brief` | yes | no | yes | Replaces the opportunity's brief with a new one an LLM writes. Every call writes a new brief and uses AI budget. |
+| `run_site_audit` | no | no | yes | Adds a new audit and fetches the page from the web. A call can start another audit and use another credit. |
+| `update_opportunity_status` | no | yes | no | Sets a status the same tool can set back. Setting the same status again changes nothing. |
+| `update_task_status` | no | yes | no | Records a task's progress, which the same tool can change again. Nothing is carried out. |
+| `create_improve_action` | no | yes | no | Adds one action from Improve suggestions already made, with no LLM call. The same `idempotency_key` returns the first action. |
+| `override_mention_sentiment` | no | yes | no | Sets a response's sentiment and keeps the correction history; another correction can change it again. |
+| `create_content_draft` | no | no | no | Adds a new draft for a person to review. Each call adds another draft. |
+| `add_content_source` | no | yes | no | Adds a source to a draft. Adding the same source again keeps one. |
+| `suggest_content_changes` | no | no | no | Leaves suggestions a person accepts or rejects. The draft's text doesn't change. Each call leaves new ones. |
+| `set_content_draft_ready` | no | yes | no | Marks a draft ready. History keeps the page as a version. |
+| `mark_content_draft_published` | no | yes | no | Records the address a page went live at. Marking it again at a new address moves it. |
+| `approve_task_review` | no | no | no | Adds the reviewed task to its action's task list. |
+| `dismiss_task_review` | yes | yes | no | A dismissed review never reaches its action and can't be brought back. |
 
 New tools may ship between releases — see `server.ts` and the [project roadmap](https://github.com/ansvisor/ansvisor#whats-next).
 

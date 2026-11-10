@@ -32,6 +32,8 @@ const {
   executeWebflowTool,
   forgetWebflowAccounts,
   getActiveConnection,
+  initiateSlackConnection,
+  isSlackConfigured,
   isHubspotConfigured,
   isWebflowConfigured,
   linkHubspot,
@@ -251,28 +253,74 @@ describe('proxyRequest (#1270)', () => {
   });
 });
 
-describe('proxyRequest writes (#2140)', () => {
-  const ENDPOINT = 'https://api.hubapi.com/crm/v3/properties/contacts/groups';
-
-  it('sends a write with its method and JSON body; a GET sends no body', async () => {
-    sdk.proxyExecute.mockResolvedValue({ status: 201, headers: {}, data: { name: 'ansvisor' } });
+describe('proxyRequest with a body (#2139)', () => {
+  it('POSTs the body as JSON, the query still as parameters', async () => {
+    sdk.proxyExecute.mockResolvedValueOnce({ status: 200, data: { ok: true } });
+    const body = { channel: 'C00000001', text: 'Hi' };
     await expect(
-      proxyRequest('ca_1', { endpoint: ENDPOINT, method: 'POST', body: { name: 'ansvisor' } }),
-    ).resolves.toEqual({ status: 201, headers: {}, data: { name: 'ansvisor' } });
-    expect(sdk.proxyExecute).toHaveBeenLastCalledWith(
-      {
-        endpoint: ENDPOINT,
+      proxyRequest('ca_slack', {
+        endpoint: 'https://slack.com/api/chat.postMessage',
         method: 'POST',
-        parameters: [],
-        body: { name: 'ansvisor' },
-        connectedAccountId: 'ca_1',
+        body,
+      }),
+    ).resolves.toEqual({ status: 200, headers: {}, data: { ok: true } });
+    expect(sdk.proxyExecute).toHaveBeenCalledWith(
+      {
+        endpoint: 'https://slack.com/api/chat.postMessage',
+        method: 'POST',
+        parameters: [
+          { in: 'header', name: 'Content-Type', value: 'application/json; charset=utf-8' },
+        ],
+        body,
+        connectedAccountId: 'ca_slack',
       },
       undefined,
     );
-    await proxyRequest('ca_1', { endpoint: ENDPOINT, body: { ignored: true } });
-    expect(sdk.proxyExecute.mock.calls.at(-1)[0]).not.toHaveProperty('body');
-    await expect(proxyRequest('ca_1', { endpoint: ENDPOINT, method: 'TRACE' })).rejects.toThrow(
-      'Unsupported proxy method',
+  });
+});
+
+describe('Slack on Composio (#2139)', () => {
+  it('is set up with the API key and the Slack auth config', () => {
+    vi.stubEnv('COMPOSIO_SLACK_AUTH_CONFIG_ID', 'ac_slack');
+    expect(isSlackConfigured()).toBe(true);
+    vi.stubEnv('COMPOSIO_API_KEY', '');
+    expect(isSlackConfigured()).toBe(false);
+    vi.stubEnv('COMPOSIO_API_KEY', 'test-composio-key');
+    vi.stubEnv('COMPOSIO_SLACK_AUTH_CONFIG_ID', '');
+    expect(isSlackConfigured()).toBe(false);
+  });
+
+  it("starts the install as one more account of the Account's entity", async () => {
+    vi.stubEnv('COMPOSIO_SLACK_AUTH_CONFIG_ID', 'ac_slack');
+    sdk.link.mockResolvedValueOnce({
+      redirectUrl: 'https://slack.test/oauth',
+      id: 'ca_new',
+      connectionStatus: 'INITIATED',
+    });
+    await expect(
+      initiateSlackConnection('org_org-1', 'https://app.test/dashboard/settings/integrations'),
+    ).resolves.toEqual({
+      redirectUrl: 'https://slack.test/oauth',
+      connectedAccountId: 'ca_new',
+      status: 'INITIATED',
+    });
+    expect(sdk.link).toHaveBeenCalledWith('org_org-1', 'ac_slack', {
+      callbackUrl: 'https://app.test/dashboard/settings/integrations',
+      allowMultiple: true,
+    });
+  });
+});
+
+describe('proxyRequest writes HubSpot calls (#2140)', () => {
+  it('sends the method HubSpot asks for, with the body as JSON', async () => {
+    sdk.proxyExecute.mockResolvedValueOnce({ status: 200, headers: {}, data: { name: 'x' } });
+    const endpoint = 'https://api.hubapi.com/crm/v3/properties/contacts/ansvisor_ai_source';
+    await expect(
+      proxyRequest('ca_1', { endpoint, method: 'PATCH', body: { options: [] } }),
+    ).resolves.toEqual({ status: 200, headers: {}, data: { name: 'x' } });
+    expect(sdk.proxyExecute).toHaveBeenLastCalledWith(
+      expect.objectContaining({ endpoint, method: 'PATCH', body: { options: [] } }),
+      undefined,
     );
   });
 });
@@ -293,6 +341,7 @@ describe('HubSpot on Composio (#2140)', () => {
     await expect(linkHubspot('org_org-1', 'https://app.test/back')).resolves.toEqual({
       redirectUrl: 'https://hs.test/auth',
       connectedAccountId: 'ca_new',
+      status: 'INITIATED',
     });
     expect(sdk.link).toHaveBeenCalledWith('org_org-1', 'ac_hubspot', {
       callbackUrl: 'https://app.test/back',
