@@ -19,6 +19,6 @@ On Ansvisor Cloud, a new account starts in dark mode for now, from the sign-up p
 
 ## Switch the mode
 
-Click the sun or moon button beside the Ansvisor logo, at the top of the main menu. On a phone, it is in the menu. The moon switches to dark mode, and the sun to light mode.
+Open the main menu: its sun or moon button sits beside the Ansvisor logo, at the top. When the menu is folded to icons, the button is hidden until you open it. On a phone, it is at the top of the menu. The moon switches to dark mode, and the sun to light mode.
 
 Your choice is kept in this browser, so each page opens in it. On another browser or device, Ansvisor opens in its usual mode until you switch there too.
