@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLANS } from '@/config/plans';
 
 /**
- * addPromptToSet keeps where a prompt came from (prompts.source_data, 00496,
+ * addPromptToSet keeps where a prompt came from (prompts.source_data, 00525,
  * AC plan P-8) only for a catalog suggestion's prompt, and only in its own
  * shape. Any other add never names the column, and a database that turns it
- * down (no 00496 yet, or its check) still gets the prompt.
+ * down (no 00525 yet, or its check) still gets the prompt.
  */
 
 /** Rows the prompts insert was sent, in order. */

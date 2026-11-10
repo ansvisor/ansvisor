@@ -25,7 +25,7 @@ export interface TopicSuggestion {
   brandId: string;
   name: string;
   reason: string | null;
-  /** The model's idea, or a category of the brand's catalog (00496). */
+  /** The model's idea, or a category of the brand's catalog (00525). */
   source: 'llm' | 'catalog';
   sourceData: CatalogTopicSourceData | null;
   status: 'new' | 'added' | 'dismissed';

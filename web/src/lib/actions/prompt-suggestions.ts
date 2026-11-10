@@ -273,7 +273,7 @@ const ACCEPT_COLUMNS =
 
 /**
  * Where a prompt accepted from this row came from (prompts.source_data,
- * 00496): its catalog category or product; null for any other suggestion.
+ * 00525): its catalog category or product; null for any other suggestion.
  */
 function sourceOfRow(row: {
   source: unknown;

@@ -798,7 +798,7 @@ export async function acceptPromptSuggestionFor(
   }
 
   // A catalog suggestion's prompt keeps the category or product it came
-  // from (prompts.source_data, 00496), as on the dashboard.
+  // from (prompts.source_data, 00525), as on the dashboard.
   const sourceData = promptSourceData({
     source: suggestion.source as PromptSuggestionSource,
     sourceData: (suggestion.source_data ?? null) as SuggestionSourceData | null,

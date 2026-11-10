@@ -366,7 +366,7 @@ describe('getCatalogProductCandidates', () => {
       p_brand_id: 'brand-1',
       p_from: new Date(now.getTime() - PRODUCT_DAYS * 86_400_000).toISOString(),
     });
-    // The products a prompt was accepted for (prompts.source_data, 00496).
+    // The products a prompt was accepted for (prompts.source_data, 00525).
     expect(db.reads[0]).toMatchObject({
       table: 'prompts',
       filters: [
@@ -499,9 +499,9 @@ describe('getCatalogTopicCandidates', () => {
   });
 });
 
-describe('prompts.source_data (00496)', () => {
+describe('prompts.source_data (00525)', () => {
   const sql = readFileSync(
-    new URL('../../../supabase/migrations/00496_prompt_source_data.sql', import.meta.url),
+    new URL('../../../supabase/migrations/00525_prompt_source_data.sql', import.meta.url),
     'utf8',
   );
 

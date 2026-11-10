@@ -110,7 +110,7 @@ describe('acceptPromptSuggestionFor', () => {
     expect(inserts).toEqual(['prompts']);
   });
 
-  it('keeps the category a catalog suggestion came from with its prompt (00496)', async () => {
+  it('keeps the category a catalog suggestion came from with its prompt (00525)', async () => {
     topic = { id: 't1' };
     catalogData = {
       category: 'Bags > Hiking backpacks',

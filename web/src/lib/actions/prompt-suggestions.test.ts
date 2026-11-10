@@ -17,7 +17,7 @@ let brandTopics: string[] = [];
 let madeTopics: string[] = [];
 let removedTopics: string[] = [];
 let categories: (string | undefined)[] = [];
-/** Each added prompt's source (prompts.source_data, 00496), in order. */
+/** Each added prompt's source (prompts.source_data, 00525), in order. */
 let sources: unknown[] = [];
 /** Suggestions drawn from the catalog, by id: their source_data. */
 let catalogRows: Record<string, unknown> = {};
@@ -192,7 +192,7 @@ describe('trackSuggestions', () => {
 
 /**
  * A prompt accepted from a catalog suggestion keeps where it came from
- * (prompts.source_data, 00496, AC plan P-8), through the same add and the
+ * (prompts.source_data, 00525, AC plan P-8), through the same add and the
  * same plan check as any other.
  */
 describe('accepting a catalog suggestion keeps where it came from', () => {

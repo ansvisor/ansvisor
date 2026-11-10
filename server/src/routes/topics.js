@@ -280,7 +280,7 @@ router.get('/suggestions/:brandId', async (req, res) => {
  * An online store's catalog adds its own, first and with no model call (AC
  * plan P-8, spec §6.3): a category with products in stock that no topic
  * covers yet, named by its own name, with that category in source_data
- * (00496). Accepting one is the same as any idea: a topic of that name,
+ * (00525). Accepting one is the same as any idea: a topic of that name,
  * which the category is then linked to by its words (topic-categories.js).
  */
 router.post(
@@ -376,13 +376,13 @@ router.post(
             )
             .select();
         let { data, error } = await insert(true);
-        // A database without 00496 has no topic_suggestions.source_data: the
+        // A database without 00525 has no topic_suggestions.source_data: the
         // catalog's topics go in without their category rather than not at all.
         if (
           ['42703', 'PGRST204'].includes(error?.code) &&
           String(error.message ?? '').includes('source_data')
         ) {
-          req.log.warn({ err: error }, 'topic-suggestions refresh: no source_data column (00496)');
+          req.log.warn({ err: error }, 'topic-suggestions refresh: no source_data column (00525)');
           ({ data, error } = await insert(false));
         }
         if (error) throw error;

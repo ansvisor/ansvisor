@@ -126,7 +126,7 @@ export function fromCatalog(s: SourceCarrier): boolean {
 }
 
 /**
- * Where a tracked prompt came from (prompts.source_data, 00496): the catalog
+ * Where a tracked prompt came from (prompts.source_data, 00525): the catalog
  * category or the products of the suggestion it was accepted from, so
  * online-store plays and measurement know what it is about.
  */
@@ -145,7 +145,7 @@ export type PromptSourceData =
       suggested_at: string;
     };
 
-/** A category's name kept with a prompt at most: the column stays a few kilobytes (00496). */
+/** A category's name kept with a prompt at most: the column stays a few kilobytes (00525). */
 const CATEGORY_CHARS = 300;
 const suggestedAt = z.iso.datetime({ offset: true });
 
@@ -203,7 +203,7 @@ export function promptSourceData(
 }
 
 /**
- * A prompt's source the database turned down: one without 00496 has no
+ * A prompt's source the database turned down: one without 00525 has no
  * prompts.source_data (PGRST204 on a write, the web deployed ahead of its
  * migration), or its check refused it (23514). The prompt is then added
  * without it: where it came from never stops it being tracked.

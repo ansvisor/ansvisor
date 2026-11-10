@@ -12,7 +12,7 @@
  *
  * Extended for AC plan P-8 (spec §6.3), still with no call of its own:
  *  - each category keeps its id, so a prompt accepted from it remembers it
- *    (prompts.source_data, 00496);
+ *    (prompts.source_data, 00525);
  *  - the top products, best-selling or most shown on AI shopping cards
  *    (product_page_candidates, 00493, ranked as P-6 ranks them), go to the
  *    same model call for product-level buyer prompts;
@@ -178,7 +178,7 @@ export function withCategories(
 }
 
 /**
- * Products a tracked prompt was accepted for (prompts.source_data, 00496).
+ * Products a tracked prompt was accepted for (prompts.source_data, 00525).
  * Empty before that migration, or when it can't be read: the names in the
  * prompts' texts still count.
  */

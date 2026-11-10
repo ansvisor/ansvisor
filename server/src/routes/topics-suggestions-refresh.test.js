@@ -182,7 +182,7 @@ describe('topic suggestions from the catalog (AC plan P-8)', () => {
     ]);
   });
 
-  it('still adds them, without their category, on a database without 00496', async () => {
+  it('still adds them, without their category, on a database without 00525', async () => {
     getCatalogTopicCandidates.mockResolvedValue([tents]);
     db.insertErrors = [
       {

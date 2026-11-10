@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00496: where a tracked prompt came from, and a topic suggestion's category
+-- 00525: where a tracked prompt came from, and a topic suggestion's category
 -- (AC plan P-8, spec §6.3)
 -- ============================================================================
 -- Tracking suggestions from a store's catalog (ECOM-003, 00362) name the
@@ -53,7 +53,7 @@ alter table public.prompts add constraint prompts_source_data_check check (
 );
 
 comment on column public.prompts.source_data is
-  'Where the prompt came from (AC plan P-8, 00496): the catalog suggestion it was accepted from, {kind catalog_category|catalog_product, category_id, category, product_ids, suggested_at}. Null for any other prompt.';
+  'Where the prompt came from (AC plan P-8, 00525): the catalog suggestion it was accepted from, {kind catalog_category|catalog_product, category_id, category, product_ids, suggested_at}. Null for any other prompt.';
 
 alter table public.topic_suggestions
   add column if not exists source_data jsonb;
@@ -65,6 +65,6 @@ alter table public.topic_suggestions add constraint topic_suggestions_source_dat
 );
 
 comment on column public.topic_suggestions.source_data is
-  'For a topic suggested from a catalog category (source catalog, AC plan P-8, 00496): {category, categoryId, products, inStock}. Null for the model''s ideas.';
+  'For a topic suggested from a catalog category (source catalog, AC plan P-8, 00525): {category, categoryId, products, inStock}. Null for the model''s ideas.';
 
 notify pgrst, 'reload schema';

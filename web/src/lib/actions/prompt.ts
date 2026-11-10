@@ -627,7 +627,7 @@ interface AddPromptInput {
   models?: string[];
   /**
    * Where it came from, for a prompt accepted from a catalog suggestion
-   * (prompts.source_data, 00496); kept only in its own shape.
+   * (prompts.source_data, 00525); kept only in its own shape.
    */
   sourceData?: PromptSourceData | null;
 }
@@ -710,7 +710,7 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
     is_active: true,
   };
   // Only a catalog suggestion's prompt names the column, so every other add
-  // works on a database without 00496 too.
+  // works on a database without 00525 too.
   const sourceData = validPromptSourceData(input.sourceData);
   const insert = (withSource: boolean) =>
     supabase
