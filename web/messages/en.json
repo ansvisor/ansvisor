@@ -15180,12 +15180,7 @@
       "growth": {
         "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
         "engines": "ChatGPT, Gemini, Google AI Mode and Google AI Overviews tracking",
-        "extras": [
-          "Multi-region tracking",
-          "White-label reports & exports",
-          "Looker Studio",
-          "HubSpot integration"
-        ],
+        "extras": ["Multi-region tracking", "White-label reports & exports", "Looker Studio"],
         "extrasChat": ["Chat and Agent Center", "Full auto, with agents that publish on their own"]
       },
       "brands": "{count, plural, one {# brand} other {# brands}}",
