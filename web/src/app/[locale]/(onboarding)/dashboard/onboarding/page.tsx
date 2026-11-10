@@ -519,6 +519,24 @@ export default function OnboardingPage() {
     return () => clearInterval(interval);
   }, [loadingCompetitors]);
 
+  // Auto-fetch topic suggestions when arriving at step 3 with none loaded:
+  // coming back to setup with the brand saved but no topics yet. Saved topics
+  // fill the list on resume, and step 2 → 3 starts its own fetch, which this
+  // sees in flight. After a failure, the step's message and Try again stand.
+  useEffect(() => {
+    if (
+      step === 3 &&
+      !initialLoading &&
+      !loadingTopics &&
+      !topicSuggestError &&
+      suggestedTopics.length === 0 &&
+      createdBrand
+    ) {
+      fetchTopicSuggestions();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, initialLoading]);
+
   // Auto-fetch competitor suggestions when arriving at step 5 with none loaded
   useEffect(() => {
     if (

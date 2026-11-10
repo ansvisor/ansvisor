@@ -9,6 +9,8 @@ import messages from '../../../../../../messages/en.json';
  * (429 onboarding_daily_limit): each step says so, and says how to go on,
  * with no Try again; any other failure keeps Try again. The wizard resumes on
  * a brand already created, so the steps are reached without walking them.
+ * The topics step asks for its suggestions once, whether it is resumed on or
+ * reached from step 2, and not when topics are saved already.
  */
 
 /** The brand's rows the resume reads; prompt sets decide step 3 or step 5. */
@@ -20,6 +22,8 @@ const db = vi.hoisted(() => ({
   brandFilters: [] as [string, unknown][][],
   // The organization has its demo brand already.
   hasDemo: false,
+  // The own brand is saved: the resume opens on it, past steps 1 and 2.
+  ownBrand: true,
 }));
 vi.mock('@/lib/supabase/client', () => {
   /** A query that answers `data` however it ends (single, limit, or awaited). */
@@ -48,15 +52,18 @@ vi.mock('@/lib/supabase/client', () => {
       onboarding_completed: db.onboarded,
       work_areas_asked_at: db.onboarded ? '2026-10-01T00:00:00Z' : null,
     }),
-    brands: () => [
-      {
-        id: 'b1',
-        organization_id: 'org-1',
-        name: 'Acme',
-        slug: 'acme',
-        brand_domains: [{ id: 'd1', brand_id: 'b1', domain: 'acme.com', is_primary: true }],
-      },
-    ],
+    brands: () =>
+      db.ownBrand
+        ? [
+            {
+              id: 'b1',
+              organization_id: 'org-1',
+              name: 'Acme',
+              slug: 'acme',
+              brand_domains: [{ id: 'd1', brand_id: 'b1', domain: 'acme.com', is_primary: true }],
+            },
+          ]
+        : [],
     prompt_sets: () => db.promptSets,
   };
   return {
@@ -88,7 +95,8 @@ vi.mock('@/lib/actions/competitor', () => ({
   getCompetitors,
   addCompetitor: vi.fn(),
 }));
-vi.mock('@/lib/actions/brand', () => ({ createBrand: vi.fn(), markBrandAsEcommerce: vi.fn() }));
+const createBrand = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/actions/brand', () => ({ createBrand, markBrandAsEcommerce: vi.fn() }));
 const getTrackedPromptCount = vi.hoisted(() => vi.fn(async () => 10));
 vi.mock('@/lib/actions/prompt', () => ({
   getPromptCapacity: vi.fn(async () => ({ maxPrompts: 50, used: 0 })),
@@ -124,6 +132,8 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 const { default: OnboardingPage } = await import('./page');
 const { SetupDailyLimitError } = await import('@/lib/ai-brand-setup');
+// The brand's saved topics: Coffee, unless a test says none.
+const getTopics = vi.mocked((await import('@/lib/actions/topic')).getTopics);
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -135,6 +145,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.spyOn(console, 'error').mockImplementation(() => {});
   db.promptSets = [];
+  db.ownBrand = true;
   db.onboarded = false;
   db.brandFilters = [];
   db.hasDemo = false;
@@ -196,6 +207,96 @@ describe('setup suggestions used up for the day', () => {
       'Setup suggestions are used up for today. Add your own prompts to each topic below to continue.',
     );
     expect(text()).not.toContain("Couldn't generate prompt suggestions");
+  });
+
+  it('says so on the topics step, with no Try again', async () => {
+    getTopics.mockResolvedValueOnce([]);
+    setup.suggestTopics.mockRejectedValueOnce(new SetupDailyLimitError('limit'));
+    await render();
+    expect(setup.suggestTopics).toHaveBeenCalledOnce();
+    expect(text()).toContain(
+      'Setup suggestions are used up for today. Try again tomorrow, or add your own.',
+    );
+    expect(button('Try again')).toBeUndefined();
+  });
+});
+
+describe('topic suggestions', () => {
+  async function type(id: string, value: string) {
+    const input = container.querySelector<HTMLInputElement>(`#${id}`)!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+  }
+  /** The topic rows: the checkable buttons above "Add custom topic". */
+  const topicRows = () =>
+    ['Espresso', 'Cold brew', 'Coffee'].filter((topic) => button(topic) !== undefined);
+  /** Holds the suggestions back, so the step shows while they load, as it does for real. */
+  function suggestLater() {
+    let answer!: () => void;
+    setup.suggestTopics.mockReturnValueOnce(
+      new Promise((resolve) => {
+        answer = () => resolve({ topics: ['Espresso', 'Cold brew'] });
+      }),
+    );
+    return () => act(async () => answer());
+  }
+
+  it('are fetched once on coming back to the topics step with no topics saved', async () => {
+    getTopics.mockResolvedValueOnce([]);
+    const answer = suggestLater();
+    await render();
+    expect(text()).toContain('Choose topics to monitor');
+    expect(text()).toContain('Researching topics for your brand...');
+    await answer();
+    expect(setup.suggestTopics).toHaveBeenCalledOnce();
+    expect(setup.suggestTopics).toHaveBeenCalledWith({
+      brandName: 'Acme',
+      description: '',
+      website: 'acme.com',
+      language: 'en',
+    });
+    expect(topicRows()).toEqual(['Espresso', 'Cold brew']);
+    expect(button('Looks good')!.disabled).toBe(false);
+  });
+
+  it('are fetched once on the way from the target market to the topics step', async () => {
+    db.ownBrand = false;
+    createBrand.mockResolvedValueOnce({
+      brand: {
+        id: 'b1',
+        organizationId: 'org-1',
+        name: 'Acme',
+        slug: 'acme',
+        region: 'US',
+        language: 'en',
+        domains: [{ id: 'd1', brandId: 'b1', domain: 'acme.com', isPrimary: true }],
+      },
+    });
+    const answer = suggestLater();
+    await render();
+    expect(text()).toContain('Set up your brand');
+    await type('brandName', 'Acme');
+    await type('website', 'acme.com');
+    await act(async () => button('Continue')!.click());
+    expect(text()).toContain('Select your target market');
+    await act(async () => button('Continue')!.click());
+    await act(async () => {});
+    expect(text()).toContain('Choose topics to monitor');
+    expect(text()).toContain('Researching topics for your brand...');
+    await answer();
+    expect(createBrand).toHaveBeenCalledOnce();
+    expect(setup.suggestTopics).toHaveBeenCalledOnce();
+    expect(topicRows()).toEqual(['Espresso', 'Cold brew']);
+  });
+
+  it('are not fetched on coming back with topics saved', async () => {
+    await render();
+    await act(async () => {});
+    expect(text()).toContain('Choose topics to monitor');
+    expect(setup.suggestTopics).not.toHaveBeenCalled();
+    expect(topicRows()).toEqual(['Coffee']);
   });
 });
 
