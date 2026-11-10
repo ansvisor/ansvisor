@@ -1,24 +1,13 @@
-/**
- * Slack messages are worded here, on the server, as the Pulse and "needs
- * you" e-mails are (owner, 2026-11-10): Block Kit blocks and the plain text
- * Slack shows in a notification. Pure.
- */
-
-/** Text for Slack's mrkdwn: the three characters Slack reads as markup, escaped. */
-export function mrkdwn(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-}
+import { mrkdwn } from './format.js';
 
 /**
  * Send a test message (Settings › Integrations): says the brand's channel is
- * set, and what will come to it.
+ * set, and what will come to it: the Daily Pulse for now; the drop alerts,
+ * the daily suggestion and "an agent needs you" join it as they arrive.
  * @param {{ brand: string, by: string|null }} input the brand's name, and who sent it
  */
 export function connectedMessage({ brand, by }) {
-  const text = `Ansvisor is connected. ${brand}’s Daily Pulse, drops, daily suggestion and agents that need someone will be posted here.`;
+  const text = `Ansvisor is connected. ${brand}’s Daily Pulse will be posted here.`;
   return {
     text,
     blocks: [

@@ -1,4 +1,5 @@
 import { sendEmail } from '../email.js';
+import { platformLabel, signed } from './format.js';
 
 /**
  * Daily Pulse email rendering + delivery via the Resend HTTP API (#540).
@@ -9,34 +10,12 @@ import { sendEmail } from '../email.js';
  * environments never crash the tracking pipeline.
  */
 
-// Display names for platform slugs used in email copy. Keep in sync with
-// PLATFORM_LABELS in web/src/config/platform-labels.ts.
-const PLATFORM_LABELS = {
-  'chatgpt-web': 'ChatGPT',
-  'google-aio': 'Google AI Overviews',
-  'google-aimode': 'Google AI Mode',
-  'copilot-web': 'Microsoft Copilot',
-  'grok-web': 'Grok',
-  'perplexity-web': 'Perplexity',
-  'gemini-web': 'Google Gemini',
-};
-
-function platformLabel(slug) {
-  return PLATFORM_LABELS[slug] ?? slug;
-}
-
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
-}
-
-function signed(n, suffix = '') {
-  const v = Math.round(n * 10) / 10;
-  if (v > 0) return `+${v}${suffix}`;
-  return `${v}${suffix}`;
 }
 
 function kpiCell(label, value, change) {

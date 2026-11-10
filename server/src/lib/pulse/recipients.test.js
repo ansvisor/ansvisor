@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 const emails = { u1: 'ana@acme.test', u2: 'bo@acme.test', u3: 'Cem@Acme.test' };
-const db = vi.hoisted(() => ({ lookups: [], tables: [], inserts: [] }));
+const db = vi.hoisted(() => ({ lookups: [], tables: [], inserts: [], updates: [] }));
 vi.mock('../../config/supabase.js', () => ({
   default: {
     from: (table) => {
@@ -20,7 +20,7 @@ vi.mock('../../config/supabase.js', () => ({
         gte: () => chain,
         limit: () => chain,
         insert: (row) => (db.inserts.push([table, row]), chain),
-        update: () => chain,
+        update: (patch) => (db.updates.push([table, patch]), chain),
         single: async () =>
           table === 'brands'
             ? {
@@ -81,6 +81,15 @@ vi.mock('./email.js', () => ({
   sendPulseEmail: async ({ to }) => (sent.to.push(to), true),
 }));
 
+// The Slack leg (#2139): lib/slack/deliver.js decides and posts; here, what it is asked.
+const slack = vi.hoisted(() => ({
+  calls: [],
+  answer: { status: 'skipped', reason: 'not_connected' },
+}));
+vi.mock('../slack/deliver.js', () => ({
+  deliverToSlack: async (input) => (slack.calls.push(input), slack.answer),
+}));
+
 const { generatePulseForBrand, resolveRecipients } = await import('./engine.js');
 
 beforeEach(() => {
@@ -94,7 +103,10 @@ beforeEach(() => {
   db.lookups = [];
   db.tables = [];
   db.inserts = [];
+  db.updates = [];
   sent.to = [];
+  slack.calls = [];
+  slack.answer = { status: 'skipped', reason: 'not_connected' };
   logger.error.mockClear();
 });
 
@@ -140,5 +152,24 @@ describe('generatePulseForBrand', () => {
     expect(db.inserts).toEqual([]);
     expect(sent.to).toEqual([]);
     expect(logger.error).toHaveBeenCalledOnce();
+  });
+
+  it("posts the Pulse to the brand's Slack channel once a day, and records it when it went", async () => {
+    expect(await generatePulseForBrand('b1')).toMatchObject({ generated: true, slackSent: false });
+    expect(slack.calls).toHaveLength(1);
+    const [call] = slack.calls;
+    expect(call).toMatchObject({
+      brand: { id: 'b1', name: 'Acme', organization_id: 'org-1' },
+      kind: 'pulse',
+      dedupeKey: `pulse:${new Date().toISOString().slice(0, 10)}`,
+    });
+    // Worded only when it goes: the deliverer calls it once its checks pass.
+    expect(typeof call.message).toBe('function');
+    // Not sent: sent_pulses says nothing of Slack.
+    expect(db.updates.filter(([, patch]) => 'slack_sent' in patch)).toEqual([]);
+
+    slack.answer = { status: 'sent', ts: '1.2' };
+    expect(await generatePulseForBrand('b1')).toMatchObject({ generated: true, slackSent: true });
+    expect(db.updates).toContainEqual(['sent_pulses', { slack_sent: true }]);
   });
 });
