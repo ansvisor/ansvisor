@@ -6,7 +6,7 @@ import messages from '../../../../messages/en.json';
 /**
  * What each page in the auth frame shows (the owner's options D and E,
  * 2026-11-10): sign-up under one headline, sign-in with the logo above its
- * card and the orbit behind, and the other pages still drawn in the frame.
+ * card, and the other pages still drawn in the frame.
  */
 
 vi.mock('next/image', () => ({
@@ -110,7 +110,8 @@ describe('the sign-up page (option D)', () => {
     expect(markup).not.toContain('data-place="above-card"');
     expect(words).toContain('Already have an account? Sign in');
     expect(markup).toMatch(/<a href="\/sign-in" class="[^"]*border-black\/10[^"]*">Sign in<\/a>/);
-    expect(markup).not.toContain('data-slot="auth-orbit"');
+    // Under the headline, the card has no shadow of its own (option D).
+    expect(markup).toContain('data-card="flat"');
     for (const line of OLD_PITCH) expect(words).not.toContain(line);
   });
 
@@ -128,12 +129,12 @@ describe('the sign-up page (option D)', () => {
 });
 
 describe('the sign-in page (option E)', () => {
-  it('puts the logo above a titled card, the orbit behind it, and no headline or pitch', async () => {
+  it('puts the logo above a titled card, and no headline or pitch', async () => {
     const markup = html(await SignInPage({ searchParams: Promise.resolve({}) }));
     const words = text(markup);
     expect(markup).toContain('data-place="above-card"');
     expect(markup).not.toContain('data-place="header"');
-    expect(markup).toMatch(/<div aria-hidden="true" data-slot="auth-orbit"/);
+    expect(markup).toContain('data-card="raised"');
     expect(markup).not.toContain('data-slot="auth-headline"');
     expect(markup).not.toContain('data-slot="auth-footnote"');
     expect(markup).toMatch(/<h1[^>]*>Sign in<\/h1>/);
@@ -162,7 +163,6 @@ describe('the other pages in the auth frame', () => {
     const markup = html(<ForgotPasswordPage />);
     expect(text(markup)).toContain('Reset your password');
     expect(markup).toContain('data-place="above-card"');
-    expect(markup).toContain('data-slot="auth-orbit"');
     expect(markup).toMatch(/<a href="\/sign-in" class="[^"]*">Sign in<\/a>/);
     expect(markup).not.toContain('data-slot="auth-headline"');
   });
@@ -171,17 +171,15 @@ describe('the other pages in the auth frame', () => {
     const markup = html(<ResetPasswordPage />);
     expect(text(markup)).toContain('Set a new password');
     expect(markup).toContain('data-place="above-card"');
-    expect(markup).toContain('data-slot="auth-orbit"');
     expect(markup).toMatch(/<a href="\/sign-in" class="[^"]*">Sign in<\/a>/);
   });
 
-  it('the consent page: the logo in the header, a wider column, the orbit behind', async () => {
+  it('the consent page: the logo in the header and a wider column', async () => {
     const markup = html(
       await ConsentPage({ searchParams: Promise.resolve({ error: 'invalid_request' }) }),
     );
     expect(text(markup)).toContain("This connection request can't be used");
     expect(markup).toContain('data-place="header"');
-    expect(markup).toContain('data-slot="auth-orbit"');
     expect(markup).toContain('max-w-lg');
     expect(markup).not.toContain('data-slot="auth-headline"');
   });

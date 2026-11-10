@@ -9,8 +9,9 @@ import { cn } from '@/lib/utils';
  * The frame every auth page shares (the owner's options D and E, 2026-11-10):
  * a header with the switch to the other auth page, and one centred column
  * with the page's card. Around the card, each page picks: a headline above
- * it (sign-up), the logo above it instead of in the header (sign-in), a
- * muted line below it, and the orbit drawn behind the page.
+ * it (sign-up), the logo above it instead of in the header (sign-in) and a
+ * muted line below it. The card sits on a soft shadow, except under a
+ * headline (sign-up, option D).
  */
 export function AuthShell({
   prompt,
@@ -19,7 +20,6 @@ export function AuthShell({
   headline,
   footnote,
   brandAboveCard = false,
-  backdrop = 'none',
   wide = false,
   children,
 }: {
@@ -35,8 +35,6 @@ export function AuthShell({
   footnote?: string;
   /** The logo above the card, and none in the header. */
   brandAboveCard?: boolean;
-  /** 'orbit': two thin rings and five dots behind the page; decoration only. */
-  backdrop?: 'orbit' | 'none';
   /** A wider column, for a card with more to say (the consent page). */
   wide?: boolean;
   children: React.ReactNode;
@@ -45,11 +43,9 @@ export function AuthShell({
 
   return (
     <div
-      data-backdrop={backdrop}
+      data-card={headline ? 'flat' : 'raised'}
       className="relative flex min-h-svh flex-col overflow-hidden bg-[#f7f5f1] dark:bg-background"
     >
-      {backdrop === 'orbit' && <Orbit />}
-
       <header
         className={cn(
           'relative z-10 flex w-full items-center gap-4 px-4 py-5 sm:px-8 sm:py-7 lg:px-14',
@@ -148,7 +144,7 @@ export function AuthCard({
   return (
     <div
       data-slot="auth-card"
-      className="rounded-2xl border bg-card p-6 sm:p-8 in-data-[backdrop=orbit]:shadow-[0_30px_80px_rgba(60,45,30,0.10)] dark:in-data-[backdrop=orbit]:shadow-[0_30px_80px_rgba(0,0,0,0.6)]"
+      className="rounded-2xl border bg-card p-6 sm:p-8 in-data-[card=raised]:shadow-[0_30px_80px_rgba(60,45,30,0.10)] dark:in-data-[card=raised]:shadow-[0_30px_80px_rgba(0,0,0,0.6)]"
     >
       {title && (
         <div className="mb-6 text-center">
@@ -194,40 +190,5 @@ function Brand({ large = false }: { large?: boolean }) {
         {siteConfig.name}
       </span>
     </a>
-  );
-}
-
-/** Where the orbit's dots sit on the outer ring: 45° apart, with three gaps. */
-const ORBIT_DOTS = [
-  'left-[85.36%] top-[14.64%]',
-  'left-full top-1/2',
-  'left-[85.36%] top-[85.36%]',
-  'left-[14.64%] top-[85.36%]',
-  'left-0 top-1/2',
-];
-
-/** Two thin rings round the middle of the page and five dots on the outer one; decoration only. */
-function Orbit() {
-  const ring = 'rounded-full border border-[rgba(60,45,30,0.10)] dark:border-white/[0.07]';
-
-  return (
-    <div
-      aria-hidden
-      data-slot="auth-orbit"
-      className="pointer-events-none absolute inset-0 flex items-center justify-center"
-    >
-      <div className={cn(ring, 'relative size-[600px] shrink-0 sm:size-[900px]')}>
-        <div className={cn(ring, 'absolute inset-[16.667%]')} />
-        {ORBIT_DOTS.map((place) => (
-          <span
-            key={place}
-            className={cn(
-              'absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[rgba(60,45,30,0.25)] dark:bg-white/[0.22]',
-              place,
-            )}
-          />
-        ))}
-      </div>
-    </div>
   );
 }
