@@ -15521,7 +15521,7 @@
     },
     "slack": {
       "title": "Slack",
-      "description": "Post {brand}’s Daily Pulse, drops, daily suggestion and agents that need someone to a Slack channel.",
+      "description": "Post {brand}’s Daily Pulse to a Slack channel.",
       "noBrand": "Pick a brand to connect Slack.",
       "unavailable": "Couldn’t read the Slack connection right now.",
       "retry": "Try again",
@@ -15559,18 +15559,6 @@
         "pulse": {
           "label": "Daily Pulse",
           "note": "As often as the brand’s Pulse goes out: change it in Notifications"
-        },
-        "drops": {
-          "label": "Drops beyond normal swing",
-          "note": "Visibility or citations down more than usual, last 7 days against the 7 before"
-        },
-        "suggestion": {
-          "label": "Daily suggestion",
-          "note": "One Action Center action a day for the brand"
-        },
-        "needsYou": {
-          "label": "Agents that need someone",
-          "note": "For people who chose Inbox + Slack in their Chat settings; they’re mentioned"
         }
       },
       "test": "Send a test message",
@@ -15582,7 +15570,7 @@
       "accessLostNote": "{name} connected Slack and can no longer see {brand}, so nothing is posted for it. Reconnect, or use another brand’s workspace.",
       "accessLostNoteUnknown": "Whoever connected Slack can no longer see {brand}, so nothing is posted for it. Reconnect, or use another brand’s workspace.",
       "memberNotConnected": "Not connected. Admins and managers can connect Slack.",
-      "memberPostsTo": "{brand}’s Pulse, drops and suggestion go to #{channel}. Admins and managers can change this.",
+      "memberPostsTo": "{brand}’s Daily Pulse goes to #{channel}. Admins and managers can change this.",
       "memberNoChannel": "Slack is connected. An admin or manager picks the channel.",
       "memberProblem": "Slack needs an admin or manager to reconnect it. Nothing is posted until then.",
       "toast": {
@@ -16455,7 +16443,7 @@
       },
       "slack": {
         "name": "Slack",
-        "description": "The brand’s Pulse, alerts and daily suggestion in a channel."
+        "description": "The brand’s Daily Pulse in a channel."
       },
       "microsoft_teams": {
         "name": "Microsoft Teams",

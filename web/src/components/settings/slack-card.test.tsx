@@ -225,12 +225,9 @@ describe('SlackCard', () => {
     expect(client.listSlackChannels).not.toHaveBeenCalled();
     expect(
       switches().map((s) => [s.getAttribute('aria-label'), s.getAttribute('aria-checked')]),
-    ).toEqual([
-      ['Daily Pulse', 'true'],
-      ['Drops beyond normal swing', 'true'],
-      ['Daily suggestion', 'true'],
-      ['Agents that need someone', 'true'],
-    ]);
+    ).toEqual([['Daily Pulse', 'true']]);
+    // Only what is posted today: the other kinds' switches come with their sends.
+    expect(text()).not.toContain('Drops beyond normal swing');
   });
 
   it('lists the channels when the picker opens, and saves the one picked', async () => {
@@ -260,13 +257,14 @@ describe('SlackCard', () => {
     ]);
   });
 
-  it('turns one kind of message off', async () => {
+  it('turns the Pulse in Slack off', async () => {
     await render();
+    expect(text()).toContain('As often as the brand’s Pulse goes out: change it in Notifications');
     await act(async () => {
-      switches()[1].click();
+      switches()[0].click();
     });
-    expect(client.saveSlack).toHaveBeenCalledWith('b1', { send: { drops: false } });
-    expect(switches()[1].getAttribute('aria-checked')).toBe('false');
+    expect(client.saveSlack).toHaveBeenCalledWith('b1', { send: { pulse: false } });
+    expect(switches()[0].getAttribute('aria-checked')).toBe('false');
   });
 
   it('sends a test message, and says why one failed', async () => {
@@ -376,7 +374,7 @@ describe('SlackCard', () => {
     role.canManage = false;
     await render();
     expect(text()).toContain(
-      'Northwind’s Pulse, drops and suggestion go to #seo-alerts. Admins and managers can change this.',
+      'Northwind’s Daily Pulse goes to #seo-alerts. Admins and managers can change this.',
     );
     expect(button('Send a test message')).toBeUndefined();
     expect(button('Disconnect')).toBeUndefined();
@@ -432,7 +430,7 @@ describe('SlackCard', () => {
     await render();
     expect(client.readSlack).not.toHaveBeenCalled();
     expect(badges()).toEqual(['Connected', 'Sample data']);
-    expect(text()).toContain('Northwind’s Pulse, drops and suggestion go to #ai-search-alerts.');
+    expect(text()).toContain('Northwind’s Daily Pulse goes to #ai-search-alerts.');
     await act(async () => {
       button('Send a test message')!.click();
     });

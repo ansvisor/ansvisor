@@ -41,7 +41,7 @@ import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { DEMO_SLACK_CHANNEL, demoIntegration } from '@/lib/demo/integrations';
 import { formatDate } from '@/lib/format';
 import {
-  SLACK_SEND_KINDS,
+  SLACK_SHOWN_KINDS,
   activateSlack,
   chooseSlackWorkspace,
   disconnectSlack,
@@ -84,7 +84,8 @@ const itemOf = (c: { id: string; name: string; private: boolean; members?: numbe
 
 /**
  * Settings › Integrations › Slack (#2139): where the active brand's Daily
- * Pulse, drops, daily suggestion and agents that need someone are posted.
+ * Pulse is posted (the drop alerts, the daily suggestion and agents that
+ * need someone join it, each with its switch).
  * Admins and managers who can access the brand connect a Slack workspace
  * (Slack's install of the Ansvisor app, in a popup), or use the workspace
  * another brand uses, pick the channel and what goes to it, send a test
@@ -691,7 +692,7 @@ function ChannelAndSends({
       )}
 
       <div role="group" aria-label={t('sendLabel')} className="pt-1">
-        {SLACK_SEND_KINDS.map((kind) => (
+        {SLACK_SHOWN_KINDS.map((kind) => (
           <div
             key={kind}
             className="flex items-center gap-3 border-t py-2.5 text-sm first:border-t-0"

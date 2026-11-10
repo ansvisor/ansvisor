@@ -4191,15 +4191,15 @@
         "stop the emails"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-10",
       "sections": [
         {
           "heading": null,
-          "text": "The Daily Pulse is a short digest for each brand that goes out after its scheduled tracking run. It shows the headline numbers for the period, then lists what went well (highlights) and what needs attention (warnings). It comes by email on Ansvisor Cloud, and can also go to your webhook, on cloud and self-hosted alike."
+          "text": "The Daily Pulse is a short digest for each brand that goes out after its scheduled tracking run. It shows the headline numbers for the period, then lists what went well (highlights) and what needs attention (warnings). It comes by email on Ansvisor Cloud, and can also go to your webhook and to the brand's Slack channel (set in **Settings › Integrations**), on cloud and self-hosted alike."
         },
         {
           "heading": "Choose how often it comes",
-          "text": "Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily** (the default): after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable**: like Daily, but skipped when there are no highlights and no warnings.\n- **Off**: no email and no webhook."
+          "text": "Open **Settings › Notifications**. Every active brand has its own row with a frequency and a recipient list. Admins and managers can change them; other members see them read-only. The **Manage notification settings** link at the bottom of every pulse email opens this page.\n\n- **Daily** (the default): after every scheduled daily tracking run.\n- **Weekly**: once a week on Monday (UTC), covering the last 7 days compared with the 7 days before.\n- **Only when notable**: like Daily, but skipped when there are no highlights and no warnings.\n- **Off**: no email, no webhook and no Slack post."
         },
         {
           "heading": "Choose who gets it",

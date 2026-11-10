@@ -15,6 +15,13 @@ export const SLACK_SEND_KINDS = ['pulse', 'drops', 'suggestion', 'needsYou'] as 
 export type SlackSendKind = (typeof SLACK_SEND_KINDS)[number];
 
 /**
+ * The switches the card shows: the kinds Ansvisor posts today. The drop
+ * alerts, the daily suggestion and "an agent needs you" each add theirs with
+ * the server's send (#2139).
+ */
+export const SLACK_SHOWN_KINDS: readonly SlackSendKind[] = ['pulse'];
+
+/**
  * Where the brand's Slack stands: none; posting (once a channel is picked);
  * the workspace refused the connection; whoever connected it can't see the
  * brand any more.
