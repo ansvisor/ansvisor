@@ -55,8 +55,12 @@ function client() {
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => client()) }));
 
-const { deleteBusinessHubSnapshot, getBusinessHubCard, saveBusinessHubSnapshot } =
-  await import('./business-hub');
+const {
+  deleteBusinessHubSnapshot,
+  getBusinessHubCard,
+  importBusinessHubSnapshots,
+  saveBusinessHubSnapshot,
+} = await import('./business-hub');
 
 const row = (over: Record<string, unknown>) => ({
   id: 's1',
@@ -228,6 +232,25 @@ describe('saving and deleting', () => {
     expect(await saveBusinessHubSnapshot(BRAND, input)).toEqual({ error: 'off' });
     response = new Response(JSON.stringify({ code: 'demo_brand' }), { status: 402 });
     expect(await saveBusinessHubSnapshot(BRAND, input)).toEqual({ error: 'demo' });
+  });
+
+  it('imports entries from the CSV template through the API, all or none', async () => {
+    response = new Response(JSON.stringify({ saved: 2, replaced: 1 }), { status: 200 });
+    const rows = [input, { ...input, periodEnd: '2026-11-03' }];
+    expect(await importBusinessHubSnapshots(BRAND, rows)).toEqual({ saved: 2, replaced: 1 });
+    expect(fetchMock.mock.calls[0]).toEqual([
+      expect.stringMatching(new RegExp(`/api/business-hub/${BRAND}/snapshots/import$`)),
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ rows }) }),
+    ]);
+    response = new Response(
+      JSON.stringify({ code: 'invalid', field: 'periodEnd', reason: 'duplicate', row: 1 }),
+      { status: 400 },
+    );
+    expect(await importBusinessHubSnapshots(BRAND, rows)).toMatchObject({
+      error: 'invalid',
+      row: 1,
+    });
+    expect(await importBusinessHubSnapshots(BRAND, [])).toEqual({ error: 'invalid' });
   });
 
   it('deletes an entry, or says an analyst may not', async () => {
