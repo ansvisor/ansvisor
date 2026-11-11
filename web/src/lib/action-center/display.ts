@@ -120,6 +120,25 @@ export function actionTexts(
       description: t('shopping_links.description', { count }),
     };
   }
+  // Setting up a ChatGPT Business Hub profile: worded for where claiming is
+  // open, or for the waitlist elsewhere, with ChatGPT's answers as evidence.
+  if (action.kind === 'business_hub_setup') {
+    const evidence = (p.evidence ?? {}) as Record<string, unknown>;
+    const answers = num(evidence, 'answers');
+    return {
+      title: t(
+        p.variant === 'waitlist' ? 'business_hub_setup.waitlistTitle' : 'business_hub_setup.title',
+      ),
+      description:
+        answers > 0
+          ? t('business_hub_setup.description', {
+              answers,
+              named: num(evidence, 'named'),
+              cited: num(evidence, 'cited'),
+            })
+          : t('business_hub_setup.descriptionGeneric'),
+    };
+  }
   // A finding sent from Chat (CHAT-09 §E) carries the title and the finding
   // the person approved.
   if (action.kind === 'chat_finding' && typeof p.title === 'string' && p.title) {
@@ -375,8 +394,8 @@ export function actionGoal(
 }
 
 /**
- * Kinds a person sends rather than a definition raises, and the catalog
- * check's (shopping_links): none rests on detection signals.
+ * Kinds a person sends rather than a definition raises, the catalog check's
+ * (shopping_links) and Business Hub's: none rests on detection signals.
  */
 const PERSON_SENT_KINDS: string[] = [
   'content_opportunity',
@@ -391,6 +410,7 @@ const PERSON_SENT_KINDS: string[] = [
   'shopping_category',
   'shopping_links',
   'chat_finding',
+  'business_hub_setup',
 ];
 
 /** Compact evidence chips under the title: signal count plus the kind's own

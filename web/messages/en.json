@@ -2152,6 +2152,7 @@
         "noSignalsAuditPage": "This action was sent from a Site Audit report, so it has no detection signals. Its evidence is the page and the checks it fails on the Overview tab.",
         "noSignalsShoppingLinks": "This action comes from the catalog check after each sync, so it has no detection signals. Its evidence is the page and the products on the Overview tab.",
         "noSignalsChat": "This action was sent from Chat, so it has no detection signals. Its evidence is the finding on the Overview tab, and any added later in History.",
+        "noSignalsBusinessHub": "This action comes from your tracked ChatGPT answers and is raised once for your brand, so it has no detection signals. Its evidence is under Why on the Overview tab.",
         "chatFinding": {
           "source": "Source",
           "sourceValue": "Chat",
@@ -2233,6 +2234,12 @@
           },
           "swaps": "In stock, from its shopping path",
           "check": "Checked again after each catalog sync, or now with Check now on its task: the action closes once the page links none of them."
+        },
+        "businessHub": {
+          "title": "ChatGPT Business Hub",
+          "open": "Open Business Hub",
+          "noApi": "There's no Business Hub API: mark each task done when its Done when is true.",
+          "usOnlyAgent": "Business Agents are for US businesses only."
         },
         "auditPage": {
           "source": "Source",
@@ -3121,6 +3128,14 @@
         "namedTitle": "{page}: {count, plural, one {# product no longer sells} other {# products no longer sell}}",
         "description": "From the catalog: the page links {count, plural, one {a product} other {# products}} you can't buy now. Readers and AI answers that follow those links land on a dead end.",
         "goal": "Link only products that sell, so readers can buy what the page recommends."
+      },
+      "business_hub_setup": {
+        "title": "Set up your ChatGPT Business Hub profile",
+        "titleGeneric": "Set up your ChatGPT Business Hub profile",
+        "waitlistTitle": "Get your business into ChatGPT Business Hub",
+        "description": "ChatGPT named you in {named} of {answers, plural, one {# tracked answer} other {# tracked answers}} in the last 30 days; your site was cited in {cited}.",
+        "descriptionGeneric": "ChatGPT describes your business in its answers. Business Hub is OpenAI's free place to claim that profile and correct it.",
+        "goal": "Claim and verify your profile in Business Hub and keep its facts right, so ChatGPT describes your business correctly."
       }
     },
     "actionTasks": {

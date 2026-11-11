@@ -53,6 +53,7 @@ const taskSend = vi.hoisted(() => ({
 vi.mock('@/lib/actions/action-task-send', () => taskSend);
 
 const { ActionDrawer } = await import('./action-drawer');
+const { BUSINESS_HUB_URL } = await import('@/lib/business-hub/links');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -400,6 +401,51 @@ describe('ActionDrawer', () => {
         (a) => a.textContent === 'Open the chat',
       );
       expect(link?.getAttribute('href')).toBe('/dashboard/chat/c1');
+    });
+  });
+
+  describe('ChatGPT Business Hub', () => {
+    const setup = {
+      ...action,
+      kind: 'business_hub_setup',
+      category: 'growth',
+      impact: 'medium',
+      signalCount: 0,
+      payload: {
+        source: 'business_hub',
+        variant: 'open',
+        region: 'US',
+        evidence: { answers: 120, named: 34, cited: 9 },
+        targetEntity: 'platforms',
+        targetCount: 1,
+      },
+    } as ActionItem;
+    const tab = (name: string) =>
+      [...document.querySelectorAll<HTMLButtonElement>('button')].find(
+        (b) => b.textContent?.trim() === name,
+      )!;
+
+    it('opens Business Hub from its block, with the answers it was raised from as its Why', async () => {
+      await renderDrawer(setup);
+      const dialog = document.body.querySelector('[role="dialog"]')!;
+      expect(dialog.textContent).toContain('Set up your ChatGPT Business Hub profile');
+      expect(dialog.textContent).toContain(
+        'ChatGPT named you in 34 of 120 tracked answers in the last 30 days; your site was cited in 9.',
+      );
+      const open = [...dialog.querySelectorAll('a')].find(
+        (a) => a.textContent === 'Open Business Hub',
+      );
+      expect(open?.getAttribute('href')).toBe(BUSINESS_HUB_URL);
+      expect(dialog.textContent).toContain("There's no Business Hub API");
+      expect(dialog.textContent).not.toContain('0 signals');
+    });
+
+    it('says why it has no signals', async () => {
+      await renderDrawer(setup);
+      await act(async () => tab('Signals').click());
+      expect(document.body.querySelector('[role="dialog"]')!.textContent).toContain(
+        'This action comes from your tracked ChatGPT answers',
+      );
     });
   });
 
