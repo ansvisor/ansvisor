@@ -6,6 +6,7 @@ import {
   rangeChipLabel,
   type ChatPageContext,
 } from './page-context';
+import { simpleDashboardNav } from '@/config/dashboard';
 
 /** A page's context as the side panel's chips (CHAT-01 items 20–22). */
 
@@ -54,6 +55,15 @@ describe('menuTitleOf', () => {
     expect(menuTitleOf('/dashboard/prompts/topics/abc')).toBe('Topics');
     expect(menuTitleOf('/dashboard/content/library')).toBe('Library');
     expect(menuTitleOf('/dashboard/settings/team')).toBeNull();
+  });
+
+  it('names the page as the menu shown does: Today and Agents with SIMPLE_NAV on', () => {
+    expect(menuTitleOf('/dashboard/agents/abc')).toBe('Agent Center');
+    expect(menuTitleOf('/dashboard/action-center/actions')).toBe('Action Center');
+    expect(menuTitleOf('/dashboard/agents/abc', simpleDashboardNav)).toBe('Agents');
+    expect(menuTitleOf('/dashboard/action-center/today', simpleDashboardNav)).toBe('Today');
+    expect(menuTitleOf('/dashboard/action-center/kpis', simpleDashboardNav)).toBe('Action Center');
+    expect(menuTitleOf('/dashboard/mentions', simpleDashboardNav)).toBe('Mentions');
   });
 });
 

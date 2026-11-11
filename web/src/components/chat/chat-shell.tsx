@@ -27,6 +27,8 @@ import { menuTitleOf } from '@/lib/chat/page-context';
 import { PAGE_PARAM, SPLIT_MIN, openPageOf, withOpenPage } from '@/lib/chat/page-pane';
 import { PANEL_FROM_PARAM, panelReturnOf } from '@/lib/chat/panel';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
+import { navFor } from '@/config/dashboard';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { ChatActionsProvider, useChatActions } from './chat-actions';
 import { ChatDebugProvider } from './chat-debug';
 import { ChatCrumbContext } from './chat-crumb';
@@ -218,6 +220,8 @@ function ChatShellFrame({
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
+  // ↙ Back names the page as the menu shown does (SIMPLE_NAV: Today, Agents).
+  const simpleNav = useSimpleNav();
   const isWide = useIsWide();
   const isMac = useIsMac();
   const brandId = useBrandStore((s) => s.activeBrandId);
@@ -233,7 +237,9 @@ function ChatShellFrame({
   const focusAfterToggle = useRef(false);
   // Opened as a full page from the side panel (CHAT-22): ↙ Back to that page.
   const backToPage = panelReturnOf(searchParams?.get(PANEL_FROM_PARAM) ?? null);
-  const backToTitle = backToPage ? menuTitleOf(backToPage.split(/[?#]/)[0]) : null;
+  const backToTitle = backToPage
+    ? menuTitleOf(backToPage.split(/[?#]/)[0], navFor(simpleNav))
+    : null;
 
   const toggle = useCallback(() => {
     if (!window.matchMedia(WIDE_QUERY).matches) {

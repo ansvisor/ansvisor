@@ -49,6 +49,8 @@ vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: vi.fn(async () => ({ ok: true, id: 'request-1' })),
 }));
+// Action Center › Agents' jobs made in Chat (SIMPLE_NAV), a server action.
+vi.mock('@/lib/actions/chat-schedules', () => ({ listChatSchedules: vi.fn() }));
 
 const { AgentCenter } = await import('./agent-center');
 

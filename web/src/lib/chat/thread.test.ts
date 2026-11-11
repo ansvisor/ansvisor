@@ -403,6 +403,19 @@ describe('loadChatThread', () => {
     });
   });
 
+  it('keeps the card of recurring work a run set up, after a reload (SIMPLE_NAV)', async () => {
+    seed([{ id: 'run-1', status: 'done' }]);
+    fake.db.tables.chat_run_steps = [];
+    const made = {
+      title: 'Espresso watch',
+      when: 'Every Monday, 08:00 · Europe/Istanbul',
+      href: '/dashboard/chat/scheduled/5c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f' as const,
+    };
+    fake.db.tables.chat_run_events = [event('run-1', chatEvent('schedule.made', 1, made))];
+    const thread = await loadChatThread(CHAT);
+    expect(thread!.messages[1].run).toMatchObject({ scheduled: [made], sent: [] });
+  });
+
   it('keeps "Remember this?" after a reload, in the author\'s own chat only (W4-33)', async () => {
     seed([{ id: 'run-1', status: 'done' }]);
     fake.db.tables.chat_run_steps = [];

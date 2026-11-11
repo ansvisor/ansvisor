@@ -29,6 +29,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
+import { HistoryViews } from '@/components/action-center/history-views';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { KpiFrameworkDrawer } from '@/components/action-center/kpi-framework-drawer';
 import { KpiTable } from '@/components/action-center/kpi-table';
 import { Button } from '@/components/ui/button';
@@ -49,6 +51,9 @@ function utcDay(offset = 0): string {
 export default function ActionCenterKpisPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const t = useTranslations('actionCenter.kpis');
+  // The simplified layout (SIMPLE_NAV): KPIs is one of History's views, the
+  // tab shown above it History's.
+  const simpleNav = useSimpleNav();
 
   return (
     <div className="space-y-6">
@@ -59,6 +64,7 @@ export default function ActionCenterKpisPage() {
         </div>
       </HeaderWithAiUsage>
       <ActionCenterTabs />
+      {simpleNav && <HistoryViews current="kpis" kpis />}
       {brand ? (
         <KpisContent key={brand.id} brand={brand} />
       ) : (

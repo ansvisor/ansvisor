@@ -58,6 +58,14 @@ vi.mock('@/components/action-center/action-center-tabs', () => ({
   ActionCenterTabs: () => null,
 }));
 
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
 vi.mock('@/components/action-center/kpi-framework-drawer', () => ({
   KpiFrameworkDrawer: () => null,
 }));
@@ -72,6 +80,7 @@ vi.mock('sonner', () => ({
 }));
 
 import ActionCenterKpisPage from './page';
+import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 
 beforeEach(() => {
   getKpiSnapshots.mockResolvedValue({ configured: true, kpis: [] });
@@ -102,17 +111,19 @@ const snapshot = (key: string) => ({
 });
 
 const openUpgrade = vi.fn();
-async function renderPage(isLocked = false) {
+async function renderPage(isLocked = false, simpleNav = false) {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
   await act(async () => {
     root.render(
-      <UpgradeDialogContext.Provider
-        value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-      >
-        <ActionCenterKpisPage />
-      </UpgradeDialogContext.Provider>,
+      <SimpleNavProvider enabled={simpleNav}>
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ActionCenterKpisPage />
+        </UpgradeDialogContext.Provider>
+      </SimpleNavProvider>,
     );
   });
   return { container, root };
@@ -262,6 +273,31 @@ describe('KPIs status filter', () => {
     expect(menu?.textContent).toContain('table.status');
     expect(menu?.querySelectorAll('[role="menuitemcheckbox"]')).toHaveLength(4);
 
+    await act(async () => root.unmount());
+  });
+});
+
+describe('KPIs with the simplified layout (SIMPLE_NAV)', () => {
+  it('shows no History views while it is off', async () => {
+    const { container, root } = await renderPage();
+    expect(container.querySelector('[aria-label="view.label"]')).toBeNull();
+    expect(container.textContent).not.toContain('view.kpis');
+    await act(async () => root.unmount());
+  });
+
+  it('is one of History’s views with it on: KPIs current, the others link back to History', async () => {
+    const { container, root } = await renderPage(false, true);
+    const group = container.querySelector('[role="group"][aria-label="view.label"]')!;
+    const views = [...group.children].map((v) => [
+      v.textContent,
+      v.getAttribute('href'),
+      v.getAttribute('aria-current'),
+    ]);
+    expect(views).toEqual([
+      ['view.actions', '/dashboard/action-center/history', null],
+      ['view.scorecard', '/dashboard/action-center/history?view=scorecard', null],
+      ['view.kpis', null, 'page'],
+    ]);
     await act(async () => root.unmount());
   });
 });

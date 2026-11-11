@@ -251,6 +251,24 @@ export interface ChatActionSent {
 }
 
 /**
+ * Recurring work Chat set up (create_schedule, a job on repeat), as its card
+ * under the answer with Run it now, Open in Agents and Change the schedule.
+ * Only with the simplified layout on (SIMPLE_NAV), where such jobs show on
+ * Action Center › Agents as "made in Chat".
+ */
+export interface ChatScheduleMade {
+  /** The job's title: "Espresso watch". */
+  title: string;
+  /** When it runs, on its clock: "Every Monday, 08:00 · Europe/Istanbul". */
+  when: string;
+  /**
+   * The job's page in Chat › Scheduled, where its schedule changes; its last
+   * part is the job's handle Run it now asks with.
+   */
+  href: ChatHref;
+}
+
+/**
  * Chat's work on an Action Center task, in the task strip (CHAT-09 §B item
  * 5, chat_task_state 00418): never the task's own Action Center status.
  * Done only once the person completed the task there (item 6).
@@ -498,6 +516,8 @@ export interface ChatEventPayloads {
   'access.denied': ChatDenialCard;
   /** Sent to Action Center, or added to an action there (CHAT-09 item 19). */
   'action.sent': ChatActionSent;
+  /** Recurring work it set up (SIMPLE_NAV): its card with Run it now and Open in Agents. */
+  'schedule.made': ChatScheduleMade;
   /** The task strip as it stands (CHAT-09 §B): the whole strip each time. */
   'tasks.updated': ChatTaskStrip;
   // Editor in Chat (CHAT-25 §12, Phase 4): payloads grow with it.
@@ -541,6 +561,7 @@ const EVENT_TYPES: Record<ChatEventType, true> = {
   'run.stopped': true,
   'access.denied': true,
   'action.sent': true,
+  'schedule.made': true,
   'tasks.updated': true,
   'deliverable.updated': true,
   'suggestion.created': true,

@@ -1,6 +1,11 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
-import { presetCardHref, recommendedPresets, type PresetFit } from '@/lib/chat/agents/catalog';
+import {
+  presetCardHref,
+  presetOnInstall,
+  recommendedPresets,
+  type PresetFit,
+} from '@/lib/chat/agents/catalog';
 import { isSiteType, siteTypeOf } from '@/lib/content/page-types';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { workAreasOf } from '@/lib/menu-access';
@@ -31,7 +36,11 @@ export async function listReadyAgentsFor(auth: McpAuthContext, params: { brandId
       .select('site_type, industry, shopping_mode_enabled')
       .eq('id', params.brandId)
       .maybeSingle(),
-    supabaseAdmin.from('profiles').select('work_areas').eq('id', auth.userId).maybeSingle(),
+    supabaseAdmin
+      .from('profiles')
+      .select('work_areas, work_areas_asked_at')
+      .eq('id', auth.userId)
+      .maybeSingle(),
   ]);
   if (brand.error) throw new Error(brand.error.message);
   if (profile.error) throw new Error(profile.error.message);
@@ -42,7 +51,7 @@ export async function listReadyAgentsFor(auth: McpAuthContext, params: { brandId
     industry: brand.data.industry,
     shoppingModeEnabled: brand.data.shopping_mode_enabled,
   });
-  const workAreas = workAreasOf((profile.data?.work_areas as string[] | null | undefined) ?? null);
+  const workAreas = workAreasOf(profile.data);
   const roleName = (role: string) => t(`ready.roles.${role}` as never);
   return {
     site_type: t(`ready.businessTypes.${siteType}`),
@@ -58,7 +67,8 @@ export async function listReadyAgentsFor(auth: McpAuthContext, params: { brandId
       ...(fit === 'role'
         ? { for_work_areas: preset.roles.filter((r) => workAreas.includes(r)).map(roleName) }
         : {}),
-      skills: preset.skills.map((skill) => `/${skill}`),
+      // As this install offers it: a skill behind a flag that is off isn't named.
+      skills: presetOnInstall(preset).skills.map((skill) => `/${skill}`),
       href: presetCardHref(preset.id),
     })),
     turn_on:

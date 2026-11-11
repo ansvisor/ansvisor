@@ -28,6 +28,13 @@ vi.mock('@/components/action-center/action-center-tabs', () => ({
   ActionCenterTabs: () => null,
 }));
 vi.mock('@/components/action-center/history-table', () => ({ HistoryTable: () => null }));
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...rest }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock('@/components/action-center/history-drawer', () => ({ HistoryDrawer: () => null }));
 vi.mock('@/components/action-center/scorecard-table', () => ({ ScorecardTable: () => null }));
 
@@ -39,6 +46,7 @@ vi.mock('@/lib/actions/action-history', () => ({ getActionHistory }));
 vi.mock('@/lib/actions/action-scorecard', () => ({ getActionScorecard }));
 
 import ActionCenterHistoryPage from './page';
+import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -59,10 +67,14 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-async function renderAt(url: string) {
+async function renderAt(url: string, simpleNav = false) {
   window.history.replaceState(null, '', url);
   await act(async () => {
-    root.render(<ActionCenterHistoryPage />);
+    root.render(
+      <SimpleNavProvider enabled={simpleNav}>
+        <ActionCenterHistoryPage />
+      </SimpleNavProvider>,
+    );
   });
 }
 
@@ -127,5 +139,43 @@ describe('History scorecard by play (AC plan P-4)', () => {
     expect(getActionScorecard.mock.calls.at(-1)?.[1]).toMatchObject({ by: 'play' });
     await act(async () => button('view.actions').click());
     expect(() => button('scorecard.by.play')).toThrow();
+  });
+});
+
+describe('History’s views and KPIs', () => {
+  const views = () =>
+    [...container.querySelectorAll('.inline-flex')]
+      .find((group) => group.textContent?.startsWith('view.actions'))
+      ?.querySelectorAll('button, a');
+
+  it('switch between Actions and Scorecard only, without SIMPLE_NAV', async () => {
+    await renderAt('/');
+    expect([...views()!].map((v) => v.textContent)).toEqual(['view.actions', 'view.scorecard']);
+    expect(container.querySelector('a[href="/dashboard/action-center/kpis"]')).toBeNull();
+  });
+
+  it('add KPIs, a link to its page, with SIMPLE_NAV on, and still switch in place', async () => {
+    await renderAt('/', true);
+    const group = container.querySelector('[role="group"][aria-label="view.label"]')!;
+    expect([...group.querySelectorAll('button, a')].map((v) => v.textContent)).toEqual([
+      'view.actions',
+      'view.scorecard',
+      'view.kpis',
+    ]);
+    expect(group.querySelector('a')?.getAttribute('href')).toBe('/dashboard/action-center/kpis');
+    await act(async () => button('view.scorecard').click());
+    expect(daysAsked(getActionScorecard)).toBe(90);
+    // One switch on the page.
+    const named = (text: string) =>
+      [...container.querySelectorAll('button')].filter((b) => b.textContent === text);
+    expect(named('view.actions')).toHaveLength(1);
+    expect(named('view.scorecard')).toHaveLength(1);
+  });
+
+  it('keep KPIs in reach with SIMPLE_NAV on when there is no history yet', async () => {
+    getActionHistory.mockResolvedValue([]);
+    await renderAt('/', true);
+    expect(container.textContent).toContain('empty.title');
+    expect(container.querySelector('a[href="/dashboard/action-center/kpis"]')).not.toBeNull();
   });
 });
