@@ -7528,6 +7528,7 @@ export type Database = {
           text: string
           tags: string[]
           topic_id: string | null
+          waiting_since: string | null
           work_status: string | null
         }
         Insert: {
@@ -7543,6 +7544,7 @@ export type Database = {
           text: string
           tags?: string[]
           topic_id?: string | null
+          waiting_since?: string | null
           work_status?: string | null
         }
         Update: {
@@ -7558,6 +7560,7 @@ export type Database = {
           text?: string
           tags?: string[]
           topic_id?: string | null
+          waiting_since?: string | null
           work_status?: string | null
         }
         Relationships: [
@@ -9515,12 +9518,14 @@ export type Database = {
         Args: {
           p_max_locations: number
           p_organization_id: string
+          p_over_limit?: string
           p_prompt_set_id: string
           p_rows: Json
         }
         Returns: {
           id: string
           idx: number
+          waiting: boolean
         }[]
       }
       org_brand_count: { Args: { p_organization_id: string }; Returns: number }

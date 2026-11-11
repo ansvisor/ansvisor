@@ -12,9 +12,13 @@ import {
   activationDelta,
   getOrgLocationUsage,
   locationLimitMessage,
+  placeNewPrompt,
   planBulkLocationChange,
   promptLocationCount,
+  promptsThatFit,
+  waitingPromptColumns,
 } from '@/lib/prompt-locations';
+import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
 import { PROMPT_DELETE_BATCH } from '@/lib/prompt-bulk-actions';
 import { isValidLocation, locationCode } from '@/lib/region';
@@ -188,7 +192,13 @@ interface SavePromptSetInput {
   }[];
 }
 
-export type SavePromptSetResult = { promptSet: PromptSet } | { error: string; code?: 'plan_limit' };
+export type SavePromptSetResult =
+  | {
+      promptSet: PromptSet;
+      /** How many were saved waiting for a spot (SIMPLE_NAV); absent when none. */
+      waiting?: number;
+    }
+  | { error: string; code?: 'plan_limit' };
 
 /**
  * How many tracked locations a brand's save may total before hitting the
@@ -240,9 +250,15 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<SaveProm
   const otherLocations = usage.total - (usage.byBrand.get(input.brandId) ?? 0);
   const adding = input.prompts.filter((p) => p.isActive ?? true).length;
   const limitError = locationLimitMessage(plan, otherLocations, adding);
-  if (limitError) {
+  // SIMPLE_NAV: the active prompts past the limit are saved waiting for a
+  // spot, in the order given, instead of the whole save being refused.
+  const waitOverLimit = simpleNavEnabled();
+  if (limitError && !waitOverLimit) {
     return { code: 'plan_limit', error: limitError };
   }
+  const fitting = limitError
+    ? promptsThatFit(plan, otherLocations, new Array<number>(adding).fill(1))
+    : adding;
 
   // Delete existing prompt sets for this brand to avoid duplicates
   // (e.g. user navigated back during onboarding and re-submitted)
@@ -294,7 +310,10 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<SaveProm
     );
 
     const rows = [];
+    let activeSeen = 0;
     for (const p of input.prompts) {
+      const active = p.isActive ?? true;
+      const waits = active && activeSeen++ >= fitting;
       const filtered = filterByPlan(plan, p.platforms, p.models ?? []);
       const platforms = stripShoppingWhenDisabled(filtered.platforms, shoppingEnabled);
       if (platforms.length === 0 && filtered.models.length === 0) {
@@ -308,7 +327,7 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<SaveProm
         platforms,
         regions: [brandRegion],
         models: filtered.models,
-        is_active: p.isActive ?? true,
+        ...(waits ? waitingPromptColumns() : { is_active: active }),
       });
     }
 
@@ -323,7 +342,9 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<SaveProm
 
   revalidatePath('/dashboard/brands');
 
-  return { promptSet: mapPromptSetRow(set as Record<string, unknown>, insertedPrompts) };
+  const promptSet = mapPromptSetRow(set as Record<string, unknown>, insertedPrompts);
+  const waiting = adding - fitting;
+  return waiting > 0 ? { promptSet, waiting } : { promptSet };
 }
 
 export async function updatePrompt(
@@ -639,7 +660,15 @@ interface AddPromptInput {
 export type PromptAddFailureCode = 'plan_limit' | typeof NO_TOPICS;
 
 export type AddPromptToSetResult =
-  | { prompt: Prompt }
+  | {
+      prompt: Prompt;
+      /**
+       * Saved waiting for a spot, not tracked: the plan's prompt locations
+       * were full (SIMPLE_NAV on; off, a full plan is refused). Absent when
+       * it is tracked.
+       */
+      waiting?: true;
+    }
   | { error: string; code?: PromptAddFailureCode };
 
 /**
@@ -648,6 +677,11 @@ export type AddPromptToSetResult =
  * server action, so a thrown PlanLimitError would reach users as the
  * meaningless digest message (#427). Prompts are grouped under topics, so a
  * brand without one gets `no_topics` and nothing is written.
+ *
+ * With the plan's prompt locations full, SIMPLE_NAV keeps the prompt as
+ * waiting for a spot (inactive, waiting_since now; 00535) and says so with
+ * `waiting`; it doesn't start by itself when a spot frees up. Without
+ * SIMPLE_NAV a full plan is refused (`plan_limit`), as before.
  */
 export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptToSetResult> {
   await assertWritable();
@@ -674,10 +708,13 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
   const plan = await getOrgPlan(orgId);
 
   // A new prompt starts at exactly one location (the brand's region), so the
-  // change adds one to the org's tracked-location total (#691).
+  // change adds one to the org's tracked-location total (#691), counted
+  // across every brand of the organization.
   const usage = await getOrgLocationUsage(supabase, orgId);
-  const limitError = locationLimitMessage(plan, usage.total, 1);
-  if (limitError) return { error: limitError, code: 'plan_limit' };
+  const waiting = placeNewPrompt(plan, usage.total, 1) === 'wait';
+  if (waiting && !simpleNavEnabled()) {
+    return { error: locationLimitMessage(plan, usage.total, 1) ?? '', code: 'plan_limit' };
+  }
   const filtered = filterByPlan(plan, input.platforms, input.models ?? []);
   if (filtered.platforms.length === 0 && filtered.models.length === 0) {
     return { error: 'At least one platform or model must be selected.' };
@@ -707,7 +744,8 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
     platforms,
     regions: [brandRegion],
     models: filtered.models,
-    is_active: true,
+    // Waiting: inactive, so neither tracked nor counted (00535).
+    ...(waiting ? waitingPromptColumns() : { is_active: true }),
   };
   // Only a catalog suggestion's prompt names the column, so every other add
   // works on a database without 00525 too.
@@ -729,11 +767,12 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
   }
 
   revalidatePath('/dashboard/brands');
-  return { prompt: mapPromptRow(data as Record<string, unknown>) };
+  const prompt = mapPromptRow(data as Record<string, unknown>);
+  return waiting ? { prompt, waiting: true } : { prompt };
 }
 
 export type AddPromptToBrandResult =
-  | { prompt: Prompt }
+  | { prompt: Prompt; waiting?: true }
   | { error: string; code?: PromptAddFailureCode };
 
 /**
@@ -790,7 +829,7 @@ export async function addPromptToBrand(
   if ('error' in result) return { error: result.error, code: result.code };
 
   revalidatePath('/dashboard/prompts');
-  return { prompt: result.prompt };
+  return result.waiting ? { prompt: result.prompt, waiting: true } : { prompt: result.prompt };
 }
 
 export type SetPromptActiveResult = { prompt: Prompt } | { error: string; code?: 'plan_limit' };
@@ -841,6 +880,15 @@ async function resumeLimitError(
 }
 
 /**
+ * The write that pauses or resumes prompts. Resuming also ends any wait for
+ * a spot (00535): the database refuses an active prompt that is still
+ * waiting, and a waiting prompt is resumed like a paused one, metered first.
+ */
+function activeColumns(isActive: boolean) {
+  return isActive ? { is_active: true, waiting_since: null } : { is_active: false };
+}
+
+/**
  * Pause or resume one prompt — the only way a prompt's active state changes
  * after it is created. Pausing frees its locations on the plan (00128).
  * Resuming brings them all back (activationDelta), so it is measured like
@@ -868,7 +916,7 @@ export async function setPromptActive(
 
   const { data, error } = await supabase
     .from('prompts')
-    .update({ is_active: isActive })
+    .update(activeColumns(isActive))
     .eq('id', id)
     .select()
     .single();
@@ -889,7 +937,18 @@ export interface ImportPromptRow {
 }
 
 export type ImportPromptsResult =
-  | { importedIdx: number[]; promptIds: string[]; analysisStarted: boolean }
+  | {
+      /** Every row saved, tracked or waiting, with its id at the same place in promptIds. */
+      importedIdx: number[];
+      promptIds: string[];
+      /**
+       * The saved rows waiting for a spot (SIMPLE_NAV: the plan's locations
+       * ran out); absent when none waits, as always without SIMPLE_NAV, where
+       * those rows aren't saved.
+       */
+      waitingIdx?: number[];
+      analysisStarted: boolean;
+    }
   | { error: string; code?: typeof NO_TOPICS };
 
 /**
@@ -900,6 +959,10 @@ export type ImportPromptsResult =
  * (import_prompts, 00122). New topics are created first, without touching the
  * brand's existing ones. The imported prompts are submitted for their first
  * run in one request. A brand with no topic yet gets `no_topics`.
+ *
+ * Past the limit, SIMPLE_NAV saves the rest waiting for a spot (p_over_limit
+ * 'wait', 00535) and lists them in `waitingIdx`; they aren't tracked, so
+ * they get no first run. Without it they are skipped, as before.
  */
 export async function importPrompts(
   brandId: string,
@@ -990,6 +1053,7 @@ export async function importPrompts(
     p_prompt_set_id: promptSetId,
     p_organization_id: orgId,
     p_max_locations: plan.limits.maxPrompts,
+    p_over_limit: simpleNavEnabled() ? 'wait' : 'skip',
     p_rows: clean.map((r) => ({
       idx: r.idx,
       text: r.text,
@@ -1002,11 +1066,19 @@ export async function importPrompts(
   });
   if (error) return { error: error.message };
 
-  const imported = (inserted ?? []) as { idx: number; id: string }[];
+  const imported = (inserted ?? []) as { idx: number; id: string; waiting?: boolean | null }[];
   const promptIds = imported.map((r) => r.id);
-  const { started } = await analyzeNewPrompts(brandId, promptIds);
+  // Only the tracked ones get a first run: a waiting prompt isn't tracked.
+  const tracked = imported.filter((r) => !r.waiting).map((r) => r.id);
+  const { started } = await analyzeNewPrompts(brandId, tracked);
   revalidatePath('/dashboard/prompts');
-  return { importedIdx: imported.map((r) => r.idx), promptIds, analysisStarted: started };
+  const waitingIdx = imported.filter((r) => r.waiting).map((r) => r.idx);
+  return {
+    importedIdx: imported.map((r) => r.idx),
+    promptIds,
+    ...(waitingIdx.length > 0 && { waitingIdx }),
+    analysisStarted: started,
+  };
 }
 
 export type AddTopicPromptsResult =
@@ -1014,7 +1086,15 @@ export type AddTopicPromptsResult =
       ok: true;
       /** partial: some weren't added (CHAT-20 §11a), each with why. */
       code: 'ok' | 'partial';
+      /** Tracked from now on. */
       added: { id: string; text: string }[];
+      /**
+       * Saved waiting for a spot, not tracked: the plan's prompt locations
+       * ran out (SIMPLE_NAV; without it they are skipped as plan_limit). The
+       * person picks which to track once a spot is free (Tracked Prompts).
+       * Absent when none waits.
+       */
+      waiting?: { id: string; text: string }[];
       skipped: { text: string; reason: 'duplicate' | 'plan_limit' | 'invalid' }[];
       analysisStarted: boolean;
     }
@@ -1145,16 +1225,20 @@ async function addPromptsToTopic(
 
   const result = await importPrompts(brandId, rows);
   if ('error' in result) return { ok: false, reason: 'failed', message: result.error };
-  const added = result.importedIdx.map((idx, i) => ({
+  const waitingIdx = new Set(result.waitingIdx ?? []);
+  const saved = result.importedIdx.map((idx, i) => ({
+    idx,
     id: result.promptIds[i],
     text: rows[idx].text,
   }));
-  const addedIdx = new Set(result.importedIdx);
+  const added = saved.filter((p) => !waitingIdx.has(p.idx)).map(({ id, text }) => ({ id, text }));
+  const waiting = saved.filter((p) => waitingIdx.has(p.idx)).map(({ id, text }) => ({ id, text }));
+  const savedIdx = new Set(result.importedIdx);
   // What the locked write left out: the plan's locations ran out.
   for (const row of rows) {
-    if (!addedIdx.has(row.idx)) skipped.push({ text: row.text, reason: 'plan_limit' });
+    if (!savedIdx.has(row.idx)) skipped.push({ text: row.text, reason: 'plan_limit' });
   }
-  if (added.length === 0) {
+  if (added.length === 0 && waiting.length === 0) {
     const [plan, usage] = await Promise.all([
       getOrgPlan(organizationId),
       getOrgLocationUsage(supabase, organizationId),
@@ -1171,6 +1255,7 @@ async function addPromptsToTopic(
     ok: true,
     code: skipped.length > 0 ? 'partial' : 'ok',
     added,
+    ...(waiting.length > 0 && { waiting }),
     skipped,
     analysisStarted: result.analysisStarted,
   };
@@ -1271,7 +1356,7 @@ export async function setPromptsActive(
 
   const { data, error } = await supabase
     .from('prompts')
-    .update({ is_active: isActive })
+    .update(activeColumns(isActive))
     .in('id', ids)
     .select('id');
   if (error) return { error: error.message };

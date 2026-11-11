@@ -79,7 +79,8 @@ describe('setPromptsActive', () => {
     usedLocations = 48;
 
     await expect(setPromptsActive(['p1', 'p2'], true)).resolves.toEqual({ updated: 2 });
-    expect(writes).toEqual([{ is_active: true }]);
+    // Resuming also ends any wait for a spot (00535).
+    expect(writes).toEqual([{ is_active: true, waiting_since: null }]);
   });
 
   it('always lets prompts be paused, even over the limit', async () => {

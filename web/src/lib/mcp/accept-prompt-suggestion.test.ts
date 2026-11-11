@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLANS } from '@/config/plans';
 
 /**
@@ -20,16 +20,19 @@ let catalogData: Record<string, unknown> | null = null;
 let hubTopic: string | null = null;
 /** Topics deleted. */
 let deletes: string[] = [];
+/** Active prompt locations per brand of the organization, as org_prompt_location_usage counts them. */
+let usage: { brand_id: string; locations: number }[] = [{ brand_id: 'b1', locations: 0 }];
 
 vi.mock('@/lib/guards/plan-guard', () => ({
   ORG_PLAN_COLUMNS: 'plan',
   planFromOrgRow: () => PLANS.growth,
   usagePlanFromOrgRow: () => PLANS.growth,
 }));
+const FULL = PLANS.growth.limits.maxPrompts;
 
 vi.mock('@/lib/supabase/admin', () => ({
   supabaseAdmin: {
-    rpc: async () => ({ data: [{ brand_id: 'b1', locations: 0 }], error: null }),
+    rpc: async () => ({ data: usage, error: null }),
     from: (table: string) => {
       let inserting = false;
       let deleting = false;
@@ -95,6 +98,8 @@ vi.mock('@/lib/supabase/admin', () => ({
 
 const { acceptPromptSuggestionFor, MCP_NO_TOPICS_MESSAGE } = await import('./data');
 
+afterEach(() => vi.unstubAllEnvs());
+
 const auth = {
   userId: 'user-1',
   email: null,
@@ -105,6 +110,8 @@ const auth = {
 };
 
 beforeEach(() => {
+  vi.unstubAllEnvs();
+  usage = [{ brand_id: 'b1', locations: 0 }];
   topic = null;
   inserts = [];
   promptRows = [];
@@ -168,5 +175,39 @@ describe('acceptPromptSuggestionFor', () => {
     topic = { id: 't1' };
     await acceptPromptSuggestionFor(auth, 's1');
     expect('source_data' in promptRows[0]).toBe(false);
+  });
+});
+
+describe('acceptPromptSuggestionFor with the plan full (Simplify PR 15)', () => {
+  beforeEach(() => {
+    topic = { id: 't1' };
+    // The organization's other brand holds every location: the limit is the organization's.
+    usage = [
+      { brand_id: 'b1', locations: 0 },
+      { brand_id: 'b2', locations: FULL },
+    ];
+  });
+
+  it('refuses it without SIMPLE_NAV, and adds nothing', async () => {
+    expect(await acceptPromptSuggestionFor(auth, 's1')).toMatchObject({ code: 'plan_limit' });
+    expect(inserts).toEqual([]);
+  });
+
+  it('with SIMPLE_NAV, saves the prompt waiting for a spot and says so', async () => {
+    vi.stubEnv('SIMPLE_NAV', 'true');
+    expect(await acceptPromptSuggestionFor(auth, 's1')).toMatchObject({
+      prompt_id: 'p1',
+      status: 'added',
+      waiting_for_spot: true,
+    });
+    expect(promptRows[0]).toMatchObject({ is_active: false, waiting_since: expect.any(String) });
+  });
+
+  it('tracks it as before while there is room', async () => {
+    vi.stubEnv('SIMPLE_NAV', 'true');
+    usage = [{ brand_id: 'b2', locations: FULL - 1 }];
+    const result = await acceptPromptSuggestionFor(auth, 's1');
+    expect(result).not.toHaveProperty('waiting_for_spot');
+    expect(promptRows[0]).toMatchObject({ is_active: true });
   });
 });
