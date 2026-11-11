@@ -40,6 +40,26 @@ export function withDefaultPicks(
   }));
 }
 
+/**
+ * Prompts the brand may still track on the organization's plan: its cap less
+ * what the organization's other brands use. Null when unknown (not read yet,
+ * or the read failed) or unlimited (-1).
+ */
+export function promptRoom(
+  capacity: { maxPrompts: number; used: number } | null | undefined,
+): number | null {
+  if (!capacity || capacity.maxPrompts === -1) return null;
+  return Math.max(0, capacity.maxPrompts - capacity.used);
+}
+
+/**
+ * How many prompts the step ticks at first: 15, or the plan's room when it
+ * has less, so nothing starts out waiting for a spot.
+ */
+export function defaultPickCount(room: number | null): number {
+  return room === null ? DEFAULT_PICKED_PROMPTS : Math.min(DEFAULT_PICKED_PROMPTS, room);
+}
+
 /** The ticked prompts: the ones the step saves, and counts toward the plan. */
 export function pickedCount(groups: TopicPromptPicks[]): number {
   return groups.reduce((sum, group) => sum + group.prompts.filter((p) => p.picked).length, 0);

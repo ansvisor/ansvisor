@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { pickedCount, withDefaultPicks } from './onboarding-prompt-picks';
+import {
+  defaultPickCount,
+  pickedCount,
+  promptRoom,
+  withDefaultPicks,
+} from './onboarding-prompt-picks';
 
 const group = (topic: string, n: number) => ({
   topic,
@@ -27,5 +32,27 @@ describe('withDefaultPicks', () => {
     const picks = withDefaultPicks([group('a', 5), group('b', 5)], 4);
     expect(picks.map((g) => g.prompts.length)).toEqual([5, 5]);
     expect(tickedPerTopic(picks)).toEqual([2, 2]);
+  });
+});
+
+describe('the default ticks and the plan', () => {
+  it('ticks 15, or the room left on the plan when it is less', () => {
+    expect(defaultPickCount(promptRoom({ maxPrompts: 50, used: 0 }))).toBe(15);
+    expect(defaultPickCount(promptRoom({ maxPrompts: 50, used: 40 }))).toBe(10);
+    expect(defaultPickCount(promptRoom({ maxPrompts: 50, used: 60 }))).toBe(0);
+  });
+
+  it('ticks 15 when the room is unknown or unlimited', () => {
+    expect(promptRoom(null)).toBeNull();
+    expect(promptRoom({ maxPrompts: -1, used: 300 })).toBeNull();
+    expect(defaultPickCount(null)).toBe(15);
+  });
+
+  it('spreads a capped count across the topics too', () => {
+    const picks = withDefaultPicks(
+      Array.from({ length: 7 }, (_, i) => group(`t${i}`, 5)),
+      defaultPickCount(10),
+    );
+    expect(tickedPerTopic(picks)).toEqual([2, 2, 2, 1, 1, 1, 1]);
   });
 });

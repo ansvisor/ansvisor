@@ -45,7 +45,7 @@ Aim for four to seven topics. Too few gives a narrow view; too many is noisy and
 
 ## Step 4: Prompts
 
-On **Choose your prompts**, Ansvisor writes five starter prompts for each topic you chose: real questions a potential customer would ask an AI engine. They come as a checklist, 15 ticked, a few from each topic:
+On **Choose your prompts**, Ansvisor writes five starter prompts for each topic you chose: real questions a potential customer would ask an AI engine. They come as a checklist, up to 15 ticked, within your plan's room:
 
 - untick the ones that don't fit; only ticked prompts are saved;
 - remove a whole topic from its **…** menu with **Remove topic**;

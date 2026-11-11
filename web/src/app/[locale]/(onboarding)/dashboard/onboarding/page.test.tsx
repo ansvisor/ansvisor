@@ -264,6 +264,27 @@ describe('the prompts step', () => {
     expect(saved).not.toContain('Best beans question 5');
     expect(saved).toContain('Best gifts question 3');
   });
+  it('ticks no more than the plan has room for, so no note shows until more are ticked', async () => {
+    const { getPromptCapacity } = await import('@/lib/actions/prompt');
+    vi.mocked(getPromptCapacity).mockResolvedValueOnce({ maxPrompts: 50, used: 40 });
+    setup.generatePromptsFromTopics.mockResolvedValue({
+      topicPrompts: ['Beans', 'Brewing', 'Grinders', 'Gifts'].map((topic) => ({
+        topic,
+        prompts: [1, 2, 3, 4, 5].map((n) => `Best ${topic.toLowerCase()} question ${n}`),
+      })),
+    });
+    await render();
+    await act(async () => button('Looks good')!.click());
+    expect(container.querySelector('[data-slot="prompt-count"]')?.textContent).toBe(
+      '10 of 20 prompts ticked',
+    );
+    expect(text()).not.toContain('waiting for a spot');
+    const unticked = container.querySelector<HTMLButtonElement>(
+      '[role="checkbox"][aria-checked="false"]',
+    )!;
+    await act(async () => unticked.click());
+    expect(text()).toContain('Your plan has room for 10 more prompts: the other 1 will be saved');
+  });
 });
 
 describe('topic suggestions', () => {

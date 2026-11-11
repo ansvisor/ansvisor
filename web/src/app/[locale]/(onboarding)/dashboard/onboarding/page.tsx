@@ -104,7 +104,9 @@ import { wantsDemoAhead } from '@/lib/demo/demo-ahead';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  defaultPickCount,
   pickedCount,
+  promptRoom,
   withDefaultPicks,
   type TopicPromptPicks,
 } from '@/lib/onboarding-prompt-picks';
@@ -871,16 +873,22 @@ export default function OnboardingPage() {
     }
 
     try {
-      const { topicPrompts: generated } = await generatePromptsFromTopics(
-        {
-          brandName: brandName.trim(),
-          description: description.trim(),
-          website: domain,
-          language,
-        },
-        topicNames,
-      );
-      setTopicPrompts(withDefaultPicks(generated));
+      // The plan's room, read alongside: the prompts ticked at first fit in
+      // it, so none start out waiting for a spot. Unread, 15 as usual.
+      const [{ topicPrompts: generated }, capacity] = await Promise.all([
+        generatePromptsFromTopics(
+          {
+            brandName: brandName.trim(),
+            description: description.trim(),
+            website: domain,
+            language,
+          },
+          topicNames,
+        ),
+        promptCapacity ?? getPromptCapacity(createdBrand.id).catch(() => null),
+      ]);
+      if (capacity) setPromptCapacity(capacity);
+      setTopicPrompts(withDefaultPicks(generated, defaultPickCount(promptRoom(capacity))));
       track('onboarding_step_completed', {
         step: 3,
         step_name: 'topics',
@@ -1195,10 +1203,7 @@ export default function OnboardingPage() {
   // Prompts this brand may track before hitting the org's plan cap (null =
   // unknown or unlimited); past it, the rest are saved waiting for a spot
   // (savePromptSet), as on a new brand's wizard, and a note says how many.
-  const promptLimit =
-    promptCapacity && promptCapacity.maxPrompts !== -1
-      ? Math.max(0, promptCapacity.maxPrompts - promptCapacity.used)
-      : null;
+  const promptLimit = promptRoom(promptCapacity);
   const overPrompts = promptLimit !== null ? Math.max(0, totalPrompts - promptLimit) : 0;
 
   async function loadResumedPreview(orgId: string) {
