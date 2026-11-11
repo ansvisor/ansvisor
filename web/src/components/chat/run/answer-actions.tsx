@@ -40,7 +40,8 @@ const ICON =
  * A button's short label beside its icon. Shown only where the row is
  * wide enough for all five (the thread); in a narrow pane (the side
  * panel) the icon stays alone and the tooltip names it. The button's
- * aria-label keeps its full name.
+ * aria-label is the same short label, so what it reads matches what it
+ * shows; the tooltip keeps the full name ("Open in Content Editor").
  */
 function Label({ children }: { children: string }) {
   return (
@@ -61,7 +62,8 @@ function Tip({ label, children }: { label: string; children: ReactElement }) {
 /**
  * The bar under a finished answer (CHAT-06 items 30–37, 30a): Copy,
  * Download ▾ and Save to Files as icon buttons with a short label where
- * the row fits them, each named in an aria-label and a tooltip. Copy takes the answer as rich text (Markdown
+ * the row fits them, each named by that label (its aria-label) and by its
+ * full name in a tooltip. Copy takes the answer as rich text (Markdown
  * where only text goes). Download offers Markdown, Word and PDF, and CSV
  * and Excel when the answer has a table; the server renders the file from
  * the stored answer, so nothing is kept and no AI is used. Save to Files
@@ -183,7 +185,7 @@ export function AnswerActions({
         <button
           type="button"
           data-action="answer.copy"
-          aria-label={t('copy')}
+          aria-label={t('short.copy')}
           onClick={() => void copy()}
           className={ICON}
         >
@@ -195,7 +197,7 @@ export function AnswerActions({
         <Tip label={t('downloadTip', { formats: extensions })}>
           <DropdownMenuTrigger
             data-action="answer.download"
-            aria-label={t('download')}
+            aria-label={t('short.download')}
             className={ICON}
           >
             <Download className="size-4" aria-hidden />
@@ -220,7 +222,7 @@ export function AnswerActions({
         <button
           type="button"
           data-action="answer.saveToFiles"
-          aria-label={filed ? t('inFiles') : t('save')}
+          aria-label={filed ? t('short.inFiles') : t('short.save')}
           aria-disabled={filed || saving}
           onClick={() => void save()}
           className={cn(ICON, filed && 'text-foreground')}
@@ -239,7 +241,7 @@ export function AnswerActions({
         <button
           type="button"
           data-action="answer.openInEditor"
-          aria-label={t('openEditor')}
+          aria-label={t('short.openEditor')}
           aria-disabled={opening}
           onClick={() => void openInEditor()}
           className={ICON}
@@ -253,7 +255,7 @@ export function AnswerActions({
           <button
             type="button"
             data-action="answer.sendToActionCenter"
-            aria-label={t('sendToActionCenter')}
+            aria-label={t('short.sendToActionCenter')}
             onClick={onSendToActionCenter}
             className={ICON}
           >
