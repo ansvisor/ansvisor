@@ -236,6 +236,7 @@ export const DEMO_GUARDED = [
   // Prompts (prompts.js).
   guard('POST /prompts/suggestions/:brandId/refresh', brandIn('path')),
   guard('POST /prompts/suggestions/:brandId/page', brandIn('path')),
+  guard('POST /prompts/suggestions/:brandId/business-hub', brandIn('path')),
   guard('POST /prompts/suggestions/:id/dismiss', rowIn('prompt_suggestions', 'path')),
   guard('POST /prompts/suggestions/:id/accept', rowIn('prompt_suggestions', 'path')),
   guard('POST /prompts/:promptId/improve', rowIn('prompts', 'path', 'promptId')),

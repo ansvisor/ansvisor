@@ -13261,7 +13261,32 @@
       "selectTopic": "Select a topic",
       "platformsAndModels": "Platform & Models",
       "selectPlatformsAndModels": "Select platform & models",
-      "selectedCount": "{count} selected"
+      "selectedCount": "{count} selected",
+      "businessHub": {
+        "button": "From ChatGPT Business Hub",
+        "badge": "ChatGPT Business Hub",
+        "tooltip": "Written from “{topic}”, a discovery topic you copied from ChatGPT Business Hub on {date}: real ChatGPT conversations that cited your site were about it.",
+        "tooltipPeriod": "Written from “{topic}”, a discovery topic ChatGPT Business Hub showed for the period ending {date}: real ChatGPT conversations that cited your site were about it.",
+        "filter": "ChatGPT Business Hub",
+        "dialog": {
+          "title": "Suggest prompts from ChatGPT Business Hub",
+          "description": "Copy up to five discovery topics from Insights in ChatGPT Business Hub. Ansvisor writes 2 or 3 prompts for each, in your brand's language, and lists them here for 30 days.",
+          "topicLabel": "Topic {number}",
+          "topicPlaceholder": "e.g. office coffee subscriptions",
+          "quota": "You can track {count, plural, one {# more prompt} other {# more prompts}} on your plan.",
+          "quotaFull": "Your plan's prompt limit is reached. You can still get suggestions, and track them once you make room.",
+          "submit": "Suggest prompts",
+          "submitting": "Writing prompts…",
+          "cancel": "Cancel"
+        },
+        "result": {
+          "added": "{count, plural, =0 {No new suggestions} one {# new suggestion, listed under ChatGPT Business Hub} other {# new suggestions, listed under ChatGPT Business Hub}}",
+          "skipped": "Left out: {tracked} already tracked, {suggested} already suggested.",
+          "topicMatched": "{count, plural, =0 {nothing new} one {# prompt} other {# prompts}} under {topic}",
+          "topicNew": "{count, plural, =0 {nothing new} one {# prompt, new topic} other {# prompts, new topic}}",
+          "done": "Done"
+        }
+      }
     },
     "topicSuggestions": {
       "catalog": {
