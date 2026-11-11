@@ -15,7 +15,7 @@ ChatGPT Business Hub is OpenAI's free place for a business to claim its profile 
 
 ## What Business Hub is
 
-In Business Hub you claim your business, verify it is yours, and correct the facts ChatGPT shows: name, category, address or service area, hours, contact details, products and services. An online shop can also connect its product feed. Claiming the profile doesn't move you up in answers by itself, and OpenAI may still fill in a field from other sources, so keep the same facts on your site. Open Business Hub from ChatGPT, or with **Open Business Hub** in the action.
+In Business Hub you claim your business, verify it is yours, and correct the facts ChatGPT shows: name, category, address or service area, hours, contact details, products and services. An online shop can also connect its product feed. Claiming the profile doesn't move you up in answers by itself, and OpenAI may still fill in a field from other sources, so keep the same facts on your site. Open Business Hub from ChatGPT, or with **Open Business Hub** in the action. **Settings › Integrations** lists Business Hub as a manual setup, with nothing to connect since it has no API yet, and its **Set up your profile** opens this action.
 
 ## When the action appears
 

@@ -15615,6 +15615,7 @@
     "integrations_cms": "Content management systems",
     "integrations_team": "Team and alerts",
     "integrations_crm": "CRM",
+    "integrations_businessProfiles": "Business profiles",
     "integrations_description": "Connect external data sources. Connections are shared with your whole organization.",
     "catalog": {
       "title": "Product catalog",
@@ -16288,6 +16289,18 @@
         "busy": "Too many tries. Wait a minute and try again.",
         "failed": "That didn't work. Try again."
       }
+    },
+    "businessHub": {
+      "title": "ChatGPT Business Hub",
+      "description": "OpenAI's free place to claim your business in ChatGPT and correct what ChatGPT says about it.",
+      "manual": "Manual: Business Hub has no API yet",
+      "noBrand": "Pick a brand to set up its Business Hub profile.",
+      "setUp": "Set up your profile",
+      "enterNumbers": "Enter numbers",
+      "noAction": "{brand} has no setup action yet: the Action Center adds one once the brand has a website and tracked ChatGPT answers. Until then, this opens Business Hub.",
+      "demoNoAction": "The demo brand has no setup action, so this opens Business Hub.",
+      "unread": "The setup action couldn't be checked, so this opens Business Hub.",
+      "apiNote": "We'll switch to an automatic connection if OpenAI opens an API."
     },
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",
