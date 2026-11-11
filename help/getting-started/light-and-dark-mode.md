@@ -8,7 +8,7 @@ updated: 2026-11-10
 last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/faq.mdx]
 ---
 Ansvisor has a light and a dark mode. You can switch between them at any time, from any page.

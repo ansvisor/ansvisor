@@ -17,6 +17,7 @@ import type { GithubRefusalCode } from './github';
 import type { ImportRefusalCode, ParsedImport } from './import';
 import type { SkillsShRefusalCode } from './skills-sh';
 import { SKILL_LIBRARY, enabledSkills, type SkillFilter } from './library';
+import { skillFlagOn } from './flagged';
 import { MAX_TITLE, skillChecksum, skillFileText, type SkillParts } from './skill-file';
 
 /**
@@ -632,7 +633,8 @@ export async function listSkills(viewer: SkillViewer): Promise<SkillList> {
   if (rows.error) throw new Error(`Could not read the workspace's skills: ${rows.error.message}`);
   const disabled = new Set(off);
   return {
-    library: SKILL_LIBRARY.map((skill) => ({
+    // A skill behind a flag that is off isn't listed (flagged.ts).
+    library: SKILL_LIBRARY.filter((skill) => skillFlagOn(skill.name)).map((skill) => ({
       name: skill.name,
       title: skill.title,
       description: skill.description,
