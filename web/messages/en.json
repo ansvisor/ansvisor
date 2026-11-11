@@ -4420,6 +4420,7 @@
     "keyFix": "Open AI Providers",
     "keyAskAdmin": "An Admin can fix it in Settings › AI Providers.",
     "keyUseAnsvisor": "Use Ansvisor's limit",
+    "openAction": "Open {ref} in Action Center, new tab",
     "tasks": {
       "title": "{due, plural, =0 {Action Center tasks} other {Action Center tasks · # due}}",
       "progress": "Tasks ready",

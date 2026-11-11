@@ -1198,7 +1198,11 @@
         "page chip",
         "suggestions from chat",
         "accept suggestion",
-        "reject suggestion"
+        "reject suggestion",
+        "action number",
+        "ac number",
+        "open action from answer",
+        "action link"
       ],
       "synonyms": [
         "assistant",
@@ -1207,7 +1211,7 @@
         "ask ansvisor"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -1363,7 +1367,7 @@
         },
         {
           "heading": "Watch the work",
-          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone."
+          "text": "While Chat works, one line says what it is doing now, such as \"Reading Citations…\". Steps it finished show as chips with a check mark above the answer: click one for its detail, or click the line with the number of steps for the full list. A fact check of the answer's figures shows as **Checked facts**.\n\nUnder the answer, **Data used** names each source it read, with its rows, and each page it opened. The answer says when it was generated and how fresh the data was, in your time zone.\n\nEach Action Center action an answer names, such as AC-1497, is a link: click it to open that action in Action Center in a new tab."
         },
         {
           "heading": "Big requests in parts",
