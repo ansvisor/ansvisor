@@ -106,3 +106,14 @@ describe('DashboardPreview with the simplified menu (SIMPLE_NAV)', () => {
     expect(menu()).not.toContain('Agent Center');
   });
 });
+
+describe('DashboardPreview’s home with SIMPLE_NAV', () => {
+  it('marks the Action Center, where Today is, as the page the wizard leads to', async () => {
+    const marked = () =>
+      [...container.querySelectorAll('aside div.bg-accent')].map((item) => item.textContent);
+    await render(true, false, true);
+    expect(marked()).toEqual(['Action Center']);
+    await render(true, false, false);
+    expect(marked()).toEqual(['Action Center']);
+  });
+});
