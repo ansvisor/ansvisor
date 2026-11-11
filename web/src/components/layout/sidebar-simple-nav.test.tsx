@@ -274,7 +274,7 @@ describe('the simplified menu (SIMPLE_NAV)', () => {
     expect(link('/dashboard/action-center/today')).not.toBeNull();
   });
 
-  it('marks the tab of the page shown, Agents on its pages too', async () => {
+  it('marks the tab of the page shown, Agents on its pages too, History on KPIs', async () => {
     nav.pathname = '/dashboard/agents/new';
     await render();
     expect(link('/dashboard/agents')?.getAttribute('aria-current')).toBe('page');
@@ -283,6 +283,13 @@ describe('the simplified menu (SIMPLE_NAV)', () => {
     await render();
     expect(link('/dashboard/action-center/today')?.getAttribute('aria-current')).toBe('page');
     expect(link('/dashboard/agents')?.getAttribute('aria-current')).toBeNull();
+    // KPIs, one of History's views: History is current, as its tab is.
+    nav.pathname = '/dashboard/action-center/kpis';
+    await render();
+    expect(link('/dashboard/action-center/history')?.getAttribute('aria-current')).toBe('page');
+    expect(
+      [...container.querySelectorAll('[aria-current="page"]')].map((a) => a.getAttribute('href')),
+    ).toEqual(['/dashboard/action-center/history']);
   });
 
   it('shows the tracked prompts’ count beside Tracked Prompts', async () => {
