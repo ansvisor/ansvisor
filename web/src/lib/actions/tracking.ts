@@ -673,7 +673,10 @@ export async function getInsightsOpportunities(brandId: string): Promise<Insight
   try {
     const read = await getPromptSuggestions(brandId);
     if (!read.ok) return { suggestions: [], trackedTopicIds: [], contentUsage: null };
-    const { suggestions } = read;
+    // ChatGPT Business Hub's (00527) aren't rated for fit, which the card
+    // ranks by: they stay in Prompts › Suggestions, and the card's states
+    // read as they did without them.
+    const suggestions = read.suggestions.filter((s) => s.source !== 'business_hub');
     const topicIds = [...new Set(suggestions.flatMap((s) => (s.topicId ? [s.topicId] : [])))];
     const readTrackedTopics = async (): Promise<string[] | null> => {
       if (topicIds.length === 0) return [];

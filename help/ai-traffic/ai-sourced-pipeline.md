@@ -8,7 +8,7 @@ updated: 2026-11-10
 last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 **AI-sourced pipeline** on the AI Traffic page shows which HubSpot contacts, deals and revenue came from AI answers, by AI engine and landing page. It needs HubSpot connected for the brand, with **Mark contacts who came from an AI answer** allowed, and the Growth plan or above.

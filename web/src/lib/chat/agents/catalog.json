@@ -206,7 +206,8 @@
       "roles": [],
       "skills": [
         "wrongclaim",
-        "facts"
+        "facts",
+        "chatgpt-profile"
       ],
       "triggers": [
         {
