@@ -21,7 +21,6 @@ vi.mock('@/hooks/use-user-role', () => ({
 const actions = vi.hoisted(() => ({ getMyMenu: vi.fn(), setMyWorkAreas: vi.fn() }));
 vi.mock('@/lib/actions/menu-access', () => actions);
 
-const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 const { WorkAreasCard, menuWithWorkAreas } = await import('./work-areas-card');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { menuSectionsFor } = await import('@/lib/menu-access');
@@ -54,16 +53,14 @@ afterEach(() => {
   container.remove();
 });
 
-async function render(start: MyMenu, chatOn = false, simpleNav = false) {
+async function render(start: MyMenu, chatOn = false) {
   actions.getMyMenu.mockResolvedValue(start);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <SimpleNavProvider enabled={simpleNav}>
-          <ChatAgenticProvider enabled={chatOn}>
-            <WorkAreasCard />
-          </ChatAgenticProvider>
-        </SimpleNavProvider>
+        <ChatAgenticProvider enabled={chatOn}>
+          <WorkAreasCard />
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -80,9 +77,9 @@ describe('menuWithWorkAreas', () => {
     const next = menuWithWorkAreas(menu({ hiddenByAdmin: ['mentions'] }), ['brand']);
     expect(next.workAreas).toEqual(['brand']);
     expect(next.hidden).toEqual([
+      'prompts',
       'mentions',
       'shopping',
-      'prompts',
       'traffic',
       'ads',
       'content',
@@ -153,12 +150,12 @@ describe('WorkAreasCard', () => {
     expect(toast.error).toHaveBeenCalledWith("Couldn't save the menu. Try again.");
   });
 
-  it('lists Agent Center, right under Chat, only with the new Chat on', async () => {
+  it('lists Agents, under the Action Center, only with the new Chat on', async () => {
     await render(menu(), true);
     expect(container.textContent).toContain('13 of 13 sections');
-    expect(section('agents').textContent).toBe('Agent Center');
-    expect(section('agent').nextElementSibling).toBe(section('agents'));
-    // AEO/GEO & Audit keeps Agent Center without Chat, as Analytics does.
+    expect(section('agents').textContent).toBe('Agents · in Action Center');
+    expect(section('action-center').nextElementSibling).toBe(section('agents'));
+    // AEO/GEO & Audit keeps Agents without Chat, as Analytics does.
     await act(async () => chip('AEO/GEO & Audit').click());
     expect(section('agents').textContent).not.toContain('Not in your work areas');
     expect(section('agent').textContent).toContain('Not in your work areas');
@@ -183,7 +180,7 @@ describe('WorkAreasCard', () => {
 
 describe('WorkAreasCard with the simplified menu (SIMPLE_NAV)', () => {
   it('lists the menu in its order, Agents under the Action Center, and narrows it as before', async () => {
-    await render(menu(), true, true);
+    await render(menu(), true);
     const listed = [...container.querySelectorAll('[data-section]')].map((li) =>
       li.getAttribute('data-section'),
     );

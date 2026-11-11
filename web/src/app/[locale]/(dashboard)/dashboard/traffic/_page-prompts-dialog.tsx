@@ -24,7 +24,6 @@ import { pageUrl } from '@/lib/traffic-pages';
 import { getLocationQuota } from '@/lib/actions/prompt';
 import { trackPagePrompts } from '@/lib/actions/prompt-suggestions';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import {
   suggestPagePrompts,
   type PagePromptSuggestions,
@@ -69,8 +68,7 @@ export function PagePromptsDialog({
   const t = useTranslations('traffic.pageList.prompts');
   const router = useRouter();
   const showWaiting = useWaitingForSpotToast();
-  // SIMPLE_NAV: prompts past the free slots are saved waiting for a spot, not held back.
-  const waitOverLimit = useSimpleNav();
+  // Prompts past the free slots are saved waiting for a spot, not held back.
   const tWaiting = useTranslations('prompts.waiting');
   // The loaded suggestions carry the page they are for, so another page's
   // never show while this one's load.
@@ -98,13 +96,12 @@ export function PagePromptsDialog({
       const slotsLeft = slotsLeftOf(quota);
       setLoaded({ page, result, slotsLeft, unlimited: quota?.maxPrompts === -1 });
       const count = 'suggestions' in result ? result.suggestions.length : 0;
-      const ticked = waitOverLimit ? count : Math.min(count, slotsLeft ?? count);
-      setSelected(new Set(Array.from({ length: ticked }, (_, i) => i)));
+      setSelected(new Set(Array.from({ length: count }, (_, i) => i)));
     });
     return () => {
       cancelled = true;
     };
-  }, [brandId, dateWindow, page, waitOverLimit]);
+  }, [brandId, dateWindow, page]);
 
   const current = page && loaded?.page === page ? loaded : null;
   // A brand with no topic yet: suggesting or tracking asks for one first.
@@ -112,7 +109,6 @@ export function PagePromptsDialog({
   const suggestions = current && 'suggestions' in current.result ? current.result.suggestions : [];
   const slotsLeft = current?.slotsLeft ?? null;
   const pastSlots = slotsLeft !== null && selected.size > slotsLeft;
-  const over = pastSlots && !waitOverLimit;
 
   const toggle = (index: number, on: boolean) =>
     setSelected((prev) => {
@@ -240,15 +236,13 @@ export function PagePromptsDialog({
             )}
           >
             {current && suggestions.length > 0
-              ? pastSlots && waitOverLimit
+              ? pastSlots
                 ? tWaiting('overNote', { count: selected.size - (slotsLeft ?? 0) })
-                : over
-                  ? t('overSlots', { count: slotsLeft ?? 0 })
-                  : current.unlimited
-                    ? t('unlimited')
-                    : slotsLeft !== null
-                      ? t('slotsLeft', { count: slotsLeft })
-                      : null
+                : current.unlimited
+                  ? t('unlimited')
+                  : slotsLeft !== null
+                    ? t('slotsLeft', { count: slotsLeft })
+                    : null
               : null}
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">
@@ -260,7 +254,7 @@ export function PagePromptsDialog({
                   {t('addOwn')}
                 </Link>
                 <Button
-                  disabled={!current || selected.size === 0 || over || tracking}
+                  disabled={!current || selected.size === 0 || tracking}
                   onClick={() => void track()}
                 >
                   {tracking && <Loader2 className="h-4 w-4 animate-spin" />}

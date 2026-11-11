@@ -4,7 +4,6 @@ import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { menuSectionsFor } from '@/lib/menu-access';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAdsEnabled } from '@/components/providers/ads-provider';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 
 interface MenuAccessValue {
   /** The left-menu sections the viewer's menu leaves out. */
@@ -47,14 +46,12 @@ export function useCanManageMenus(): boolean {
 }
 
 /**
- * The left menu's sections this workspace has, in its order: Agent Center
- * only with the new Chat on (CHAT_AGENTIC), Ads only with Ads on
- * (ADS_ENABLED); in the simplified menu's order with SIMPLE_NAV on. What the
- * menu-access lists show.
+ * The left menu's sections this workspace has, in its order: Agents only
+ * with the new Chat on (CHAT_AGENTIC), Ads only with Ads on (ADS_ENABLED).
+ * What the menu-access lists show.
  */
 export function useMenuSections(): string[] {
   const chatAgentic = useChatAgentic();
   const ads = useAdsEnabled();
-  const simpleNav = useSimpleNav();
-  return useMemo(() => menuSectionsFor(chatAgentic, ads, simpleNav), [chatAgentic, ads, simpleNav]);
+  return useMemo(() => menuSectionsFor(chatAgentic, ads), [chatAgentic, ads]);
 }

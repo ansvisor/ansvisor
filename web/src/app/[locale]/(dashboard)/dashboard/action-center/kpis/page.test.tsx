@@ -80,7 +80,6 @@ vi.mock('sonner', () => ({
 }));
 
 import ActionCenterKpisPage from './page';
-import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 
 beforeEach(() => {
   getKpiSnapshots.mockResolvedValue({ configured: true, kpis: [] });
@@ -111,19 +110,17 @@ const snapshot = (key: string) => ({
 });
 
 const openUpgrade = vi.fn();
-async function renderPage(isLocked = false, simpleNav = false) {
+async function renderPage(isLocked = false) {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
   await act(async () => {
     root.render(
-      <SimpleNavProvider enabled={simpleNav}>
-        <UpgradeDialogContext.Provider
-          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-        >
-          <ActionCenterKpisPage />
-        </UpgradeDialogContext.Provider>
-      </SimpleNavProvider>,
+      <UpgradeDialogContext.Provider
+        value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+      >
+        <ActionCenterKpisPage />
+      </UpgradeDialogContext.Provider>,
     );
   });
   return { container, root };
@@ -277,16 +274,9 @@ describe('KPIs status filter', () => {
   });
 });
 
-describe('KPIs with the simplified layout (SIMPLE_NAV)', () => {
-  it('shows no History views while it is off', async () => {
+describe('KPIs, one of History’s views', () => {
+  it('shows KPIs current, the others linking back to History', async () => {
     const { container, root } = await renderPage();
-    expect(container.querySelector('[aria-label="view.label"]')).toBeNull();
-    expect(container.textContent).not.toContain('view.kpis');
-    await act(async () => root.unmount());
-  });
-
-  it('is one of History’s views with it on: KPIs current, the others link back to History', async () => {
-    const { container, root } = await renderPage(false, true);
     const group = container.querySelector('[role="group"][aria-label="view.label"]')!;
     const views = [...group.children].map((v) => [
       v.textContent,

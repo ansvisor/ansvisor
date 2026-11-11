@@ -7,8 +7,7 @@
       "keywords": [
         "actions",
         "today",
-        "next 7",
-        "done this week",
+        "todays focus",
         "agent work",
         "i approve first",
         "agent starts on its own",
@@ -35,19 +34,19 @@
         "who starts agent work"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
           "text": "An action is one piece of work with an outcome, built from the evidence behind it. Ansvisor groups many signals into one action: six valuable pages with no AI traffic become one \"Capture AI traffic\" action with six linked signals, not six rows. New actions are added after the daily tracking run, on the **Actions** tab."
         },
         {
-          "heading": "Today",
-          "text": "The **Today** card at the top of the **Actions** tab lists up to three things to do today: open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. An action Chat's Inbox suggested to you today comes first.\n\nEach item says why it matters, its first step and page, and who does it: **Me** (assigned to you), **Agent** (an agent can do the first step) or **Team** (no one's yet). **Open** opens the action.\n\nUnder the card, **Next** lists the seven after them, and **Done this week** counts actions completed since Monday; click it for History. While Getting started runs, the card shows its next three steps instead."
+          "heading": "Today's focus",
+          "text": "What to do today is on the **Today** tab: **Today's focus** lists your three highest-impact open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. The **Actions** tab lists every action; sort it by Priority to see what comes next."
         },
         {
           "heading": "Agent work",
-          "text": "When Chat is on, the **Agent work** gear on the **Today** card sets how far your workspace's agents go without a person:\n\n- **I approve first**, where every workspace starts: every change an agent makes waits for someone to approve it, whatever the agent's mode.\n- **Agent starts on its own**: each agent works in its own mode, **Ask me first**, **Auto** or **Full auto**.\n\nNeither changes going live: an agent publishes or sends only with a person's click, unless an Admin let it publish on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. It is also in **Settings › Chat**."
+          "text": "When Chat is on, the **Agent work** gear beside **Today's focus** sets how far your workspace's agents go without a person:\n\n- **I approve first**, where every workspace starts: every change an agent makes waits for someone to approve it, whatever the agent's mode.\n- **Agent starts on its own**: each agent works in its own mode, **Ask me first**, **Auto** or **Full auto**.\n\nNeither changes going live: an agent publishes or sends only with a person's click, unless an Admin let it publish on its own. Only Admins change the setting; everyone sees it, with who changed it last and when. It is also in **Settings › Chat**."
         },
         {
           "heading": "Action categories",
@@ -55,7 +54,7 @@
         },
         {
           "heading": "Cards and filters",
-          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter. While Getting started runs, its card shows instead.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products."
+          "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products."
         },
         {
           "heading": "Status, dismiss and delete",
@@ -106,15 +105,15 @@
         "performance targets"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "The **KPIs** tab tracks the goals you set for the brand. Each KPI shows its **Value**, **Change**, **Trend (7D)**, **Goal**, progress **vs Goal** and a **Status**. An action's Overview lists the KPIs it is linked to."
+          "text": "**KPIs**, one of the views of the Action Center's **History** tab, tracks the goals you set for the brand. Each KPI shows its **Value**, **Change**, **Trend (7D)**, **Goal**, progress **vs Goal** and a **Status**. An action's Overview lists the KPIs it is linked to."
         },
         {
           "heading": "KPIs you can track",
-          "text": "AI Visibility, Citations, Mentions, Share of Voice, AI Referral Traffic and Positive Sentiment.\n\nA brand that never had KPIs starts with a suggested set: AI Visibility, Citations, Mentions, Share of Voice and Positive Sentiment, plus AI Referral Traffic when Google Analytics is connected. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. It is saved the first time an admin or manager opens the tab."
+          "text": "AI Visibility, Citations, Mentions, Share of Voice, AI Referral Traffic and Positive Sentiment.\n\nA brand that never had KPIs starts with a suggested set: AI Visibility, Citations, Mentions, Share of Voice and Positive Sentiment, plus AI Referral Traffic when Google Analytics is connected. Each aims 20% above its last 30 days, or starts from a default where there's no data yet. It is saved the first time an admin or manager opens KPIs."
         },
         {
           "heading": "KPI status",
@@ -146,15 +145,15 @@
         "home page"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. When you sign in, Ansvisor opens on **Visibility** on a paid plan and from the second day of a free trial, and on **Chat** otherwise, such as on a trial's first day. It opens here instead when neither that page nor Chat is on your menu. Open it from **Action Center** in the main menu. Everything in it is per brand: switch brands to see another brand's work."
+          "text": "The **Action Center** is where Ansvisor turns what changed in AI search into a ranked list of work. Everyone lands on its **Today** tab when they sign in, whatever the plan. Open it from **Action Center**, first in the main menu, under Chat; its tabs are listed under it too. Everything in it is per brand: switch brands to see another brand's work."
         },
         {
           "heading": "The tabs",
-          "text": "- **Actions**: what to do now, ranked by Priority Score.\n- **Signals**: what changed across your AI visibility data.\n- **KPIs**: the goals you track for the brand.\n- **History**: what was done, and what it moved.\n\nAdmins and managers also see **Needs review**, where tasks the AI wrote without some of their details wait for a person."
+          "text": "- **Today**: what changed since your last visit, today's focus and what waits for you.\n- **Actions**: every action, ranked by Priority Score.\n- **Signals**: what changed across your AI visibility data.\n- **Agents**: your agents and ready-to-use ones, when Chat's agents are on for your workspace.\n- **History**: what was done, and what it moved. **KPIs**, the goals you track for the brand, is one of its views.\n\nAdmins and managers open **Needs review**, where tasks the AI wrote without some of their details wait for a person, from **Waiting for you** on Today."
         },
         {
           "heading": "How the work flows",
@@ -162,11 +161,11 @@
         },
         {
           "heading": "While the first tracking runs",
-          "text": "While a new brand's first tracking runs, one thin line sits under the tabs: **First tracking running**, how many of its checks are done and about how long is left. If another analysis is running, the line says **First tracking queued** until a slot opens. Click **Details** to read what it means and follow the run on Visibility. Actions, signals and KPIs fill in once it finishes, and the line goes away. Meanwhile, a new brand starts with the **Getting started** steps on the Actions tab."
+          "text": "While a new brand's first tracking runs, one thin line sits under the tabs: **First tracking running**, how many of its checks are done and about how long is left. If another analysis is running, the line says **First tracking queued** until a slot opens. Click **Details** to read what it means and follow the run on Visibility. Actions, signals and KPIs fill in once it finishes, and the line goes away. Meanwhile, Today asks you to check the prompts we track and lists the set-up steps left."
         },
         {
           "heading": "A weekly routine",
-          "text": "Work from the **Top Actions** card each week. Assign each action, set a due date, and close it as **Completed** when its tasks are done, so History can measure the result."
+          "text": "Start each day from **Today's focus**, and work from the **Top Actions** card each week. Assign each action, set a due date, and close it as **Completed** when its tasks are done, so History can measure the result."
         }
       ]
     },
@@ -426,14 +425,15 @@
     },
     {
       "id": "action-center/getting-started-steps",
-      "title": "Getting started steps in the Action Center",
-      "route": "/dashboard/action-center/actions",
+      "title": "Finish setting up: the 7 set-up steps",
+      "route": "/dashboard/action-center/today",
       "keywords": [
         "getting started",
+        "finish setting up",
         "setup steps",
         "onboarding checklist",
         "new brand",
-        "skip get started"
+        "hide setup"
       ],
       "synonyms": [
         "first steps",
@@ -442,35 +442,27 @@
         "onboarding"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "A new brand starts with **Getting started**: a fixed list of 17 steps on the Action Center's **Actions** tab. While it runs, the **Getting started** category opens first and lists the steps with their **Stage**, **Status** and **Ready** time, and a **Getting started** card shows how many are done. Click **All** or another category to see your actions."
+          "text": "**Finish setting up** is a card on the Action Center's **Today** tab: the 7 steps that set a brand up, with how many are done, such as **3 of 7**. It shows the next two steps with about how long each takes; **Show all steps** lists all 7. The card goes away once all 7 are done."
         },
         {
-          "heading": "The four stages",
-          "text": "- **Set up**, ready now: set your KPIs, add at least 3 competitors and 3 topics, add 3 prompts per topic, connect Google Search Console and Google Analytics, and add the AI Traffic snippet.\n- **Explore**, when the first AI answers are in (usually within an hour): see where you stand in Visibility, read your first AI answers, track high-value prompt suggestions, check what AI says about you, see who AI quotes and see visits from AI.\n- **Act**, when the first content suggestions are in (about 24 hours): pick content from suggestions, create your first content, optimize a page.\n- **Ready**, after every step above is done or skipped.\n\nThe high-value prompts step waits about 24 hours after you connect Search Console or Analytics."
+          "heading": "The 7 steps",
+          "text": "- Set your KPIs.\n- Add at least 3 competitors.\n- Add at least 3 topics.\n- Add 3 prompts per topic.\n- Connect Google Search Console.\n- Connect Google Analytics.\n- Add the AI Traffic snippet.\n\nEach step opens its page. Steps are checked from your data, such as three competitors saved or a first AI visit detected, so what you did before counts: an existing brand shows its real count on the first day."
         },
         {
-          "heading": "Complete a step",
-          "text": "Click a step to open its card: why it matters, how to do it, and when it counts as done. The card's button opens the step's page in a new tab. Most steps are checked automatically from your data, such as three competitors saved or a first AI visit detected, so the step updates when you come back to the Action Center tab. A step still waiting for its data says when it opens."
+          "heading": "Search Console and Analytics",
+          "text": "**Connect Google Search Console** and **Connect Google Analytics** are optional. A skipped one counts as done, and you can still connect later from Settings. Without either one, prompt and content suggestions are less accurate."
         },
         {
-          "heading": "While the first tracking runs",
-          "text": "A new brand's first tracking takes from a few minutes to an hour or two at busy times. Meanwhile, the steps you can do right away come first and carry a **Ready now** mark: KPIs, competitors, topics and prompts you haven't finished, Google Search Console, Google Analytics and the AI Traffic snippet. The steps that need the first answers say **Arriving now**. Their card shows how far tracking is, such as \"Your first answers are arriving (18 of 40) · ~6 min\", instead of a page that is still empty. When tracking finishes, the app says **Your first results are ready**, the list goes back to its usual order and those steps open."
-        },
-        {
-          "heading": "Skip the Google steps",
-          "text": "**Connect Google Search Console** and **Connect Google Analytics** are optional. Admins and managers can **Skip** them. A skipped step counts as complete, and you can still connect later from Settings. Without either one, prompt and content suggestions are less accurate."
-        },
-        {
-          "heading": "Start or skip Getting started",
-          "text": "Admins and managers see **Get Started** or **Skip Get Started** at the top right of the Actions tab.\n\n- **Skip Get Started** puts the actions list back to normal. Steps you finished stay done, and you can start again any time from the same button.\n- **Get Started** appears after a skip, and for an existing brand whose setup looks incomplete: fewer than 3 competitors or topics, no Search Console, or no content in the last 30 days.\n- A brand added to an organization that already has one asks first whether to run Getting started for it. Choose **Run Getting started** or **Skip**."
+          "heading": "Hide the card",
+          "text": "**Hide** takes the card away. For admins and managers it hides the steps for everyone on the brand; for anyone else, only for themselves. Steps you finished stay done.\n\nA brand added to an organization that already has one asks first, on Today, whether to run the set-up steps for it."
         },
         {
           "heading": "Steps are not actions",
-          "text": "Getting started steps are not actions: they have no Priority Score and never come from signals. Your actions are listed beside them, under **All** and the other categories."
+          "text": "The set-up steps are not actions: they have no Priority Score and never come from signals. Your first work on content comes from **Today's focus**, and opening Visibility, your AI answers, Mentions, Citations and AI Referral Traffic needs no step of its own."
         }
       ]
     },
@@ -597,11 +589,11 @@
         "incomplete tasks"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "A task the AI writes without its **URL**, its **Change**, **Done when** or **How we check** doesn't reach the action's task list. It waits on the Action Center's **Needs review** tab instead, with what it misses. Only admins and managers see the tab and review tasks."
+          "text": "A task the AI writes without its **URL**, its **Change**, **Done when** or **How we check** doesn't reach the action's task list. It waits on the Action Center's **Needs review** page instead, with what it misses. Admins and managers open it from **Waiting for you** on the **Today** tab; only they review tasks."
         },
         {
           "heading": "Approve a task",
@@ -614,6 +606,73 @@
         {
           "heading": "Where these tasks come from",
           "text": "They come from AI task writing, such as **Regenerate tasks** on an action. Only the tasks that miss one of the four fields wait here; the others go straight to the action's **Tasks** tab. Tasks of an action that is completed, dismissed or deleted aren't listed."
+        }
+      ]
+    },
+    {
+      "id": "action-center/today",
+      "title": "Today in the Action Center",
+      "route": "/dashboard/action-center/today",
+      "keywords": [
+        "today",
+        "action center",
+        "todays focus",
+        "since yesterday",
+        "waiting for you",
+        "finish setting up",
+        "where you stand",
+        "new area to track",
+        "waiting for a spot"
+      ],
+      "synonyms": [
+        "start page",
+        "home page",
+        "daily summary",
+        "what to do today",
+        "my day"
+      ],
+      "plan": "all",
+      "updated": "2026-11-11",
+      "sections": [
+        {
+          "heading": null,
+          "text": "**Today** is the first tab of the **Action Center**: what changed since your last visit, what to do today and what is waiting for you, on one page per brand. Everyone lands here when they sign in, whatever the plan."
+        },
+        {
+          "heading": "The tabs",
+          "text": "The Action Center has five tabs: **Today**, **Actions**, **Signals**, **Agents** and **History**. **Agents** (formerly Agent Center) is there when Chat's agents are on for your workspace and on your menu. **KPIs** opens from **History**, next to its Actions and Scorecard views. Admins and managers open **Needs review** from **Waiting for you** on Today.\n\nBeside **Actions** is how many open actions are yours or unassigned, beside **Signals** how many new signals wait, and beside **Agents** how many of your agent runs wait for you."
+        },
+        {
+          "heading": "The top of the page",
+          "text": "The top line has the date, the brand and when AI answers last came in, with how many changes and things wait for you. Under the tabs, the loop strip follows your brand's daily loop: **Prompts** (how many are tracked), **AI answers**, **Actions** (open ones that are yours or no one's), **Done** (this week) and **Results** (your score and its change)."
+        },
+        {
+          "heading": "Since yesterday and Today's focus",
+          "text": "- **Since yesterday**: the 3 to 5 biggest changes the nightly checks found since your last visit, each marked **Up**, **Down** or **Rival**, with a link to the action it added. Only high and medium impact signals count; the rest are in **All signals**. On a Monday it reads \"Since Friday\". A quiet day says so.\n- **Today's focus**: your three highest-impact actions, ranked as Chat's daily suggestion ranks them. They stay until you finish them; **Skip for now** hides one from your focus for 7 days without changing it. A new one is marked **New**."
+        },
+        {
+          "heading": "Beside them",
+          "text": "- **Waiting for you**: this brand's agent work waiting for your OK, drafts in review, tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.\n- **Finish setting up**: the next of the 7 set-up steps (KPIs, competitors, topics, prompts, Search Console, Analytics, the AI traffic snippet), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise.\n- **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand.\n- **Ask Chat**: with Chat on, a question goes to Chat's side panel."
+        },
+        {
+          "heading": "Prompts waiting for a spot",
+          "text": "When your plan's prompt locations are all in use, prompts you add are saved as **Waiting for a spot**: kept, but not tracked. Admins and managers see them under **Waiting for you**, with **Free up a spot**, and on Starter, **See Growth**. A waiting prompt never starts by itself when a spot frees up; Today says \"1 spot free\" instead, so you pick which one to track.\n\n**Free up a spot** opens Tracked Prompts and lists prompts you could pause, least useful first: low demand, and AI rarely names you there. Your other brands' prompts are listed too, since the limit is shared. A prompt in several locations needs that many spots. **Pause it and track this one** does both at once; if tracking fails, the paused prompts are tracked again."
+        },
+        {
+          "heading": "A brand's first day",
+          "text": "Before the first answers are in, Today asks you to check the prompts we track for you: remove any that don't fit, add your own, then **Looks good**. Suggestions already stored for the brand show under **Worth tracking too**, and **While you wait** lists the set-up steps left and Chat's tour."
+        },
+        {
+          "heading": "Mondays",
+          "text": "On Mondays, once the brand has a full week of answers, **Last week** sums up visibility against the week before, the actions done and the results that came in, with a link to Reports. The focus reads **This week's focus**."
+        },
+        {
+          "heading": "New area to track",
+          "text": "On your Monday, or once today's focus is finished, admins and managers may see **New area to track**: one topic you don't track yet, when what Ansvisor already has makes a strong case for it. That is a catalog category with 3 or more products, 3 or more Search Console or Analytics prompt ideas about it, or prompt ideas from ChatGPT Business Hub. The card says why, and how many prompt spots it needs and has left on your plan. It waits until your workspace is two weeks old.\n\n**Suggest 5 prompts** adds the topic and lists the prompt ideas you already have for it; with none, it writes 5. Tick the ones to track: past your plan's spots, they are saved as waiting for a spot. **Not now** hides that topic for you for 30 days."
+        },
+        {
+          "heading": "After a plan or trial ends",
+          "text": "Today is read-only: what your trial found, the focus waiting for a plan, what is saved for you, and **Choose a plan**."
         }
       ]
     },
@@ -929,7 +988,7 @@
     },
     {
       "id": "chat/agents",
-      "title": "See and run your agents in Agent Center",
+      "title": "See and run your agents in Action Center › Agents",
       "route": "/dashboard/agents",
       "keywords": [
         "agents",
@@ -1042,15 +1101,15 @@
         "agent for new brands"
       ],
       "plan": "all",
-      "updated": "2026-11-07",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, when a brand is added, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses."
+          "text": "An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, when a brand is added, or when someone clicks **Run now**. **Agents**, a tab of the **Action Center** (formerly Agent Center), lists every agent you can see and offers ready-to-use agents, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses."
         },
         {
-          "heading": "Open Agent Center",
-          "text": "Click **Agent Center** on the left menu, right under **Chat**. It has a page of its own, outside Chat. It is also in the chat menu, under **Inbox**, where it shows **New** until you first open Agent Center. You can also press Ctrl K (⌘K on a Mac) in Chat and type \"Agent Center\". Old links to Agents in Chat open Agent Center.\n\nIt has two tabs: **Ready to use**, which opens first, and **Your agents**. In **Your agents**, the filters above the list show how many agents each holds:\n\n- **Mine**: the agents you own.\n- **Workspace**: the agents shared with everyone in your workspace. Admins also see their teammates' private agents here.\n- **Paused** and **Archived**: agents that are off.\n\nType in **Search by name or skill** to find an agent by its name or by a skill it uses."
+          "heading": "Open Agents",
+          "text": "Click **Agents** under **Action Center** on the left menu. It is also in the chat menu, under **Inbox**, as **Agents · in Action Center**, with **New** until you first open it. Old links to Agent Center still open it.\n\n**Your agents** comes first, with **Ready to use** under it. **Ask Chat to make one** opens Chat with a request filled in for you to send; **New agent** opens the form. In **Your agents**, the filters above the list show how many agents each holds:\n\n- **Mine**: the agents you own.\n- **Workspace**: the agents shared with everyone in your workspace. Admins also see their teammates' private agents here.\n- **Paused** and **Archived**: agents that are off.\n\nType in **Search by name or skill** to find an agent by its name or by a skill it uses."
         },
         {
           "heading": "Ready-to-use agents",
@@ -1070,7 +1129,7 @@
         },
         {
           "heading": "Onboarding & Help",
-          "text": "**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**). It starts on **All brands** with **When a brand is added**: once it's on, each brand someone adds gets one run, which acts as the agent's owner and shows in their Inbox. You can also click **Run now** on its page. Each run says how many **Getting started** steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help."
+          "text": "**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**). It starts on **All brands** with **When a brand is added**: once it's on, each brand someone adds gets one run, which acts as the agent's owner and shows in their Inbox. You can also click **Run now** on its page. Each run says how many set-up steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help."
         },
         {
           "heading": "Prompt Portfolio Manager",
@@ -1079,6 +1138,10 @@
         {
           "heading": "What each card shows",
           "text": "In **Your agents**, each agent has a card with:\n\n- A dot and its state: green for **Active**, amber for **Paused** with the reason, grey for **Draft** and **Archived**.\n- Its skills, its mode and the person who owns it.\n- **Trigger**: what starts it, for example \"Every Mon 09:00 · New Recover signal\", and **Next run**.\n- **Scope**: the brand it works on, or how many brands.\n- **Last run** with its state, and **Outcomes · 30 days**.\n- **AI use · 30 days**: its share of your monthly AI limit, with a thin bar. Hover over it to see its runs, the average share a run and its cap a run.\n\nUsage is always shown as a share of your monthly AI limit."
+        },
+        {
+          "heading": "Runs open in Chat",
+          "text": "Each card's first button opens its run in Chat: **Open the run in Chat** while it runs, **Review in Chat** when it waits for your OK, and **Open the last run** otherwise. Recurring work you set up in Chat is listed under your agents too, marked as made in Chat."
         },
         {
           "heading": "An agent's page",
@@ -1102,7 +1165,7 @@
         },
         {
           "heading": "Create an agent",
-          "text": "Admins and Managers click **New agent** in **Agent Center**. Four steps open, with a summary of the agent on the right:\n\n1. **Skill**: pick what it does, add up to 2 follow-on skills, and write instructions if you like.\n2. **Trigger**: add up to 5, such as **Schedule** or **Signal created**. Each shows its next run or when it fires. **Manual** is always on: **Run now**. Next to **FOR**, pick its brands, and narrow it to platforms, topics, prompt tags or URLs.\n3. **Mode & approvals**: how much it may do without asking.\n4. **Connections & model**: then its name, **Private** or **Workspace**, and **Max per run**, the most one run may use of your monthly AI limit. Admins can also set a **Monthly cap**.\n\nClick **Save as draft** to keep it off, or **Turn on**. If something needs fixing, its step opens and says what to change."
+          "text": "Admins and Managers click **New agent** on **Agents**. Four steps open, with a summary of the agent on the right:\n\n1. **Skill**: pick what it does, add up to 2 follow-on skills, and write instructions if you like.\n2. **Trigger**: add up to 5, such as **Schedule** or **Signal created**. Each shows its next run or when it fires. **Manual** is always on: **Run now**. Next to **FOR**, pick its brands, and narrow it to platforms, topics, prompt tags or URLs.\n3. **Mode & approvals**: how much it may do without asking.\n4. **Connections & model**: then its name, **Private** or **Workspace**, and **Max per run**, the most one run may use of your monthly AI limit. Admins can also set a **Monthly cap**.\n\nClick **Save as draft** to keep it off, or **Turn on**. If something needs fixing, its step opens and says what to change."
         },
         {
           "heading": "Skills an agent can use",
@@ -1170,7 +1233,7 @@
         },
         {
           "heading": "When your AI key fails",
-          "text": "When your workspace runs on its own AI key and the key fails (the provider turns it down, the account is out of credit, or the key can't reach its model), a run ends **Stopped · AI key not working**. An agent a trigger started pauses with **Your AI key isn't working**. These runs don't count toward 3 failed runs in a row.\n\nWhile the key fails, Agent Center says so at the top, and **Run now**, **Run agent**, **Turn on** and **Resume** are refused before anything starts. Admins get **Fix in AI Providers**; others read that an Admin can fix it there."
+          "text": "When your workspace runs on its own AI key and the key fails (the provider turns it down, the account is out of credit, or the key can't reach its model), a run ends **Stopped · AI key not working**. An agent a trigger started pauses with **Your AI key isn't working**. These runs don't count toward 3 failed runs in a row.\n\nWhile the key fails, **Agents** says so at the top, and **Run now**, **Run agent**, **Turn on** and **Resume** are refused before anything starts. Admins get **Fix in AI Providers**; others read that an Admin can fix it there."
         }
       ]
     },
@@ -1412,7 +1475,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on **Visibility** while your plan is paid or your free trial is past its first day, and on Chat otherwise, such as on the trial's first day or once a plan has ended. If Visibility isn't on your menu, it opens on Chat instead. If an Admin took Chat off your menu, or the work areas you picked leave it out, it opens on the Action Center. Every chat is saved, so you can come back to it later and pick up where you left off."
+          "text": "Chat answers questions about your brand from your Ansvisor data, and can do work for you step by step. Open it from **Chat** in the main menu. Each time you come back, Ansvisor opens on the Action Center's **Today** tab, whatever your plan; Chat is one click away. Every chat is saved, so you can come back to it later and pick up where you left off."
         },
         {
           "heading": "Chat Home",
@@ -1424,7 +1487,7 @@
         },
         {
           "heading": "Agents for you",
-          "text": "In your first 14 days in a workspace, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nIt shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.\n\nAdmins and Managers click an agent to open it in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide it on all your devices."
+          "text": "In your first 14 days in a workspace, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nIt shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.\n\nAdmins and Managers click an agent to open it in **Action Center › Agents › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide it on all your devices."
         },
         {
           "heading": "The welcome card",
@@ -1476,7 +1539,7 @@
         },
         {
           "heading": "Work through your Action Center tasks",
-          "text": "Type **/tasks**, or click **Complete tasks** under **For you now** on Chat Home, and Chat works through the brand's Action Center tasks: those due this week first, highest Priority Score first.\n\nUnder the answer, **Action Center tasks** lists up to 4 tasks it takes on and how many are ready (\"1 of 3 ready\"). Each row shows the task, \"Priority 86 · Fix\" and where Chat's work stands:\n\n- **Queued**: not started yet.\n- **Writing**: Chat is working on it now.\n- **Ready for review**: Chat finished its part, for you to check.\n- **Done**: you completed it in Action Center.\n\nThese show Chat's work, not the task's Action Center status. Once the run ends, **Close tasks in Action Center** opens your actions: Chat never marks a task done.\n\nAfter the tasks, Chat helps with your open **Getting started** steps. It never marks a step done or skips one."
+          "text": "Type **/tasks**, or click **Complete tasks** under **For you now** on Chat Home, and Chat works through the brand's Action Center tasks: those due this week first, highest Priority Score first.\n\nUnder the answer, **Action Center tasks** lists up to 4 tasks it takes on and how many are ready (\"1 of 3 ready\"). Each row shows the task, \"Priority 86 · Fix\" and where Chat's work stands:\n\n- **Queued**: not started yet.\n- **Writing**: Chat is working on it now.\n- **Ready for review**: Chat finished its part, for you to check.\n- **Done**: you completed it in Action Center.\n\nThese show Chat's work, not the task's Action Center status. Once the run ends, **Close tasks in Action Center** opens your actions: Chat never marks a task done.\n\nAfter the tasks, Chat helps with your open set-up steps (**Finish setting up**). It never marks a step done or skips one."
         },
         {
           "heading": "How many tasks one run finishes",
@@ -2295,7 +2358,7 @@
         "send report to customer"
       ],
       "plan": "all",
-      "updated": "2026-11-07",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -2311,7 +2374,7 @@
         },
         {
           "heading": "After you create it",
-          "text": "The steps above the answer show **Scheduled:** with the job's name, when it runs and where results go. Each run works in the job's own chat, as you, with your access checked again at every run.\n\nOnly Admins and Managers can schedule work. Your plan sets how many scheduled jobs can be on at once."
+          "text": "The steps above the answer show **Scheduled:** with the job's name, when it runs and where results go. Each run works in the job's own chat, as you, with your access checked again at every run.\n\nWork on repeat also gets a card under the answer, **Set up:** with its name and when it runs: **Run it now** runs it once now, **Open in Agents** opens Action Center › Agents, where it is listed as made in Chat, and **Change the schedule** opens its page.\n\nOnly Admins and Managers can schedule work. Your plan sets how many scheduled jobs can be on at once."
         },
         {
           "heading": "Results and notices",
@@ -2327,7 +2390,7 @@
         },
         {
           "heading": "The Scheduled page",
-          "text": "**Scheduled**, in the Chat menu with the number of your jobs that are on, lists the work Chat does on a date or on repeat. Each row shows the job, when it runs, its last run, where its result goes and its mode, with a switch to turn it on or off. A job turned back on runs from now on: missed runs aren't made up. Your agents' schedules are listed too, with **Edit** in Agent Center.\n\n**New schedule** opens a new chat with \"Every Monday at 9:00, \" ready to finish."
+          "text": "**Scheduled**, in the Chat menu with the number of your jobs that are on, lists the work Chat does on a date or on repeat. Each row shows the job, when it runs, its last run, where its result goes and its mode, with a switch to turn it on or off. A job turned back on runs from now on: missed runs aren't made up. Your agents' schedules are listed too, with **Edit** in Action Center › Agents.\n\n**New schedule** opens a new chat with \"Every Monday at 9:00, \" ready to finish."
         },
         {
           "heading": "A job's page",
@@ -2402,7 +2465,7 @@
         "skills directory"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -2450,7 +2513,7 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps and Prompt portfolio.\n\n**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps and Prompt portfolio.\n\n**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
         },
         {
           "heading": "Fan-out gaps",
@@ -2699,7 +2762,7 @@
         "find competitors"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -2707,7 +2770,7 @@
         },
         {
           "heading": "Open the Competitors page",
-          "text": "Open **Competitors** from the sidebar, or from **Visibility**:\n\n- **Head-to-Head** on the **Leaderboard** card;\n- a competitor's name on the Leaderboard, which opens the page with that competitor selected;\n- **Head-to-Head Comparison**, shown in the Leaderboard's place before a brand has competitors.\n\nThe Action Center's **Add at least 3 competitors** step in Getting started opens it too.\n\nOnly admins and managers add, suggest and remove competitors; other members see the list and the comparison."
+          "text": "Open **Competitors** from the sidebar, or from **Visibility**:\n\n- **Head-to-Head** on the **Leaderboard** card;\n- a competitor's name on the Leaderboard, which opens the page with that competitor selected;\n- **Head-to-Head Comparison**, shown in the Leaderboard's place before a brand has competitors.\n\nThe **Add at least 3 competitors** step of **Finish setting up**, on the Action Center's **Today** tab, opens it too.\n\nOnly admins and managers add, suggest and remove competitors; other members see the list and the comparison."
         },
         {
           "heading": "Add a competitor",
@@ -2727,7 +2790,7 @@
         },
         {
           "heading": "How many to track",
-          "text": "The Getting started step asks for at least 3 competitors, and 5 to 20 give the clearest picture.\n\nAI answers to your prompts may name brands you've never heard of. They are the alternatives people see when you're not cited. Add the most-mentioned ones to your competitors to track them properly."
+          "text": "The set-up step asks for at least 3 competitors, and 5 to 20 give the clearest picture.\n\nAI answers to your prompts may name brands you've never heard of. They are the alternatives people see when you're not cited. Add the most-mentioned ones to your competitors to track them properly."
         },
         {
           "heading": "Remove a competitor",
@@ -3661,6 +3724,50 @@
       ]
     },
     {
+      "id": "getting-started/dots-in-the-menu",
+      "title": "Dots in the menu",
+      "route": "/dashboard",
+      "keywords": [
+        "menu dot",
+        "green dot",
+        "yellow dot",
+        "new results",
+        "needs you",
+        "action center count"
+      ],
+      "synonyms": [
+        "what does the dot mean",
+        "colored dot",
+        "notification dot",
+        "badge in the menu",
+        "unread"
+      ],
+      "plan": "all",
+      "updated": "2026-11-11",
+      "sections": [
+        {
+          "heading": null,
+          "text": "Small dots in the main menu show where something is new since you last opened a page."
+        },
+        {
+          "heading": "Green: New results",
+          "text": "A green dot means new results since you last opened the page. After each nightly tracking run, it shows on **Overview**, **Mentions** and **Citations** under **Visibility**, and on **Tracked Prompts** under **Prompts**. **Visibility** also says **New results** beside its name. On **AI Referral Traffic**, a green dot means the snippet or Google Analytics is now connected. Each dot goes once you open its page."
+        },
+        {
+          "heading": "Yellow: Needs you",
+          "text": "A yellow dot means something waits for you. It shows on **Actions** in the **Action Center** when new actions arrive, on **Opportunities** in **Content** when new opportunities arrive, on **Prompt Suggestions** when there are new suggestions, and on **Tracked Prompts** while prompts wait for a spot on your plan. On **AI Referral Traffic**, it stays until the snippet or Google Analytics is connected. Only admins and managers see yellow dots."
+        },
+        {
+          "heading": "When a menu is folded",
+          "text": "When a submenu, a group such as **Analytics** or the whole menu is folded, the dot shows on the item's icon or the group's name. Yellow wins over green. Point at a dot to read **New results** or **Needs you**; screen readers say it too."
+        },
+        {
+          "heading": "The Action Center's number",
+          "text": "The number beside **Action Center** is how many open actions are unassigned or yours. It is hidden once your plan or trial has ended. The demo brand shows green dots only, as does a workspace whose plan ended, and a section off your menu shows none."
+        }
+      ]
+    },
+    {
       "id": "getting-started/first-results-after-setup",
       "title": "Your first results after brand setup",
       "route": "/dashboard/insights",
@@ -3681,11 +3788,11 @@
         "how long until results"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. Either way, Ansvisor then opens on **Chat**. From the next day, in the free trial or on a paid plan, it opens on **Visibility** each time you come back. If you explore the demo brand instead, it opens on **Chat** with the demo's sample data, and your brand's first run starts when you pick a plan."
+          "text": "When you finish setting up a brand, the first round of questions to the AI engines starts on its own and Ansvisor opens. On a self-hosted install it starts right away. On the cloud it starts after the plan and checkout step, whether you start a free trial there or buy the plan. Either way, Ansvisor then opens on the Action Center's **Today** tab, as it does each time you come back. If you explore the demo brand instead, Today shows the demo's sample data, and your brand's first run starts when you pick a plan."
         },
         {
           "heading": "How long the first run takes",
@@ -3705,7 +3812,7 @@
         },
         {
           "heading": "While the first tracking runs",
-          "text": "The **Visibility** page says **First tracking in progress** at the top until its first results are in. Above the **Tracked Prompts** table, a note says \"Your first answers are arriving\", with how many are in and about how long is left, and rows still without results say **Arriving now**. Everything fills in when tracking finishes. Meanwhile, do the **Ready now** steps of **Getting started** on the Action Center. When tracking finishes, the app says **Your first results are ready**."
+          "text": "The **Visibility** page says **First tracking in progress** at the top until its first results are in. Above the **Tracked Prompts** table, a note says \"Your first answers are arriving\", with how many are in and about how long is left, and rows still without results say **Arriving now**. Everything fills in when tracking finishes. Meanwhile, check the prompts we track and do the set-up steps of **Finish setting up** on the Action Center's **Today** tab. When tracking finishes, the app says **Your first results are ready**."
         },
         {
           "heading": "My visibility score is 0",
@@ -3987,7 +4094,7 @@
         "track a search"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -4003,7 +4110,7 @@
         },
         {
           "heading": "Add many at once",
-          "text": "In the same dialog, open the **Bulk import** tab and upload a one-column Excel or CSV file of prompts. A preview marks each row **Valid**, **Duplicate**, **Error** or **Over plan limit**, and the valid rows that fit are imported. They get the platforms and models picked in the dialog and the brand's location. Set their topic afterwards from each prompt's **Edit**, and add locations with **Track in more locations**."
+          "text": "In the same dialog, open the **Bulk import** tab and upload a one-column Excel or CSV file of prompts. A preview marks each row **Valid**, **Duplicate** or **Error**, and the valid rows are imported; past your plan's limit, the rest are saved as **Waiting for a spot**. They get the platforms and models picked in the dialog and the brand's location. Set their topic afterwards from each prompt's **Edit**, and add locations with **Track in more locations**."
         },
         {
           "heading": "Add from suggestions",
@@ -4015,7 +4122,7 @@
         },
         {
           "heading": "What counts on your plan",
-          "text": "Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor adds the prompts that fit and says how many weren't added. Once the limit is reached, it adds nothing until you pause or remove prompts."
+          "text": "Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor tracks the prompts that fit and saves the rest as **Waiting for a spot**: kept, but not tracked and not counted. A waiting prompt never starts by itself; in **Tracked Prompts**, admins and managers can **Free up a spot** to swap one in."
         }
       ]
     },
@@ -4234,7 +4341,7 @@
         "stop tracking a location"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -4254,7 +4361,7 @@
         },
         {
           "heading": "When locations would pass your plan's limit",
-          "text": "If the choice would pass your plan's limit, the dialog says how many it needs and how many are left, and saves nothing. Pick fewer prompts or places, or follow your plan's way to track more."
+          "text": "If the choice would pass your plan's limit, the dialog says how many it needs and how many are left, and saves nothing. Pick fewer prompts or places, or follow your plan's way to track more. Only new prompts wait for a spot; locations added to prompts you track don't."
         },
         {
           "heading": "Which engines answer from a state or city",
@@ -4294,7 +4401,7 @@
         "suggest queries"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -4321,8 +4428,8 @@
           "text": "**Add All** adds every suggestion listed to **Tracked Prompts**, and the added ones leave the list. Like **Clear All**, it acts on what's listed, so a source filter or a search narrows it. Each prompt passes the same plan check as a single **+**."
         },
         {
-          "heading": "When your prompt limit stops Add All",
-          "text": "When your plan's prompt limit stops **Add All** partway, an amber note above the list says how many suggestions couldn't be added and how many were added before the limit.\n\nTo add the rest, upgrade your plan or ask us to raise your limit, as the note says, or pause as many prompts as the note names and try again. **Go to Tracked Prompts** opens the list where you can pause prompts."
+          "heading": "When your plan's prompts are full",
+          "text": "When your plan's prompt locations run out, **Add All** and **+** still add: the suggestions past the limit become prompts **Waiting for a spot**, kept but not tracked. An amber note above the list says how many were added and how many wait.\n\nA waiting prompt never starts by itself. **Go to Tracked Prompts** opens the list, where admins and managers can **Free up a spot**, or upgrade your plan or ask us to raise your limit."
         },
         {
           "heading": "How AI suggestions are written",
@@ -4409,7 +4516,7 @@
         "categories"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -4436,6 +4543,10 @@
           "text": "The **Topic Suggestions** card on the Topics tab starts folded, and remembers whether you left it open. Open it to see AI-generated topic ideas for your brand. Topics you already track and ideas you dismissed don't come back.\n\nAdmins and managers can **Refresh** for new ideas, add an idea to your topics, or dismiss it. A new topic starts empty: assign prompts to it to start tracking it.\n\nOn an online shop with a product catalog, **Refresh** also suggests the catalog's categories that have at least three products in stock and that none of your topics covers yet. They come first, marked **Your catalog**, with the category and how many of its products are in stock. Adding one creates a topic named after the category, which links it to that category."
         },
         {
+          "heading": "New area to track",
+          "text": "On the Action Center's **Today** tab, admins and managers may also see **New area to track**: a topic worth adding, with why and **Suggest 5 prompts**."
+        },
+        {
           "heading": "Add and rename topics",
           "text": "Only admins and managers can change topics; other roles can view them.\n\n- **Add Topic** creates a new, empty topic.\n- To rename a topic, click **Manage topics** and use the pencil icon beside it in the brand's topic settings. Its prompts stay attached.\n\nKeep topic names short (two to four words) and intent-driven: \"Pricing\" works better than a long descriptive phrase."
         },
@@ -4458,7 +4569,9 @@
         "prompt status",
         "columns",
         "performance filter",
-        "paused prompts"
+        "paused prompts",
+        "waiting for a spot",
+        "free up a spot"
       ],
       "synonyms": [
         "prompt list",
@@ -4467,7 +4580,7 @@
         "tracked queries"
       ],
       "plan": "all",
-      "updated": "2026-10-31",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -4475,7 +4588,7 @@
         },
         {
           "heading": "Prompt statuses",
-          "text": "Each row has a status:\n\n- **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.\n- **Active**: tracked on its schedule.\n- **Paused**: kept, but not tracked.\n\nThe table opens on **Active + New**. The **Status** filter, or the cards under **Plan & usage** (click **Show**), show one status or all of them."
+          "text": "Each row has a status:\n\n- **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.\n- **Active**: tracked on its schedule.\n- **Paused**: kept, but not tracked.\n- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. It never starts by itself.\n\nWhile prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. The table opens on **Active + New**. The **Status** filter, or the cards under **Plan & usage** (click **Show**), show one status or all of them."
         },
         {
           "heading": "Rows without figures",
@@ -4585,7 +4698,7 @@
         "report card in german"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -4597,7 +4710,7 @@
         },
         {
           "heading": "The four pages",
-          "text": "1. **Status**: a **Start free trial** button, the products found on your site, the four headline figures, your starting point and first step, each engine, who AI names and cites, and the five questions competitors win most. A visibility of 0% is shown as your starting point.\n2. **Questions**: every question by product, with its keyword's monthly Google searches as Keyword Planner's range (**Low** when Google reports too few), what each engine's answer did and the competitor named instead.\n3. **Plan**: three findings, each with what you'd do in week one and where Ansvisor helps, the sites AI cites sorted by what you can do there, and how agents work: you approve each step, or, in Growth, chosen agents publish on their own.\n4. **Value and plans**: what AI visits are worth, Starter and Growth side by side, what Chat, Agent Center and MCP do, and the free trial."
+          "text": "1. **Status**: a **Start free trial** button, the products found on your site, the four headline figures, your starting point and first step, each engine, who AI names and cites, and the five questions competitors win most. A visibility of 0% is shown as your starting point.\n2. **Questions**: every question by product, with its keyword's monthly Google searches as Keyword Planner's range (**Low** when Google reports too few), what each engine's answer did and the competitor named instead.\n3. **Plan**: three findings, each with what you'd do in week one and where Ansvisor helps, the sites AI cites sorted by what you can do there, and how agents work: you approve each step, or, in Growth, chosen agents publish on their own.\n4. **Value and plans**: what AI visits are worth, Starter and Growth side by side, what Chat, its agents and MCP do, and the free trial."
         },
         {
           "heading": "Competitors, marketplaces and where to get mentioned",
@@ -5207,7 +5320,7 @@
         "simplify sidebar"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -5215,7 +5328,7 @@
         },
         {
           "heading": "Fold a group on your menu",
-          "text": "Click a group's title on the left menu, **Analytics** or **Execution**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Agent Center** sit above the groups, and **Reports** and **Competitors** below them, so they don't fold."
+          "text": "Click a group's title on the left menu, **Analytics** or **More**, to fold it, and again to open it; the arrow on its right shows which. This browser remembers it, and a folded group opens by itself when you go to one of its pages. **Chat** and **Action Center** sit above the groups, so they don't fold; the Action Center's own tabs fold under it."
         },
         {
           "heading": "Who can change menus",
@@ -5223,7 +5336,7 @@
         },
         {
           "heading": "Choose what each role sees",
-          "text": "**Sections each role sees** lists the left menu's sections, by group, with a column for each role. Tick what a role sees; each box is saved as you click it.\n\n- **Admin** always sees **Everything**.\n- **Action Center** is on everyone's menu and can't be turned off.\n- **Use a set…** fills a role's column from a work area's ready-made set, or **Everything**. Adjust it from there. **Agent Center** is in every set: right after Chat where the set has Chat, else right after Action Center.\n\nUntil an admin hides something, every role sees every section."
+          "text": "**Sections each role sees** lists the left menu's sections, by group, with a column for each role. Tick what a role sees; each box is saved as you click it.\n\n- **Admin** always sees **Everything**.\n- **Action Center** is on everyone's menu and can't be turned off. **Agents · in Action Center**, under it, can be hidden on its own.\n- **Use a set…** fills a role's column from a work area's ready-made set, or **Everything**. Adjust it from there. **Agents** is in every set.\n\nUntil an admin hides something, every role sees every section."
         },
         {
           "heading": "Change one person's menu",
@@ -5402,7 +5515,7 @@
         "set my region time"
       ],
       "plan": "all",
-      "updated": "2026-11-03",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -5414,7 +5527,7 @@
         },
         {
           "heading": "What uses it",
-          "text": "- **New scheduled jobs**: the schedule card's **When** line shows your time zone, and the job is made on it.\n- **New agent schedules**: a **Schedule** trigger you add to an agent in **Agent Center** starts on your time zone, shown beside its time.\n- **Chat's dates and times**: when an answer was made and how old its data is, from your next message on.\n- **Daily suggestions**: they arrive in your morning, in this time zone."
+          "text": "- **New scheduled jobs**: the schedule card's **When** line shows your time zone, and the job is made on it.\n- **New agent schedules**: a **Schedule** trigger you add to an agent in **Action Center › Agents** starts on your time zone, shown beside its time.\n- **Chat's dates and times**: when an answer was made and how old its data is, from your next message on.\n- **Daily suggestions**: they arrive in your morning, in this time zone."
         },
         {
           "heading": "Jobs you already have",
@@ -5585,7 +5698,7 @@
         },
         {
           "heading": "The work areas",
-          "text": "- **Founders & leaders**: Action Center, Chat, Agent Center, Visibility, Mentions, AI Referral Traffic, Reports, Competitors.\n- **AEO/GEO & Audit**: Action Center, Agent Center, Content, Audit, Citations, AI Referral Traffic, Reports.\n- **Content**: Action Center, Chat, Agent Center, Content, Prompts, Citations, Reports.\n- **Brand & PR**: Action Center, Chat, Agent Center, Visibility, Mentions, Citations, Reports, Competitors.\n- **Growth**: Action Center, Chat, Agent Center, Visibility, Prompts, Citations, AI Referral Traffic, Reports, Competitors.\n- **Product Development**: Action Center, Chat, Agent Center, Visibility, Prompts, Mentions, Product Visibility, Reports.\n- **Business Development**: Action Center, Chat, Agent Center, Visibility, Prompts, Mentions, Citations, Reports, Competitors.\n- **Developers**: Action Center, Agent Center, Audit, Prompts, Citations, AI Referral Traffic, Reports.\n- **Analytics**: Action Center, Agent Center, Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors."
+          "text": "- **Founders & leaders**: Action Center, Agents, Chat, Visibility, Mentions, AI Referral Traffic, Reports, Competitors.\n- **AEO/GEO & Audit**: Action Center, Agents, Content, Audit, Citations, AI Referral Traffic, Reports.\n- **Content**: Action Center, Agents, Chat, Content, Prompts, Citations, Reports.\n- **Brand & PR**: Action Center, Agents, Chat, Visibility, Mentions, Citations, Reports, Competitors.\n- **Growth**: Action Center, Agents, Chat, Visibility, Prompts, Citations, AI Referral Traffic, Reports, Competitors.\n- **Product Development**: Action Center, Agents, Chat, Visibility, Prompts, Mentions, Product Visibility, Reports.\n- **Business Development**: Action Center, Agents, Chat, Visibility, Prompts, Mentions, Citations, Reports, Competitors.\n- **Developers**: Action Center, Agents, Audit, Prompts, Citations, AI Referral Traffic, Reports.\n- **Analytics**: Action Center, Agents, Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors."
         },
         {
           "heading": "Where you pick them",
@@ -5790,11 +5903,11 @@
         "AI readiness check"
       ],
       "plan": "all",
-      "updated": "2026-11-01",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 49 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **Execution**, after **Content**. It is on every plan."
+          "text": "**Site Audit** checks how ready a page is to be cited by AI answer engines. It fetches the page, runs 49 signals in five categories, scores the page out of 100 and writes fixes for what failed. You find it in the sidebar under **More**, after **Content**. It is on every plan."
         },
         {
           "heading": "Start an audit",

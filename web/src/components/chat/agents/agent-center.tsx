@@ -5,15 +5,13 @@ import { useTranslations } from 'next-intl';
 import { Lock, Plus, Sparkles } from 'lucide-react';
 import { AskAdminButton } from '@/components/chat-access/ask-admin-button';
 import { RoleContext } from '@/components/providers/role-provider';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Link } from '@/i18n/navigation';
 import { track } from '@/lib/analytics';
 import type { AgentPreset, PresetLock } from '@/lib/chat/agents/catalog';
-import { AGENT_CENTER_TABS, writesAgents, type AgentCenterTab } from '@/lib/chat/agent-view';
+import { writesAgents } from '@/lib/chat/agent-view';
 import { composeHref } from '@/lib/chat/compose-param';
 import { isDemoSelected } from '@/lib/demo/demo-brand';
-import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentsList } from './agents-list';
 import { ChatMadeAgents } from './chat-made-agents';
@@ -21,33 +19,24 @@ import { useAgentWords } from './agent-words';
 import { ReadyAgents } from './ready-agents';
 
 /**
- * Agent Center (CHAT-21 §B; governance mockup `#g-agents`; AGENTS plan §1),
- * its own page under Chat on the menu: the title with the count of agents
- * on, the formula and New agent, then two tabs. **Ready to use**, first:
- * the ready-to-use agents (ready-agents.tsx). **Your agents**: the agents
- * the person may see (agents-list.tsx), with Mine · Workspace · Paused ·
- * Archived inside it. The tab is kept in the address (`?tab=ready|yours`),
- * Ready to use without one. Both stay mounted, so a tab keeps its search
- * and filters, and the count shows from the start. Analysts and Agency
- * partners read, with a line that says so and Ask your Admin.
- *
- * As Action Center › Agents (SIMPLE_NAV; mockup Agents.dc.html), under the
- * Action Center's header and tabs: no title or tabs of its own, Your agents
- * first, with the recurring work made in Chat under its agents
- * (chat-made-agents.tsx), and Ready to use under it, both on the page. Ask
- * Chat to make one opens Chat with its box filled (the person reads it and
- * sends it); New agent stays, beside it.
+ * Action Center › Agents (CHAT-21 §B; AGENTS plan §1; mockup Agents.dc.html),
+ * under the Action Center's header and tabs: no title or tabs of its own.
+ * **Your agents** first, the agents the person may see (agents-list.tsx),
+ * with Mine · Workspace · Paused · Archived inside it and the count of
+ * agents on, then the recurring work made in Chat under its agents
+ * (chat-made-agents.tsx). **Ready to use** under it, the ready-to-use agents
+ * (ready-agents.tsx). Ask Chat to make one opens Chat with its box filled
+ * (the person reads it and sends it); New agent stays, beside it. Analysts
+ * and Agency partners read, with a line that says so and Ask your Admin.
  */
 
 export function AgentCenter({
-  initialTab = 'ready',
   locks = {},
   workAreas = [],
   presets,
   now: nowProp,
   timeZone,
 }: {
-  initialTab?: AgentCenterTab;
   /** Ready presets whose mode the workspace's plan or Settings › Chat keeps closed. */
   locks?: Record<string, PresetLock>;
   /** The person's work areas: Ready to use puts the agents made for them first. */
@@ -62,7 +51,6 @@ export function AgentCenter({
   const tRoles = useTranslations('chatAccess.roleNames');
   const { role } = useContext(RoleContext);
   const writer = writesAgents(role);
-  const [tab, setTab] = useState<AgentCenterTab>(initialTab);
   const [summary, setSummary] = useState<{ active: number; activeLimit: number | null } | null>(
     null,
   );
@@ -72,18 +60,6 @@ export function AgentCenter({
   // The cards' triggers read the same on any clock: one for the page.
   const now = useMemo(() => nowProp ?? new Date(), [nowProp]);
   const words = useAgentWords(now, timeZone);
-  const simpleNav = useSimpleNav();
-
-  const switchTab = (next: AgentCenterTab) => {
-    setTab(next);
-    try {
-      const url = new URL(window.location.href);
-      url.searchParams.set('tab', next);
-      window.history.replaceState(null, '', url);
-    } catch {
-      // The address only remembers the tab; the page works without it.
-    }
-  };
 
   const count = summary && !demoSelected && (
     <span
@@ -122,137 +98,53 @@ export function AgentCenter({
   );
   const yours = <AgentsList now={nowProp} timeZone={timeZone} onSummary={setSummary} />;
 
-  if (simpleNav) {
-    return (
-      <div className="max-w-[1100px]" data-layout="action-center">
-        {writer && (
-          <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
-            <Link
-              href="/dashboard/agents/new"
-              data-action="agents.new"
-              className={buttonVariants({ variant: 'ghost' })}
-            >
-              <Plus aria-hidden />
-              {tList('newAgent')}
-            </Link>
-            <Link
-              href={composeHref(t('askChatText'))}
-              data-action="agents.askChat"
-              title={t('askChatTip')}
-              onClick={() => track('agents_ask_chat_clicked')}
-              className={buttonVariants({ variant: 'outline' })}
-            >
-              <Sparkles aria-hidden />
-              {t('askChat')}
-            </Link>
-          </div>
-        )}
-        {readOnly}
-        <section
-          aria-labelledby="agent-center-yours-title"
-          data-slot="agent-center-yours"
-          className="mb-8"
-        >
-          <h2
-            id="agent-center-yours-title"
-            className="flex items-center gap-2 text-[17px] font-semibold"
-          >
-            {t('tabs.yours')}
-            {count}
-          </h2>
-          {yours}
-          {/* Recurring work made in Chat, as agents of its own kind (owner's decision, option A). */}
-          <ChatMadeAgents now={nowProp} />
-        </section>
-        <section aria-labelledby="agent-center-ready-title" data-slot="agent-center-ready">
-          <h2 id="agent-center-ready-title" className="text-[17px] font-semibold">
-            {t('tabs.ready')}
-          </h2>
-          {ready}
-        </section>
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-[1100px]">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold tracking-[-.4px]">{tList('title')}</h1>
-        {count}
-        <div className="ml-auto flex items-center gap-2">
-          <div
-            title={tList('formulaTip')}
-            className="flex items-center gap-1 text-[11.5px] text-muted-foreground max-[900px]:hidden"
+    <div className="max-w-[1100px]" data-layout="action-center">
+      {writer && (
+        <div className="mb-4 flex flex-wrap items-center justify-end gap-2">
+          <Link
+            href="/dashboard/agents/new"
+            data-action="agents.new"
+            className={buttonVariants({ variant: 'ghost' })}
           >
-            {(['skill', 'mode', 'connections', 'model'] as const).map((part, i) => (
-              <span key={part} className="flex items-center gap-1">
-                {i > 0 && <span aria-hidden>+</span>}
-                <span className="rounded-[7px] border bg-muted/50 px-[7px] py-px text-foreground/80">
-                  {tList(`formula.${part}`)}
-                </span>
-              </span>
-            ))}
-          </div>
-          {writer && (
-            <Link
-              href="/dashboard/agents/new"
-              data-action="agents.new"
-              className={buttonVariants({ variant: 'default' })}
-            >
-              <Plus aria-hidden />
-              {tList('newAgent')}
-            </Link>
-          )}
+            <Plus aria-hidden />
+            {tList('newAgent')}
+          </Link>
+          <Link
+            href={composeHref(t('askChatText'))}
+            data-action="agents.askChat"
+            title={t('askChatTip')}
+            onClick={() => track('agents_ask_chat_clicked')}
+            className={buttonVariants({ variant: 'outline' })}
+          >
+            <Sparkles aria-hidden />
+            {t('askChat')}
+          </Link>
         </div>
-      </div>
-
+      )}
       {readOnly}
-
-      <div
-        role="tablist"
-        aria-label={tList('title')}
-        className="flex gap-[18px] border-b text-[13.5px]"
-      >
-        {AGENT_CENTER_TABS.map((view) => (
-          <button
-            key={view}
-            type="button"
-            role="tab"
-            id={`agent-center-tab-${view}`}
-            aria-controls={`agent-center-panel-${view}`}
-            aria-selected={tab === view}
-            data-action="agents.tab"
-            data-tab={view}
-            onClick={() => switchTab(view)}
-            className={cn(
-              'py-2 text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-              tab === view &&
-                'font-semibold text-foreground shadow-[inset_0_-2px_0_var(--foreground)]',
-            )}
-          >
-            {t(`tabs.${view}`)}
-          </button>
-        ))}
-      </div>
-
-      <div
-        role="tabpanel"
-        id="agent-center-panel-ready"
-        aria-labelledby="agent-center-tab-ready"
-        data-slot="agent-center-ready"
-        hidden={tab !== 'ready'}
-      >
-        {ready}
-      </div>
-      <div
-        role="tabpanel"
-        id="agent-center-panel-yours"
-        aria-labelledby="agent-center-tab-yours"
+      <section
+        aria-labelledby="agent-center-yours-title"
         data-slot="agent-center-yours"
-        hidden={tab !== 'yours'}
+        className="mb-8"
       >
+        <h2
+          id="agent-center-yours-title"
+          className="flex items-center gap-2 text-[17px] font-semibold"
+        >
+          {t('tabs.yours')}
+          {count}
+        </h2>
         {yours}
-      </div>
+        {/* Recurring work made in Chat, as agents of its own kind (owner's decision, option A). */}
+        <ChatMadeAgents now={nowProp} />
+      </section>
+      <section aria-labelledby="agent-center-ready-title" data-slot="agent-center-ready">
+        <h2 id="agent-center-ready-title" className="text-[17px] font-semibold">
+          {t('tabs.ready')}
+        </h2>
+        {ready}
+      </section>
     </div>
   );
 }

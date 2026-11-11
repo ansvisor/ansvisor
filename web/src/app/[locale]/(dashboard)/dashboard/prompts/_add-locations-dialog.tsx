@@ -24,7 +24,7 @@ import { CITY_PLATFORMS } from '@/config/cities';
 import { parseLocation, regionFlag, regionLabel } from '@/lib/region';
 import { cn } from '@/lib/utils';
 import type { Prompt } from '@/types';
-import { PromptLimitActions } from './_prompt-limit-actions';
+import { PlanLimitButtons } from './_plan-limit-buttons';
 
 type Scope = 'one' | 'selected' | 'topic' | 'all';
 type Mode = 'add' | 'remove';
@@ -375,7 +375,7 @@ export function AddLocationsDialog({
               </p>
               <p className="text-xs">{t('overHint', { plan: quota.planId })}</p>
               <div className="flex flex-wrap gap-2">
-                <PromptLimitActions planId={quota.planId} />
+                <PlanLimitButtons planId={quota.planId} source="locations" size="sm" />
               </div>
             </div>
           )}

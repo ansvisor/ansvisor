@@ -50,7 +50,6 @@ const { Sidebar } = await import('./sidebar');
 const { MobileNav } = await import('./mobile-nav');
 const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 const { useSidebarStore } = await import('@/stores/use-sidebar-store');
-const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -58,18 +57,16 @@ const { SimpleNavProvider } = await import('@/components/providers/simple-nav-pr
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(path: string, hidden: string[] = [], simpleNav = false) {
+async function render(path: string, hidden: string[] = []) {
   const [pathname] = path.split('?');
   nav.pathname = pathname;
   window.history.replaceState(null, '', path);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <SimpleNavProvider enabled={simpleNav}>
-          <MenuAccessProvider hidden={hidden} canManageMenus={false}>
-            <Sidebar />
-          </MenuAccessProvider>
-        </SimpleNavProvider>
+        <MenuAccessProvider hidden={hidden} canManageMenus={false}>
+          <Sidebar />
+        </MenuAccessProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -100,8 +97,8 @@ afterEach(() => {
 });
 
 describe('the Visibility group', () => {
-  it('is the same group in the simplified menu (SIMPLE_NAV), under ANALYTICS after Prompts', async () => {
-    await render('/dashboard/mentions', [], true);
+  it('is a group under ANALYTICS, after Prompts', async () => {
+    await render('/dashboard/mentions', []);
     expect(group().textContent).toBe('Visibility');
     expect(entries()).toEqual([
       { label: 'Overview', href: '/dashboard/insights', current: null },

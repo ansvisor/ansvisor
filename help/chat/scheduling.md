@@ -4,8 +4,8 @@ route: /dashboard/chat/scheduled
 keywords: [schedule, scheduled job, scheduled page, every monday, recurring report, ready by, due time, due date, keep working, create schedule, repeat, run now, take over, no change, didn't run, paused, job time zone, outside the workspace, client email, external recipient]
 synonyms: [run later, run on repeat, weekly report automatically, remind me, automate a chat, email a client, send report to customer]
 plan: all
-updated: 2026-11-07
-last_checked: 2026-11-07
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -37,6 +37,8 @@ When a phrase could mean two dates, such as "next Friday", Chat asks which one y
 
 The steps above the answer show **Scheduled:** with the job's name, when it runs and where results go. Each run works in the job's own chat, as you, with your access checked again at every run.
 
+Work on repeat also gets a card under the answer, **Set up:** with its name and when it runs: **Run it now** runs it once now, **Open in Agents** opens Action Center › Agents, where it is listed as made in Chat, and **Change the schedule** opens its page.
+
 Only Admins and Managers can schedule work. Your plan sets how many scheduled jobs can be on at once.
 
 ## Results and notices
@@ -57,7 +59,7 @@ When everything is ready, or when the due time comes, Chat posts what is ready i
 
 ## The Scheduled page
 
-**Scheduled**, in the Chat menu with the number of your jobs that are on, lists the work Chat does on a date or on repeat. Each row shows the job, when it runs, its last run, where its result goes and its mode, with a switch to turn it on or off. A job turned back on runs from now on: missed runs aren't made up. Your agents' schedules are listed too, with **Edit** in Agent Center.
+**Scheduled**, in the Chat menu with the number of your jobs that are on, lists the work Chat does on a date or on repeat. Each row shows the job, when it runs, its last run, where its result goes and its mode, with a switch to turn it on or off. A job turned back on runs from now on: missed runs aren't made up. Your agents' schedules are listed too, with **Edit** in Action Center › Agents.
 
 **New schedule** opens a new chat with "Every Monday at 9:00, " ready to finish.
 

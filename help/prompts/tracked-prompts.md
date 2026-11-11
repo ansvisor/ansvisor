@@ -1,11 +1,11 @@
 ---
 title: Tracked Prompts list, statuses and columns
 route: /dashboard/prompts/tracked
-keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts]
+keywords: [tracked prompts, prompt status, columns, performance filter, paused prompts, waiting for a spot, free up a spot]
 synonyms: [prompt list, my prompts, prompt table, tracked queries]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -20,8 +20,9 @@ Each row has a status:
 - **New** (amber): added in the last 24 hours. New prompts lead the table until you sort by a column; after a day they read as Active.
 - **Active**: tracked on its schedule.
 - **Paused**: kept, but not tracked.
+- **Waiting for a spot**: saved past your plan's limit, not tracked and not counted. It never starts by itself.
 
-The table opens on **Active + New**. The **Status** filter, or the cards under **Plan & usage** (click **Show**), show one status or all of them.
+While prompts wait, a yellow banner above the table says how many; admins and managers get **Free up a spot**, which lists prompts you could pause, least useful first, and **Pause it and track this one**. The table opens on **Active + New**. The **Status** filter, or the cards under **Plan & usage** (click **Show**), show one status or all of them.
 
 ## Rows without figures
 

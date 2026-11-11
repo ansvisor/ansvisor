@@ -256,33 +256,30 @@ const waiting = {
 let chats: Record<string, unknown>[] = [];
 
 const setUp = (over: Partial<GettingStartedFacts> = {}) =>
-  buildGettingStarted(
-    {
-      startedAt: '2026-10-20T10:00:00Z',
-      dismissedAt: null,
-      confirmedAt: '2026-10-20T10:00:00Z',
-      records: {},
-      recordedAt: {},
-      kpiSetupAt: '2026-10-01T00:00:00Z',
-      competitors: 4,
-      topicPrompts: [3, 3, 3],
-      gsc: false,
-      ga: false,
-      firstAnswer: true,
-      firstVisit: false,
-      dataSuggestions: 0,
-      dataTracked: 0,
-      contentSuggestions: 0,
-      contentPicked: 0,
-      contentCreated: 0,
-      contentRecent: 0,
-      audits: 0,
-      draftsCreated: 0,
-      draftsOptimized: 0,
-      ...over,
-    },
-    { setupOnly: true },
-  );
+  buildGettingStarted({
+    startedAt: '2026-10-20T10:00:00Z',
+    dismissedAt: null,
+    confirmedAt: '2026-10-20T10:00:00Z',
+    records: {},
+    recordedAt: {},
+    kpiSetupAt: '2026-10-01T00:00:00Z',
+    competitors: 4,
+    topicPrompts: [3, 3, 3],
+    gsc: false,
+    ga: false,
+    firstAnswer: true,
+    firstVisit: false,
+    dataSuggestions: 0,
+    dataTracked: 0,
+    contentSuggestions: 0,
+    contentPicked: 0,
+    contentCreated: 0,
+    contentRecent: 0,
+    audits: 0,
+    draftsCreated: 0,
+    draftsOptimized: 0,
+    ...over,
+  });
 
 let container: HTMLDivElement;
 let root: Root;
@@ -360,7 +357,6 @@ afterEach(() => {
 
 let upgrade: UpgradeDialogState | null = null;
 async function draw() {
-  vi.stubEnv('SIMPLE_NAV', 'true');
   const page = ActionCenterTodayPage();
   await act(async () => {
     root.render(
@@ -377,15 +373,7 @@ const button = (label: string) =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === label);
 
 describe('Action Center › Today', () => {
-  it('is not found while SIMPLE_NAV is off, as production leaves it', () => {
-    vi.stubEnv('SIMPLE_NAV', undefined);
-    expect(() => ActionCenterTodayPage()).toThrow('NEXT_NOT_FOUND');
-    vi.stubEnv('SIMPLE_NAV', 'false');
-    expect(() => ActionCenterTodayPage()).toThrow('NEXT_NOT_FOUND');
-  });
-
-  it('shows Today with SIMPLE_NAV on', () => {
-    vi.stubEnv('SIMPLE_NAV', 'true');
+  it('shows Today', () => {
     const page = ActionCenterTodayPage();
     expect(isValidElement(page) && page.type).toBe(TodayPage);
   });
@@ -652,6 +640,42 @@ describe('Action Center › Today', () => {
     const rows = [...container.querySelectorAll('[data-waiting]')];
     expect(rows.map((row) => row.getAttribute('data-waiting'))).toEqual(['due', 'review']);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('says prompts wait for a spot, with Free up a spot and, on Starter, See Growth', async () => {
+    reads.getTodayWaiting.mockResolvedValue({
+      ...waiting,
+      prompts: { count: 3, free: 0, fits: false, plan: 'starter' },
+    });
+    await draw();
+    const types = [...container.querySelectorAll('[data-waiting]')].map((row) =>
+      row.getAttribute('data-waiting'),
+    );
+    expect(types).toEqual(['agent', 'drafts', 'due', 'review', 'prompts', 'ideas']);
+    const row = container.querySelector('[data-waiting="prompts"]')!;
+    expect(row.textContent).toContain('3 prompts are waiting for a spot.');
+    const links = [...row.querySelectorAll('a')];
+    expect(links.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['Free up a spot', '/dashboard/prompts/tracked?status=waiting&swap=1'],
+      ['See Growth', '/dashboard/settings?tab=billing'],
+    ]);
+    await act(async () => links[1].click());
+    expect(track).toHaveBeenCalledWith('prompt_limit_see_growth', { source: 'today' });
+    await act(async () => links[0].click());
+    expect(track).toHaveBeenCalledWith('today_waiting_clicked', { type: 'prompts' });
+  });
+
+  it('says a spot is free for one, which a waiting prompt never takes by itself', async () => {
+    reads.getTodayWaiting.mockResolvedValue({
+      ...waiting,
+      prompts: { count: 2, free: 1, fits: true, plan: 'growth' },
+    });
+    await draw();
+    const row = container.querySelector('[data-waiting="prompts"]')!;
+    expect(row.textContent).toContain('1 spot free · 2 prompts wait for one.');
+    expect(
+      [...row.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]),
+    ).toEqual([['Track a waiting prompt', '/dashboard/prompts/tracked?status=waiting&swap=1']]);
   });
 
   it('says nothing waits, and offers the focus action furthest along', async () => {

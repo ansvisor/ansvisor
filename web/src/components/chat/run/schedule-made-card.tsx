@@ -29,8 +29,7 @@ type CardAction = 'run_now' | 'open_agents' | 'change_schedule';
  * and when it runs, with Run it now (one run at once, as the Scheduled
  * page's Run now), Open in Agents (Action Center › Agents, where it is
  * listed as made in Chat) and Change the schedule (its page in Chat ›
- * Scheduled). Only with the simplified layout on (SIMPLE_NAV): the thread
- * shows it through ScheduleMadeCards (schedule-made-cards.tsx).
+ * Scheduled). The thread shows it through ScheduleMadeCards (schedule-made-cards.tsx).
  */
 export function ScheduleMadeCard({ made }: { made: ChatScheduleMade }) {
   const t = useTranslations('chatRun.scheduleMade');

@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { useUserRole } from '@/hooks/use-user-role';
 import { cn } from '@/lib/utils';
-import { dashboardNav, simpleDashboardNav } from '@/config/dashboard';
+import { dashboardNav } from '@/config/dashboard';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import {
   MENU_SECTIONS,
@@ -19,13 +19,10 @@ import {
   type WorkAreaId,
 } from '@/lib/menu-access';
 import { useMenuSections } from '@/components/providers/menu-access-provider';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { getMyMenu, setMyWorkAreas, type MyMenu } from '@/lib/actions/menu-access';
 
-/** The menu's sections with their icons and nav titles, in its order. */
+/** The menu's sections with their icons and nav titles, in its order: Agents under the Action Center. */
 const SECTIONS = menuSectionEntries(dashboardNav.flatMap((group) => group.items));
-/** The simplified menu's (SIMPLE_NAV): Agents under the Action Center. */
-const SIMPLE_SECTIONS = menuSectionEntries(simpleDashboardNav.flatMap((group) => group.items));
 
 /**
  * The menu with other work areas: what the admin takes off stays off, and the
@@ -53,11 +50,9 @@ export function WorkAreasCard() {
   const t = useTranslations('settings.menuAccess');
   const tNav = useTranslations('nav');
   const { canAdmin } = useUserRole();
-  // Agent Center only with the new Chat on.
+  // Agents only with the new Chat on.
   const sections = useMenuSections();
-  const shown = (useSimpleNav() ? SIMPLE_SECTIONS : SECTIONS).filter((s) =>
-    sections.includes(s.section),
-  );
+  const shown = SECTIONS.filter((s) => sections.includes(s.section));
   const [menu, setMenu] = useState<MyMenu | null>(null);
   const [failed, setFailed] = useState(false);
 

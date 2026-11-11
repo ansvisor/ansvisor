@@ -61,7 +61,6 @@ const { MobileNav } = await import('./mobile-nav');
 const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { AdsProvider } = await import('@/components/providers/ads-provider');
-const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 const { useSidebarStore } = await import('@/stores/use-sidebar-store');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 
@@ -91,7 +90,6 @@ afterEach(() => {
 });
 
 interface Setup {
-  simpleNav?: boolean;
   chatAgentic?: boolean;
   ads?: boolean;
   hidden?: string[];
@@ -99,7 +97,6 @@ interface Setup {
 }
 
 async function render({
-  simpleNav = true,
   chatAgentic = true,
   ads = false,
   hidden = [],
@@ -108,15 +105,13 @@ async function render({
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <SimpleNavProvider enabled={simpleNav}>
-          <ChatAgenticProvider enabled={chatAgentic}>
-            <AdsProvider enabled={ads}>
-              <MenuAccessProvider hidden={hidden} canManageMenus={false}>
-                {mobile ? <MobileNav /> : <Sidebar />}
-              </MenuAccessProvider>
-            </AdsProvider>
-          </ChatAgenticProvider>
-        </SimpleNavProvider>
+        <ChatAgenticProvider enabled={chatAgentic}>
+          <AdsProvider enabled={ads}>
+            <MenuAccessProvider hidden={hidden} canManageMenus={false}>
+              {mobile ? <MobileNav /> : <Sidebar />}
+            </MenuAccessProvider>
+          </AdsProvider>
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -141,41 +136,7 @@ const link = (href: string) => container.querySelector<HTMLAnchorElement>(`a[hre
 const groupHeader = (title: string) =>
   container.querySelector<HTMLButtonElement>(`button[data-nav-group="${title}"]`);
 
-describe('the menu without SIMPLE_NAV', () => {
-  it('is as it was: Agent Center under Chat, Analytics, Execution, Reports and Competitors', async () => {
-    await render({ simpleNav: false });
-    expect(rows()).toEqual([
-      'Chat',
-      'Agent Center',
-      '# Analytics',
-      'Visibility',
-      '  Overview',
-      '  Mentions',
-      '  Citations',
-      'Prompts',
-      '  Tracked Prompts',
-      '  Prompt Suggestions',
-      '  Topics',
-      '  Query Fan-outs',
-      '  Insights',
-      'AI Referral Traffic',
-      '# Execution',
-      'Action Center',
-      'Content',
-      '  Opportunities',
-      '  Plan',
-      '  Editor',
-      '  Library',
-      'Audit',
-      'Reports',
-      'Competitors',
-    ]);
-    expect(link('/dashboard/action-center/today')).toBeNull();
-    expect(container.textContent).not.toContain('More');
-  });
-});
-
-describe('the simplified menu (SIMPLE_NAV)', () => {
+describe('the menu', () => {
   it('is Chat, the Action Center with its tabs, ANALYTICS with Prompts first, and MORE', async () => {
     await render();
     expect(rows()).toEqual([
@@ -391,7 +352,7 @@ describe('the simplified menu (SIMPLE_NAV)', () => {
   });
 });
 
-describe('the mobile menu with SIMPLE_NAV', () => {
+describe('the mobile menu', () => {
   it('lists the same menu, the Action Center’s tabs under it', async () => {
     await render({ mobile: true });
     const trigger = container.querySelector<HTMLButtonElement>(
@@ -415,17 +376,5 @@ describe('the mobile menu with SIMPLE_NAV', () => {
     expect(at('/dashboard/traffic')).toBeLessThan(at('/dashboard/content'));
     expect(at('/dashboard/reports')).toBeLessThan(at('/dashboard/competitors'));
     expect(document.body.textContent).not.toContain('Agent Center');
-  });
-
-  it('is as it was without it', async () => {
-    await render({ mobile: true, simpleNav: false });
-    const trigger = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Toggle navigation menu"]',
-    )!;
-    await act(async () => trigger.click());
-    const hrefs = [...document.querySelectorAll('a')].map((a) => a.getAttribute('href'));
-    expect(hrefs.indexOf('/dashboard/agents')).toBe(hrefs.indexOf('/dashboard/chat') + 1);
-    expect(hrefs).not.toContain('/dashboard/action-center/today');
-    expect(hrefs.indexOf('/dashboard/insights')).toBeLessThan(hrefs.indexOf('/dashboard/prompts'));
   });
 });

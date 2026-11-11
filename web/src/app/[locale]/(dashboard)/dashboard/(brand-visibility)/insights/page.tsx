@@ -1073,11 +1073,6 @@ export default function InsightsPage() {
                   trackedTopicIds={opportunities.trackedTopicIds}
                   topics={topicCompetitors}
                   entities={rateTrend?.entities ?? null}
-                  slotsLeft={
-                    !trackedPrompts || trackedPrompts.quotaLimit < 0
-                      ? null
-                      : Math.max(0, trackedPrompts.quotaLimit - trackedPrompts.quotaUsed)
-                  }
                   contentUsage={opportunities.contentUsage}
                   onTracked={(count) =>
                     setTrackedPrompts(

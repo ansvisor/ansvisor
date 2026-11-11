@@ -46,7 +46,6 @@ vi.mock('@/lib/actions/action-history', () => ({ getActionHistory }));
 vi.mock('@/lib/actions/action-scorecard', () => ({ getActionScorecard }));
 
 import ActionCenterHistoryPage from './page';
-import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 
 let container: HTMLDivElement;
 let root: Root;
@@ -67,14 +66,10 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
-async function renderAt(url: string, simpleNav = false) {
+async function renderAt(url: string) {
   window.history.replaceState(null, '', url);
   await act(async () => {
-    root.render(
-      <SimpleNavProvider enabled={simpleNav}>
-        <ActionCenterHistoryPage />
-      </SimpleNavProvider>,
-    );
+    root.render(<ActionCenterHistoryPage />);
   });
 }
 
@@ -143,19 +138,8 @@ describe('History scorecard by play (AC plan P-4)', () => {
 });
 
 describe('History’s views and KPIs', () => {
-  const views = () =>
-    [...container.querySelectorAll('.inline-flex')]
-      .find((group) => group.textContent?.startsWith('view.actions'))
-      ?.querySelectorAll('button, a');
-
-  it('switch between Actions and Scorecard only, without SIMPLE_NAV', async () => {
+  it('are Actions, Scorecard and KPIs, a link to its page, and still switch in place', async () => {
     await renderAt('/');
-    expect([...views()!].map((v) => v.textContent)).toEqual(['view.actions', 'view.scorecard']);
-    expect(container.querySelector('a[href="/dashboard/action-center/kpis"]')).toBeNull();
-  });
-
-  it('add KPIs, a link to its page, with SIMPLE_NAV on, and still switch in place', async () => {
-    await renderAt('/', true);
     const group = container.querySelector('[role="group"][aria-label="view.label"]')!;
     expect([...group.querySelectorAll('button, a')].map((v) => v.textContent)).toEqual([
       'view.actions',
@@ -172,9 +156,9 @@ describe('History’s views and KPIs', () => {
     expect(named('view.scorecard')).toHaveLength(1);
   });
 
-  it('keep KPIs in reach with SIMPLE_NAV on when there is no history yet', async () => {
+  it('keep KPIs in reach when there is no history yet', async () => {
     getActionHistory.mockResolvedValue([]);
-    await renderAt('/', true);
+    await renderAt('/');
     expect(container.textContent).toContain('empty.title');
     expect(container.querySelector('a[href="/dashboard/action-center/kpis"]')).not.toBeNull();
   });

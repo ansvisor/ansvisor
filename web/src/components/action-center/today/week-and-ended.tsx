@@ -21,7 +21,7 @@ function useTitles() {
 }
 
 /**
- * Monday's "Last week" on Action Center › Today (SIMPLE_NAV, mockup
+ * Monday's "Last week" on Action Center › Today (mockup
  * Bugun-pazartesi), where the loop strip is on other days: visibility over
  * last week against the week before and the rank, the actions done, and the
  * results that came in, with the weekly report a click away.

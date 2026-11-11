@@ -10,7 +10,7 @@ export interface MenuStateRead {
 }
 
 /**
- * The simplified menu's dots and Action Center count (SIMPLE_NAV), shared
+ * The menu's dots and Action Center count, shared
  * by the sidebar, the mobile menu and NavSeen, so one read serves them all.
  * `opened` keeps the pages opened on this device since, per brand: their
  * dots clear at once, before the next read brings the visit back from the

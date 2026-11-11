@@ -4862,7 +4862,7 @@ async function cardAgain(
 
 /**
  * What a change made, as a card with its Open (its row's resultCard, CHAT-09
- * item 19), or recurring work it set up (its scheduleCard, SIMPLE_NAV).
+ * item 19), or recurring work it set up (its scheduleCard).
  */
 function showResultCard(
   rc: RunContext,

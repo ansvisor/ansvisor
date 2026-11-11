@@ -6,8 +6,8 @@ import { NIGHTLY_AREAS, isDotArea, type DotArea, type MenuState } from '@/lib/me
 import { isoTime, isUuid, readNavSeen } from '@/lib/user-brand-state';
 
 /**
- * What the simplified menu's dots and the Action Center's count compare
- * (SIMPLE_NAV; lib/menu-dots.ts), in one read per brand: run on a brand
+ * What the menu's dots and the Action Center's count compare
+ * (lib/menu-dots.ts), in one read per brand: run on a brand
  * switch and at most every 5 minutes while the person moves around, never
  * at night. A handful of indexed single-row reads in parallel, as the
  * person (RLS), each only for an area the person's menu shows:
@@ -19,17 +19,37 @@ import { isoTime, isUuid, readNavSeen } from '@/lib/user-brand-state';
  *   AI traffic connected, when   the first AI visit (idx_ai_traffic_logs_brand_created);
  *                                the brand's Analytics property and the workspace's connection
  *   the open-action count        getMyOpenActionCount, the Actions tab's own read
+ *   prompts waiting for a spot   a head count of the brand's prompts (idx_prompts_waiting,
+ *                                00535), for admins and managers (PR 16)
  *   the person's visits          user_brand_state.nav_seen (00529)
  *
- * Prompts waiting for a spot come with PR 16. Answers as a value and never
- * throws (#1777); null when it can't be read, and a part that couldn't be
- * read is null, so its dot doesn't show.
+ * Answers as a value and never throws (#1777); null when it can't be read,
+ * and a part that couldn't be read is null, so its dot doesn't show.
  */
 
 /** What the menu asks for: the areas it shows a dot for, and whether it shows the count. */
 export interface MenuStateAsk {
   areas: DotArea[];
   count: boolean;
+  /**
+   * Count the prompts waiting for a spot, for Tracked Prompts' yellow dot:
+   * asked only for an admin or manager with Tracked Prompts on their menu.
+   */
+  waiting?: boolean;
+}
+
+/** How many of the brand's prompts wait for a spot; null when it couldn't be read. */
+async function waitingCount(supabase: Client, brandId: string): Promise<number | null> {
+  const { count, error } = await supabase
+    .from('prompts')
+    .select('id, prompt_sets!inner(brand_id)', { count: 'exact', head: true })
+    .eq('prompt_sets.brand_id', brandId)
+    .not('waiting_since', 'is', null);
+  if (error) {
+    console.error('[menu-state] could not count the prompts waiting for a spot:', error.message);
+    return null;
+  }
+  return count ?? 0;
 }
 
 type Client = Awaited<ReturnType<typeof createClient>>;
@@ -111,6 +131,7 @@ export async function getMenuState(brandId: string, ask: MenuStateAsk): Promise<
       newOpportunityAt,
       traffic,
       openActions,
+      waitingPrompts,
       seen,
     ] = await Promise.all([
       NIGHTLY_AREAS.some((area) => areas.has(area))
@@ -174,6 +195,7 @@ export async function getMenuState(brandId: string, ask: MenuStateAsk): Promise<
         : none,
       areas.has('traffic') ? trafficOf(supabase, brandId) : Promise.resolve(undefined),
       ask?.count ? getMyOpenActionCount(brandId) : none,
+      ask?.waiting && areas.has('prompts/tracked') ? waitingCount(supabase, brandId) : none,
       supabase
         .from('user_brand_state')
         .select('nav_seen')
@@ -192,6 +214,7 @@ export async function getMenuState(brandId: string, ask: MenuStateAsk): Promise<
       navSeen: seen.error ? null : readNavSeen(seen.data?.nav_seen),
     };
     if (traffic) state.traffic = traffic;
+    if (waitingPrompts !== null) state.waitingPrompts = waitingPrompts;
     return state;
   } catch (error) {
     console.error('[menu-state] could not read the menu state:', error);

@@ -2,7 +2,7 @@ import type { ActionItem } from '@/lib/actions/action-center';
 import type { TodayStep } from '@/lib/action-center/today';
 
 /**
- * Today's "Waiting for you" (SIMPLE_NAV, simplification plan PR 9): what
+ * Today's "Waiting for you" (simplification plan PR 9): what
  * waits on the person, in order, each row only for a role that can act on
  * it and only while its section is on the person's menu:
  *
@@ -12,14 +12,31 @@ import type { TodayStep } from '@/lib/action-center/today';
  *   3. due      open actions due today or overdue, theirs or no one's
  *   4. reminder recurring reminders, such as the weekly Business Hub numbers
  *   5. review   tasks waiting in Needs review (admins and managers)
- *   6. ideas    new prompt ideas from Search Console or Analytics since they
+ *   6. prompts  prompts waiting for a spot on the plan, or a spot free to
+ *               track one (admins and managers, Prompts; PR 16)
+ *   7. ideas    new prompt ideas from Search Console or Analytics since they
  *               last looked (admins and managers, Prompts)
  *
  * Nothing is stored; each row reads what the app already keeps. Pure: the
  * server action and the page read, this orders and filters.
  */
 
-export type WaitingType = 'agent' | 'drafts' | 'due' | 'reminder' | 'review' | 'ideas';
+export type WaitingType = 'agent' | 'drafts' | 'due' | 'reminder' | 'review' | 'prompts' | 'ideas';
+
+/**
+ * The brand's prompts waiting for a spot (00535), and the plan's room: a
+ * waiting prompt never starts by itself when a spot frees up, so a free
+ * spot is said, for the person to pick one.
+ */
+export interface WaitingPrompts {
+  count: number;
+  /** Spots free on the workspace's plan; null when it has no limit. */
+  free: number | null;
+  /** The free spots fit at least one of them (each needs one per location). */
+  fits: boolean;
+  /** The workspace's plan: Starter is offered Growth. */
+  plan: string;
+}
 
 /** An action a row opens: its first step still to do, and when it is due. */
 export interface WaitingAction {
@@ -36,6 +53,7 @@ export type WaitingRow =
   | { type: 'due'; item: WaitingAction; overdue: boolean }
   | { type: 'reminder'; item: WaitingAction }
   | { type: 'review'; count: number }
+  | ({ type: 'prompts' } & WaitingPrompts)
   | { type: 'ideas'; count: number; sources: ('gsc' | 'ga')[] };
 
 /** The menu section a row belongs to; the Action Center's rows are always on. */
@@ -45,11 +63,12 @@ const SECTION: Record<WaitingType, string | null> = {
   due: null,
   reminder: null,
   review: null,
+  prompts: 'prompts',
   ideas: 'prompts',
 };
 
 /** Rows only admins and managers act on. */
-const MANAGERS_ONLY: readonly WaitingType[] = ['review', 'ideas'];
+const MANAGERS_ONLY: readonly WaitingType[] = ['review', 'prompts', 'ideas'];
 
 /** Due rows listed at most; the rest wait in All actions. */
 export const DUE_ROWS = 3;
@@ -71,6 +90,8 @@ export interface WaitingInput {
   /** The person's day, YYYY-MM-DD. */
   today: string;
   reviews: number | null;
+  /** Prompts waiting for a spot (admins and managers); absent or null when not read. */
+  prompts?: WaitingPrompts | null;
   ideas: { count: number; sources: ('gsc' | 'ga')[] } | null;
 }
 
@@ -103,6 +124,7 @@ export function waitingRows(input: WaitingInput): WaitingRow[] {
   }
   if (input.reviews !== null && input.reviews > 0)
     rows.push({ type: 'review', count: input.reviews });
+  if (input.prompts && input.prompts.count > 0) rows.push({ type: 'prompts', ...input.prompts });
   if (input.ideas && input.ideas.count > 0) rows.push({ type: 'ideas', ...input.ideas });
 
   return rows.filter((row) => {

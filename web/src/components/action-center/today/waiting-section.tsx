@@ -6,7 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { track } from '@/lib/analytics';
 import { actionTexts, taskText } from '@/lib/action-center/display';
 import { isReminderKind } from '@/lib/action-center/focus';
-import { REVIEW_TAB } from '@/lib/action-center/tabs';
+import { ACTION_CENTER_REVIEW } from '@/lib/action-center/tabs';
 import { waitingRows, type WaitingAction, type WaitingRow } from '@/lib/action-center/waiting';
 import { getTodayWaiting } from '@/lib/actions/today-waiting';
 import type { FocusCard } from '@/lib/actions/today-focus';
@@ -38,12 +38,12 @@ async function readAgentsWaiting(brandId: string): Promise<{ id: string; title: 
 }
 
 /**
- * Waiting for you on Action Center › Today (SIMPLE_NAV): the brand's agent
+ * Waiting for you on Action Center › Today: the brand's agent
  * runs and drafts waiting for an OK, tasks due, weekly reminders, Needs
- * review and new prompt ideas, each for a role that can act on it and only
- * while its section is on the person's menu (lib/action-center/waiting.ts).
- * With nothing waiting, the action in their focus furthest along. Stays
- * away when its read fails.
+ * review, prompts waiting for a spot and new prompt ideas, each for a role
+ * that can act on it and only while its section is on the person's menu
+ * (lib/action-center/waiting.ts). With nothing waiting, the action in their
+ * focus furthest along. Stays away when its read fails.
  */
 export function WaitingSection({
   brandId,
@@ -114,8 +114,58 @@ export function WaitingSection({
   );
 }
 
+/** Tracked Prompts with the waiting prompts shown and the swap dialog open (PR 16). */
+export const FREE_UP_HREF = '/dashboard/prompts/tracked?status=waiting&swap=1';
+
+/**
+ * Prompts waiting for a spot (admins and managers, PR 16): "3 prompts are
+ * waiting for a spot · Free up a spot · See Growth", or once the plan has
+ * room, "1 spot free · … · Track a waiting prompt": a waiting prompt never
+ * starts by itself, so the person picks it in the swap dialog.
+ */
+function WaitingPromptsLine({ row }: { row: Extract<WaitingRow, { type: 'prompts' }> }) {
+  const t = useTranslations('prompts.waiting.today');
+  const opened = () => track('today_waiting_clicked', { type: row.type });
+  const linkClass = 'font-semibold underline underline-offset-2';
+  return (
+    <>
+      <span className="leading-snug">
+        {!row.fits
+          ? t('line', { count: row.count })
+          : row.free === null
+            ? t('roomUnlimited', { count: row.count })
+            : t('room', { free: row.free, count: row.count })}
+      </span>
+      <span className="flex flex-wrap items-center gap-x-1.5">
+        <Link href={FREE_UP_HREF} onClick={opened} className={linkClass}>
+          {row.fits ? t('track') : t('freeUp')}
+        </Link>
+        {!row.fits && row.plan === 'starter' && (
+          <>
+            <span aria-hidden className="text-muted-foreground">
+              ·
+            </span>
+            <Link
+              href="/dashboard/settings?tab=billing"
+              onClick={() => track('prompt_limit_see_growth', { source: 'today' })}
+              className={linkClass}
+            >
+              {t('seeGrowth')}
+            </Link>
+          </>
+        )}
+      </span>
+    </>
+  );
+}
+
 /** A row's line and its link. */
 function WaitingLine({ row }: { row: WaitingRow }) {
+  if (row.type === 'prompts') return <WaitingPromptsLine row={row} />;
+  return <WaitingActionLine row={row} />;
+}
+
+function WaitingActionLine({ row }: { row: Exclude<WaitingRow, { type: 'prompts' }> }) {
   const t = useTranslations('actionCenter.today.waiting');
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tTasks = useTranslations('actionCenter.actionTasks');
@@ -163,7 +213,7 @@ function WaitingLine({ row }: { row: WaitingRow }) {
         return [
           t('review.line', { count: row.count }),
           t('review.open'),
-          REVIEW_TAB.href,
+          ACTION_CENTER_REVIEW,
           'today.needsReview',
         ];
       case 'ideas':

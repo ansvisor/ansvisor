@@ -43,7 +43,7 @@ export interface FocusCard {
 type FocusTaskRow = TodayTaskRow & { effort: string | null };
 
 /**
- * Today's focus for the signed-in person on a brand (SIMPLE_NAV): the 3
+ * Today's focus for the signed-in person on a brand: the 3
  * actions they keep (user_brand_state.focus) while those still fit, the
  * server's ranking (GET /api/action-center/today, shared with the Chat
  * Inbox) for the slots left, without the ones they skipped or reminders.

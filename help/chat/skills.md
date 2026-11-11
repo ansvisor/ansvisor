@@ -4,8 +4,8 @@ route: /dashboard/chat
 keywords: [manager adds library skill, skills, skill, setup guide, /setup, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, skill from skills.sh, skills.sh, review a skill, skill update, update available, library, skill library, library skills, add a skill from the library, third-party skills, mit skills, pending approval, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, fan-out gaps, fanout, sub-questions ai searches, prompt portfolio, prompts to add, prompts to pause]
 synonyms: [slash commands, playbooks, how-tos, templates, marketplace, skills directory]
 plan: all
-updated: 2026-11-09
-last_checked: 2026-11-09
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -74,7 +74,7 @@ A skill shapes how Chat works, not what it may do. It gives Chat no new tools, d
 
 Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps and Prompt portfolio.
 
-**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent.
+**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent.
 
 ## Fan-out gaps
 

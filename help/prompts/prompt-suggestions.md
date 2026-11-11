@@ -4,8 +4,8 @@ route: /dashboard/prompts/suggestions
 keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter, product prompts, catalog suggestions]
 synonyms: [prompt ideas, recommended prompts, new prompt ideas, suggest queries]
 plan: all
-updated: 2026-11-09
-last_checked: 2026-11-09
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -49,11 +49,11 @@ A prompt added from suggestions gets its first results with the next daily run.
 
 **Add All** adds every suggestion listed to **Tracked Prompts**, and the added ones leave the list. Like **Clear All**, it acts on what's listed, so a source filter or a search narrows it. Each prompt passes the same plan check as a single **+**.
 
-## When your prompt limit stops Add All
+## When your plan's prompts are full
 
-When your plan's prompt limit stops **Add All** partway, an amber note above the list says how many suggestions couldn't be added and how many were added before the limit.
+When your plan's prompt locations run out, **Add All** and **+** still add: the suggestions past the limit become prompts **Waiting for a spot**, kept but not tracked. An amber note above the list says how many were added and how many wait.
 
-To add the rest, upgrade your plan or ask us to raise your limit, as the note says, or pause as many prompts as the note names and try again. **Go to Tracked Prompts** opens the list where you can pause prompts.
+A waiting prompt never starts by itself. **Go to Tracked Prompts** opens the list, where admins and managers can **Free up a spot**, or upgrade your plan or ask us to raise your limit.
 
 ## How AI suggestions are written
 

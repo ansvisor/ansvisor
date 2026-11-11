@@ -714,7 +714,7 @@ describe('the Chat tool registry', () => {
     ).toMatchObject({ kind: 'action_added', actionNo: 1258 });
   });
 
-  it('gives recurring work create_schedule set up its card, with the simplified layout on (SIMPLE_NAV)', () => {
+  it('gives recurring work create_schedule set up its card', () => {
     const schedule = chatTool_('create_schedule');
     const input = schedule.inputSchema.parse(schedule.fixture.input);
     const made = {
@@ -728,10 +728,6 @@ describe('the Chat tool registry', () => {
       recurring: true,
     };
     try {
-      // Off: no card, the step line only, as before.
-      vi.stubEnv('SIMPLE_NAV', '');
-      expect(schedule.scheduleCard!(input, made)).toBeNull();
-      vi.stubEnv('SIMPLE_NAV', 'true');
       const card = schedule.scheduleCard!(input, made);
       expect(card).toEqual({
         title: 'Weekly visibility report',
@@ -1318,27 +1314,10 @@ describe('the reads that run only within a skill', () => {
 });
 
 describe('add_prompts over the plan limit (Simplify PR 15)', () => {
-  /** add_prompts' description as the registry reads it when its module loads. */
-  const description = async (simpleNav: boolean) => {
-    vi.resetModules();
-    if (simpleNav) vi.stubEnv('SIMPLE_NAV', 'true');
-    try {
-      const { PROMPT_TOOLS } = await import('./prompt-tools');
-      return PROMPT_TOOLS.find((tool) => tool.name === 'add_prompts')!.description;
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  };
-
-  it('says the prompts past the limit wait for a spot, apart from the added ones, with SIMPLE_NAV', async () => {
-    expect(await description(true)).toContain(
+  it('says the prompts past the limit wait for a spot, apart from the added ones', async () => {
+    const { PROMPT_TOOLS } = await import('./prompt-tools');
+    expect(PROMPT_TOOLS.find((tool) => tool.name === 'add_prompts')!.description).toContain(
       "When the plan's prompt locations run out, the rest are saved waiting for a spot: listed in `waiting`, not in `added`",
     );
-  });
-
-  it('keeps today’s description without it', async () => {
-    const text = await description(false);
-    expect(text).toContain("the plan's prompt locations may stop the rest (partial)");
-    expect(text).not.toContain('waiting');
   });
 });

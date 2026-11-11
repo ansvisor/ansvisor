@@ -81,7 +81,7 @@ export interface ThreadRun {
   remember: string | null;
   /** What it sent to the Action Center (CHAT-09 item 19), in order. */
   sent: ChatActionSent[];
-  /** The recurring work it set up (SIMPLE_NAV), each its card; none without. */
+  /** The recurring work it set up, each its card; none without. */
   scheduled?: ChatScheduleMade[];
   /** The Action Center tasks it worked on (CHAT-09 §B); null when it had none. */
   tasks: ChatTaskStrip | null;
@@ -153,7 +153,7 @@ interface FileRow {
 const END_EVENTS = ['run.finished', 'run.stopped', 'run.error', 'run.paused_cap'];
 /** What a run sent to the Action Center (CHAT-09 item 19), read back with its end. */
 const SENT_EVENT = 'action.sent';
-/** The recurring work a run set up (SIMPLE_NAV), read back the same way. */
+/** The recurring work a run set up, read back the same way. */
 const SCHEDULE_EVENT = 'schedule.made';
 /** "Remember this?" (W4-33): the line a finished run offered to remember. */
 const REMEMBER_EVENT = 'remember.offered';

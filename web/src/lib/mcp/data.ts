@@ -58,13 +58,7 @@ import {
 import { locationCode, isValidLocation } from '@/lib/region';
 import { promptVolumeEstimate, type EstimateConfidence } from '@/lib/volume-estimate';
 import { readPromptDemand, type PromptDemand } from './prompt-demand';
-import {
-  getOrgLocationUsage,
-  locationLimitMessage,
-  placeNewPrompt,
-  waitingPromptColumns,
-} from '@/lib/prompt-locations';
-import { simpleNavEnabled } from '@/lib/simple-nav/flag';
+import { getOrgLocationUsage, placeNewPrompt, waitingPromptColumns } from '@/lib/prompt-locations';
 import { NO_TOPICS, brandHasTopics } from '@/lib/topics-required';
 import {
   promptSourceData,
@@ -794,7 +788,7 @@ export interface AcceptedPromptSuggestion {
   status: 'added';
   /**
    * The prompt was saved waiting for a spot, not tracked: the plan's prompt
-   * locations were full (SIMPLE_NAV). Absent when it is tracked.
+   * locations were full. Absent when it is tracked.
    */
   waiting_for_spot?: true;
 }
@@ -900,13 +894,10 @@ export async function acceptPromptSuggestionFor(
     return { error: 'At least one platform or model must be selected.' };
   }
 
-  // Counted across every brand of the organization. Full: refused, or with
-  // SIMPLE_NAV saved waiting for a spot, as on the dashboard.
+  // Counted across every brand of the organization. Full: saved waiting for
+  // a spot, as on the dashboard.
   const usage = await getOrgLocationUsage(supabaseAdmin, auth.organizationId);
   const waiting = placeNewPrompt(plan, usage.total, 1) === 'wait';
-  if (waiting && !simpleNavEnabled()) {
-    return { error: locationLimitMessage(plan, usage.total, 1) ?? '', code: 'plan_limit' };
-  }
 
   const country = (brand.region as string | null) ?? 'US';
   const candidateRegion = locationCode(country, brand.state as string | null);

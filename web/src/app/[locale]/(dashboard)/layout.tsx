@@ -13,8 +13,6 @@ import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provide
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { AdsProvider } from '@/components/providers/ads-provider';
 import { adsEnabled } from '@/lib/ads/flag';
-import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
-import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import { isTourTopic } from '@/lib/chat/tour';
 import { readTourPrefs } from '@/lib/chat/tour-prefs';
 import { firstNameOf } from '@/lib/chat/home';
@@ -71,8 +69,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const chatOn = chatAgenticEnabled(profile.organization_id);
   // Ads (ADS_ENABLED): in development, off in production; the same for every workspace.
   const adsOn = adsEnabled();
-  // The simplified layout (SIMPLE_NAV): built in steps, off in production; the same for every workspace.
-  const simpleNavOn = simpleNavEnabled();
 
   const [
     { data: org, error: orgError },
@@ -129,8 +125,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
       organizationId: profile.organization_id,
     });
   }
-  // Of the sections the workspace has: Agent Center only with the new Chat
-  // on, Ads only with Ads on.
+  // Of the sections the workspace has: Agents only with the new Chat on,
+  // Ads only with Ads on.
   const menu = menuOfProfile({ ...profile, role }, roleHidden, menuSectionsFor(chatOn, adsOn));
 
   // The organization's demo brand (sample data, 00380), shown or hidden: the
@@ -222,7 +218,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const tourTopic = tour?.tour_topic;
 
   return (
-    <SimpleNavProvider enabled={simpleNavOn}>
+    <>
       <AuthProvider
         user={user}
         person={{
@@ -256,7 +252,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 >
                   {/* Inside the provider: it records nothing while the workspace is read-only. */}
                   <GettingStartedPageOpened />
-                  {/* A menu dot's page opened (SIMPLE_NAV): its dot clears. */}
+                  {/* A menu dot's page opened: its dot clears. */}
                   <NavSeen />
                   <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
                     <AiUsageProvider>
@@ -304,6 +300,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </ChatAgenticProvider>
         </RoleProvider>
       </PlanProvider>
-    </SimpleNavProvider>
+    </>
   );
 }

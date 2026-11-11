@@ -27,7 +27,7 @@ const NEXT_STEPS = 2;
 const SETUP_CARD = 'setup';
 
 /**
- * Finish setting up on Action Center › Today (SIMPLE_NAV): the 7 set-up
+ * Finish setting up on Action Center › Today: the 7 set-up
  * steps (KPIs, competitors, topics, prompts, Search Console, Analytics and
  * the AI traffic snippet), worked out from the brand's data, so the steps a
  * brand already did count. The next 2 open steps with how long each takes,
