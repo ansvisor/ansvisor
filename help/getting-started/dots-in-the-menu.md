@@ -33,6 +33,10 @@ A grey dot that pulses means Ansvisor is working on it right now: an agent is ru
 
 When a submenu, a group such as **Analytics** or the whole menu is folded, the dot shows on the item's icon or the group's name. Red wins over yellow, yellow over green and green over grey. Point at a dot to read what it means, such as **Needs attention: Search Console disconnected**; screen readers say it too.
 
+## Dots on pages
+
+The same dots show inside some pages, beside a title: on actions in **Actions**, on rows in **Content Plan** and **Library**, and on the **Auto-audit** line and **Opportunities** tab in **Audit**. They follow the same colours and rules, and never replace a row's status.
+
 ## The Action Center's number
 
 The number beside **Action Center** is how many open actions are unassigned or yours. It is hidden once your plan or trial has ended. The demo brand shows green and grey dots only, a workspace whose plan ended shows no yellow, and a section off your menu shows none.

@@ -1,5 +1,8 @@
 'use client';
 
+import { useDotViewer } from '@/components/layout/menu-dot';
+import { PageDot } from '@/components/layout/page-dot';
+import { draftDots, pickDot } from '@/lib/page-dots';
 import { useFormatter, useTranslations } from 'next-intl';
 import {
   AlertTriangle,
@@ -119,6 +122,7 @@ export function LibraryTable({
   const t = useTranslations('contentEditor.library');
   const tTypes = useTranslations('contentEditor.pageTypes');
   const chatOn = useChatAgentic();
+  const viewer = useDotViewer();
 
   if (drafts.length === 0) {
     return tab === 'all' ? (
@@ -179,12 +183,24 @@ export function LibraryTable({
               <TableCell
                 className={`max-w-[180px] xl:max-w-[320px] ${selection ? 'pl-2' : 'pl-6'}`}
               >
-                <Link
-                  href={contentEditorPath(draft.id)}
-                  className="block truncate font-medium hover:underline"
-                >
-                  {draft.title.trim() || t('untitled')}
-                </Link>
+                <div className="flex min-w-0 items-center gap-2">
+                  <Link
+                    href={contentEditorPath(draft.id)}
+                    className="block truncate font-medium hover:underline"
+                  >
+                    {draft.title.trim() || t('untitled')}
+                  </Link>
+                  <PageDot
+                    dot={pickDot(
+                      draftDots({
+                        status: draft.status,
+                        writing: draft.agentState === 'writing',
+                        sendFailed: sent?.status === 'failed',
+                      }),
+                      viewer,
+                    )}
+                  />
+                </div>
               </TableCell>
               <TableCell>
                 {isPageType(draft.pageType) ? (

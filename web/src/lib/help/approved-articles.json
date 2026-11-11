@@ -53,6 +53,10 @@
           "text": "- **Growth**: ground you could win, such as demand, topics, platforms or pages where you could appear more.\n- **Protect**: ground you hold that is starting to slip.\n- **Recover**: ground you held and lost, in visibility, citations, mentions or traffic.\n- **Fix**: issues on your own site, such as low audit scores, blocked crawlers or broken links AI sends people to.\n- **Compete**: places where competitors lead you."
         },
         {
+          "heading": "Dots on actions",
+          "text": "A dot beside an action's title, in the list and in its drawer, says what changed. It sits next to the status, which stays as it was.\n\n- **Red, with a !**: a task failed, the agent's last run on it failed, or its page didn't reach your CMS.\n- **Yellow**: a task waits for approval, a draft is in review, or the action is due today or overdue.\n- **Green**: its outcome was measured (Improved or No change) since you last opened it. Opening it clears the dot.\n- **Grey, pulsing**: an agent is working on it, its tasks are being written, or its draft is being written.\n\nRed and yellow are for admins and managers. Point at a dot to read why."
+        },
+        {
           "heading": "Cards and filters",
           "text": "The cards at the top count and filter the list, all but **Highest Priority**. Click one to narrow the table, and click it again to clear it.\n\n- **Top Actions**: the five highest-priority open actions.\n- **At Risk**: open Recover and Fix actions.\n- **Opportunities**: open Growth actions.\n- **In Progress**: actions someone is working on.\n- **Highest Priority**: the highest level among open actions; it doesn't filter.\n\nBelow them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products."
         },
@@ -3173,7 +3177,7 @@
         "draft list"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -3182,6 +3186,10 @@
         {
           "heading": "The tabs",
           "text": "Each tab shows its count:\n\n- **All**: every draft that isn't archived.\n- **In progress**: drafts being written.\n- **In review**: drafts the Content Agent wrote, waiting for a person.\n- **Ready**: drafts marked ready.\n- **Published**: drafts marked published, by you or your CMS.\n- **Archived**: drafts sent to the archive. They keep their status for when they're restored."
+        },
+        {
+          "heading": "Dots on pages",
+          "text": "A dot beside a page's title says what needs a look. Its status stays as it was.\n\n- **Red, with a !**: the page's last send to your CMS failed. It stays until a send goes through.\n- **Yellow**: the page is in review.\n- **Grey, pulsing**: the Content Agent is writing it.\n\nRed and yellow are for admins and managers. Point at a dot to read why."
         },
         {
           "heading": "Columns and filters",
@@ -3312,7 +3320,7 @@
         "editorial plan"
       ],
       "plan": "all",
-      "updated": "2026-10-29",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -3329,6 +3337,10 @@
         {
           "heading": "The priority list",
           "text": "Each row shows the **Priority Score**; the **Page**, with its title, page type and path, or **New page**; the **Action**: Create, Optimize or Protect; **Why** it's listed, tagged with where that comes from (**Opportunity**, **Citations** or **Protect**); and **Who** is on it: you, the Agent, a teammate or the person it's assigned to.\n\nThe row's button, **Create**, **Optimize** or **View**, opens New content on that row, and **Open draft** opens the draft already being written. Rows marked as a priority come first, the rest by score. The list shows up to 50 rows."
+        },
+        {
+          "heading": "Dots on rows",
+          "text": "Once a row has a draft, a dot beside its title can say what needs a look:\n\n- **Red, with a !**: the draft's last send to your CMS failed.\n- **Yellow**: the draft is in review, or its task is due this week and the draft isn't started.\n- **Grey, pulsing**: the Content Agent is writing it.\n\nRed and yellow are for admins and managers. Point at a dot to read why."
         },
         {
           "heading": "How the Priority Score works",
@@ -3772,6 +3784,10 @@
         {
           "heading": "When a menu is folded",
           "text": "When a submenu, a group such as **Analytics** or the whole menu is folded, the dot shows on the item's icon or the group's name. Red wins over yellow, yellow over green and green over grey. Point at a dot to read what it means, such as **Needs attention: Search Console disconnected**; screen readers say it too."
+        },
+        {
+          "heading": "Dots on pages",
+          "text": "The same dots show inside some pages, beside a title: on actions in **Actions**, on rows in **Content Plan** and **Library**, and on the **Auto-audit** line and **Opportunities** tab in **Audit**. They follow the same colours and rules, and never replace a row's status."
         },
         {
           "heading": "The Action Center's number",
@@ -5978,7 +5994,7 @@
         "audit priority"
       ],
       "plan": "all",
-      "updated": "2026-11-05",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -5987,6 +6003,10 @@
         {
           "heading": "Summary and cards",
           "text": "A summary line gives your site score, pages audited, lowest category and next auto-audit. The first three cards count only the pages of your primary domain:\n\n- **Site score**: the average score of each page's latest audit, and its change from each page's previous audit.\n- **Pages audited**: how many of your site's pages, as your sitemap, Google Analytics and AI citations list them, have an audit from the last 90 days, and how many don't. **See the … not audited** opens those in Opportunities.\n- **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.\n- **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs."
+        },
+        {
+          "heading": "Dots on Auto-audit and Opportunities",
+          "text": "The **Auto-audit** line and the **Opportunities** tab can carry a dot:\n\n- **Auto-audit**: grey while a scheduled audit runs; green when one finished since your last visit, with a summary such as **Score 72 → 78 · 3 issues fixed**; red when the latest run found a critical issue the run before didn't (AI crawlers blocked, broken structured data, a canonical or noindex problem), or couldn't reach your site; yellow while auto-audit is off or paused by your plan, with **Set up**.\n- **Opportunities**: yellow for pages to fix audited since you last opened the tab; green when a later audit confirmed fixes.\n\nRed and yellow are for admins and managers."
         },
         {
           "heading": "Score over time",

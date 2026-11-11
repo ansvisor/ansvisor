@@ -351,7 +351,66 @@ describe('GET /api/audits/auto-runs/latest', () => {
       completed: 2,
       running: 1,
       criticalIssues: 2,
+      compare: {
+        previous: false,
+        scoreBefore: null,
+        scoreAfter: null,
+        fixed: 0,
+        newCritical: [],
+        unreachable: false,
+      },
     });
+  });
+
+  it('compares the latest run with the one before: scores, fixes and new critical checks', async () => {
+    tables.site_audit_auto_runs = [
+      run('r2', ['a2', 'c2'], '2026-10-14T06:00:00Z'),
+      run('r1', ['a1', 'c1'], '2026-10-07T06:00:00Z'),
+    ];
+    const audit = (id, url, score) => ({
+      id,
+      brand_id: brandId,
+      status: 'completed',
+      url,
+      total_score: score,
+    });
+    tables.site_audits = [
+      audit('a1', 'https://acme.com/', 70),
+      audit('c1', 'https://acme.com/pricing', 74),
+      audit('a2', 'https://acme.com/', 76),
+      audit('c2', 'https://acme.com/pricing', 80),
+    ];
+    tables.audit_signal_results = [
+      { audit_id: 'a1', signal_key: 'faq-schema', status: 'fail' },
+      { audit_id: 'a1', signal_key: 'tables', status: 'fail' },
+      { audit_id: 'c1', signal_key: 'canonical', status: 'fail' },
+      { audit_id: 'a2', signal_key: 'tables', status: 'fail' },
+      { audit_id: 'c2', signal_key: 'canonical', status: 'fail' },
+      { audit_id: 'c2', signal_key: 'ai-bot-access', status: 'fail' },
+    ];
+
+    const res = await fetch(`${baseUrl}/auto-runs/latest?brandId=${brandId}`);
+    const { run: latest } = await res.json();
+    expect(latest.id).toBe('r2');
+    // faq-schema on / was fixed; canonical was failing before, so only AI bot access is new.
+    expect(latest.compare).toEqual({
+      previous: true,
+      scoreBefore: 72,
+      scoreAfter: 78,
+      fixed: 1,
+      newCritical: ['ai-bot-access'],
+      unreachable: false,
+    });
+  });
+
+  it('says the run could not audit the site when every audit of it failed', async () => {
+    tables.site_audit_auto_runs = [run('r1', ['a1', 'a2'], '2026-10-14T06:00:00Z')];
+    tables.site_audits = [
+      { id: 'a1', brand_id: brandId, status: 'failed' },
+      { id: 'a2', brand_id: brandId, status: 'failed' },
+    ];
+    const res = await fetch(`${baseUrl}/auto-runs/latest?brandId=${brandId}`);
+    expect((await res.json()).run.compare.unreachable).toBe(true);
   });
 
   it('is null when no recent run audited the brand', async () => {

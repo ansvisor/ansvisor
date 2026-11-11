@@ -13,7 +13,7 @@
 
 import { opportunityPageType } from './asset-types';
 import { detectPageType, type SiteType } from './page-types';
-import type { DraftMethod, PageType } from './drafts';
+import type { DraftMethod, DraftStatus, PageType } from './drafts';
 import { pageKey } from './sources';
 import type { PriorityLevel } from '@/lib/action-center/priority';
 import { levelOf, logScale, round } from '@/lib/priority-core';
@@ -87,6 +87,12 @@ export interface PlanDraft {
   sourceUrl: string | null;
   /** The Action Center task it was sent as (Start's Team), and who it is assigned to. */
   actionId: string | null;
+  /** For the row's dot (lib/page-dots.ts): its status, the Content Agent writing it, */
+  status?: DraftStatus;
+  writing?: boolean;
+  /** its latest send to the CMS failed, and its task's due date (YYYY-MM-DD). */
+  sendFailed?: boolean;
+  dueDate?: string | null;
   assignee: { id: string; name: string } | null;
 }
 

@@ -124,6 +124,9 @@ import {
 import { ImproveOutcomeCard } from './improve-outcome-card';
 import { improvePlatformLabels } from '@/lib/improve-outcome';
 import { cn } from '@/lib/utils';
+import { useDotViewer } from '@/components/layout/menu-dot';
+import { PageDot } from '@/components/layout/page-dot';
+import { actionDots, localDay, pickDot } from '@/lib/page-dots';
 
 type DrawerTab = 'overview' | 'affected' | 'tasks' | 'signals' | 'history';
 const TABS: DrawerTab[] = ['overview', 'tasks', 'signals', 'history'];
@@ -168,6 +171,7 @@ export function ActionDrawer({
   const tSignalTexts = useTranslations('actionCenter.signalTexts');
   const tCategories = useTranslations('actionCenter.actionCategories');
   const tRegistry = useTranslations('actionCenter.registry');
+  const dotViewer = useDotViewer();
   const tTasks = useTranslations('actionCenter.actionTasks');
   const tTaskStatus = useTranslations('actionCenter.taskStatus');
   const tPriority = useTranslations('actionCenter.actionsPage.priority');
@@ -501,7 +505,15 @@ export function ActionDrawer({
               />
             </div>
             <div className="min-w-0">
-              <SheetTitle>{texts.title}</SheetTitle>
+              <SheetTitle className="flex items-center gap-2">
+                {texts.title}
+                <PageDot
+                  dot={pickDot(
+                    actionDots(action, action.dotFacts, localDay(new Date())),
+                    dotViewer,
+                  )}
+                />
+              </SheetTitle>
               <SheetDescription>
                 {ready ? (story?.why ?? texts.description) : null}
               </SheetDescription>

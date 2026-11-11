@@ -1,5 +1,6 @@
 'use server';
 
+import type { AutoRunCompare } from '@/lib/page-dots';
 import { createClient } from '@/lib/supabase/server';
 import { assertWritable } from '@/lib/subscription-guard';
 import { isManager } from '@/lib/session-role';
@@ -154,6 +155,8 @@ export interface AutoAuditRun {
   running: number;
   /** Signals those audits failed. */
   criticalIssues: number;
+  /** Against the run before it, for the Audit page's dots; absent from an older API. */
+  compare?: AutoRunCompare | null;
 }
 
 export interface AuditTrendPoint {

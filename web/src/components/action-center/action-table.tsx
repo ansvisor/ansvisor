@@ -25,6 +25,9 @@ import {
 } from 'lucide-react';
 import { RemovedNote } from '@/components/action-center/removed-note';
 import { RunAgentButton } from '@/components/action-center/run-agent-button';
+import { useDotViewer } from '@/components/layout/menu-dot';
+import { PageDot } from '@/components/layout/page-dot';
+import { actionDots, localDay, pickDot } from '@/lib/page-dots';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -382,6 +385,8 @@ export function ActionTable({
   const tTexts = useTranslations('actionCenter.actionTexts');
   const tCategories = useTranslations('actionCenter.actionCategories');
   const tCommon = useTranslations('common');
+  const viewer = useDotViewer();
+  const today = localDay(new Date());
 
   return (
     <div className="overflow-x-auto rounded-lg border bg-card">
@@ -419,6 +424,9 @@ export function ActionTable({
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-1">
                         <p className="truncate text-sm font-medium">{texts.title}</p>
+                        <PageDot
+                          dot={pickDot(actionDots(action, action.dotFacts, today), viewer)}
+                        />
                         <AskAboutThis
                           reference={{ type: 'task', id: action.id, label: texts.title }}
                           className="shrink-0"

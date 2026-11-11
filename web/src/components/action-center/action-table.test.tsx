@@ -304,4 +304,30 @@ describe('ActionTable and Chat’s side panel (W1-08)', () => {
     render();
     expect(container.querySelector('[data-action="page.askAboutThis"]')).toBeNull();
   });
+
+  it('shows a dot beside the title when its outcome was measured since it was last opened', () => {
+    render({
+      actions: [
+        {
+          ...action,
+          dotFacts: {
+            taskWaiting: false,
+            taskFailed: false,
+            agentRun: null,
+            writingTasks: false,
+            draftWriting: false,
+            draftInReview: false,
+            publishFailed: false,
+            measuredAt: '2026-11-10T00:00:00.000Z',
+            seenAt: null,
+          },
+        },
+      ],
+    });
+    const dot = container.querySelector('[data-menu-dot="green"]')!;
+    expect(dot.getAttribute('role')).toBe('img');
+    expect(dot.getAttribute('aria-label')).toBe('New results: its outcome was measured');
+    // The status pill stays.
+    expect(container.textContent).toContain('In Progress');
+  });
 });

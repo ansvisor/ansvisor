@@ -4,8 +4,8 @@ route: /dashboard/audit
 keywords: [site score, pages audited, audit opportunities, audited pages, score over time, first score, current score, not audited, audit coverage, score range]
 synonyms: [audit overview, audit history, which pages to audit, audit priority]
 plan: all
-updated: 2026-11-05
-last_checked: 2026-11-05
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -21,6 +21,15 @@ A summary line gives your site score, pages audited, lowest category and next au
 - **Pages audited**: how many of your site's pages, as your sitemap, Google Analytics and AI citations list them, have an audit from the last 90 days, and how many don't. **See the … not audited** opens those in Opportunities.
 - **Authority · E-E-A-T**: those two category scores averaged over your pages, and the signals that fail or warn on the most pages.
 - **Audits this month**: audits left this billing month, with the share auto-audit keeps for its next runs.
+
+## Dots on Auto-audit and Opportunities
+
+The **Auto-audit** line and the **Opportunities** tab can carry a dot:
+
+- **Auto-audit**: grey while a scheduled audit runs; green when one finished since your last visit, with a summary such as **Score 72 → 78 · 3 issues fixed**; red when the latest run found a critical issue the run before didn't (AI crawlers blocked, broken structured data, a canonical or noindex problem), or couldn't reach your site; yellow while auto-audit is off or paused by your plan, with **Set up**.
+- **Opportunities**: yellow for pages to fix audited since you last opened the tab; green when a later audit confirmed fixes.
+
+Red and yellow are for admins and managers.
 
 ## Score over time
 

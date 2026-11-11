@@ -20,6 +20,8 @@ import { useBrandStore } from '@/stores/use-brand-store';
 import { useChatPageContext } from '@/components/chat/panel/chat-panel-context';
 import type { ChatPageFilter } from '@/lib/chat/page-context';
 import { useUserRole } from '@/hooks/use-user-role';
+import { markPageSeen } from '@/lib/actions/user-brand-state';
+import { actionSeenKey } from '@/lib/user-brand-state';
 import { onFirstRunFinished } from '@/hooks/use-first-run';
 import type { Brand } from '@/types';
 import {
@@ -255,6 +257,25 @@ function ActionsContent({ brand }: { brand: Brand }) {
     const query = params.toString();
     window.history.replaceState(null, '', window.location.pathname + (query ? `?${query}` : ''));
   };
+
+  // Opening an action clears its green dot: here at once, and for the next
+  // read (nav_seen's action:<id>). Written on the demo brand too: it is the
+  // person's own UI state.
+  useEffect(() => {
+    if (!selectedId) return;
+    const at = new Date().toISOString();
+    setActions(
+      (list) =>
+        list?.map((action) =>
+          action.id === selectedId && action.dotFacts
+            ? { ...action, dotFacts: { ...action.dotFacts, seenAt: at } }
+            : action,
+        ) ?? null,
+    );
+    markPageSeen(brand.id, actionSeenKey(selectedId)).catch(() => {
+      // Offline: it clears here; the next read brings it back.
+    });
+  }, [selectedId, brand.id]);
 
   const load = useCallback(async () => {
     setLoadFailed(false);

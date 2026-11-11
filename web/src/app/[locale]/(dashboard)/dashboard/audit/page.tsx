@@ -27,6 +27,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { qualityPhase } from '@/lib/content/quality';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useDotViewer } from '@/components/layout/menu-dot';
+import { PageDot } from '@/components/layout/page-dot';
+import { markPageSeen, readPageSeen } from '@/lib/actions/user-brand-state';
+import { autoAuditDots, opportunityDots, pickDot } from '@/lib/page-dots';
+import type { PageSeenKey } from '@/lib/user-brand-state';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { isNoPlan } from '@/lib/billing/no-plan';
 import {
@@ -156,6 +161,14 @@ export default function SiteAuditPage() {
   const [tab, setTab] = useState<ListTab | null>(null);
   const [startingBulk, setStartingBulk] = useState(false);
   const [latestRun, setLatestRun] = useState<AutoAuditRun | null>(null);
+  // The person's last looks (nav_seen's audit keys), for the dots: undefined
+  // until read, null when they couldn't be.
+  const [seen, setSeen] = useState<{ brandId: string; at: Record<string, string> | null } | null>(
+    null,
+  );
+  // The brand whose Opportunities tab the person opened on this visit: its dot is gone.
+  const [oppOpened, setOppOpened] = useState<string | null>(null);
+  const dotViewer = useDotViewer();
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Pages › Group by template (SA-007): the templates, read while it's on.
   const [groupByTemplate, setGroupByTemplate] = useState(false);
@@ -170,8 +183,42 @@ export default function SiteAuditPage() {
 
   const refetch = () => setRefreshKey((k: number) => k + 1);
 
+  // The Opportunities tab shown keeps this look for the next visit's dot,
+  // once the last one was read.
+  const seenBrand = seen?.brandId ?? null;
+  useEffect(() => {
+    if (!activeBrandId || tab !== 'opportunities' || seenBrand !== activeBrandId) return;
+    markPageSeen(activeBrandId, 'audit/opportunities').catch(() => {});
+  }, [activeBrandId, tab, seenBrand]);
+
+  // The last look at each part, for its dot: undefined until read or when it couldn't be.
+  const seenAt = (key: PageSeenKey) =>
+    seen && seen.brandId === activeBrandId && seen.at ? (seen.at[key] ?? null) : undefined;
+  const autoDot = pickDot(
+    autoAuditDots({ run: latestRun, auto: quota?.auto ?? null, seenAt: seenAt('audit/auto') }),
+    dotViewer,
+  );
+  const oppDot =
+    oppOpened === activeBrandId
+      ? null
+      : pickDot(
+          opportunityDots({
+            audits: (opps?.opportunities ?? [])
+              .filter((o) => o.reasons.length > 0)
+              .map((o) => o.lastAudit?.at ?? null),
+            run:
+              latestRun?.status === 'completed'
+                ? { finishedAt: latestRun.finishedAt, fixed: latestRun.compare?.fixed ?? 0 }
+                : null,
+            seenAt: seenAt('audit/opportunities'),
+          }),
+          dotViewer,
+        );
+
   // The address follows the list shown, so it can be shared or reopened.
   const showList = (next: ListTab) => {
+    // Opening Opportunities clears its dot.
+    if (next === 'opportunities') setOppOpened(activeBrandId ?? null);
     setTab(next);
     window.history.replaceState(null, '', withListTab(window.location.href, next));
   };
@@ -202,6 +249,14 @@ export default function SiteAuditPage() {
     setTab(activeBrandId === linked.current.brandId ? linked.current.tab : null);
     setOpps(null);
     setLatestRun(null);
+    // Read before this visit is kept: the dots compare with the visit before.
+    readPageSeen(activeBrandId)
+      .catch(() => null)
+      .then((at) => {
+        if (cancelled) return;
+        setSeen({ brandId: activeBrandId, at });
+        markPageSeen(activeBrandId, 'audit/auto').catch(() => {});
+      });
     (async () => {
       try {
         const hub = await getAuditHub(activeBrandId);
@@ -735,6 +790,8 @@ export default function SiteAuditPage() {
         run={latestRun}
         nextRun={quota?.auto?.enabled ? nextAutoRun(quota.auto, new Date(nowMs)) : null}
         onViewPages={showPages}
+        dot={autoDot}
+        onSetUp={canManage ? () => setSettingsOpen(true) : undefined}
       />
 
       {/* KPI cards, as in the v2 mockup (SA-018) */}
@@ -909,6 +966,7 @@ export default function SiteAuditPage() {
             {(opps || oppsLoading) && (
               <TabsTrigger value="opportunities">
                 {t('lists.opportunities')}
+                <PageDot dot={oppDot} />
                 {opps ? (
                   <TabCount count={opps.opportunities.length} />
                 ) : (

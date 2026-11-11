@@ -7,11 +7,14 @@ import {
   focusColumn,
   isHiddenKey,
   isNavArea,
+  isSeenKey,
   isoTime,
   isUuid,
   parseUserBrandState,
+  readSeenKeys,
   withHidden,
   withSeen,
+  withSeenKey,
   type FocusPin,
   type NavArea,
   type UserBrandState,
@@ -124,6 +127,43 @@ export async function markSeen(brandId: string, area: NavArea): Promise<UserBran
   if (!isUuid(brandId) || !isNavArea(area)) return { ok: false, error: 'invalid' };
   const at = new Date();
   return keep(brandId, 'nav_seen', (current) => withSeen(current, area, at), `the ${area} visit`);
+}
+
+/**
+ * The person looked at a part of a page with its own dot (the Audit page's
+ * Auto-audit line or Opportunities tab), or opened an action: that dot
+ * clears for them (nav_seen's page keys). The time is the server's.
+ */
+export async function markPageSeen(brandId: string, key: string): Promise<UserBrandStateResult> {
+  if (!isUuid(brandId) || !isSeenKey(key)) return { ok: false, error: 'invalid' };
+  const at = new Date();
+  return keep(brandId, 'nav_seen', (current) => withSeenKey(current, key, at), `the ${key} visit`);
+}
+
+/**
+ * When the person last looked at each part of a page with its own dot, by
+ * its key; null when it can't be read, so no green or yellow compares with it.
+ */
+export async function readPageSeen(brandId: string): Promise<Record<string, string> | null> {
+  if (!isUuid(brandId)) return null;
+  try {
+    const who = await person();
+    if (!who) return null;
+    const { data, error } = await who.client
+      .from('user_brand_state')
+      .select('nav_seen')
+      .eq('user_id', who.userId)
+      .eq('brand_id', brandId)
+      .maybeSingle();
+    if (error) {
+      console.error('[user-brand-state] could not read the pages seen:', error.message);
+      return null;
+    }
+    return readSeenKeys(data?.nav_seen);
+  } catch (error) {
+    console.error('[user-brand-state] could not read the pages seen:', error);
+    return null;
+  }
 }
 
 /**

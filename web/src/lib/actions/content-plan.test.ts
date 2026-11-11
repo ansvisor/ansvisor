@@ -192,6 +192,10 @@ describe('getContentPlan', () => {
           opportunityId: 'o2',
           sourceUrl: null,
           actionId: 'a1',
+          status: 'draft',
+          writing: false,
+          sendFailed: false,
+          dueDate: null,
           // Named as the Action Center names them: the e-mail when there's no name.
           assignee: { id: 'u2', name: 'ada@acme.example' },
         },
