@@ -102,6 +102,11 @@ export const DEMO_GUARDED = [
   guard('POST /brand-facts/fetch', brandIn('body')),
   guard('PATCH /brand-facts/:id', rowIn('brand_facts', 'path')),
 
+  // ChatGPT Business Hub numbers (business-hub.js): the demo's are sample entries.
+  guard('PUT /business-hub/:brandId/snapshots', brandIn('path')),
+  guard('POST /business-hub/:brandId/snapshots/import', brandIn('path')),
+  guard('DELETE /business-hub/snapshots/:id', rowIn('business_hub_snapshots', 'path')),
+
   // Brands (brands.js): reading the site's home page, and AI, for its kind,
   // and for the tracking snippet (a demo brand's site is a sample).
   guard('POST /brands/:id/detect-site-type', brandIn('path', 'id')),

@@ -1152,6 +1152,66 @@ export type Database = {
           },
         ]
       }
+      business_hub_snapshots: {
+        Row: {
+          brand_id: string
+          created_at: string
+          discovery_topics: string[]
+          entered_by: string | null
+          id: string
+          mentions: number | null
+          period_days: number
+          period_end: string
+          profile_views: number | null
+          source: string
+          updated_at: string
+          website_clicks: number | null
+        }
+        Insert: {
+          brand_id: string
+          created_at?: string
+          discovery_topics?: string[]
+          entered_by?: string | null
+          id?: string
+          mentions?: number | null
+          period_days: number
+          period_end: string
+          profile_views?: number | null
+          source?: string
+          updated_at?: string
+          website_clicks?: number | null
+        }
+        Update: {
+          brand_id?: string
+          created_at?: string
+          discovery_topics?: string[]
+          entered_by?: string | null
+          id?: string
+          mentions?: number | null
+          period_days?: number
+          period_end?: string
+          profile_views?: number | null
+          source?: string
+          updated_at?: string
+          website_clicks?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_hub_snapshots_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_hub_snapshots_entered_by_fkey"
+            columns: ["entered_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cancellation_feedback: {
         Row: {
           choice: string
