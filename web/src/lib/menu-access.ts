@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { dashboardNav, type NavItem } from '@/config/dashboard';
+import { dashboardNav, simpleDashboardNav, type NavItem } from '@/config/dashboard';
 import type { UserRole } from '@/types';
 
 /**
@@ -58,14 +58,30 @@ export const MENU_SECTIONS: string[] = menuSectionEntries(
 ).map((entry) => entry.section);
 
 /**
- * Sections only the new Chat has (CHAT_AGENTIC): Agent Center. While it is
- * off for the workspace they are on no menu and in no list of sections.
+ * The same sections in the simplified menu's order (SIMPLE_NAV): Chat, the
+ * Action Center and Agents under it, then Analytics' and More's. No section
+ * is added or renamed, so every menu saved for a role, a person or a work
+ * area keeps working (`agents` is Action Center › Agents there).
  */
-export const CHAT_AGENTIC_SECTIONS: string[] = dashboardNav
-  .flatMap((group) => group.items)
-  .filter((item) => item.requiresChatAgentic)
-  .map((item) => menuSectionOf(item.href))
-  .filter((section): section is string => section !== null);
+export const SIMPLE_MENU_SECTIONS: string[] = menuSectionEntries(
+  simpleDashboardNav.flatMap((group) => group.items),
+).map((entry) => entry.section);
+
+/**
+ * Sections only the new Chat has (CHAT_AGENTIC): Agent Center, an item of
+ * the menu, or Action Center › Agents, an entry of the simplified one. While
+ * it is off for the workspace they are on no menu and in no list of sections.
+ */
+export const CHAT_AGENTIC_SECTIONS: string[] = [
+  ...new Set(
+    [...dashboardNav, ...simpleDashboardNav]
+      .flatMap((group) => group.items)
+      .flatMap((item) => [item, ...(item.children ?? [])])
+      .filter((entry) => entry.requiresChatAgentic)
+      .map((entry) => menuSectionOf(entry.href))
+      .filter((section): section is string => section !== null),
+  ),
+];
 
 /**
  * Sections only Ads has (ADS_ENABLED, lib/ads/flag.ts): Ads. While it is off
@@ -80,10 +96,11 @@ export const ADS_SECTIONS: string[] = dashboardNav
 
 /**
  * The left menu's sections a workspace has, in its order: Agent Center only
- * with the new Chat on, Ads only with Ads on; all of them with both.
+ * with the new Chat on, Ads only with Ads on; all of them with both. In the
+ * simplified menu's order with it on (`simpleNav`), where they are listed.
  */
-export function menuSectionsFor(chatAgentic: boolean, ads = false): string[] {
-  return MENU_SECTIONS.filter(
+export function menuSectionsFor(chatAgentic: boolean, ads = false, simpleNav = false): string[] {
+  return (simpleNav ? SIMPLE_MENU_SECTIONS : MENU_SECTIONS).filter(
     (section) =>
       (chatAgentic || !CHAT_AGENTIC_SECTIONS.includes(section)) &&
       (ads || !ADS_SECTIONS.includes(section)),
@@ -285,9 +302,8 @@ export interface MyMenu {
   hidden: string[];
   /** Of those, the ones their role or an exception takes off, whatever their work areas. */
   hiddenByAdmin: string[];
+  /** The work areas that narrow it (workAreasOf); none is Everything. */
   workAreas: WorkAreaId[];
-  /** Whether they answered (or skipped) "What do you work on?". */
-  workAreasAsked: boolean;
   /** Admin, or a manager an admin let change menus. */
   canManageMenus: boolean;
 }
@@ -306,8 +322,29 @@ export function canManageMenus(profile: Pick<MenuProfile, 'role' | 'can_manage_m
   return profile.role === 'admin' || (profile.role === 'manager' && !!profile.can_manage_menus);
 }
 
-export function workAreasOf(values: readonly string[] | null): WorkAreaId[] {
-  return (values ?? []).filter(isWorkAreaId);
+/**
+ * When everyone's work areas went back to Everything (owner, 2026-11-11):
+ * "What do you work on?" left onboarding, and nobody's menu stays narrowed
+ * by an answer to it. Work areas saved before then are kept but no longer
+ * count; picking them again in Settings (setMyWorkAreas stamps
+ * work_areas_asked_at) does. Moving it later resets everyone again.
+ */
+export const WORK_AREAS_RESET_AT = '2026-11-11T12:00:00Z';
+
+/**
+ * A person's work areas: the known ones they saved since WORK_AREAS_RESET_AT;
+ * none (Everything) when they haven't picked any since. Everything that
+ * reads work areas (the menu, Agent Center, MCP) goes through this.
+ */
+export function workAreasOf(
+  profile: {
+    work_areas?: readonly string[] | null;
+    work_areas_asked_at?: string | null;
+  } | null,
+): WorkAreaId[] {
+  const savedAt = profile?.work_areas_asked_at ? Date.parse(profile.work_areas_asked_at) : NaN;
+  if (!(savedAt >= Date.parse(WORK_AREAS_RESET_AT))) return [];
+  return (profile?.work_areas ?? []).filter(isWorkAreaId);
 }
 
 /**
@@ -319,7 +356,7 @@ export function menuOfProfile(
   roleHidden: readonly string[],
   sections: readonly string[] = MENU_SECTIONS,
 ): MyMenu {
-  const workAreas = workAreasOf(profile.work_areas);
+  const workAreas = workAreasOf(profile);
   const access = {
     role: profile.role,
     roleHidden,
@@ -330,7 +367,6 @@ export function menuOfProfile(
     hidden: [...hiddenMenuSections({ ...access, workAreas }, sections)],
     hiddenByAdmin: [...hiddenMenuSections({ ...access, workAreas: [] }, sections)],
     workAreas,
-    workAreasAsked: profile.work_areas_asked_at !== null,
     canManageMenus: canManageMenus(profile),
   };
 }

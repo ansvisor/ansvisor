@@ -55,7 +55,10 @@ describe('listReadyAgentsFor', () => {
       industry: 'B2B Software (SaaS)',
       shopping_mode_enabled: false,
     };
-    db.rows.profiles = { work_areas: ['leaders', 'not-an-area'] };
+    db.rows.profiles = {
+      work_areas: ['leaders', 'not-an-area'],
+      work_areas_asked_at: '2026-11-12T09:00:00Z',
+    };
     const read = await listReadyAgentsFor(auth, { brandId: 'brand-1' });
     expect(db.brandAllowed).toHaveBeenCalledWith(auth, 'brand-1');
     expect(db.filters).toEqual([

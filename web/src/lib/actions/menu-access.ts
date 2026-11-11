@@ -125,7 +125,7 @@ export async function getMenuAccessSettings(): Promise<MenuAccessSettings> {
     supabaseAdmin
       .from('profiles')
       .select(
-        'id, full_name, avatar_url, role, work_areas, menu_shown, menu_hidden, can_manage_menus, created_at',
+        'id, full_name, avatar_url, role, work_areas, work_areas_asked_at, menu_shown, menu_hidden, can_manage_menus, created_at',
       )
       .eq('organization_id', profile.organization_id)
       .order('created_at', { ascending: true }),
@@ -143,7 +143,9 @@ export async function getMenuAccessSettings(): Promise<MenuAccessSettings> {
       fullName: (row.full_name as string | null) ?? null,
       avatarUrl: (row.avatar_url as string | null) ?? null,
       role: row.role as UserRole,
-      workAreas: workAreasOf(row.work_areas as string[] | null),
+      workAreas: workAreasOf(
+        row as { work_areas: string[] | null; work_areas_asked_at: string | null },
+      ),
       shown: cleanMenuSections((row.menu_shown as string[] | null) ?? []),
       hidden: cleanMenuSections((row.menu_hidden as string[] | null) ?? []),
       canManageMenus: canManageMenus({
@@ -233,8 +235,8 @@ export async function setMenuManager(memberId: string, allowed: boolean) {
 }
 
 /**
- * What the viewer works on or leads; none = every section. Answers "What do
- * you work on?" too, so it isn't asked again.
+ * What the viewer works on or leads (Settings › Account); none = every
+ * section. Stamped with when, so it counts after WORK_AREAS_RESET_AT.
  */
 export async function setMyWorkAreas(areas: string[]) {
   const parsed = z.array(z.enum(WORK_AREA_IDS as [WorkAreaId, ...WorkAreaId[]])).parse(areas);
