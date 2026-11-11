@@ -592,6 +592,12 @@ describe('the simplified menu', () => {
     expect(isNavItemActive(actionCenter, '/dashboard/action-center/today')).toBe(true);
     expect(isNavItemActive(actionCenter, '/dashboard/agents/abc')).toBe(true);
     expect(activeChildHref(tabs, '/dashboard/agents/abc/edit')).toBe('/dashboard/agents');
+    // KPIs is one of History's views: History is its current entry.
+    expect(activeChildHref(tabs, '/dashboard/action-center/kpis')).toBe(
+      '/dashboard/action-center/history',
+    );
+    expect(isNavItemActive(actionCenter, '/dashboard/action-center/kpis')).toBe(true);
+    expect(activeChildHref(tabs, '/dashboard/action-center/review')).toBeNull();
     expect(isNavItemActive(actionCenter, '/dashboard/agent')).toBe(false);
   });
 
