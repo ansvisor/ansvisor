@@ -1,7 +1,7 @@
 ---
 title: Today in the Action Center
 route: /dashboard/action-center/today
-keywords: [today, action center, todays focus, since yesterday, waiting for you, finish setting up, where you stand]
+keywords: [today, action center, todays focus, since yesterday, waiting for you, finish setting up, where you stand, new area to track]
 synonyms: [start page, home page, daily summary, what to do today, my day]
 plan: all
 updated: 2026-11-11
@@ -42,6 +42,12 @@ Before the first answers are in, Today asks you to check the prompts we track fo
 ## Mondays
 
 On Mondays, once the brand has a full week of answers, **Last week** sums up visibility against the week before, the actions done and the results that came in, with a link to Reports. The focus reads **This week's focus**.
+
+## New area to track
+
+On your Monday, or once today's focus is finished, admins and managers may see **New area to track**: one topic you don't track yet, when what Ansvisor already has makes a strong case for it. That is a catalog category with 3 or more products, 3 or more Search Console or Analytics prompt ideas about it, or prompt ideas from ChatGPT Business Hub. The card says why, and how many prompt spots it needs and has left on your plan. It waits until your workspace is two weeks old.
+
+**Suggest 5 prompts** adds the topic and lists the prompt ideas you already have for it; with none, it writes 5. Tick the ones to track: past your plan's spots, they are saved as waiting for a spot. **Not now** hides that topic for you for 30 days.
 
 ## After a plan or trial ends
 

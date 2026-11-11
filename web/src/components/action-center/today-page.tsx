@@ -10,6 +10,7 @@ import { getTodayEnded, getTodayLastWeek } from '@/lib/actions/today-week';
 import { isMondayIn } from '@/lib/action-center/last-week';
 import { useUpgradeDialog } from '@/components/providers/upgrade-gate';
 import { finishOne } from '@/lib/action-center/waiting';
+import { topicCardTime } from '@/lib/action-center/topic-card';
 import type { FocusCard } from '@/lib/actions/today-focus';
 import { viewerTimeZone } from '@/lib/time-zone';
 import { ActionCenterHeader } from './action-center-header';
@@ -18,6 +19,7 @@ import { FirstDayView } from './today/first-day';
 import { FocusSection } from './today/focus-section';
 import { SetupSection } from './today/setup-section';
 import { SinceSection } from './today/since-section';
+import { TopicCard } from './today/topic-card';
 import { WaitingSection } from './today/waiting-section';
 import {
   EndedAside,
@@ -65,8 +67,10 @@ const VISIT_PARTS: Record<TodayMode, readonly TodayVisitPart[]> = {
  * strip's place (mockup Bugun-pazartesi). After the plan or trial ended,
  * it is read-only: what the trial found, the focus waiting for a plan, and
  * Choose a plan (mockup Bugun-bitmis); the global read-only band stays, and
- * Today adds only a note in its header. Each part reads on its own, so a
- * slow or failed read shows or hides only its part.
+ * Today adds only a note in its header. On the person's Monday, or once
+ * today's focus is finished, "New area to track" may offer a topic to
+ * track under Waiting for you. Each part reads on its own, so a slow or
+ * failed read shows or hides only its part.
  */
 export function TodayPage() {
   const t = useTranslations('actionCenter.today');
@@ -127,7 +131,8 @@ export function TodayPage() {
     setSince(summary);
   }, []);
   const [waiting, setWaiting] = useState<number | null>(null);
-  const [focusCards, setFocusCards] = useState<FocusCard[]>([]);
+  // Today's focus as read: null until it has, for New area to track's "focus finished".
+  const [focusCards, setFocusCards] = useState<FocusCard[] | null>(null);
   const summary =
     mode === 'ended'
       ? tEnded('readOnly')
@@ -241,9 +246,10 @@ export function TodayPage() {
               <WaitingSection
                 brandId={brandId}
                 visit={visit}
-                focus={finishOne(focusCards)}
+                focus={finishOne(focusCards ?? [])}
                 onSummary={setWaiting}
               />
+              {topicCardTime(monday, focusCards) && <TopicCard brandId={brandId} />}
               <SetupSection
                 brandId={brandId}
                 brandName={brandName ?? null}

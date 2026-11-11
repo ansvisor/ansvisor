@@ -57,7 +57,10 @@ const panel = { available: true, open: false, fill: vi.fn(), toggle: vi.fn() };
 vi.mock('@/components/chat/panel/chat-panel-context', () => ({ useChatPanel: () => panel }));
 const { track } = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('@/lib/analytics', () => ({ track }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+const { toast } = vi.hoisted(() => ({
+  toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+}));
+vi.mock('sonner', () => ({ toast }));
 
 const reads = vi.hoisted(() => ({
   getTodayOverview: vi.fn(),
@@ -79,6 +82,16 @@ const reads = vi.hoisted(() => ({
   acceptSuggestion: vi.fn(),
   getTodayLastWeek: vi.fn(),
   getTodayEnded: vi.fn(),
+  getTodayTopic: vi.fn(),
+  openTopicCard: vi.fn(),
+  writeTopicPrompts: vi.fn(),
+  trackTopicPrompts: vi.fn(),
+}));
+vi.mock('@/lib/actions/today-topic', () => ({
+  getTodayTopic: reads.getTodayTopic,
+  openTopicCard: reads.openTopicCard,
+  writeTopicPrompts: reads.writeTopicPrompts,
+  trackTopicPrompts: reads.trackTopicPrompts,
 }));
 vi.mock('@/lib/actions/today-week', () => ({
   getTodayLastWeek: reads.getTodayLastWeek,
@@ -294,6 +307,7 @@ beforeEach(() => {
   reads.skipGettingStarted.mockResolvedValue(undefined);
   reads.startGettingStarted.mockResolvedValue(undefined);
   reads.hideCard.mockResolvedValue({ ok: true });
+  reads.getTodayTopic.mockResolvedValue(null);
   chats = [
     {
       id: 'c1',
@@ -933,6 +947,188 @@ describe('Action Center › Today', () => {
       await draw();
       expect(titles()).toContain("Today's focus");
       expect(reads.getTodayEnded).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('New area to track', () => {
+    const topic = {
+      candidate: {
+        key: 'cold brew',
+        name: 'Cold brew',
+        source: 'catalog',
+        catalog: { suggestionId: 't1', category: 'Coffee > Cold brew', products: 4 },
+        search: { count: 3, sources: ['gsc'] },
+        businessHub: null,
+        llmSuggestionId: null,
+        topicId: null,
+        competitors: ['Northbound Roasters', 'Kettle & Crate'],
+      },
+      spots: { left: 3, plan: 'Starter' },
+    };
+    const ideas = [
+      { id: 'i1', text: 'best cold brew coffee concentrate' },
+      { id: 'i2', text: 'how to make cold brew at home' },
+      { id: 'i3', text: 'cold brew vs iced coffee caffeine' },
+      { id: 'i4', text: 'low acid cold brew for sensitive stomachs' },
+    ];
+    const card = () => container.querySelector('[data-today-part="topic"]');
+    const boxes = () => [...card()!.querySelectorAll<HTMLButtonElement>('button[role="checkbox"]')];
+    const waits = () =>
+      [...card()!.querySelectorAll('li')].map((li) => li.querySelector('[data-waits]') !== null);
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-16T09:00:00Z'));
+      reads.getTodayLastWeek.mockResolvedValue(null);
+      reads.getTodayTopic.mockResolvedValue(topic);
+      reads.openTopicCard.mockResolvedValue({
+        ok: true,
+        topic: { id: 'topic-9', name: 'Cold brew' },
+        ideas,
+      });
+      reads.trackTopicPrompts.mockResolvedValue({ ok: true, added: 3, waiting: 1 });
+    });
+
+    it("offers a topic on the person's Monday, under Waiting for you, with why and the spots", async () => {
+      await draw();
+      expect(reads.getTodayTopic).toHaveBeenCalledWith('b1');
+      const aside = titles();
+      expect(aside.indexOf('Cold brew')).toBe(aside.indexOf('Waiting for you') + 1);
+      expect(card()!.className).toContain('border-dashed');
+      expect(card()!.textContent).toContain('New area to track');
+      expect(card()!.textContent).toContain(
+        'No topic you track covers it yet. You sell 4 products in Coffee > Cold brew. ' +
+          'People look for it: 3 prompt ideas from your Search Console are about it. ' +
+          'AI answers name Northbound Roasters and Kettle & Crate here.',
+      );
+      expect(card()!.textContent).toContain('Needs 5 prompt spots · 3 left on Starter');
+      expect(button('Suggest 5 prompts')).toBeDefined();
+      expect(track).toHaveBeenCalledWith('today_topic_card_shown', { source: 'catalog' });
+    });
+
+    it("waits for today's focus to be finished on any other day", async () => {
+      vi.setSystemTime(new Date('2026-11-18T09:00:00Z'));
+      await draw();
+      expect(card()).toBeNull();
+      expect(reads.getTodayTopic).not.toHaveBeenCalled();
+
+      act(() => root.unmount());
+      root = createRoot(container);
+      reads.getTodayFocus.mockResolvedValue([]);
+      await draw();
+      expect(card()).not.toBeNull();
+    });
+
+    it('is only for admins and managers with Prompts on their menu', async () => {
+      canManage = false;
+      await draw();
+      expect(card()).toBeNull();
+      act(() => root.unmount());
+      root = createRoot(container);
+      canManage = true;
+      hidden = new Set(['prompts']);
+      await draw();
+      expect(card()).toBeNull();
+      expect(reads.getTodayTopic).not.toHaveBeenCalled();
+    });
+
+    it('snoozes the topic for the person for 30 days with Not now', async () => {
+      await draw();
+      await act(async () => button('Not now')?.click());
+      expect(reads.hideCard).toHaveBeenCalledWith(
+        'b1',
+        'topic:cold brew',
+        new Date('2026-12-16T09:00:00Z'),
+      );
+      expect(track).toHaveBeenCalledWith('today_topic_not_now', { source: 'catalog' });
+      expect(card()).toBeNull();
+    });
+
+    it('makes the topic, lists its stored ideas, marks the one past the spots and tracks the ticked', async () => {
+      await draw();
+      await act(async () => button('Suggest 5 prompts')?.click());
+      expect(track).toHaveBeenCalledWith('today_topic_suggest_clicked', { source: 'catalog' });
+      expect(reads.openTopicCard).toHaveBeenCalledWith('b1', {
+        name: 'Cold brew',
+        suggestionId: 't1',
+        topicId: null,
+      });
+      // Stored ideas first: no prompts are written.
+      expect(reads.writeTopicPrompts).not.toHaveBeenCalled();
+      expect(boxes().map((box) => box.getAttribute('aria-checked'))).toEqual([
+        'true',
+        'true',
+        'true',
+        'true',
+      ]);
+      expect(waits()).toEqual([false, false, false, true]);
+      expect(card()!.textContent).toContain(
+        "1 prompt past your plan's limit will be saved as waiting for a spot",
+      );
+      // One unticked: the rest fit in the 3 spots.
+      await act(async () => boxes()[1].click());
+      expect(waits()).toEqual([false, false, false, false]);
+      await act(async () => boxes()[1].click());
+
+      await act(async () => button('Track 4 prompts')?.click());
+      expect(reads.trackTopicPrompts).toHaveBeenCalledWith(
+        'b1',
+        'topic-9',
+        ideas.map((idea) => ({ ideaId: idea.id, text: idea.text })),
+      );
+      expect(card()!.textContent).toContain('3 added to Cold brew, 1 waiting for a spot.');
+      expect(card()!.querySelector('a')?.getAttribute('href')).toBe(
+        '/dashboard/prompts/topics/topic-9',
+      );
+      expect(toast.warning).toHaveBeenCalledWith(
+        '3 added, 1 waiting for a spot',
+        expect.anything(),
+      );
+      expect(track).toHaveBeenCalledWith('prompt_saved_waiting', { path: 'topic_card', count: 1 });
+    });
+
+    it('has the per-topic generator write 5 once when the topic has no stored ideas', async () => {
+      reads.openTopicCard.mockResolvedValue({
+        ok: true,
+        topic: { id: 'topic-9', name: 'Cold brew' },
+        ideas: [],
+      });
+      reads.writeTopicPrompts.mockResolvedValue({
+        ok: true,
+        prompts: ['best cold brew maker', 'is cold brew less acidic'],
+      });
+      reads.trackTopicPrompts.mockResolvedValue({ ok: true, added: 2, waiting: 0 });
+      await draw();
+      await act(async () => button('Suggest 5 prompts')?.click());
+      expect(reads.writeTopicPrompts).toHaveBeenCalledTimes(1);
+      expect(reads.writeTopicPrompts).toHaveBeenCalledWith('b1', 'topic-9');
+      expect(card()!.textContent).toContain('Written just now for this topic.');
+      await act(async () => button('Track 2 prompts')?.click());
+      expect(reads.trackTopicPrompts).toHaveBeenCalledWith('b1', 'topic-9', [
+        { ideaId: null, text: 'best cold brew maker' },
+        { ideaId: null, text: 'is cold brew less acidic' },
+      ]);
+      expect(card()!.textContent).toContain('2 prompts added to Cold brew.');
+      expect(toast.warning).not.toHaveBeenCalled();
+    });
+
+    it('offers to try again when the prompts could not be written', async () => {
+      reads.openTopicCard.mockResolvedValue({
+        ok: true,
+        topic: { id: 'topic-9', name: 'Cold brew' },
+        ideas: [],
+      });
+      reads.writeTopicPrompts.mockResolvedValueOnce({ ok: false, error: 'failed' });
+      reads.writeTopicPrompts.mockResolvedValueOnce({
+        ok: true,
+        prompts: ['best cold brew maker'],
+      });
+      await draw();
+      await act(async () => button('Suggest 5 prompts')?.click());
+      expect(card()!.textContent).toContain("Couldn't write prompts just now.");
+      await act(async () => button('Try again')?.click());
+      expect(reads.writeTopicPrompts).toHaveBeenCalledTimes(2);
+      expect(button('Track 1 prompt')).toBeDefined();
     });
   });
 });

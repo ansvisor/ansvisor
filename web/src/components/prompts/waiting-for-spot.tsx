@@ -28,7 +28,8 @@ export type WaitingPath =
   | 'fanout'
   | 'demand'
   | 'brand_page'
-  | 'new_brand';
+  | 'new_brand'
+  | 'topic_card';
 
 /** Counts prompts saved waiting (no-op on self-hosted, as every event is). */
 export function trackSavedWaiting(path: WaitingPath, count: number): void {
