@@ -8,6 +8,7 @@ import type { TodayOverview } from '@/lib/actions/today';
 import type { TodayStanding } from '@/lib/action-center/focus';
 import type { Signal } from '@/lib/signals/map';
 import { buildGettingStarted, type GettingStartedFacts } from '@/lib/getting-started/steps';
+import { UpgradeDialogContext, type UpgradeDialogState } from '@/components/providers/upgrade-gate';
 import messages from '../../../../../../../messages/en.json';
 
 /**
@@ -76,6 +77,12 @@ const reads = vi.hoisted(() => ({
   setPromptActive: vi.fn(),
   addPromptToBrand: vi.fn(),
   acceptSuggestion: vi.fn(),
+  getTodayLastWeek: vi.fn(),
+  getTodayEnded: vi.fn(),
+}));
+vi.mock('@/lib/actions/today-week', () => ({
+  getTodayLastWeek: reads.getTodayLastWeek,
+  getTodayEnded: reads.getTodayEnded,
 }));
 vi.mock('@/lib/actions/today-first-day', () => ({
   getTodayFirstDay: reads.getTodayFirstDay,
@@ -332,15 +339,18 @@ afterEach(() => {
   panel.available = true;
   hidden = new Set();
   canManage = true;
+  upgrade = null;
+  vi.useRealTimers();
 });
 
+let upgrade: UpgradeDialogState | null = null;
 async function draw() {
   vi.stubEnv('SIMPLE_NAV', 'true');
   const page = ActionCenterTodayPage();
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        {page}
+        <UpgradeDialogContext.Provider value={upgrade}>{page}</UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -796,6 +806,128 @@ describe('Action Center › Today', () => {
       expect(button('+ Add a prompt')).toBeUndefined();
       await act(async () => button('Looks good')?.click());
       expect(reads.hideCard).toHaveBeenCalledWith('b1', 'prompts_check', null);
+    });
+  });
+  describe('on Mondays', () => {
+    const lastWeek = {
+      visibility: { ...standing, score: 53.9, change: 3.5 },
+      done: {
+        count: 2,
+        actions: [
+          { id: 'd1', kind: 'recover_lost_citations', payload: {} },
+          { id: 'd2', kind: 'recover_lost_citations', payload: {} },
+        ],
+      },
+      results: { count: 1, actions: [{ id: 'd1', kind: 'recover_lost_citations', payload: {} }] },
+    };
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-11-16T09:00:00Z'));
+      reads.getTodayLastWeek.mockResolvedValue(lastWeek);
+    });
+
+    it("sums up last week in the loop strip's place, and names this week's focus", async () => {
+      await draw();
+      expect(reads.getTodayLastWeek).toHaveBeenCalledWith('b1', expect.any(String));
+      expect(container.querySelector('ol[aria-label="Your loop"]')).toBeNull();
+      const week = container.querySelector('[data-today-part="week"]')!;
+      expect(week.textContent).toContain('Visibility53.9 +3.5from 50.4 · #2 of 5');
+      expect(week.textContent).toContain('Actions done2');
+      expect(week.textContent).toContain('Results in1 improved');
+      expect(week.querySelector('a')?.getAttribute('href')).toBe('/dashboard/reports');
+      expect(titles()).toContain("This week's focus");
+      expect(titles()).not.toContain('Where you stand');
+      expect(track).toHaveBeenCalledWith(
+        'today_viewed',
+        expect.objectContaining({ state: 'monday' }),
+      );
+    });
+
+    it('keeps the normal day before the brand has a full week of runs', async () => {
+      reads.getTodayLastWeek.mockResolvedValue(null);
+      await draw();
+      expect(container.querySelector('ol[aria-label="Your loop"]')).not.toBeNull();
+      expect(titles()).toContain("Today's focus");
+      expect(titles()).toContain('Where you stand');
+    });
+  });
+
+  describe('after the plan ended', () => {
+    const openUpgrade = vi.fn();
+    beforeEach(() => {
+      upgrade = { isLocked: true, reason: 'ended', adminName: null, openUpgrade };
+      reads.getTodayEnded.mockResolvedValue({
+        lastRunAt: '2026-11-14T05:00:00Z',
+        trial: {
+          score: 53.9,
+          change: 3.5,
+          rank: 2,
+          of: 5,
+          neighbour: { name: 'Northbound Roasters', gap: 6.2, ahead: false },
+          competitors: [],
+        },
+        prompts: 22,
+        competitors: 4,
+        done: 2,
+        improved: {
+          count: 1,
+          actions: [{ id: 'd1', kind: 'recover_lost_citations', payload: {} }],
+        },
+        open: 3,
+        drafts: { count: 1, title: 'The low-acid buying guide' },
+      });
+    });
+
+    it('reads what the trial found, read-only, with Choose a plan', async () => {
+      await draw();
+      expect(text('header')).toContain('tracking paused since Nov 14');
+      expect(text('header')).toContain('Read-only until you choose a plan');
+      const cells = [...container.querySelectorAll('ol[aria-label="Your loop"] li')].map(
+        (li) => li.textContent,
+      );
+      expect(cells).toEqual([
+        '1 · Prompts22 saved',
+        '2 · AI answersPausedlast on Nov 14',
+        '3 · Actions3 waiting',
+        '4 · Done2 in the trial',
+        '5 · Results53.9 +3.5over the trial',
+      ]);
+      expect(titles()).toEqual([
+        'What your trial found',
+        'Ready when you pick a plan',
+        'Saved for you',
+        'Picking up where you left off',
+      ]);
+      const found = text('[data-today-part="found"]');
+      expect(found).toContain("Visibility rose from 50.4 to 53.9. You're #2 of 5 brands.");
+      expect(found).toContain(
+        'Northbound Roasters still leads by 6.2 points. 3 actions are ready to close it.',
+      );
+      expect(text('[data-today-part="saved"]')).toContain(
+        '1 draft from your agent: The low-acid buying guide.',
+      );
+      // The focus is read-only: no Skip, no Start; "Needs a plan" opens the upgrade dialog.
+      expect(button('Skip for now')).toBeUndefined();
+      await act(async () => button('Needs a plan')?.click());
+      expect(openUpgrade).toHaveBeenCalledTimes(1);
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[data-action="today.choosePlan"]')?.click(),
+      );
+      expect(track).toHaveBeenCalledWith('today_choose_plan_clicked');
+      expect(openUpgrade).toHaveBeenCalledTimes(2);
+      expect(text('main, div')).toContain('Chat can still read your past answers and data.');
+      expect(reads.getTodayWaiting).not.toHaveBeenCalled();
+      expect(track).toHaveBeenCalledWith(
+        'today_viewed',
+        expect.objectContaining({ state: 'ended' }),
+      );
+    });
+
+    it('is the normal Today while a payment is retried', async () => {
+      upgrade = { isLocked: true, reason: 'payment_failed', adminName: null, openUpgrade };
+      await draw();
+      expect(titles()).toContain("Today's focus");
+      expect(reads.getTodayEnded).not.toHaveBeenCalled();
     });
   });
 });
