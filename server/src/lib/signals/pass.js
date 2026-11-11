@@ -26,6 +26,9 @@ import { generateActionsForBrand } from '../action-center/generate.js';
 import { rescoreBrandActions } from '../action-center/priority-data.js';
 import { sweepActionTasks } from '../action-center/task-writer/index.js';
 import { sweepStaleActions } from '../action-center/stale.js';
+import { syncBusinessHubSetupAction } from '../action-center/from-business-hub.js';
+import { businessHubEnabled } from '../business-hub/flag.js';
+import { resolve } from '../../config/action-engine.js';
 
 /**
  * How far back the sweep looks. Long enough to cover a missed night plus the
@@ -81,6 +84,25 @@ async function markStaleActions(brandId, now) {
 }
 
 /**
+ * The ChatGPT Business Hub setup action (action-center/from-business-hub.js),
+ * once per brand, behind BUSINESS_HUB_ENABLED. It takes one of the day's new
+ * actions, so it opens only while tonight's generator left one. Best effort,
+ * as the stale sweep: an action that can't be raised tonight is tried again
+ * the next night, and is no reason to fail the pass. Null when the flag is
+ * off or it failed.
+ */
+async function syncBusinessHub(brandId, generated, now) {
+  if (!businessHubEnabled()) return null;
+  try {
+    const open = (generated?.created ?? 0) < resolve().noise.maxNewActionsPerDay;
+    return { setup: await syncBusinessHubSetupAction(brandId, { now, open }) };
+  } catch (err) {
+    logger.warn({ brandId, err: err.message }, '[actions] business hub sync failed');
+    return null;
+  }
+}
+
+/**
  * Record signals and consolidate them into actions for one brand, then log
  * the pass against the run it covered.
  *
@@ -111,6 +133,7 @@ export async function runSignalPass(brandId, { runAt, now = new Date() } = {}) {
     ? await rescoreSkippedNight(brandId, now)
     : await generateActionsForBrand(brandId, { now });
   const stale = await markStaleActions(brandId, now);
+  const businessHub = await syncBusinessHub(brandId, generated, now);
 
   const { error } = await supabaseAdmin.from('signal_runs').upsert(
     {
@@ -118,7 +141,12 @@ export async function runSignalPass(brandId, { runAt, now = new Date() } = {}) {
       tracking_run_at: trackingRunAt,
       ran_at: now.toISOString(),
       outcome: recorded.skipped ? 'skipped' : 'recorded',
-      detail: { signals: recorded, actions: generated, stale },
+      detail: {
+        signals: recorded,
+        actions: generated,
+        stale,
+        ...(businessHub ? { businessHub } : {}),
+      },
     },
     { onConflict: 'brand_id,tracking_run_at' },
   );
