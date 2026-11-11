@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -15,10 +15,11 @@ import {
   type TaskReview,
 } from '@/lib/actions/action-task-reviews';
 import type { TaskDetailsEdit } from '@/lib/action-center/task-details';
-import { TASK_REVIEWS_CHANGED } from '@/lib/action-center/tabs';
+import { ACTION_CENTER_TODAY, TASK_REVIEWS_CHANGED } from '@/lib/action-center/tabs';
 import { ActionCenterTabs } from '@/components/action-center/action-center-tabs';
 import { TaskDetailForm, TaskDetailView } from '@/components/action-center/task-detail';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,9 +32,22 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function ActionCenterReviewPage() {
   const brand = useBrandStore((s) => s.getActiveBrand());
   const t = useTranslations('actionCenter.reviewPage');
+  const tToday = useTranslations('actionCenter.today');
+  // The simplified layout (SIMPLE_NAV): no tab of its own, reached from Today.
+  const simpleNav = useSimpleNav();
 
   return (
     <div className="space-y-6">
+      {simpleNav && (
+        <Link
+          href={ACTION_CENTER_TODAY}
+          data-action="review.backToToday"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" aria-hidden />
+          {tToday('backToToday')}
+        </Link>
+      )}
       <HeaderWithAiUsage>
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>

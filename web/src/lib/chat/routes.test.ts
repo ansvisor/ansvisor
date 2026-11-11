@@ -99,6 +99,35 @@ describe('routeRegistry', () => {
     expect(withAds.filter((r) => r.id !== 'ads')).toEqual(routes);
   });
 
+  // The simplified layout (SIMPLE_NAV), being built: Chat opens Today only
+  // where its page is there.
+  it('opens Action Center › Today only with SIMPLE_NAV on, first of the Action Center’s pages', () => {
+    const off = routeRegistry({ cloud: true, simpleNav: false });
+    expect(routeById('action-center/today', off)).toBeUndefined();
+    expect(routeRequest('open today', off)).toBeNull();
+    const on = routeRegistry({ cloud: true, simpleNav: true });
+    expect(routeById('action-center/today', on)).toMatchObject({
+      href: '/dashboard/action-center/today',
+      name: 'Today',
+      section: 'Action Center',
+    });
+    expect(routeRequest('open today', on)?.route.href).toBe('/dashboard/action-center/today');
+    expect(routeRequest('take me to action center › today', on)?.route.href).toBe(
+      '/dashboard/action-center/today',
+    );
+    // A page's filters still win over "today" as a range word.
+    expect(routeRequest('open citations for today', on)).toMatchObject({
+      route: { href: '/dashboard/citations' },
+      filters: { range: '24h' },
+    });
+    const ids = on.map((r) => r.id);
+    expect(ids.indexOf('action-center/today')).toBe(ids.indexOf('action-center/signals') - 1);
+    expect(on.filter((r) => !pageExists(r.href))).toEqual([]);
+    // The rest of the registry is the same either way.
+    expect(on.filter((r) => r.id !== 'action-center/today')).toEqual(off);
+    expect(off).toEqual(routes);
+  });
+
   it('sets only the filters a page keeps, with the values it takes', () => {
     const insights = routeById('insights')!;
     const citations = routeById('citations')!;
