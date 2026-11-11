@@ -1,6 +1,11 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
-import { presetCardHref, recommendedPresets, type PresetFit } from '@/lib/chat/agents/catalog';
+import {
+  presetCardHref,
+  presetOnInstall,
+  recommendedPresets,
+  type PresetFit,
+} from '@/lib/chat/agents/catalog';
 import { isSiteType, siteTypeOf } from '@/lib/content/page-types';
 import type { McpAuthContext } from '@/lib/mcp-auth';
 import { workAreasOf } from '@/lib/menu-access';
@@ -58,7 +63,8 @@ export async function listReadyAgentsFor(auth: McpAuthContext, params: { brandId
       ...(fit === 'role'
         ? { for_work_areas: preset.roles.filter((r) => workAreas.includes(r)).map(roleName) }
         : {}),
-      skills: preset.skills.map((skill) => `/${skill}`),
+      // As this install offers it: a skill behind a flag that is off isn't named.
+      skills: presetOnInstall(preset).skills.map((skill) => `/${skill}`),
       href: presetCardHref(preset.id),
     })),
     turn_on:

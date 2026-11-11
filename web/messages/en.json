@@ -2238,6 +2238,8 @@
         "businessHub": {
           "title": "ChatGPT Business Hub",
           "open": "Open Business Hub",
+          "check": "Check what ChatGPT says",
+          "checkText": "Check what ChatGPT says about our business, and prepare our Business Hub corrections and site fixes.",
           "noApi": "There's no Business Hub API: mark each task done when its Done when is true.",
           "usOnlyAgent": "Business Agents are for US businesses only."
         },
@@ -6727,6 +6729,7 @@
       "wrongclaim": "Fix wrong claims about us",
       "answerfirst": "Answer-first rewrite",
       "facts": "Brand facts check",
+      "chatgpt-profile": "ChatGPT profile check",
       "compare": "Comparison page",
       "translate": "Translate a page",
       "questions": "Buyer questions",

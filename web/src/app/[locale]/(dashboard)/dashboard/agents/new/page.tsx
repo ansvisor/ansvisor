@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation';
 import { AgentForm } from '@/components/chat/agents/agent-form';
 import { readAgentFormSetup } from '@/lib/chat/agent-form-setup';
-import { readyPreset } from '@/lib/chat/agents/catalog';
+import { presetOnInstall, readyPreset } from '@/lib/chat/agents/catalog';
 import { chatPageOpen } from '../../chat/_chat-page-access';
 
 /**
@@ -22,11 +22,12 @@ export default async function NewAgentPage({
   const setup = await readAgentFormSetup();
   if (!setup) notFound();
   const { skill, preset } = await searchParams;
+  const ready = readyPreset(typeof preset === 'string' ? preset : null);
   return (
     <AgentForm
       setup={setup}
       initialSkill={typeof skill === 'string' ? skill : null}
-      preset={readyPreset(typeof preset === 'string' ? preset : null)}
+      preset={ready && presetOnInstall(ready)}
     />
   );
 }

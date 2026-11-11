@@ -165,6 +165,14 @@ describe('agentFormSetupFor', () => {
     });
   });
 
+  it('names the Ansvisor skills this install does not offer now: the ChatGPT profile check until Business Hub is on', async () => {
+    vi.stubEnv('BUSINESS_HUB_ENABLED', '');
+    expect((await setupOf(PEOPLE.manager)).offSkills).toEqual(['chatgpt-profile']);
+    vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+    expect((await setupOf(PEOPLE.manager)).offSkills).toEqual([]);
+    vi.unstubAllEnvs();
+  });
+
   it('carries the time zone the person picked in Settings › Account, null for Automatic', async () => {
     expect((await setupOf(PEOPLE.manager)).timeZone).toBeNull();
 
