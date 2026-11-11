@@ -6,9 +6,11 @@ import { readEntityCounts } from '@/lib/action-center/entity-counts';
 import { ACTION_COLUMNS, actionItemFromRow, type ActionRow } from '@/lib/action-center/rows';
 import { firstOpenTask, todayStep, type TodayTaskRow } from '@/lib/action-center/today';
 import { REMINDER_KINDS } from '@/lib/action-center/focus';
-import type { WaitingAction } from '@/lib/action-center/waiting';
+import type { WaitingAction, WaitingPrompts } from '@/lib/action-center/waiting';
 import { getTaskReviewCount } from '@/lib/actions/action-task-reviews';
 import { readUserBrandState } from '@/lib/actions/user-brand-state';
+import { getOrgPlan } from '@/lib/guards/plan-guard';
+import { getOrgLocationUsage, promptLocationCount } from '@/lib/prompt-locations';
 import { dayIn, effectiveTimeZone } from '@/lib/time-zone';
 
 /** What "Waiting for you" reads on the server; each part null when it couldn't be read. */
@@ -22,6 +24,8 @@ export interface TodayWaiting {
   reviews: number | null;
   /** New Search Console and Analytics prompt ideas since the person last opened Suggestions. */
   ideas: { count: number; sources: ('gsc' | 'ga')[] } | null;
+  /** The brand's prompts waiting for a spot and the plan's room (admins and managers). */
+  prompts: WaitingPrompts | null;
 }
 
 const settled = <T>(result: PromiseSettledResult<T>): T | null =>
@@ -32,8 +36,9 @@ const settled = <T>(result: PromiseSettledResult<T>): T | null =>
  * person (RLS): the brand's drafts in review, its open actions due today or
  * before that are theirs or no one's, its open reminders (read by kind, so
  * the weekly Business Hub reminder shows once it exists), and for admins
- * and managers the tasks in Needs review and the new prompt ideas from
- * Search Console or Analytics. Nothing is stored. The rows are ordered and
+ * and managers the tasks in Needs review, the prompts waiting for a spot
+ * and the new prompt ideas from Search Console or Analytics. Nothing is
+ * stored. The rows are ordered and
  * filtered for the person's menu by lib/action-center/waiting.ts; agent
  * runs are read in the browser from Chat's list, for this brand only.
  * Throws only when no one is signed in.
@@ -55,7 +60,7 @@ export async function getTodayWaiting(
   const canManage = profile.data?.role === 'admin' || profile.data?.role === 'manager';
   const today = dayIn(Date.now(), effectiveTimeZone(profile.data?.time_zone ?? null, browserZone));
 
-  const [drafts, actions, reviews, ideas] = await Promise.allSettled([
+  const [drafts, actions, reviews, ideas, prompts] = await Promise.allSettled([
     supabase
       .from('content_drafts')
       .select('id, title')
@@ -71,6 +76,7 @@ export async function getTodayWaiting(
     readWaitingActions(supabase, brandId, user.id, today),
     canManage ? getTaskReviewCount(brandId) : Promise.resolve(null),
     canManage ? readIdeas(supabase, brandId) : Promise.resolve(null),
+    canManage ? readWaitingPrompts(supabase, brandId) : Promise.resolve(null),
   ]);
   return {
     canManage,
@@ -79,6 +85,7 @@ export async function getTodayWaiting(
     actions: settled(actions),
     reviews: settled(reviews),
     ideas: settled(ideas),
+    prompts: settled(prompts),
   };
 }
 
@@ -165,4 +172,36 @@ async function readIdeas(
   if (error) throw new Error(error.message);
   const sources = [...new Set((data ?? []).map((row) => row.source as 'gsc' | 'ga'))].sort();
   return { count: data?.length ?? 0, sources };
+}
+
+/**
+ * The brand's prompts waiting for a spot (00535, idx_prompts_waiting) and
+ * the room on the workspace's plan, counted across its brands as every add
+ * path counts it (getOrgLocationUsage). The plan is read only when some wait.
+ */
+async function readWaitingPrompts(supabase: Client, brandId: string): Promise<WaitingPrompts> {
+  const { data, error } = await supabase
+    .from('prompts')
+    .select('regions, prompt_sets!inner(brand_id)')
+    .eq('prompt_sets.brand_id', brandId)
+    .not('waiting_since', 'is', null)
+    .limit(500);
+  if (error) throw new Error(error.message);
+  const rows = data ?? [];
+  if (rows.length === 0) return { count: 0, free: null, fits: false, plan: '' };
+  const brand = await supabase
+    .from('brands')
+    .select('organization_id')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (brand.error || !brand.data) throw new Error(brand.error?.message ?? 'Brand not found');
+  const orgId = brand.data.organization_id as string;
+  const [plan, usage] = await Promise.all([
+    getOrgPlan(orgId),
+    getOrgLocationUsage(supabase, orgId),
+  ]);
+  const max = plan.limits.maxPrompts;
+  const free = max === -1 ? null : Math.max(0, max - usage.total);
+  const smallest = Math.min(...rows.map((row) => promptLocationCount(row.regions as string[])));
+  return { count: rows.length, free, fits: free === null || free >= smallest, plan: plan.id };
 }

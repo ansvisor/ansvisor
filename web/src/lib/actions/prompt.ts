@@ -103,6 +103,8 @@ function mapPromptRow(row: Record<string, unknown>): Prompt {
           .length
       : 0,
     createdAt: row.created_at as string,
+    // Only a prompt waiting for a spot (00535) carries it.
+    ...(row.waiting_since ? { waitingSince: row.waiting_since as string } : {}),
   };
 }
 

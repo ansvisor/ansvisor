@@ -190,6 +190,29 @@ describe('PromptUsageCards', () => {
     expect(onFilter).toHaveBeenLastCalledWith('new');
   });
 
+  it('leaves the prompts waiting for a spot out of the paused count, as they have a filter', () => {
+    const waiting = { isActive: false, createdAt: '2026-10-01T00:00:00.000Z', waitingSince: 'x' };
+    act(() => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <PromptUsageCards
+            state={{
+              status: 'ready',
+              usage: summary({ brand: { active: 44, paused: 3, total: 47 } }),
+            }}
+            brandName="Acme Coffee"
+            readOnly={false}
+            prompts={[waiting, waiting]}
+            filter="tracked"
+            onFilter={onFilter}
+            onRetry={onRetry}
+          />
+        </NextIntlClientProvider>,
+      );
+    });
+    expect(container.textContent).toContain('1 paused · being tracked now');
+  });
+
   it('shows dashes and a retry when the counts fail to load', () => {
     render({ status: 'error' });
 
@@ -356,7 +379,25 @@ describe('the table status filter', () => {
     expect(rows.filter((r) => matchesStatusFilter(r, 'new', now))).toHaveLength(1);
     expect(rows.filter((r) => matchesStatusFilter(r, 'paused', now))).toHaveLength(1);
     expect(rows.filter((r) => matchesStatusFilter(r, 'all', now))).toHaveLength(4);
-    expect(countByStatus(rows, now)).toEqual({ tracked: 3, active: 2, new: 1, paused: 1, all: 4 });
+    expect(countByStatus(rows, now)).toEqual({
+      tracked: 3,
+      active: 2,
+      new: 1,
+      paused: 1,
+      waiting: 0,
+      all: 4,
+    });
+  });
+
+  it('reads a prompt waiting for a spot as Waiting, apart from the paused and the tracked', () => {
+    const waiting = { isActive: false, createdAt: old, waitingSince: '2026-10-17T09:00:00.000Z' };
+    expect(promptStatus(waiting, now)).toBe('waiting');
+    expect(promptStatus({ ...waiting, waitingSince: null }, now)).toBe('paused');
+    const all = [...rows, waiting];
+    expect(all.filter((r) => matchesStatusFilter(r, 'waiting', now))).toEqual([waiting]);
+    expect(all.filter((r) => matchesStatusFilter(r, 'paused', now))).toHaveLength(1);
+    expect(all.filter((r) => matchesStatusFilter(r, 'tracked', now))).toHaveLength(3);
+    expect(countByStatus(all, now)).toMatchObject({ tracked: 3, paused: 1, waiting: 1, all: 5 });
   });
 
   it('reads a tracked prompt as New for its first 24 hours', () => {

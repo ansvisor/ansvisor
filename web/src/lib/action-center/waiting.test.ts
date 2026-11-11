@@ -93,6 +93,31 @@ describe('Waiting for you', () => {
     ).toEqual([]);
   });
 
+  it('says prompts wait for a spot, for admins and managers with Prompts on their menu', () => {
+    const prompts = { count: 3, free: 0, fits: false, plan: 'starter' };
+    const rows = waitingRows(input({ prompts }));
+    expect(types(rows)).toEqual([
+      'agent',
+      'drafts',
+      'due:late',
+      'due:today',
+      'reminder',
+      'review',
+      'prompts',
+      'ideas',
+    ]);
+    expect(rows.find((row) => row.type === 'prompts')).toEqual({ type: 'prompts', ...prompts });
+    expect(types(waitingRows(input({ prompts, canManage: false })))).not.toContain('prompts');
+    expect(types(waitingRows(input({ prompts, hidden: new Set(['prompts']) })))).not.toContain(
+      'prompts',
+    );
+    // None waiting, or not read: no row.
+    expect(types(waitingRows(input({ prompts: { ...prompts, count: 0 } })))).not.toContain(
+      'prompts',
+    );
+    expect(types(waitingRows(input({ prompts: null })))).not.toContain('prompts');
+  });
+
   it('offers the focus action furthest along when nothing waits', () => {
     const cards = [
       { action: action('a', { status: 'in_progress', taskCompleted: 1 }) },
