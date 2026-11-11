@@ -261,7 +261,7 @@ async function openCycle({
   // The plan follows from what this brand has and what this action is about
   // — not from the kind alone (#818 phase 5). Two brands with the same
   // problem and different integrations get different lists here.
-  const plan = planTasks(definition, { sources: available, payload });
+  const plan = planTasks(definition, { sources: available, payload, signals });
   const { error: tasksErr } = await supabaseAdmin.from('action_tasks').insert(
     plan.map((item) => ({
       action_id: inserted.id,
@@ -271,6 +271,7 @@ async function openCycle({
       mode: item.mode,
       permission: item.permission,
       depends_on: item.dependsOn,
+      title: item.title,
       title_params: item.titleParams,
       details: item.details,
     })),
