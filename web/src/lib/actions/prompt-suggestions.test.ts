@@ -8,6 +8,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 let slotsLeft = Infinity;
+/** SIMPLE_NAV: addPromptToSet saves a prompt past the limit waiting instead of refusing it. */
+let waitWhenFull = false;
 let added: string[] = [];
 /** Suggestions still 'new'; others were accepted or dismissed elsewhere. */
 let open: Set<string>;
@@ -100,6 +102,11 @@ vi.mock('@/lib/actions/prompt', () => ({
       sourceData?: unknown;
     }) => {
       categories.push(category);
+      if (slotsLeft <= 0 && waitWhenFull) {
+        added.push(text);
+        sources.push(sourceData);
+        return { prompt: { id: `p-${added.length}` }, waiting: true };
+      }
       if (slotsLeft <= 0) {
         return { error: 'Your plan’s prompt locations are full.', code: 'plan_limit' };
       }
@@ -136,6 +143,7 @@ const {
 
 beforeEach(() => {
   slotsLeft = Infinity;
+  waitWhenFull = false;
   added = [];
   targets.length = 0;
   targetError = null;
@@ -173,6 +181,28 @@ describe('trackSuggestions', () => {
     });
     expect(added).toHaveLength(2);
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('with SIMPLE_NAV, adds them all and says which wait for a spot', async () => {
+    slotsLeft = 2;
+    waitWhenFull = true;
+    expect(await trackSuggestions(['s1', 's2', 's3', 's4'])).toEqual({
+      trackedIds: ['s1', 's2', 's3', 's4'],
+      waitingIds: ['s3', 's4'],
+      skippedIds: [],
+    });
+    // A waiting prompt is still the suggestion's: each is marked added.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('one + marks the suggestion added with the waiting prompt', async () => {
+    slotsLeft = 0;
+    waitWhenFull = true;
+    expect(await acceptSuggestion('s1')).toEqual({ promptId: 'p-1', waiting: true });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://server/api/prompts/suggestions/s1/accept',
+      expect.objectContaining({ body: JSON.stringify({ promptId: 'p-1' }) }),
+    );
   });
 
   it('skips suggestions accepted or dismissed elsewhere and tracks the rest', async () => {
@@ -415,6 +445,16 @@ describe('trackPagePrompts (AT-006 part B2)', () => {
       error: 'Your plan’s prompt locations are full.',
       code: 'plan_limit',
     });
+  });
+
+  it('with SIMPLE_NAV, keeps the ones past the limit waiting, each still pointing at the page', async () => {
+    slotsLeft = 1;
+    waitWhenFull = true;
+    expect(await trackPagePrompts('b1', 'https://acme.example/gifts', picked)).toEqual({
+      promptIds: ['p-1', 'p-2'],
+      waitingIds: ['p-2'],
+    });
+    expect(targets.map((t) => t.promptId)).toEqual(['p-1', 'p-2']);
   });
 
   it('keeps a prompt tracked when its target URL could not be saved, or without a domain', async () => {

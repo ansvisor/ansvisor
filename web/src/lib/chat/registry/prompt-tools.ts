@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { addTopicPrompts, pauseBrandPrompts } from '@/lib/actions/prompt';
 import { contentUuid } from '@/lib/mcp/content-schemas';
+import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import { FIXTURE_IDS, defineTool } from './define-tool';
 import { listWords, promptTexts, topicName } from './targets';
 
@@ -21,8 +22,9 @@ export const PROMPT_TOOLS = [
     name: 'add_prompts',
     class: 'write',
     area: 'prompts',
-    description:
-      "Track new prompts in one of the brand's topics (its id from list_topics; a topic the brand doesn't have is added first, with add_topic). Up to 20 texts, each as a person would ask an AI engine. They're tracked like the brand's newest prompt, at its location; a prompt it already tracks is skipped, and the plan's prompt locations may stop the rest (partial).",
+    description: simpleNavEnabled()
+      ? "Track new prompts in one of the brand's topics (its id from list_topics; a topic the brand doesn't have is added first, with add_topic). Up to 20 texts, each as a person would ask an AI engine. They're tracked like the brand's newest prompt, at its location; a prompt it already tracks is skipped (partial). When the plan's prompt locations run out, the rest are saved waiting for a spot: listed in `waiting`, not in `added`, not tracked, and they don't start by themselves. Say how many were added and how many are waiting; the person frees a spot in Tracked Prompts or upgrades."
+      : "Track new prompts in one of the brand's topics (its id from list_topics; a topic the brand doesn't have is added first, with add_topic). Up to 20 texts, each as a person would ask an AI engine. They're tracked like the brand's newest prompt, at its location; a prompt it already tracks is skipped, and the plan's prompt locations may stop the rest (partial).",
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
     minRole: 'manager',

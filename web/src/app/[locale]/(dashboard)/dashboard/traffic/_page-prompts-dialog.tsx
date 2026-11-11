@@ -23,6 +23,8 @@ import { formatNumber } from '@/lib/format';
 import { pageUrl } from '@/lib/traffic-pages';
 import { getLocationQuota } from '@/lib/actions/prompt';
 import { trackPagePrompts } from '@/lib/actions/prompt-suggestions';
+import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import {
   suggestPagePrompts,
   type PagePromptSuggestions,
@@ -66,6 +68,10 @@ export function PagePromptsDialog({
 }) {
   const t = useTranslations('traffic.pageList.prompts');
   const router = useRouter();
+  const showWaiting = useWaitingForSpotToast();
+  // SIMPLE_NAV: prompts past the free slots are saved waiting for a spot, not held back.
+  const waitOverLimit = useSimpleNav();
+  const tWaiting = useTranslations('prompts.waiting');
   // The loaded suggestions carry the page they are for, so another page's
   // never show while this one's load.
   const [loaded, setLoaded] = useState<{
@@ -92,21 +98,21 @@ export function PagePromptsDialog({
       const slotsLeft = slotsLeftOf(quota);
       setLoaded({ page, result, slotsLeft, unlimited: quota?.maxPrompts === -1 });
       const count = 'suggestions' in result ? result.suggestions.length : 0;
-      setSelected(
-        new Set(Array.from({ length: Math.min(count, slotsLeft ?? count) }, (_, i) => i)),
-      );
+      const ticked = waitOverLimit ? count : Math.min(count, slotsLeft ?? count);
+      setSelected(new Set(Array.from({ length: ticked }, (_, i) => i)));
     });
     return () => {
       cancelled = true;
     };
-  }, [brandId, dateWindow, page]);
+  }, [brandId, dateWindow, page, waitOverLimit]);
 
   const current = page && loaded?.page === page ? loaded : null;
   // A brand with no topic yet: suggesting or tracking asks for one first.
   const askTopic = (!!page && noTopicsPage === page) || (!!current && isNoTopics(current.result));
   const suggestions = current && 'suggestions' in current.result ? current.result.suggestions : [];
   const slotsLeft = current?.slotsLeft ?? null;
-  const over = slotsLeft !== null && selected.size > slotsLeft;
+  const pastSlots = slotsLeft !== null && selected.size > slotsLeft;
+  const over = pastSlots && !waitOverLimit;
 
   const toggle = (index: number, on: boolean) =>
     setSelected((prev) => {
@@ -128,8 +134,12 @@ export function PagePromptsDialog({
       );
       const open = { label: t('openPrompts'), onClick: () => router.push('/dashboard/prompts') };
       const done = result.promptIds.length;
+      const waiting = result.waitingIds?.length ?? 0;
       if (done > 0) onTracked();
-      if (done === picked.length) {
+      if (done === picked.length && waiting > 0) {
+        showWaiting('page_prompts', done - waiting, waiting);
+        onClose();
+      } else if (done === picked.length) {
         toast.success(t('tracked', { count: done }), {
           description: t('trackedDescription', { page }),
           duration: 10_000,
@@ -226,17 +236,19 @@ export function PagePromptsDialog({
           <p
             className={cn(
               'text-xs',
-              over ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
+              pastSlots ? 'text-amber-700 dark:text-amber-400' : 'text-muted-foreground',
             )}
           >
             {current && suggestions.length > 0
-              ? over
-                ? t('overSlots', { count: slotsLeft ?? 0 })
-                : current.unlimited
-                  ? t('unlimited')
-                  : slotsLeft !== null
-                    ? t('slotsLeft', { count: slotsLeft })
-                    : null
+              ? pastSlots && waitOverLimit
+                ? tWaiting('overNote', { count: selected.size - (slotsLeft ?? 0) })
+                : over
+                  ? t('overSlots', { count: slotsLeft ?? 0 })
+                  : current.unlimited
+                    ? t('unlimited')
+                    : slotsLeft !== null
+                      ? t('slotsLeft', { count: slotsLeft })
+                      : null
               : null}
           </p>
           <div className="flex flex-col-reverse gap-2 sm:flex-row">

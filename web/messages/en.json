@@ -13195,6 +13195,15 @@
     }
   },
   "prompts": {
+    "waiting": {
+      "resultTitle": "{added} added, {waiting} waiting for a spot",
+      "savedTitle": "{count, plural, one {Saved, but not tracked yet} other {# prompts saved, but not tracked yet}}",
+      "body": "Your plan's prompt locations are all in use, so {count, plural, one {it waits} other {they wait}} for a spot. To track {count, plural, one {it} other {them}}, pause a prompt you need less in Tracked Prompts, or raise your plan's limit.",
+      "open": "Go to Tracked Prompts",
+      "full": "Your plan's prompt locations are all in use. Prompts you add now are saved as waiting for a spot and aren't tracked until you pause another or raise your limit.",
+      "overNote": "{count, plural, one {# prompt} other {# prompts}} past your plan's limit will be saved as waiting for a spot, not tracked until you pause another or raise your limit.",
+      "brandNote": "Your plan has room for {room} more prompts: the other {count} will be saved as waiting for a spot, not tracked until you pause another or raise your limit."
+    },
     "tags": {
       "label": "Tags",
       "removeTag": "Remove tag {tag}",
