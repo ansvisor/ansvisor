@@ -2,8 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
-const { ACTION_PLAN, actionCenter, actionCenterRows, PAGE_STEPS, PRESET_KPIS, presetTarget } =
-  await import('./action-center.js');
+const {
+  ACTION_PLAN,
+  actionCenter,
+  actionCenterRows,
+  LONE_SIGNALS,
+  PAGE_STEPS,
+  PRESET_KPIS,
+  presetTarget,
+} = await import('./action-center.js');
 const { coreRows } = await import('./core.js');
 const { demoId } = await import('./random.js');
 const { loadDefinitions } = await import('../action-center/definitions/index.js');
@@ -16,16 +23,20 @@ const { loadDefinitions } = await import('../action-center/definitions/index.js'
 const BRAND_ID = '11111111-2222-4333-8444-555555555555';
 const NOW = new Date('2026-10-28T12:00:00Z');
 const DAY = 86_400_000;
-const rows = await actionCenterRows({ brandId: BRAND_ID, now: NOW });
+// Without BUSINESS_HUB_ENABLED: no weekly Business Hub reminder (today.test.js has it).
+const rows = await actionCenterRows({ brandId: BRAND_ID, now: NOW, env: {} });
+/** Sent by a person (or raised by a check of its own), not from a definition. */
+const SENT_KINDS = ['content_opportunity', 'topic_competitor_gap', 'shopping_product'];
 const core = coreRows({ brandId: BRAND_ID, now: NOW });
 const count = (list, key) =>
   list.reduce((acc, row) => ({ ...acc, [row[key]]: (acc[row[key]] ?? 0) + 1 }), {});
 
 describe('actionCenterRows', () => {
-  it('raises nine actions across the families, in every status', () => {
-    expect(rows.actions).toHaveLength(ACTION_PLAN.length + 1);
+  it('raises its actions across the families, in every status, and three a person sent', () => {
+    expect(rows.actions).toHaveLength(ACTION_PLAN.length + SENT_KINDS.length);
+    expect(rows.actions.filter((a) => SENT_KINDS.includes(a.kind))).toHaveLength(3);
     expect(count(rows.actions, 'status')).toEqual({
-      new: 2,
+      new: 4,
       in_progress: 2,
       completed: 4,
       dismissed: 1,
@@ -60,7 +71,7 @@ describe('actionCenterRows', () => {
   it('builds each action from a real definition, with its planned tasks', async () => {
     const definitions = await loadDefinitions();
     for (const a of rows.actions) {
-      if (a.kind === 'content_opportunity') continue;
+      if (SENT_KINDS.includes(a.kind)) continue;
       const definition = definitions.find((d) => d.id === a.kind);
       expect(definition, a.kind).toBeTruthy();
       expect(a.category).toBe(definition.category);
@@ -68,7 +79,7 @@ describe('actionCenterRows', () => {
     }
     for (const a of rows.actions) {
       const tasks = rows.tasks.filter((t) => t.action_id === a.id);
-      expect(tasks.length, a.kind).toBeGreaterThan(3);
+      expect(tasks.length, a.kind).toBeGreaterThan(2);
       expect(tasks.map((t) => t.position)).toEqual(tasks.map((_, i) => i + 1));
       if (a.status === 'completed') expect(tasks.every((t) => t.status === 'completed')).toBe(true);
       if (a.status === 'new') expect(tasks.every((t) => t.status === 'todo')).toBe(true);
@@ -83,6 +94,11 @@ describe('actionCenterRows', () => {
     const promptIds = new Set(core.prompts.map((p) => p.id));
     for (const s of rows.signals) {
       expect(s.brand_id).toBe(BRAND_ID);
+      // The build night's prompt gain waits in the candidate queue, with no action.
+      if (s.id === demoId(BRAND_ID, `signal:${LONE_SIGNALS[0]}`)) {
+        expect(s).toMatchObject({ kind: 'prompt_gain', status: 'new', action_id: null });
+        continue;
+      }
       expect(actionIds.has(s.action_id)).toBe(true);
       expect(rows.links).toContainEqual(
         expect.objectContaining({ action_id: s.action_id, signal_id: s.id }),
@@ -123,6 +139,7 @@ describe('actionCenterRows', () => {
     const later = await actionCenterRows({
       brandId: BRAND_ID,
       now: new Date(NOW.getTime() + 2 * DAY + 5 * 3_600_000),
+      env: {},
     });
     const shape = (list) =>
       list.map(({ kind, status, outcome, payload }) => ({ kind, status, outcome, payload }));
@@ -173,7 +190,7 @@ describe('actionCenter.build', () => {
         }),
       }),
     };
-    const built = await actionCenter.build({ brandId: BRAND_ID, now: NOW, db });
+    const built = await actionCenter.build({ brandId: BRAND_ID, now: NOW, db, env: {} });
     const order = written.map(([table]) => table);
     // The brand reads as set up before its KPIs land.
     expect(order[0]).toBe('brands:update');
@@ -181,7 +198,7 @@ describe('actionCenter.build', () => {
     expect(order.indexOf('actions')).toBeLessThan(order.indexOf('signals'));
     expect(order.indexOf('signals')).toBeLessThan(order.indexOf('action_signals'));
     expect(order).toContain('action_task_reviews');
-    expect(built).toEqual({ signals: 8, actions: 9, tasks: rows.tasks.length });
+    expect(built).toEqual({ signals: 9, actions: 11, tasks: rows.tasks.length });
     for (const table of actionCenter.tables) expect(order).toContain(table);
     // Written over by key: what a new brand's trigger made, and an old build's rows.
     expect(keys).toMatchObject({

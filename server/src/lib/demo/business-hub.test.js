@@ -7,7 +7,8 @@ const { TOPICS } = await import('./brewline.js');
 
 /**
  * The demo brand's ChatGPT Business Hub numbers (00526): four weekly
- * entries, the newest ending yesterday, so Visibility's card shows them.
+ * entries, the newest a week before the latest run's day, so Visibility's
+ * card shows them and this week's are due.
  */
 
 const BRAND_ID = '11111111-2222-4333-8444-555555555555';
@@ -16,13 +17,17 @@ const NOW = new Date('2026-11-11T08:30:00Z');
 describe('businessHubRows', () => {
   const rows = businessHubRows({ brandId: BRAND_ID, now: NOW });
 
-  it('enters four weeks back to back, the newest ending yesterday', () => {
+  it('enters four weeks back to back, the newest a week before the latest run', () => {
     expect(rows.map((r) => [r.period_days, r.period_end])).toEqual([
-      [7, '2026-10-20'],
-      [7, '2026-10-27'],
-      [7, '2026-11-03'],
-      [7, '2026-11-10'],
+      [7, '2026-10-14'],
+      [7, '2026-10-21'],
+      [7, '2026-10-28'],
+      [7, '2026-11-04'],
     ]);
+    // Before 07:00 UTC the latest run is yesterday's, and so is the week counted from it.
+    expect(
+      businessHubRows({ brandId: BRAND_ID, now: new Date('2026-11-11T05:00:00Z') }).at(-1),
+    ).toMatchObject({ period_end: '2026-11-03' });
     for (const row of rows) {
       expect(row.brand_id).toBe(BRAND_ID);
       expect(row.source).toBe('manual');
