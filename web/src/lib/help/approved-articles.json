@@ -1152,6 +1152,10 @@
         "/facts",
         "/wrongclaim",
         "fact check",
+        "/chatgpt-profile",
+        "chatgpt profile check",
+        "chatgpt business hub",
+        "business hub corrections",
         "api key in message",
         "paste api key",
         "remove key",
@@ -1315,7 +1319,7 @@
         },
         {
           "heading": "Your brand facts",
-          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or a manager approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact."
+          "text": "Chat reads your brand's approved facts: the prices and plans, trial, founding year and claims an admin or a manager approved on the **Brand facts** tab of the brand's settings, in your site's own words. Facts waiting for approval, rejected ones and ones no longer on your site aren't read.\n\n**/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. **/chatgpt-profile** (**ChatGPT profile check**) checks what ChatGPT says about your business and prepares your ChatGPT Business Hub corrections and site fixes, asking you for what nothing confirms. The **Brand Facts Guardian** agent uses them. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact."
         },
         {
           "heading": "Open a web page",
@@ -2111,7 +2115,10 @@
         "sub-questions ai searches",
         "prompt portfolio",
         "prompts to add",
-        "prompts to pause"
+        "prompts to pause",
+        "chatgpt profile check",
+        "/chatgpt-profile",
+        "business hub corrections"
       ],
       "synonyms": [
         "slash commands",
@@ -2122,11 +2129,11 @@
         "skills directory"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-four Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief** and **Setup guide**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-five Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **ChatGPT profile check** and **Setup guide**."
         },
         {
           "heading": "Use a skill",
@@ -3974,7 +3981,9 @@
         "suggested prompts",
         "source filter",
         "product prompts",
-        "catalog suggestions"
+        "catalog suggestions",
+        "chatgpt business hub",
+        "discovery topics"
       ],
       "synonyms": [
         "prompt ideas",
@@ -3983,7 +3992,7 @@
         "suggest queries"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -3991,11 +4000,15 @@
         },
         {
           "heading": "Where suggestions come from",
-          "text": "Suggestions come from four sources. The sources filter (**All sources**) shows one of them, **From your data** for both Google sources, or **Ansvisor Agents only**:\n\n- **Ansvisor Agents**: written by AI from your brand and tracking data. Each shows an estimated monthly AI volume as a grey range.\n- **Google Search Console**: queries people already search, with their impressions over the last 28 days.\n- **Google Analytics (GA4)**: pages that earn revenue or conversions, or already get AI visits, with that evidence on the row.\n- **Your catalog**: for an online shop with a product catalog, shopping questions about its categories and its top products. The **Shopping** filter lists them.\n\nWhen Search Console or Analytics is connected, a share of each refresh is drawn from their data."
+          "text": "Suggestions come from five sources. The sources filter (**All sources**) shows one of them, **From your data** for both Google sources, or **Ansvisor Agents only**:\n\n- **Ansvisor Agents**: written by AI from your brand and tracking data. Each shows an estimated monthly AI volume as a grey range.\n- **Google Search Console**: queries people already search, with their impressions over the last 28 days.\n- **Google Analytics (GA4)**: pages that earn revenue or conversions, or already get AI visits, with that evidence on the row.\n- **Your catalog**: for an online shop with a product catalog, shopping questions about its categories and its top products. The **Shopping** filter lists them.\n- **ChatGPT Business Hub**: prompts from the discovery topics you copy from ChatGPT Business Hub, with a filter of their own.\n\nWhen Search Console or Analytics is connected, a share of each refresh is drawn from their data."
         },
         {
           "heading": "Shopping suggestions from your catalog",
           "text": "For an online shop with a product catalog, each refresh adds two kinds of shopping suggestions, marked **Your catalog**:\n\n- the questions a shopper asks before buying in a category, using its price band;\n- buyer questions about the products that sell most, or that AI shopping answers show most.\n\nEach row names the category or the product it's about; hover **Your catalog** for more. A product one of your prompts already names isn't asked about again."
+        },
+        {
+          "heading": "Prompts from ChatGPT Business Hub topics",
+          "text": "ChatGPT Business Hub shows your business its top discovery topics: what real ChatGPT conversations that cited your site were about. Open Business Hub from ChatGPT and copy them from its Insights.\n\nThen click **From ChatGPT Business Hub** and enter up to five topics. The dialog says how many more prompts your plan can track. Ansvisor writes 2 or 3 prompts for each topic, in your brand's language, and files each under your topic that fits or under the discovery topic. Prompts you already track or that are already suggested are left out.\n\nThese suggestions show the **ChatGPT Business Hub** badge. They stay 30 days and aren't replaced by **New**. Tracking one under a discovery topic adds that topic to your topics. Admins and managers can use it; it doesn't count against your AI allowance."
         },
         {
           "heading": "A brand without topics",
@@ -4003,7 +4016,7 @@
         },
         {
           "heading": "Add, dismiss or refresh suggestions",
-          "text": "Use **Search prompts…** to narrow the list, **+** to add a suggestion, **×** to dismiss it and **New** to generate a fresh list. **Clear All** asks first, then dismisses every suggestion listed. Admins and managers can add and generate suggestions; analysts can also dismiss them. Those from Search Console or Analytics stay hidden for 30 days once dismissed.\n\nSuggestions expire after 48 hours. Click **New** for fresh ideas, for example after you change your content.\n\nA prompt added from suggestions gets its first results with the next daily run."
+          "text": "Use **Search prompts…** to narrow the list, **+** to add a suggestion, **×** to dismiss it and **New** to generate a fresh list. **Clear All** asks first, then dismisses every suggestion listed. Admins and managers can add and generate suggestions; analysts can also dismiss them. Those from Search Console or Analytics stay hidden for 30 days once dismissed.\n\nSuggestions expire after 48 hours. Click **New** for fresh ideas, for example after you change your content. Business Hub suggestions stay 30 days and aren't replaced by **New**.\n\nA prompt added from suggestions gets its first results with the next daily run."
         },
         {
           "heading": "Add every suggestion at once",
