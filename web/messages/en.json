@@ -682,7 +682,9 @@
         "skipHint": "Hides it from your focus for 7 days. The action itself doesn't change.",
         "skipped": "Skipped for 7 days. It is still in All actions.",
         "skipFailed": "Couldn't skip it. Try again.",
-        "empty": "Nothing to focus on right now. New actions arrive after the nightly check."
+        "empty": "Nothing to focus on right now. New actions arrive after the nightly check.",
+        "weekTitle": "This week's focus",
+        "needsPlan": "Needs a plan"
       },
       "stand": {
         "title": "Where you stand",
@@ -826,6 +828,64 @@
           "tour": "Take the 2-minute tour",
           "tourMinutes": "2 min"
         }
+      },
+      "lastWeek": {
+        "title": "Last week",
+        "report": "Open the weekly report",
+        "visibility": "Visibility",
+        "done": "Actions done",
+        "results": "Results in",
+        "from": "from {score}",
+        "rank": "#{rank} of {count}",
+        "improved": "{count} improved",
+        "noneDone": "None last week",
+        "noResults": "No results came in"
+      },
+      "ended": {
+        "readOnly": "Read-only until you choose a plan",
+        "pausedSince": "tracking paused since {date}",
+        "loop": {
+          "saved": "{count} saved",
+          "paused": "Paused",
+          "lastOn": "last on {date}",
+          "waiting": "{count} waiting",
+          "inTrial": "{count} in the trial",
+          "overTrial": "over the trial"
+        },
+        "found": {
+          "title": "What your trial found",
+          "rank": "You're #{rank} of {count} brands.",
+          "held": "Visibility held at {score}.",
+          "rose": "Visibility rose from {from} to {to}.",
+          "fell": "Visibility fell from {from} to {to}.",
+          "improved": "{count, plural, one {An action you finished got results} other {# actions you finished got results}}: {titles}.",
+          "gap": "{name} still leads by {gap} points. {count, plural, =0 {Your next actions arrive with a plan.} one {# action is ready to close it.} other {# actions are ready to close it.}}",
+          "nothing": "Your trial's answers are saved. Choose a plan to see what changes next.",
+          "tag": {
+            "up": "Up",
+            "down": "Down",
+            "done": "Done",
+            "gap": "Gap"
+          }
+        },
+        "focus": {
+          "title": "Ready when you pick a plan",
+          "body": "You can read these. Starting them needs an active plan."
+        },
+        "saved": {
+          "title": "Saved for you",
+          "drafts": "{count, plural, one {1 draft from your agent} other {# drafts from your agents}}: {title}.",
+          "draftsUntitled": "{count, plural, one {1 draft from your agent} other {# drafts from your agents}} waiting for review.",
+          "kept": "Choose a plan to review and publish them. Your {prompts, plural, one {# prompt} other {# prompts}} and {competitors, plural, one {# competitor} other {# competitors}} are kept."
+        },
+        "plan": {
+          "title": "Picking up where you left off",
+          "tracking": "Tracking restarts the same day",
+          "waiting": "Your actions and drafts are waiting",
+          "agents": "Agents resume on their schedule",
+          "choose": "Choose a plan"
+        },
+        "chatNote": "Chat can still read your past answers and data. New runs, drafts and agents need an active plan."
       }
     },
     "firstRun": {

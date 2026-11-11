@@ -33,9 +33,15 @@ export function FocusSection({
   title,
   sub,
   onCards,
+  onUpgrade,
 }: {
   brandId: string;
   visit: TodayVisit;
+  /**
+   * After the plan ended: read-only cards, each with "Needs a plan", which
+   * opens the upgrade dialog; no Skip and no Agent work gear.
+   */
+  onUpgrade?: () => void;
   /** The cards as read, for Waiting for you's "A good day to finish one". */
   onCards?: (cards: FocusCard[]) => void;
   /** Monday's "This week's focus"; Today's own title otherwise. */
@@ -87,8 +93,12 @@ export function FocusSection({
       part="focus"
       title={title ?? t('title')}
       sub={sub ?? t('body')}
-      link={{ href: '/dashboard/action-center/actions', label: tToday('allActions') }}
-      aside={chatOn ? <AgentWorkGear /> : null}
+      link={
+        onUpgrade
+          ? undefined
+          : { href: '/dashboard/action-center/actions', label: tToday('allActions') }
+      }
+      aside={chatOn && !onUpgrade ? <AgentWorkGear /> : null}
     >
       {load.status === 'loading' ? (
         <TodaySkeleton />
@@ -102,6 +112,7 @@ export function FocusSection({
               card={card}
               position={index + 1}
               onSkip={() => void skip(card)}
+              onUpgrade={onUpgrade}
             />
           ))}
         </ul>
@@ -114,10 +125,12 @@ function FocusRow({
   card,
   position,
   onSkip,
+  onUpgrade,
 }: {
   card: FocusCard;
   position: number;
   onSkip: () => void;
+  onUpgrade?: () => void;
 }) {
   const t = useTranslations('actionCenter.today.focus');
   const tTexts = useTranslations('actionCenter.actionTexts');
@@ -158,28 +171,40 @@ function FocusRow({
         {step && <p className="text-xs text-muted-foreground">{t('firstStep', { step })}</p>}
       </div>
       <div className="flex shrink-0 items-center gap-3">
-        <button
-          type="button"
-          onClick={onSkip}
-          title={t('skipHint')}
-          className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-        >
-          {t('skip')}
-        </button>
-        <Link
-          href={actionHref(card.id)}
-          className={cn(buttonVariants(), 'h-10 px-3.5')}
-          onClick={() =>
-            track('today_focus_clicked', {
-              position,
-              action_kind: action.kind,
-              is_new: card.isNew,
-              who: card.who,
-            })
-          }
-        >
-          {action.taskCompleted > 0 ? t('continue') : t('start')}
-        </Link>
+        {onUpgrade ? (
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="inline-flex h-9 items-center rounded-lg border px-3 text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            {t('needsPlan')}
+          </button>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={onSkip}
+              title={t('skipHint')}
+              className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              {t('skip')}
+            </button>
+            <Link
+              href={actionHref(card.id)}
+              className={cn(buttonVariants(), 'h-10 px-3.5')}
+              onClick={() =>
+                track('today_focus_clicked', {
+                  position,
+                  action_kind: action.kind,
+                  is_new: card.isNew,
+                  who: card.who,
+                })
+              }
+            >
+              {action.taskCompleted > 0 ? t('continue') : t('start')}
+            </Link>
+          </>
+        )}
       </div>
     </li>
   );
