@@ -2391,7 +2391,12 @@
         "sub-questions ai searches",
         "prompt portfolio",
         "prompts to add",
-        "prompts to pause"
+        "prompts to pause",
+        "30-day plan",
+        "/plan",
+        "monthly plan",
+        "task list",
+        "plan actions"
       ],
       "synonyms": [
         "slash commands",
@@ -2402,11 +2407,11 @@
         "skills directory"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-four Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief** and **Setup guide**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-five Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan** and **Setup guide**."
         },
         {
           "heading": "Use a skill",
@@ -2450,7 +2455,7 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps and Prompt portfolio.\n\n**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio and 30-day plan.\n\n**Setup guide** (**/setup**) walks you through the open **Getting started** steps, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Agent Center**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
         },
         {
           "heading": "Fan-out gaps",
@@ -2459,6 +2464,10 @@
         {
           "heading": "Prompt portfolio",
           "text": "**Prompt portfolio** (**/prompts**) proposes prompts to track, from your prompt suggestions, the sub-questions AI engines search and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each change is a card you approve, and the **Activity** log can undo it."
+        },
+        {
+          "heading": "30-day plan",
+          "text": "**30-day plan** (**/plan**) reads your brand's visibility, prompts, competitors, content opportunities and open actions over your date range, and proposes a plan for four weeks: 8 to 12 actions, each with why, its effort and the prompts and pages it covers. Chat asks you once before it adds them to the **Action Center**, then links each one (AC-n) and says what to do first. Where an open action already covers something, the plan links that action instead of adding another."
         }
       ]
     },

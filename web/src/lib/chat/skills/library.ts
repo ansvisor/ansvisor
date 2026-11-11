@@ -80,6 +80,8 @@ export const SKILL_ORDER = [
   'fanout',
   // AGENTS plan §7 step 3: the Prompt Portfolio Manager's.
   'prompts',
+  // A 30-day plan whose actions go to the Action Center (create_action).
+  'plan',
 ] as const;
 
 export interface LibrarySkill {
