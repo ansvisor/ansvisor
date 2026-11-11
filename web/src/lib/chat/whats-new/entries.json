@@ -1,6 +1,25 @@
 {
   "entries": [
     {
+      "slug": "mcp-app-sign-in",
+      "feature": "Connected apps",
+      "homeLine": "Connect your AI assistant to Ansvisor by signing in, with no key to copy.",
+      "route": "/dashboard/settings/api-keys",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-10",
+      "lines": [
+        "Connecting an AI assistant meant creating a key and pasting it into the assistant's setup.",
+        "Now you add Ansvisor's address in your assistant, sign in, and choose whether it may make changes.",
+        "It acts as you, with your role and brands, and loses access the moment you disconnect it.",
+        "See your apps and disconnect any of them in Settings, under Connected apps."
+      ]
+    },
+    {
       "slug": "agent-work",
       "feature": "Agent work",
       "homeLine": "Agents now ask before every change until an Admin lets them start work on their own.",
@@ -17,6 +36,25 @@
         "Agent work now starts on I approve first: each change an agent makes waits for a person, whatever its mode.",
         "Nothing changes without your team, and the setting shows who changed it last and when.",
         "To let agents work in their own mode again, an Admin picks Agent starts on its own on the Today card's gear."
+      ]
+    },
+    {
+      "slug": "site-audit-evidence-levels",
+      "feature": "Site Audit evidence levels",
+      "homeLine": "Each Site Audit check now says how strong the evidence behind it is.",
+      "route": "/dashboard/audit",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "show_upgrade",
+      "published": "2026-11-06",
+      "lines": [
+        "Some audit checks matter more for AI citations than others, and the report didn't say which.",
+        "Each check now shows Strong evidence, Likely helps or Hygiene / informational, and llms.txt is out of the score.",
+        "You fix what has the best evidence first, and a page's next audit may move a point or two on its own.",
+        "Open a report and click Formula to see the weights and the levels."
       ]
     },
     {

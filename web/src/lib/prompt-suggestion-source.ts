@@ -69,13 +69,32 @@ export interface CatalogProductSuggestionSourceData {
   orders: number;
 }
 
+/**
+ * The ChatGPT Business Hub discovery topic behind a suggestion (Business Hub
+ * plan, PR 6; 00527): what a person copied from Business Hub's Insights,
+ * the last day of the period it was shown for when they gave it, and when
+ * they entered it.
+ */
+export interface BusinessHubSuggestionSourceData {
+  topic: string;
+  periodEnd: string | null;
+  enteredAt: string;
+}
+
 export type SuggestionSourceData =
   | GscSuggestionSourceData
   | GaSuggestionSourceData
   | CatalogSuggestionSourceData
-  | CatalogProductSuggestionSourceData;
+  | CatalogProductSuggestionSourceData
+  | BusinessHubSuggestionSourceData;
 
-export type PromptSuggestionSource = 'llm' | 'heuristic' | 'gsc' | 'ga' | 'catalog';
+export type PromptSuggestionSource =
+  | 'llm'
+  | 'heuristic'
+  | 'gsc'
+  | 'ga'
+  | 'catalog'
+  | 'business_hub';
 
 interface SourceCarrier {
   source: PromptSuggestionSource;
@@ -118,6 +137,26 @@ export function catalogProductSourceData(
     typeof s.sourceData.productId === 'string'
     ? s.sourceData
     : null;
+}
+
+/** A prompt written from one of ChatGPT Business Hub's discovery topics. */
+export function businessHubSourceData(s: SourceCarrier): BusinessHubSuggestionSourceData | null {
+  return s.source === 'business_hub' &&
+    s.sourceData &&
+    'topic' in s.sourceData &&
+    typeof s.sourceData.topic === 'string' &&
+    'enteredAt' in s.sourceData
+    ? s.sourceData
+    : null;
+}
+
+/**
+ * From ChatGPT Business Hub: Prompt Suggestions' "ChatGPT Business Hub"
+ * filter. By its source alone, so a row whose topic can't be read is still
+ * kept out of "Ansvisor Agents only".
+ */
+export function fromBusinessHub(s: SourceCarrier): boolean {
+  return s.source === 'business_hub';
 }
 
 /** Drawn from the brand's catalog, a category or a product: Prompt Suggestions' "Shopping" filter. */

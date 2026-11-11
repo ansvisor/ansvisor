@@ -4,6 +4,7 @@ import {
   apiLimiter,
   apiLimiterKey,
   botIngestKey,
+  businessHubTopicsLimiter,
   catalogCategoryLimiter,
   catalogLimiter,
   cmsLimiter,
@@ -225,6 +226,42 @@ describe('rate-limiter – shopping path builds', () => {
       expect(builds.at(-1)).toBe(429);
       // The other buckets keep theirs.
       expect(await statuses('/cms', 1)).toEqual([200]);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+});
+
+describe('rate-limiter – prompts from Business Hub topics', () => {
+  it("gives each brand 10 an hour, whoever asks, and doesn't count a refusal", async () => {
+    const app = express();
+    app.post('/suggestions/:brandId/business-hub', businessHubTopicsLimiter, (req, res) =>
+      res.status(req.query.refuse ? 403 : req.query.fail ? 500 : 200).json({}),
+    );
+    const server = await new Promise((resolve) => {
+      const listening = app.listen(0, '127.0.0.1', () => resolve(listening));
+    });
+    const base = `http://127.0.0.1:${server.address().port}`;
+    const statuses = async (brand, n, query = '') => {
+      const out = [];
+      for (let i = 0; i < n; i += 1) {
+        const res = await fetch(`${base}/suggestions/${brand}/business-hub${query}`, {
+          method: 'POST',
+        });
+        out.push(res.status);
+      }
+      return out;
+    };
+    try {
+      // Refusals first: none of them is counted.
+      expect(new Set(await statuses('b1', 12, '?refuse=1'))).toEqual(new Set([403]));
+      // A failed generation is: its model calls ran.
+      expect(await statuses('b1', 1, '?fail=1')).toEqual([500]);
+      const runs = await statuses('b1', 10);
+      expect(new Set(runs.slice(0, 9))).toEqual(new Set([200]));
+      expect(runs.at(-1)).toBe(429);
+      // Another brand keeps its own.
+      expect(await statuses('b2', 1)).toEqual([200]);
     } finally {
       await new Promise((resolve) => server.close(resolve));
     }

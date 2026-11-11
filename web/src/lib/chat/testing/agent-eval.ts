@@ -64,7 +64,8 @@ export type OutputPromise =
   | 'cms_draft'
   | 'wrong_claim'
   | 'draft_or_action'
-  | 'prompt_change';
+  | 'prompt_change'
+  | 'needs_answer';
 
 export type EvalGroup = 'agents' | 'skills';
 export type EvalTrigger = 'schedule' | 'signal' | 'kpi' | 'brand_added' | 'manual';
@@ -200,6 +201,8 @@ const SKILL_REQUESTS: Readonly<Record<string, { message: string; must: OutputPro
       'Check our drafts against our brand facts. Approved facts: subscriptions can be paused, skipped or cancelled anytime with no fees; plans start at $16 per 12 oz bag; we were founded in 2016.',
     must: ['list'],
   },
+  // No facts given: the fields no source gives must be asked for, never filled in.
+  'chatgpt-profile': { message: 'Check our ChatGPT profile.', must: ['list', 'needs_answer'] },
   compare: {
     message:
       'Draft a Brewline Coffee vs Northbound Roasters comparison page, and save it as a draft.',
@@ -551,6 +554,8 @@ const proposed = (run: AgentEvalRun, tools: readonly string[]) =>
 
 /** The wrong claims the workspace's answers carry: a run that looks for them finds one. */
 const WRONG_CLAIM = /\$\s?15|cancel(?:lation)?\s+fee|fee to cancel|decaf/i;
+/** What the ChatGPT profile check asks for instead of filling in (its SKILL.md's Needs your answer). */
+const NEEDS_ANSWER = /\[confirm:|needs your answer/i;
 
 function promiseMet(run: AgentEvalRun, promise: OutputPromise): { ok: boolean; detail: string } {
   const all = [run.answer, ...run.outputs.map((o) => o.text)].join('\n');
@@ -599,6 +604,11 @@ function promiseMet(run: AgentEvalRun, promise: OutputPromise): { ok: boolean; d
       return {
         ok: proposed(run, ['add_prompts', 'pause_prompts']),
         detail: 'no prompt to add or pause proposed',
+      };
+    case 'needs_answer':
+      return {
+        ok: NEEDS_ANSWER.test(all),
+        detail: 'no "[confirm: …]" line or Needs your answer for what no source gives',
       };
   }
 }
@@ -871,6 +881,7 @@ const PROMISE_TR: Readonly<Record<OutputPromise, string>> = {
   wrong_claim: 'yanlış iddiayı bulma',
   draft_or_action: 'taslak ya da Action Center aksiyonu',
   prompt_change: 'eklenecek ya da durdurulacak prompt önerisi',
+  needs_answer: 'kaynağı olmayan bilgiyi sorma',
 };
 
 /** A check's name as the Turkish report shows it. */

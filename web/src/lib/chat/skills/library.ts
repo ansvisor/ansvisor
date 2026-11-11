@@ -2,6 +2,7 @@ import library from './library.json';
 import { chatAgenticEnabled } from '../flag';
 import { SHORTCUT_IDS, type ShortcutId } from '../shortcuts';
 import { parseSkillFile } from './format';
+import { skillFlagOn } from './flagged';
 
 /**
  * Chat's skills (CHAT-13 items 3–6, and its v2 "Ansvisor skills (14)"; Chat
@@ -61,6 +62,8 @@ export const SKILL_ORDER = [
   'wrongclaim',
   'answerfirst',
   'facts',
+  // ChatGPT Business Hub plan, PR 7: beside the facts check, behind BUSINESS_HUB_ENABLED (flagged.ts).
+  'chatgpt-profile',
   'compare',
   'translate',
   // CHAT-24 §5, in its table's order (/compare is /features, /factcheck is wrongclaim).
@@ -161,14 +164,15 @@ export function buildSkillLibrary(files: readonly { folder: string; text: string
 }
 
 /**
- * The library for a workspace: the whole of it, or none while the new Chat
- * is off. What the workspace turned off is left out by store.ts.
+ * The library for a workspace: all of it that this install offers (a skill
+ * behind a flag that is off is left out, flagged.ts), or none while the new
+ * Chat is off. What the workspace turned off is left out by store.ts.
  */
 export function enabledSkills(
   organizationId: string | null,
   skills: readonly LibrarySkill[] = SKILL_LIBRARY,
 ): readonly LibrarySkill[] {
-  return chatAgenticEnabled(organizationId) ? skills : [];
+  return chatAgenticEnabled(organizationId) ? skills.filter((s) => skillFlagOn(s.name)) : [];
 }
 
 /**
