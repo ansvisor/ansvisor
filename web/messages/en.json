@@ -665,7 +665,8 @@
         "notYet": "Not yet",
         "open": "{count} open",
         "doneWeek": "{count} this week",
-        "noChange": "no change"
+        "noChange": "no change",
+        "tomorrow": "Tomorrow"
       },
       "focus": {
         "title": "Today's focus",
@@ -778,6 +779,53 @@
         "hideHintPerson": "Hides this card for you. Steps you finished stay done.",
         "hideFailed": "Couldn't hide it. Try again.",
         "askFailed": "Couldn't save that. Try again."
+      },
+      "firstDay": {
+        "welcome": "Welcome",
+        "welcomeName": "Welcome, {name}",
+        "asking": "we're asking {engines} your questions right now",
+        "askingGeneric": "we're asking AI engines your questions right now",
+        "check": {
+          "title": "Check the prompts we track for you",
+          "body": "We ask {engines} these every day and see if they name you. Remove any that don't fit your business, or add your own. Your first actions arrive tomorrow, after the first answers.",
+          "bodyGeneric": "We ask AI engines these every day and see if they name you. Remove any that don't fit your business, or add your own. Your first actions arrive tomorrow, after the first answers.",
+          "demand": {
+            "high": "high demand",
+            "medium": "medium demand",
+            "low": "low demand"
+          },
+          "remove": "Stop tracking this prompt",
+          "removeFailed": "Couldn't stop tracking it. Try again.",
+          "showAll": "Show all {count}",
+          "add": "+ Add a prompt",
+          "addLabel": "A prompt to track",
+          "addPlaceholder": "A question your buyers ask AI",
+          "addSave": "Add",
+          "addFailed": "Couldn't add it. Try again.",
+          "looksGood": "Looks good",
+          "checkFailed": "Couldn't save that. Try again."
+        },
+        "worth": {
+          "title": "Worth tracking too",
+          "body": "From your website.",
+          "spots": "From your website. {left} of {limit} spots left on {plan}.",
+          "track": "Track",
+          "failed": "Couldn't track it. Try again."
+        },
+        "wait": {
+          "title": "While you wait",
+          "optional": "· optional",
+          "steps": {
+            "gsc": "Connect Google Search Console",
+            "kpis": "Set one goal for this month"
+          },
+          "minutes": {
+            "gsc": "2 min",
+            "kpis": "1 min"
+          },
+          "tour": "Take the 2-minute tour",
+          "tourMinutes": "2 min"
+        }
       }
     },
     "firstRun": {

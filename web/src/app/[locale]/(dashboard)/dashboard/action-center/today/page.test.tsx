@@ -71,7 +71,23 @@ const reads = vi.hoisted(() => ({
   skipGettingStarted: vi.fn(),
   startGettingStarted: vi.fn(),
   hideCard: vi.fn(),
+  getTodayFirstDay: vi.fn(),
+  markPromptsChecked: vi.fn(),
+  setPromptActive: vi.fn(),
+  addPromptToBrand: vi.fn(),
+  acceptSuggestion: vi.fn(),
 }));
+vi.mock('@/lib/actions/today-first-day', () => ({
+  getTodayFirstDay: reads.getTodayFirstDay,
+  markPromptsChecked: reads.markPromptsChecked,
+}));
+vi.mock('@/lib/actions/prompt', () => ({
+  setPromptActive: reads.setPromptActive,
+  addPromptToBrand: reads.addPromptToBrand,
+}));
+vi.mock('@/lib/actions/prompt-suggestions', () => ({ acceptSuggestion: reads.acceptSuggestion }));
+const tour = { available: true, show: vi.fn(async () => {}) };
+vi.mock('@/components/chat/tour/chat-tour', () => ({ useChatTour: () => tour }));
 vi.mock('@/lib/actions/getting-started', () => ({
   getGettingStarted: reads.getGettingStarted,
   skipGettingStarted: reads.skipGettingStarted,
@@ -668,5 +684,123 @@ describe('Action Center › Today', () => {
     expect(reads.startGettingStarted).toHaveBeenCalledWith('b1');
     expect(reads.getGettingStarted).toHaveBeenCalledTimes(2);
     expect(container.querySelectorAll('[data-setup-step]')).toHaveLength(2);
+  });
+  describe("on a brand's first day", () => {
+    const firstDay = {
+      firstName: 'Alex',
+      engines: ['ChatGPT', 'Google Gemini'],
+      prompts: [
+        {
+          id: 'p1',
+          text: 'Best whole bean coffee for espresso?',
+          topic: 'Espresso',
+          demand: 'high',
+        },
+        {
+          id: 'p2',
+          text: 'Easiest coffee on a sensitive stomach?',
+          topic: 'Low-acid',
+          demand: null,
+        },
+      ],
+      total: 22,
+      checked: false,
+      platforms: ['chatgpt-web', 'gemini-web'],
+      models: [],
+      suggestions: [{ id: 's1', text: 'Is single-origin coffee worth the price?' }],
+      spots: { left: 28, limit: 50, plan: 'Starter' },
+    };
+    beforeEach(() => {
+      reads.getTodayOverview.mockResolvedValue({
+        ...overview,
+        lastRunAt: null,
+        trackedPrompts: 22,
+      });
+      reads.getTodayFirstDay.mockResolvedValue(firstDay);
+      reads.getGettingStarted.mockResolvedValue(setUp({ kpiSetupAt: null }));
+      reads.markPromptsChecked.mockResolvedValue({ ok: true });
+      reads.setPromptActive.mockResolvedValue({ prompt: {} });
+      reads.acceptSuggestion.mockResolvedValue({ promptId: 'p9' });
+      firstRun = { progress: { current: 7, total: 44 } };
+    });
+
+    it('welcomes the person, shows the answers coming in, and asks them to check the prompts', async () => {
+      await draw();
+      expect(text('header p')).toBe(
+        "Welcome, Alex · Brewline Coffee · we're asking ChatGPT and Google Gemini your questions right now",
+      );
+      const cells = [...container.querySelectorAll('ol[aria-label="Your loop"] li')].map(
+        (li) => li.textContent,
+      );
+      expect(cells).toEqual([
+        '1 · Prompts · you are here22 tracked',
+        '2 · AI answers7 of 44 in',
+        '3 · ActionsTomorrow',
+        '4 · Done—',
+        '5 · Results—',
+      ]);
+      expect(titles()).toEqual([
+        'Check the prompts we track for you',
+        'Worth tracking too',
+        'While you wait · optional',
+      ]);
+      const rows = [...container.querySelectorAll('[data-prompt-id]')].map((li) => li.textContent);
+      expect(rows[0]).toBe('Best whole bean coffee for espresso?Espresso · high demand');
+      expect(text('[data-today-part="worth"]')).toContain(
+        'From your website. 28 of 50 spots left on Starter.',
+      );
+      // No normal day's parts, and no reads for them.
+      expect(reads.getTodayFocus).not.toHaveBeenCalled();
+      expect(reads.getTodayStanding).not.toHaveBeenCalled();
+      expect(track).toHaveBeenCalledWith('today_viewed', { state: 'day1' });
+      expect(reads.markSeen).toHaveBeenCalledWith('b1', 'today');
+    });
+
+    it('stops tracking a prompt that doesn’t fit, and keeps Looks good for the brand', async () => {
+      await draw();
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[data-prompt-id="p1"] button')?.click(),
+      );
+      expect(reads.setPromptActive).toHaveBeenCalledWith('p1', false);
+      expect(track).toHaveBeenCalledWith('today_prompt_removed');
+      expect(container.querySelector('[data-prompt-id="p1"]')).toBeNull();
+      await act(async () => button('Looks good')?.click());
+      expect(reads.markPromptsChecked).toHaveBeenCalledWith('b1');
+      expect(track).toHaveBeenCalledWith('today_prompts_checked');
+      expect(container.querySelector('[data-today-part="prompts"]')).toBeNull();
+    });
+
+    it('tracks a stored suggestion, and reads the day again', async () => {
+      await draw();
+      await act(async () => button('Track')?.click());
+      expect(reads.acceptSuggestion).toHaveBeenCalledWith('s1');
+      expect(reads.getTodayFirstDay).toHaveBeenCalledTimes(2);
+    });
+
+    it('offers the open set-up steps and, with Chat on, the tour while the person waits', async () => {
+      await draw();
+      const wait = container.querySelector('[data-today-part="wait"]')!;
+      expect([...wait.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+        'Connect Google Search Console2 min',
+        'Set one goal for this month1 min',
+        'Take the 2-minute tour2 min',
+      ]);
+      await act(async () => button('Take the 2-minute tour2 min')?.click());
+      expect(tour.show).toHaveBeenCalledWith('visibility', 'everything');
+    });
+
+    it('hides Worth tracking too without suggestions, and the tour without Chat', async () => {
+      chatOn = false;
+      canManage = false;
+      reads.getTodayFirstDay.mockResolvedValue({ ...firstDay, suggestions: [], spots: null });
+      await draw();
+      expect(titles()).toEqual(['Check the prompts we track for you', 'While you wait · optional']);
+      expect(text('[data-today-part="wait"]')).not.toContain('tour');
+      // Anyone else can't remove or add, and Looks good hides the check for them.
+      expect(container.querySelector('[data-prompt-id="p1"] button')).toBeNull();
+      expect(button('+ Add a prompt')).toBeUndefined();
+      await act(async () => button('Looks good')?.click());
+      expect(reads.hideCard).toHaveBeenCalledWith('b1', 'prompts_check', null);
+    });
   });
 });

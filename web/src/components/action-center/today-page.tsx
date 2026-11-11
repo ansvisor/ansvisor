@@ -5,11 +5,13 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useFirstRun } from '@/hooks/use-first-run';
 import { getTodayOverview, getTodayStanding } from '@/lib/actions/today';
+import { getTodayFirstDay } from '@/lib/actions/today-first-day';
 import { finishOne } from '@/lib/action-center/waiting';
 import type { FocusCard } from '@/lib/actions/today-focus';
 import { viewerTimeZone } from '@/lib/time-zone';
 import { ActionCenterHeader } from './action-center-header';
 import { ActionCenterTabs } from './action-center-tabs';
+import { FirstDayView } from './today/first-day';
 import { FocusSection } from './today/focus-section';
 import { SetupSection } from './today/setup-section';
 import { SinceSection } from './today/since-section';
@@ -20,34 +22,60 @@ import {
   ResultsValue,
   StandSection,
   useAnswersCell,
+  type LoopCell,
 } from './today/today-parts';
 import { useTodayRead, useTodayVisit, type TodayVisitPart } from './today/use-today';
 
-/** The parts a visit waits on before it counts as seen. */
-const VISIT_PARTS: readonly TodayVisitPart[] = ['since', 'focus', 'waiting'];
+/**
+ * Which Today the brand gets: its first day before its first run is
+ * stamped, else the normal day. Undecided while the overview reads.
+ */
+type TodayMode = 'loading' | 'day1' | 'normal';
+
+/** The parts a visit waits on before it counts as seen, by mode. */
+const VISIT_PARTS: Record<TodayMode, readonly TodayVisitPart[]> = {
+  loading: [],
+  day1: ['prompts'],
+  normal: ['since', 'focus', 'waiting'],
+};
 
 /**
  * Action Center › Today (SIMPLE_NAV), the page everyone lands on with the
  * simplified layout on (mockup Main): the date, brand and when AI answers
  * last came in, with how many changes and things wait; the loop strip; then
  * Since yesterday and Today's focus, with Waiting for you, Finish setting
- * up and Where you stand beside them; and Ask Chat at the bottom. Each part
- * reads on its own, so a slow or failed read shows or hides only its part.
+ * up and Where you stand beside them; and Ask Chat at the bottom. A brand's
+ * first day, before its first run is stamped, asks the person to check the
+ * prompts tracked for them instead (mockup Bugun-ilk-gun). Each part reads
+ * on its own, so a slow or failed read shows or hides only its part.
  */
 export function TodayPage() {
   const t = useTranslations('actionCenter.today');
   const brandId = useBrandStore((s) => s.activeBrandId);
   const brandName = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId)?.name);
   const firstRun = useFirstRun();
+  const overview = useTodayRead(brandId, () => getTodayOverview(brandId!, viewerTimeZone()));
+  const ready = overview.status === 'ready' ? overview.data : null;
+  const mode: TodayMode =
+    overview.status === 'loading' ? 'loading' : ready?.lastRunAt === null ? 'day1' : 'normal';
+
   // Steps done, for today_viewed when it has read by then.
   const [setupDone, setSetupDone] = useState<number | null>(null);
-  const visit = useTodayVisit(brandId, VISIT_PARTS, () =>
-    setupDone === null ? {} : { setup_done: setupDone },
+  const visit = useTodayVisit(brandId, VISIT_PARTS[mode], () => ({
+    state: mode === 'day1' ? 'day1' : 'normal',
+    ...(setupDone === null ? {} : { setup_done: setupDone }),
+  }));
+  const standing = useTodayRead(mode === 'normal' ? brandId : null, () =>
+    getTodayStanding(brandId!),
   );
-  const overview = useTodayRead(brandId, () => getTodayOverview(brandId!, viewerTimeZone()));
-  const standing = useTodayRead(brandId, () => getTodayStanding(brandId!));
+  const [firstDayVersion, setFirstDayVersion] = useState(0);
+  const reloadFirstDay = useCallback(() => setFirstDayVersion((v) => v + 1), []);
+  const firstDay = useTodayRead(
+    mode === 'day1' ? brandId : null,
+    () => getTodayFirstDay(brandId!),
+    firstDayVersion,
+  );
 
-  const ready = overview.status === 'ready' ? overview.data : null;
   const zone = ready?.zone ?? viewerTimeZone();
   const answers = useAnswersCell(
     overview.status === 'loading' ? undefined : (ready?.lastRunAt ?? null),
@@ -64,71 +92,90 @@ export function TodayPage() {
   const [waiting, setWaiting] = useState<number | null>(null);
   const [focusCards, setFocusCards] = useState<FocusCard[]>([]);
   const summary =
-    [
-      since ? t('summary.changes', since) : null,
-      waiting !== null ? t('summary.waiting', { count: waiting }) : null,
-    ]
-      .filter(Boolean)
-      .join(' · ') || null;
+    mode !== 'normal'
+      ? null
+      : [
+          since ? t('summary.changes', since) : null,
+          waiting !== null ? t('summary.waiting', { count: waiting }) : null,
+        ]
+          .filter(Boolean)
+          .join(' · ') || null;
   const count = (value: number | null | undefined, key: 'tracked' | 'open' | 'doneWeek') =>
     value === null || value === undefined ? null : tLoop(key, { count: value });
 
+  const prompts: LoopCell = { value: count(ready?.trackedPrompts, 'tracked') };
+  const day1 = mode === 'day1';
+  const cells: Record<'prompts' | 'answers' | 'actions' | 'done' | 'results', LoopCell> = day1
+    ? {
+        prompts,
+        answers,
+        actions: { value: tLoop('tomorrow') },
+        done: { value: null },
+        results: { value: null },
+      }
+    : {
+        prompts,
+        answers,
+        actions: { value: count(ready?.openActions, 'open') },
+        done: { value: count(ready?.doneThisWeek, 'doneWeek') },
+        results: {
+          value:
+            standing.status === 'ready' && standing.data ? (
+              <ResultsValue standing={standing.data} />
+            ) : null,
+        },
+      };
+
+  const subtitle = day1 ? (
+    <WelcomeLine
+      brand={brandName ?? null}
+      firstName={firstDay.status === 'ready' ? firstDay.data.firstName : null}
+      engines={firstDay.status === 'ready' ? firstDay.data.engines : []}
+    />
+  ) : (
+    <TodayLine zone={zone} brand={brandName ?? null} lastRunAt={ready?.lastRunAt} />
+  );
+
   return (
     <div className="space-y-6">
-      <ActionCenterHeader
-        subtitle={<TodayLine zone={zone} brand={brandName ?? null} lastRunAt={ready?.lastRunAt} />}
-        aside={summary}
-      />
+      <ActionCenterHeader subtitle={subtitle} aside={summary} />
       <ActionCenterTabs />
-      <LoopStrip
-        current="actions"
-        cells={{
-          prompts: { value: count(ready?.trackedPrompts, 'tracked') },
-          answers,
-          actions: { value: count(ready?.openActions, 'open') },
-          done: { value: count(ready?.doneThisWeek, 'doneWeek') },
-          results: {
-            value:
-              standing.status === 'ready' && standing.data ? (
-                <ResultsValue standing={standing.data} />
-              ) : null,
-          },
-        }}
-      />
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-4">
-          {brandId && (
-            <SinceSection
-              brandId={brandId}
-              visit={visit}
-              zone={zone}
-              standing={standing}
-              onSummary={onSince}
-            />
-          )}
-          {brandId && <FocusSection brandId={brandId} visit={visit} onCards={setFocusCards} />}
-        </div>
-        <div className="space-y-4">
-          {brandId && (
-            <WaitingSection
-              brandId={brandId}
-              visit={visit}
-              focus={finishOne(focusCards)}
-              onSummary={setWaiting}
-            />
-          )}
-          {brandId && (
-            <SetupSection
-              brandId={brandId}
-              brandName={brandName ?? null}
-              visit={visit}
-              onDone={setSetupDone}
-            />
-          )}
-          <StandSection load={standing} />
-        </div>
-      </div>
-      <AskChatBox />
+      <LoopStrip current={day1 ? 'prompts' : 'actions'} here={day1} cells={cells} />
+      {brandId && day1 && (
+        <FirstDayView brandId={brandId} visit={visit} load={firstDay} reload={reloadFirstDay} />
+      )}
+      {brandId && mode === 'normal' && (
+        <>
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="space-y-4">
+              <SinceSection
+                brandId={brandId}
+                visit={visit}
+                zone={zone}
+                standing={standing}
+                onSummary={onSince}
+              />
+              <FocusSection brandId={brandId} visit={visit} onCards={setFocusCards} />
+            </div>
+            <div className="space-y-4">
+              <WaitingSection
+                brandId={brandId}
+                visit={visit}
+                focus={finishOne(focusCards)}
+                onSummary={setWaiting}
+              />
+              <SetupSection
+                brandId={brandId}
+                brandName={brandName ?? null}
+                visit={visit}
+                onDone={setSetupDone}
+              />
+              <StandSection load={standing} />
+            </div>
+          </div>
+          <AskChatBox />
+        </>
+      )}
     </div>
   );
 }
@@ -155,6 +202,29 @@ function TodayLine({
       : lastRunAt === null
         ? t('noAnswersYet')
         : t('updated', { ago: format.relativeTime(new Date(lastRunAt), now) }),
+  ];
+  return <>{parts.filter(Boolean).join(' · ')}</>;
+}
+
+/** "Welcome, Alex · Brewline Coffee · we're asking ChatGPT and Gemini your questions right now". */
+function WelcomeLine({
+  brand,
+  firstName,
+  engines,
+}: {
+  brand: string | null;
+  firstName: string | null;
+  engines: string[];
+}) {
+  const t = useTranslations('actionCenter.today.firstDay');
+  const parts = [
+    firstName ? t('welcomeName', { name: firstName }) : t('welcome'),
+    brand,
+    engines.length > 0
+      ? t('asking', {
+          engines: new Intl.ListFormat('en-US', { type: 'conjunction' }).format(engines),
+        })
+      : t('askingGeneric'),
   ];
   return <>{parts.filter(Boolean).join(' · ')}</>;
 }
