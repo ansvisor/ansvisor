@@ -30,7 +30,7 @@ The top line has the date, the brand and when AI answers last came in, with how 
 
 ## Beside them
 
-- **Waiting for you**: agent work waiting for your OK, drafts in review, tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.
+- **Waiting for you**: this brand's agent work waiting for your OK, drafts in review, tasks due today or overdue, weekly reminders, and for admins and managers, tasks in **Needs review** and new prompt ideas from Search Console or Analytics. Sections off your menu are left out.
 - **Finish setting up**: the next of the 7 set-up steps (KPIs, competitors, topics, prompts, Search Console, Analytics, the AI traffic snippet), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise.
 - **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand.
 - **Ask Chat**: with Chat on, a question goes to Chat's side panel.

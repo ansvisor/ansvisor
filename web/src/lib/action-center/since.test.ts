@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Signal } from '@/lib/signals/map';
-import { changeDirection, largestRivalMove, pickChanges, sinceStart } from './since';
+import { asSentence, changeDirection, largestRivalMove, pickChanges, sinceStart } from './since';
 
 const now = new Date('2026-11-17T09:00:00Z');
 
@@ -89,5 +89,17 @@ describe('Since yesterday: the changes', () => {
   it("measures competitors' largest move for a quiet day", () => {
     expect(largestRivalMove([{ change: 0.4 }, { change: -1.6 }, { change: null }])).toBe(1.6);
     expect(largestRivalMove([])).toBe(0);
+  });
+
+  it('ends a change’s line as a sentence before “An action was added.”', () => {
+    expect(asSentence('Northbound Roasters is mentioned far more than you')).toBe(
+      'Northbound Roasters is mentioned far more than you.',
+    );
+    expect(asSentence('Visibility gained for “cold brew” ')).toBe(
+      'Visibility gained for “cold brew”.',
+    );
+    expect(asSentence('Cited again.')).toBe('Cited again.');
+    expect(asSentence('A new rival!')).toBe('A new rival!');
+    expect(asSentence('Why the drop?')).toBe('Why the drop?');
   });
 });

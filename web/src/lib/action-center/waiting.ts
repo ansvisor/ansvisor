@@ -6,8 +6,8 @@ import type { TodayStep } from '@/lib/action-center/today';
  * waits on the person, in order, each row only for a role that can act on
  * it and only while its section is on the person's menu:
  *
- *   1. agent    their agent runs waiting for an OK (Chat's Agents at work),
- *               with the new Chat on and Chat on their menu
+ *   1. agent    their agent runs on this brand waiting for an OK (Chat's
+ *               Agents at work), with the new Chat on and Chat on their menu
  *   2. drafts   drafts in review in the Library (Content)
  *   3. due      open actions due today or overdue, theirs or no one's
  *   4. reminder recurring reminders, such as the weekly Business Hub numbers
@@ -61,7 +61,7 @@ export interface WaitingInput {
   chatOn: boolean;
   /** The person's menu sections that are off. */
   hidden: ReadonlySet<string>;
-  /** Their own chats whose agent run waits for them, newest first. */
+  /** Their own chats on this brand whose agent run waits for them, newest first. */
   agents: { id: string; title: string | null }[] | null;
   /** Drafts in review, newest first. */
   drafts: { id: string; title: string }[] | null;
