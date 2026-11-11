@@ -36,19 +36,27 @@ const trend = (now, before) =>
 const platformName = (id) => IMPROVE_PLATFORM_LABELS[id] ?? id;
 const ALL_PLATFORMS = PLATFORMS.map((p) => platformName(p.id));
 
-/** The actions' titles as the Action Center words them (actionTexts.{kind}.title). */
+/**
+ * The actions' titles as the Action Center words them (actionTexts.{kind}.title):
+ * from their targets, or, for one a person sent, from what they sent.
+ */
 const ACTION_TITLES = {
   close_competitor_gap: (t) => `Close the visibility gap with ${t}`,
   protect_platform_visibility: (t) => `Protect visibility on ${t}`,
   earn_third_party_citations: (t) => `Target ${t} for citations of your pages`,
+  topic_competitor_gap: (_, p) =>
+    `Close the ${p.gap.toFixed(1)}-pt gap with ${p.competitorName} in ${p.topicName}`,
+  shopping_product: (_, p) => `Get ${p.title} on the shelf`,
 };
 
 function actionTitle(action) {
-  if (action.payload?.title) return action.payload.title;
-  const targets = (action.payload?.targets ?? [])
-    .map((t) => (action.payload?.targetEntity === 'platforms' ? platformName(t.label) : t.label))
+  const payload = action.payload ?? {};
+  const named = ACTION_TITLES[action.kind];
+  if (!named) return payload.title || null;
+  const targets = (payload.targets ?? [])
+    .map((t) => (payload.targetEntity === 'platforms' ? platformName(t.label) : t.label))
     .join(', ');
-  return ACTION_TITLES[action.kind]?.(targets) ?? null;
+  return named(targets, payload);
 }
 
 const actionHref = (action) => `/dashboard/action-center/actions/${action.id}`;
@@ -379,7 +387,7 @@ async function chatScripts({ brandId, now }) {
         sources: [{ label: 'Action Center', count: open.length }],
       },
     ],
-    moves: ['Open the draft for the first action', 'Why is the second one in progress?'],
+    moves: ['Open the draft for the first action', 'What does the second one involve?'],
   };
 
   // ── 5. Which subscription questions miss us? ───────────────────────────────

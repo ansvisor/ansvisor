@@ -2,13 +2,16 @@
  * The demo brand's ChatGPT Business Hub numbers (00526): four weekly
  * entries, as a member would copy them from Business Hub, so Visibility's
  * Business Hub card can be seen in the demo. Each ends a week after the one
- * before, the newest yesterday. The second-oldest has no Profile views, as
- * Business Hub shows none below its threshold; the rest grow a little each
- * week. Its topics are the questions coffee buyers bring to ChatGPT, two of
- * them the demo's own tracked topics.
+ * before, the newest a week before the day of the latest run: this week's
+ * are due, and the Action Center's weekly reminder asks for them
+ * (action-center.js, with BUSINESS_HUB_ENABLED). The second-oldest has no
+ * Profile views, as Business Hub shows none below its threshold; the rest
+ * grow a little each week. Its topics are the questions coffee buyers bring
+ * to ChatGPT, two of them the demo's own tracked topics.
  */
 
 import supabaseAdmin from '../../config/supabase.js';
+import { latestRunStart } from './core.js';
 import { demoId } from './random.js';
 import { demoWriter } from './write.js';
 
@@ -69,17 +72,20 @@ const WEEKS = [
 /** A UTC day as YYYY-MM-DD. */
 const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
 
+/** The newest entry ends this many days before the latest run's (UTC) day: the numbers are due. */
+export const NEWEST_DAYS_AGO = 7;
+
 /**
- * The four entries, the newest ending yesterday (UTC), each entered the
- * morning after it ends.
+ * The four entries, the newest ending NEWEST_DAYS_AGO before the latest
+ * run's day (UTC), each entered the morning after it ends.
  *
  * @param {{ brandId: string, now: Date }} ctx
  */
 export function businessHubRows({ brandId, now }) {
-  const today = Date.parse(dayOf(now.getTime()));
+  const runDay = Date.parse(dayOf(latestRunStart(now).getTime()));
   return WEEKS.map((week, i) => {
     const weeksBack = WEEKS.length - 1 - i;
-    const end = today - DAY_MS - weeksBack * 7 * DAY_MS;
+    const end = runDay - NEWEST_DAYS_AGO * DAY_MS - weeksBack * 7 * DAY_MS;
     const entered = new Date(Math.min(end + DAY_MS + 9 * 3_600_000, now.getTime())).toISOString();
     return {
       id: demoId(brandId, `business-hub:${weeksBack}`),
