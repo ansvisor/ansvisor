@@ -8,7 +8,7 @@ updated: 2026-11-09
 last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 When an action's work is writing, a new page or a better existing one, its drawer opens with a **Start now** block at the top of **Overview**. It takes you straight to the writing, with what the action knows already filled in.

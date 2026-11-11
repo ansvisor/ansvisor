@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useTransition, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +26,7 @@ import {
   Clock,
   ShoppingBag,
   Package,
+  Building2,
 } from 'lucide-react';
 import { Filter } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -45,7 +46,7 @@ import {
   EstimateRange,
   createEstimateNoteHandle,
 } from '@/components/prompts/volume-estimate';
-import { readUrlChoice } from '@/lib/url-state';
+import { readUrlChoice, readUrlParam } from '@/lib/url-state';
 import {
   getPromptSuggestions,
   refreshPromptSuggestions,
@@ -53,13 +54,16 @@ import {
   dismissSuggestion,
   dismissSuggestions,
   trackSuggestions,
+  type BusinessHubTopicsResult,
   type PromptSuggestion,
 } from '@/lib/actions/prompt-suggestions';
 import type { PlanId } from '@/config/plans';
 import { priceText } from '@/lib/shopping/price';
 import {
+  businessHubSourceData,
   catalogProductSourceData,
   catalogSourceData,
+  fromBusinessHub,
   fromCatalog,
   fromYourData,
   gaSourceData,
@@ -76,6 +80,7 @@ import { useFailureToast } from '@/hooks/use-failure-toast';
 import type { PromptAddFailureCode } from '@/lib/actions/prompt';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { SuggestionsLoadError } from './_suggestions-load-error';
+import { BusinessHubTopicsDialog } from './_business-hub-topics-dialog';
 import {
   Dialog,
   DialogContent,
@@ -183,6 +188,24 @@ function HoverTip({ content, children }: { content: string; children: React.Reac
  */
 function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
   const tCatalog = useTranslations('prompts.suggestions.catalog');
+  const tHub = useTranslations('prompts.suggestions.businessHub');
+  const format = useFormatter();
+  const hub = businessHubSourceData(suggestion);
+  // The period's last day is a date; when it was entered, a moment.
+  const hubTip = hub
+    ? hub.periodEnd
+      ? tHub('tooltipPeriod', {
+          topic: hub.topic,
+          date: format.dateTime(new Date(`${hub.periodEnd}T00:00:00Z`), {
+            dateStyle: 'medium',
+            timeZone: 'UTC',
+          }),
+        })
+      : tHub('tooltip', {
+          topic: hub.topic,
+          date: format.dateTime(new Date(hub.enteredAt), { dateStyle: 'medium' }),
+        })
+    : null;
   const gsc = gscSourceData(suggestion);
   const ga = gaSourceData(suggestion);
   const catalog = catalogSourceData(suggestion);
@@ -242,6 +265,14 @@ function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
           </Badge>
         </HoverTip>
       )}
+      {hubTip && (
+        <HoverTip content={hubTip}>
+          <Badge variant="outline" className="gap-1.5 bg-card text-xs font-normal">
+            <Building2 className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+            {tHub('badge')}
+          </Badge>
+        </HoverTip>
+      )}
       <HoverTip content="Phrased by Ansvisor from your brand, the prompts you already track, and the competitors cited in your AI answers.">
         <Badge variant="outline" className="gap-1.5 bg-card text-xs font-normal">
           <Shield className="h-3.5 w-3.5 text-muted-foreground" />
@@ -253,12 +284,21 @@ function SourceBadges({ suggestion }: { suggestion: PromptSuggestion }) {
 }
 
 /** Which data source a row carries, for the source filter. */
-type SourceFilter = 'all' | 'data' | 'gsc' | 'ga' | 'shopping' | 'agents';
+type SourceFilter = 'all' | 'data' | 'gsc' | 'ga' | 'shopping' | 'business_hub' | 'agents';
 
-const SOURCE_FILTERS: SourceFilter[] = ['all', 'data', 'gsc', 'ga', 'shopping', 'agents'];
+const SOURCE_FILTERS: SourceFilter[] = [
+  'all',
+  'data',
+  'gsc',
+  'ga',
+  'shopping',
+  'business_hub',
+  'agents',
+];
 
-// Shopping's label is translated (prompts.suggestions.catalog.filter).
-const SOURCE_FILTER_LABELS: Record<Exclude<SourceFilter, 'shopping'>, string> = {
+// Shopping's and Business Hub's labels are translated
+// (prompts.suggestions.catalog.filter, prompts.suggestions.businessHub.filter).
+const SOURCE_FILTER_LABELS: Record<Exclude<SourceFilter, 'shopping' | 'business_hub'>, string> = {
   all: 'All sources',
   // Either Google source: Getting started's high-value prompts step links here
   // with ?source=data.
@@ -357,9 +397,15 @@ export function SuggestionsCard({
   const [refreshing, setRefreshing] = useState(false);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  // ChatGPT Business Hub's topics (BUSINESS_HUB_ENABLED, read with the list).
+  const [businessHub, setBusinessHub] = useState(false);
+  const [hubOpen, setHubOpen] = useState(false);
+  // A link can ask for its dialog (?source=business_hub&hub=1), once the list says it's on.
+  const hubAsked = useRef(false);
   // A link can open the list on a source (?source=data).
   useEffect(() => {
     setSourceFilter(readUrlChoice<SourceFilter>('source', SOURCE_FILTERS, 'all'));
+    hubAsked.current = readUrlParam('hub') === '1';
   }, []);
   const [search, setSearch] = useState('');
   const [clearing, setClearing] = useState(false);
@@ -382,6 +428,7 @@ export function SuggestionsCard({
     const read = await readWithOneRetry(() => getPromptSuggestions(brandId));
     if (read.ok) {
       setSuggestions(read.suggestions);
+      setBusinessHub(read.businessHub === true);
       setLoaded(true);
     } else {
       setError(read);
@@ -405,6 +452,24 @@ export function SuggestionsCard({
     if (!loaded && !loading) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, brandId]);
+
+  // Admins and managers generate suggestions; the link's dialog opens for them only.
+  const canUseHub = businessHub && canManage;
+  useEffect(() => {
+    if (!canUseHub || !hubAsked.current) return;
+    hubAsked.current = false;
+    setHubOpen(true);
+  }, [canUseHub]);
+
+  /** Business Hub's prompts join the list at its top, and the list shows them alone. */
+  const handleHubAdded = (result: BusinessHubTopicsResult) => {
+    if (result.suggestions.length === 0) return;
+    const ids = new Set(result.suggestions.map((s) => s.id));
+    setSuggestions((prev) => [...result.suggestions, ...prev.filter((s) => !ids.has(s.id))]);
+    setLoaded(true);
+    setError(null);
+    setSourceFilter('business_hub');
+  };
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -434,7 +499,10 @@ export function SuggestionsCard({
       if (sourceFilter === 'gsc' && !gscSourceData(s)) return false;
       if (sourceFilter === 'ga' && !gaSourceData(s)) return false;
       if (sourceFilter === 'shopping' && !fromCatalog(s)) return false;
-      if (sourceFilter === 'agents' && (fromYourData(s) || fromCatalog(s))) return false;
+      if (sourceFilter === 'business_hub' && !fromBusinessHub(s)) return false;
+      if (sourceFilter === 'agents' && (fromYourData(s) || fromCatalog(s) || fromBusinessHub(s))) {
+        return false;
+      }
       if (!q) return true;
       return (
         s.suggestedText.toLowerCase().includes(q) ||
@@ -444,12 +512,21 @@ export function SuggestionsCard({
     });
   }, [suggestions, sourceFilter, search]);
 
-  // Shopping is offered once the catalog gave a suggestion (ECOM-003, P-8), or a link asked for it.
-  const filters = SOURCE_FILTERS.filter(
-    (key) => key !== 'shopping' || sourceFilter === 'shopping' || suggestions.some(fromCatalog),
+  // Shopping is offered once the catalog gave a suggestion (ECOM-003, P-8),
+  // and ChatGPT Business Hub once its topics gave one, or a link asked for either.
+  const filters = SOURCE_FILTERS.filter((key) =>
+    key === 'shopping'
+      ? sourceFilter === 'shopping' || suggestions.some(fromCatalog)
+      : key === 'business_hub'
+        ? sourceFilter === 'business_hub' || suggestions.some(fromBusinessHub)
+        : true,
   );
   const filterLabel = (key: SourceFilter) =>
-    key === 'shopping' ? t('catalog.filter') : SOURCE_FILTER_LABELS[key];
+    key === 'shopping'
+      ? t('catalog.filter')
+      : key === 'business_hub'
+        ? t('businessHub.filter')
+        : SOURCE_FILTER_LABELS[key];
 
   const notice = useMemo(
     () => sourceNotice(sourceStates, suggestions),
@@ -615,6 +692,18 @@ export function SuggestionsCard({
                   className="h-8 pl-8 text-xs"
                 />
               </div>
+
+              {canUseHub && (
+                <Button
+                  onClick={guard(() => setHubOpen(true), { action: tActions('suggestPrompts') })}
+                  size="sm"
+                  variant="outline"
+                  className="gap-2"
+                >
+                  <Building2 className="h-3.5 w-3.5" />
+                  {t('businessHub.button')}
+                </Button>
+              )}
 
               {canManage && (
                 <Button
@@ -802,6 +891,19 @@ export function SuggestionsCard({
                   )}
                   Generate Suggestions
                 </Button>
+                {canUseHub && (
+                  <Button
+                    onClick={guard(() => setHubOpen(true), {
+                      action: tActions('suggestPrompts'),
+                    })}
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 gap-2"
+                  >
+                    <Building2 className="h-3.5 w-3.5" />
+                    {t('businessHub.button')}
+                  </Button>
+                )}
               </>
             ) : (
               <p className="text-xs text-muted-foreground max-w-sm">
@@ -972,6 +1074,15 @@ export function SuggestionsCard({
         )}
         <EstimateNoteTooltip handle={volumeNote} />
         {topicFirst.dialog}
+        {canUseHub && (
+          <BusinessHubTopicsDialog
+            brandId={brandId}
+            open={hubOpen}
+            onOpenChange={setHubOpen}
+            onAdded={handleHubAdded}
+            onNoTopics={topicFirst.show}
+          />
+        )}
       </CardContent>
     </Card>
   );
