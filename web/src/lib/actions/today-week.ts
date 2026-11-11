@@ -191,7 +191,10 @@ export async function getTodayEnded(brandId: string): Promise<TodayEnded> {
     })(),
     getTrackedPromptCount(brandId),
     count(
-      supabase.from('competitors').select('id', { count: 'exact', head: true }).eq('brand_id', brandId),
+      supabase
+        .from('competitors')
+        .select('id', { count: 'exact', head: true })
+        .eq('brand_id', brandId),
     ),
     count(
       supabase
