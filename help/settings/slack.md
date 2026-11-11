@@ -8,7 +8,7 @@ updated: 2026-11-10
 last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/self-host/env-variables.mdx]
 ---
 Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, an alert when visibility or citations drop more than usual, one daily suggestion, and a message when an agent needs someone. Each message links back to Ansvisor. Slack is on every paid plan.

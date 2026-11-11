@@ -47,6 +47,21 @@ import {
 } from '../lib/action-center/from-prompt-improve.js';
 import { brandPromptKeys, demandResponse } from '../lib/prompt-demand.js';
 import { yearRule } from '../lib/current-year.js';
+import { businessHubEnabled } from '../lib/business-hub/flag.js';
+import {
+  BUSINESS_HUB_ATTEMPTS,
+  BUSINESS_HUB_SOURCE,
+  businessHubRows,
+  businessHubTopicsBody,
+  cleanTopics,
+  dismissedSince,
+  isExpiredBusinessHubRow,
+  isLiveBusinessHubRow,
+  topicPromptsRequest,
+  topicPromptsSchema,
+  topicPromptsSystem,
+} from '../lib/business-hub/topic-prompts.js';
+import { businessHubTopicsLimiter } from '../middleware/rate-limiter.js';
 
 const router = Router();
 
@@ -533,8 +548,13 @@ async function findOrCreateTopic(brandId, topicName) {
  * empty. A text the old batch already has is refreshed in its row, since a
  * brand keeps one undecided suggestion per text
  * (idx_prompt_suggestions_brand_text_active).
+ *
+ * Suggestions from ChatGPT Business Hub's topics (00527) stay their 30 days:
+ * a refresh never removes or rewrites one, a refreshed text one of them has
+ * is left out, and they are listed after the batch. One past its 30 days
+ * goes with the old batch.
  */
-async function replaceNewSuggestions(brandId, rows, log) {
+async function replaceNewSuggestions(brandId, generated, log) {
   const { data: current, error: currentError } = await supabaseAdmin
     .from('prompt_suggestions')
     .select('*')
@@ -542,7 +562,12 @@ async function replaceNewSuggestions(brandId, rows, log) {
     .eq('status', 'new');
   if (currentError) throw currentError;
   const textKey = (text) => text.toLowerCase();
-  const currentByText = new Map((current ?? []).map((row) => [textKey(row.suggested_text), row]));
+  const now = Date.now();
+  const kept = (current ?? []).filter((row) => isLiveBusinessHubRow(row, now));
+  const keptTexts = new Set(kept.map((row) => textKey(row.suggested_text)));
+  const replaceable = (current ?? []).filter((row) => !isLiveBusinessHubRow(row, now));
+  const rows = generated.filter((row) => !keptTexts.has(textKey(row.suggested_text)));
+  const currentByText = new Map(replaceable.map((row) => [textKey(row.suggested_text), row]));
 
   const fresh = rows.filter((row) => !currentByText.has(textKey(row.suggested_text)));
   let inserted = [];
@@ -572,8 +597,8 @@ async function replaceNewSuggestions(brandId, rows, log) {
   }
 
   // Only then the rest of the old batch goes; one decided meanwhile stays.
-  const kept = new Set([...byText.values()].map((row) => row.id));
-  const stale = (current ?? []).filter((row) => !kept.has(row.id)).map((row) => row.id);
+  const refreshed = new Set([...byText.values()].map((row) => row.id));
+  const stale = replaceable.filter((row) => !refreshed.has(row.id)).map((row) => row.id);
   if (stale.length) {
     const { error } = await supabaseAdmin
       .from('prompt_suggestions')
@@ -583,7 +608,10 @@ async function replaceNewSuggestions(brandId, rows, log) {
     if (error) log.warn({ err: error }, 'prompt-suggestions refresh: old batch not removed');
   }
 
-  return [...new Set(rows.map((row) => byText.get(textKey(row.suggested_text))).filter(Boolean))];
+  return [
+    ...new Set(rows.map((row) => byText.get(textKey(row.suggested_text))).filter(Boolean)),
+    ...kept,
+  ];
 }
 
 /** Generating suggestions and Improve sets costs AI: admins and managers start it (2026-10-29). */
@@ -798,6 +826,153 @@ router.post(
   },
 );
 
+/** Off: Business Hub's routes are not found until BUSINESS_HUB_ENABLED is "true". */
+function businessHubOnly(req, res, next) {
+  if (businessHubEnabled()) return next();
+  return res.status(404).json({ error: 'Not available', code: 'off' });
+}
+
+/**
+ * The model call for Business Hub's topics: one generateObject, with Refresh's
+ * model and at most two retries. Not charged to the AI budget, as Refresh
+ * isn't; the route's limiter and its roles bound it.
+ */
+async function writeTopicPrompts({ brand, topicNames, trackedTexts, topics }) {
+  const model = process.env.PROMPT_SUGGESTION_MODEL || 'google/gemini-3-flash-preview';
+  const { object } = await withRetry(
+    () =>
+      generateObject({
+        model: resolveModel(model),
+        schema: topicPromptsSchema,
+        system: topicPromptsSystem({ langName: getLanguageName(brand.language) }),
+        prompt: topicPromptsRequest({ brand, topicNames, trackedTexts, topics }),
+      }),
+    { attempts: BUSINESS_HUB_ATTEMPTS, baseDelayMs: 500, label: 'business-hub-topics' },
+  );
+  return object;
+}
+
+/** Inserts the rows; a text written meanwhile by a refresh (23505) leaves only that one out. */
+async function insertBusinessHubRows(rows) {
+  if (rows.length === 0) return [];
+  const { data, error } = await supabaseAdmin.from('prompt_suggestions').insert(rows).select();
+  if (!error) return data ?? [];
+  if (error.code !== '23505') throw error;
+  const inserted = [];
+  for (const row of rows) {
+    const one = await supabaseAdmin.from('prompt_suggestions').insert(row).select().maybeSingle();
+    if (one.error && one.error.code !== '23505') throw one.error;
+    if (one.data) inserted.push(one.data);
+  }
+  return inserted;
+}
+
+/**
+ * POST /api/prompts/suggestions/:brandId/business-hub
+ * Body: { topics: string[1..5], periodEnd?: 'YYYY-MM-DD' }
+ *
+ * Prompts from ChatGPT Business Hub's discovery topics (Business Hub plan,
+ * PR 6): two or three for each topic, in the brand's language, under the
+ * brand's topic that fits or the discovery topic itself. Written as prompt
+ * suggestions with source 'business_hub' (00527), kept 30 days. A prompt
+ * the brand tracks, or that is suggested already, is left out and counted.
+ * Admins and managers, as every suggestion generator; 10 an hour per brand.
+ */
+router.post(
+  '/suggestions/:brandId/business-hub',
+  businessHubOnly,
+  requireFeature('prompt_suggestions'),
+  businessHubTopicsLimiter,
+  async (req, res) => {
+    try {
+      const parsed = businessHubTopicsBody.safeParse(req.body ?? {});
+      const topics = parsed.success ? cleanTopics(parsed.data.topics) : [];
+      if (!parsed.success || topics.length === 0) {
+        return res.status(400).json({ error: 'Give one to five topics.', code: 'invalid' });
+      }
+      const brandId = req.params.brandId;
+      const { brand } = await assertBrandAccess(brandId, req.user.id, BRAND_COLUMNS);
+      await assertRole(req.user.id, MANAGER_ROLES, SUGGEST_PROMPTS_REFUSAL);
+      if (!(await brandHasTopics(brandId))) return refuseNoTopics(res);
+
+      const now = new Date();
+      // Ones past their 30 days go first, so their texts can be suggested again.
+      const { error: expiredError } = await supabaseAdmin
+        .from('prompt_suggestions')
+        .delete()
+        .eq('brand_id', brandId)
+        .eq('source', BUSINESS_HUB_SOURCE)
+        .eq('status', 'new')
+        .lt('expires_at', now.toISOString());
+      if (expiredError) req.log.warn({ err: expiredError }, 'business hub topics: expired kept');
+
+      const [topicsRead, pendingRead, dismissedRead, trackedTexts] = await Promise.all([
+        supabaseAdmin
+          .from('topics')
+          .select('id, name')
+          .eq('brand_id', brandId)
+          .eq('is_active', true)
+          .limit(200),
+        supabaseAdmin
+          .from('prompt_suggestions')
+          .select('suggested_text')
+          .eq('brand_id', brandId)
+          .eq('status', 'new')
+          .limit(1000),
+        supabaseAdmin
+          .from('prompt_suggestions')
+          .select('suggested_text')
+          .eq('brand_id', brandId)
+          .eq('source', BUSINESS_HUB_SOURCE)
+          .eq('status', 'dismissed')
+          .gte('updated_at', dismissedSince(now))
+          .limit(1000),
+        brandPromptTexts(brandId, req.log),
+      ]);
+      for (const read of [topicsRead, pendingRead, dismissedRead]) {
+        if (read.error) throw read.error;
+      }
+      const existingTopics = topicsRead.data ?? [];
+
+      const answer = await writeTopicPrompts({
+        brand,
+        topicNames: existingTopics.map((t) => t.name),
+        trackedTexts,
+        topics,
+      });
+      const result = businessHubRows({
+        answer,
+        topics,
+        brandId,
+        brandName: brand.name,
+        existingTopics,
+        trackedTexts,
+        pendingTexts: (pendingRead.data ?? []).map((r) => r.suggested_text),
+        dismissedTexts: (dismissedRead.data ?? []).map((r) => r.suggested_text),
+        periodEnd: parsed.data.periodEnd ?? null,
+        now,
+      });
+      const suggestions = await insertBusinessHubRows(result.rows);
+      // Fewer only when a refresh wrote one of the texts meanwhile: suggested already.
+      const addedTo = (topic) => suggestions.filter((r) => r.source_data?.topic === topic).length;
+      return res.json({
+        added: suggestions.length,
+        alreadyTracked: result.alreadyTracked,
+        alreadySuggested: result.alreadySuggested + result.rows.length - suggestions.length,
+        topics: result.topics.map((t) => ({ ...t, added: addedTo(t.topic) })),
+        suggestions,
+      });
+    } catch (error) {
+      const status = error.status || 500;
+      req.log.error({ err: error }, 'business hub topic prompts error');
+      return res.status(status).json({
+        error: status === 500 ? 'Failed to suggest prompts' : error.message,
+        code: error.code,
+      });
+    }
+  },
+);
+
 router.get('/suggestions/:brandId', async (req, res) => {
   try {
     await assertBrandAccess(req.params.brandId, req.user.id);
@@ -809,11 +984,13 @@ router.get('/suggestions/:brandId', async (req, res) => {
       .order('generated_at', { ascending: false });
     if (error) throw error;
 
-    const stale = (data || []).every((r) => new Date(r.expires_at).getTime() < Date.now());
-    return res.json({
-      suggestions: data || [],
-      stale: data?.length === 0 || stale,
-    });
+    // A Business Hub suggestion past its 30 days is no longer listed; the
+    // others stay until a refresh replaces them, whatever their expiry.
+    const now = Date.now();
+    const suggestions = (data || []).filter((r) => !isExpiredBusinessHubRow(r, now));
+    const batch = suggestions.filter((r) => r.source !== BUSINESS_HUB_SOURCE);
+    const stale = batch.every((r) => new Date(r.expires_at).getTime() < now);
+    return res.json({ suggestions, stale: batch.length === 0 || stale });
   } catch (error) {
     const status = error.status || 500;
     req.log.error({ err: error }, 'prompt-suggestions list error');

@@ -2236,6 +2236,8 @@
           "check": "Checked again after each catalog sync, or now with Check now on its task: the action closes once the page links none of them."
         },
         "businessHub": {
+          "check": "Check what ChatGPT says",
+          "checkText": "Check what ChatGPT says about our business, and prepare our Business Hub corrections and site fixes.",
           "title": "ChatGPT Business Hub",
           "open": "Open Business Hub",
           "noApi": "There's no Business Hub API: mark each task done when its Done when is true.",
@@ -6727,6 +6729,7 @@
       "wrongclaim": "Fix wrong claims about us",
       "answerfirst": "Answer-first rewrite",
       "facts": "Brand facts check",
+      "chatgpt-profile": "ChatGPT profile check",
       "compare": "Comparison page",
       "translate": "Translate a page",
       "questions": "Buyer questions",
@@ -13276,7 +13279,32 @@
       "selectTopic": "Select a topic",
       "platformsAndModels": "Platform & Models",
       "selectPlatformsAndModels": "Select platform & models",
-      "selectedCount": "{count} selected"
+      "selectedCount": "{count} selected",
+      "businessHub": {
+        "button": "From ChatGPT Business Hub",
+        "badge": "ChatGPT Business Hub",
+        "tooltip": "Written from “{topic}”, a discovery topic you copied from ChatGPT Business Hub on {date}: real ChatGPT conversations that cited your site were about it.",
+        "tooltipPeriod": "Written from “{topic}”, a discovery topic ChatGPT Business Hub showed for the period ending {date}: real ChatGPT conversations that cited your site were about it.",
+        "filter": "ChatGPT Business Hub",
+        "dialog": {
+          "title": "Suggest prompts from ChatGPT Business Hub",
+          "description": "Copy up to five discovery topics from Insights in ChatGPT Business Hub. Ansvisor writes 2 or 3 prompts for each, in your brand's language, and lists them here for 30 days.",
+          "topicLabel": "Topic {number}",
+          "topicPlaceholder": "e.g. office coffee subscriptions",
+          "quota": "You can track {count, plural, one {# more prompt} other {# more prompts}} on your plan.",
+          "quotaFull": "Your plan's prompt limit is reached. You can still get suggestions, and track them once you make room.",
+          "submit": "Suggest prompts",
+          "submitting": "Writing prompts…",
+          "cancel": "Cancel"
+        },
+        "result": {
+          "added": "{count, plural, =0 {No new suggestions} one {# new suggestion, listed under ChatGPT Business Hub} other {# new suggestions, listed under ChatGPT Business Hub}}",
+          "skipped": "Left out: {tracked} already tracked, {suggested} already suggested.",
+          "topicMatched": "{count, plural, =0 {nothing new} one {# prompt} other {# prompts}} under {topic}",
+          "topicNew": "{count, plural, =0 {nothing new} one {# prompt, new topic} other {# prompts, new topic}}",
+          "done": "Done"
+        }
+      }
     },
     "topicSuggestions": {
       "catalog": {
@@ -14908,19 +14936,6 @@
     "citationEvidence": "Citation Evidence",
     "citationEvidenceDescription": "The URLs AI answers cited most in this period, and which tracked prompts surfaced them."
   },
-  "welcome": {
-    "title": "What do you work on?",
-    "invitedTitle": "Welcome to {workspace} Workspace, {name}",
-    "invitedTitleNoName": "Welcome to {workspace} Workspace",
-    "lede": "Pick what you work on or lead, one or more. We'll set up your menu around it; your team can pick their own when they join.",
-    "invitedLede": "You've joined as {role}. What do you work on or lead? We'll set up your menu around it.",
-    "yourMenu": "Your menu",
-    "hiddenByAdmin": "{count} hidden by your admin",
-    "changeLater": "You can change this any time in Settings › Account.",
-    "skip": "Skip: show me everything",
-    "continue": "Continue",
-    "saveFailed": "Couldn't save your work areas. Try again."
-  },
   "settings": {
     "title": "Settings",
     "description": "Manage your project and account settings.",
@@ -15612,6 +15627,7 @@
     "integrations_cms": "Content management systems",
     "integrations_team": "Team and alerts",
     "integrations_crm": "CRM",
+    "integrations_businessProfiles": "Business profiles",
     "integrations_description": "Connect external data sources. Connections are shared with your whole organization.",
     "catalog": {
       "title": "Product catalog",
@@ -16285,6 +16301,18 @@
         "busy": "Too many tries. Wait a minute and try again.",
         "failed": "That didn't work. Try again."
       }
+    },
+    "businessHub": {
+      "title": "ChatGPT Business Hub",
+      "description": "OpenAI's free place to claim your business in ChatGPT and correct what ChatGPT says about it.",
+      "manual": "Manual: Business Hub has no API yet",
+      "noBrand": "Pick a brand to set up its Business Hub profile.",
+      "setUp": "Set up your profile",
+      "enterNumbers": "Enter numbers",
+      "noAction": "{brand} has no setup action yet: the Action Center adds one once the brand has a website and tracked ChatGPT answers. Until then, this opens Business Hub.",
+      "demoNoAction": "The demo brand has no setup action, so this opens Business Hub.",
+      "unread": "The setup action couldn't be checked, so this opens Business Hub.",
+      "apiNote": "We'll switch to an automatic connection if OpenAI opens an API."
     },
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",

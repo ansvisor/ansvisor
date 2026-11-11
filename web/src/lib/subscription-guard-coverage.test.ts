@@ -72,7 +72,7 @@ const OPEN_ACTIONS: Record<string, string> = {
   'user-brand-state.ts:hideCard':
     "the person's own hidden or snoozed Today cards, nothing that costs",
   'menu-access.ts:setMyWorkAreas':
-    'the person\'s own profile; it answers "What do you work on?", which /dashboard/welcome waits on',
+    "the person's own profile: their work areas only narrow their own menu",
   'chat-uploads.ts:prepareChatUpload':
     'checks the plan itself (isSubscriptionActive), to answer read_only instead of throwing',
   'chat-uploads.ts:finishChatUpload':

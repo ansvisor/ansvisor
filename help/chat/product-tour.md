@@ -8,7 +8,7 @@ updated: 2026-11-06
 last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 The product tour shows you Ansvisor's main pages one at a time. Each topic opens its page with Chat in the side panel beside it, where a few short lines explain what the page shows. The tour's text is written ahead, so it uses none of your AI usage. In the free trial, and while you explore the demo brand, Chat Home offers it on its welcome card.

@@ -32,7 +32,6 @@ const menu = (over: Partial<MyMenu> = {}): MyMenu => ({
   hidden: [],
   hiddenByAdmin: [],
   workAreas: [],
-  workAreasAsked: true,
   canManageMenus: false,
   ...over,
 });
@@ -122,6 +121,13 @@ describe('WorkAreasCard', () => {
     expect(section('content').textContent).toContain('Not in your work areas');
     expect(section('insights').textContent).not.toContain('Not in');
     expect(container.textContent).toContain('Your admin took a section off your menu.');
+  });
+
+  it('starts on Everything: no work areas picked since the reset (getMyMenu gives none)', async () => {
+    await render(menu());
+    expect(chip('Everything').getAttribute('aria-pressed')).toBe('true');
+    expect(chip('Brand & PR').getAttribute('aria-pressed')).toBe('false');
+    expect(container.textContent).toContain('12 of 12 sections');
   });
 
   it('saves the areas as they change, in the list’s order', async () => {

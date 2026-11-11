@@ -3,9 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The onboarding wizard reads whether the new Chat is on for the workspace
- * (CHAT_AGENTIC) as the welcome page does, so its work areas show Agent
- * Center only where the menu will; and whether Ads is on (ADS_ENABLED), for
- * the same reason.
+ * (CHAT_AGENTIC), so its dashboard preview shows Agent Center only where the
+ * menu will; and whether Ads is on (ADS_ENABLED), for the same reason.
  */
 
 const db = vi.hoisted(() => ({ organizationId: null as string | null }));
