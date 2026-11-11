@@ -1,11 +1,11 @@
 ---
 title: Prompt Suggestions and Add All
 route: /dashboard/prompts/suggestions
-keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter, product prompts, catalog suggestions, chatgpt business hub, discovery topics]
+keywords: [prompt suggestions, add all, clear all, suggested prompts, source filter, product prompts, catalog suggestions]
 synonyms: [prompt ideas, recommended prompts, new prompt ideas, suggest queries]
 plan: all
-updated: 2026-11-11
-last_checked: 2026-11-11
+updated: 2026-11-09
+last_checked: 2026-11-09
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -15,13 +15,12 @@ sources: [docs/guides/prompts.mdx]
 
 ## Where suggestions come from
 
-Suggestions come from five sources. The sources filter (**All sources**) shows one of them, **From your data** for both Google sources, or **Ansvisor Agents only**:
+Suggestions come from four sources. The sources filter (**All sources**) shows one of them, **From your data** for both Google sources, or **Ansvisor Agents only**:
 
 - **Ansvisor Agents**: written by AI from your brand and tracking data. Each shows an estimated monthly AI volume as a grey range.
 - **Google Search Console**: queries people already search, with their impressions over the last 28 days.
 - **Google Analytics (GA4)**: pages that earn revenue or conversions, or already get AI visits, with that evidence on the row.
 - **Your catalog**: for an online shop with a product catalog, shopping questions about its categories and its top products. The **Shopping** filter lists them.
-- **ChatGPT Business Hub**: prompts from the discovery topics you copy from ChatGPT Business Hub, with a filter of their own.
 
 When Search Console or Analytics is connected, a share of each refresh is drawn from their data.
 
@@ -34,14 +33,6 @@ For an online shop with a product catalog, each refresh adds two kinds of shoppi
 
 Each row names the category or the product it's about; hover **Your catalog** for more. A product one of your prompts already names isn't asked about again.
 
-## Prompts from ChatGPT Business Hub topics
-
-ChatGPT Business Hub shows your business its top discovery topics: what real ChatGPT conversations that cited your site were about. Open Business Hub from ChatGPT and copy them from its Insights.
-
-Then click **From ChatGPT Business Hub** and enter up to five topics. The dialog says how many more prompts your plan can track. Ansvisor writes 2 or 3 prompts for each topic, in your brand's language, and files each under your topic that fits or under the discovery topic. Prompts you already track or that are already suggested are left out.
-
-These suggestions show the **ChatGPT Business Hub** badge. They stay 30 days and aren't replaced by **New**. Tracking one under a discovery topic adds that topic to your topics. Admins and managers can use it; it doesn't count against your AI allowance.
-
 ## A brand without topics
 
 Suggestions are written for a brand's topics. If the brand has none, **Generate Suggestions** and **New** ask you to add a topic first and open **Prompts › Topics**, without using any AI.
@@ -50,7 +41,7 @@ Suggestions are written for a brand's topics. If the brand has none, **Generate 
 
 Use **Search prompts…** to narrow the list, **+** to add a suggestion, **×** to dismiss it and **New** to generate a fresh list. **Clear All** asks first, then dismisses every suggestion listed. Admins and managers can add and generate suggestions; analysts can also dismiss them. Those from Search Console or Analytics stay hidden for 30 days once dismissed.
 
-Suggestions expire after 48 hours. Click **New** for fresh ideas, for example after you change your content. Business Hub suggestions stay 30 days and aren't replaced by **New**.
+Suggestions expire after 48 hours. Click **New** for fresh ideas, for example after you change your content.
 
 A prompt added from suggestions gets its first results with the next daily run.
 
