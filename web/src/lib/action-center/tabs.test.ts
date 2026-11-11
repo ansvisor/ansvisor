@@ -4,6 +4,7 @@ import {
   ACTION_CENTER_TODAY,
   REVIEW_TAB,
   SIMPLE_TABS,
+  agentsWaitingOn,
   simpleTabOf,
 } from './tabs';
 
@@ -57,5 +58,29 @@ describe('simpleTabOf', () => {
     expect(simpleTabOf('/dashboard/agent')).toBeNull();
     expect(simpleTabOf('/dashboard/agentsx')).toBeNull();
     expect(simpleTabOf('/dashboard/insights')).toBeNull();
+  });
+});
+
+describe('agentsWaitingOn', () => {
+  const agent = (status: string, run: string | null) => ({
+    status,
+    lastRun: run ? { status: run } : null,
+  });
+
+  it('counts the agents whose newest run needs the person, as their cards say', () => {
+    expect(
+      agentsWaitingOn([
+        agent('active', 'needs_you'),
+        agent('paused', 'needs_you'),
+        agent('active', 'running'),
+        agent('active', 'succeeded'),
+        agent('draft', null),
+      ]),
+    ).toBe(2);
+  });
+
+  it('leaves archived agents out, and is 0 for none', () => {
+    expect(agentsWaitingOn([agent('archived', 'needs_you')])).toBe(0);
+    expect(agentsWaitingOn([])).toBe(0);
   });
 });
