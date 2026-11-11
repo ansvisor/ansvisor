@@ -10,7 +10,8 @@ import { priorityReasonText } from '@/lib/action-center/priority';
 import { getTodayFocus, skipTodayFocus, type FocusCard } from '@/lib/actions/today-focus';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { AgentWorkGear } from '@/components/action-center/agent-work-gear';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { TodaySection, TodaySkeleton } from './today-parts';
 import { useTodayRead, type TodayVisit } from './use-today';
 
@@ -188,21 +189,20 @@ function FocusRow({
             >
               {t('skip')}
             </button>
-            <Button asChild className="h-10 px-3.5">
-              <Link
-                href={actionHref(card.id)}
-                onClick={() =>
-                  track('today_focus_clicked', {
-                    position,
-                    action_kind: action.kind,
-                    is_new: card.isNew,
-                    who: card.who,
-                  })
-                }
-              >
-                {action.taskCompleted > 0 ? t('continue') : t('start')}
-              </Link>
-            </Button>
+            <Link
+              href={actionHref(card.id)}
+              className={cn(buttonVariants(), 'h-10 px-3.5')}
+              onClick={() =>
+                track('today_focus_clicked', {
+                  position,
+                  action_kind: action.kind,
+                  is_new: card.isNew,
+                  who: card.who,
+                })
+              }
+            >
+              {action.taskCompleted > 0 ? t('continue') : t('start')}
+            </Link>
           </>
         )}
       </div>
