@@ -27,7 +27,14 @@ const toast = vi.hoisted(() =>
   Object.assign(vi.fn(), { error: vi.fn(), warning: vi.fn(), success: vi.fn() }),
 );
 vi.mock('sonner', () => ({ toast }));
-const server = vi.hoisted(() => ({ startDraftFromAction: vi.fn() }));
+const server = vi.hoisted(() => ({
+  startDraftFromAction: vi.fn(),
+  startAgentWriting: vi.fn(),
+  // What the Content Agent's request is built from (agent-write.ts).
+  getDraftSources: vi.fn(async () => null),
+  getMyRuleSets: vi.fn(async () => ({})),
+  getCitedPassages: vi.fn(async () => null),
+}));
 vi.mock('@/lib/actions/content-drafts', () => server);
 const chat = vi.hoisted(() => ({ runChatOnAction: vi.fn() }));
 vi.mock('@/components/chat/agents/agent-requests', () => chat);
@@ -111,6 +118,52 @@ describe('StartNowBlock', () => {
       linkLabels: { name: 'Links to add on this page', linkTo: 'Link to', anchor: 'Link text' },
     });
     expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new?brief=build');
+  });
+
+  it('has the Content Agent write a new draft’s brief and page, as Write this, and opens it', async () => {
+    server.startDraftFromAction.mockResolvedValueOnce({
+      draftId: 'd-new',
+      created: true,
+      importFailed: false,
+      draft: {
+        method: 'create',
+        title: 'Is a coffee subscription worth it?',
+        pageType: 'buying_guide',
+        sourceUrl: null,
+        bodyHtml: '<h1>Is a coffee subscription worth it?</h1>',
+        rules: { set: null, source: null, overrides: {}, textRules: [] },
+      },
+    });
+    server.startAgentWriting.mockResolvedValueOnce({ started: true });
+    await render();
+    await click(button(/^Content Editor$/));
+    expect(server.startAgentWriting).toHaveBeenCalledWith(
+      'd-new',
+      BRAND,
+      expect.objectContaining({ buildBrief: true }),
+    );
+    // The agent builds the brief: the editor doesn't build it again.
+    expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
+
+    // The agent didn't start: the draft opens all the same, and says why.
+    push.mockClear();
+    server.startDraftFromAction.mockResolvedValueOnce({
+      draftId: 'd-new',
+      created: true,
+      importFailed: false,
+      draft: {
+        method: 'create',
+        title: 'x',
+        pageType: 'blog_post',
+        sourceUrl: null,
+        bodyHtml: '<h1>x</h1>',
+        rules: { set: null, source: null, overrides: {}, textRules: [] },
+      },
+    });
+    server.startAgentWriting.mockResolvedValueOnce({ error: 'ai_budget' });
+    await click(button(/^Content Editor$/));
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('AI usage is spent'));
+    expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
   });
 
   it("opens one draft per page, then the Library on the action's drafts", async () => {

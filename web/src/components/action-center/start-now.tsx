@@ -11,7 +11,13 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useUserRole } from '@/hooks/use-user-role';
-import { startDraftFromAction } from '@/lib/actions/content-drafts';
+import {
+  startAgentWriting,
+  startDraftFromAction,
+  type ActionStartedDraft,
+  type AgentWriteError,
+} from '@/lib/actions/content-drafts';
+import { agentWriteRequest, useRuleDescriber, type RuleDescriber } from '@/lib/content/agent-write';
 import {
   findActionDraft,
   startNowDrafts,
@@ -21,6 +27,7 @@ import {
 } from '@/lib/content/action-drafts';
 import { actionLibraryPath, contentEditorPath, startedDraftPath } from '@/lib/content/drafts';
 import { pagePath } from '@/lib/content/overlap';
+import { useBrandStore } from '@/stores/use-brand-store';
 import { useShowChat } from './use-show-chat';
 
 /** The action Start now works on: its id, number and title as the page names it. */
@@ -31,17 +38,46 @@ export interface StartNowAction {
 }
 
 /**
+ * Write this's job on a draft Start now just wrote (content-writer.js
+ * briefThenWrite): the Content Agent builds the brief from the draft's
+ * prompts, fan-outs and cited pages, then writes the new page (or leaves
+ * suggestions on the live one) while the editor shows it at work. The same
+ * request and the same API route as Content › Opportunities' Write this, so
+ * the same AI usage and plan rules apply.
+ */
+async function writeStartedDraft(
+  id: string,
+  brandId: string,
+  draft: ActionStartedDraft,
+  describe: RuleDescriber,
+  language: string | null | undefined,
+): Promise<{ started: true } | { error: AgentWriteError }> {
+  try {
+    const request = await agentWriteRequest({ id, brandId, ...draft, language }, describe);
+    return await startAgentWriting(id, brandId, { ...request, buildBrief: true });
+  } catch (err) {
+    console.error("Failed to hand Start now's draft to the Content Agent:", err);
+    return { error: 'failed' };
+  }
+}
+
+/**
  * Start now in the Content Editor (AC-ACTION-PLAN spec §10): the draft for
  * the action's writing work, one per page of a multi-page play, each
- * written by startDraftFromAction with the action's prompts, page, page
- * type and locked products. One draft opens in the editor, its brief built
- * as it opens (a new one); several open the Library on the action's drafts.
- * A draft already written opens as it is. The drawer's Start now and the
- * Actions list's row menu both start here.
+ * written by startDraftFromAction with a page's title, the action's
+ * prompts, page, page type and locked products. One new draft has the
+ * Content Agent write its brief and page (Write this's job) and opens in
+ * the editor as it writes; a page that couldn't be read opens with its
+ * brief built as it opens, as before. Several open the Library on the
+ * action's drafts. A draft already written opens as it is. The drawer's
+ * Start now and the Actions list's row menu both start here.
  */
 export function useStartNow(brandId: string) {
   const t = useTranslations('actionCenter.actionsPage.startNow');
+  const tAgent = useTranslations('contentEditor.newContent.start.agentErrors');
   const router = useRouter();
+  const describeRule = useRuleDescriber();
+  const language = useBrandStore((s) => s.brands.find((b) => b.id === brandId)?.language);
   const [busy, setBusy] = useState(false);
 
   const start = useCallback(
@@ -50,7 +86,7 @@ export function useStartNow(brandId: string) {
       setBusy(true);
       try {
         const pages = startNowPages(work);
-        const written: { draftId: string; created: boolean }[] = [];
+        const written: { draftId: string; created: boolean; draft?: ActionStartedDraft }[] = [];
         let unread = false;
         for (const page of pages) {
           const had = findActionDraft(drafts, work.method, page);
@@ -75,11 +111,31 @@ export function useStartNow(brandId: string) {
             return;
           }
           if (result.importFailed) unread = true;
-          written.push({ draftId: result.draftId, created: result.created });
+          written.push({
+            draftId: result.draftId,
+            created: result.created,
+            // A page that couldn't be read has nothing to suggest changes to, as in Write this.
+            draft: result.importFailed ? undefined : result.draft,
+          });
         }
         if (unread) toast.warning(t('pageNotRead'));
         if (pages.length === 1 && written.length === 1) {
           const [only] = written;
+          if (only.created && only.draft) {
+            const started = await writeStartedDraft(
+              only.draftId,
+              brandId,
+              only.draft,
+              describeRule,
+              language,
+            );
+            // The draft opens either way, with its title to write from.
+            if ('error' in started) {
+              toast.error(tAgent(tAgent.has(started.error) ? started.error : 'failed'));
+            }
+            router.push(contentEditorPath(only.draftId));
+            return;
+          }
           router.push(
             only.created ? startedDraftPath(only.draftId) : contentEditorPath(only.draftId),
           );
@@ -91,7 +147,7 @@ export function useStartNow(brandId: string) {
         setBusy(false);
       }
     },
-    [brandId, busy, router, t],
+    [brandId, busy, describeRule, language, router, t, tAgent],
   );
 
   return { busy, start };
