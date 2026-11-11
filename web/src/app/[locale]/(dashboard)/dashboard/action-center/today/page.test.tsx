@@ -449,12 +449,17 @@ describe('Action Center › Today', () => {
     expect(reads.getTodayFocus).toHaveBeenCalledWith('b1', '2026-11-10T08:00:00.000Z');
     expect(reads.markSeen).toHaveBeenCalledWith('b1', 'today');
     expect(reads.getTodayChanges).toHaveBeenCalledWith('b1', '2026-11-10T08:00:00.000Z', []);
-    expect(track).toHaveBeenCalledWith('today_viewed', {
-      state: 'normal',
-      since_count: 3,
-      focus_count: 3,
-      waiting_count: 5,
-    });
+    // setup_done comes along when Finish setting up has read by then.
+    expect(track).toHaveBeenCalledWith(
+      'today_viewed',
+      expect.objectContaining({
+        state: 'normal',
+        since_count: 3,
+        focus_count: 3,
+        waiting_count: 5,
+      }),
+    );
+    expect(track).toHaveBeenCalledTimes(1);
   });
 
   it('skips a card for the person and reads the focus again', async () => {
