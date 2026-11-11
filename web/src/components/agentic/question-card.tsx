@@ -2,8 +2,9 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { Check, Loader2, MessageCircleQuestion } from 'lucide-react';
+import { CalendarRange, Check, Loader2, MessageCircleQuestion } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CustomRangeFields } from '@/components/chat/range/range-picker';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { ANSWER_MAX } from '@/lib/chat/asks';
 import type { ChatAsk } from '@/lib/chat/events';
@@ -18,10 +19,160 @@ export interface QuestionAnswerValue {
   skipped: boolean;
 }
 
+interface QuestionCardProps {
+  ask: ChatAsk;
+  status?: 'pending' | 'saving' | 'error';
+  error?: string;
+  onAnswer: (answer: QuestionAnswerValue) => void;
+}
+
 /**
- * The question card (CHAT-07 §A): the question, with its place in a batch
- * ("1 of 2"), and 2–4 options, each with its key, label, detail and cost
- * multiplier, the Recommended one marked and picked to start with; an
+ * The question card (CHAT-07 §A): the model's questions and the engine's
+ * own (ChoiceQuestionCard), or the engine's range card (RangeQuestionCard).
+ */
+export function QuestionCard(props: QuestionCardProps) {
+  return props.ask.dateRange ? <RangeQuestionCard {...props} /> : <ChoiceQuestionCard {...props} />;
+}
+
+/**
+ * The range card (the engine's own question, owner request 2026-11-11):
+ * "Which time range should I use?" with a button per range, each one click,
+ * no Next: the page's own range first in the side panel, then Last 24 hours,
+ * Last 7 days, Last 30 days and Last 90 days, and Custom, which opens two
+ * days and "Use these dates" (sent as Other, "YYYY-MM-DD/YYYY-MM-DD").
+ * Number keys pick a range, the last one opens Custom. Skip goes on with
+ * the Recommended range for this answer only. Through the read-only gate,
+ * as every answer.
+ */
+function RangeQuestionCard({ ask, status = 'pending', error, onAnswer }: QuestionCardProps) {
+  const t = useTranslations('agentic.questionCard');
+  const tr = useTranslations('chatRange');
+  const { guard } = useUpgradeGate();
+  const titleId = useId();
+  const card = useRef<HTMLElement>(null);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [clicked, setClicked] = useState<number | 'custom' | null>(null);
+  const busy = status === 'saving';
+  const rows = ask.options.length + 1;
+
+  useEffect(() => {
+    if (document.activeElement?.closest('input, textarea, [contenteditable="true"]')) return;
+    card.current?.focus({ preventScroll: true });
+  }, [ask.n]);
+
+  const answer = guard((value: QuestionAnswerValue) => onAnswer(value), {
+    action: t('answerNeedsPlan'),
+  });
+  const pick = (i: number) => {
+    if (busy) return;
+    setClicked(i);
+    answer({ selected: [i], other: null, skipped: false });
+  };
+
+  const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest('input, textarea, [contenteditable="true"]')) return;
+    const n = Number.parseInt(event.key, 10);
+    if (!Number.isInteger(n) || n < 1 || n > rows) return;
+    event.preventDefault();
+    if (n <= ask.options.length) pick(n - 1);
+    else setCustomOpen(true);
+  };
+
+  return (
+    <AgentCard
+      ref={card}
+      tone="needsYou"
+      tabIndex={-1}
+      aria-labelledby={titleId}
+      data-slot="question-card"
+      data-kind="range"
+      onKeyDown={onKeyDown}
+      className="outline-none"
+    >
+      <AgentCardHeader
+        titleId={titleId}
+        lead={
+          <CalendarRange
+            aria-hidden
+            className="size-4 shrink-0 text-amber-600 dark:text-amber-400"
+          />
+        }
+        title={ask.question}
+        end={ask.batch ? <CardPill>{t('counter', ask.batch)}</CardPill> : undefined}
+      />
+      <AgentCardBody className="pt-2.5">
+        {ask.then && <p className="mt-0 mb-2 text-[13px] text-muted-foreground">{ask.then}</p>}
+        <div role="group" aria-labelledby={titleId} className="flex flex-wrap gap-1.5">
+          {ask.options.map((option, i) => (
+            <Button
+              key={`${i}-${option.label}`}
+              type="button"
+              variant="outline"
+              size="sm"
+              data-action="question.pickRange"
+              disabled={busy}
+              aria-busy={(busy && clicked === i) || undefined}
+              onClick={() => pick(i)}
+              className="h-auto min-h-8 py-1 whitespace-normal"
+            >
+              {busy && clicked === i && (
+                <Loader2 aria-hidden className="animate-spin motion-reduce:animate-none" />
+              )}
+              {option.label}
+            </Button>
+          ))}
+          {ask.allowOther && (
+            <Button
+              type="button"
+              variant={customOpen ? 'secondary' : 'outline'}
+              size="sm"
+              data-action="question.customRange"
+              disabled={busy}
+              aria-expanded={customOpen}
+              onClick={() => setCustomOpen((open) => !open)}
+              className="h-auto min-h-8 py-1"
+            >
+              {tr('customButton')}
+            </Button>
+          )}
+        </div>
+        {ask.allowOther && customOpen && (
+          <CustomRangeFields
+            busy={busy}
+            action="question.useDates"
+            className="mt-2.5"
+            onUse={(range) => {
+              setClicked('custom');
+              answer({ selected: [], other: range, skipped: false });
+            }}
+          />
+        )}
+        {status === 'error' && error && (
+          <p role="alert" className="mt-2 mb-0 text-[12.5px] text-red-700 dark:text-red-300">
+            {error}
+          </p>
+        )}
+      </AgentCardBody>
+      <AgentCardFooter note={tr('pressToPick', { max: rows })}>
+        <Button
+          type="button"
+          variant="link"
+          data-action="question.skip"
+          disabled={busy}
+          onClick={() => answer({ selected: [], other: null, skipped: true })}
+          className="text-muted-foreground"
+        >
+          {t('skip')}
+        </Button>
+      </AgentCardFooter>
+    </AgentCard>
+  );
+}
+
+/**
+ * A question with options (CHAT-07 §A): the question, with its place in a
+ * batch ("1 of 2"), and 2–4 options, each with its key, label, detail and
+ * cost multiplier, the Recommended one marked and picked to start with; an
  * Other… row with Add when the card offers it, whose text counts without
  * Add. One option, or several when `multi`: each row then has a check box,
  * and the footer says "Pick one or more" (the mockup's words). Number keys
@@ -32,17 +183,7 @@ export interface QuestionAnswerValue {
  * go through the read-only gate. Built on the approval card's parts
  * (`#s-need`).
  */
-export function QuestionCard({
-  ask,
-  status = 'pending',
-  error,
-  onAnswer,
-}: {
-  ask: ChatAsk;
-  status?: 'pending' | 'saving' | 'error';
-  error?: string;
-  onAnswer: (answer: QuestionAnswerValue) => void;
-}) {
+function ChoiceQuestionCard({ ask, status = 'pending', error, onAnswer }: QuestionCardProps) {
   const t = useTranslations('agentic.questionCard');
   const { guard } = useUpgradeGate();
   const titleId = useId();

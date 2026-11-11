@@ -219,6 +219,8 @@ function seed() {
     chat_run_events: [],
     chat_asks: [],
     chat_next_moves: [],
+    // Each person picked Chat's date range already (00528): the scenarios read, they don't ask it.
+    chat_user_prefs: Object.values(ACTOR).map((id) => ({ user_id: id, date_range: '30d' })),
   });
   let clock = Date.parse('2026-11-02T09:00:00.000Z');
   const at = () => new Date((clock += 1000)).toISOString();

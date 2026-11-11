@@ -4,19 +4,22 @@ import { platformFamily, platformName } from '@/lib/signals/names';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { Json } from '@/types/supabase';
 import { oldestFirst } from './fit';
+import { FALLBACK_RANGE, rangeDaysBack, rangeWindow, type ChatRange } from './range';
 import type { ChatTool } from './registry/define-tool';
 
 /**
  * Chat's scope decisions, in one place (CHAT-04 items 2–4, Rule 1; CHAT-20
  * §7 "Platforms by plan"): which dates, platforms and how many rows a read
  * covers. The server sets them, not the model: a read with no dates gets the
- * last 30 days unless the person asked for all time, a plan that tracks some
- * platforms reads only those, and every list stops at its row limit and says
- * it was cut (`truncated`). The engine scopes each read here before it runs
- * (scopeRead) and cuts its rows after (capRows). Server only.
+ * person's date range (range.ts: their default, or one their message named),
+ * or the app's last 30 days, unless the person asked for all time; a plan
+ * that tracks some platforms reads only those, and every list stops at its
+ * row limit and says it was cut (`truncated`). The engine scopes each read
+ * here before it runs (scopeRead) and cuts its rows after (capRows). Server
+ * only.
  */
 
-/** A read with no dates covers this many days back (CHAT-04 item 2). */
+/** A read with no dates and no range set covers the app's last this many days (CHAT-04 item 2). */
 export const DEFAULT_RANGE_DAYS = 30;
 
 /** No list a model reads is longer than this (CHAT-04 Rule 1: "at most ~50 rows"). */
@@ -104,28 +107,50 @@ interface DatesUsed {
   dateTo: string | null;
   dates: DateChoice;
   days?: number;
+  /** The range a read with no dates took (range.ts): the person's, or the app's 30 days. */
+  range?: ChatRange;
+}
+
+/** Whether a read's input gives its own period: dates, or days back. */
+export function givesDates(input: Record<string, unknown>): boolean {
+  const named = (value: unknown) => typeof value === 'string' && value.trim() !== '';
+  return named(input.date_from) || named(input.date_to) || typeof input.days === 'number';
+}
+
+/** Whether a read covers a period: it takes dates or days back. */
+export function takesDates(tool: Pick<ChatTool, 'inputSchema'>): boolean {
+  return hasField(tool, 'date_from') || hasField(tool, 'date_to') || hasField(tool, 'days');
 }
 
 /**
  * A read's dates: the model's when it gave valid ones (a missing end is
  * today, a missing start the default window before the end, the end never
- * past today); none when the person asked for all time; else the last
- * DEFAULT_RANGE_DAYS.
+ * past today); none when the person asked for all time; else `range`'s
+ * window, as the app's pages cut it (range.ts rangeWindow): the person's
+ * range, or the app's last 30 days.
  */
 export function resolveDates(
   from: unknown,
   to: unknown,
   allTime: boolean,
   now: Date,
-): Pick<DatesUsed, 'dateFrom' | 'dateTo' | 'dates'> & { values: Record<string, string> } {
+  range: ChatRange = FALLBACK_RANGE,
+): Pick<DatesUsed, 'dateFrom' | 'dateTo' | 'dates' | 'range'> & {
+  values: Record<string, string>;
+} {
   const today = now.getTime();
   let start = parseDate(from);
   let end = parseDate(to);
   if (start === null && end === null) {
     if (allTime) return { dateFrom: null, dateTo: null, dates: 'all_time', values: {} };
-    const dateFrom = dayOf(today - DEFAULT_RANGE_DAYS * DAY_MS);
-    const dateTo = dayOf(today);
-    return { dateFrom, dateTo, dates: 'default', values: { date_from: dateFrom, date_to: dateTo } };
+    const { dateFrom, dateTo } = rangeWindow(range, now);
+    return {
+      dateFrom,
+      dateTo,
+      dates: 'default',
+      range,
+      values: { date_from: dateFrom, date_to: dateTo },
+    };
   }
   // The model's own strings where they stand, so a timestamp keeps its time.
   let fromText = start === null ? null : (from as string);
@@ -238,6 +263,12 @@ export interface NotOnPlan {
 export interface ScopeFacts {
   /** The person's question: an all-time ask lifts the default window. */
   question: string | null | undefined;
+  /**
+   * The range a read with no dates covers (range.ts): the person's default,
+   * or one their message named. Null or left out: none is set, and the app's
+   * last 30 days are read (Google's reads keep their pages' 28).
+   */
+  range?: ChatRange | null;
   /** The plan's platform limits; null when they couldn't be read. */
   limits: PlatformLimits | null;
   planName: string;
@@ -266,8 +297,9 @@ export interface RowCap {
   probe: number | null;
 }
 
-const hasField = (tool: Pick<ChatTool, 'inputSchema'>, field: string) =>
-  field in (tool.inputSchema.shape as Record<string, unknown>);
+function hasField(tool: Pick<ChatTool, 'inputSchema'>, field: string): boolean {
+  return field in (tool.inputSchema.shape as Record<string, unknown>);
+}
 
 /** Whether the tool's input takes these values (its schema's own limits). */
 const accepts = (tool: Pick<ChatTool, 'inputSchema'>, input: Record<string, unknown>) =>
@@ -328,16 +360,35 @@ export async function scopeRead(
   // Dates.
   let dates: DatesUsed = { dateFrom: null, dateTo: null, dates: 'none' };
   if (hasField(tool, 'date_from') || hasField(tool, 'date_to')) {
-    const resolved = resolveDates(input.date_from, input.date_to, allTime, now);
+    const resolved = resolveDates(
+      input.date_from,
+      input.date_to,
+      allTime,
+      now,
+      facts.range ?? FALLBACK_RANGE,
+    );
     delete input.date_from;
     delete input.date_to;
     for (const [key, value] of Object.entries(resolved.values)) {
       if (hasField(tool, key)) input[key] = value;
     }
-    dates = { dateFrom: resolved.dateFrom, dateTo: resolved.dateTo, dates: resolved.dates };
+    dates = {
+      dateFrom: resolved.dateFrom,
+      dateTo: resolved.dateTo,
+      dates: resolved.dates,
+      ...(resolved.range ? { range: resolved.range } : {}),
+    };
   } else if (hasField(tool, 'days')) {
     const asked = typeof input.days === 'number' ? input.days : null;
-    const days = asked ?? (allTime ? DAYS_MAX : (DAYS_DEFAULTS[tool.name] ?? DEFAULT_RANGE_DAYS));
+    // The person's range in days back; none set, the page's own default for the read.
+    const range = asked === null && !allTime ? (facts.range ?? null) : null;
+    const days =
+      asked ??
+      (allTime
+        ? DAYS_MAX
+        : range
+          ? rangeDaysBack(range, now, DAYS_MAX)
+          : (DAYS_DEFAULTS[tool.name] ?? DEFAULT_RANGE_DAYS));
     const fits = accepts(tool, { ...input, days }) ? days : DEFAULT_RANGE_DAYS;
     input.days = fits;
     dates = {
@@ -345,6 +396,7 @@ export async function scopeRead(
       dateTo: dayOf(now.getTime()),
       dates: asked === null && allTime ? 'all_time' : 'days',
       days: fits,
+      ...(range && fits === days ? { range } : {}),
     };
   }
 

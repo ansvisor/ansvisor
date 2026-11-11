@@ -45,6 +45,16 @@ import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { NewPill } from '@/components/agentic/new-pill';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { menuSectionOf } from '@/lib/menu-access';
+import { ACTION_CENTER_ITEM, NEW_RESULTS_ITEM } from '@/lib/menu-dots';
+import {
+  FoldedGroupLabel,
+  ICON_DOT,
+  MenuDot,
+  NewResultsWords,
+  OpenActionsCount,
+  useDotLabel,
+  useMenuDots,
+} from '@/components/layout/menu-dots';
 import {
   ChevronDown,
   ChevronsLeft,
@@ -225,6 +235,9 @@ export function Sidebar() {
       ),
     }))
     .filter((group) => group.items.length > 0);
+  // The simplified menu's dots and Action Center count (SIMPLE_NAV); off, none.
+  const dots = useMenuDots(nav, compact);
+  const dotLabel = useDotLabel();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Hydration guard: SSR can't know the resolved theme, so we render the
@@ -481,7 +494,11 @@ export function Sidebar() {
                   onClick={() => setGroupOpen(group.title!, !isGroupOpen(group.title!))}
                   className="mb-1 flex w-full items-center justify-between rounded-md px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
-                  {getDashboardNavGroupLabel(group.title, t)}
+                  {/* Folded, its items' dot beside it. */}
+                  <FoldedGroupLabel
+                    label={getDashboardNavGroupLabel(group.title, t)}
+                    dot={isGroupOpen(group.title) ? null : dots.groupDot(group)}
+                  />
                   <ChevronDown
                     aria-hidden
                     className={cn(
@@ -512,6 +529,8 @@ export function Sidebar() {
 
                     const isLocked =
                       isCloud && item.requiredFeature != null && !canUse(item.requiredFeature);
+                    // Its dot (a locked item has none): its own, or its submenu's strongest.
+                    const dot = dots.itemDot(item);
 
                     if (isLocked) {
                       return (
@@ -557,6 +576,14 @@ export function Sidebar() {
                       const submenuId = `submenu-${item.href.replace(/\W+/g, '-')}`;
                       const submenuOpen = isSubmenuOpen(item.href);
                       const currentChild = activeChildHref(children, pathname);
+                      // Closed, its icon carries its entries' dot. Visibility
+                      // says "New results" in words too, its dot by its name
+                      // while open.
+                      const words = dot?.colour === 'green' && item.href === NEW_RESULTS_ITEM;
+                      const iconDot = submenuOpen ? null : dot;
+                      const nameDot = submenuOpen && words ? dot : null;
+                      const openActions =
+                        item.href === ACTION_CENTER_ITEM ? dots.openActions : null;
                       return (
                         <div key={item.href}>
                           <button
@@ -571,10 +598,19 @@ export function Sidebar() {
                               isActive
                                 ? 'text-primary'
                                 : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                              iconDot && 'relative',
                             )}
                           >
                             <item.icon className="h-4 w-4 shrink-0" />
-                            <span className="flex-1 truncate">{label}</span>
+                            <span className={nameDot ? 'truncate' : 'flex-1 truncate'}>
+                              {label}
+                            </span>
+                            {nameDot && <MenuDot colour={nameDot.colour} className="mr-auto" />}
+                            {iconDot && (
+                              <MenuDot colour={iconDot.colour} className={cn(ICON_DOT, 'left-5')} />
+                            )}
+                            {words && <NewResultsWords />}
+                            {openActions !== null && <OpenActionsCount count={openActions} />}
                             {effectiveBadge && (
                               <Badge
                                 variant="secondary"
@@ -597,6 +633,20 @@ export function Sidebar() {
                             >
                               {children.map((child) => {
                                 const childActive = child.href === currentChild;
+                                const childDot = dots.dotOf(child.href);
+                                const childName = (
+                                  <>
+                                    <span className={childDot ? 'truncate' : 'flex-1 truncate'}>
+                                      {getDashboardNavLabel(child.title, t)}
+                                    </span>
+                                    {childDot && (
+                                      <MenuDot colour={childDot.colour} className="mr-auto" />
+                                    )}
+                                  </>
+                                );
+                                const onDotClick = childDot
+                                  ? () => dots.clicked(childDot, false)
+                                  : undefined;
                                 const childClass = cn(
                                   'flex items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                                   childActive
@@ -614,10 +664,9 @@ export function Sidebar() {
                                         data-nav-item="child"
                                         aria-current={childActive ? 'page' : undefined}
                                         className={childClass}
+                                        onClick={onDotClick}
                                       >
-                                        <span className="flex-1 truncate">
-                                          {getDashboardNavLabel(child.title, t)}
-                                        </span>
+                                        {childName}
                                       </BrandVisibilityTabLink>
                                     </li>
                                   );
@@ -629,10 +678,9 @@ export function Sidebar() {
                                       data-nav-item="child"
                                       aria-current={childActive ? 'page' : undefined}
                                       className={childClass}
+                                      onClick={onDotClick}
                                     >
-                                      <span className="flex-1 truncate">
-                                        {getDashboardNavLabel(child.title, t)}
-                                      </span>
+                                      {childName}
                                       {child.badge && (
                                         <Badge
                                           variant="secondary"
@@ -661,12 +709,16 @@ export function Sidebar() {
                       children.length > 0 && ownSection && hiddenSections.has(ownSection)
                         ? children[0].href
                         : href;
+                    // Icons only, the item's name says its dot ("Visibility, New results").
+                    const iconName = compact && dot ? dotLabel(dot.colour, label) : undefined;
                     return (
                       <Link
                         key={item.href}
                         href={linkHref}
                         data-nav-item="link"
                         aria-current={isActive ? 'page' : undefined}
+                        aria-label={iconName}
+                        onClick={dot ? () => dots.clicked(dot, compact) : undefined}
                       >
                         <span
                           className={cn(
@@ -675,19 +727,25 @@ export function Sidebar() {
                               ? 'bg-primary/10 text-primary'
                               : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                             compact && 'justify-center',
+                            iconName && 'relative',
                           )}
                           title={
-                            compact
+                            iconName ??
+                            (compact
                               ? effectiveBadge
                                 ? `${label} (${effectiveBadge})`
                                 : label
-                              : undefined
+                              : undefined)
                           }
                         >
                           <item.icon className="h-4 w-4 shrink-0" />
+                          {iconName && dot && (
+                            <MenuDot colour={dot.colour} className={cn(ICON_DOT, 'left-7')} />
+                          )}
                           {!compact && (
                             <>
-                              <span className="flex-1 truncate">{label}</span>
+                              <span className={dot ? 'truncate' : 'flex-1 truncate'}>{label}</span>
+                              {dot && <MenuDot colour={dot.colour} className="mr-auto" />}
                               {effectiveBadge && (
                                 <Badge
                                   variant="secondary"

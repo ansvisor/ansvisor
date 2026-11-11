@@ -62754,6 +62754,70 @@ comment on column public.prompt_suggestions.source is
 notify pgrst, 'reload schema';
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00528_chat_date_range.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00528: Chat's date range — the person's default, and the card that asks it
+-- ============================================================================
+-- Owner request 2026-11-11: before the first analysis that reads data, Chat
+-- asks which time range to use (Last 24 hours, Last 7 days, Last 30 days,
+-- Last 90 days, or two days picked), and keeps the answer as the person's
+-- default from then on: in the main Chat and in the side panel alike, for
+-- every brand. A short message ("last 7d", "son 7d") changes it, and so does
+-- Chat Settings or the line under the message box.
+--
+--   * chat_user_prefs.date_range: the person's default range, as the app's
+--     date control names its presets ('24h', '7d', '30d', '90d'), or two
+--     days, first and last ('2026-10-01/2026-10-15'). Null: not picked yet,
+--     so Chat asks on the next analysis that reads data. The person reads
+--     and writes their own row (00400's policies and table grants cover the
+--     new column); the engine writes it with the service role when the
+--     person answers its card or sends a short range.
+--   * chat_ask_options_valid: a question card may have 2–5 options, one
+--     more than before. The range card offers the page's own range first
+--     when the side panel is open on a page with a custom range, then the
+--     four presets. The model's questions are still held to 4 by the server
+--     (asks.ts askToolInput); the rest of the rule is 00417's.
+
+alter table public.chat_user_prefs
+  add column if not exists date_range text check (
+    date_range ~ '^(24h|7d|30d|90d|[0-9]{4}-[0-9]{2}-[0-9]{2}/[0-9]{4}-[0-9]{2}-[0-9]{2})$'
+    and (
+      position('/' in date_range) = 0
+      or split_part(date_range, '/', 1) <= split_part(date_range, '/', 2)
+    )
+  );
+
+comment on column public.chat_user_prefs.date_range is
+  'Chat''s date range (00528): the period a read covers when the person names none, as a preset (24h, 7d, 30d, 90d) or two days (YYYY-MM-DD/YYYY-MM-DD). Null: Chat asks before the next analysis that reads data.';
+
+-- Whether a question's options are 2–5 rows, each with a label, exactly one
+-- of them Recommended (CHAT-07 Data notes; 5 for the range card, 00528).
+create or replace function public.chat_ask_options_valid(p_options jsonb)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $$
+  select case
+    when jsonb_typeof(p_options) <> 'array' then false
+    when jsonb_array_length(p_options) not between 2 and 5 then false
+    else coalesce(
+      (
+        select bool_and(
+            jsonb_typeof(o) = 'object'
+            and jsonb_typeof(o -> 'label') = 'string'
+            and char_length(o ->> 'label') between 1 and 120
+          )
+          and count(*) filter (where o -> 'recommended' = 'true'::jsonb) = 1
+        from jsonb_array_elements(p_options) as t(o)
+      ),
+      false
+    )
+  end;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- migrations/00529_user_brand_state.sql
 -- ─────────────────────────────────────────────────────────────────────────
 -- ============================================================================
@@ -62886,6 +62950,130 @@ comment on column public.user_brand_state.focus is
   'Today''s focus as the person keeps it: at most 3 [{"id": "<action id>", "added_at": "<ISO time>"}].';
 comment on column public.user_brand_state.hidden is
   'Cards the person hid or snoozed: {"<key>": "<ISO time>"} until then, or null for good. Keys: setup, prompts_check, topic:<key>, skip:<action id>.';
+
+notify pgrst, 'reload schema';
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- migrations/00535_prompts_waiting_for_spot.sql
+-- ─────────────────────────────────────────────────────────────────────────
+-- ============================================================================
+-- 00535: a prompt can wait for a spot (Simplify PR 14)
+-- ============================================================================
+-- When the plan's prompt locations are all used, a prompt someone adds will
+-- be kept as "Waiting for a spot" instead of being refused (Simplify PRs 15
+-- and 16). This migration only adds the state; nothing saves a prompt
+-- waiting yet.
+--
+--   * prompts.waiting_since: when the prompt started waiting; null when it
+--     isn't waiting. A waiting prompt is never active (the check below), so
+--     it is already not tracked (the tracking worker reads active prompts
+--     only) and not counted against the plan (org_prompt_location_usage
+--     counts active prompts only, 00128 and 00390). A paused prompt stays
+--     inactive with no waiting_since. prompts.work_status (00031) is a
+--     workflow field and isn't reused.
+--   * A waiting prompt doesn't start by itself when a spot frees up (the
+--     owner's call, 2026-11-11): the person picks it. Whatever makes it
+--     active clears waiting_since in the same write, or the check refuses
+--     the write.
+--   * import_prompts (00122) takes p_over_limit: 'skip' (the default, as
+--     before: the rows past the limit aren't saved) or 'wait' (they are
+--     saved waiting). It says which saved rows wait.
+
+alter table public.prompts
+  add column if not exists waiting_since timestamptz;
+
+alter table public.prompts drop constraint if exists prompts_waiting_not_active_check;
+alter table public.prompts add constraint prompts_waiting_not_active_check
+  check (waiting_since is null or not is_active);
+
+-- The prompts waiting for a spot, per prompt set: the Tracked Prompts filter
+-- and banner, Today's row and the menu dot (PRs 13 and 16).
+create index if not exists idx_prompts_waiting
+  on public.prompts (prompt_set_id)
+  where waiting_since is not null;
+
+comment on column public.prompts.waiting_since is
+  'When the prompt started waiting for a spot on the plan (00535); null when it isn''t waiting. A waiting prompt is never active (prompts_waiting_not_active_check), so it isn''t tracked or counted against the plan, and it doesn''t start by itself when a spot frees up.';
+
+-- ── import_prompts: rows past the limit can wait ────────────────────────────
+-- As 00122, plus p_over_limit. The rows are taken in the order given; once
+-- one doesn't fit, it and every row after it are past the limit: skipped
+-- with 'skip' (the default, so the callers before this behave as before),
+-- or saved waiting with 'wait' (is_active false, waiting_since now). Waiting
+-- rows take no room, so a second import still counts only what is tracked.
+-- SECURITY INVOKER: prompts keeps its admin/manager insert policy through the
+-- prompt set's brand, so RLS still decides whether the caller may write.
+
+drop function if exists public.import_prompts(uuid, uuid, integer, jsonb);
+
+create or replace function public.import_prompts(
+  p_prompt_set_id uuid,
+  p_organization_id uuid,
+  p_max_locations integer,
+  p_rows jsonb,
+  p_over_limit text default 'skip'
+)
+returns table (idx integer, id uuid, waiting boolean)
+language plpgsql
+volatile
+security invoker
+set search_path = ''
+as $$
+declare
+  v_used bigint;
+  v_row jsonb;
+  v_regions text[];
+  v_cost integer;
+  v_id uuid;
+  v_over boolean := false;
+begin
+  if p_over_limit is null or p_over_limit not in ('skip', 'wait') then
+    raise exception 'p_over_limit must be skip or wait' using errcode = '22023';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('import_prompts:' || p_organization_id::text, 0));
+
+  select coalesce(sum(u.locations), 0) into v_used
+  from public.org_prompt_location_usage(p_organization_id) u;
+
+  for v_row in select value from jsonb_array_elements(p_rows) loop
+    v_regions := array(select jsonb_array_elements_text(v_row -> 'regions'));
+    -- Same unit as org_prompt_location_usage: one per region, minimum one.
+    v_cost := greatest(coalesce(array_length(v_regions, 1), 0), 1);
+    v_over := v_over or (p_max_locations <> -1 and v_used + v_cost > p_max_locations);
+    exit when v_over and p_over_limit = 'skip';
+
+    insert into public.prompts
+      (prompt_set_id, text, category, topic_id, platforms, models, regions, is_active, waiting_since)
+    values (
+      p_prompt_set_id,
+      v_row ->> 'text',
+      nullif(v_row ->> 'category', ''),
+      nullif(v_row ->> 'topic_id', '')::uuid,
+      array(select jsonb_array_elements_text(v_row -> 'platforms')),
+      array(select jsonb_array_elements_text(v_row -> 'models')),
+      v_regions,
+      not v_over,
+      case when v_over then now() end
+    )
+    returning prompts.id into v_id;
+
+    if not v_over then
+      v_used := v_used + v_cost;
+    end if;
+    idx := (v_row ->> 'idx')::integer;
+    id := v_id;
+    waiting := v_over;
+    return next;
+  end loop;
+end;
+$$;
+
+revoke all on function public.import_prompts(uuid, uuid, integer, jsonb, text) from public, anon;
+grant execute on function public.import_prompts(uuid, uuid, integer, jsonb, text) to authenticated, service_role;
+
+comment on function public.import_prompts(uuid, uuid, integer, jsonb, text) is
+  'Bulk-inserts prompts [{idx, text, category, topic_id, platforms, models, regions}] in order under a per-organization advisory lock, up to p_max_locations tracked locations for the org (-1 = unlimited). Past the limit: p_over_limit ''skip'' (default) stops there, ''wait'' saves the rest waiting for a spot (inactive, waiting_since now; 00535). Returns (idx, id, waiting) for each saved row. PROMPT-005.';
 
 notify pgrst, 'reload schema';
 
