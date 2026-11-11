@@ -120,23 +120,40 @@ describe('StartNowBlock', () => {
     expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new?brief=build');
   });
 
-  it('has the Content Agent write a new draft’s brief and page, as Write this, and opens it', async () => {
-    server.startDraftFromAction.mockResolvedValueOnce({
+  it('asks as Write this does, then has the Content Agent write the new draft, and opens it', async () => {
+    const created = (title: string) => ({
       draftId: 'd-new',
       created: true,
       importFailed: false,
       draft: {
         method: 'create',
-        title: 'Is a coffee subscription worth it?',
+        title,
         pageType: 'buying_guide',
         sourceUrl: null,
-        bodyHtml: '<h1>Is a coffee subscription worth it?</h1>',
+        bodyHtml: `<h1>${title}</h1>`,
         rules: { set: null, source: null, overrides: {}, textRules: [] },
+        prompts: 3,
       },
     });
+    const inDialog = (name: RegExp) =>
+      [...document.querySelectorAll('[role="dialog"] button')].find((b) =>
+        name.test(b.textContent ?? ''),
+      ) as HTMLElement | undefined;
+
+    server.startDraftFromAction.mockResolvedValueOnce(
+      created('Is a coffee subscription worth it?'),
+    );
     server.startAgentWriting.mockResolvedValueOnce({ started: true });
     await render();
     await click(button(/^Content Editor$/));
+    // Nothing is spent before the person's yes: Write this's ask, its steps and title.
+    expect(server.startAgentWriting).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Write this page');
+    expect(dialog?.textContent).toContain('Is a coffee subscription worth it?');
+    expect(dialog?.textContent).toContain("From the opportunity's 3 prompts");
+    await click(inDialog(/^Write this$/)!);
     expect(server.startAgentWriting).toHaveBeenCalledWith(
       'd-new',
       BRAND,
@@ -145,23 +162,22 @@ describe('StartNowBlock', () => {
     // The agent builds the brief: the editor doesn't build it again.
     expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
 
+    // Cancelled: the draft opens as written, titled and typed, nothing spent or said.
+    push.mockClear();
+    server.startAgentWriting.mockClear();
+    server.startDraftFromAction.mockResolvedValueOnce(created('x'));
+    await click(button(/^Content Editor$/));
+    await click(inDialog(/^Cancel$/)!);
+    expect(server.startAgentWriting).not.toHaveBeenCalled();
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
+
     // The agent didn't start: the draft opens all the same, and says why.
     push.mockClear();
-    server.startDraftFromAction.mockResolvedValueOnce({
-      draftId: 'd-new',
-      created: true,
-      importFailed: false,
-      draft: {
-        method: 'create',
-        title: 'x',
-        pageType: 'blog_post',
-        sourceUrl: null,
-        bodyHtml: '<h1>x</h1>',
-        rules: { set: null, source: null, overrides: {}, textRules: [] },
-      },
-    });
+    server.startDraftFromAction.mockResolvedValueOnce(created('x'));
     server.startAgentWriting.mockResolvedValueOnce({ error: 'ai_budget' });
     await click(button(/^Content Editor$/));
+    await click(inDialog(/^Write this$/)!);
     expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('AI usage is spent'));
     expect(push).toHaveBeenCalledWith('/dashboard/content/editor/d-new');
   });

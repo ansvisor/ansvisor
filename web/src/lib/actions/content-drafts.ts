@@ -916,6 +916,8 @@ export interface ActionStartedDraft {
   sourceUrl: string | null;
   bodyHtml: string;
   rules: DraftRules;
+  /** How many prompts its brief is built from (Write this's ask says). */
+  prompts: number;
 }
 
 /**
@@ -1166,7 +1168,15 @@ export async function startDraftFromAction(
       draftId: inserted.id,
       created: true,
       importFailed,
-      draft: { method, title, pageType, sourceUrl: page, bodyHtml: body, rules },
+      draft: {
+        method,
+        title,
+        pageType,
+        sourceUrl: page,
+        bodyHtml: body,
+        rules,
+        prompts: new Set(prompts.map((p) => p.id)).size,
+      },
     };
   } catch (err) {
     console.error('Failed to start a draft from an action:', err);

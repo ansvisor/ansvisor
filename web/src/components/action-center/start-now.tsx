@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { FilePen, Loader2, MessageSquare } from 'lucide-react';
 import { useRouter } from '@/i18n/navigation';
+import { WriteThisConfirm } from '@/components/content/write-this-dialog';
 import { runChatOnAction } from '@/components/chat/agents/agent-requests';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
@@ -65,9 +66,10 @@ async function writeStartedDraft(
  * Start now in the Content Editor (AC-ACTION-PLAN spec §10): the draft for
  * the action's writing work, one per page of a multi-page play, each
  * written by startDraftFromAction with a page's title, the action's
- * prompts, page, page type and locked products. One new draft has the
- * Content Agent write its brief and page (Write this's job) and opens in
- * the editor as it writes; a page that couldn't be read opens with its
+ * prompts, page, page type and locked products. One new draft asks as
+ * Write this asks (its usage estimate), then has the Content Agent write
+ * its brief and page and opens in the editor as it writes; cancelled, it
+ * opens as written, nothing spent; a page that couldn't be read opens with its
  * brief built as it opens, as before. Several open the Library on the
  * action's drafts. A draft already written opens as it is. The drawer's
  * Start now and the Actions list's row menu both start here.
@@ -79,6 +81,12 @@ export function useStartNow(brandId: string) {
   const describeRule = useRuleDescriber();
   const language = useBrandStore((s) => s.brands.find((b) => b.id === brandId)?.language);
   const [busy, setBusy] = useState(false);
+  // Write this's ask on the new draft, answered by the person (true: write it).
+  const [asking, setAsking] = useState<{
+    draft: ActionStartedDraft;
+    answer: (write: boolean) => void;
+  } | null>(null);
+  const [writing, setWriting] = useState(false);
 
   const start = useCallback(
     async (action: StartNowAction, work: StartNowWork, drafts: readonly ActionDraft[]) => {
@@ -122,18 +130,26 @@ export function useStartNow(brandId: string) {
         if (pages.length === 1 && written.length === 1) {
           const [only] = written;
           if (only.created && only.draft) {
-            const started = await writeStartedDraft(
-              only.draftId,
-              brandId,
-              only.draft,
-              describeRule,
-              language,
-            );
-            // The draft opens either way, with its title to write from.
-            if ('error' in started) {
-              toast.error(tAgent(tAgent.has(started.error) ? started.error : 'failed'));
+            const draft = only.draft;
+            // Asked first, as Write this asks: nothing is spent without the person's yes.
+            const write = await new Promise<boolean>((answer) => setAsking({ draft, answer }));
+            if (write) {
+              setWriting(true);
+              const started = await writeStartedDraft(
+                only.draftId,
+                brandId,
+                draft,
+                describeRule,
+                language,
+              );
+              if ('error' in started) {
+                toast.error(tAgent(tAgent.has(started.error) ? started.error : 'failed'));
+              }
             }
+            // The draft opens either way, titled and typed, to write from.
             router.push(contentEditorPath(only.draftId));
+            setAsking(null);
+            setWriting(false);
             return;
           }
           router.push(
@@ -150,7 +166,22 @@ export function useStartNow(brandId: string) {
     [brandId, busy, describeRule, language, router, t, tAgent],
   );
 
-  return { busy, start };
+  const confirm = (
+    <WriteThisConfirm
+      open={asking !== null}
+      title={asking?.draft.title}
+      prompts={asking?.draft.prompts || null}
+      page={asking?.draft.sourceUrl ?? null}
+      starting={writing}
+      onOpenChange={(open) => {
+        if (!open && !writing) asking?.answer(false);
+      }}
+      onConfirm={() => asking?.answer(true)}
+    />
+  );
+
+  /** confirm: Write this's ask, for the caller to render. */
+  return { busy, start, confirm };
 }
 
 /**
@@ -246,6 +277,7 @@ export function StartNowBlock({
 
   return (
     <section aria-label={t('title')} className="space-y-2 rounded-lg border px-3 py-3">
+      {editor.confirm}
       <p className="text-xs font-medium text-muted-foreground">{t('title')}</p>
       <p className="text-xs text-muted-foreground">{hint}</p>
       <div className="flex flex-wrap items-center gap-2">

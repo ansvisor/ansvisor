@@ -43,7 +43,7 @@ Click **Content Editor**. A draft is written for the action's writing task and o
 - the page type, from the page's address, or the kind of page the action or its opportunity picked;
 - on an online shop, the products the action is about, locked into the page's shopping path.
 
-The Content Agent then builds a new draft's brief and writes the page, or suggests changes, as **Write this** does, from your AI usage. An unreadable page builds only its brief. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it.
+As in **Write this**, once you confirm its AI usage, the Content Agent builds the brief and writes the page, or suggests changes. If the page can't be read, only the brief is built. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it.
 
 ## Several pages
 

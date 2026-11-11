@@ -1084,6 +1084,7 @@ describe('startDraftFromAction', () => {
         title: 'Is a coffee subscription worth it?',
         pageType: 'buying_guide',
         sourceUrl: null,
+        prompts: 2,
       },
     });
     expect(admin.inserts[0].value).toMatchObject({

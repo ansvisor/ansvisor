@@ -58,7 +58,6 @@ export function WriteThisDialog({
   const tStart = useTranslations('contentEditor.newContent.start');
   const router = useRouter();
   const describeRule = useRuleDescriber();
-  const { usage } = useAiUsage();
   const brandId = opportunity?.brandId;
   // The Language rule's default for the agent: the brand's language.
   const language = useBrandStore((s) => s.brands.find((b) => b.id === brandId)?.language);
@@ -66,7 +65,6 @@ export function WriteThisDialog({
 
   const start = opportunity ? writeThisStart(opportunity, siteType) : null;
   const prompts = opportunity ? writeThisPrompts(opportunity) : null;
-  const estimate = usage && !usage.unlimited ? usage.estimates?.writeThis : undefined;
 
   const close = (open: boolean) => {
     if (!starting) onOpenChange(open);
@@ -144,33 +142,72 @@ export function WriteThisDialog({
     router.push(contentEditorPath(id));
   };
 
-  const steps = start
-    ? [
-        {
-          key: 'brief',
-          detail:
-            prompts !== null
-              ? t('steps.briefDetail', { count: prompts })
-              : t('steps.briefDetailAny'),
-        },
-        {
-          key: 'draft',
-          detail: start.page
-            ? t('steps.draftDetailPage', { page: pagePath(start.page.url) })
-            : t('steps.draftDetail'),
-        },
-        { key: 'review', detail: t('steps.reviewDetail') },
-      ]
-    : [];
+  return (
+    <WriteThisConfirm
+      open={opportunity !== null}
+      title={opportunity?.title}
+      prompts={prompts}
+      page={start?.page?.url ?? null}
+      ready={start !== null}
+      starting={starting}
+      onOpenChange={close}
+      onConfirm={() => void write()}
+    />
+  );
+}
+
+/**
+ * Write this's ask (customer priorities item 9): what the run does (the
+ * brief, the page from it, the person's review) and what it takes of the
+ * month's AI usage, before it spends any. Write this and the Action
+ * Center's Start now (one new draft) both ask with it.
+ */
+export function WriteThisConfirm({
+  open,
+  title,
+  prompts,
+  page,
+  ready = true,
+  starting,
+  onOpenChange,
+  onConfirm,
+}: {
+  open: boolean;
+  /** What is written: the opportunity's or the draft's title. */
+  title: string | undefined;
+  /** How many prompts the brief is built from, when known. */
+  prompts: number | null;
+  /** The live page it suggests changes to; null for a new page. */
+  page: string | null;
+  /** False while there is nothing to write yet. */
+  ready?: boolean;
+  starting: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: () => void;
+}) {
+  const t = useTranslations('content.writeThis');
+  const { usage } = useAiUsage();
+  const estimate = usage && !usage.unlimited ? usage.estimates?.writeThis : undefined;
+
+  const steps = [
+    {
+      key: 'brief',
+      detail:
+        prompts !== null ? t('steps.briefDetail', { count: prompts }) : t('steps.briefDetailAny'),
+    },
+    {
+      key: 'draft',
+      detail: page ? t('steps.draftDetailPage', { page: pagePath(page) }) : t('steps.draftDetail'),
+    },
+    { key: 'review', detail: t('steps.reviewDetail') },
+  ];
 
   return (
-    <Dialog open={opportunity !== null} onOpenChange={close}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
-          <DialogDescription className="[overflow-wrap:anywhere]">
-            {opportunity?.title}
-          </DialogDescription>
+          <DialogDescription className="[overflow-wrap:anywhere]">{title}</DialogDescription>
         </DialogHeader>
         <ol className="space-y-3">
           {steps.map((step, i) => (
@@ -196,10 +233,10 @@ export function WriteThisDialog({
           </p>
         )}
         <DialogFooter>
-          <Button variant="outline" disabled={starting} onClick={() => close(false)}>
+          <Button variant="outline" disabled={starting} onClick={() => onOpenChange(false)}>
             {t('cancel')}
           </Button>
-          <Button disabled={starting || !start} onClick={() => void write()} className="gap-2">
+          <Button disabled={starting || !ready} onClick={onConfirm} className="gap-2">
             {starting && <LoadingDots />}
             {t('confirm')}
           </Button>
