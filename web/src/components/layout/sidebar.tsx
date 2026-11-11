@@ -54,15 +54,7 @@ import {
   useDotLabel,
   useMenuDots,
 } from '@/components/layout/menu-dots';
-import {
-  ChevronDown,
-  ChevronsLeft,
-  ChevronsRight,
-  Crown,
-  ExternalLink,
-  Lock,
-  MessageSquareHeart,
-} from 'lucide-react';
+import { ChevronDown, ChevronsLeft, ChevronsRight, Crown, Lock } from 'lucide-react';
 
 /** How long the pointer rests on the collapsed sidebar before it opens. */
 const PEEK_DELAY_MS = 150;
@@ -767,24 +759,6 @@ export function Sidebar() {
               </Link>
             </p>
           )}
-          <a
-            href={siteConfig.links.feedback}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={compact ? t('feedback') : undefined}
-            className={cn(
-              'flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-              compact && 'justify-center',
-            )}
-          >
-            <MessageSquareHeart className="h-4 w-4 shrink-0" />
-            {!compact && (
-              <>
-                <span className="flex-1 truncate">{t('feedback')}</span>
-                <ExternalLink className="h-3 w-3 shrink-0 opacity-60" />
-              </>
-            )}
-          </a>
           <Button
             variant="ghost"
             onClick={handleToggleCollapse}
@@ -805,7 +779,7 @@ export function Sidebar() {
         </div>
 
         <div className="border-t p-2">
-          <UserProfileNavItem collapsed={compact} />
+          <UserProfileNavItem collapsed={compact} shortcut />
         </div>
       </aside>
     </>

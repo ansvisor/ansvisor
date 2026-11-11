@@ -23,6 +23,10 @@ export const NAV_AREAS = [
   'prompts/suggestions',
   'traffic',
   'content',
+  // Settings' places whose green opening them clears (lib/settings-dots.ts).
+  'settings/members',
+  'settings/integrations',
+  'settings/api',
 ] as const;
 
 export type NavArea = (typeof NAV_AREAS)[number];

@@ -35,8 +35,18 @@ export function useDotLabel(): (dot: DotLike, name?: string) => string {
  * "Needs attention"; grey and pulsing, "Working on it". Never colour alone:
  * it is an image named by its words, which show on hover.
  */
-export function MenuDot({ dot, className }: { dot: DotLike; className?: string }) {
-  const label = useDotLabel()(dot);
+export function MenuDot({
+  dot,
+  label: words,
+  className,
+}: {
+  dot: DotLike;
+  /** Its words when they are not the colour's and reason's (Settings' dots). */
+  label?: string;
+  className?: string;
+}) {
+  const named = useDotLabel()(dot);
+  const label = words ?? named;
   return (
     <span
       role="img"

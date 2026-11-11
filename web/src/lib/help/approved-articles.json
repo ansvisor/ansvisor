@@ -3741,7 +3741,9 @@
         "needs you",
         "needs attention",
         "working on it",
-        "action center count"
+        "action center count",
+        "settings dot",
+        "account menu dot"
       ],
       "synonyms": [
         "what does the dot mean",
@@ -3780,6 +3782,10 @@
         {
           "heading": "In Chat and on agent cards",
           "text": "Chat's chats and the agent cards in **Action Center › Agents** use the same dots. A chat is grey while Chat works in it, yellow while it waits for you, green when it finished while you were away, and red when its last run stopped with an error. An agent's card is grey while it runs, yellow while it waits for your OK, and red when its last run failed."
+        },
+        {
+          "heading": "In Settings",
+          "text": "Admins and managers also see dots for **Settings**: on the account menu under your name, on the matching Settings tabs, and the strongest one on your avatar and the gear. **Members & invites** is green when people joined since you last opened it, with their names at the top of the tab, and yellow when an invite expired without being accepted or every seat is taken. **Integrations** is red while a Google sign-in, CMS site or Slack is disconnected, and green when a teammate connected one. **API & MCP** is green when an MCP client such as Claude connected. **Plans & billing** is yellow in a trial's last 3 days and red when a payment failed. Green goes once you open the tab; yellow and red stay until they're dealt with."
         },
         {
           "heading": "The Action Center's number",
@@ -3865,17 +3871,23 @@
         "light mode",
         "theme",
         "night mode",
-        "appearance"
+        "appearance",
+        "account menu",
+        "sign out",
+        "settings shortcut"
       ],
       "synonyms": [
         "change colors",
         "dark theme",
         "light theme",
         "make it darker",
-        "brighter screen"
+        "brighter screen",
+        "log out",
+        "where is settings",
+        "menu under my name"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -3888,6 +3900,10 @@
         {
           "heading": "Switch the mode",
           "text": "Open the main menu: its sun or moon button sits beside the Ansvisor logo, at the top. When the menu is folded to icons, the button is hidden until you open it. On a phone, it is at the top of the menu. The moon switches to dark mode, and the sun to light mode.\n\nYour choice is kept in this browser, so each page opens in it. On another browser or device, Ansvisor opens in its usual mode until you switch there too."
+        },
+        {
+          "heading": "The account menu",
+          "text": "Your name at the bottom of the main menu opens the account menu. At its top are your e-mail, your workspace and its plan, such as **Brewline · Growth**. Below are shortcuts into **Settings**: **Your account**, **Members & invites**, **Integrations**, **API & MCP** and, on Ansvisor Cloud, **Plans & billing**. Then come **What's new** (with Chat on), **Help**, **Send feedback** and **Sign out**. The gear beside your name opens **Settings** as before, and so does ⌘, on a Mac or Ctrl+, elsewhere. When the menu is folded to icons, your avatar opens the same menu. Enter or Space opens it, the arrow keys move through it and Esc closes it. Admins and managers see dots on its items: see **Dots in the menu**."
         }
       ]
     },
