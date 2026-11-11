@@ -33,6 +33,7 @@
 
 import { resolve } from '../../config/action-engine.js';
 import {
+  COMMERCIAL,
   INTENT_WEIGHTS,
   clamp,
   levelOf,
@@ -194,9 +195,6 @@ const CATEGORY_RECOVERABILITY = { recover: 1, protect: 0.9, fix: 0.9, compete: 0
 
 /** What a page is worth to the business, by the signal that ranked it. */
 const PAGE_VALUE = { revenue: 1, transactions: 0.95, key_events: 0.85, engagement: 0.65 };
-
-/** Commercial enough to say so in "Why this priority?". */
-const COMMERCIAL = 0.85;
 
 const LEVEL_RANK = { low: 1, medium: 2, high: 3 };
 

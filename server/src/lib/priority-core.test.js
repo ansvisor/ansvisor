@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import {
+  COMMERCIAL,
   INTENT_WEIGHTS,
   clamp,
   levelOf,
@@ -106,5 +107,9 @@ describe('levelOf and clamp', () => {
   it('weighs comparing above learning', () => {
     expect(INTENT_WEIGHTS.comparison).toBeGreaterThan(INTENT_WEIGHTS['what-is']);
     expect(Object.isFrozen(INTENT_WEIGHTS)).toBe(true);
+  });
+  it('calls comparing and choosing commercial, and learning not', () => {
+    const commercial = Object.keys(INTENT_WEIGHTS).filter((i) => INTENT_WEIGHTS[i] >= COMMERCIAL);
+    expect(commercial).toEqual(['comparison', 'best-top', 'vs-review', 'recommendation']);
   });
 });
