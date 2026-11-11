@@ -20,6 +20,12 @@ export interface PriorityReason {
   /** The worst finding's change; null when nothing open supports the action. */
   change: PriorityChange | null;
   subject: { entity: string | null; count: number | null };
+  /**
+   * A topic gap sent from Visibility (VIS-010): the rival's lead in
+   * Visibility points and its name, as the action was sent. Null for every
+   * other action, and from a scorer before it.
+   */
+  competitorGap?: { points: number; competitor: string } | null;
   /** Measured demand; null when nothing measures it. */
   demand: 'high' | 'medium' | 'low' | null;
   /**
@@ -164,6 +170,7 @@ export function parsePriorityReason(
       entity: typeof subject.entity === 'string' ? subject.entity : null,
       count: num(subject.count),
     },
+    competitorGap: competitorGapOf(r.competitorGap),
     demand: r.demand === 'high' || r.demand === 'medium' || r.demand === 'low' ? r.demand : null,
     realDemand: r.realDemand === 'high' || r.realDemand === 'medium' ? r.realDemand : null,
     commercial: r.commercial === true,
@@ -173,6 +180,15 @@ export function parsePriorityReason(
     pastSuccess: pastSuccessOf(r.pastSuccess),
     confidence: confidenceOf(r),
   };
+}
+
+function competitorGapOf(value: unknown): PriorityReason['competitorGap'] {
+  if (!value || typeof value !== 'object') return null;
+  const g = value as Record<string, unknown>;
+  const competitor = typeof g.competitor === 'string' ? g.competitor.trim() : '';
+  return typeof g.points === 'number' && Number.isFinite(g.points) && g.points > 0 && competitor
+    ? { points: g.points, competitor }
+    : null;
 }
 
 function pastSuccessOf(value: unknown): PriorityReason['pastSuccess'] {
@@ -251,10 +267,21 @@ const SUBJECTS = new Set([
 ]);
 
 /**
+ * The English article a number takes, as it is said: "an" before 8, 11, 18
+ * and the eighties ("an 8.5-pt gap"), "a" before the rest. A select in the
+ * copy, so another language's words can leave it aside.
+ */
+function articleBefore(number: string): 'an' | 'a' {
+  return /^(8\d?|11|18)(\.|$)/.test(number) ? 'an' : 'a';
+}
+
+/**
  * "Why this priority?": what changed, on what, how recently, and what makes
  * it matter — from the action's own facts, in the reader's language
  * (actionsPage.priority.reason). "Lost ground on 7 high-demand prompts
  * 2 days ago — measured demand High, commercial intent, previously visible."
+ * A topic gap sent from Visibility names its gap and rival: "A 23.4-pt gap
+ * with Northbound Roasters on 12 prompts — commercial intent."
  */
 export function priorityReasonText(reason: PriorityReason, t: Translator): string {
   const { entity, count } = reason.subject;
@@ -263,16 +290,24 @@ export function priorityReasonText(reason: PriorityReason, t: Translator): strin
   const inSubject =
     Boolean(adjective) && entity !== null && DEMANDED.has(entity) && count !== null && count > 0;
   const known = entity !== null && SUBJECTS.has(entity) && count !== null && count > 0;
-  const what = !reason.change
+  const gap = reason.change ? reason.competitorGap : null;
+  const key = gap ? 'competitorGap' : reason.change;
+  // One decimal, as the action's title states the gap.
+  const points = gap ? gap.points.toFixed(1) : '';
+  const named: Record<string, string> = gap
+    ? { points, competitor: gap.competitor, article: articleBefore(points) }
+    : {};
+  const what = !key
     ? t('reason.change.none')
     : known
-      ? t(`reason.change.${reason.change}`, {
+      ? t(`reason.change.${key}`, {
+          ...named,
           subject: t(`reason.subject.${entity}`, {
             count,
             demand: inSubject ? `${adjective} ` : '',
           }),
         })
-      : t(`reason.alone.${reason.change}`);
+      : t(`reason.alone.${key}`, named);
   const when =
     reason.change && reason.days !== null
       ? reason.days === 0
