@@ -56,6 +56,10 @@ const OPEN = {
   'POST /api/content-pages/page-read': 'Reads a page for the editor.',
   // Publishing: whose it is, is decided in #1894.
   'POST /api/content-drafts/:draftId/publish': 'Publishing, decided in #1894.',
+  // ChatGPT Business Hub numbers: copying them in is daily work (2026-11-11).
+  'PUT /api/business-hub/:brandId/snapshots': 'Enters Business Hub numbers by hand; no model.',
+  'POST /api/business-hub/:brandId/snapshots/import':
+    "Enters Business Hub numbers from Ansvisor's CSV template; no model.",
   // Reading, with no change to the workspace.
   'POST /api/brands/:id/tracking-snippet/check': 'Checks whether the snippet is installed.',
   'POST /api/prompts/fanout-intents': 'The Fan-out tab calls it on its own.',
