@@ -31,7 +31,11 @@ export async function listReadyAgentsFor(auth: McpAuthContext, params: { brandId
       .select('site_type, industry, shopping_mode_enabled')
       .eq('id', params.brandId)
       .maybeSingle(),
-    supabaseAdmin.from('profiles').select('work_areas').eq('id', auth.userId).maybeSingle(),
+    supabaseAdmin
+      .from('profiles')
+      .select('work_areas, work_areas_asked_at')
+      .eq('id', auth.userId)
+      .maybeSingle(),
   ]);
   if (brand.error) throw new Error(brand.error.message);
   if (profile.error) throw new Error(profile.error.message);
@@ -42,7 +46,7 @@ export async function listReadyAgentsFor(auth: McpAuthContext, params: { brandId
     industry: brand.data.industry,
     shoppingModeEnabled: brand.data.shopping_mode_enabled,
   });
-  const workAreas = workAreasOf((profile.data?.work_areas as string[] | null | undefined) ?? null);
+  const workAreas = workAreasOf(profile.data);
   const roleName = (role: string) => t(`ready.roles.${role}` as never);
   return {
     site_type: t(`ready.businessTypes.${siteType}`),

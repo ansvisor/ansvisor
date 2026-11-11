@@ -285,9 +285,8 @@ export interface MyMenu {
   hidden: string[];
   /** Of those, the ones their role or an exception takes off, whatever their work areas. */
   hiddenByAdmin: string[];
+  /** The work areas that narrow it (workAreasOf); none is Everything. */
   workAreas: WorkAreaId[];
-  /** Whether they answered (or skipped) "What do you work on?". */
-  workAreasAsked: boolean;
   /** Admin, or a manager an admin let change menus. */
   canManageMenus: boolean;
 }
@@ -306,8 +305,29 @@ export function canManageMenus(profile: Pick<MenuProfile, 'role' | 'can_manage_m
   return profile.role === 'admin' || (profile.role === 'manager' && !!profile.can_manage_menus);
 }
 
-export function workAreasOf(values: readonly string[] | null): WorkAreaId[] {
-  return (values ?? []).filter(isWorkAreaId);
+/**
+ * When everyone's work areas went back to Everything (owner, 2026-11-11):
+ * "What do you work on?" left onboarding, and nobody's menu stays narrowed
+ * by an answer to it. Work areas saved before then are kept but no longer
+ * count; picking them again in Settings (setMyWorkAreas stamps
+ * work_areas_asked_at) does. Moving it later resets everyone again.
+ */
+export const WORK_AREAS_RESET_AT = '2026-11-11T12:00:00Z';
+
+/**
+ * A person's work areas: the known ones they saved since WORK_AREAS_RESET_AT;
+ * none (Everything) when they haven't picked any since. Everything that
+ * reads work areas (the menu, Agent Center, MCP) goes through this.
+ */
+export function workAreasOf(
+  profile: {
+    work_areas?: readonly string[] | null;
+    work_areas_asked_at?: string | null;
+  } | null,
+): WorkAreaId[] {
+  const savedAt = profile?.work_areas_asked_at ? Date.parse(profile.work_areas_asked_at) : NaN;
+  if (!(savedAt >= Date.parse(WORK_AREAS_RESET_AT))) return [];
+  return (profile?.work_areas ?? []).filter(isWorkAreaId);
 }
 
 /**
@@ -319,7 +339,7 @@ export function menuOfProfile(
   roleHidden: readonly string[],
   sections: readonly string[] = MENU_SECTIONS,
 ): MyMenu {
-  const workAreas = workAreasOf(profile.work_areas);
+  const workAreas = workAreasOf(profile);
   const access = {
     role: profile.role,
     roleHidden,
@@ -330,7 +350,6 @@ export function menuOfProfile(
     hidden: [...hiddenMenuSections({ ...access, workAreas }, sections)],
     hiddenByAdmin: [...hiddenMenuSections({ ...access, workAreas: [] }, sections)],
     workAreas,
-    workAreasAsked: profile.work_areas_asked_at !== null,
     canManageMenus: canManageMenus(profile),
   };
 }
