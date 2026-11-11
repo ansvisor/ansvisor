@@ -714,6 +714,43 @@ describe('the Chat tool registry', () => {
     ).toMatchObject({ kind: 'action_added', actionNo: 1258 });
   });
 
+  it('gives recurring work create_schedule set up its card, with the simplified layout on (SIMPLE_NAV)', () => {
+    const schedule = chatTool_('create_schedule');
+    const input = schedule.inputSchema.parse(schedule.fixture.input);
+    const made = {
+      ok: true,
+      schedule_id: FIXTURE_IDS.item,
+      title: 'Weekly visibility report',
+      when: 'Every Monday, 09:00 · Europe/Istanbul',
+      next_run_at: '2026-11-16T06:00:00.000Z',
+      deliver: 'Chat',
+      ready_by: false,
+      recurring: true,
+    };
+    try {
+      // Off: no card, the step line only, as before.
+      vi.stubEnv('SIMPLE_NAV', '');
+      expect(schedule.scheduleCard!(input, made)).toBeNull();
+      vi.stubEnv('SIMPLE_NAV', 'true');
+      const card = schedule.scheduleCard!(input, made);
+      expect(card).toEqual({
+        title: 'Weekly visibility report',
+        when: 'Every Monday, 09:00 · Europe/Istanbul',
+        href: `/dashboard/chat/scheduled/${FIXTURE_IDS.item}`,
+      });
+      // Safe for the browser as an event: no id field, a link in the app.
+      expect(
+        clientEventProblems({ type: 'schedule.made', seq: 1, data: card! } as ChatEvent),
+      ).toEqual([]);
+      // Work done once, or a job that wasn't made: no card.
+      expect(schedule.scheduleCard!(input, { ...made, recurring: false })).toBeNull();
+      expect(schedule.scheduleCard!(input, { ok: false, reason: 'quota_exceeded' })).toBeNull();
+      expect(schedule.scheduleCard!(input, null)).toBeNull();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('never offers a tool that marks a task done (CHAT-09 item 15)', () => {
     const names = CHAT_TOOLS.map((tool) => tool.name).join(' ');
     expect(names).not.toMatch(/complete|mark_done|dismiss_action|delete_action|close_task/);

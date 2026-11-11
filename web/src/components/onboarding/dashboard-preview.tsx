@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useTranslations } from 'next-intl';
 import { useTheme } from 'next-themes';
 import { ChevronsUpDown } from 'lucide-react';
-import { dashboardNav } from '@/config/dashboard';
+import { navFor } from '@/config/dashboard';
 import { siteConfig } from '@/config/site';
 import {
   getDashboardNavGroupLabel,
@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { isDashboardHomeItem } from '@/config/home';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAdsEnabled } from '@/components/providers/ads-provider';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 
 export interface DashboardPreviewCompetitor {
   name: string;
@@ -43,7 +44,8 @@ const MAX_ROWS = 6;
  * reads no plan, brand or tracking state, because none exists yet. Metrics are
  * placeholder bars, never numbers — nothing has been measured at this point.
  * Agent Center is in it only with the new Chat on (CHAT_AGENTIC), and Ads
- * only with Ads on (ADS_ENABLED), as in the menu the wizard leads to.
+ * only with Ads on (ADS_ENABLED), as in the menu the wizard leads to; the
+ * simplified menu with SIMPLE_NAV on.
  */
 export function DashboardPreview({
   brandName,
@@ -55,6 +57,8 @@ export function DashboardPreview({
   const t = useTranslations('nav');
   const chatAgentic = useChatAgentic();
   const ads = useAdsEnabled();
+  const simpleNav = useSimpleNav();
+  const nav = navFor(simpleNav);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -88,7 +92,7 @@ export function DashboardPreview({
         </div>
 
         <div className="flex-1 px-2 py-3">
-          {dashboardNav.map((group, i) => (
+          {nav.map((group, i) => (
             <div key={i} className="mb-4">
               {group.title && (
                 <p className="mb-1 px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -113,7 +117,7 @@ export function DashboardPreview({
                       key={item.href}
                       className={cn(
                         'flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium',
-                        isDashboardHomeItem(item.href)
+                        isDashboardHomeItem(item.href, simpleNav)
                           ? 'bg-accent text-accent-foreground'
                           : 'text-muted-foreground',
                       )}

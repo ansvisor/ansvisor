@@ -1414,7 +1414,7 @@
         },
         {
           "heading": "Agents for you",
-          "text": "In your first 14 days in a workspace, once you've answered or skipped **What do you work on?**, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nIt shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.\n\nAdmins and Managers click an agent to open it in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide it on all your devices."
+          "text": "In your first 14 days in a workspace, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nIt shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.\n\nAdmins and Managers click an agent to open it in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide it on all your devices."
         },
         {
           "heading": "The welcome card",
@@ -3598,11 +3598,11 @@
         "add another brand"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and seven on the cloud: the extra two ask what you work on and pick your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped."
+          "text": "When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and six on the cloud: the extra one picks your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped."
         },
         {
           "heading": "Step 1: Brand basics",
@@ -3625,11 +3625,7 @@
           "text": "On **Add your competitors**, Ansvisor suggests competitors for your brand. Check the real rivals, and uncheck or remove the ones that aren't comparable. Add your own with a company name and domain, using the name as it appears in AI answers rather than the website address.\n\nSelect at least one competitor to continue. **Start tracking with N competitors** finishes the brand. Competitor tracking is on every plan.\n\nIf your site looks like an online store, Ansvisor turns on Product Visibility for the brand and says so on this step. You can turn it off in the brand settings."
         },
         {
-          "heading": "Step 6 on the cloud: What do you work on?",
-          "text": "Pick what you work on or lead, such as Founders & leaders, Brand & PR, Content or Growth, and your left menu keeps only the sections you need. **Skip: show me everything** keeps every section. You can change it later in **Settings › Account**.\n\nA self-hosted install asks the same the first time you open the dashboard."
-        },
-        {
-          "heading": "Step 7 on the cloud: Plan and checkout",
+          "heading": "Step 6 on the cloud: Plan and checkout",
           "text": "The final step picks your plan, **Starter** or **Growth**, and starts checkout.\n\nWhile a free trial is on offer, **Choose how to start** lets you pick the trial, **Monthly** or **Yearly**. With the trial you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. **Buy now**, or a plan without a trial, starts the plan the same day.\n\nNot ready to add a card? Pick **Demo**, after **Yearly**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The demo is a made-up brand with sample data: you can open every page, but nothing runs or changes. Your brand stays saved, and its tracking starts when you pick a plan.\n\nA self-hosted install skips this step."
         },
         {
@@ -5555,23 +5551,23 @@
         "my role focus"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "Each person can say what they work on or lead. Their left menu then keeps only those areas' sections. Pick one or more; picking none keeps every section. **Settings** is always on the menu, with your API keys and MCP."
+          "text": "Everyone starts on **Everything**: every section of the left menu their role shows. Each person can then say what they work on or lead, and their left menu keeps only those areas' sections. Pick one or more; picking none keeps every section. **Settings** is always on the menu, with your API keys and MCP."
         },
         {
           "heading": "The work areas",
           "text": "- **Founders & leaders**: Action Center, Chat, Agent Center, Visibility, Mentions, AI Referral Traffic, Reports, Competitors.\n- **AEO/GEO & Audit**: Action Center, Agent Center, Content, Audit, Citations, AI Referral Traffic, Reports.\n- **Content**: Action Center, Chat, Agent Center, Content, Prompts, Citations, Reports.\n- **Brand & PR**: Action Center, Chat, Agent Center, Visibility, Mentions, Citations, Reports, Competitors.\n- **Growth**: Action Center, Chat, Agent Center, Visibility, Prompts, Citations, AI Referral Traffic, Reports, Competitors.\n- **Product Development**: Action Center, Chat, Agent Center, Visibility, Prompts, Mentions, Product Visibility, Reports.\n- **Business Development**: Action Center, Chat, Agent Center, Visibility, Prompts, Mentions, Citations, Reports, Competitors.\n- **Developers**: Action Center, Agent Center, Audit, Prompts, Citations, AI Referral Traffic, Reports.\n- **Analytics**: Action Center, Agent Center, Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors."
         },
         {
-          "heading": "When you're asked",
-          "text": "**What do you work on?** is asked once:\n\n- when you sign up, after your competitors and before you choose a plan;\n- when you join from an invitation, on your first sign-in;\n- on a self-hosted install, the first time the admin opens the dashboard.\n\n**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas. It shows on Home's Default view too."
+          "heading": "Where you pick them",
+          "text": "Nobody is asked at sign-up or on joining: new people, invited teammates and the demo start on **Everything**. Work areas picked before November 11, 2026, such as at sign-up, went back to **Everything** then; pick them again to narrow your menu.\n\nFor your first 14 days in the workspace, Chat Home shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas. It shows on Home's Default view too."
         },
         {
           "heading": "Change your work areas",
-          "text": "Change your answer any time in **Settings › Account › Your work areas**. It also shows your menu, and why a section is off it: **Hidden by your admin** or **Not in your work areas**.\n\nWhen something is off your menu, the bottom of the sidebar says how much, such as **3 sections off your menu**, with **Change** leading to your work areas."
+          "text": "Pick or change them any time in **Settings › Account › Your work areas**; **Everything** shows every section. It also shows your menu, and why a section is off it: **Hidden by your admin** or **Not in your work areas**.\n\nWhen something is off your menu, the bottom of the sidebar says how much, such as **3 sections off your menu**, with **Change** leading to your work areas."
         }
       ]
     },
