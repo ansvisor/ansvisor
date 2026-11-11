@@ -1,39 +1,65 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { useFormatter, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useUserRole } from '@/hooks/use-user-role';
+import { useFirstRun } from '@/hooks/use-first-run';
 import { getTaskReviewCount } from '@/lib/actions/action-task-reviews';
+import { getTodayOverview, getTodayStanding } from '@/lib/actions/today';
 import { REVIEW_TAB } from '@/lib/action-center/tabs';
+import { viewerTimeZone } from '@/lib/time-zone';
 import { ActionCenterHeader } from './action-center-header';
 import { ActionCenterTabs } from './action-center-tabs';
+import { FocusSection } from './today/focus-section';
+import {
+  AskChatBox,
+  LoopStrip,
+  ResultsValue,
+  StandSection,
+  TodaySection,
+  useAnswersCell,
+} from './today/today-parts';
+import { useTodayRead, useTodayVisit, type TodayVisitPart } from './today/use-today';
 
-/** Today's parts, in the mockup's two columns: what changed and what to do, then what waits. */
-const MAIN = ['since', 'focus'] as const;
-const ASIDE = ['waiting', 'setup', 'stand'] as const;
-type TodayPart = (typeof MAIN)[number] | (typeof ASIDE)[number];
-
-/** Where a part's "All …" link goes: the full list behind it. */
-const LINKS: Partial<Record<TodayPart, { href: string; label: 'allSignals' | 'allActions' }>> = {
-  since: { href: '/dashboard/action-center/signals', label: 'allSignals' },
-  focus: { href: '/dashboard/action-center/actions', label: 'allActions' },
-};
+/** The parts a visit waits on before it counts as seen. */
+const VISIT_PARTS: readonly TodayVisitPart[] = ['focus'];
 
 /**
  * Action Center › Today (SIMPLE_NAV), the page everyone lands on with the
- * simplified layout on: the Action Center's header and tabs, then its parts,
- * which arrive one by one (Since yesterday, Today's focus, Waiting for you,
- * Finish setting up, Where you stand). Until each is built it says what it
- * will show, under a note that Today is in preview. Admins and managers
- * already find Needs review under Waiting for you: it is no tab any more.
+ * simplified layout on (mockup Main): the date, brand and when AI answers
+ * last came in; the loop strip; then Since yesterday and Today's focus, with
+ * Waiting for you, Finish setting up and Where you stand beside them; and
+ * Ask Chat at the bottom. Each part reads on its own, so a slow or failed
+ * read shows or hides only its part. The parts still being built say what
+ * they will show, under a note that Today is in preview.
  */
 export function TodayPage() {
   const t = useTranslations('actionCenter.today');
+  const brandId = useBrandStore((s) => s.activeBrandId);
+  const brandName = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId)?.name);
+  const firstRun = useFirstRun();
+  const visit = useTodayVisit(brandId, VISIT_PARTS);
+  const overview = useTodayRead(brandId, () => getTodayOverview(brandId!, viewerTimeZone()));
+  const standing = useTodayRead(brandId, () => getTodayStanding(brandId!));
+
+  const ready = overview.status === 'ready' ? overview.data : null;
+  const zone = ready?.zone ?? viewerTimeZone();
+  const answers = useAnswersCell(
+    overview.status === 'loading' ? undefined : (ready?.lastRunAt ?? null),
+    zone,
+    firstRun,
+  );
+  const tLoop = useTranslations('actionCenter.today.loop');
+  const count = (value: number | null | undefined, key: 'tracked' | 'open' | 'doneWeek') =>
+    value === null || value === undefined ? null : tLoop(key, { count: value });
+
   return (
     <div className="space-y-6">
-      <ActionCenterHeader subtitle={t('subtitle')} />
+      <ActionCenterHeader
+        subtitle={<TodayLine zone={zone} brand={brandName ?? null} lastRunAt={ready?.lastRunAt} />}
+      />
       <ActionCenterTabs />
       <p
         role="note"
@@ -41,48 +67,86 @@ export function TodayPage() {
       >
         {t('preview')}
       </p>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-6">
-          {MAIN.map((part) => (
-            <TodaySection key={part} part={part} />
-          ))}
+      <LoopStrip
+        current="actions"
+        cells={{
+          prompts: { value: count(ready?.trackedPrompts, 'tracked') },
+          answers,
+          actions: { value: count(ready?.openActions, 'open') },
+          done: { value: count(ready?.doneThisWeek, 'doneWeek') },
+          results: {
+            value:
+              standing.status === 'ready' && standing.data ? (
+                <ResultsValue standing={standing.data} />
+              ) : null,
+          },
+        }}
+      />
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-4">
+          <Placeholder part="since" link={{ href: '/dashboard/action-center/signals' }} />
+          {brandId && <FocusSection brandId={brandId} visit={visit} />}
         </div>
-        <div className="space-y-6">
-          {ASIDE.map((part) => (
-            <TodaySection key={part} part={part} />
-          ))}
+        <div className="space-y-4">
+          <Placeholder part="waiting">
+            <NeedsReviewLink />
+          </Placeholder>
+          <Placeholder part="setup" />
+          <StandSection load={standing} />
         </div>
       </div>
+      <AskChatBox />
     </div>
   );
 }
 
-function TodaySection({ part }: { part: TodayPart }) {
+/** "Tuesday, Nov 11 · Brewline Coffee · AI answers updated 1 hour ago", on the person's clock. */
+function TodayLine({
+  zone,
+  brand,
+  lastRunAt,
+}: {
+  zone: string;
+  brand: string | null;
+  /** Undefined while it reads. */
+  lastRunAt: string | null | undefined;
+}) {
   const t = useTranslations('actionCenter.today');
-  const link = LINKS[part];
-  const titleId = `today-${part}-title`;
+  const format = useFormatter();
+  const now = new Date();
+  const parts = [
+    format.dateTime(now, { weekday: 'long', month: 'short', day: 'numeric', timeZone: zone }),
+    brand,
+    lastRunAt === undefined
+      ? null
+      : lastRunAt === null
+        ? t('noAnswersYet')
+        : t('updated', { ago: format.relativeTime(new Date(lastRunAt), now) }),
+  ];
+  return <>{parts.filter(Boolean).join(' · ')}</>;
+}
+
+/** A part still being built: what it will show. */
+function Placeholder({
+  part,
+  link,
+  children,
+}: {
+  part: 'since' | 'waiting' | 'setup';
+  link?: { href: string };
+  children?: React.ReactNode;
+}) {
+  const t = useTranslations('actionCenter.today');
   return (
-    <section
-      aria-labelledby={titleId}
-      data-today-part={part}
-      className="rounded-xl border bg-card p-5"
+    <TodaySection
+      part={part}
+      title={t(`sections.${part}.title`)}
+      link={link ? { href: link.href, label: t('allSignals') } : undefined}
+      dashed={part === 'setup'}
     >
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 id={titleId} className="text-base font-semibold">
-          {t(`sections.${part}.title`)}
-        </h2>
-        {link && (
-          <Link
-            href={link.href}
-            className="shrink-0 text-sm text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            {t(link.label)}
-          </Link>
-        )}
-      </div>
-      <p className="mt-2 text-sm text-muted-foreground">{t(`sections.${part}.body`)}</p>
-      {part === 'waiting' && <NeedsReviewLink />}
-    </section>
+      <p className="text-sm text-muted-foreground">{t(`sections.${part}.body`)}</p>
+      {children}
+    </TodaySection>
   );
 }
 
@@ -111,7 +175,7 @@ function NeedsReviewLink() {
     <Link
       href={REVIEW_TAB.href}
       data-action="today.needsReview"
-      className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
+      className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
     >
       {t('needsReview')}
       {count > 0 && (

@@ -634,7 +634,7 @@
     },
     "today": {
       "subtitle": "What changed, what to do today, and what is waiting for you.",
-      "preview": "Today is in preview. Each part below fills in as it is built; until then, it says what it will show.",
+      "preview": "Today is in preview. The parts still being built say what they will show.",
       "allSignals": "All signals",
       "allActions": "All actions",
       "needsReview": "Tasks waiting for review",
@@ -660,6 +660,59 @@
           "title": "Where you stand",
           "body": "Your score, its change since yesterday, and how far you are from the next brand."
         }
+      },
+      "updated": "AI answers updated {ago}",
+      "noAnswersYet": "no AI answers yet",
+      "loop": {
+        "label": "Your loop",
+        "step": "{number} · {name}",
+        "here": "you are here",
+        "steps": {
+          "prompts": "Prompts",
+          "answers": "AI answers",
+          "actions": "Actions",
+          "done": "Done",
+          "results": "Results"
+        },
+        "none": "—",
+        "tracked": "{count} tracked",
+        "updatedToday": "Updated today",
+        "updatedAgo": "Updated {ago}",
+        "answersIn": "{current} of {total} in",
+        "starting": "Starting",
+        "notYet": "Not yet",
+        "open": "{count} open",
+        "doneWeek": "{count} this week",
+        "noChange": "no change"
+      },
+      "focus": {
+        "title": "Today's focus",
+        "body": "Your 3 highest-impact actions. They stay here until you finish or skip them.",
+        "new": "New",
+        "impact": "{level} impact",
+        "effort": "about {effort}",
+        "steps": "{done} of {total} steps done",
+        "firstStep": "First step: {step}",
+        "start": "Start",
+        "continue": "Continue",
+        "skip": "Skip for now",
+        "skipHint": "Hides it from your focus for 7 days. The action itself doesn't change.",
+        "skipped": "Skipped for 7 days. It is still in All actions.",
+        "skipFailed": "Couldn't skip it. Try again.",
+        "empty": "Nothing to focus on right now. New actions arrive after the nightly check."
+      },
+      "stand": {
+        "title": "Where you stand",
+        "change": "{change} since yesterday",
+        "noChange": "no change since yesterday",
+        "behind": "#{rank} of {count} brands. {gap} points behind {name}.",
+        "ahead": "#1 of {count} brands. {gap} points ahead of {name}.",
+        "alone": "No competitor scored on your prompts yet."
+      },
+      "ask": {
+        "label": "Ask Chat",
+        "placeholder": "Ask Chat, e.g. why did my score change?",
+        "button": "Ask"
       }
     },
     "firstRun": {

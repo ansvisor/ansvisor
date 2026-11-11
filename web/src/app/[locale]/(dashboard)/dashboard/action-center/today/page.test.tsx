@@ -2,12 +2,17 @@ import { act, isValidElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ActionItem } from '@/lib/actions/action-center';
+import type { FocusCard } from '@/lib/actions/today-focus';
+import type { TodayOverview } from '@/lib/actions/today';
+import type { TodayStanding } from '@/lib/action-center/focus';
 import messages from '../../../../../../../messages/en.json';
 
 /**
  * Action Center › Today (SIMPLE_NAV): not found while the simplified layout
- * is off; with it on, the Action Center's header and tabs, and Today's parts,
- * each saying what it will show until it is built.
+ * is off; with it on, the Action Center's header with the day, brand and
+ * when answers came in, the loop strip, Today's focus, Where you stand, the
+ * parts still being built, and Ask Chat. Each part reads on its own.
  */
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -31,19 +36,105 @@ vi.mock('@/components/ai-usage/ai-usage-meter', () => ({
 vi.mock('@/components/action-center/action-center-tabs', () => ({
   ActionCenterTabs: () => <nav data-testid="tabs" />,
 }));
+vi.mock('@/components/action-center/agent-work-gear', () => ({
+  AgentWorkGear: () => <button type="button" data-testid="gear" />,
+}));
 vi.mock('@/stores/use-brand-store', () => ({
-  useBrandStore: (selector: (state: { activeBrandId: string }) => unknown) =>
-    selector({ activeBrandId: 'b1' }),
+  useBrandStore: (
+    selector: (state: { activeBrandId: string; brands: { id: string; name: string }[] }) => unknown,
+  ) => selector({ activeBrandId: 'b1', brands: [{ id: 'b1', name: 'Brewline Coffee' }] }),
 }));
 let canManage = true;
 vi.mock('@/hooks/use-user-role', () => ({
   useUserRole: () => ({ canManage }),
 }));
+let firstRun: { progress: { current: number; total: number } | null } | null = null;
+vi.mock('@/hooks/use-first-run', () => ({ useFirstRun: () => firstRun }));
+let chatOn = true;
+vi.mock('@/components/providers/chat-agentic-provider', () => ({
+  useChatAgentic: () => chatOn,
+}));
+const panel = { available: true, open: false, fill: vi.fn(), toggle: vi.fn() };
+vi.mock('@/components/chat/panel/chat-panel-context', () => ({ useChatPanel: () => panel }));
+const { track } = vi.hoisted(() => ({ track: vi.fn() }));
+vi.mock('@/lib/analytics', () => ({ track }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+
 const { getTaskReviewCount } = vi.hoisted(() => ({ getTaskReviewCount: vi.fn(async () => 2) }));
 vi.mock('@/lib/actions/action-task-reviews', () => ({ getTaskReviewCount }));
+const reads = vi.hoisted(() => ({
+  getTodayOverview: vi.fn(),
+  getTodayStanding: vi.fn(),
+  getTodayFocus: vi.fn(),
+  skipTodayFocus: vi.fn(),
+  readUserBrandState: vi.fn(),
+  markSeen: vi.fn(async () => ({ ok: true })),
+}));
+vi.mock('@/lib/actions/today', () => ({
+  getTodayOverview: reads.getTodayOverview,
+  getTodayStanding: reads.getTodayStanding,
+}));
+vi.mock('@/lib/actions/today-focus', () => ({
+  getTodayFocus: reads.getTodayFocus,
+  skipTodayFocus: reads.skipTodayFocus,
+}));
+vi.mock('@/lib/actions/user-brand-state', () => ({
+  readUserBrandState: reads.readUserBrandState,
+  markSeen: reads.markSeen,
+}));
 
 const { default: ActionCenterTodayPage } = await import('./page');
 const { TodayPage } = await import('@/components/action-center/today-page');
+
+function action(id: string, overrides: Partial<ActionItem> = {}): ActionItem {
+  return {
+    id,
+    actionNo: 1,
+    category: 'recover',
+    kind: 'recover_lost_citations',
+    impact: 'high',
+    status: 'new',
+    payload: {},
+    kpiKeys: [],
+    assignee: null,
+    dueDate: null,
+    createdAt: '2026-11-10T09:05:31Z',
+    updatedAt: '2026-11-10T09:05:31Z',
+    taskTotal: 4,
+    taskCompleted: 0,
+    signalCount: 1,
+    priorityScore: 80,
+    priorityLevel: 'high',
+    priorityReason: null,
+    ...overrides,
+  };
+}
+
+const card = (id: string, overrides: Partial<FocusCard> = {}): FocusCard => ({
+  id,
+  action: action(id),
+  isNew: false,
+  firstStep: null,
+  effort: null,
+  who: 'team',
+  ...overrides,
+});
+
+const overview: TodayOverview = {
+  zone: 'UTC',
+  lastRunAt: new Date(Date.now() - 3600_000).toISOString(),
+  trackedPrompts: 12,
+  openActions: 3,
+  doneThisWeek: 1,
+};
+const standing: TodayStanding = {
+  score: 53.9,
+  change: 0.4,
+  rank: 2,
+  of: 5,
+  neighbour: { name: 'Northbound Roasters', gap: 6.2, ahead: false },
+  competitors: [],
+};
 
 let container: HTMLDivElement;
 let root: Root;
@@ -52,6 +143,22 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
+  reads.getTodayOverview.mockResolvedValue(overview);
+  reads.getTodayStanding.mockResolvedValue(standing);
+  reads.getTodayFocus.mockResolvedValue([
+    card('a1', {
+      effort: '~20 min',
+      firstStep: { taskKey: 'validate', title: null, titleParams: {}, url: null },
+    }),
+    card('a2', { isNew: true, action: action('a2', { priorityLevel: 'medium' }) }),
+    card('a3', { action: action('a3', { taskCompleted: 2 }) }),
+  ]);
+  reads.skipTodayFocus.mockResolvedValue({ ok: true });
+  reads.readUserBrandState.mockResolvedValue({
+    navSeen: { today: '2026-11-10T08:00:00.000Z' },
+    focus: [],
+    hidden: {},
+  });
 });
 
 afterEach(() => {
@@ -60,9 +167,13 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
   canManage = true;
+  chatOn = true;
+  firstRun = null;
+  panel.available = true;
 });
 
 async function draw() {
+  vi.stubEnv('SIMPLE_NAV', 'true');
   const page = ActionCenterTodayPage();
   await act(async () => {
     root.render(
@@ -72,6 +183,11 @@ async function draw() {
     );
   });
 }
+
+const text = (selector: string) => container.querySelector(selector)?.textContent;
+const titles = () => [...container.querySelectorAll('section h2')].map((h) => h.textContent);
+const button = (label: string) =>
+  [...container.querySelectorAll('button')].find((b) => b.textContent === label);
 
 describe('Action Center › Today', () => {
   it('is not found while SIMPLE_NAV is off, as production leaves it', () => {
@@ -87,33 +203,144 @@ describe('Action Center › Today', () => {
     expect(isValidElement(page) && page.type).toBe(TodayPage);
   });
 
-  it('draws the Action Center’s header and tabs, the preview note and Today’s five parts', async () => {
-    vi.stubEnv('SIMPLE_NAV', 'true');
+  it('heads the page with the day, the brand and when AI answers came in, then the loop', async () => {
     await draw();
-    expect(container.querySelector('h1')?.textContent).toBe('Action Center');
+    expect(text('h1')).toBe('Action Center');
+    expect(text('header p')).toMatch(
+      /^\w+day, \w{3} \d{1,2} · Brewline Coffee · AI answers updated 1 hour ago$/,
+    );
     expect(container.querySelector('[data-testid="tabs"]')).not.toBeNull();
-    expect(container.querySelector('[role="note"]')?.textContent).toContain('Today is in preview');
-    const parts = [...container.querySelectorAll('section h2')].map((h) => h.textContent);
-    expect(parts).toEqual([
+    const cells = [...container.querySelectorAll('ol[aria-label="Your loop"] li')].map(
+      (li) => li.textContent,
+    );
+    expect(cells).toEqual([
+      '1 · Prompts12 tracked',
+      '2 · AI answersUpdated today',
+      '3 · Actions3 open',
+      '4 · Done1 this week',
+      '5 · Results53.9 +0.4',
+    ]);
+    expect(container.querySelector('[aria-current="step"]')?.getAttribute('data-loop-step')).toBe(
+      'actions',
+    );
+    expect(reads.getTodayOverview).toHaveBeenCalledWith('b1', expect.any(String));
+  });
+
+  it("shows a first run's answers coming in", async () => {
+    firstRun = { progress: { current: 7, total: 44 } };
+    await draw();
+    expect(text('[data-loop-step="answers"]')).toBe('2 · AI answers7 of 44 in');
+  });
+
+  it('lays out the parts as the mockup does, each named by its title', async () => {
+    await draw();
+    expect(titles()).toEqual([
       'Since yesterday',
       "Today's focus",
       'Waiting for you',
       'Finish setting up',
       'Where you stand',
     ]);
-    // Each part is named for screen readers by its title.
     for (const section of container.querySelectorAll('section')) {
       const id = section.getAttribute('aria-labelledby');
       expect(id && container.querySelector(`[id="${id}"]`)).toBeTruthy();
     }
-    const link = (text: string) =>
-      [...container.querySelectorAll('a')].find((a) => a.textContent === text);
+    const link = (label: string) =>
+      [...container.querySelectorAll('a')].find((a) => a.textContent === label);
     expect(link('All signals')?.getAttribute('href')).toBe('/dashboard/action-center/signals');
     expect(link('All actions')?.getAttribute('href')).toBe('/dashboard/action-center/actions');
   });
 
+  it("lists the focus with why, impact, effort and steps, and opens each action's drawer", async () => {
+    await draw();
+    const rows = [...container.querySelectorAll('[data-focus-id]')];
+    expect(rows.map((row) => row.getAttribute('data-focus-id'))).toEqual(['a1', 'a2', 'a3']);
+    expect(rows[0].textContent).toContain('Recover lost citations');
+    expect(rows[0].textContent).toContain('Citations you held consistently are gone.');
+    expect(rows[0].textContent).toContain('High impact · about ~20 min · 0 of 4 steps done');
+    expect(rows[0].textContent).toContain('First step: Validate across AI platforms');
+    expect(rows[1].textContent).toContain('New');
+    expect(rows[1].textContent).toContain('Medium impact');
+    expect(rows[0].querySelector('a')?.textContent).toBe('Start');
+    expect(rows[2].querySelector('a')?.textContent).toBe('Continue');
+    expect(rows[2].querySelector('a')?.getAttribute('href')).toBe(
+      '/dashboard/action-center/actions?action=a3',
+    );
+    // The gear for who starts agent work sits on the focus with Chat on.
+    expect(
+      container.querySelector('[data-today-part="focus"] [data-testid="gear"]'),
+    ).not.toBeNull();
+  });
+
+  it('reads the focus with the last visit, then keeps this one and counts it viewed', async () => {
+    await draw();
+    expect(reads.getTodayFocus).toHaveBeenCalledWith('b1', '2026-11-10T08:00:00.000Z');
+    expect(reads.markSeen).toHaveBeenCalledWith('b1', 'today');
+    expect(track).toHaveBeenCalledWith('today_viewed', { state: 'normal', focus_count: 3 });
+  });
+
+  it('skips a card for the person and reads the focus again', async () => {
+    await draw();
+    reads.getTodayFocus.mockResolvedValue([card('a2'), card('a3'), card('a4')]);
+    await act(async () => {
+      button('Skip for now')?.click();
+    });
+    expect(reads.skipTodayFocus).toHaveBeenCalledWith('b1', 'a1');
+    expect(track).toHaveBeenCalledWith('today_focus_skipped', {
+      action_kind: 'recover_lost_citations',
+    });
+    expect(
+      [...container.querySelectorAll('[data-focus-id]')].map((r) =>
+        r.getAttribute('data-focus-id'),
+      ),
+    ).toEqual(['a2', 'a3', 'a4']);
+  });
+
+  it('says where the brand stands', async () => {
+    await draw();
+    const stand = container.querySelector('[data-today-part="stand"]');
+    expect(stand?.textContent).toContain('53.9 +0.4 since yesterday');
+    expect(stand?.textContent).toContain('#2 of 5 brands. 6.2 points behind Northbound Roasters.');
+  });
+
+  it('hides only the part whose read failed', async () => {
+    reads.getTodayFocus.mockRejectedValue(new Error('down'));
+    reads.getTodayStanding.mockRejectedValue(new Error('down'));
+    await draw();
+    expect(titles()).toEqual(['Since yesterday', 'Waiting for you', 'Finish setting up']);
+    expect(text('[data-loop-step="results"]')).toBe('5 · Results—');
+    expect(text('[data-loop-step="prompts"]')).toBe('1 · Prompts12 tracked');
+  });
+
+  it('says so when nothing is in focus', async () => {
+    reads.getTodayFocus.mockResolvedValue([]);
+    await draw();
+    expect(text('[data-today-part="focus"]')).toContain('Nothing to focus on right now.');
+  });
+
+  it('hands a question to Chat’s side panel with Chat on, and has no box without it', async () => {
+    await draw();
+    const input = container.querySelector<HTMLInputElement>('#today-ask')!;
+    await act(async () => {
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+      setValue.call(input, 'why did my score change?');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => {
+      input.form?.requestSubmit();
+    });
+    expect(panel.fill).toHaveBeenCalledWith('why did my score change?');
+    expect(panel.toggle).toHaveBeenCalled();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    chatOn = false;
+    await draw();
+    expect(container.querySelector('#today-ask')).toBeNull();
+    expect(container.querySelector('[data-testid="gear"]')).toBeNull();
+  });
+
   it('links admins and managers to Needs review from Waiting for you, with how many wait', async () => {
-    vi.stubEnv('SIMPLE_NAV', 'true');
     await draw();
     const review = container.querySelector('[data-action="today.needsReview"]');
     expect(review?.getAttribute('href')).toBe('/dashboard/action-center/review');
@@ -122,7 +349,6 @@ describe('Action Center › Today', () => {
   });
 
   it('shows anyone else no Needs review link, and reads no count', async () => {
-    vi.stubEnv('SIMPLE_NAV', 'true');
     canManage = false;
     await draw();
     expect(container.querySelector('[data-action="today.needsReview"]')).toBeNull();
