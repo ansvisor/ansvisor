@@ -3,6 +3,7 @@ import {
   comparisonWindows,
   deltaDayWindows,
   visibilityChange,
+  wholeDayWindow,
   windowBounds,
 } from './insights-windows';
 
@@ -123,5 +124,57 @@ describe('windowBounds', () => {
       from: '',
       to: '2026-10-14T06:00:00.000Z',
     });
+  });
+});
+
+describe('wholeDayWindow', () => {
+  it("reads Chat's default window, bare days, as those days", () => {
+    expect(wholeDayWindow('2026-10-12', '2026-11-11')).toEqual({
+      dayFrom: '2026-10-12',
+      dayTo: '2026-11-11',
+    });
+  });
+
+  it('reads timestamps on day boundaries as whole days', () => {
+    expect(wholeDayWindow('2026-10-12T00:00:00Z', '2026-11-11T23:59:59Z')).toEqual({
+      dayFrom: '2026-10-12',
+      dayTo: '2026-11-11',
+    });
+    expect(wholeDayWindow('2026-10-12T00:00:00.000Z', '2026-11-11T23:59:59.999Z')).toEqual({
+      dayFrom: '2026-10-12',
+      dayTo: '2026-11-11',
+    });
+    // Another zone's midnight that is UTC midnight; a timestamp with no zone is UTC.
+    expect(wholeDayWindow('2026-10-12T03:00:00+03:00', '2026-11-11T23:59:59')).toEqual({
+      dayFrom: '2026-10-12',
+      dayTo: '2026-11-11',
+    });
+  });
+
+  it('ends an upper bound at midnight on the day before', () => {
+    expect(wholeDayWindow('2026-10-12', '2026-11-11T00:00:00Z')).toEqual({
+      dayFrom: '2026-10-12',
+      dayTo: '2026-11-10',
+    });
+  });
+
+  it('leaves an absent bound open: all time has none', () => {
+    expect(wholeDayWindow(undefined, undefined)).toEqual({});
+    expect(wholeDayWindow(null, '2026-11-11')).toEqual({ dayTo: '2026-11-11' });
+    expect(wholeDayWindow('2026-10-12', '')).toEqual({ dayFrom: '2026-10-12' });
+  });
+
+  it('leaves a bound inside a day to the raw rows', () => {
+    expect(wholeDayWindow('2026-11-10T15:30:00Z', '2026-11-11')).toBeNull();
+    expect(wholeDayWindow('2026-10-12', '2026-11-11T12:00:00Z')).toBeNull();
+    // Turkey's midnight is 21:00 UTC the day before.
+    expect(wholeDayWindow('2026-10-12T00:00:00+03:00', undefined)).toBeNull();
+    // A lower bound at the end of a day is inside it.
+    expect(wholeDayWindow('2026-10-12T23:59:59Z', undefined)).toBeNull();
+  });
+
+  it("leaves what isn't a date to the raw rows, which say so", () => {
+    expect(wholeDayWindow('last month', undefined)).toBeNull();
+    expect(wholeDayWindow('2026-13-45', undefined)).toBeNull();
   });
 });

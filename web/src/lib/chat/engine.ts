@@ -188,6 +188,7 @@ import {
   writeCap,
   type ReadBudget,
 } from './run-limits';
+import { READ_TIMED_OUT, attemptRead, type ReadAttempt } from './read-attempt';
 import {
   DAYS_DEFAULTS,
   DAYS_MAX,
@@ -962,9 +963,6 @@ export const QUEUE_WAIT_MS = 120_000;
 const QUEUE_POLL_MS = 2_000;
 /** How often a driver looks for a Stop made in another process. */
 const STOP_POLL_MS = 1_500;
-/** A read's time limit, and the wait before its one retry (CHAT-20 §11b). */
-const READ_TIMEOUT_MS = 20_000;
-const READ_RETRY_MS = 2_000;
 /** The wait before a model step the provider ended in an error, with nothing in it, runs again. */
 const STEP_RETRY_MS = 1_000;
 
@@ -3902,49 +3900,29 @@ export function dataAsOfOf(value: unknown): string | null {
   return newest === null ? null : new Date(newest).toISOString();
 }
 
-/** A read's own call, with one retry after 2 s (CHAT-20 §11b) and a time limit. */
-async function runRead(
+/**
+ * A read's own call, with a time limit and one retry after 2 s when it failed
+ * (CHAT-20 §11b); one that ran out of time isn't tried again (read-attempt.ts).
+ */
+function runRead(
   rc: RunContext,
   tool: ChatTool,
   input: Record<string, unknown>,
   role: PrecedenceContext['role'],
   pageSites?: ChatToolContext['pageSites'],
   brandAccess?: PrecedenceContext['brandAccess'],
-): Promise<{ ok: true; value: unknown } | { ok: false; timedOut: boolean; error: string }> {
-  let last: { timedOut: boolean; error: string } = { timedOut: false, error: '' };
-  for (let attempt = 0; attempt < 2; attempt++) {
-    if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, READ_RETRY_MS));
-    if (rc.signal.aborted) return { ok: false, timedOut: false, error: 'stopped' };
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    try {
-      const value = await Promise.race([
-        tool.run(
-          pageSites
-            ? { ...toolContext(rc, role, brandAccess), pageSites }
-            : toolContext(rc, role, brandAccess),
-          input as never,
-        ),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new ReadTimeout()), READ_TIMEOUT_MS);
-          // A Stop doesn't wait for the read.
-          rc.signal.addEventListener('abort', () => reject(new Error('stopped')), { once: true });
-        }),
-      ]);
-      return { ok: true, value };
-    } catch (err) {
-      last = {
-        timedOut: err instanceof ReadTimeout,
-        error: err instanceof Error ? err.message : String(err),
-      };
-      if (rc.signal.aborted) break;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  }
-  return { ok: false, ...last };
+): Promise<ReadAttempt> {
+  return attemptRead(
+    () =>
+      tool.run(
+        pageSites
+          ? { ...toolContext(rc, role, brandAccess), pageSites }
+          : toolContext(rc, role, brandAccess),
+        input as never,
+      ),
+    rc.signal,
+  );
 }
-
-class ReadTimeout extends Error {}
 
 /**
  * Who a tool acts as: the signed-in person, with their live role (lib/agent/auth.ts's
@@ -4109,7 +4087,18 @@ async function readCall(
         }
         return result(call, refusal, true);
       }
-      return result(call, { code: timedOut ? 'timeout' : 'failed' }, true);
+      if (!timedOut) return result(call, { code: 'failed' }, true);
+      const timeout = { code: 'timeout', message: READ_TIMED_OUT };
+      // The writer reads only the read log: without it, it can't say what is missing.
+      if (rc.progress.phase === 'read' && rc.models.phases === 'auto') {
+        rc.progress.readLog.push({
+          tool: tool.name,
+          input: toJson(input),
+          result: timeout,
+          source,
+        });
+      }
+      return result(call, timeout, true);
     }
     output = toJson(outcome.value);
     // Outside text (§16a): hidden text goes; an attempt to instruct is marked.

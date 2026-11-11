@@ -17,6 +17,7 @@ import { countTrafficLogs, scanTrafficLogs } from '@/lib/traffic-scan';
 import { readSnippet } from '@/lib/traffic-snippet';
 import { snippetState, type SnippetState } from '@/lib/traffic-sources';
 import { computeAiVisibilityScore } from '@/lib/visibility-score';
+import { wholeDayWindow, type DayWindow } from '@/lib/insights-windows';
 import { API_BASE_URL } from '@/config/api';
 import { ORG_PLAN_COLUMNS, planFromOrgRow, usagePlanFromOrgRow } from '@/lib/guards/plan-guard';
 import { PLANS, type Feature, getMinimumPlanForFeature, hasFeature, isCloud } from '@/config/plans';
@@ -167,6 +168,53 @@ interface CompetitorMentionRow {
   visibility_score: number;
 }
 
+/** ai_visibility_aggregates(_daily)'s payload: the score's components, brand and competitors. */
+interface AiVisibilityPayload {
+  answers?: number;
+  mention_answers?: number;
+  citation_answers?: number;
+  position_factor?: number | string | null;
+  by_competitor?: Array<{
+    competitor_id?: string | null;
+    name: string | null;
+    mention_answers?: number;
+    citation_answers?: number;
+    position_factor?: number | string | null;
+  }>;
+}
+
+/** The AI Visibility Score of a payload, the brand's and each competitor's (shared denominator). */
+function foldAiVisibility(data: unknown) {
+  const aiVis = (data ?? {}) as AiVisibilityPayload;
+  const factor = (value: number | string | null | undefined) =>
+    value === null || value === undefined ? null : Number(value);
+  const answers = Number(aiVis.answers ?? 0);
+  const mentionAnswers = Number(aiVis.mention_answers ?? 0);
+  const citationAnswers = Number(aiVis.citation_answers ?? 0);
+  const positionFactor = factor(aiVis.position_factor);
+  return {
+    aiVisibilityScore: computeAiVisibilityScore({
+      answers,
+      mentionAnswers,
+      citationAnswers,
+      positionFactor,
+    }),
+    mentionAnswers,
+    citationAnswers,
+    positionFactor,
+    competitors: (aiVis.by_competitor ?? []).map((c) => ({
+      id: c.competitor_id ?? null,
+      name: c.name,
+      score: computeAiVisibilityScore({
+        answers,
+        mentionAnswers: Number(c.mention_answers ?? 0),
+        citationAnswers: Number(c.citation_answers ?? 0),
+        positionFactor: factor(c.position_factor),
+      }),
+    })),
+  };
+}
+
 export async function getVisibilitySummaryFor(
   auth: McpAuthContext,
   params: VisibilitySummaryParams,
@@ -190,6 +238,17 @@ export async function getVisibilitySummaryFor(
     : null;
   const p_models_arg = p_models && p_models.length > 0 ? p_models : null;
 
+  // Whole UTC days (Chat's default window, a date-only range, all time) are
+  // answered from the daily rollups, as the Visibility page answers them.
+  const days = wholeDayWindow(params.dateFrom, params.dateTo);
+  if (days) {
+    return visibilitySummaryFromRollups(brand, {
+      models: p_models_arg,
+      region: params.region ?? null,
+      days,
+    });
+  }
+
   const rpcBaseArgs = {
     p_brand_id: params.brandId,
     p_platform: null as string | null,
@@ -204,7 +263,8 @@ export async function getVisibilitySummaryFor(
   // excludes chatgpt-shopping for the same reason: its model isn't
   // comparable to a normal ChatGPT answer and would skew brand visibility.
   //
-  // Run the raw-row query and the two rate RPCs in parallel:
+  // A window that starts or ends inside a day reads the raw rows. Run the
+  // raw-row query and the rate RPCs in parallel:
   //   • visible_prompt_stats  → visiblePrompts (numerator)
   //   • tracked_prompt_count  → promptCount (denominator)
   // This is the exact same source pair used by getVisibilityRateKpi /
@@ -261,41 +321,9 @@ export async function getVisibilitySummaryFor(
     promptCount > 0 ? Math.round((visiblePrompts / promptCount) * 1000) / 10 : 0;
 
   // AI Visibility Score — the same blend every dashboard surface shows.
-  const aiVis = (aiVisRes.data ?? {}) as {
-    answers?: number;
-    mention_answers?: number;
-    citation_answers?: number;
-    position_factor?: number | null;
-    by_competitor?: Array<{
-      name: string | null;
-      mention_answers?: number;
-      citation_answers?: number;
-      position_factor?: number | null;
-    }>;
-  };
-  const aiAnswers = Number(aiVis.answers ?? 0);
-  const mentionAnswers = Number(aiVis.mention_answers ?? 0);
-  const citationAnswers = Number(aiVis.citation_answers ?? 0);
-  const positionFactor = aiVis.position_factor ?? null;
-  const aiVisibilityScore = computeAiVisibilityScore({
-    answers: aiAnswers,
-    mentionAnswers,
-    citationAnswers,
-    positionFactor,
-  });
+  const { competitors: compScores, ...score } = foldAiVisibility(aiVisRes.data);
   const compScoreByName = new Map<string, number | null>();
-  for (const c of aiVis.by_competitor ?? []) {
-    if (!c.name) continue;
-    compScoreByName.set(
-      c.name,
-      computeAiVisibilityScore({
-        answers: aiAnswers,
-        mentionAnswers: Number(c.mention_answers ?? 0),
-        citationAnswers: Number(c.citation_answers ?? 0),
-        positionFactor: c.position_factor ?? null,
-      }),
-    );
-  }
+  for (const c of compScores) if (c.name) compScoreByName.set(c.name, c.score);
 
   if (results.length === 0) {
     return {
@@ -308,10 +336,7 @@ export async function getVisibilitySummaryFor(
         visiblePrompts,
         promptCount,
         visibilityRatePct,
-        aiVisibilityScore,
-        mentionAnswers,
-        citationAnswers,
-        positionFactor,
+        ...score,
       },
       topCompetitors: [],
     };
@@ -363,12 +388,100 @@ export async function getVisibilitySummaryFor(
       visiblePrompts,
       promptCount,
       visibilityRatePct,
-      aiVisibilityScore,
-      mentionAnswers,
-      citationAnswers,
-      positionFactor,
+      ...score,
     },
     topCompetitors,
+  };
+}
+
+const roundTenth = (value: number) => Math.round(value * 10) / 10;
+
+/** competitor_aggregates_daily's payload, the parts the summary reads. */
+interface CompetitorAggregatesDaily {
+  brand_row_count?: number;
+  brand_sum_visibility?: number | string | null;
+  brand_total_mentions?: number;
+  brand_total_citations?: number;
+  brand_prompt_count?: number;
+  brand_visible_prompts?: number;
+  by_competitor?: Array<{
+    competitor_id: string;
+    name: string | null;
+    sum_visibility: number | string | null;
+    total_mentions: number | null;
+  }>;
+}
+
+/**
+ * The visibility summary over whole UTC days, from the daily rollups
+ * (00066, 00164): what the Visibility page reads for the same window, in two
+ * calls that run together. Their cost follows the days in the window, not
+ * the answers in it. The raw path reads the window's answers in four
+ * queries at once, unpacking each answer's competitor list, and its row read
+ * stops at PostgREST's 1,000 rows: on a brand with a month of answers it
+ * outran Chat's 20 s read limit (2026-11-11).
+ *
+ *   • competitor_aggregates_daily → the answers, mentions, citations and
+ *     legacy average, the prompts answered and appeared in, and each live
+ *     competitor's mentions and legacy average;
+ *   • ai_visibility_aggregates_daily → the AI Visibility Score's
+ *     components, the brand's and each live competitor's.
+ *
+ * A day's rows are written when its tracking run completes, as on the page.
+ */
+async function visibilitySummaryFromRollups(
+  brand: { id: string; name: string },
+  filters: { models: string[] | null; region: string | null; days: DayWindow },
+): Promise<VisibilitySummary> {
+  const args = {
+    p_brand_id: brand.id,
+    p_models: filters.models,
+    p_region: filters.region,
+    p_day_from: filters.days.dayFrom ?? null,
+    p_day_to: filters.days.dayTo ?? null,
+  };
+  const [aggRes, aiVisRes] = await Promise.all([
+    supabaseAdmin.rpc('competitor_aggregates_daily', args),
+    supabaseAdmin.rpc('ai_visibility_aggregates_daily', args),
+  ]);
+  if (aggRes.error) throw new Error(aggRes.error.message);
+  if (aiVisRes.error) throw new Error(aiVisRes.error.message);
+
+  const agg = (aggRes.data ?? {}) as CompetitorAggregatesDaily;
+  const resultCount = Number(agg.brand_row_count ?? 0);
+  const visiblePrompts = Number(agg.brand_visible_prompts ?? 0);
+  const promptCount = Number(agg.brand_prompt_count ?? 0);
+  const { competitors: compScores, ...score } = foldAiVisibility(aiVisRes.data);
+  const scoreById = new Map(compScores.map((c) => [c.id, c.score]));
+  // The legacy averages divide by the brand's answers, competitors' too (#478).
+  const average = (sum: number | string | null | undefined) =>
+    resultCount > 0 ? roundTenth(Number(sum ?? 0) / resultCount) : 0;
+
+  return {
+    brand: { id: brand.id, name: brand.name },
+    totals: {
+      resultCount,
+      avgVisibility: average(agg.brand_sum_visibility),
+      totalMentions: Number(agg.brand_total_mentions ?? 0),
+      totalCitations: Number(agg.brand_total_citations ?? 0),
+      visiblePrompts,
+      promptCount,
+      visibilityRatePct:
+        promptCount > 0 ? Math.round((visiblePrompts / promptCount) * 1000) / 10 : 0,
+      ...score,
+    },
+    topCompetitors:
+      resultCount > 0
+        ? (agg.by_competitor ?? [])
+            .map((c) => ({
+              name: c.name ?? '',
+              mentions: Number(c.total_mentions ?? 0),
+              avgVisibility: average(c.sum_visibility),
+              score: scoreById.get(c.competitor_id) ?? null,
+            }))
+            .sort((a, b) => b.mentions - a.mentions || a.name.localeCompare(b.name))
+            .slice(0, 5)
+        : [],
   };
 }
 
