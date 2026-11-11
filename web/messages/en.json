@@ -2236,10 +2236,10 @@
           "check": "Checked again after each catalog sync, or now with Check now on its task: the action closes once the page links none of them."
         },
         "businessHub": {
-          "title": "ChatGPT Business Hub",
-          "open": "Open Business Hub",
           "check": "Check what ChatGPT says",
           "checkText": "Check what ChatGPT says about our business, and prepare our Business Hub corrections and site fixes.",
+          "title": "ChatGPT Business Hub",
+          "open": "Open Business Hub",
           "noApi": "There's no Business Hub API: mark each task done when its Done when is true.",
           "usOnlyAgent": "Business Agents are for US businesses only."
         },
