@@ -8,7 +8,7 @@ updated: 2026-11-07
 last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 On an online store, Ansvisor picks the product pages most worth improving for AI shopping answers and opens an **Optimize the product pages AI asks about** action for them. It needs your site type set to an online store and a product catalog.

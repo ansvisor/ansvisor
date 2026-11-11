@@ -8,7 +8,7 @@ updated: 2026-11-06
 last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/answer-engine-insights.mdx, docs/guides/mcp-server.mdx]
 ---
 **Product Visibility** is the fourth tab of **Visibility**, for brands that sell online. It shows which of your products AI shopping answers put on their shelf, why some don't make it, and what AI visits sell. Open it from the tabs under Visibility's header, or from **Visibility › Products** in the sidebar. It used to be a page of its own in the sidebar; links to it still open it.

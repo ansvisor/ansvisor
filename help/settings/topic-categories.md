@@ -8,7 +8,7 @@ updated: 2026-11-07
 last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/topics.mdx]
 ---
 On an online store, each topic you track can be about one or more categories of your product catalog: the topic "cold brew" and the category "Coffee > Cold Brew". The link lets a topic's work reach the category's page and its products.
