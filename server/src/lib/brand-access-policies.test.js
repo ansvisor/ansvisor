@@ -605,6 +605,8 @@ describe('every brand table answers to the brand’s access', () => {
       'chat_schedules',
       'chat_memory_items',
       'brand_integrations',
+      // A person's own Today and menu state (00529): their rows, on brands they access.
+      'user_brand_state',
     ]) {
       expect(reaching, table).toContain(table);
     }
