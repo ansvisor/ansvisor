@@ -40,6 +40,14 @@ Business Hub counts clicks on links in ChatGPT; Ansvisor counts visits that arri
 
 Entering the same days again replaces that entry. Your first entry completes the setup action's **Enter your first Business Hub numbers** task.
 
+## Bring numbers in from a spreadsheet
+
+Business Hub has no export yet, so Ansvisor has its own template. In **Enter numbers**, choose **Import CSV**, then **Download template**.
+
+Copy Business Hub's numbers into it, one row per entry: the last day, 7 or 28 days, Mentions, Website clicks, Profile views and up to five topics. Leave a number empty if Business Hub doesn't show it. Files saved by Excel in Turkish or English work: cells split by commas or semicolons, numbers like 1.240, and dates like 10.11.2026.
+
+Choose the file to see every row before anything is saved: new, replacing an entry for the same days, or not readable and why. Rows that can't be read are left out. Up to 104 rows at a time.
+
 ## Who can enter, edit and delete
 
 Every member of the workspace can enter numbers and edit an entry from **All entries**. Only admins and managers can delete an entry.

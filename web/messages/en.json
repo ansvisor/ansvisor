@@ -9450,7 +9450,48 @@
       "saved": "Business Hub numbers saved",
       "saveFailed": "Couldn't save the numbers. Try again.",
       "demo": "This is the demo brand: its numbers are samples.",
-      "off": "Business Hub numbers aren't available here."
+      "off": "Business Hub numbers aren't available here.",
+      "import": {
+        "link": "Import CSV",
+        "title": "Import from a spreadsheet",
+        "noExport": "Business Hub has no export yet. This is Ansvisor's own template: copy the numbers from Business Hub into it.",
+        "columnsHint": "One row per entry: the last day (YYYY-MM-DD or DD.MM.YYYY), 7 or 28 days, Mentions, Website clicks, Profile views and up to five topics. Leave a number empty if Business Hub doesn't show it.",
+        "template": "Download template",
+        "choose": "Choose a CSV file",
+        "readFailed": "Couldn't read the file.",
+        "missingHeader": "This file has no period_end column. Start from the template.",
+        "truncated": "Only the first 104 rows are read; {count, plural, one {# more was} other {# more were}} left out.",
+        "summary": "{new} new · {replaces} replace an entry · {errors} can't be read",
+        "columns": {
+          "row": "Row",
+          "lastDay": "Last day",
+          "days": "Days",
+          "mentions": "Mentions",
+          "clicks": "Clicks",
+          "views": "Views",
+          "status": "Status"
+        },
+        "status": {
+          "new": "New",
+          "replaces": "Replaces an entry"
+        },
+        "reasons": {
+          "date": "The last day isn't a date (YYYY-MM-DD or DD.MM.YYYY).",
+          "future": "The last day is in the future.",
+          "too_old": "The last day is more than two years ago.",
+          "days": "Days must be 7 or 28.",
+          "count": "{column} isn't a whole number.",
+          "too_many_topics": "More than 5 topics.",
+          "topic_too_long": "A topic is over 120 characters.",
+          "empty": "No number and no topic.",
+          "duplicate": "The same days as row {row}."
+        },
+        "import": "Import {count, plural, one {# entry} other {# entries}}",
+        "importing": "Importing…",
+        "imported": "{count, plural, one {# entry} other {# entries}} imported",
+        "failed": "Couldn't import the file. Nothing was saved.",
+        "back": "Back"
+      }
     }
   },
   "topics": {
