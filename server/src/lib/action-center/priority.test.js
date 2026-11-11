@@ -437,6 +437,26 @@ describe('scorePriority', () => {
     expect(linked.reason.factors).toMatchObject({ severity: 0.6, confidence: 0.9 });
   });
 
+  it('scores the ChatGPT Business Hub setup as room to grow on one platform', () => {
+    const setup = scorePriority(
+      {
+        action: action({
+          kind: 'business_hub_setup',
+          category: 'growth',
+          impact: 'medium',
+          created_at: daysAgo(0),
+          payload: { source: 'business_hub', targetEntity: 'platforms', targetCount: 1 },
+        }),
+      },
+      NOW,
+    );
+    expect(setup.reason).toMatchObject({
+      change: 'opportunity',
+      subject: { entity: 'platforms', count: 1 },
+    });
+    expect(setup.reason.factors).toMatchObject({ confidence: 0.6, recoverability: 0.8 });
+  });
+
   it('stays within 0–100 and returns whole numbers', () => {
     for (const impact of ['high', 'medium', 'low', 'unknown']) {
       const { score } = scorePriority({ action: action({ impact }), signals: [] }, NOW);

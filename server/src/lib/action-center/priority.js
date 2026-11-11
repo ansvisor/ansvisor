@@ -420,6 +420,18 @@ function sentByHand(action) {
       subject: { entity: 'pages', count: 1 },
     };
   }
+  // Setting up a ChatGPT Business Hub profile (from-business-hub.js): room to
+  // grow on one platform, raised once from its tracked answers, and work a
+  // person can finish in a few sittings.
+  if (action.kind === 'business_hub_setup') {
+    return {
+      change: 'opportunity',
+      severity: SEVERITY.opportunity,
+      confidence: 0.6,
+      recoverability: 0.8,
+      subject: { entity: 'platforms', count: 1 },
+    };
+  }
   // Pages sent from AI Traffic (AT-006). Answers citing a page nobody clicks
   // rest on two sources, citations and traffic, and the page already earns
   // the answer; a page AI skips rests on traffic alone.

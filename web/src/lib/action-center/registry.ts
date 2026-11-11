@@ -39,7 +39,8 @@ export type ActionOutcome =
   | 'not_measurable';
 
 /** A kind this build has copy for — the V1 library's sixty-two definitions, plus
- *  the kinds a person sends from another page. */
+ *  the kinds a person sends from another page, and the ones raised by a check
+ *  of their own (the catalog's, Business Hub's). */
 export type ActionKind =
   | 'capture_ai_traffic'
   | 'convert_mentions'
@@ -132,7 +133,10 @@ export type ActionKind =
   // longer sell (shopping path, part 7), and closed by it once fixed.
   | 'shopping_links'
   // Sent by a person from Chat: a finding and its tasks, as approved (CHAT-09 §E).
-  | 'chat_finding';
+  | 'chat_finding'
+  // Raised once per brand by the nightly pass: set up its ChatGPT Business
+  // Hub profile (BUSINESS_HUB_ENABLED).
+  | 'business_hub_setup';
 
 export type TaskStatus =
   | 'todo'
@@ -312,6 +316,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'shopping_category',
   'shopping_links',
   'chat_finding',
+  'business_hub_setup',
 ];
 
 /**

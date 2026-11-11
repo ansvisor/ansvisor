@@ -88,6 +88,7 @@ import { BridgeLinksContext } from './bridge-links-context';
 import { ProductPagesContext } from './product-pages-context';
 import { AuditPageContext } from './audit-page-context';
 import { ChatFindingContext } from './chat-finding-context';
+import { BusinessHubContext } from './business-hub-context';
 import {
   TaskDetailForm,
   TaskDetailView,
@@ -792,6 +793,11 @@ export function ActionDrawer({
                   <Separator />
                   <ShoppingLinksContext payload={action.payload ?? {}} />
                 </>
+              ) : action.kind === 'business_hub_setup' ? (
+                <>
+                  <Separator />
+                  <BusinessHubContext payload={action.payload ?? {}} />
+                </>
               ) : action.kind === 'bridge_links' ? (
                 <>
                   <Separator />
@@ -951,9 +957,11 @@ export function ActionDrawer({
                                 ? t('drawer.noSignalsShoppingLinks')
                                 : action.kind === 'chat_finding'
                                   ? t('drawer.noSignalsChat')
-                                  : opportunityId
-                                    ? t('drawer.noSignalsOpportunity')
-                                    : t('drawer.noSignals')}
+                                  : action.kind === 'business_hub_setup'
+                                    ? t('drawer.noSignalsBusinessHub')
+                                    : opportunityId
+                                      ? t('drawer.noSignalsOpportunity')
+                                      : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {
