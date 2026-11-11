@@ -5192,7 +5192,10 @@
       "files": "Files",
       "scheduled": "Scheduled",
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
-      "agents": "Agent Center"
+      "agents": "Agent Center",
+      "agentsShort": "Agents",
+      "agentsWhere": "in Action Center",
+      "agentsLabel": "Agents · in Action Center"
     },
     "actions": {
       "more": "More for {name}",
@@ -7142,13 +7145,21 @@
         "clear": "Clear search"
       },
       "loadFailed": "Couldn't load the agents.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "openInChat": {
+        "running": "Open the run in Chat",
+        "needsYou": "Review in Chat",
+        "last": "Open the last run"
+      }
     },
     "center": {
       "tabs": {
         "ready": "Ready to use",
         "yours": "Your agents"
-      }
+      },
+      "askChat": "Ask Chat to make one",
+      "askChatText": "Help me set up an agent for recurring work. Ask me what it should do and how often.",
+      "askChatTip": "Opens Chat with this filled in. You read it and send it."
     },
     "ready": {
       "filters": {

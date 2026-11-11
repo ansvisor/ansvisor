@@ -57,6 +57,7 @@ vi.mock('@/components/providers/ai-usage-provider', () => ({
 }));
 
 const { ChatMenuView } = await import('./chat-menu');
+const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 const { ChatShell } = await import('./chat-shell');
 const { useChatCrumb } = await import('./chat-crumb');
 const { AgentsSeen } = await import('./agents/agents-seen');
@@ -378,6 +379,26 @@ describe('ChatMenuView', () => {
     expect(text()).not.toContain('Chat d');
     // A chat at work isn't listed again below.
     expect(action('chatMenu.openChat')).toHaveLength(4);
+  });
+
+  it('names Agent Center "Agents · in Action Center" with the simplified layout on, and keeps Agents at work (SIMPLE_NAV)', async () => {
+    const chats = [
+      chat('a', { state: 'needsYou', progress: { done: 3, total: 6 } }),
+      chat('b', { state: 'running' }),
+    ];
+    await render(<SimpleNavProvider enabled>{menu(chats)}</SimpleNavProvider>);
+    const agents = action('chatMenu.openAgents')[0];
+    // The same page, its New pill until it is first opened, and where it is now.
+    expect(agents.getAttribute('href')).toBe('/dashboard/agents');
+    expect(agents.textContent).toBe('AgentsNewin Action Center');
+    expect(agents.getAttribute('aria-label')).toBe('Agents · in Action Center');
+    expect(agents.querySelector('[data-slot="agents-where"] svg')).not.toBeNull();
+    expect(text()).toContain('Agents at work2');
+    expect(text()).toContain('Needs your OK · step 4 of 6');
+    // Off: as it was.
+    await render(menu(chats));
+    expect(action('chatMenu.openAgents')[0].textContent).toBe('Agent CenterNew');
+    expect(action('chatMenu.openAgents')[0].hasAttribute('aria-label')).toBe(false);
   });
 
   it("leaves a teammate's shared chat out of the Inbox: it waits on its author", async () => {

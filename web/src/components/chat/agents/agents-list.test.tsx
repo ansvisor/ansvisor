@@ -4,6 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
+import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 import type { AgentListResult } from '@/lib/chat/agents';
 import { AGENT_ID, NOW, listItem, listResult } from '@/lib/chat/testing/agent-fixtures';
 
@@ -49,8 +50,10 @@ vi.mock('sonner', () => ({ toast }));
 vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: vi.fn(async () => ({ ok: true, id: 'request-1' })),
 }));
+vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
 
 const { AgentCenter } = await import('./agent-center');
+const { track } = await import('@/lib/analytics');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -64,13 +67,15 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => answer(url, i
 async function settle() {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 }
-async function render(role: TeamRole = 'manager') {
+async function render(role: TeamRole = 'manager', simpleNav = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <RoleProvider role={role}>
-          <AgentCenter initialTab="yours" now={NOW} timeZone="UTC" />
-        </RoleProvider>
+        <SimpleNavProvider enabled={simpleNav}>
+          <RoleProvider role={role}>
+            <AgentCenter initialTab="yours" now={NOW} timeZone="UTC" />
+          </RoleProvider>
+        </SimpleNavProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -448,5 +453,89 @@ describe('AgentsList (Agent Center › Your agents)', () => {
     expect(empty.textContent).toContain('No agents here');
     expect(empty.textContent).toContain('Make one with New agent.');
     expect(action('agents.showAll')).toHaveLength(0);
+  });
+});
+
+describe('Action Center › Agents (SIMPLE_NAV)', () => {
+  const CHAT = 'cccccccc-0000-4000-8000-000000000001';
+  const withRun = (n: number, status: string, chatId: string | null) =>
+    listItem({
+      id: `aaaaaaaa-0000-4000-8000-00000000001${n}`,
+      name: `Agent ${n}`,
+      lastRun: { status, at: '2026-10-30T09:14:00.000Z', chatId },
+    });
+
+  beforeEach(() => {
+    vi.mocked(track).mockClear();
+  });
+
+  it("opens each card's run in Chat: while it runs, while it needs someone, or its last one", async () => {
+    page = listResult([
+      withRun(1, 'running', CHAT),
+      withRun(2, 'needs_you', CHAT),
+      withRun(3, 'done', CHAT),
+      // No chat the person can open (someone else's private one): no button.
+      withRun(4, 'done', null),
+      listItem({ id: 'aaaaaaaa-0000-4000-8000-000000000015', name: 'Never ran', lastRun: null }),
+    ]);
+    await render('manager', true);
+    const buttons = cards().map((card) =>
+      card.querySelector<HTMLAnchorElement>('[data-action="agents.openInChat"]'),
+    );
+    expect(buttons.map((b) => b?.textContent ?? null)).toEqual([
+      'Open the run in Chat',
+      'Review in Chat',
+      'Open the last run',
+      null,
+      null,
+    ]);
+    expect(buttons[0]?.getAttribute('href')).toBe(`/dashboard/chat/${CHAT}`);
+    // The card's first button; Run now, Pause and Open stay beside it.
+    const first = cards()[0];
+    const runNow = first.querySelector<HTMLElement>('[data-action="agents.run"]')!;
+    expect(runNow.parentElement?.firstElementChild).toBe(buttons[0]);
+    expect(first.querySelector('[data-action="agents.pauseResume"]')?.textContent).toBe('Pause');
+    await click(buttons[1]!);
+    expect(track).toHaveBeenCalledWith('agents_open_in_chat', { state: 'needsYou' });
+  });
+
+  it('shows no Chat button with the flag off: the cards are as they were', async () => {
+    page = listResult([withRun(1, 'running', CHAT)]);
+    await render('manager');
+    expect(action('agents.openInChat')).toHaveLength(0);
+  });
+
+  it('puts Your agents first and Ready to use under it, with Ask Chat to make one and New agent', async () => {
+    await render('manager', true);
+    expect(container.querySelector('[role="tablist"]')).toBeNull();
+    expect(container.querySelector('h1')).toBeNull();
+    const titles = all('h2').map((h) => h.textContent);
+    expect(titles[0]).toMatch(/^Your agents/);
+    expect(titles[1]).toBe('Ready to use');
+    // Both on the page: nothing hidden behind a tab.
+    for (const slot of ['agent-center-yours', 'agent-center-ready']) {
+      expect(container.querySelector(`[data-slot="${slot}"]`)?.hasAttribute('hidden')).toBe(false);
+    }
+    expect(container.querySelector('[data-slot="agents-count"]')?.textContent).toBe('4');
+    expect(cards()).toHaveLength(2);
+    // Ask Chat to make one only fills Chat's box: the person reads it and sends it.
+    const ask = action('agents.askChat')[0];
+    expect(ask.textContent).toBe('Ask Chat to make one');
+    expect(ask.getAttribute('href')).toBe(
+      `/dashboard/chat?${new URLSearchParams({
+        compose:
+          'Help me set up an agent for recurring work. Ask me what it should do and how often.',
+      })}`,
+    );
+    await click(ask);
+    expect(track).toHaveBeenCalledWith('agents_ask_chat_clicked');
+    expect(action('agents.new')[0].getAttribute('href')).toBe('/dashboard/agents/new');
+  });
+
+  it('gives readers the read-only line, and neither Ask Chat nor New agent', async () => {
+    await render('analyst', true);
+    expect(container.querySelector('[data-slot="agents-read-only"]')).not.toBeNull();
+    expect(action('agents.askChat')).toHaveLength(0);
+    expect(action('agents.new')).toHaveLength(0);
   });
 });
