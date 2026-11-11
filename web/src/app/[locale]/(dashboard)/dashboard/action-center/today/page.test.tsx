@@ -548,6 +548,33 @@ describe('Action Center › Today', () => {
     expect(text('header')).toContain('Since yesterday: 3 changes · 5 things waiting for you');
   });
 
+  it("lists the agent runs of the brand on screen, never another brand's", async () => {
+    const byBrand: Record<string, Record<string, unknown>[]> = {
+      b1: [chats[0]],
+      b2: [
+        {
+          id: 'c9',
+          mine: true,
+          state: 'needsYou',
+          title: 'Another brand’s page',
+          lastMessageAt: '2026-11-11T09:00:00Z',
+        },
+      ],
+    };
+    // As the chats API answers: one brand's chats when asked, every brand's otherwise.
+    vi.mocked(fetch).mockImplementation(async (input) => {
+      const brand = new URL(String(input), 'https://app.example.com').searchParams.get('brandId');
+      const list = brand ? (byBrand[brand] ?? []) : Object.values(byBrand).flat();
+      return { ok: true, json: async () => ({ ok: true, chats: list }) } as unknown as Response;
+    });
+    await draw();
+    expect(fetch).toHaveBeenCalledWith('/api/chat/conversations?brandId=b1', { cache: 'no-store' });
+    const agent = container.querySelector('[data-waiting="agent"]');
+    expect(agent?.textContent).toContain('An agent is waiting for your OK on “Comparison page”.');
+    expect(agent?.textContent).not.toContain('Another brand');
+    expect(agent?.querySelector('a')?.getAttribute('href')).toBe('/dashboard/chat/c1');
+  });
+
   it("leaves out agent runs without Chat, and rows off the person's menu", async () => {
     chatOn = false;
     hidden = new Set(['content', 'prompts']);
@@ -589,6 +616,13 @@ describe('Action Center › Today', () => {
       'Rival',
     ]);
     expect(rows[2].textContent).toContain('Morning Ritual Co.');
+    // The change and its action read as two sentences, not one run-on line.
+    expect(rows[1].textContent).toBe(
+      'UpFirst citation for beanbulletin.example. An action was added.',
+    );
+    expect(rows[0].textContent).toBe(
+      'UpVisibility gained for “best whole bean coffee for espresso”',
+    );
     const added = rows[1].querySelector('a');
     expect(added?.textContent).toBe('An action was added');
     expect(added?.getAttribute('href')).toBe('/dashboard/action-center/actions?action=a9');

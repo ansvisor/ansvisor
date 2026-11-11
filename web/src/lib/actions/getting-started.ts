@@ -106,15 +106,20 @@ export async function startGettingStarted(brandId: string): Promise<void> {
 
 /**
  * Skip Getting started: the actions list goes back to normal, the steps
- * already done stay done, and Start brings it back.
+ * already done stay done, and Start brings it back. An upsert, as Start is:
+ * a brand from before 00196 has no row until now, and Today's Hide skips it
+ * for the brand all the same. Admins and managers only (00197's insert and
+ * update policies); anyone else's write is refused.
  */
 export async function skipGettingStarted(brandId: string): Promise<void> {
   await assertWritable({ brandId });
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('getting_started')
-    .update({ dismissed_at: new Date().toISOString() })
-    .eq('brand_id', brandId)
+    .upsert(
+      { brand_id: brandId, dismissed_at: new Date().toISOString() },
+      { onConflict: 'brand_id' },
+    )
     .select('brand_id');
   if (error) throw new Error(error.message);
   // RLS lets only admins and managers write: nothing changed otherwise.
