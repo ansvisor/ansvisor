@@ -11,6 +11,7 @@ import { viewerTimeZone } from '@/lib/time-zone';
 import { ActionCenterHeader } from './action-center-header';
 import { ActionCenterTabs } from './action-center-tabs';
 import { FocusSection } from './today/focus-section';
+import { SetupSection } from './today/setup-section';
 import { SinceSection } from './today/since-section';
 import { WaitingSection } from './today/waiting-section';
 import {
@@ -18,7 +19,6 @@ import {
   LoopStrip,
   ResultsValue,
   StandSection,
-  TodaySection,
   useAnswersCell,
 } from './today/today-parts';
 import { useTodayRead, useTodayVisit, type TodayVisitPart } from './today/use-today';
@@ -29,18 +29,21 @@ const VISIT_PARTS: readonly TodayVisitPart[] = ['since', 'focus', 'waiting'];
 /**
  * Action Center › Today (SIMPLE_NAV), the page everyone lands on with the
  * simplified layout on (mockup Main): the date, brand and when AI answers
- * last came in; the loop strip; then Since yesterday and Today's focus, with
- * Waiting for you, Finish setting up and Where you stand beside them; and
- * Ask Chat at the bottom. Each part reads on its own, so a slow or failed
- * read shows or hides only its part. The parts still being built say what
- * they will show, under a note that Today is in preview.
+ * last came in, with how many changes and things wait; the loop strip; then
+ * Since yesterday and Today's focus, with Waiting for you, Finish setting
+ * up and Where you stand beside them; and Ask Chat at the bottom. Each part
+ * reads on its own, so a slow or failed read shows or hides only its part.
  */
 export function TodayPage() {
   const t = useTranslations('actionCenter.today');
   const brandId = useBrandStore((s) => s.activeBrandId);
   const brandName = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId)?.name);
   const firstRun = useFirstRun();
-  const visit = useTodayVisit(brandId, VISIT_PARTS);
+  // Steps done, for today_viewed when it has read by then.
+  const [setupDone, setSetupDone] = useState<number | null>(null);
+  const visit = useTodayVisit(brandId, VISIT_PARTS, () =>
+    setupDone === null ? {} : { setup_done: setupDone },
+  );
   const overview = useTodayRead(brandId, () => getTodayOverview(brandId!, viewerTimeZone()));
   const standing = useTodayRead(brandId, () => getTodayStanding(brandId!));
 
@@ -77,12 +80,6 @@ export function TodayPage() {
         aside={summary}
       />
       <ActionCenterTabs />
-      <p
-        role="note"
-        className="rounded-lg border border-dashed px-4 py-3 text-sm text-muted-foreground"
-      >
-        {t('preview')}
-      </p>
       <LoopStrip
         current="actions"
         cells={{
@@ -120,7 +117,14 @@ export function TodayPage() {
               onSummary={setWaiting}
             />
           )}
-          <Placeholder part="setup" />
+          {brandId && (
+            <SetupSection
+              brandId={brandId}
+              brandName={brandName ?? null}
+              visit={visit}
+              onDone={setSetupDone}
+            />
+          )}
           <StandSection load={standing} />
         </div>
       </div>
@@ -153,14 +157,4 @@ function TodayLine({
         : t('updated', { ago: format.relativeTime(new Date(lastRunAt), now) }),
   ];
   return <>{parts.filter(Boolean).join(' · ')}</>;
-}
-
-/** A part still being built: what it will show. */
-function Placeholder({ part }: { part: 'setup' }) {
-  const t = useTranslations('actionCenter.today');
-  return (
-    <TodaySection part={part} title={t(`sections.${part}.title`)} dashed>
-      <p className="text-sm text-muted-foreground">{t(`sections.${part}.body`)}</p>
-    </TodaySection>
-  );
 }

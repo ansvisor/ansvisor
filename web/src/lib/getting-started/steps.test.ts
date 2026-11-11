@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   GETTING_STARTED_STEPS,
+  SETUP_STEPS,
   buildGettingStarted,
   firstRunOrder,
   isPageOpenedStep,
@@ -293,6 +294,67 @@ describe('buildGettingStarted', () => {
  * While the brand's first tracking run goes on, the steps that need none of
  * its data come first, "Ready now"; the rest wait for it.
  */
+describe('the 7 set-up steps (SIMPLE_NAV)', () => {
+  const setup = (f: GettingStartedFacts) => buildGettingStarted(f, { setupOnly: true });
+
+  it('lists only the set-up steps, in order, with no Ready step', () => {
+    expect(SETUP_STEPS.map((s) => s.key)).toEqual([
+      'kpis',
+      'competitors',
+      'topics',
+      'prompts',
+      'gsc',
+      'ga',
+      'snippet',
+    ]);
+    const status = setup(facts());
+    expect(status.steps.map((s) => s.key)).toEqual(SETUP_STEPS.map((s) => s.key));
+    expect(status).toMatchObject({ done: 0, total: 7 });
+  });
+
+  it('carries over what a brand already did, from its data and records', () => {
+    const status = setup(
+      facts({
+        startedAt: null,
+        confirmedAt: null,
+        kpiSetupAt: '2026-09-01T00:00:00Z',
+        competitors: 4,
+        topicPrompts: [3, 5, 3],
+        gsc: true,
+        firstVisit: true,
+        // Explore records still count where they are kept, but aren't listed.
+        records: { visibility: 'opened', ga: 'skipped' },
+      }),
+    );
+    expect(status.steps.map((s) => [s.key, s.state])).toEqual([
+      ['kpis', 'done'],
+      ['competitors', 'done'],
+      ['topics', 'done'],
+      ['prompts', 'done'],
+      ['gsc', 'done'],
+      ['ga', 'skipped'],
+      ['snippet', 'done'],
+    ]);
+    expect(status).toMatchObject({ done: 7, total: 7 });
+  });
+
+  it('counts a skipped optional step as complete, and leaves the rest to do', () => {
+    const status = setup(facts({ competitors: 3, records: { gsc: 'skipped' } }));
+    expect(status.done).toBe(2);
+    expect(status.steps.filter((s) => s.state === 'new').map((s) => s.key)).toEqual([
+      'kpis',
+      'topics',
+      'prompts',
+      'ga',
+      'snippet',
+    ]);
+  });
+
+  it('keeps the 17 steps without it', () => {
+    expect(buildGettingStarted(facts()).total).toBe(GETTING_STARTED_STEPS.length);
+  });
+});
+
 describe('the first run', () => {
   it('needs the first answers for the explore pages and the suggestions for the act steps', () => {
     expect(GETTING_STARTED_STEPS.filter(needsFirstAnswers).map((s) => s.key)).toEqual([

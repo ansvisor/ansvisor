@@ -7,6 +7,7 @@ import type { FocusCard } from '@/lib/actions/today-focus';
 import type { TodayOverview } from '@/lib/actions/today';
 import type { TodayStanding } from '@/lib/action-center/focus';
 import type { Signal } from '@/lib/signals/map';
+import { buildGettingStarted, type GettingStartedFacts } from '@/lib/getting-started/steps';
 import messages from '../../../../../../../messages/en.json';
 
 /**
@@ -66,7 +67,18 @@ const reads = vi.hoisted(() => ({
   markSeen: vi.fn(async () => ({ ok: true })),
   getTodayChanges: vi.fn(),
   getTodayWaiting: vi.fn(),
+  getGettingStarted: vi.fn(),
+  skipGettingStarted: vi.fn(),
+  startGettingStarted: vi.fn(),
+  hideCard: vi.fn(),
 }));
+vi.mock('@/lib/actions/getting-started', () => ({
+  getGettingStarted: reads.getGettingStarted,
+  skipGettingStarted: reads.skipGettingStarted,
+  startGettingStarted: reads.startGettingStarted,
+}));
+let canManage = true;
+vi.mock('@/hooks/use-user-role', () => ({ useUserRole: () => ({ canManage }) }));
 vi.mock('@/lib/actions/today-waiting', () => ({ getTodayWaiting: reads.getTodayWaiting }));
 vi.mock('@/lib/actions/today-changes', () => ({ getTodayChanges: reads.getTodayChanges }));
 let hidden = new Set<string>();
@@ -84,6 +96,7 @@ vi.mock('@/lib/actions/today-focus', () => ({
 vi.mock('@/lib/actions/user-brand-state', () => ({
   readUserBrandState: reads.readUserBrandState,
   markSeen: reads.markSeen,
+  hideCard: reads.hideCard,
 }));
 
 const { default: ActionCenterTodayPage } = await import('./page');
@@ -205,6 +218,35 @@ const waiting = {
 };
 let chats: Record<string, unknown>[] = [];
 
+const setUp = (over: Partial<GettingStartedFacts> = {}) =>
+  buildGettingStarted(
+    {
+      startedAt: '2026-10-20T10:00:00Z',
+      dismissedAt: null,
+      confirmedAt: '2026-10-20T10:00:00Z',
+      records: {},
+      recordedAt: {},
+      kpiSetupAt: '2026-10-01T00:00:00Z',
+      competitors: 4,
+      topicPrompts: [3, 3, 3],
+      gsc: false,
+      ga: false,
+      firstAnswer: true,
+      firstVisit: false,
+      dataSuggestions: 0,
+      dataTracked: 0,
+      contentSuggestions: 0,
+      contentPicked: 0,
+      contentCreated: 0,
+      contentRecent: 0,
+      audits: 0,
+      draftsCreated: 0,
+      draftsOptimized: 0,
+      ...over,
+    },
+    { setupOnly: true },
+  );
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -225,6 +267,10 @@ beforeEach(() => {
   reads.skipTodayFocus.mockResolvedValue({ ok: true });
   reads.getTodayChanges.mockResolvedValue(changes);
   reads.getTodayWaiting.mockResolvedValue(waiting);
+  reads.getGettingStarted.mockResolvedValue(setUp({ records: { ga: 'skipped' } }));
+  reads.skipGettingStarted.mockResolvedValue(undefined);
+  reads.startGettingStarted.mockResolvedValue(undefined);
+  reads.hideCard.mockResolvedValue({ ok: true });
   chats = [
     {
       id: 'c1',
@@ -269,6 +315,7 @@ afterEach(() => {
   firstRun = null;
   panel.available = true;
   hidden = new Set();
+  canManage = true;
 });
 
 async function draw() {
@@ -376,12 +423,17 @@ describe('Action Center › Today', () => {
     expect(reads.getTodayFocus).toHaveBeenCalledWith('b1', '2026-11-10T08:00:00.000Z');
     expect(reads.markSeen).toHaveBeenCalledWith('b1', 'today');
     expect(reads.getTodayChanges).toHaveBeenCalledWith('b1', '2026-11-10T08:00:00.000Z', []);
-    expect(track).toHaveBeenCalledWith('today_viewed', {
-      state: 'normal',
-      since_count: 3,
-      focus_count: 3,
-      waiting_count: 5,
-    });
+    // setup_done comes along when Finish setting up has read by then.
+    expect(track).toHaveBeenCalledWith(
+      'today_viewed',
+      expect.objectContaining({
+        state: 'normal',
+        since_count: 3,
+        focus_count: 3,
+        waiting_count: 5,
+      }),
+    );
+    expect(track).toHaveBeenCalledTimes(1);
   });
 
   it('skips a card for the person and reads the focus again', async () => {
@@ -554,5 +606,67 @@ describe('Action Center › Today', () => {
       '/dashboard/action-center/signals',
     );
     expect(text('header')).toContain('Since yesterday: no big changes');
+  });
+  it('lists the next 2 set-up steps with how long each takes, and all 7 on request', async () => {
+    await draw();
+    const part = container.querySelector('[data-today-part="setup"]')!;
+    expect(part.textContent).toContain('Finish setting up5 of 7');
+    const steps = () => [...part.querySelectorAll('[data-setup-step]')].map((li) => li.textContent);
+    expect(steps()).toEqual([
+      'Connect Google Search Console2 min',
+      'Add the AI Traffic snippet5 min',
+    ]);
+    expect(part.querySelector('[data-setup-step="gsc"] a')?.getAttribute('href')).toBe(
+      '/dashboard/settings?tab=integrations',
+    );
+    await act(async () => button('Show all steps')?.click());
+    expect(steps()).toHaveLength(7);
+    expect(steps()[5]).toBe('Connect Google AnalyticsSkipped');
+  });
+
+  it('hides the steps for the brand when an admin or manager hides them', async () => {
+    await draw();
+    await act(async () => button('Hide')?.click());
+    expect(reads.skipGettingStarted).toHaveBeenCalledWith('b1');
+    expect(reads.hideCard).not.toHaveBeenCalled();
+    expect(track).toHaveBeenCalledWith('today_setup_hidden', { by: 'brand' });
+    expect(container.querySelector('[data-today-part="setup"]')).toBeNull();
+  });
+
+  it('hides the card for anyone else, and keeps it hidden on the next visit', async () => {
+    canManage = false;
+    await draw();
+    await act(async () => button('Hide')?.click());
+    expect(reads.skipGettingStarted).not.toHaveBeenCalled();
+    expect(reads.hideCard).toHaveBeenCalledWith('b1', 'setup', null);
+    expect(container.querySelector('[data-today-part="setup"]')).toBeNull();
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    reads.readUserBrandState.mockResolvedValue({ navSeen: {}, focus: [], hidden: { setup: null } });
+    await draw();
+    expect(container.querySelector('[data-today-part="setup"]')).toBeNull();
+  });
+
+  it('is gone at 7 of 7, and after Getting started was skipped', async () => {
+    reads.getGettingStarted.mockResolvedValue(setUp({ gsc: true, ga: true, firstVisit: true }));
+    await draw();
+    expect(container.querySelector('[data-today-part="setup"]')).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+    reads.getGettingStarted.mockResolvedValue(setUp({ dismissedAt: '2026-10-21T00:00:00Z' }));
+    await draw();
+    expect(container.querySelector('[data-today-part="setup"]')).toBeNull();
+  });
+
+  it('asks an admin or manager whether to run it for a brand added beside others', async () => {
+    reads.getGettingStarted.mockResolvedValueOnce(setUp({ confirmedAt: null }));
+    await draw();
+    const part = container.querySelector('[data-today-part="setup"]')!;
+    expect(part.textContent).toContain('Run Getting started for Brewline Coffee?');
+    await act(async () => button('Run Getting started')?.click());
+    expect(reads.startGettingStarted).toHaveBeenCalledWith('b1');
+    expect(reads.getGettingStarted).toHaveBeenCalledTimes(2);
+    expect(container.querySelectorAll('[data-setup-step]')).toHaveLength(2);
   });
 });

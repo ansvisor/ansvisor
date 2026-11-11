@@ -640,25 +640,9 @@
       "agentsSubtitle": "Agents do recurring work for you. Each one asks before anything goes live."
     },
     "today": {
-      "subtitle": "What changed, what to do today, and what is waiting for you.",
-      "preview": "Today is in preview. The parts still being built say what they will show.",
       "allSignals": "All signals",
       "allActions": "All actions",
       "backToToday": "Back to Today",
-      "sections": {
-        "focus": {
-          "title": "Today's focus",
-          "body": "Your 3 highest-impact actions. They stay here until you finish or skip them."
-        },
-        "setup": {
-          "title": "Finish setting up",
-          "body": "The set-up steps you have left, two at a time, with how long each takes."
-        },
-        "stand": {
-          "title": "Where you stand",
-          "body": "Your score, its change since yesterday, and how far you are from the next brand."
-        }
-      },
       "updated": "AI answers updated {ago}",
       "noAnswersYet": "no AI answers yet",
       "loop": {
@@ -768,6 +752,32 @@
         "nothing": "Nothing is waiting for you.",
         "finish": "A good day to finish one: “{title}” has {done} of {total} steps done.",
         "continue": "Continue it"
+      },
+      "setup": {
+        "title": "Finish setting up",
+        "count": "{done} of {total}",
+        "minutes": {
+          "kpis": "1 min",
+          "competitors": "2 min",
+          "topics": "2 min",
+          "prompts": "3 min",
+          "gsc": "2 min",
+          "ga": "2 min",
+          "snippet": "5 min"
+        },
+        "state": {
+          "new": "To do",
+          "done": "Done",
+          "skipped": "Skipped",
+          "waiting": "Waiting for data"
+        },
+        "showAll": "Show all steps",
+        "showFewer": "Show fewer",
+        "hide": "Hide",
+        "hideHintBrand": "Hides the set-up steps for everyone on this brand. Steps you finished stay done.",
+        "hideHintPerson": "Hides this card for you. Steps you finished stay done.",
+        "hideFailed": "Couldn't hide it. Try again.",
+        "askFailed": "Couldn't save that. Try again."
       }
     },
     "firstRun": {
