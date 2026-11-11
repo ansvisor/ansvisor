@@ -107,6 +107,23 @@ describe('AnswerActions', () => {
     ).toEqual(['Copy', 'Download', 'Save to Files', 'Open in Content Editor']);
   });
 
+  /** Each button carries a short label; a narrow row (the side panel) hides it behind the tooltip. */
+  it('labels each button, shown only where the row is wide enough', async () => {
+    await render(undefined, false, vi.fn());
+    const toolbar = container.querySelector('[role="toolbar"]')!;
+    expect(toolbar.className).toContain('@container');
+    const labels = [...toolbar.querySelectorAll('button > span')];
+    expect(labels.map((label) => label.textContent)).toEqual([
+      'Copy',
+      'Download',
+      'Save',
+      'Open in Editor',
+      'Send to Actions',
+    ]);
+    for (const label of labels) expect(label.className).toMatch(/\bhidden\b.*@lg:inline/);
+    expect(button('answer.openInEditor').getAttribute('aria-label')).toBe('Open in Content Editor');
+  });
+
   /** CHAT-09 item 18: on the latest answer, for Admins and Managers (the thread decides). */
   it('offers Send to Action Center where the thread gives it, and asks Chat on a click', async () => {
     const send = vi.fn();
@@ -171,6 +188,7 @@ describe('AnswerActions', () => {
     fetchMock.mockClear();
     await render('Two pages lost most of it.', true);
     expect(button('answer.saveToFiles').getAttribute('aria-label')).toBe('In Files');
+    expect(button('answer.saveToFiles').textContent).toBe('In Files');
     await click(button('answer.saveToFiles'));
     expect(fetchMock).not.toHaveBeenCalled();
   });

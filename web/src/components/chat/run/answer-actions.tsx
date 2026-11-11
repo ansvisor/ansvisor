@@ -32,8 +32,21 @@ function fileNameOf(res: Response, fallback: string): string {
   return named?.[1] ?? fallback;
 }
 
+/** 28×28 with the icon alone; wider with its short label where the row fits them all. */
 const ICON =
-  'flex size-7 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60';
+  'flex h-7 min-w-7 items-center justify-center gap-1.5 rounded-lg px-1.5 text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-60 @lg:px-2';
+
+/**
+ * A button's short label beside its icon. Shown only where the row is
+ * wide enough for all five (the thread); in a narrow pane (the side
+ * panel) the icon stays alone and the tooltip names it. The button's
+ * aria-label keeps its full name.
+ */
+function Label({ children }: { children: string }) {
+  return (
+    <span className="hidden text-xs font-medium whitespace-nowrap @lg:inline">{children}</span>
+  );
+}
 
 /** An icon button with its name in a tooltip on hover and on keyboard focus (item 30a). */
 function Tip({ label, children }: { label: string; children: ReactElement }) {
@@ -47,8 +60,8 @@ function Tip({ label, children }: { label: string; children: ReactElement }) {
 
 /**
  * The bar under a finished answer (CHAT-06 items 30–37, 30a): Copy,
- * Download ▾ and Save to Files as 28×28 icon buttons, each named in an
- * aria-label and a tooltip. Copy takes the answer as rich text (Markdown
+ * Download ▾ and Save to Files as icon buttons with a short label where
+ * the row fits them, each named in an aria-label and a tooltip. Copy takes the answer as rich text (Markdown
  * where only text goes). Download offers Markdown, Word and PDF, and CSV
  * and Excel when the answer has a table; the server renders the file from
  * the stored answer, so nothing is kept and no AI is used. Save to Files
@@ -165,7 +178,7 @@ export function AnswerActions({
   }
 
   return (
-    <div role="toolbar" aria-label={t('label')} className="flex items-center gap-0.5">
+    <div role="toolbar" aria-label={t('label')} className="@container flex items-center gap-0.5">
       <Tip label={t('copy')}>
         <button
           type="button"
@@ -175,6 +188,7 @@ export function AnswerActions({
           className={ICON}
         >
           <Copy className="size-4" aria-hidden />
+          <Label>{t('short.copy')}</Label>
         </button>
       </Tip>
       <DropdownMenu>
@@ -185,6 +199,7 @@ export function AnswerActions({
             className={ICON}
           >
             <Download className="size-4" aria-hidden />
+            <Label>{t('short.download')}</Label>
           </DropdownMenuTrigger>
         </Tip>
         <DropdownMenuContent align="start" className="w-44">
@@ -217,6 +232,7 @@ export function AnswerActions({
           ) : (
             <FolderPlus className="size-4" aria-hidden />
           )}
+          <Label>{filed ? t('short.inFiles') : t('short.save')}</Label>
         </button>
       </Tip>
       <Tip label={t('openEditor')}>
@@ -229,6 +245,7 @@ export function AnswerActions({
           className={ICON}
         >
           <PenLine className={cn('size-4', opening && 'animate-pulse')} aria-hidden />
+          <Label>{t('short.openEditor')}</Label>
         </button>
       </Tip>
       {onSendToActionCenter && (
@@ -241,6 +258,7 @@ export function AnswerActions({
             className={ICON}
           >
             <ListPlus className="size-4" aria-hidden />
+            <Label>{t('short.sendToActionCenter')}</Label>
           </button>
         </Tip>
       )}
