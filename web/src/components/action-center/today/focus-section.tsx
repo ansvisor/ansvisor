@@ -31,9 +31,12 @@ export function FocusSection({
   visit,
   title,
   sub,
+  onCards,
 }: {
   brandId: string;
   visit: TodayVisit;
+  /** The cards as read, for Waiting for you's "A good day to finish one". */
+  onCards?: (cards: FocusCard[]) => void;
   /** Monday's "This week's focus"; Today's own title otherwise. */
   title?: string;
   sub?: string;
@@ -56,6 +59,10 @@ export function FocusSection({
   useEffect(() => {
     if (settled) settle('focus', count);
   }, [settled, count, settle]);
+  const read = load.status === 'ready' ? load.data : null;
+  useEffect(() => {
+    if (read) onCards?.(read);
+  }, [read, onCards]);
 
   if (load.status === 'failed') return null;
   const cards =

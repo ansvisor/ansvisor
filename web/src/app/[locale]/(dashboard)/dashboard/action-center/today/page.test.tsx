@@ -45,10 +45,6 @@ vi.mock('@/stores/use-brand-store', () => ({
     selector: (state: { activeBrandId: string; brands: { id: string; name: string }[] }) => unknown,
   ) => selector({ activeBrandId: 'b1', brands: [{ id: 'b1', name: 'Brewline Coffee' }] }),
 }));
-let canManage = true;
-vi.mock('@/hooks/use-user-role', () => ({
-  useUserRole: () => ({ canManage }),
-}));
 let firstRun: { progress: { current: number; total: number } | null } | null = null;
 vi.mock('@/hooks/use-first-run', () => ({ useFirstRun: () => firstRun }));
 let chatOn = true;
@@ -61,8 +57,6 @@ const { track } = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('@/lib/analytics', () => ({ track }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-const { getTaskReviewCount } = vi.hoisted(() => ({ getTaskReviewCount: vi.fn(async () => 2) }));
-vi.mock('@/lib/actions/action-task-reviews', () => ({ getTaskReviewCount }));
 const reads = vi.hoisted(() => ({
   getTodayOverview: vi.fn(),
   getTodayStanding: vi.fn(),
@@ -71,7 +65,9 @@ const reads = vi.hoisted(() => ({
   readUserBrandState: vi.fn(),
   markSeen: vi.fn(async () => ({ ok: true })),
   getTodayChanges: vi.fn(),
+  getTodayWaiting: vi.fn(),
 }));
+vi.mock('@/lib/actions/today-waiting', () => ({ getTodayWaiting: reads.getTodayWaiting }));
 vi.mock('@/lib/actions/today-changes', () => ({ getTodayChanges: reads.getTodayChanges }));
 let hidden = new Set<string>();
 vi.mock('@/components/providers/menu-access-provider', () => ({
@@ -189,6 +185,26 @@ const changes = {
   small: 2,
 };
 
+const waiting = {
+  canManage: true,
+  today: '2026-11-11',
+  drafts: [
+    { id: 'd1', title: 'Low-acid guide' },
+    { id: 'd2', title: 'Espresso page' },
+  ],
+  actions: [
+    {
+      id: 'a7',
+      action: action('a7'),
+      firstStep: { taskKey: 'validate', title: null, titleParams: {}, url: null },
+      dueDate: '2026-11-11',
+    },
+  ],
+  reviews: 2,
+  ideas: { count: 2, sources: ['gsc'] },
+};
+let chats: Record<string, unknown>[] = [];
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -208,6 +224,34 @@ beforeEach(() => {
   ]);
   reads.skipTodayFocus.mockResolvedValue({ ok: true });
   reads.getTodayChanges.mockResolvedValue(changes);
+  reads.getTodayWaiting.mockResolvedValue(waiting);
+  chats = [
+    {
+      id: 'c1',
+      mine: true,
+      state: 'needsYou',
+      title: 'Comparison page',
+      lastMessageAt: '2026-11-11T07:00:00Z',
+    },
+    {
+      id: 'c2',
+      mine: false,
+      state: 'needsYou',
+      title: 'Theirs',
+      lastMessageAt: '2026-11-11T08:00:00Z',
+    },
+    {
+      id: 'c3',
+      mine: true,
+      state: 'running',
+      title: 'Running',
+      lastMessageAt: '2026-11-11T08:00:00Z',
+    },
+  ];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, chats }) })),
+  );
   reads.readUserBrandState.mockResolvedValue({
     navSeen: { today: '2026-11-10T08:00:00.000Z' },
     focus: [],
@@ -219,8 +263,8 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
-  canManage = true;
   chatOn = true;
   firstRun = null;
   panel.available = true;
@@ -336,6 +380,7 @@ describe('Action Center › Today', () => {
       state: 'normal',
       since_count: 3,
       focus_count: 3,
+      waiting_count: 5,
     });
   });
 
@@ -400,20 +445,62 @@ describe('Action Center › Today', () => {
     expect(container.querySelector('[data-testid="gear"]')).toBeNull();
   });
 
-  it('links admins and managers to Needs review from Waiting for you, with how many wait', async () => {
+  it('lists what waits for the person, each row with its link, and counts them in the header', async () => {
     await draw();
-    const review = container.querySelector('[data-action="today.needsReview"]');
-    expect(review?.getAttribute('href')).toBe('/dashboard/action-center/review');
-    expect(review?.textContent).toBe('Tasks waiting for review2');
-    expect(getTaskReviewCount).toHaveBeenCalledWith('b1');
+    const rows = [...container.querySelectorAll('[data-waiting]')];
+    expect(rows.map((row) => row.getAttribute('data-waiting'))).toEqual([
+      'agent',
+      'drafts',
+      'due',
+      'review',
+      'ideas',
+    ]);
+    const link = (type: string) => container.querySelector(`[data-waiting="${type}"] a`);
+    expect(rows[0].textContent).toContain('An agent is waiting for your OK on “Comparison page”.');
+    expect(link('agent')?.getAttribute('href')).toBe('/dashboard/chat/c1');
+    expect(link('drafts')?.textContent).toBe('Review 2 drafts');
+    expect(link('drafts')?.getAttribute('href')).toBe('/dashboard/content/library');
+    expect(rows[2].textContent).toContain('Due today: Validate across AI platforms.');
+    expect(link('due')?.getAttribute('href')).toBe('/dashboard/action-center/actions?action=a7');
+    expect(link('review')?.getAttribute('href')).toBe('/dashboard/action-center/review');
+    expect(link('review')?.getAttribute('data-action')).toBe('today.needsReview');
+    expect(rows[4].textContent).toContain('2 new prompt ideas from your Search Console.');
+    await act(async () => (link('ideas') as HTMLAnchorElement).click());
+    expect(track).toHaveBeenCalledWith('today_waiting_clicked', { type: 'ideas' });
+    expect(text('header')).toContain('Since yesterday: 3 changes · 5 things waiting for you');
   });
 
-  it('shows anyone else no Needs review link, and reads no count', async () => {
-    canManage = false;
+  it("leaves out agent runs without Chat, and rows off the person's menu", async () => {
+    chatOn = false;
+    hidden = new Set(['content', 'prompts']);
     await draw();
-    expect(container.querySelector('[data-action="today.needsReview"]')).toBeNull();
-    expect(getTaskReviewCount).not.toHaveBeenCalled();
+    const rows = [...container.querySelectorAll('[data-waiting]')];
+    expect(rows.map((row) => row.getAttribute('data-waiting'))).toEqual(['due', 'review']);
+    expect(fetch).not.toHaveBeenCalled();
   });
+
+  it('says nothing waits, and offers the focus action furthest along', async () => {
+    reads.getTodayWaiting.mockResolvedValue({
+      ...waiting,
+      drafts: [],
+      actions: [],
+      reviews: null,
+      ideas: null,
+    });
+    chats = [];
+    reads.getTodayFocus.mockResolvedValue([
+      card('a3', { action: action('a3', { status: 'in_progress', taskCompleted: 2 }) }),
+    ]);
+    await draw();
+    const part = container.querySelector('[data-today-part="waiting"]');
+    expect(part?.textContent).toContain('Nothing is waiting for you.');
+    expect(part?.textContent).toContain('has 2 of 4 steps done.');
+    expect(part?.querySelector('a')?.getAttribute('href')).toBe(
+      '/dashboard/action-center/actions?action=a3',
+    );
+    expect(text('header')).toContain('nothing waiting');
+  });
+
   it('lists the night’s biggest changes as Up, Down and Rival, and counts them in the header', async () => {
     hidden = new Set(['traffic']);
     await draw();

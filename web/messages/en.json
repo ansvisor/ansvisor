@@ -637,16 +637,11 @@
       "preview": "Today is in preview. The parts still being built say what they will show.",
       "allSignals": "All signals",
       "allActions": "All actions",
-      "needsReview": "Tasks waiting for review",
       "backToToday": "Back to Today",
       "sections": {
         "focus": {
           "title": "Today's focus",
           "body": "Your 3 highest-impact actions. They stay here until you finish or skip them."
-        },
-        "waiting": {
-          "title": "Waiting for you",
-          "body": "Agent drafts that need your OK, tasks due today and weekly reminders."
         },
         "setup": {
           "title": "Finish setting up",
@@ -711,7 +706,8 @@
         "button": "Ask"
       },
       "summary": {
-        "changes": "{title}: {count, plural, =0 {no big changes} one {# change} other {# changes}}"
+        "changes": "{title}: {count, plural, =0 {no big changes} one {# change} other {# changes}}",
+        "waiting": "{count, plural, =0 {nothing waiting} one {# thing waiting for you} other {# things waiting for you}}"
       },
       "since": {
         "title": "Since yesterday",
@@ -731,6 +727,40 @@
           "next": "Next update tomorrow morning.",
           "small": "Small moves are in <link>all signals</link>."
         }
+      },
+      "waiting": {
+        "title": "Waiting for you",
+        "agent": {
+          "one": "An agent is waiting for your OK on “{title}”.",
+          "oneUntitled": "An agent is waiting for your OK.",
+          "many": "{count} agent runs are waiting for your OK.",
+          "open": "Open in Chat",
+          "openNewest": "Open the newest in Chat"
+        },
+        "drafts": {
+          "line": "An agent drafted {count, plural, one {a page} other {# pages}}. Nothing goes live without your OK.",
+          "open": "{count, plural, one {Review the draft} other {Review # drafts}}"
+        },
+        "due": {
+          "today": "Due today: {task}.",
+          "overdue": "Overdue: {task}.",
+          "open": "Open the task"
+        },
+        "reminder": {
+          "line": "Weekly: {title}.",
+          "open": "Open it"
+        },
+        "review": {
+          "line": "{count, plural, one {# task an agent wrote is} other {# tasks agents wrote are}} waiting for your review.",
+          "open": "Review tasks"
+        },
+        "ideas": {
+          "line": "{count, plural, one {# new prompt idea} other {# new prompt ideas}} from your {source, select, gsc {Search Console} ga {Google Analytics} other {Search Console and Google Analytics}}.",
+          "open": "See ideas"
+        },
+        "nothing": "Nothing is waiting for you.",
+        "finish": "A good day to finish one: “{title}” has {done} of {total} steps done.",
+        "continue": "Continue it"
       }
     },
     "firstRun": {

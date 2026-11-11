@@ -1,19 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
-import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
-import { useUserRole } from '@/hooks/use-user-role';
 import { useFirstRun } from '@/hooks/use-first-run';
-import { getTaskReviewCount } from '@/lib/actions/action-task-reviews';
 import { getTodayOverview, getTodayStanding } from '@/lib/actions/today';
-import { REVIEW_TAB } from '@/lib/action-center/tabs';
+import { finishOne } from '@/lib/action-center/waiting';
+import type { FocusCard } from '@/lib/actions/today-focus';
 import { viewerTimeZone } from '@/lib/time-zone';
 import { ActionCenterHeader } from './action-center-header';
 import { ActionCenterTabs } from './action-center-tabs';
 import { FocusSection } from './today/focus-section';
 import { SinceSection } from './today/since-section';
+import { WaitingSection } from './today/waiting-section';
 import {
   AskChatBox,
   LoopStrip,
@@ -25,7 +24,7 @@ import {
 import { useTodayRead, useTodayVisit, type TodayVisitPart } from './today/use-today';
 
 /** The parts a visit waits on before it counts as seen. */
-const VISIT_PARTS: readonly TodayVisitPart[] = ['since', 'focus'];
+const VISIT_PARTS: readonly TodayVisitPart[] = ['since', 'focus', 'waiting'];
 
 /**
  * Action Center › Today (SIMPLE_NAV), the page everyone lands on with the
@@ -59,7 +58,15 @@ export function TodayPage() {
   const onSince = useCallback((summary: { title: string; count: number } | null) => {
     setSince(summary);
   }, []);
-  const summary = since ? t('summary.changes', since) : null;
+  const [waiting, setWaiting] = useState<number | null>(null);
+  const [focusCards, setFocusCards] = useState<FocusCard[]>([]);
+  const summary =
+    [
+      since ? t('summary.changes', since) : null,
+      waiting !== null ? t('summary.waiting', { count: waiting }) : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || null;
   const count = (value: number | null | undefined, key: 'tracked' | 'open' | 'doneWeek') =>
     value === null || value === undefined ? null : tLoop(key, { count: value });
 
@@ -102,12 +109,17 @@ export function TodayPage() {
               onSummary={onSince}
             />
           )}
-          {brandId && <FocusSection brandId={brandId} visit={visit} />}
+          {brandId && <FocusSection brandId={brandId} visit={visit} onCards={setFocusCards} />}
         </div>
         <div className="space-y-4">
-          <Placeholder part="waiting">
-            <NeedsReviewLink />
-          </Placeholder>
+          {brandId && (
+            <WaitingSection
+              brandId={brandId}
+              visit={visit}
+              focus={finishOne(focusCards)}
+              onSummary={setWaiting}
+            />
+          )}
           <Placeholder part="setup" />
           <StandSection load={standing} />
         </div>
@@ -144,55 +156,11 @@ function TodayLine({
 }
 
 /** A part still being built: what it will show. */
-function Placeholder({
-  part,
-  children,
-}: {
-  part: 'waiting' | 'setup';
-  children?: React.ReactNode;
-}) {
+function Placeholder({ part }: { part: 'setup' }) {
   const t = useTranslations('actionCenter.today');
   return (
-    <TodaySection part={part} title={t(`sections.${part}.title`)} dashed={part === 'setup'}>
+    <TodaySection part={part} title={t(`sections.${part}.title`)} dashed>
       <p className="text-sm text-muted-foreground">{t(`sections.${part}.body`)}</p>
-      {children}
     </TodaySection>
-  );
-}
-
-/**
- * Needs review, for admins and managers: no tab with the simplified layout,
- * so Waiting for you links to its page, with how many tasks wait.
- */
-function NeedsReviewLink() {
-  const t = useTranslations('actionCenter.today');
-  const { canManage } = useUserRole();
-  const brandId = useBrandStore((s) => s.activeBrandId);
-  const [waiting, setWaiting] = useState<{ brandId: string; count: number } | null>(null);
-  useEffect(() => {
-    if (!brandId || !canManage) return;
-    let cancelled = false;
-    getTaskReviewCount(brandId)
-      .then((count) => !cancelled && setWaiting({ brandId, count }))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [brandId, canManage]);
-  if (!canManage) return null;
-  const count = waiting && waiting.brandId === brandId ? waiting.count : 0;
-  return (
-    <Link
-      href={REVIEW_TAB.href}
-      data-action="today.needsReview"
-      className="inline-flex items-center gap-1.5 text-sm font-medium hover:underline"
-    >
-      {t('needsReview')}
-      {count > 0 && (
-        <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
-          {count}
-        </span>
-      )}
-    </Link>
   );
 }
