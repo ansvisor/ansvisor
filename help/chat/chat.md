@@ -346,7 +346,7 @@ Point at a chat in the menu and click **⋯**, or click **⋯** at the top right
 
 ## Copy, download or save an answer
 
-Under every finished answer, three small buttons show their names when you point at them:
+Under every finished answer, buttons show their names; in the narrow side panel, point at them:
 
 - **Copy** copies the answer, with its formatting where you paste it.
 - **Download** gives the answer as **Markdown**, **Word** or **PDF**, and as **CSV** or **Excel** when it has a table (one sheet per table). The file is named after your question and the day, and it carries when the answer was made and how fresh its data was. Downloads aren't kept and use no AI.
