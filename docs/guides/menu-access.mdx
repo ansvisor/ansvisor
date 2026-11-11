@@ -45,7 +45,7 @@ Until an admin hides something, every role sees every section.
 
 ## Pick what you work on
 
-Each person can say what they work on or lead. Their menu then keeps only those areas' sections:
+Everyone starts on **Everything**: every section their role shows. Each person can then say what they work on or lead, in **Settings → Account → Your work areas**. Their menu then keeps only those areas' sections:
 
 | Work area | Sections |
 |---|---|
@@ -61,13 +61,7 @@ Each person can say what they work on or lead. Their menu then keeps only those 
 
 Mentions and Citations are tabs of Visibility, and stay sections of their own: a menu without them shows Visibility with the tabs it keeps. Pick one or more; none means every section. **Settings** is always on the menu, with your API keys and MCP.
 
-**What do you work on?** is asked once:
-
-- when you sign up, after your competitors and before you choose a plan;
-- when you join from an invitation, on your first sign-in, with the workspace's name and your first name, like **Welcome to Acme Workspace, Ada**;
-- on a self-hosted install, the first time the admin opens the dashboard.
-
-**Skip: show me everything** keeps every section. Change your answer any time in **Settings → Account → Your work areas**, which also shows your menu and why a section is off it: **Hidden by your admin** or **Not in your work areas**.
+Nobody is asked at sign-up or on joining: new people, invited teammates and the demo start on **Everything**. Work areas picked before November 11, 2026 (the old **What do you work on?** step) went back to **Everything** then, without changing what's stored; pick them again to narrow your menu. **Settings → Account → Your work areas** also shows your menu and why a section is off it: **Hidden by your admin** or **Not in your work areas**.
 
 ## How a menu is worked out
 
@@ -82,5 +76,5 @@ Action Center always stays. Nobody takes a section off an admin's menu; only an 
 When something is off your menu, the bottom of the sidebar says how much, as **3 sections off your menu**, with **Change** leading to your work areas.
 
 <Note>
-**Self-hosting:** menu access needs migration `00374_menu_access.sql`. Apply it before you upgrade the web app (see [Upgrading](/self-host/upgrading)). It counts everyone already in your workspace as asked, so only new and invited people see **What do you work on?**.
+**Self-hosting:** menu access needs migration `00374_menu_access.sql`. Apply it before you upgrade the web app (see [Upgrading](/self-host/upgrading)).
 </Note>
