@@ -15,10 +15,10 @@ import {
   REVIEW_TAB,
   SIMPLE_TABS,
   TASK_REVIEWS_CHANGED,
+  agentsWaitingOn,
   simpleTabOf,
 } from '@/lib/action-center/tabs';
-import { needsYouCount } from '@/lib/chat/menu-groups';
-import type { ChatListItem } from '@/lib/chat/conversations';
+import type { AgentListItem } from '@/lib/chat/agents';
 import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
@@ -135,8 +135,9 @@ const countOf = (value: BrandCount, brandId: string | null) =>
  * section on the person's menu (menu access). The counts are best-effort,
  * read on each page change, and a failed one shows nothing: Actions, the
  * open actions Today ranks for the person; Signals, the untriaged ones, as
- * before; Agents, the person's runs that wait for them, as Chat's Agents at
- * work counts them.
+ * before; Agents, the person's agents whose newest run waits on them, as
+ * Agents › Your agents shows them. Plain numbers, as in the mockup: the
+ * menu's green and yellow dots keep their colours to themselves.
  */
 function SimpleActionCenterTabs() {
   const pathname = usePathname();
@@ -163,16 +164,16 @@ function SimpleActionCenterTabs() {
     };
   }, [brandId, pathname]);
 
-  // The person's chats, as Chat's menu reads them: those that need them.
+  // The person's agents, as Agents › Your agents lists them: those whose run waits on them.
   const [agentsWaiting, setAgentsWaiting] = useState(0);
   useEffect(() => {
     if (!agentsOn) return;
     let cancelled = false;
-    fetch('/api/chat/conversations', { cache: 'no-store' })
+    fetch('/api/chat/agents?view=mine', { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
-      .then((body: { ok?: boolean; chats?: ChatListItem[] } | null) => {
-        if (!cancelled && body?.ok && Array.isArray(body.chats)) {
-          setAgentsWaiting(needsYouCount(body.chats));
+      .then((body: { ok?: boolean; agents?: AgentListItem[] } | null) => {
+        if (!cancelled && body?.ok && Array.isArray(body.agents)) {
+          setAgentsWaiting(agentsWaitingOn(body.agents));
         }
       })
       .catch(() => {});
@@ -211,12 +212,7 @@ function SimpleActionCenterTabs() {
               {count > 0 && (
                 <span
                   data-count={tab.key}
-                  className={cn(
-                    'ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium',
-                    tab.key === 'agents'
-                      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                      : 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-                  )}
+                  className="ml-1.5 font-normal tabular-nums text-muted-foreground"
                 >
                   {count}
                 </span>

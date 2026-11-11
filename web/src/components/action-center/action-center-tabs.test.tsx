@@ -124,22 +124,25 @@ describe('ActionCenterTabs', () => {
   });
 });
 
-/** The person's chats as GET /api/chat/conversations answers: `waiting` of them need them. */
-function stubChats(waiting: number, others = 0) {
-  const chat = (i: number, state: string, mine = true) => ({
-    id: `c${i}`,
-    mine,
-    state,
-    unread: false,
-    lastMessageAt: '2026-11-11T08:00:00Z',
+/**
+ * The person's agents as GET /api/chat/agents?view=mine answers: `waiting`
+ * of them with a newest run that needs them, `others` working or done.
+ */
+function stubAgents(waiting: number, others = 0) {
+  const agent = (i: number, status: string, run: string | null) => ({
+    id: `a${i}`,
+    status,
+    lastRun: run ? { status: run, at: '2026-11-11T08:00:00Z' } : null,
   });
-  const chats = [
-    ...Array.from({ length: waiting }, (_, i) => chat(i, 'needsYou')),
-    ...Array.from({ length: others }, (_, i) => chat(100 + i, 'running')),
-    // A teammate's shared chat waits on its author, not on this person.
-    chat(999, 'needsYou', false),
+  const agents = [
+    ...Array.from({ length: waiting }, (_, i) => agent(i, 'active', 'needs_you')),
+    ...Array.from({ length: others }, (_, i) => agent(100 + i, 'active', 'running')),
+    agent(200, 'active', 'succeeded'),
+    agent(201, 'draft', null),
+    // An archived agent's old run waits on nobody.
+    agent(202, 'archived', 'needs_you'),
   ];
-  const fetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, chats }) }));
+  const fetch = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true, agents }) }));
   vi.stubGlobal('fetch', fetch);
   return fetch;
 }
@@ -148,7 +151,7 @@ const current = () => container.querySelector('nav a[aria-current="page"]')?.tex
 
 describe('ActionCenterTabs without SIMPLE_NAV', () => {
   it('stay as they were whatever Chat and the menu say, and read none of the new counts', async () => {
-    const fetch = stubChats(2);
+    const fetch = stubAgents(2);
     await render({ simpleNav: false, chatAgentic: true });
     expect(tabs()).toEqual(['Actions', 'Signals', 'KPIs', 'History', 'Needs review3']);
     expect(getMyOpenActionCount).not.toHaveBeenCalled();
@@ -159,7 +162,7 @@ describe('ActionCenterTabs without SIMPLE_NAV', () => {
 
 describe('ActionCenterTabs with SIMPLE_NAV', () => {
   it('are Today, Actions, Signals, Agents and History with the new Chat on, Needs review on none', async () => {
-    stubChats(0);
+    stubAgents(0);
     await render({ simpleNav: true, chatAgentic: true });
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'Agents', 'History']);
     const hrefs = [...container.querySelectorAll('nav a')].map((a) => a.getAttribute('href'));
@@ -176,7 +179,7 @@ describe('ActionCenterTabs with SIMPLE_NAV', () => {
   });
 
   it('leave Agents out without the new Chat, and read no agent runs', async () => {
-    const fetch = stubChats(1);
+    const fetch = stubAgents(1);
     await render({ simpleNav: true, chatAgentic: false });
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'History']);
     expect(fetch).not.toHaveBeenCalled();
@@ -184,34 +187,39 @@ describe('ActionCenterTabs with SIMPLE_NAV', () => {
 
   it('leave Agents out on a plan without agents', async () => {
     planHasAgents = false;
-    stubChats(1);
+    stubAgents(1);
     await render({ simpleNav: true, chatAgentic: true });
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'History']);
   });
 
   it('leave Agents out when its section is off the person’s menu (menu access), the rest stays', async () => {
-    stubChats(1);
+    stubAgents(1);
     await render({ simpleNav: true, chatAgentic: true, hidden: ['agents', 'insights'] });
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'History']);
   });
 
   it('show the same to every role', async () => {
     canManage = false;
-    stubChats(0);
+    stubAgents(0);
     await render({ simpleNav: true, chatAgentic: true });
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'Agents', 'History']);
   });
 
-  it('count the person’s open actions, the new signals and their runs that wait for them', async () => {
+  it('count the person’s open actions, the new signals and their agents whose run waits on them', async () => {
     getMyOpenActionCount.mockResolvedValue(3);
     getNewSignalCount.mockResolvedValue(5);
-    const fetch = stubChats(1, 2);
+    const fetch = stubAgents(1, 2);
     await render({ simpleNav: true, chatAgentic: true });
     expect(getMyOpenActionCount).toHaveBeenCalledWith('b1');
     expect(getNewSignalCount).toHaveBeenCalledWith('b1');
-    expect(fetch).toHaveBeenCalledWith('/api/chat/conversations', { cache: 'no-store' });
+    expect(fetch).toHaveBeenCalledWith('/api/chat/agents?view=mine', { cache: 'no-store' });
     expect(tabs()).toEqual(['Today', 'Actions3', 'Signals5', 'Agents1', 'History']);
-    expect(container.querySelector('[data-count="agents"]')?.className).toContain('amber');
+    // Plain numbers, as in the mockup: no colour of their own beside the menu's dots.
+    for (const key of ['actions', 'signals', 'agents']) {
+      const pill = container.querySelector(`[data-count="${key}"]`)!;
+      expect(pill.className).toContain('text-muted-foreground');
+      expect(pill.className).not.toMatch(/blue|amber|bg-/);
+    }
   });
 
   it('show no count that is 0 or failed', async () => {
@@ -226,7 +234,7 @@ describe('ActionCenterTabs with SIMPLE_NAV', () => {
   });
 
   it('mark the tab of the page shown: Today, Agents under its pages, and History on KPIs', async () => {
-    stubChats(0);
+    stubAgents(0);
     for (const [path, tab] of [
       ['/dashboard/action-center/today', 'Today'],
       ['/dashboard/agents/new', 'Agents'],
