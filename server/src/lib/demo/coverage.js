@@ -24,6 +24,8 @@ export const SKIPPED = {
     "A person's saved Tracked Prompts columns (00363): the demo brand starts on the default ones.",
   sentiment_overrides:
     "A person's sentiment corrections on Mentions: the demo's answers carry their own.",
+  user_brand_state:
+    "A person's own Today and menu state on a brand (00529): their visits, focus and hidden cards, made by their own clicks, never sample data; on the demo brand everyone starts with none.",
 
   // demo-site
   brand_cms_connections:
