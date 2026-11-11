@@ -33,6 +33,10 @@ A grey dot that pulses means Ansvisor is working on it right now: an agent is ru
 
 When a submenu, a group such as **Analytics** or the whole menu is folded, the dot shows on the item's icon or the group's name. Red wins over yellow, yellow over green and green over grey. Point at a dot to read what it means, such as **Needs attention: Search Console disconnected**; screen readers say it too.
 
+## In Chat and on agent cards
+
+Chat's chats and the agent cards in **Action Center › Agents** use the same dots. A chat is grey while Chat works in it, yellow while it waits for you, green when it finished while you were away, and red when its last run stopped with an error. An agent's card is grey while it runs, yellow while it waits for your OK, and red when its last run failed.
+
 ## The Action Center's number
 
 The number beside **Action Center** is how many open actions are unassigned or yours. It is hidden once your plan or trial has ended. The demo brand shows green and grey dots only, a workspace whose plan ended shows no yellow, and a section off your menu shows none.

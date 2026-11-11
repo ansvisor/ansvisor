@@ -57,6 +57,25 @@ export type WorkingReason = 'agentRunning' | 'writing' | 'trackingRunning' | 'au
 
 export type DotReason = BrokenReason | WorkingReason;
 
+/**
+ * Why a row's dot outside the menu shows (Chat's chats and Agents at work,
+ * Action Center › Agents' cards): the same dots, in the row's own words.
+ */
+export type RowReason =
+  | 'chatRunning'
+  | 'chatWaiting'
+  | 'chatResults'
+  | 'chatFailed'
+  | 'agentWorking'
+  | 'agentNeedsOk'
+  | 'agentRunFailed';
+
+/** A row's dot: its colour, and why. */
+export interface RowDot {
+  colour: DotColour;
+  reason: RowReason;
+}
+
 /** The entries that turn red, in the order Today lists their "Fix this" rows. */
 export const BROKEN_AREAS: readonly DotArea[] = ['traffic', 'audit', 'content/library', 'agents'];
 

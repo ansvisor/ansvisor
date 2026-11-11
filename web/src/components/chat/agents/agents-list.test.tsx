@@ -194,7 +194,9 @@ describe('AgentsList (Agent Center › Your agents)', () => {
     );
     const status = first.querySelector('[data-slot="agent-status"]')!;
     expect(status.textContent).toBe('Active · Next run Mon 09:00');
-    expect(first.querySelector('[data-slot="agent-dot"]')?.getAttribute('data-dot')).toBe('active');
+    // The menu's dots, not the status dot: its last run finished, so none.
+    expect(first.querySelector('[data-slot="agent-dot"]')).toBeNull();
+    expect(first.querySelector('[data-menu-dot]')).toBeNull();
     expect(first.querySelector('[data-slot="agent-formula"]')?.textContent).toBe(
       '/winback/refreshAuto, ask before changes',
     );
@@ -207,9 +209,10 @@ describe('AgentsList (Agent Center › Your agents)', () => {
     expect(second.querySelector('[data-slot="agent-status"]')?.textContent).toBe(
       'Paused · AI limit reached',
     );
-    expect(second.querySelector('[data-slot="agent-dot"]')?.getAttribute('data-dot')).toBe(
-      'paused',
-    );
+    // Paused: the words only.
+    expect(
+      second.querySelector('[data-slot="agent-status"] [data-menu-dot], [data-slot="agent-dot"]'),
+    ).toBeNull();
     expect(cell(second, 'trigger')).toBe('TriggerManual only');
     expect(cell(second, 'scope')).toBe('Scope3 brands');
     expect(cell(second, 'lastRun')).toBe('Last run—');
@@ -467,6 +470,37 @@ describe('Action Center › Agents', () => {
 
   beforeEach(() => {
     vi.mocked(track).mockClear();
+  });
+
+  it("shows the menu's dots on each card: grey running, yellow needs your OK, red failed", async () => {
+    page = listResult([
+      withRun(1, 'running', CHAT),
+      withRun(2, 'needs_you', CHAT),
+      withRun(3, 'failed', CHAT),
+      withRun(4, 'done', CHAT),
+      { ...withRun(5, 'needs_you', CHAT), status: 'paused' },
+    ]);
+    await render('manager');
+    const dots = cards().map((card) =>
+      card.querySelector<HTMLElement>('[data-slot="agent-status"] [data-menu-dot]'),
+    );
+    expect(dots.map((dot) => dot?.dataset.menuDot ?? null)).toEqual([
+      'grey',
+      'yellow',
+      'red',
+      null,
+      null,
+    ]);
+    expect(dots.slice(0, 3).map((dot) => dot?.getAttribute('aria-label'))).toEqual([
+      'Working on it: it is running now',
+      'Needs you: it is waiting for your OK',
+      'Needs attention: its last run failed',
+    ]);
+    expect(dots[0]?.getAttribute('role')).toBe('img');
+    expect(dots[0]?.getAttribute('title')).toBe(dots[0]?.getAttribute('aria-label'));
+    expect(dots[0]?.className).toContain('animate-menu-dot-pulse');
+    expect(dots[0]?.className).toContain('motion-reduce:animate-none');
+    expect(container.querySelector('[data-slot="list-dot"]')).toBeNull();
   });
 
   it("opens each card's run in Chat: while it runs, while it needs someone, or its last one", async () => {

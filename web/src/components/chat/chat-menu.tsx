@@ -521,7 +521,7 @@ export function ChatMenuView({
           <SectionHead>
             {t('atWork')}
             <Count value={atWork.length} />
-            <DotLegend className="ml-0.5" />
+            <DotLegend dots="menu" className="ml-0.5" />
             <FoldButton
               folded={folded.atWork}
               label={t('toggleAtWork')}

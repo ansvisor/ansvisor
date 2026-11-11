@@ -72,4 +72,36 @@ describe('DotLegend', () => {
     expect(popup()).toBeNull();
     expect(document.activeElement).toBe(trigger());
   });
+
+  it("explains the menu's dots for Chat's chats, strongest first, then no dot", async () => {
+    await act(async () =>
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages}>
+          <DotLegend dots="menu" />
+        </NextIntlClientProvider>,
+      ),
+    );
+    await act(async () => trigger().click());
+    await act(async () => {});
+    const rows = [...popup()!.querySelectorAll<HTMLElement>('li')];
+    expect(rows.map((li) => li.dataset.legendDot)).toEqual([
+      'red',
+      'yellow',
+      'green',
+      'grey',
+      'none',
+    ]);
+    expect(rows.map((li) => li.querySelector('b')!.textContent)).toEqual([
+      'Needs attention',
+      'Needs you',
+      'New results',
+      'Working on it',
+      'No dot',
+    ]);
+    expect(popup()!.querySelector('[data-slot="list-dot"]')).toBeNull();
+    // The words say it: the dots beside them are not read twice.
+    for (const dot of popup()!.querySelectorAll('[data-menu-dot]')) {
+      expect(dot.parentElement?.getAttribute('aria-hidden')).toBe('true');
+    }
+  });
 });

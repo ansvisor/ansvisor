@@ -584,7 +584,14 @@
       "agentRunning": "an agent is running",
       "writing": "the Content Agent is writing a page",
       "trackingRunning": "today’s tracking is running",
-      "auditRunning": "an audit is running"
+      "auditRunning": "an audit is running",
+      "chatRunning": "Chat is working in this chat",
+      "chatWaiting": "Chat is waiting for your answer or OK",
+      "chatResults": "Chat finished since you last opened it",
+      "chatFailed": "the last run stopped with an error",
+      "agentWorking": "it is running now",
+      "agentNeedsOk": "it is waiting for your OK",
+      "agentRunFailed": "its last run failed"
     },
     "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
   },
@@ -4134,6 +4141,14 @@
         "done": "Finished. Bold until you open the result.",
         "failed": "You stopped it, or a step failed. Open it to retry.",
         "idle": "A normal chat. Nothing is running."
+      },
+      "menuLegend": {
+        "red": "The last run stopped with an error. Open the chat to try again.",
+        "yellow": "Waiting for your answer or OK. Nothing moves until you reply.",
+        "green": "Finished while you were away. Goes once you open the chat.",
+        "grey": "Working now. The thin line shows how far it is.",
+        "noneTitle": "No dot",
+        "none": "You have seen it, and nothing runs."
       }
     },
     "newPill": "New",

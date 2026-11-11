@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Send, X } from 'lucide-react';
 import { DenialCard } from '@/components/agentic/denial-card';
@@ -82,10 +82,13 @@ export function liveRunOf(agent: Pick<AgentListItem, 'status' | 'lastRun'>) {
 export function StatusLine({
   agent,
   words,
+  mark,
   className,
 }: {
   agent: Pick<AgentListItem, 'status' | 'pausedReason' | 'lastRun' | 'triggers'>;
   words: AgentWords;
+  /** In place of the status dot (the cards' menu dot, agent-dot.tsx); null for none. */
+  mark?: ReactNode;
   className?: string;
 }) {
   const t = useTranslations('chatAgents');
@@ -118,7 +121,7 @@ export function StatusLine({
         className,
       )}
     >
-      <StatusDot status={agent.status} />
+      {mark === undefined ? <StatusDot status={agent.status} /> : mark}
       <span className="truncate">{text}</span>
     </span>
   );

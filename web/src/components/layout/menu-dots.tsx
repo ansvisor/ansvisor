@@ -10,7 +10,6 @@ import { isEcommerceBrand } from '@/lib/brand-visibility';
 import { formatNumber } from '@/lib/format';
 import {
   BROKEN_AREAS,
-  DOT_STYLE,
   areasToRead,
   dotAreasOnMenu,
   dotReason,
@@ -27,7 +26,7 @@ import {
   type DotColour,
   type MenuState,
 } from '@/lib/menu-dots';
-import { cn } from '@/lib/utils';
+import { MenuDot } from './menu-dot';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAdsEnabled } from '@/components/providers/ads-provider';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
@@ -43,6 +42,8 @@ export const MENU_STATE_MAX_AGE_MS = 5 * 60_000;
 
 /** A grey dot reads once more after this, so it goes out soon after its job ends. */
 export const GREY_RECHECK_MS = 60_000;
+
+export { MenuDot, useDotLabel } from './menu-dot';
 
 /** The dots on the menu, as the sidebar and the mobile menu show them. */
 export interface MenuDotsView {
@@ -177,64 +178,6 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
         track('menu_dot_clicked', { area: dot.area, colour: dot.colour, collapsed: isCollapsed });
     },
   };
-}
-
-/** Each colour's words. */
-const DOT_WORDS = {
-  red: 'needsAttention',
-  yellow: 'needsYou',
-  green: 'newResults',
-  grey: 'workingOnIt',
-} as const satisfies Record<DotColour, string>;
-
-/**
- * What a dot says, on hover and to screen readers: "New results", "Needs
- * you", and for red and grey why ("Needs attention: Search Console
- * disconnected", "Working on it: an agent is running"); after an item's
- * name where only its icon shows ("Audit, Needs attention").
- */
-export function useDotLabel(): (dot: Pick<Dot, 'colour' | 'reason'>, name?: string) => string {
-  const t = useTranslations('menuDots');
-  return ({ colour, reason }, name) => {
-    const words = t(DOT_WORDS[colour]);
-    if (name) return t('withDot', { label: name, dot: words });
-    return reason ? t('withReason', { dot: words, reason: t(`reasons.${reason}`) }) : words;
-  };
-}
-
-/**
- * A menu dot: green, "New results"; yellow, "Needs you"; red with a "!",
- * "Needs attention"; grey and pulsing, "Working on it". Never colour alone:
- * it is an image named by its words, which show on hover.
- */
-export function MenuDot({
-  dot,
-  className,
-}: {
-  dot: Pick<Dot, 'colour' | 'reason'>;
-  className?: string;
-}) {
-  const label = useDotLabel()(dot);
-  return (
-    <span
-      role="img"
-      aria-label={label}
-      title={label}
-      data-menu-dot={dot.colour}
-      data-dot-reason={dot.reason}
-      className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-full',
-        DOT_STYLE[dot.colour],
-        className,
-      )}
-    >
-      {dot.colour === 'red' && (
-        <span aria-hidden className="text-[9px] font-bold leading-none">
-          !
-        </span>
-      )}
-    </span>
-  );
 }
 
 /** Where a dot sits on an item's icon: icons only, or a closed submenu's row. */

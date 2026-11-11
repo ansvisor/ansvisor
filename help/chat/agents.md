@@ -55,18 +55,18 @@ Agents made for the site type of the brand you have open are marked **For your s
 
 In **Your agents**, each agent has a card with:
 
-- A dot and its state: green for **Active**, amber for **Paused** with the reason, grey for **Draft** and **Archived**.
+- Its state: **Active**, **Paused** with the reason, **Draft** or **Archived**. While it is on, a dot as in the main menu shows beside it: grey and pulsing while it runs, yellow while it waits for your OK, and red with a **!** when its last run failed. A paused agent has no dot.
 - Its skills, its mode and the person who owns it.
 - **Trigger**: what starts it, for example "Every Mon 09:00 · New Recover signal", and **Next run**.
 - **Scope**: the brand it works on, or how many brands.
-- **Last run** with its state, and **Outcomes · 30 days**.
+- **Last run**: when it last ran, and **Outcomes · 30 days**.
 - **AI use · 30 days**: its share of your monthly AI limit, with a thin bar. Hover over it to see its runs, the average share a run and its cap a run.
 
 Usage is always shown as a share of your monthly AI limit.
 
 ## Runs open in Chat
 
-Each card's first button opens its run in Chat: **Open the run in Chat** while it runs, **Review in Chat** when it waits for your OK, and **Open the last run** otherwise. Recurring work you set up in Chat is listed under your agents too, marked as made in Chat.
+Each card's first button opens its run in Chat: **Open the run in Chat** while it runs, **Review in Chat** when it waits for your OK, and **Open the last run** otherwise. Recurring work you set up in Chat is listed under your agents too, marked as made in Chat, with the same dots.
 
 ## An agent's page
 
