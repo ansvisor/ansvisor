@@ -2238,6 +2238,7 @@
         "businessHub": {
           "title": "ChatGPT Business Hub",
           "open": "Open Business Hub",
+          "enterNumbers": "Enter numbers",
           "noApi": "There's no Business Hub API: mark each task done when its Done when is true.",
           "usOnlyAgent": "Business Agents are for US businesses only."
         },
@@ -9009,6 +9010,87 @@
       "writeFailed": "Couldn't write a content suggestion",
       "stillWriting": "Still writing the content suggestion",
       "stillWritingWhy": "It will appear in Content when it's done."
+    },
+    "businessHub": {
+      "title": "ChatGPT Business Hub",
+      "period": "{days} days to {end}",
+      "enter": "Enter numbers",
+      "allEntries": "All entries",
+      "hub": "Business Hub",
+      "hubHint": "From Insights in Business Hub",
+      "ours": "Ansvisor",
+      "oursHint": "Your tracked prompts, ChatGPT",
+      "metrics": {
+        "mentions": "Mentions",
+        "mentionsHint": "Your site referenced",
+        "websiteClicks": "Website clicks",
+        "profileViews": "Profile views",
+        "visibility": "ChatGPT visibility",
+        "named": "Answers naming you",
+        "cited": "Answers citing your site",
+        "visits": "Visits from ChatGPT"
+      },
+      "notShown": "Not shown",
+      "notRead": "Couldn't read",
+      "of": "of {count}",
+      "changeTitle": "Against the {days} days to {end}",
+      "topics": "Top discovery topics",
+      "tracked": "Tracked",
+      "suggestPrompts": "Suggest prompts",
+      "note": "Business Hub and Ansvisor count different things: compare their direction, not their size.",
+      "howTheyDiffer": "How these differ",
+      "definitions": "Business Hub counts real ChatGPT conversations that referenced your website. Ansvisor counts how often your brand is named, or your site cited, in answers to the prompts you track. Compare their direction, not their size.",
+      "clicksNote": "Business Hub counts clicks on links in ChatGPT; Ansvisor counts visits that arrived from ChatGPT. Some clicks arrive without a referrer.",
+      "empty": "No numbers yet. Copy them from Insights in Business Hub: it keeps only the last 7 or 28 days, and Ansvisor keeps them week by week.",
+      "partial": "Business Hub showed no numbers for these days.",
+      "noAnswers": "No ChatGPT answers tracked on these days.",
+      "entries": {
+        "title": "All entries",
+        "days": "{days} days",
+        "edit": "Edit",
+        "delete": "Delete",
+        "deleteLabel": "Delete the {days} days to {end}",
+        "deleted": "Entry deleted",
+        "deleteFailed": "Couldn't delete the entry. Try again.",
+        "managersDelete": "Admins and managers can delete entries.",
+        "source": {
+          "manual": "By hand",
+          "csv": "From CSV"
+        }
+      },
+      "dialog": {
+        "title": "Enter Business Hub numbers",
+        "editTitle": "Edit Business Hub numbers",
+        "description": "Copy them from Insights in Business Hub. Leave a number empty if Business Hub doesn't show it.",
+        "days": "Days",
+        "days7": "7 days",
+        "days28": "28 days",
+        "lastDay": "Last day",
+        "lastDayHint": "The last day Business Hub's numbers cover, usually yesterday.",
+        "mentions": "Mentions",
+        "websiteClicks": "Website clicks",
+        "profileViews": "Profile views",
+        "emptyPlaceholder": "Not shown",
+        "topics": "Top discovery topics",
+        "topicPlaceholder": "Topic {n}",
+        "replaces": "This replaces your entry for the same days.",
+        "save": "Save",
+        "saving": "Saving…",
+        "cancel": "Cancel",
+        "errors": {
+          "count": "Enter a whole number, or leave it empty.",
+          "date": "Enter the last day as a date.",
+          "future": "The last day can't be in the future.",
+          "tooOld": "The last day can't be more than two years ago.",
+          "topicTooLong": "Each topic can be 120 characters at most.",
+          "topics": "Enter up to 5 topics.",
+          "empty": "Enter at least one number or topic."
+        }
+      },
+      "saved": "Business Hub numbers saved",
+      "saveFailed": "Couldn't save the numbers. Try again.",
+      "demo": "This is the demo brand: its numbers are samples.",
+      "off": "Business Hub numbers aren't available here."
     }
   },
   "topics": {

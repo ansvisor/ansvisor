@@ -12,6 +12,8 @@ import {
   BUSINESS_HUB_SETUP_KIND,
   businessHubSetupDedupKey,
   businessHubSetupTasks,
+  NUMBERS_PATH,
+  completeFirstNumbersTask,
   isOpenRegion,
   syncBusinessHubSetupAction,
 } from './from-business-hub.js';
@@ -60,6 +62,11 @@ function fakeDb(seed = {}, { fail = {} } = {}) {
           if (kind === 'gte') return at != null && at >= value;
           return value.includes(at);
         });
+      if (state.op === 'update') {
+        const changed = rows(table).filter(match);
+        for (const row of changed) Object.assign(row, state.payload);
+        return { data: changed, error: null };
+      }
       if (state.op === 'insert') {
         if (fail[table]) return { data: null, error: fail[table] };
         const added = [state.payload].flat().map((values) => ({
@@ -113,6 +120,11 @@ function fakeDb(seed = {}, { fail = {} } = {}) {
       },
       insert: (payload) => {
         state.op = 'insert';
+        state.payload = payload;
+        return builder;
+      },
+      update: (payload) => {
+        state.op = 'update';
         state.payload = payload;
         return builder;
       },
@@ -190,7 +202,7 @@ const within = (details) => {
 };
 
 describe('businessHubSetupTasks', () => {
-  it('gives a US online shop five tasks, each saying why, how and when it is done, linked to Business Hub', () => {
+  it('gives a US online shop six tasks, each saying why, how and when it is done, linked to Business Hub', () => {
     const tasks = businessHubSetupTasks({
       brandName: 'Northwind Outdoors',
       domain: 'northwind.example',
@@ -198,15 +210,23 @@ describe('businessHubSetupTasks', () => {
       open: true,
       ecommerce: true,
     });
-    expect(tasks.map((t) => t.details.step)).toEqual(['claim', 'verify', 'facts', 'feed', 'agent']);
+    expect(tasks.map((t) => t.details.step)).toEqual([
+      'claim',
+      'verify',
+      'facts',
+      'feed',
+      'agent',
+      'numbers',
+    ]);
     expect(tasks.map((t) => t.details.type)).toEqual([
       'technical',
       'technical',
       'content',
       'product',
       'product',
+      'technical',
     ]);
-    for (const t of tasks) {
+    for (const t of tasks.slice(0, 5)) {
       expect(t.status).toBe('todo');
       expect(t.details).toMatchObject({
         source: 'business_hub',
@@ -254,7 +274,7 @@ describe('businessHubSetupTasks', () => {
       open: false,
       ecommerce: false,
     });
-    expect(tasks.map((t) => t.details.step)).toEqual(['claim', 'verify', 'facts']);
+    expect(tasks.map((t) => t.details.step)).toEqual(['claim', 'verify', 'facts', 'numbers']);
     expect(tasks[0].title).toBe('Join ChatGPT Business Hub');
     expect(tasks[0].details.how[0]).toBe(
       "If Business Hub says it isn't open in your country yet, join the waitlist and mark this task done.",
@@ -271,7 +291,7 @@ describe('businessHubSetupTasks', () => {
       directFeed: true,
     });
     expect(tasks.find((t) => t.details.step === 'feed').status).toBe('completed');
-    expect(tasks.filter((t) => t.status === 'todo')).toHaveLength(4);
+    expect(tasks.filter((t) => t.status === 'todo')).toHaveLength(5);
   });
 });
 
@@ -293,7 +313,7 @@ describe('syncBusinessHubSetupAction', () => {
     expect(fake.rows('actions')).toEqual([]);
   });
 
-  it('opens a US online shop’s action: medium impact, its evidence, five tasks and a History line', async () => {
+  it('opens a US online shop’s action: medium impact, its evidence, six tasks and a History line', async () => {
     const fake = fakeDb(seed({ brand: { industry: 'E-commerce & Retail' } }));
     expect(await sync(fake)).toBe('opened');
 
@@ -331,6 +351,7 @@ describe('syncBusinessHubSetupAction', () => {
       [3, 'facts', 'todo'],
       [4, 'feed', 'todo'],
       [5, 'agent', 'todo'],
+      [6, 'numbers', 'todo'],
     ]);
     expect(tasks.every((t) => t.action_id === action.id)).toBe(true);
     expect(fake.rows('action_events')).toEqual([
@@ -338,12 +359,12 @@ describe('syncBusinessHubSetupAction', () => {
         action_id: action.id,
         event: 'created',
         actor_id: null,
-        data: { source: 'business_hub', variant: 'open', taskCount: 5 },
+        data: { source: 'business_hub', variant: 'open', taskCount: 6 },
       }),
     ]);
   });
 
-  it('opens a Turkish B2B brand’s with low impact, the waitlist wording and three tasks', async () => {
+  it('opens a Turkish B2B brand’s with low impact, the waitlist wording and no agent task', async () => {
     const fake = fakeDb(seed({ brand: { region: 'TR' } }));
     expect(await sync(fake)).toBe('opened');
     const [action] = fake.rows('actions');
@@ -353,6 +374,7 @@ describe('syncBusinessHubSetupAction', () => {
       'claim',
       'verify',
       'facts',
+      'numbers',
     ]);
     expect(fake.rows('action_tasks')[0].title).toBe('Join ChatGPT Business Hub');
   });
@@ -428,5 +450,73 @@ describe('syncBusinessHubSetupAction', () => {
   it('fails on any other write error', async () => {
     const fake = fakeDb(seed(), { fail: { actions: { code: '42501', message: 'denied' } } });
     await expect(sync(fake)).rejects.toThrow('actions write: denied');
+  });
+});
+
+describe('the first numbers task', () => {
+  it('asks for the first entry in Visibility, and is checked automatically', () => {
+    const [numbers] = businessHubSetupTasks({
+      brandName: 'Northwind',
+      domain: 'northwind.example',
+      open: true,
+      ecommerce: false,
+    }).slice(-1);
+    expect(numbers.title).toBe('Enter your first Business Hub numbers');
+    expect(numbers.details).toMatchObject({
+      source: 'business_hub',
+      step: 'numbers',
+      url: NUMBERS_PATH,
+      check: 'auto',
+    });
+    expect(NUMBERS_PATH).toBe('/dashboard/insights?businessHub=enter');
+    within(numbers.details);
+  });
+
+  it('is completed by the first save, with a History line, and the action stays open', async () => {
+    const fake = fakeDb(seed());
+    expect(await sync(fake)).toBe('opened');
+    const [action] = fake.rows('actions');
+    const later = new Date(NOW.getTime() + 2 * DAY);
+
+    expect(await completeFirstNumbersTask(BRAND, { db: fake.db, now: later })).toBe(true);
+    const numbers = fake.rows('action_tasks').find((t) => t.details.step === 'numbers');
+    expect(numbers.status).toBe('completed');
+    expect(numbers.details.autoCheck).toEqual({
+      at: later.toISOString(),
+      triedAt: later.toISOString(),
+      passed: true,
+      missing: [],
+    });
+    // Only its own task: the others are the person's to mark.
+    expect(fake.rows('action_tasks').filter((t) => t.status === 'completed')).toHaveLength(1);
+    expect(fake.rows('action_events').at(-1)).toMatchObject({
+      action_id: action.id,
+      event: 'task_checked',
+      data: { taskId: numbers.id, task: null, title: 'Enter your first Business Hub numbers' },
+      actor_id: null,
+    });
+    expect(action.status).toBe('new');
+    expect(action.updated_at).toBe(later.toISOString());
+
+    // A second save finds nothing left to complete.
+    expect(await completeFirstNumbersTask(BRAND, { db: fake.db, now: later })).toBe(false);
+    expect(fake.rows('action_events').filter((e) => e.event === 'task_checked')).toHaveLength(1);
+  });
+
+  it('does nothing without an open setup action', async () => {
+    const fake = fakeDb(
+      seed({
+        actions: [
+          {
+            id: 'a0',
+            brand_id: BRAND,
+            dedup_key: businessHubSetupDedupKey(BRAND),
+            status: 'dismissed',
+          },
+        ],
+      }),
+    );
+    expect(await completeFirstNumbersTask(BRAND, { db: fake.db, now: NOW })).toBe(false);
+    expect(fake.rows('action_events')).toEqual([]);
   });
 });
