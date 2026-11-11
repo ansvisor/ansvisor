@@ -624,7 +624,43 @@
       "kpis": "KPIs",
       "actions": "Actions",
       "signals": "Signals",
-      "history": "History"
+      "history": "History",
+      "today": "Today",
+      "agents": "Agents"
+    },
+    "header": {
+      "title": "Action Center",
+      "agentsSubtitle": "Agents do recurring work for you. Each one asks before anything goes live."
+    },
+    "today": {
+      "subtitle": "What changed, what to do today, and what is waiting for you.",
+      "preview": "Today is in preview. Each part below fills in as it is built; until then, it says what it will show.",
+      "allSignals": "All signals",
+      "allActions": "All actions",
+      "needsReview": "Tasks waiting for review",
+      "backToToday": "Back to Today",
+      "sections": {
+        "since": {
+          "title": "Since yesterday",
+          "body": "The biggest changes in AI answers since your last visit: a better or worse rank, a citation won or lost, a rival's move."
+        },
+        "focus": {
+          "title": "Today's focus",
+          "body": "Your 3 highest-impact actions. They stay here until you finish or skip them."
+        },
+        "waiting": {
+          "title": "Waiting for you",
+          "body": "Agent drafts that need your OK, tasks due today and weekly reminders."
+        },
+        "setup": {
+          "title": "Finish setting up",
+          "body": "The set-up steps you have left, two at a time, with how long each takes."
+        },
+        "stand": {
+          "title": "Where you stand",
+          "body": "Your score, its change since yesterday, and how far you are from the next brand."
+        }
+      }
     },
     "firstRun": {
       "running": "First tracking running",
@@ -3539,7 +3575,9 @@
       "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
       "view": {
         "actions": "Actions",
-        "scorecard": "Scorecard"
+        "scorecard": "Scorecard",
+        "kpis": "KPIs",
+        "label": "History views"
       },
       "scorecard": {
         "note": "What each kind of action did at this brand, from its own actions only. Results are the readings so far; each is final a month after its action closed. Median change is in each action's main metric.",

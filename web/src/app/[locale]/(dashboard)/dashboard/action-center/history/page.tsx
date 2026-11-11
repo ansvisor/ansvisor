@@ -40,6 +40,8 @@ import { ActionCenterTabs } from '@/components/action-center/action-center-tabs'
 import { HistoryTable } from '@/components/action-center/history-table';
 import { HistoryDrawer } from '@/components/action-center/history-drawer';
 import { ScorecardTable } from '@/components/action-center/scorecard-table';
+import { HistoryViews } from '@/components/action-center/history-views';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { cn } from '@/lib/utils';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
@@ -75,6 +77,9 @@ export default function ActionCenterHistoryPage() {
   const tTypes = useTranslations('actionCenter.actionCategories');
   const tActions = useTranslations('actionCenter.actionsPage');
   const tSources = useTranslations('actionCenter.signalsPage.sources');
+  // The simplified layout (SIMPLE_NAV): KPIs is one of History's views, shown
+  // under the tabs whatever the list holds.
+  const simpleNav = useSimpleNav();
 
   const [items, setItems] = useState<ActionHistoryItem[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -255,6 +260,7 @@ export default function ActionCenterHistoryPage() {
     <div className="space-y-6">
       {header}
       <ActionCenterTabs />
+      {simpleNav && <HistoryViews current={view} onPick={setView} kpis />}
 
       {isLoading ? (
         <div className="space-y-4">
@@ -314,24 +320,7 @@ export default function ActionCenterHistoryPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex overflow-hidden rounded-md border">
-              {VIEWS.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  aria-pressed={view === option}
-                  onClick={() => setView(option)}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-medium transition-colors',
-                    view === option
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-card text-foreground hover:bg-muted',
-                  )}
-                >
-                  {t(`view.${option}`)}
-                </button>
-              ))}
-            </div>
+            {!simpleNav && <HistoryViews current={view} onPick={setView} />}
             <div className="inline-flex overflow-hidden rounded-md border">
               {RANGE_PRESETS.map((preset) => (
                 <button

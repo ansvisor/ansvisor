@@ -6,6 +6,7 @@ import { ALL_DATE_PRESETS } from '@/config/date-presets';
 import { PROMPT_RANGE_PRESETS, SCRAPER_GROUPS } from '@/config/prompt-options';
 import { dashboardNavLabelKeys } from '@/lib/dashboard-navigation';
 import { adsEnabled } from '@/lib/ads/flag';
+import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import {
   SETTINGS_SECTIONS,
   hasSettingsSection,
@@ -84,6 +85,8 @@ const SYNONYMS: Record<string, readonly string[]> = {
   // Was Chat › Agents.
   agents: ['agents', 'my agents', 'agent centre'],
   'action-center': ['actions', 'action centre'],
+  // Its name, Today, is asked by already.
+  'action-center/today': ["today's focus", 'my day'],
   'action-center/signals': ['signals'],
   'action-center/kpis': ['kpis', 'kpi', 'goals'],
   'action-center/history': ['action history', 'history'],
@@ -116,13 +119,16 @@ const SYNONYMS: Record<string, readonly string[]> = {
   ],
 };
 
-/** Pages the sidebar doesn't list but people go to, named as their page names them. */
-const EXTRA_PAGES: {
+/** A page the sidebar doesn't list but people go to, named as its page names it. */
+interface ExtraPage {
   href: ChatHref;
   name: string;
   section: string | null;
   requiredFeature?: Feature;
-}[] = [
+}
+
+/** Pages the sidebar doesn't list but people go to, named as their page names them. */
+const EXTRA_PAGES: ExtraPage[] = [
   {
     href: '/dashboard/action-center/signals',
     name: actionCenterT('tabs.signals'),
@@ -146,6 +152,16 @@ const EXTRA_PAGES: {
   },
   { href: '/dashboard/brands', name: brandsT('title'), section: null },
 ];
+
+/**
+ * Action Center › Today, a page only with the simplified layout on
+ * (SIMPLE_NAV): Chat opens it only then, as its page is there only then.
+ */
+const TODAY_PAGE: ExtraPage = {
+  href: '/dashboard/action-center/today',
+  name: actionCenterT('tabs.today'),
+  section: navT('actionCenter'),
+};
 
 /** Settings sections by their Settings name. */
 const SETTINGS_NAMES: Partial<Record<(typeof SETTINGS_SECTIONS)[number], string>> = {
@@ -186,13 +202,15 @@ function route(
 /**
  * Every page Chat can open, from the live sidebar and Settings, in the
  * sidebar's order: Settings' sections this install shows (no Billing or AI
- * Providers on a self-hosted one). Chat itself (its own page) isn't one, and
- * Ads is one only with Ads on (ADS_ENABLED), as its page is.
+ * Providers on a self-hosted one). Chat itself (its own page) isn't one,
+ * Ads is one only with Ads on (ADS_ENABLED), as its page is, and Action
+ * Center › Today only with the simplified layout on (SIMPLE_NAV).
  */
 export function routeRegistry({
   cloud = isCloud(),
   ads = adsEnabled(),
-}: { cloud?: boolean; ads?: boolean } = {}): ChatRoute[] {
+  simpleNav = simpleNavEnabled(),
+}: { cloud?: boolean; ads?: boolean; simpleNav?: boolean } = {}): ChatRoute[] {
   const out: ChatRoute[] = [];
   for (const group of dashboardNav) {
     for (const item of group.items) {
@@ -214,7 +232,7 @@ export function routeRegistry({
       }
     }
   }
-  for (const page of EXTRA_PAGES) {
+  for (const page of simpleNav ? [TODAY_PAGE, ...EXTRA_PAGES] : EXTRA_PAGES) {
     // A page the sidebar lists (Competitors, once it's back on it) is there already.
     if (out.some((r) => r.href === page.href)) continue;
     out.push(route(page.href, page.name, page.section, page.requiredFeature));
