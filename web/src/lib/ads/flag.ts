@@ -14,8 +14,9 @@
  * nothing is written into the browser's code, where it is always off. The
  * dashboard's layout reads it on the server and hands the answer down
  * (AdsProvider). The process sees a change only when it starts again: a
- * restart self-hosted, a new deployment on Vercel. Web only: no route of
- * the API server needs it yet.
+ * restart self-hosted, a new deployment on Vercel. The API server reads the
+ * same variable the same way (server/src/lib/ads-flag.js): off, every
+ * /api/ads path is not found. Set both to the same value.
  */
 export function adsEnabled(): boolean {
   return process.env.ADS_ENABLED === 'true';
