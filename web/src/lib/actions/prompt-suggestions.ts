@@ -429,6 +429,8 @@ export async function acceptSuggestion(
   suggestionId: string,
   options?: { platforms?: string[]; models?: string[] },
 ): Promise<AcceptSuggestionResult> {
+  // First: a Business Hub suggestion's topic may be made here, before the add checks too.
+  await assertWritable();
   const session = await getSession();
   const supabase = await createClient();
 
@@ -497,6 +499,8 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
     return { trackedIds: [], skippedIds: [], error: 'Pick between 1 and 25 suggestions.' };
   }
 
+  // First: a Business Hub suggestion's topic may be made here, before each add checks too.
+  await assertWritable();
   const session = await getSession();
   const supabase = await createClient();
   const { data: rows, error: rowsErr } = await supabase
