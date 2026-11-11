@@ -152,6 +152,11 @@ export interface ChatAsk {
   batch?: { at: number; of: number };
   /** What comes after the answer: "Then I'll write the FAQ draft". */
   then?: string;
+  /**
+   * The engine's range card (range.ts): its options are date ranges, each a
+   * click, and Other is Custom, two days sent as "YYYY-MM-DD/YYYY-MM-DD".
+   */
+  dateRange?: true;
 }
 
 /**

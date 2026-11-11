@@ -82,6 +82,14 @@ export interface PendingCalls {
   /** A WRITE's card (`ask`), an EXECUTE's click, or a question card (CHAT-07). */
   kind: 'ask' | 'click' | 'question';
   offerDontAskAgain: boolean;
+  /**
+   * The engine's range card (range.ts): the question asks which date range
+   * the reads take, and the call on it is the first read that waits for it,
+   * which runs, with the calls after it, once the person picks.
+   */
+  range?: true;
+  /** Those reads came from the read phase: the reading goes on after them. */
+  readPhase?: true;
 }
 
 /**

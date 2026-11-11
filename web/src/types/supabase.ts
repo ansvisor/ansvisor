@@ -4128,6 +4128,7 @@ export type Database = {
         Row: {
           agents_for_you_dismissed_at: string | null
           answer_language: string | null
+          date_range: string | null
           default_mode: string
           effort: string | null
           focus: string[] | null
@@ -4155,6 +4156,7 @@ export type Database = {
         Insert: {
           agents_for_you_dismissed_at?: string | null
           answer_language?: string | null
+          date_range?: string | null
           default_mode?: string
           effort?: string | null
           focus?: string[] | null
@@ -4182,6 +4184,7 @@ export type Database = {
         Update: {
           agents_for_you_dismissed_at?: string | null
           answer_language?: string | null
+          date_range?: string | null
           default_mode?: string
           effort?: string | null
           focus?: string[] | null

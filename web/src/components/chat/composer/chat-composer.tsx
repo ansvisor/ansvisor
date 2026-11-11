@@ -45,6 +45,7 @@ import {
   type PlusItem,
 } from './composer-menus';
 import { ModeMenu } from './mode-menu';
+import { RangeLine } from '../range/range-line';
 import { ModelMenu, useModelLabel } from './model-menu';
 import { VoiceButton } from './voice-button';
 import { YourKeysDialog } from './your-keys-dialog';
@@ -1109,6 +1110,8 @@ export function ChatComposer({
             offByAdmin={fullAutoOffByAdmin}
           />
         )}
+        {/* The range Chat reads when a message names none (range.ts), and its change. */}
+        <RangeLine running={running} />
         <span>{uploading ? t('files.sendWaits') : under}</span>
         <span className="ml-auto flex items-center gap-2.5">
           {usage}

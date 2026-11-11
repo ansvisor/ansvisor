@@ -1275,3 +1275,24 @@ describe('Agents for you hidden (00483)', () => {
     expect(sql).not.toMatch(/\bgrant\b|create policy/);
   });
 });
+
+describe("Chat's date range (00528)", () => {
+  const sql = migration('00528');
+
+  it("keeps the person's range on their own Chat settings row, a preset or two days in order", () => {
+    expect(sql).toMatch(
+      /alter table public\.chat_user_prefs\s+add column if not exists date_range text check/,
+    );
+    expect(sql).toContain(
+      "'^(24h|7d|30d|90d|[0-9]{4}-[0-9]{2}-[0-9]{2}/[0-9]{4}-[0-9]{2}-[0-9]{2})$'",
+    );
+    expect(sql).toMatch(/split_part\(date_range, '\/', 1\) <= split_part\(date_range, '\/', 2\)/);
+    // 00400's own-row policies and table grants already cover the new column.
+    expect(sql).not.toMatch(/\bgrant\b|create policy/);
+  });
+
+  it('lets a question card have up to 5 options, the rest of the rule as before', () => {
+    expect(sql).toMatch(/jsonb_array_length\(p_options\) not between 2 and 5 then false/);
+    expect(sql).toMatch(/count\(\*\) filter \(where o -> 'recommended' = 'true'::jsonb\) = 1/);
+  });
+});
