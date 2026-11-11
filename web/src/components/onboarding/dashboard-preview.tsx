@@ -57,7 +57,8 @@ export function DashboardPreview({
   const t = useTranslations('nav');
   const chatAgentic = useChatAgentic();
   const ads = useAdsEnabled();
-  const nav = navFor(useSimpleNav());
+  const simpleNav = useSimpleNav();
+  const nav = navFor(simpleNav);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -116,7 +117,7 @@ export function DashboardPreview({
                       key={item.href}
                       className={cn(
                         'flex items-center gap-3 rounded-md px-2 py-1.5 text-[13px] font-medium',
-                        isDashboardHomeItem(item.href)
+                        isDashboardHomeItem(item.href, simpleNav)
                           ? 'bg-accent text-accent-foreground'
                           : 'text-muted-foreground',
                       )}

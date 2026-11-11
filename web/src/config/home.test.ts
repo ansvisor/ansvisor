@@ -3,6 +3,8 @@ import {
   CHAT_HOME,
   DASHBOARD_HOME,
   INSIGHTS_HOME,
+  TODAY_HOME,
+  dashboardHomeOf,
   isDashboardHomeItem,
   landingPageFor,
   startsOnInsights,
@@ -136,5 +138,60 @@ describe('startsOnInsights', () => {
     for (const status of ['past_due', 'unpaid', 'canceled', 'inactive', null, undefined]) {
       expect(facts({ status, periodEnd: trialFrom('2026-11-01T00:00:00Z') })).toBe(false);
     }
+  });
+});
+
+/**
+ * The simplified layout (SIMPLE_NAV, owner decisions 2026-11-11): everyone
+ * lands on Action Center › Today, whatever the plan, the trial's day, the
+ * person's menu or the install. Off, the rules above hold.
+ */
+describe('the landing page with SIMPLE_NAV', () => {
+  beforeEach(() => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('is Today for everyone', () => {
+    expect(TODAY_HOME).toBe('/dashboard/action-center/today');
+    for (const chatOn of [true, false]) {
+      for (const chatHidden of [true, false]) {
+        for (const onInsights of [true, false]) {
+          for (const insightsHidden of [true, false]) {
+            expect(
+              landingPageFor({ chatOn, chatHidden, onInsights, insightsHidden, simpleNav: true }),
+            ).toBe(TODAY_HOME);
+          }
+        }
+      }
+    }
+    // A new buyer, asked without the plan (the checkout), too.
+    expect(landingPageFor({ chatOn: true, simpleNav: true })).toBe(TODAY_HOME);
+  });
+
+  it('is Today self-hosted too', () => {
+    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'false');
+    expect(landingPageFor({ chatOn: false, simpleNav: true })).toBe(TODAY_HOME);
+    expect(landingPageFor({ chatOn: false })).toBe(DASHBOARD_HOME);
+  });
+
+  it('keeps every rule as it was without it', () => {
+    expect(landingPageFor({ chatOn: true, simpleNav: false })).toBe(CHAT_HOME);
+    expect(landingPageFor({ chatOn: true, onInsights: true, simpleNav: false })).toBe(
+      INSIGHTS_HOME,
+    );
+    expect(landingPageFor({ chatOn: false, simpleNav: false })).toBe(DASHBOARD_HOME);
+  });
+
+  it('makes Today the home, under the Action Center item', () => {
+    expect(dashboardHomeOf(true)).toBe(TODAY_HOME);
+    expect(dashboardHomeOf(false)).toBe(DASHBOARD_HOME);
+    expect(isDashboardHomeItem('/dashboard/action-center', true)).toBe(true);
+    expect(isDashboardHomeItem('/dashboard/action-center/today', true)).toBe(true);
+    expect(isDashboardHomeItem('/dashboard/action-center/actions', true)).toBe(false);
+    expect(isDashboardHomeItem('/dashboard/action-center/actions')).toBe(true);
   });
 });
