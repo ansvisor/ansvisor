@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
+vi.mock('../action-center/from-business-hub.js', () => ({ completeFirstNumbersTask: vi.fn() }));
 
 import {
   MAX_TOPICS,
@@ -220,7 +221,14 @@ describe('snapshotOut and afterBusinessHubSave', () => {
     expect(snapshotOut({ id: 's1', period_days: 7, discovery_topics: null }).topics).toEqual([]);
   });
 
-  it('does nothing yet', async () => {
-    expect(await afterBusinessHubSave('b1')).toBeNull();
+  it('completes the setup action’s first numbers task', async () => {
+    const completeFirstNumbersTask = vi.mocked(
+      (await import('../action-center/from-business-hub.js')).completeFirstNumbersTask,
+    );
+    completeFirstNumbersTask.mockResolvedValue(true);
+    expect(await afterBusinessHubSave('b1', { db: 'db', now: NOW })).toEqual({
+      firstNumbers: true,
+    });
+    expect(completeFirstNumbersTask).toHaveBeenCalledWith('b1', { db: 'db', now: NOW });
   });
 });

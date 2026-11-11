@@ -66,6 +66,7 @@ describe('Check what ChatGPT says', () => {
   it('is not there while the new Chat is off for the workspace', async () => {
     await render(false);
     expect(check()).toBeUndefined();
-    expect(container.querySelectorAll('a')).toHaveLength(1);
+    // The step's other links (Open Business Hub, Enter numbers) stay.
+    expect(container.textContent).toContain('Open Business Hub');
   });
 });

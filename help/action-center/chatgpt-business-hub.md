@@ -28,6 +28,7 @@ Ansvisor raises it once for each brand, on a nightly run, when the brand has a w
 3. **Correct your business facts**, using the facts as your own site states them. **Check what ChatGPT says** in the action opens Chat with the **ChatGPT profile check**: it lists what ChatGPT gets wrong and writes the corrections to paste, asking you for anything nothing confirms.
 4. **Connect your product feed**, for an online shop only. If you already send OpenAI a product feed, this task is done from the start.
 5. **Turn on your Business Agent**, in the US only, and only if Business Hub offers it.
+6. **Enter your first Business Hub numbers** on Visibility's ChatGPT Business Hub card. **Enter numbers** in the action opens it.
 
 Each task says why it matters, how to do it and when it is done.
 
@@ -37,7 +38,7 @@ Business Hub may not be open in every country yet. Outside the countries where c
 
 ## Why you mark the steps yourself
 
-Business Hub has no connection Ansvisor can read, so Ansvisor can't see your progress there. Mark each task done when its **Done when** is true, for example when Business Hub shows your business as verified. The action closes the way any action does. Ansvisor doesn't measure a result for it.
+Business Hub has no connection Ansvisor can read, so Ansvisor can't see your progress there. Mark each task done when its **Done when** is true, for example when Business Hub shows your business as verified. Only the last one completes itself, when your first numbers are saved. The action closes the way any action does. Ansvisor doesn't measure a result for it.
 
 ## Who can do it
 

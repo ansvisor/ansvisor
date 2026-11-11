@@ -47,7 +47,7 @@ afterEach(() => {
 describe('BusinessHubContext', () => {
   it('opens Business Hub in a new tab, and says each task is marked done by hand', async () => {
     await render({ variant: 'open', region: 'US' });
-    const link = container.querySelector('a')!;
+    const link = container.querySelector('a[target="_blank"]')!;
     expect(link.getAttribute('href')).toBe(BUSINESS_HUB_URL);
     expect(link.getAttribute('target')).toBe('_blank');
     expect(link.getAttribute('rel')).toBe('noopener noreferrer');
@@ -56,6 +56,14 @@ describe('BusinessHubContext', () => {
       "There's no Business Hub API: mark each task done when its Done when is true.",
     );
     expect(container.textContent).not.toContain('Business Agents are for US businesses only.');
+  });
+
+  it('opens Visibility to enter the numbers', async () => {
+    await render({ variant: 'open', region: 'US' });
+    const enter = [...container.querySelectorAll('a')].find(
+      (a) => a.textContent === 'Enter numbers',
+    );
+    expect(enter?.getAttribute('href')).toBe('/dashboard/insights?businessHub=enter');
   });
 
   it('says Business Agents are for US businesses only outside the open regions', async () => {
