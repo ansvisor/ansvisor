@@ -6,6 +6,7 @@ import type { ActionItem } from '@/lib/actions/action-center';
 import type { FocusCard } from '@/lib/actions/today-focus';
 import type { TodayOverview } from '@/lib/actions/today';
 import type { TodayStanding } from '@/lib/action-center/focus';
+import { actionItemFromRow } from '@/lib/action-center/rows';
 import type { Signal } from '@/lib/signals/map';
 import { buildGettingStarted, type GettingStartedFacts } from '@/lib/getting-started/steps';
 import { UpgradeDialogContext, type UpgradeDialogState } from '@/components/providers/upgrade-gate';
@@ -456,6 +457,61 @@ describe('Action Center › Today', () => {
     expect(
       container.querySelector('[data-today-part="focus"] [data-testid="gear"]'),
     ).not.toBeNull();
+  });
+
+  /** A topic gap sent from Visibility (VIS-010), as the server stores its priority. */
+  it('says why a topic gap sent from Visibility is in focus: its gap and rival', async () => {
+    const gap = actionItemFromRow(
+      {
+        id: 'a1',
+        action_no: 7,
+        category: 'compete',
+        kind: 'topic_competitor_gap',
+        impact: 'high',
+        status: 'new',
+        payload: {
+          source: 'topic_competitor_gap',
+          topicName: 'Coffee subscriptions',
+          competitorName: 'Northbound Roasters',
+          gap: 23.4,
+          targetEntity: 'prompts',
+          targetCount: 12,
+        },
+        kpi_keys: ['ai_visibility', 'share_of_voice'],
+        assignee_id: null,
+        due_date: null,
+        created_at: '2026-11-10T09:05:31Z',
+        updated_at: '2026-11-10T09:05:31Z',
+        priority_score: 77,
+        priority_level: 'high',
+        priority_reason: {
+          version: 1,
+          change: 'gap',
+          subject: { entity: 'prompts', count: 12 },
+          competitorGap: { points: 23.4, competitor: 'Northbound Roasters' },
+          demand: 'medium',
+          realDemand: null,
+          searches: 380,
+          commercial: true,
+          heldBefore: false,
+          days: null,
+          kinds: 0,
+          sources: 0,
+          pastSuccess: null,
+          factors: { severity: 0.53, confidence: 0.6 },
+        },
+        priority_updated_at: '2026-11-10T09:05:31Z',
+      },
+      { assignee: null, taskTotal: 9, taskCompleted: 0, signalCount: 0 },
+    );
+    reads.getTodayFocus.mockResolvedValue([card('a1', { action: gap })]);
+    await draw();
+    const row = container.querySelector('[data-focus-id="a1"]')?.textContent ?? '';
+    expect(row).toContain('Close the 23.4-pt gap with Northbound Roasters in Coffee subscriptions');
+    expect(row).toContain(
+      'A 23.4-pt gap with Northbound Roasters on 12 prompts — commercial intent.',
+    );
+    expect(row).not.toContain('Its findings have resolved');
   });
 
   it('reads the focus with the last visit, then keeps this one and counts it viewed', async () => {

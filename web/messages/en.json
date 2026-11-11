@@ -1858,6 +1858,7 @@
             "issue": "A site issue on {subject}",
             "opportunity": "Room to grow on {subject}",
             "gain": "A gain on {subject}",
+            "competitorGap": "{article, select, an {An} other {A}} {points}-pt gap with {competitor} on {subject}",
             "none": "Its findings have resolved"
           },
           "subject": {
@@ -1877,7 +1878,8 @@
             "gap": "A gap to close",
             "issue": "A site issue",
             "opportunity": "Room to grow",
-            "gain": "A gain"
+            "gain": "A gain",
+            "competitorGap": "{article, select, an {An} other {A}} {points}-pt gap with {competitor}"
           },
           "demand": {
             "high": "high-demand",
