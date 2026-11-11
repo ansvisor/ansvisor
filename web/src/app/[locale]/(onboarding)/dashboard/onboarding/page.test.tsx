@@ -46,12 +46,7 @@ vi.mock('@/lib/supabase/client', () => {
         : []
       : null;
   const rows: Record<string, () => unknown> = {
-    // "What do you work on?" (menu access) answered: the resume goes on to the plan step.
-    profiles: () => ({
-      organization_id: 'org-1',
-      onboarding_completed: db.onboarded,
-      work_areas_asked_at: db.onboarded ? '2026-10-01T00:00:00Z' : null,
-    }),
+    profiles: () => ({ organization_id: 'org-1', onboarding_completed: db.onboarded }),
     brands: () =>
       db.ownBrand
         ? [
@@ -115,7 +110,6 @@ vi.mock('@/lib/actions/prompt', () => ({
 }));
 vi.mock('@/lib/actions/tracking', () => ({ triggerTrackingCheck: vi.fn() }));
 vi.mock('@/lib/actions/volumes', () => ({ bootstrapBrandVolumes: vi.fn() }));
-vi.mock('@/lib/actions/menu-access', () => ({ setMyWorkAreas: vi.fn() }));
 const setup = vi.hoisted(() => ({
   suggestTopics: vi.fn(),
   generatePromptsFromTopics: vi.fn(),
@@ -368,6 +362,24 @@ describe('the plan step', () => {
     vi.unstubAllGlobals();
     vi.useRealTimers();
     getCompetitors.mockResolvedValue([]);
+  });
+
+  it('comes straight after the competitors, the last of six steps, with no "What do you work on?"', async () => {
+    db.onboarded = false;
+    db.promptSets = [{ id: 's1' }];
+    setup.suggestCompetitors.mockResolvedValue({
+      competitors: [{ name: 'Rival', domain: 'rival.com' }],
+      isEcommerce: false,
+    });
+    await render();
+    await act(async () => button('Start tracking with 1 competitor')!.click());
+    await act(async () => {});
+    expect(text()).toContain('Choose how to start');
+    expect(text()).not.toContain('What do you work on?');
+    // The step dots: six, the plan's the current one.
+    const dots = [...container.querySelector('.w-6.bg-foreground')!.parentElement!.children];
+    expect(dots).toHaveLength(6);
+    expect(dots.findIndex((dot) => dot.classList.contains('w-6'))).toBe(5);
   });
 
   it('offers the demo brand in one line under the plans, for someone not ready to add a card', async () => {

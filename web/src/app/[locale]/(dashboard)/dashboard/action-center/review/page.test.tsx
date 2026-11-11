@@ -55,6 +55,7 @@ const { toast } = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast }));
 
 import ActionCenterReviewPage from './page';
+import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 
 const review: TaskReview = {
   id: 'r1',
@@ -70,15 +71,17 @@ let container: HTMLDivElement;
 let root: Root;
 const openUpgrade = vi.fn();
 
-async function render(isLocked = false) {
+async function render(isLocked = false, simpleNav = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <UpgradeDialogContext.Provider
-          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-        >
-          <ActionCenterReviewPage />
-        </UpgradeDialogContext.Provider>
+        <SimpleNavProvider enabled={simpleNav}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <ActionCenterReviewPage />
+          </UpgradeDialogContext.Provider>
+        </SimpleNavProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -227,5 +230,20 @@ describe('Needs review', () => {
     await render();
     expect(getTaskReviews).not.toHaveBeenCalled();
     expect(container.textContent).toContain('Only admins and managers review tasks.');
+  });
+});
+
+describe('Needs review with the simplified layout (SIMPLE_NAV)', () => {
+  const back = () => container.querySelector('[data-action="review.backToToday"]');
+
+  it('has no way back to Today while it is off', async () => {
+    await render();
+    expect(back()).toBeNull();
+  });
+
+  it('links back to Today with it on, where it is reached from', async () => {
+    await render(false, true);
+    expect(back()?.getAttribute('href')).toBe('/dashboard/action-center/today');
+    expect(back()?.textContent).toBe('Back to Today');
   });
 });

@@ -69,6 +69,18 @@ export const GETTING_STARTED_STEPS: readonly GettingStartedStepDef[] = [
   { key: 'ready', stage: 'ready', href: '/dashboard/action-center/actions' },
 ];
 
+/**
+ * The set-up steps, in order: with the simplified layout on (SIMPLE_NAV),
+ * the whole list, as Today's "Finish setting up · x of 7". The explore
+ * steps still complete when their page is first opened (PAGE_STEPS), but
+ * aren't listed; Today's focus takes over the act steps; and there is no
+ * Ready step. Every state is worked out from the brand's data and records
+ * as before, so a brand's steps done carry over.
+ */
+export const SETUP_STEPS: readonly GettingStartedStepDef[] = GETTING_STARTED_STEPS.filter(
+  (step) => step.stage === 'setup',
+);
+
 export const MIN_COMPETITORS = 3;
 export const MIN_TOPICS = 3;
 export const PROMPTS_PER_TOPIC = 3;
@@ -330,14 +342,18 @@ export function firstRunOrder(steps: GettingStartedStep[]): GettingStartedStep[]
   return [...steps.filter(readyNow), ...steps.filter((step) => !readyNow(step))];
 }
 
-export function buildGettingStarted(f: GettingStartedFacts): GettingStartedStatus {
-  const steps = GETTING_STARTED_STEPS.map((def) => ({
+/** `setupOnly`: the 7 set-up steps (SETUP_STEPS), for the simplified layout. */
+export function buildGettingStarted(
+  f: GettingStartedFacts,
+  { setupOnly = false }: { setupOnly?: boolean } = {},
+): GettingStartedStatus {
+  const steps = (setupOnly ? SETUP_STEPS : GETTING_STARTED_STEPS).map((def) => ({
     ...def,
     ...stepState(def.key, f),
     updatedAt: f.recordedAt[def.key] ?? null,
   }));
-  const ready = steps.find((s) => s.key === 'ready')!;
-  ready.state = steps.every((s) => s === ready || complete(s)) ? 'done' : 'waiting';
+  const ready = steps.find((s) => s.key === 'ready');
+  if (ready) ready.state = steps.every((s) => s === ready || complete(s)) ? 'done' : 'waiting';
   const running = Boolean(f.startedAt) && !f.dismissedAt;
   return {
     active: running && Boolean(f.confirmedAt),

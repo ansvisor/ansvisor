@@ -5,7 +5,7 @@ route: /dashboard/settings/api-keys
 plans: [starter, growth, enterprise]
 plan_mode: show_upgrade
 published: 2026-11-10
-approved: false
+approved: true
 ---
 Connecting an AI assistant meant creating a key and pasting it into the assistant's setup.
 Now you add Ansvisor's address in your assistant, sign in, and choose whether it may make changes.

@@ -541,6 +541,13 @@
     "settings": "Settings",
     "execution": "Execution",
     "analytics": "Analytics",
+    "more": "More",
+    "today": "Today",
+    "actions": "Actions",
+    "signals": "Signals",
+    "agents": "Agents",
+    "history": "History",
+    "agentsInActionCenter": "Agents · in Action Center",
     "toggleMenu": "Toggle navigation menu",
     "keepSidebarOpen": "Keep sidebar open",
     "collapseSidebar": "Collapse sidebar",
@@ -624,7 +631,262 @@
       "kpis": "KPIs",
       "actions": "Actions",
       "signals": "Signals",
-      "history": "History"
+      "history": "History",
+      "today": "Today",
+      "agents": "Agents"
+    },
+    "header": {
+      "title": "Action Center",
+      "agentsSubtitle": "Agents do recurring work for you. Each one asks before anything goes live."
+    },
+    "today": {
+      "allSignals": "All signals",
+      "allActions": "All actions",
+      "backToToday": "Back to Today",
+      "updated": "AI answers updated {ago}",
+      "noAnswersYet": "no AI answers yet",
+      "loop": {
+        "label": "Your loop",
+        "step": "{number} · {name}",
+        "here": "you are here",
+        "steps": {
+          "prompts": "Prompts",
+          "answers": "AI answers",
+          "actions": "Actions",
+          "done": "Done",
+          "results": "Results"
+        },
+        "none": "—",
+        "tracked": "{count} tracked",
+        "updatedToday": "Updated today",
+        "updatedAgo": "Updated {ago}",
+        "answersIn": "{current} of {total} in",
+        "starting": "Starting",
+        "notYet": "Not yet",
+        "open": "{count} open",
+        "doneWeek": "{count} this week",
+        "noChange": "no change",
+        "tomorrow": "Tomorrow"
+      },
+      "focus": {
+        "title": "Today's focus",
+        "body": "Your 3 highest-impact actions. They stay here until you finish or skip them.",
+        "new": "New",
+        "impact": "{level} impact",
+        "effort": "about {effort}",
+        "steps": "{done} of {total} steps done",
+        "firstStep": "First step: {step}",
+        "start": "Start",
+        "continue": "Continue",
+        "skip": "Skip for now",
+        "skipHint": "Hides it from your focus for 7 days. The action itself doesn't change.",
+        "skipped": "Skipped for 7 days. It is still in All actions.",
+        "skipFailed": "Couldn't skip it. Try again.",
+        "empty": "Nothing to focus on right now. New actions arrive after the nightly check.",
+        "weekTitle": "This week's focus",
+        "needsPlan": "Needs a plan"
+      },
+      "stand": {
+        "title": "Where you stand",
+        "change": "{change} since yesterday",
+        "noChange": "no change since yesterday",
+        "behind": "#{rank} of {count} brands. {gap} points behind {name}.",
+        "ahead": "#1 of {count} brands. {gap} points ahead of {name}.",
+        "alone": "No competitor scored on your prompts yet."
+      },
+      "ask": {
+        "label": "Ask Chat",
+        "placeholder": "Ask Chat, e.g. why did my score change?",
+        "button": "Ask"
+      },
+      "summary": {
+        "changes": "{title}: {count, plural, =0 {no big changes} one {# change} other {# changes}}",
+        "waiting": "{count, plural, =0 {nothing waiting} one {# thing waiting for you} other {# things waiting for you}}"
+      },
+      "since": {
+        "title": "Since yesterday",
+        "titleDay": "Since {day}",
+        "direction": {
+          "up": "Up",
+          "down": "Down",
+          "rival": "Rival"
+        },
+        "actionAdded": "<link>An action was added</link>.",
+        "quiet": {
+          "none": "No big changes.",
+          "held": "No big changes. Your score held at {score}.",
+          "heldCalm": "No big changes. Your score held at {score}, and no competitor moved more than 1 point.",
+          "moved": "No big changes. Your score is {score} ({change}).",
+          "movedCalm": "No big changes. Your score is {score} ({change}), and no competitor moved more than 1 point.",
+          "next": "Next update tomorrow morning.",
+          "small": "Small moves are in <link>all signals</link>."
+        }
+      },
+      "waiting": {
+        "title": "Waiting for you",
+        "agent": {
+          "one": "An agent is waiting for your OK on “{title}”.",
+          "oneUntitled": "An agent is waiting for your OK.",
+          "many": "{count} agent runs are waiting for your OK.",
+          "open": "Open in Chat",
+          "openNewest": "Open the newest in Chat"
+        },
+        "drafts": {
+          "line": "An agent drafted {count, plural, one {a page} other {# pages}}. Nothing goes live without your OK.",
+          "open": "{count, plural, one {Review the draft} other {Review # drafts}}"
+        },
+        "due": {
+          "today": "Due today: {task}.",
+          "overdue": "Overdue: {task}.",
+          "open": "Open the task"
+        },
+        "reminder": {
+          "line": "Weekly: {title}.",
+          "open": "Open it"
+        },
+        "review": {
+          "line": "{count, plural, one {# task an agent wrote is} other {# tasks agents wrote are}} waiting for your review.",
+          "open": "Review tasks"
+        },
+        "ideas": {
+          "line": "{count, plural, one {# new prompt idea} other {# new prompt ideas}} from your {source, select, gsc {Search Console} ga {Google Analytics} other {Search Console and Google Analytics}}.",
+          "open": "See ideas"
+        },
+        "nothing": "Nothing is waiting for you.",
+        "finish": "A good day to finish one: “{title}” has {done} of {total} steps done.",
+        "continue": "Continue it"
+      },
+      "setup": {
+        "title": "Finish setting up",
+        "count": "{done} of {total}",
+        "minutes": {
+          "kpis": "1 min",
+          "competitors": "2 min",
+          "topics": "2 min",
+          "prompts": "3 min",
+          "gsc": "2 min",
+          "ga": "2 min",
+          "snippet": "5 min"
+        },
+        "state": {
+          "new": "To do",
+          "done": "Done",
+          "skipped": "Skipped",
+          "waiting": "Waiting for data"
+        },
+        "showAll": "Show all steps",
+        "showFewer": "Show fewer",
+        "hide": "Hide",
+        "hideHintBrand": "Hides the set-up steps for everyone on this brand. Steps you finished stay done.",
+        "hideHintPerson": "Hides this card for you. Steps you finished stay done.",
+        "hideFailed": "Couldn't hide it. Try again.",
+        "askFailed": "Couldn't save that. Try again."
+      },
+      "firstDay": {
+        "welcome": "Welcome",
+        "welcomeName": "Welcome, {name}",
+        "asking": "we're asking {engines} your questions right now",
+        "askingGeneric": "we're asking AI engines your questions right now",
+        "check": {
+          "title": "Check the prompts we track for you",
+          "body": "We ask {engines} these every day and see if they name you. Remove any that don't fit your business, or add your own. Your first actions arrive tomorrow, after the first answers.",
+          "bodyGeneric": "We ask AI engines these every day and see if they name you. Remove any that don't fit your business, or add your own. Your first actions arrive tomorrow, after the first answers.",
+          "demand": {
+            "high": "high demand",
+            "medium": "medium demand",
+            "low": "low demand"
+          },
+          "remove": "Stop tracking this prompt",
+          "removeFailed": "Couldn't stop tracking it. Try again.",
+          "showAll": "Show all {count}",
+          "add": "+ Add a prompt",
+          "addLabel": "A prompt to track",
+          "addPlaceholder": "A question your buyers ask AI",
+          "addSave": "Add",
+          "addFailed": "Couldn't add it. Try again.",
+          "looksGood": "Looks good",
+          "checkFailed": "Couldn't save that. Try again."
+        },
+        "worth": {
+          "title": "Worth tracking too",
+          "body": "From your website.",
+          "spots": "From your website. {left} of {limit} spots left on {plan}.",
+          "track": "Track",
+          "failed": "Couldn't track it. Try again."
+        },
+        "wait": {
+          "title": "While you wait",
+          "optional": "· optional",
+          "steps": {
+            "gsc": "Connect Google Search Console",
+            "kpis": "Set one goal for this month"
+          },
+          "minutes": {
+            "gsc": "2 min",
+            "kpis": "1 min"
+          },
+          "tour": "Take the 2-minute tour",
+          "tourMinutes": "2 min"
+        }
+      },
+      "lastWeek": {
+        "title": "Last week",
+        "report": "Open the weekly report",
+        "visibility": "Visibility",
+        "done": "Actions done",
+        "results": "Results in",
+        "from": "from {score}",
+        "rank": "#{rank} of {count}",
+        "improved": "{count} improved",
+        "noneDone": "None last week",
+        "noResults": "No results came in"
+      },
+      "ended": {
+        "readOnly": "Read-only until you choose a plan",
+        "pausedSince": "tracking paused since {date}",
+        "loop": {
+          "saved": "{count} saved",
+          "paused": "Paused",
+          "lastOn": "last on {date}",
+          "waiting": "{count} waiting",
+          "inTrial": "{count} in the trial",
+          "overTrial": "over the trial"
+        },
+        "found": {
+          "title": "What your trial found",
+          "rank": "You're #{rank} of {count} brands.",
+          "held": "Visibility held at {score}.",
+          "rose": "Visibility rose from {from} to {to}.",
+          "fell": "Visibility fell from {from} to {to}.",
+          "improved": "{count, plural, one {An action you finished got results} other {# actions you finished got results}}: {titles}.",
+          "gap": "{name} still leads by {gap} points. {count, plural, =0 {Your next actions arrive with a plan.} one {# action is ready to close it.} other {# actions are ready to close it.}}",
+          "nothing": "Your trial's answers are saved. Choose a plan to see what changes next.",
+          "tag": {
+            "up": "Up",
+            "down": "Down",
+            "done": "Done",
+            "gap": "Gap"
+          }
+        },
+        "focus": {
+          "title": "Ready when you pick a plan",
+          "body": "You can read these. Starting them needs an active plan."
+        },
+        "saved": {
+          "title": "Saved for you",
+          "drafts": "{count, plural, one {1 draft from your agent} other {# drafts from your agents}}: {title}.",
+          "draftsUntitled": "{count, plural, one {1 draft from your agent} other {# drafts from your agents}} waiting for review.",
+          "kept": "Choose a plan to review and publish them. Your {prompts, plural, one {# prompt} other {# prompts}} and {competitors, plural, one {# competitor} other {# competitors}} are kept."
+        },
+        "plan": {
+          "title": "Picking up where you left off",
+          "tracking": "Tracking restarts the same day",
+          "waiting": "Your actions and drafts are waiting",
+          "agents": "Agents resume on their schedule",
+          "choose": "Choose a plan"
+        },
+        "chatNote": "Chat can still read your past answers and data. New runs, drafts and agents need an active plan."
+      }
     },
     "firstRun": {
       "running": "First tracking running",
@@ -2237,6 +2499,8 @@
           "check": "Checked again after each catalog sync, or now with Check now on its task: the action closes once the page links none of them."
         },
         "businessHub": {
+          "check": "Check what ChatGPT says",
+          "checkText": "Check what ChatGPT says about our business, and prepare our Business Hub corrections and site fixes.",
           "title": "ChatGPT Business Hub",
           "open": "Open Business Hub",
           "enterNumbers": "Enter numbers",
@@ -3547,7 +3811,9 @@
       "positionResult": "{measurable, plural, =0 {Positions: not enough data} other {Position improved on {improved} of # platforms}}",
       "view": {
         "actions": "Actions",
-        "scorecard": "Scorecard"
+        "scorecard": "Scorecard",
+        "kpis": "KPIs",
+        "label": "History views"
       },
       "scorecard": {
         "note": "What each kind of action did at this brand, from its own actions only. Results are the readings so far; each is final a month after its action closed. Median change is in each action's main metric.",
@@ -4488,6 +4754,14 @@
       "toastCreated": "Sent to Action Center",
       "toastAdded": "Added to the action in Action Center"
     },
+    "scheduleMade": {
+      "label": "Recurring work set up",
+      "title": "Set up: {title}",
+      "note": "It runs by itself, in a chat of its own, where its results go. You'll find it in Action Center › Agents, made in Chat.",
+      "runNow": "Run it now",
+      "openAgents": "Open in Agents",
+      "change": "Change the schedule"
+    },
     "status": {
       "thinking": "Thinking…",
       "writing": "Writing the answer…",
@@ -5155,7 +5429,10 @@
       "files": "Files",
       "scheduled": "Scheduled",
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
-      "agents": "Agent Center"
+      "agents": "Agent Center",
+      "agentsShort": "Agents",
+      "agentsWhere": "in Action Center",
+      "agentsLabel": "Agents · in Action Center"
     },
     "actions": {
       "more": "More for {name}",
@@ -6737,6 +7014,7 @@
       "wrongclaim": "Fix wrong claims about us",
       "answerfirst": "Answer-first rewrite",
       "facts": "Brand facts check",
+      "chatgpt-profile": "ChatGPT profile check",
       "compare": "Comparison page",
       "translate": "Translate a page",
       "questions": "Buyer questions",
@@ -7104,13 +7382,26 @@
         "clear": "Clear search"
       },
       "loadFailed": "Couldn't load the agents.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "openInChat": {
+        "running": "Open the run in Chat",
+        "needsYou": "Review in Chat",
+        "last": "Open the last run"
+      }
     },
     "center": {
       "tabs": {
         "ready": "Ready to use",
         "yours": "Your agents"
-      }
+      },
+      "askChat": "Ask Chat to make one",
+      "askChatText": "Help me set up an agent for recurring work. Ask me what it should do and how often.",
+      "askChatTip": "Opens Chat with this filled in. You read it and send it."
+    },
+    "madeInChat": {
+      "title": "Made in Chat",
+      "when": "{when} · made in Chat",
+      "lastRun": "Last run {date} · {status}"
     },
     "ready": {
       "filters": {
@@ -13367,7 +13658,32 @@
       "selectTopic": "Select a topic",
       "platformsAndModels": "Platform & Models",
       "selectPlatformsAndModels": "Select platform & models",
-      "selectedCount": "{count} selected"
+      "selectedCount": "{count} selected",
+      "businessHub": {
+        "button": "From ChatGPT Business Hub",
+        "badge": "ChatGPT Business Hub",
+        "tooltip": "Written from “{topic}”, a discovery topic you copied from ChatGPT Business Hub on {date}: real ChatGPT conversations that cited your site were about it.",
+        "tooltipPeriod": "Written from “{topic}”, a discovery topic ChatGPT Business Hub showed for the period ending {date}: real ChatGPT conversations that cited your site were about it.",
+        "filter": "ChatGPT Business Hub",
+        "dialog": {
+          "title": "Suggest prompts from ChatGPT Business Hub",
+          "description": "Copy up to five discovery topics from Insights in ChatGPT Business Hub. Ansvisor writes 2 or 3 prompts for each, in your brand's language, and lists them here for 30 days.",
+          "topicLabel": "Topic {number}",
+          "topicPlaceholder": "e.g. office coffee subscriptions",
+          "quota": "You can track {count, plural, one {# more prompt} other {# more prompts}} on your plan.",
+          "quotaFull": "Your plan's prompt limit is reached. You can still get suggestions, and track them once you make room.",
+          "submit": "Suggest prompts",
+          "submitting": "Writing prompts…",
+          "cancel": "Cancel"
+        },
+        "result": {
+          "added": "{count, plural, =0 {No new suggestions} one {# new suggestion, listed under ChatGPT Business Hub} other {# new suggestions, listed under ChatGPT Business Hub}}",
+          "skipped": "Left out: {tracked} already tracked, {suggested} already suggested.",
+          "topicMatched": "{count, plural, =0 {nothing new} one {# prompt} other {# prompts}} under {topic}",
+          "topicNew": "{count, plural, =0 {nothing new} one {# prompt, new topic} other {# prompts, new topic}}",
+          "done": "Done"
+        }
+      }
     },
     "topicSuggestions": {
       "catalog": {
@@ -14999,19 +15315,6 @@
     "citationEvidence": "Citation Evidence",
     "citationEvidenceDescription": "The URLs AI answers cited most in this period, and which tracked prompts surfaced them."
   },
-  "welcome": {
-    "title": "What do you work on?",
-    "invitedTitle": "Welcome to {workspace} Workspace, {name}",
-    "invitedTitleNoName": "Welcome to {workspace} Workspace",
-    "lede": "Pick what you work on or lead, one or more. We'll set up your menu around it; your team can pick their own when they join.",
-    "invitedLede": "You've joined as {role}. What do you work on or lead? We'll set up your menu around it.",
-    "yourMenu": "Your menu",
-    "hiddenByAdmin": "{count} hidden by your admin",
-    "changeLater": "You can change this any time in Settings › Account.",
-    "skip": "Skip: show me everything",
-    "continue": "Continue",
-    "saveFailed": "Couldn't save your work areas. Try again."
-  },
   "settings": {
     "title": "Settings",
     "description": "Manage your project and account settings.",
@@ -15703,6 +16006,7 @@
     "integrations_cms": "Content management systems",
     "integrations_team": "Team and alerts",
     "integrations_crm": "CRM",
+    "integrations_businessProfiles": "Business profiles",
     "integrations_description": "Connect external data sources. Connections are shared with your whole organization.",
     "catalog": {
       "title": "Product catalog",
@@ -16376,6 +16680,18 @@
         "busy": "Too many tries. Wait a minute and try again.",
         "failed": "That didn't work. Try again."
       }
+    },
+    "businessHub": {
+      "title": "ChatGPT Business Hub",
+      "description": "OpenAI's free place to claim your business in ChatGPT and correct what ChatGPT says about it.",
+      "manual": "Manual: Business Hub has no API yet",
+      "noBrand": "Pick a brand to set up its Business Hub profile.",
+      "setUp": "Set up your profile",
+      "enterNumbers": "Enter numbers",
+      "noAction": "{brand} has no setup action yet: the Action Center adds one once the brand has a website and tracked ChatGPT answers. Until then, this opens Business Hub.",
+      "demoNoAction": "The demo brand has no setup action, so this opens Business Hub.",
+      "unread": "The setup action couldn't be checked, so this opens Business Hub.",
+      "apiNote": "We'll switch to an automatic connection if OpenAI opens an API."
     },
     "integrations_connected": "Connected",
     "integrations_notConfigured": "Not configured",

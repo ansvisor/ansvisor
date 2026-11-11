@@ -8,7 +8,7 @@ updated: 2026-11-06
 last_checked: 2026-11-06
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/send-to-cms.mdx]
 ---
 **IndexNow** tells Bing, Yandex and other search engines that share it when a page of your brand goes live through **Send to CMS**, so they don't wait for their next crawl. It is free, uses no AI and never holds up a publish.

@@ -125,6 +125,7 @@ export function businessHubSetupTasks({ brandName, domain, open, ecommerce, dire
     task('facts', 'Correct your business facts in Business Hub', {
       why: `ChatGPT answers about ${name} from what it finds. The profile is where you state the facts yourself. OpenAI may still fill in or replace a field from other sources, so your site should say the same.`,
       how: [
+        'To see what ChatGPT gets wrong first, use Check what ChatGPT says on this action (the ChatGPT profile check, /chatgpt-profile in Chat): it lists each wrong or missing fact and writes your corrections, asking you for what nothing confirms.',
         'In Business Hub, open your profile and check each field it shows, such as name, category, address or service area, hours, contact details, products and services.',
         'Fix any field that is wrong or empty, using the facts as your own site states them.',
         'Where your site says something else, correct the site too, so both agree.',

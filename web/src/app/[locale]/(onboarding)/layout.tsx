@@ -52,8 +52,8 @@ export default async function OnboardingLayout({ children }: { children: React.R
   return (
     <>
       <AuthProvider user={user} />
-      {/* Onboarding and the welcome page: also a new person signed up with
-          Google from the sign-in page, or invited (config/theme.ts). */}
+      {/* Onboarding: also a new person signed up with Google from the
+          sign-in page, or invited (config/theme.ts). */}
       <NewUserTheme />
       <OnboardingSignOutButton />
       {children}

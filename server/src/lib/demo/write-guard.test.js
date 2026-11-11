@@ -42,6 +42,8 @@ const OPEN_ON_A_DEMO_BRAND = {
     "A person's own notes from the system (00446): they only mark them read or close them, no sample data and nothing that costs; none is ever written about a demo brand.",
   prompt_table_views:
     "A person's column layout of the Tracked Prompts table (00363): it changes no sample data and costs nothing; the web keeps it open while read-only too.",
+  user_brand_state:
+    "A person's own Today and menu state on a brand (00529): the menu areas they opened, their focus and the cards they hid. It changes no sample data and costs nothing, and the demo's dots clear as on any brand.",
 };
 
 const name = (raw) =>

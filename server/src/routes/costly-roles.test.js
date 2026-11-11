@@ -150,6 +150,12 @@ const ROUTES = [
     { page: '/pricing' },
     'Only admins and managers can generate prompt suggestions.',
   ],
+  // Business Hub plan, PR 6: prompts from Business Hub's topics (BUSINESS_HUB_ENABLED below).
+  [
+    `/prompts/suggestions/${BRAND}/business-hub`,
+    { topics: ['Office coffee subscriptions'] },
+    'Only admins and managers can generate prompt suggestions.',
+  ],
   ['/prompts/suggest', setup, 'Only admins and managers can generate prompt suggestions.'],
   ['/prompts/p1/improve', range, 'Only admins and managers can use Improve.'],
   [
@@ -194,6 +200,7 @@ const post = (path, body) =>
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
   assertBrandAccess.mockResolvedValue({ brand: { id: BRAND, organization_id: 'o1' }, orgId: 'o1' });
   assertOpportunityAccess.mockResolvedValue({ id: 'o1', brand_id: 'b1', source_data: {} });
   assertOpportunitiesAccess.mockResolvedValue([{ id: 'o1', brand_id: 'b1' }]);
@@ -204,6 +211,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await new Promise((resolve) => server.close(resolve));
 });
 

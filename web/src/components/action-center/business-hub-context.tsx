@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { ProfileCheckButton } from './business-hub-profile-check';
 import { ArrowUpRight } from 'lucide-react';
 import { Link } from '@/i18n/navigation';
 import { buttonVariants } from '@/components/ui/button-variants';
@@ -35,6 +36,7 @@ export function BusinessHubContext({
     <section className="space-y-2">
       <p className="text-xs font-medium text-muted-foreground">{t('title')}</p>
       <div className="flex flex-wrap gap-2">
+        <ProfileCheckButton />
         <a
           href={BUSINESS_HUB_URL}
           target="_blank"

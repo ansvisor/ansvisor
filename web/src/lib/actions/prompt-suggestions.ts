@@ -21,6 +21,7 @@ import {
   type ReadFailure,
 } from '@/lib/api-failure';
 import { NO_TOPICS, NO_TOPICS_MESSAGE } from '@/lib/topics-required';
+import { businessHubEnabled } from '@/lib/business-hub/flag';
 
 const AEO_SERVER_URL = API_BASE_URL;
 
@@ -85,7 +86,17 @@ async function getSession() {
 }
 
 export type PromptSuggestionsRead =
-  | { ok: true; suggestions: PromptSuggestion[]; stale: boolean }
+  | {
+      ok: true;
+      suggestions: PromptSuggestion[];
+      stale: boolean;
+      /**
+       * Whether ChatGPT Business Hub's topics can be turned into suggestions
+       * here (BUSINESS_HUB_ENABLED, read on the server): the list's From
+       * ChatGPT Business Hub button.
+       */
+      businessHub: boolean;
+    }
   | ReadFailure;
 
 /**
@@ -116,6 +127,7 @@ export async function getPromptSuggestions(brandId: string): Promise<PromptSugge
       ok: true,
       suggestions: data.suggestions.map(mapRow),
       stale: data.stale,
+      businessHub: businessHubEnabled(),
     };
   } catch {
     // No answer, or one cut off: a dropped connection or the timeout.
@@ -163,6 +175,71 @@ export async function refreshPromptSuggestions(
     return { ok: true, suggestions: data.suggestions.map(mapRow) };
   } catch {
     // No answer, or one cut off: a dropped connection.
+    return NO_ANSWER;
+  }
+}
+
+/** What Business Hub's topics gave: the suggestions written, and what was left out. */
+export interface BusinessHubTopicsResult {
+  added: number;
+  /** Prompts the brand tracks already, or that a tracked prompt covers. */
+  alreadyTracked: number;
+  /** Prompts suggested already, or dismissed in the last 30 days. */
+  alreadySuggested: number;
+  /** Each topic as kept, how many it gave, and the brand's topic they went under. */
+  topics: { topic: string; added: number; matchedTopic: string | null }[];
+  suggestions: PromptSuggestion[];
+}
+
+export type SuggestFromBusinessHubResult =
+  | { ok: true; result: BusinessHubTopicsResult }
+  | { ok: false; failure: typeof NO_TOPICS }
+  | ReadFailure;
+
+/**
+ * Prompts from ChatGPT Business Hub's discovery topics (Business Hub plan,
+ * PR 6): two or three for each of up to five topics, written by the API as
+ * suggestions kept 30 days. Every failure comes back as a value, as
+ * refreshPromptSuggestions' do; a brand with no topic yet gets `no_topics`.
+ * Not found while BUSINESS_HUB_ENABLED is off.
+ */
+export async function suggestPromptsFromBusinessHub(
+  brandId: string,
+  topics: string[],
+  periodEnd?: string,
+): Promise<SuggestFromBusinessHubResult> {
+  if (!businessHubEnabled()) return { ok: false, failure: 'not_found', retryable: false };
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { ok: false, failure: 'session', retryable: false };
+  try {
+    const res = await fetch(
+      `${AEO_SERVER_URL}/api/prompts/suggestions/${encodeURIComponent(brandId)}/business-hub`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ topics, ...(periodEnd ? { periodEnd } : {}) }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      if (body.code === NO_TOPICS) return { ok: false, failure: NO_TOPICS };
+      return {
+        ok: false,
+        failure: apiFailure(res.status, body),
+        retryable: isTransientStatus(res.status),
+      };
+    }
+    const data = (await res.json()) as Omit<BusinessHubTopicsResult, 'suggestions'> & {
+      suggestions: SuggestionRow[];
+    };
+    return { ok: true, result: { ...data, suggestions: (data.suggestions ?? []).map(mapRow) } };
+  } catch {
     return NO_ANSWER;
   }
 }
@@ -287,6 +364,52 @@ function sourceOfRow(row: {
   });
 }
 
+type TopicNames = Map<string, string>;
+
+const topicKey = (name: string) => name.trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** The brand's topics by name, case and spacing aside; null when they can't be read. */
+async function readTopicNames(supabase: ServerClient, brandId: string): Promise<TopicNames | null> {
+  const { data, error } = await supabase
+    .from('topics')
+    .select('name')
+    .eq('brand_id', brandId)
+    .eq('is_active', true);
+  if (error) return null;
+  return new Map((data ?? []).map((t) => [topicKey(t.name as string), t.name as string]));
+}
+
+/**
+ * The topic a suggestion's prompt goes under. A ChatGPT Business Hub
+ * suggestion (00527) whose discovery topic fit none of the brand's names
+ * that topic, and it is made only now, as a page's prompts make theirs
+ * (trackPagePrompts): addPromptToSet finds topics by name only, so it would
+ * save the prompt under none. `madeTopicId` is the topic made here, to take
+ * back if the prompt isn't added. Any other suggestion keeps its topic name.
+ */
+async function topicForRow(
+  supabase: ServerClient,
+  brandId: string,
+  row: { source: unknown; topic_name: unknown },
+  topics: TopicNames | null,
+): Promise<{ category: string | undefined; madeTopicId: string | null }> {
+  const named = typeof row.topic_name === 'string' ? row.topic_name.trim() : '';
+  // A brand with no topic gets no_topics from addPromptToSet, with nothing made.
+  if (row.source !== 'business_hub' || !named || !topics || topics.size === 0) {
+    return { category: named || undefined, madeTopicId: null };
+  }
+  const existing = topics.get(topicKey(named));
+  if (existing) return { category: existing, madeTopicId: null };
+  const { data: made } = await supabase
+    .from('topics')
+    .insert({ brand_id: brandId, name: named.slice(0, 60), is_active: true })
+    .select('id, name')
+    .single();
+  if (!made) return { category: named, madeTopicId: null };
+  topics.set(topicKey(made.name as string), made.name as string);
+  return { category: made.name as string, madeTopicId: made.id as string };
+}
+
 /** Marks the suggestion added on the server; a failure is logged, not returned. */
 async function ackAccepted(accessToken: string, suggestionId: string, promptId: string) {
   const ack = await fetch(`${AEO_SERVER_URL}/api/prompts/suggestions/${suggestionId}/accept`, {
@@ -306,6 +429,8 @@ export async function acceptSuggestion(
   suggestionId: string,
   options?: { platforms?: string[]; models?: string[] },
 ): Promise<AcceptSuggestionResult> {
+  // First: a Business Hub suggestion's topic may be made here, before the add checks too.
+  await assertWritable();
   const session = await getSession();
   const supabase = await createClient();
 
@@ -322,13 +447,18 @@ export async function acceptSuggestion(
   const target = await promptTarget(supabase, row.brand_id, options);
   if ('error' in target) return target;
 
+  const topics =
+    row.source === 'business_hub' ? await readTopicNames(supabase, row.brand_id) : null;
+  const { category, madeTopicId } = await topicForRow(supabase, row.brand_id, row, topics);
   const result = await addPromptToSet({
     ...target,
     text: row.suggested_text,
-    category: row.topic_name ?? undefined,
+    category,
     sourceData: sourceOfRow(row),
   });
   if ('error' in result) {
+    // A topic made for a prompt that wasn't added would sit empty.
+    if (madeTopicId) await supabase.from('topics').delete().eq('id', madeTopicId);
     return { error: result.error, code: result.code };
   }
 
@@ -369,6 +499,8 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
     return { trackedIds: [], skippedIds: [], error: 'Pick between 1 and 25 suggestions.' };
   }
 
+  // First: a Business Hub suggestion's topic may be made here, before each add checks too.
+  await assertWritable();
   const session = await getSession();
   const supabase = await createClient();
   const { data: rows, error: rowsErr } = await supabase
@@ -386,21 +518,28 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
     return { trackedIds: [], skippedIds, error: 'Track suggestions of one brand at a time.' };
   }
 
-  const target = await promptTarget(supabase, [...brandIds][0]);
+  const brandId = [...brandIds][0];
+  const target = await promptTarget(supabase, brandId);
   if ('error' in target) return { trackedIds: [], skippedIds, error: target.error };
 
+  // Read once, for ChatGPT Business Hub suggestions whose topic may need making.
+  const topics = (rows ?? []).some((r) => r.source === 'business_hub')
+    ? await readTopicNames(supabase, brandId)
+    : null;
   const added: { id: string; promptId: string }[] = [];
   let failure: { error: string; code?: PromptAddFailureCode } | undefined;
   for (const id of ids) {
     const row = byId.get(id);
     if (!row) continue;
+    const { category, madeTopicId } = await topicForRow(supabase, brandId, row, topics);
     const result = await addPromptToSet({
       ...target,
       text: row.suggested_text as string,
-      category: (row.topic_name as string | null) ?? undefined,
+      category,
       sourceData: sourceOfRow(row),
     });
     if ('error' in result) {
+      if (madeTopicId) await supabase.from('topics').delete().eq('id', madeTopicId);
       failure = { error: result.error, code: result.code };
       break;
     }

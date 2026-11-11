@@ -17,7 +17,8 @@ const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
 const ME = 'aaaaaaaa-0000-4000-8000-000000000001';
 const BRAND = 'bbbbbbbb-0000-4000-8000-000000000001';
 const FOREIGN_BRAND = 'bbbbbbbb-0000-4000-8000-000000000002';
-const NOW = new Date('2026-11-05T12:00:00Z');
+// After WORK_AREAS_RESET_AT, so work areas saved days ago count.
+const NOW = new Date('2026-11-20T12:00:00Z');
 const daysAgo = (days: number) => new Date(NOW.getTime() - days * 86_400_000).toISOString();
 
 const db = vi.hoisted(() => ({
@@ -141,11 +142,11 @@ describe('readAgentsForYou', () => {
     expect(shown(await readAgentsForYou(BRAND))).toEqual([]);
   });
 
-  it('waits for Your work areas, and stays hidden once hidden (00483)', async () => {
+  it('needs no work areas picked, and stays hidden once hidden (00483)', async () => {
     accepted();
+    profile().work_areas = [];
     profile().work_areas_asked_at = null;
-    expect(shown(await readAgentsForYou(BRAND))).toEqual([]);
-    profile().work_areas_asked_at = daysAgo(1);
+    expect(shown(await readAgentsForYou(BRAND))?.length).toBeGreaterThanOrEqual(3);
     person().tables.chat_user_prefs.push({ user_id: ME, agents_for_you_dismissed_at: daysAgo(1) });
     expect(shown(await readAgentsForYou(BRAND))).toEqual([]);
   });
@@ -192,15 +193,15 @@ describe('readAgentsForYouOpen (the Default view, owner 2026-11-06)', () => {
     expect(await readAgentsForYouOpen()).toBe(true);
   });
 
-  it('is false for anyone else: joined 15 days ago, work areas not asked yet, or hidden (00483)', async () => {
+  it('is false for anyone else: joined 15 days ago, or hidden (00483)', async () => {
     // An account 400 days old and no invitation to this workspace.
     expect(await readAgentsForYouOpen()).toBe(false);
     accepted({ accepted_at: daysAgo(15) });
     expect(await readAgentsForYouOpen()).toBe(false);
     accepted();
+    // No work areas picked: nothing to wait for.
     profile().work_areas_asked_at = null;
-    expect(await readAgentsForYouOpen()).toBe(false);
-    profile().work_areas_asked_at = daysAgo(1);
+    expect(await readAgentsForYouOpen()).toBe(true);
     person().tables.chat_user_prefs.push({ user_id: ME, agents_for_you_dismissed_at: daysAgo(1) });
     expect(await readAgentsForYouOpen()).toBe(false);
   });

@@ -596,7 +596,11 @@ export interface AgentListItem {
   mode: ChatMode | null;
   triggers: AgentTriggerView[];
   scope: { allBrands: boolean; brands: string[] };
-  lastRun: { status: string; at: string } | null;
+  /**
+   * Its newest run the person may see, with that run's chat when they can
+   * open it (runChats): Action Center › Agents opens the run there.
+   */
+  lastRun: { status: string; at: string; chatId: string | null } | null;
   /** Outcomes of its runs in the last 30 days (§B item 6), by the one vocabulary (§I item 43). */
   outcomes30d: Record<AgentOutcome, number>;
   /** Its AI use over the last 30 days (CHAT-27 item 24); null when it couldn't be read or isn't metered. */
@@ -734,6 +738,8 @@ function listItem(
     owners: Map<string, string>;
     usage: AgentUsageView | null;
     now: Date;
+    /** The chats of its runs the person can open, by run id (runChats). */
+    chats?: ReadonlyMap<string, string>;
   },
 ): AgentListItem {
   const { row, version } = agent;
@@ -765,7 +771,11 @@ function listItem(
       brands: scopeBrands(scope, allowedBrands(access, parts.brands)).map((b) => b.name),
     },
     lastRun: last
-      ? { status: last.status, at: last.finished_at ?? last.started_at ?? last.queued_at }
+      ? {
+          status: last.status,
+          at: last.finished_at ?? last.started_at ?? last.queued_at,
+          chatId: parts.chats?.get(last.id) ?? null,
+        }
       : null,
     outcomes30d: outcomes,
     usage30d: parts.usage,
@@ -908,44 +918,27 @@ async function readCalls(runs: RunRow[]): Promise<CallsOf> {
 }
 
 /**
- * Runs as the detail and the Runs tab show them, with their brand, person
- * and chat: the ones on a brand the person may see (runVisible). A run's
- * chat is given only when the person can open it as the
- * chat page reads chats today (`readChat`): their own, or shared with the
- * team. Anyone else's private chat would open on "This chat isn't
- * available".
+ * The chats of these runs the person can open, by run id: only as the chat
+ * page reads chats today (`readChat`), their own or shared with the team.
+ * Anyone else's private chat would open on "This chat isn't available". A
+ * deleted chat (Delete with Undo, 00407) isn't opened from a run.
  */
-export async function runViews(
+async function runChats(
   organizationId: string,
-  viewer: Pick<AgentViewer, 'userId' | 'brandAccess'>,
-  allRuns: RunRow[],
-): Promise<AgentRunView[]> {
-  const viewerId = viewer.userId;
-  const runs = allRuns.filter((run) => runVisible(run, viewer.brandAccess));
-  if (runs.length === 0) return [];
-  const [brands, people, chats, calls] = await Promise.all([
-    brandsOf(organizationId),
-    namesOf(
-      organizationId,
-      runs.map((r) => r.acting_user_id).filter((id): id is string => !!id),
-    ),
-    supabaseAdmin
-      .from('chat_conversations')
-      .select('id, agent_run_id, user_id, shared_at')
-      .eq('organization_id', organizationId)
-      .in(
-        'agent_run_id',
-        runs.map((r) => r.id),
-      )
-      // A deleted chat (Delete with Undo, 00407) isn't opened from a run.
-      .is('deleted_at', null),
-    readCalls(runs),
-  ]);
-  if (chats.error) throw new Error(`Could not read the runs' chats: ${chats.error.message}`);
-  const brandNames = new Map(brands.map((b) => [b.id, b.name]));
-  const chatOf = new Map(
+  viewerId: string,
+  runIds: string[],
+): Promise<Map<string, string>> {
+  if (runIds.length === 0) return new Map();
+  const { data, error } = await supabaseAdmin
+    .from('chat_conversations')
+    .select('id, agent_run_id, user_id, shared_at')
+    .eq('organization_id', organizationId)
+    .in('agent_run_id', runIds)
+    .is('deleted_at', null);
+  if (error) throw new Error(`Could not read the runs' chats: ${error.message}`);
+  return new Map(
     (
-      (chats.data ?? []) as {
+      (data ?? []) as {
         id: string;
         agent_run_id: string | null;
         user_id: string | null;
@@ -957,6 +950,34 @@ export async function runViews(
         : [],
     ),
   );
+}
+
+/**
+ * Runs as the detail and the Runs tab show them, with their brand, person
+ * and chat: the ones on a brand the person may see (runVisible), each with
+ * its chat when the person can open it (runChats).
+ */
+export async function runViews(
+  organizationId: string,
+  viewer: Pick<AgentViewer, 'userId' | 'brandAccess'>,
+  allRuns: RunRow[],
+): Promise<AgentRunView[]> {
+  const runs = allRuns.filter((run) => runVisible(run, viewer.brandAccess));
+  if (runs.length === 0) return [];
+  const [brands, people, chatOf, calls] = await Promise.all([
+    brandsOf(organizationId),
+    namesOf(
+      organizationId,
+      runs.map((r) => r.acting_user_id).filter((id): id is string => !!id),
+    ),
+    runChats(
+      organizationId,
+      viewer.userId,
+      runs.map((r) => r.id),
+    ),
+    readCalls(runs),
+  ]);
+  const brandNames = new Map(brands.map((b) => [b.id, b.name]));
   return runs.map((run) => runView(run, brandNames, people, chatOf, calls));
 }
 
@@ -1070,11 +1091,21 @@ export async function listAgents(
   ]);
   if (runs.error) throw new Error(`Could not read the agents' runs: ${runs.error.message}`);
   const runRows = (runs.data ?? []) as RunRow[];
+  // Each card's last run the person may see, as listItem picks it: its chat opens it.
+  const lastRunIds = shown.flatMap((agent) => {
+    const last = runRows.find(
+      (r) => r.agent_id === agent.row.id && runVisible(r, ctx.viewer.brandAccess),
+    );
+    return last ? [last.id] : [];
+  });
   // The cards' "Publishes on its own" badge (AUTONOMOUS-GO-LIVE §7.2).
-  const goLive = await readGoLiveLimits(
-    org,
-    shown.map((agent) => ({ id: agent.row.id, version: agent.row.version })),
-  );
+  const [goLive, chats] = await Promise.all([
+    readGoLiveLimits(
+      org,
+      shown.map((agent) => ({ id: agent.row.id, version: agent.row.version })),
+    ),
+    runChats(org, ctx.actor.userId, lastRunIds),
+  ]);
 
   return {
     agents: shown.map((agent) => {
@@ -1085,6 +1116,7 @@ export async function listAgents(
         owners,
         usage: usageOf(shares, agent.row.id),
         now,
+        chats,
       });
       const limit = goLive.get(agent.row.id);
       return limit === undefined ? item : { ...item, goLiveLimit: limit };
@@ -1171,8 +1203,11 @@ async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promi
     usage: usageOf(days30, row.id),
     now,
   });
+  const recentRuns = await runViews(org, ctx.viewer, runs);
   return {
     ...item,
+    // Its last run is the newest of these: the same chat, read once.
+    lastRun: item.lastRun && { ...item.lastRun, chatId: recentRuns[0]?.chatId ?? null },
     createdAt: row.created_at,
     activatedAt: row.activated_at,
     archivedAt: row.archived_at,
@@ -1196,7 +1231,7 @@ async function detailOf(ctx: AgentContext, agent: LoadedAgent, now: Date): Promi
           name: b.name,
         }))
       : [],
-    recentRuns: await runViews(org, ctx.viewer, runs),
+    recentRuns,
     usagePeriod: usageOf(period, row.id),
     can: abilitiesOf(ctx, agent),
     limits: agentPlanLimits(ctx.plan),

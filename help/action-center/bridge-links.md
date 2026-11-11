@@ -8,7 +8,7 @@ updated: 2026-11-07
 last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/action-center.mdx]
 ---
 AI sends readers to some of your pages, often guides and blog posts, that rarely lead to a sale or a sign-up. Other pages convert well, but AI sends them few readers. A **Link AI-visited pages to pages that convert** action pairs them: a link from the first to the second puts the selling page one click away, and lets AI find it through the page it already cites.
