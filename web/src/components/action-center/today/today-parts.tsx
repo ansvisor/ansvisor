@@ -31,7 +31,7 @@ export function TodaySection({
 }: {
   part: string;
   title: ReactNode;
-  link?: { href: string; label: string };
+  link?: { href: string; label: string; onClick?: () => void };
   aside?: ReactNode;
   sub?: ReactNode;
   dashed?: boolean;
@@ -56,6 +56,7 @@ export function TodaySection({
           {link && (
             <Link
               href={link.href}
+              onClick={link.onClick}
               className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
             >
               {link.label}
