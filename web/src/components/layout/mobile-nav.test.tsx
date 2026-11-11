@@ -35,7 +35,7 @@ vi.mock('@/components/layout/user-profile-nav-item', () => ({ UserProfileNavItem
 vi.mock('@/components/layout/theme-toggle', () => ({ ThemeToggle: () => null }));
 vi.mock('@/config/dashboard', () => {
   const Icon = () => <svg />;
-  return {
+  const config = {
     dashboardNav: [
       {
         items: [
@@ -65,6 +65,8 @@ vi.mock('@/config/dashboard', () => {
       },
     ],
   };
+  // The simplified menu (SIMPLE_NAV) has tests of its own, on the real menus.
+  return { ...config, simpleDashboardNav: [], navFor: () => config.dashboardNav };
 });
 
 // The brand store keeps its state in localStorage, which this jsdom lacks.

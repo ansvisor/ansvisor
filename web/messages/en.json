@@ -541,6 +541,12 @@
     "settings": "Settings",
     "execution": "Execution",
     "analytics": "Analytics",
+    "more": "More",
+    "today": "Today",
+    "actions": "Actions",
+    "signals": "Signals",
+    "agents": "Agents",
+    "history": "History",
     "toggleMenu": "Toggle navigation menu",
     "keepSidebarOpen": "Keep sidebar open",
     "collapseSidebar": "Collapse sidebar",
@@ -562,6 +568,12 @@
     "expandRail": "Expand the Ansvisor menu",
     "collapseRail": "Collapse the Ansvisor menu",
     "railTip": "Ansvisor · hover or click to expand"
+  },
+  "menuDots": {
+    "newResults": "New results",
+    "needsYou": "Needs you",
+    "withDot": "{label}, {dot}",
+    "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
   },
   "brandVisibility": {
     "title": "Visibility",

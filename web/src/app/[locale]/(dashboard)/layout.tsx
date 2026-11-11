@@ -32,6 +32,7 @@ import { ChatSidePanelSlot } from '@/components/chat/panel/chat-side-panel-slot'
 import { BrandLoader } from '@/components/providers/brand-loader';
 import { BrandGuard } from '@/components/providers/brand-guard';
 import { GettingStartedPageOpened } from '@/components/getting-started/page-opened';
+import { NavSeen } from '@/components/layout/nav-seen';
 import { getBrands } from '@/lib/actions/brand';
 import { menuOfProfile, menuSectionsFor, readRoleHidden } from '@/lib/menu-access';
 import { getPlan, isCloud, toPlanId } from '@/config/plans';
@@ -261,6 +262,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
                 >
                   {/* Inside the provider: it records nothing while the workspace is read-only. */}
                   <GettingStartedPageOpened />
+                  {/* A menu dot's page opened (SIMPLE_NAV): its dot clears. */}
+                  <NavSeen />
                   <MenuAccessProvider hidden={menu.hidden} canManageMenus={menu.canManageMenus}>
                     <AiUsageProvider>
                       {/* The Get more window, for every limit on the page (CHAT-18 §B item 6). */}

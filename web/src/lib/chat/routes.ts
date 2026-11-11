@@ -1,6 +1,6 @@
 import { createTranslator } from 'next-intl';
 import messages from '../../../messages/en.json';
-import { dashboardNav } from '@/config/dashboard';
+import { navFor } from '@/config/dashboard';
 import { type Feature, isCloud } from '@/config/plans';
 import { ALL_DATE_PRESETS } from '@/config/date-presets';
 import { PROMPT_RANGE_PRESETS, SCRAPER_GROUPS } from '@/config/prompt-options';
@@ -82,8 +82,8 @@ const SYNONYMS: Record<string, readonly string[]> = {
   // "insights" alone is this page's address and Prompts › Insights' name: the model asks.
   // Named Brand Visibility until 2026-11-06.
   insights: ['brand visibility', 'answer engine insights', 'visibility dashboard', 'insights'],
-  // Was Chat › Agents.
-  agents: ['agents', 'my agents', 'agent centre'],
+  // Was Chat › Agents; Action Center › Agents in the simplified menu (SIMPLE_NAV).
+  agents: ['agents', 'my agents', 'agent centre', 'agent center'],
   'action-center': ['actions', 'action centre'],
   // Its name, Today, is asked by already.
   'action-center/today': ["today's focus", 'my day'],
@@ -204,7 +204,8 @@ function route(
  * sidebar's order: Settings' sections this install shows (no Billing or AI
  * Providers on a self-hosted one). Chat itself (its own page) isn't one,
  * Ads is one only with Ads on (ADS_ENABLED), as its page is, and Action
- * Center › Today only with the simplified layout on (SIMPLE_NAV).
+ * Center › Today only with the simplified layout on (SIMPLE_NAV), whose
+ * menu it then reads: the Action Center's tabs under it, Agents among them.
  */
 export function routeRegistry({
   cloud = isCloud(),
@@ -212,7 +213,7 @@ export function routeRegistry({
   simpleNav = simpleNavEnabled(),
 }: { cloud?: boolean; ads?: boolean; simpleNav?: boolean } = {}): ChatRoute[] {
   const out: ChatRoute[] = [];
-  for (const group of dashboardNav) {
+  for (const group of navFor(simpleNav)) {
     for (const item of group.items) {
       if (item.href === '/dashboard/agent') continue;
       if (item.requiresAds && !ads) continue;
@@ -242,6 +243,14 @@ export function routeRegistry({
     const name = SETTINGS_NAMES[section];
     if (name && hasSettingsSection(section, { isCloud: cloud })) {
       out.push(route(`/dashboard/settings/${section}`, name, navT('settings')));
+    }
+  }
+  if (simpleNav) {
+    // The Action Center opens Today then, and Actions is a tab of its own:
+    // "actions" is that tab's name, not another word for the Action Center.
+    const actionCenter = out.find((r) => r.id === 'action-center');
+    if (actionCenter) {
+      actionCenter.synonyms = actionCenter.synonyms.filter((word) => word !== 'actions');
     }
   }
   return out;

@@ -8,7 +8,7 @@ import { useSearchParams } from 'next/navigation';
 import { usePathname, Link } from '@/i18n/navigation';
 import { getTrackedPromptCount } from '@/lib/actions/prompt';
 import { carriedParams, PROMPTS_BASE } from '@/lib/prompts-routes';
-import { dashboardNav } from '@/config/dashboard';
+import { dashboardNav, navFor, simpleDashboardNav, type NavGroup } from '@/config/dashboard';
 import { saveChatRailOpen } from '@/lib/actions/chat-prefs';
 import {
   activeChildHref,
@@ -26,6 +26,7 @@ import { brandVisibilityTabOf, isEcommerceBrand } from '@/lib/brand-visibility';
 import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAdsEnabled } from '@/components/providers/ads-provider';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useChatRailStore } from '@/stores/use-chat-rail-store';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -44,6 +45,16 @@ import { ThemeToggle } from '@/components/layout/theme-toggle';
 import { NewPill } from '@/components/agentic/new-pill';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
 import { menuSectionOf } from '@/lib/menu-access';
+import { ACTION_CENTER_ITEM, NEW_RESULTS_ITEM } from '@/lib/menu-dots';
+import {
+  FoldedGroupLabel,
+  ICON_DOT,
+  MenuDot,
+  NewResultsWords,
+  OpenActionsCount,
+  useDotLabel,
+  useMenuDots,
+} from '@/components/layout/menu-dots';
 import {
   ChevronDown,
   ChevronsLeft,
@@ -77,28 +88,41 @@ const NAV_VIEWPORT =
 const NAV_SCROLLBAR =
   'data-vertical:w-2 opacity-0 transition-opacity duration-300 data-hovering:opacity-100 data-scrolling:opacity-100 data-scrolling:duration-75 [&>[data-slot=scroll-area-thumb]]:bg-muted-foreground/25 [&>[data-slot=scroll-area-thumb]:hover]:bg-muted-foreground/45';
 
-/** The items that open a submenu (Brand Visibility, Prompts, Content). */
-const EXPANDABLE_ITEMS = dashboardNav.flatMap((group) =>
-  group.items.filter((item) => item.children?.length),
-);
-const EXPANDABLE_HREFS = EXPANDABLE_ITEMS.map((item) => item.href);
+/**
+ * Both menus while the simplified one is built (SIMPLE_NAV): the choices
+ * stored for either load, whichever is shown.
+ */
+const MENUS = [dashboardNav, simpleDashboardNav];
+
+/** A menu's items that open a submenu (Brand Visibility, Prompts, Content; the Action Center in the simplified one). */
+function expandableItemsOf(nav: NavGroup[]) {
+  return nav.flatMap((group) => group.items.filter((item) => item.children?.length));
+}
+const EXPANDABLE_HREFS = [...new Set(MENUS.flatMap(expandableItemsOf).map((item) => item.href))];
 
 /**
  * Where a submenu's open/closed state is remembered, per item: Prompts keeps
  * its key from PROMPT-001 (ansvisor.sidebar.promptsOpen), Content gets
- * ansvisor.sidebar.contentOpen.
+ * ansvisor.sidebar.contentOpen, the simplified menu's Action Center
+ * ansvisor.sidebar.action-centerOpen.
  */
 function submenuKey(href: string) {
   return `ansvisor.sidebar.${href.split('/').pop()}Open`;
 }
 
-/** Where a titled group's open/closed state is remembered: ansvisor.sidebar.group.executionOpen. */
+/**
+ * Where a titled group's open/closed state is remembered:
+ * ansvisor.sidebar.group.executionOpen; the simplified menu's More,
+ * ansvisor.sidebar.group.moreOpen.
+ */
 function groupKey(title: string) {
   return `ansvisor.sidebar.group.${title.toLowerCase()}Open`;
 }
 
-/** The titled groups (Execution, Analytics), which fold under their title. */
-const GROUP_TITLES = dashboardNav.flatMap((group) => (group.title ? [group.title] : []));
+/** The titled groups (Execution, Analytics; More in the simplified menu), which fold under their title. */
+const GROUP_TITLES = [
+  ...new Set(MENUS.flatMap((nav) => nav.flatMap((group) => (group.title ? [group.title] : [])))),
+];
 
 /**
  * Arrow keys in the sidebar's links (PROMPT-001): up and down move between
@@ -147,6 +171,8 @@ export function Sidebar() {
   // person expanded it with the logo, a choice kept on them for every device
   // (CHAT-01 item 4f); elsewhere it keeps its own pinned state.
   const chatAgentic = useChatAgentic();
+  // The menu shown: the simplified one with SIMPLE_NAV on, as it is built.
+  const nav = navFor(useSimpleNav());
   const onChat =
     chatAgentic && (pathname === CHAT_AGENTIC_HREF || pathname.startsWith(`${CHAT_AGENTIC_HREF}/`));
   const railOpen = useChatRailStore((s) => s.open);
@@ -168,16 +194,16 @@ export function Sidebar() {
   const isSubmenuOpen = (href: string) => openMenus[href] ?? true;
   // Brand Visibility's tabs keep their own routes (Mentions, Citations), so
   // an item is under the page shown when one of its entries is.
-  const underMenu = EXPANDABLE_ITEMS.find((item) => isNavItemActive(item, pathname))?.href ?? null;
+  const underMenu =
+    expandableItemsOf(nav).find((item) => isNavItemActive(item, pathname))?.href ?? null;
   // Each titled group (Execution, Analytics) folds under its title the same
   // way: remembered per browser, open until closed, and open whenever one of
   // its pages is showing.
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const isGroupOpen = (title: string) => openGroups[title] ?? true;
   const underGroup =
-    dashboardNav.find(
-      (group) => group.title && group.items.some((item) => isNavItemActive(item, pathname)),
-    )?.title ?? null;
+    nav.find((group) => group.title && group.items.some((item) => isNavItemActive(item, pathname)))
+      ?.title ?? null;
   const [trackedCount, setTrackedCount] = useState<number | null>(null);
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
   const t = useTranslations('nav');
@@ -196,12 +222,12 @@ export function Sidebar() {
   // sidebar hides the entry entirely when it is false — Visibility's
   // Products shows for brands that sell online (#155/#170, 2026-11-06).
   const brandPrefs = { ecommerce: isEcommerceBrand(activeBrand) };
-  const childGates = { brandPrefs, canUse };
+  const childGates = { brandPrefs, canUse, chatAgentic };
   // The items the viewer sees, and the groups that keep one: a group whose
   // sections are all off their menu goes, title and all. Ads only with Ads on.
   const hiddenSections = useHiddenMenuSections();
   const ads = useAdsEnabled();
-  const visibleNav = dashboardNav
+  const visibleNav = nav
     .map((group) => ({
       ...group,
       items: group.items.filter((item) =>
@@ -209,6 +235,9 @@ export function Sidebar() {
       ),
     }))
     .filter((group) => group.items.length > 0);
+  // The simplified menu's dots and Action Center count (SIMPLE_NAV); off, none.
+  const dots = useMenuDots(nav, compact);
+  const dotLabel = useDotLabel();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Hydration guard: SSR can't know the resolved theme, so we render the
@@ -465,7 +494,11 @@ export function Sidebar() {
                   onClick={() => setGroupOpen(group.title!, !isGroupOpen(group.title!))}
                   className="mb-1 flex w-full items-center justify-between rounded-md px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 >
-                  {getDashboardNavGroupLabel(group.title, t)}
+                  {/* Folded, its items' dot beside it. */}
+                  <FoldedGroupLabel
+                    label={getDashboardNavGroupLabel(group.title, t)}
+                    dot={isGroupOpen(group.title) ? null : dots.groupDot(group)}
+                  />
                   <ChevronDown
                     aria-hidden
                     className={cn(
@@ -496,6 +529,8 @@ export function Sidebar() {
 
                     const isLocked =
                       isCloud && item.requiredFeature != null && !canUse(item.requiredFeature);
+                    // Its dot (a locked item has none): its own, or its submenu's strongest.
+                    const dot = dots.itemDot(item);
 
                     if (isLocked) {
                       return (
@@ -541,6 +576,14 @@ export function Sidebar() {
                       const submenuId = `submenu-${item.href.replace(/\W+/g, '-')}`;
                       const submenuOpen = isSubmenuOpen(item.href);
                       const currentChild = activeChildHref(children, pathname);
+                      // Closed, its icon carries its entries' dot. Visibility
+                      // says "New results" in words too, its dot by its name
+                      // while open.
+                      const words = dot?.colour === 'green' && item.href === NEW_RESULTS_ITEM;
+                      const iconDot = submenuOpen ? null : dot;
+                      const nameDot = submenuOpen && words ? dot : null;
+                      const openActions =
+                        item.href === ACTION_CENTER_ITEM ? dots.openActions : null;
                       return (
                         <div key={item.href}>
                           <button
@@ -555,10 +598,19 @@ export function Sidebar() {
                               isActive
                                 ? 'text-primary'
                                 : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                              iconDot && 'relative',
                             )}
                           >
                             <item.icon className="h-4 w-4 shrink-0" />
-                            <span className="flex-1 truncate">{label}</span>
+                            <span className={nameDot ? 'truncate' : 'flex-1 truncate'}>
+                              {label}
+                            </span>
+                            {nameDot && <MenuDot colour={nameDot.colour} className="mr-auto" />}
+                            {iconDot && (
+                              <MenuDot colour={iconDot.colour} className={cn(ICON_DOT, 'left-5')} />
+                            )}
+                            {words && <NewResultsWords />}
+                            {openActions !== null && <OpenActionsCount count={openActions} />}
                             {effectiveBadge && (
                               <Badge
                                 variant="secondary"
@@ -581,6 +633,20 @@ export function Sidebar() {
                             >
                               {children.map((child) => {
                                 const childActive = child.href === currentChild;
+                                const childDot = dots.dotOf(child.href);
+                                const childName = (
+                                  <>
+                                    <span className={childDot ? 'truncate' : 'flex-1 truncate'}>
+                                      {getDashboardNavLabel(child.title, t)}
+                                    </span>
+                                    {childDot && (
+                                      <MenuDot colour={childDot.colour} className="mr-auto" />
+                                    )}
+                                  </>
+                                );
+                                const onDotClick = childDot
+                                  ? () => dots.clicked(childDot, false)
+                                  : undefined;
                                 const childClass = cn(
                                   'flex items-center gap-2 rounded-md px-2 py-1 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
                                   childActive
@@ -598,10 +664,9 @@ export function Sidebar() {
                                         data-nav-item="child"
                                         aria-current={childActive ? 'page' : undefined}
                                         className={childClass}
+                                        onClick={onDotClick}
                                       >
-                                        <span className="flex-1 truncate">
-                                          {getDashboardNavLabel(child.title, t)}
-                                        </span>
+                                        {childName}
                                       </BrandVisibilityTabLink>
                                     </li>
                                   );
@@ -613,10 +678,9 @@ export function Sidebar() {
                                       data-nav-item="child"
                                       aria-current={childActive ? 'page' : undefined}
                                       className={childClass}
+                                      onClick={onDotClick}
                                     >
-                                      <span className="flex-1 truncate">
-                                        {getDashboardNavLabel(child.title, t)}
-                                      </span>
+                                      {childName}
                                       {child.badge && (
                                         <Badge
                                           variant="secondary"
@@ -645,12 +709,16 @@ export function Sidebar() {
                       children.length > 0 && ownSection && hiddenSections.has(ownSection)
                         ? children[0].href
                         : href;
+                    // Icons only, the item's name says its dot ("Visibility, New results").
+                    const iconName = compact && dot ? dotLabel(dot.colour, label) : undefined;
                     return (
                       <Link
                         key={item.href}
                         href={linkHref}
                         data-nav-item="link"
                         aria-current={isActive ? 'page' : undefined}
+                        aria-label={iconName}
+                        onClick={dot ? () => dots.clicked(dot, compact) : undefined}
                       >
                         <span
                           className={cn(
@@ -659,19 +727,25 @@ export function Sidebar() {
                               ? 'bg-primary/10 text-primary'
                               : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                             compact && 'justify-center',
+                            iconName && 'relative',
                           )}
                           title={
-                            compact
+                            iconName ??
+                            (compact
                               ? effectiveBadge
                                 ? `${label} (${effectiveBadge})`
                                 : label
-                              : undefined
+                              : undefined)
                           }
                         >
                           <item.icon className="h-4 w-4 shrink-0" />
+                          {iconName && dot && (
+                            <MenuDot colour={dot.colour} className={cn(ICON_DOT, 'left-7')} />
+                          )}
                           {!compact && (
                             <>
-                              <span className="flex-1 truncate">{label}</span>
+                              <span className={dot ? 'truncate' : 'flex-1 truncate'}>{label}</span>
+                              {dot && <MenuDot colour={dot.colour} className="mr-auto" />}
                               {effectiveBadge && (
                                 <Badge
                                   variant="secondary"
