@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { AgentCenter } from '@/components/chat/agents/agent-center';
+import { AGENT_PRESETS, presetOnInstall } from '@/lib/chat/agents/catalog';
 import { agentCenterTabOf } from '@/lib/chat/agent-view';
 import { readMyWorkAreas, readPresetLocks } from '@/lib/chat/agents/ready-setup';
 import { chatPageOpen } from '../chat/_chat-page-access';
@@ -21,5 +22,13 @@ export default async function AgentCenterPage({
   if (!(await chatPageOpen())) notFound();
   const { tab } = await searchParams;
   const [locks, workAreas] = await Promise.all([readPresetLocks(), readMyWorkAreas()]);
-  return <AgentCenter initialTab={agentCenterTabOf(tab)} locks={locks} workAreas={workAreas} />;
+  return (
+    <AgentCenter
+      initialTab={agentCenterTabOf(tab)}
+      locks={locks}
+      workAreas={workAreas}
+      // As this install offers them: a skill behind a flag that is off is left out.
+      presets={AGENT_PRESETS.map(presetOnInstall)}
+    />
+  );
 }

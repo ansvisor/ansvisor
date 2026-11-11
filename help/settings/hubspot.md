@@ -8,7 +8,7 @@ updated: 2026-11-10
 last_checked: 2026-11-10
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [web/messages/en.json]
 ---
 HubSpot shows which contacts, deals and revenue a brand's AI answers bring. Each brand connects its own HubSpot account, or uses the account another brand uses. HubSpot comes with the Growth plan and above.

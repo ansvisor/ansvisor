@@ -898,6 +898,10 @@ export async function acceptPromptSuggestionFor(
   const region = isValidLocation(candidateRegion) ? candidateRegion : country;
 
   let topicId: string | null = null;
+  // A ChatGPT Business Hub suggestion (00527) whose discovery topic fit none
+  // of the brand's names it, and it is made now, as on the dashboard; taken
+  // back below if the prompt isn't added.
+  let madeTopicId: string | null = null;
   if (suggestion.topic_name) {
     const { data: topic, error: topicError } = await supabaseAdmin
       .from('topics')
@@ -908,7 +912,20 @@ export async function acceptPromptSuggestionFor(
       .maybeSingle();
     if (topicError) throw new Error(topicError.message);
     topicId = topic?.id ?? null;
+    if (!topicId && suggestion.source === 'business_hub') {
+      const { data: made, error: madeError } = await supabaseAdmin
+        .from('topics')
+        .insert({ brand_id: brand.id, name: suggestion.topic_name, is_active: true })
+        .select('id')
+        .single();
+      if (madeError) throw new Error(madeError.message);
+      topicId = made?.id ?? null;
+      madeTopicId = topicId;
+    }
   }
+  const takeBackTopic = async () => {
+    if (madeTopicId) await supabaseAdmin.from('topics').delete().eq('id', madeTopicId);
+  };
 
   // A catalog suggestion's prompt keeps the category or product it came
   // from (prompts.source_data, 00525), as on the dashboard.
@@ -938,6 +955,7 @@ export async function acceptPromptSuggestionFor(
     ({ data: prompt, error: promptError } = await insertPrompt(false));
   }
   if (promptError || !prompt) {
+    await takeBackTopic();
     return { error: promptError?.message ?? 'Failed to add the prompt.' };
   }
 
@@ -966,6 +984,7 @@ export async function acceptPromptSuggestionFor(
           'Suggestion was processed concurrently and the duplicate prompt could not be removed.',
       );
     }
+    await takeBackTopic();
     if (updateError) throw new Error(updateError.message);
     return null;
   }
