@@ -6,6 +6,7 @@ import type { WorkAreaId } from '@/lib/menu-access';
 import { RRULE_DAYS } from '../agent-schedule';
 import { CHAT_MODES } from '../precedence';
 import type { PlanGate } from '../registry/define-tool';
+import { skillFlagOn } from '../skills/flagged';
 import catalog from './catalog.json';
 
 /**
@@ -239,6 +240,17 @@ export function buildPresetCatalog(files: readonly { file: string; json: unknown
       (a, b) => rank(a.id) - rank(b.id) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     ),
   };
+}
+
+/**
+ * A preset as this install offers it: without a skill whose flag is off
+ * (skills/flagged.ts), such as the Brand Facts Guardian's ChatGPT profile
+ * check before BUSINESS_HUB_ENABLED. Read on the server, which hands the
+ * pages what it decided: in the browser the flags read off.
+ */
+export function presetOnInstall(preset: AgentPreset): AgentPreset {
+  const skills = preset.skills.filter(skillFlagOn);
+  return skills.length === preset.skills.length ? preset : { ...preset, skills };
 }
 
 /** A preset "Use this agent" may open: a ready one, by its id. */

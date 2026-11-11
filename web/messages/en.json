@@ -2236,6 +2236,8 @@
           "check": "Checked again after each catalog sync, or now with Check now on its task: the action closes once the page links none of them."
         },
         "businessHub": {
+          "check": "Check what ChatGPT says",
+          "checkText": "Check what ChatGPT says about our business, and prepare our Business Hub corrections and site fixes.",
           "title": "ChatGPT Business Hub",
           "open": "Open Business Hub",
           "noApi": "There's no Business Hub API: mark each task done when its Done when is true.",
@@ -6727,6 +6729,7 @@
       "wrongclaim": "Fix wrong claims about us",
       "answerfirst": "Answer-first rewrite",
       "facts": "Brand facts check",
+      "chatgpt-profile": "ChatGPT profile check",
       "compare": "Comparison page",
       "translate": "Translate a page",
       "questions": "Buyer questions",

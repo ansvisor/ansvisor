@@ -231,6 +231,17 @@ describe('businessHubSetupTasks', () => {
     expect(tasks[0].details.why).toMatch(/doesn't move you up in answers/);
   });
 
+  it("points the facts task at the ChatGPT profile check, the drawer's Check what ChatGPT says", () => {
+    const [, , facts] = businessHubSetupTasks({
+      brandName: 'Kuzey',
+      open: false,
+      ecommerce: false,
+    });
+    expect(facts.details.step).toBe('facts');
+    expect(facts.details.how[0]).toContain('Check what ChatGPT says');
+    expect(facts.details.how[0]).toContain('/chatgpt-profile');
+  });
+
   it('keeps every task within the limits the drawer edits it in', () => {
     const long = 'N'.repeat(300);
     for (const open of [true, false]) {
