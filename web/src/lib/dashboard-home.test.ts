@@ -34,7 +34,8 @@ const member = (patch: Partial<Profile> = {}): Profile => ({
   organization_id: 'org1',
   role: 'manager',
   work_areas: null,
-  work_areas_asked_at: null,
+  // Work areas set in a test were picked in Settings after WORK_AREAS_RESET_AT.
+  work_areas_asked_at: '2026-11-12T09:00:00Z',
   menu_shown: null,
   menu_hidden: null,
   can_manage_menus: false,
@@ -284,7 +285,14 @@ describe('dashboardHomeFor', () => {
 describe('dashboardHome', () => {
   it("reads the signed-in person's organization, its plan and their menu", async () => {
     await expect(dashboardHome()).resolves.toBe(CHAT);
-    for (const column of ['organization_id', 'role', 'work_areas', 'menu_shown', 'menu_hidden']) {
+    for (const column of [
+      'organization_id',
+      'role',
+      'work_areas',
+      'work_areas_asked_at',
+      'menu_shown',
+      'menu_hidden',
+    ]) {
       expect(session.select).toContain(column);
     }
     expect(session.orgReads).toEqual(['org1']);

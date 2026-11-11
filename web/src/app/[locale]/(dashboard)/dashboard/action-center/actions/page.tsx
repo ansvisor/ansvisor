@@ -22,6 +22,7 @@ import type { ChatPageFilter } from '@/lib/chat/page-context';
 import { useUserRole } from '@/hooks/use-user-role';
 import { onFirstRunFinished, useFirstRun } from '@/hooks/use-first-run';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import type { Brand } from '@/types';
 import {
   deleteAction,
@@ -215,6 +216,9 @@ function ActionsContent({ brand }: { brand: Brand }) {
   const tCategories = useTranslations('actionCenter.actionCategories');
   const tChat = useTranslations('chatPanel.suggest');
   const tStarted = useTranslations('actionCenter.gettingStarted');
+  // With the simplified layout on, Today's focus (Action Center › Today)
+  // takes the Today card's place, and the card isn't read here.
+  const simpleNav = useSimpleNav();
 
   const [actions, setActions] = useState<ActionItem[] | null>(null);
   // Null for a brand that doesn't run Getting started, or when it can't be
@@ -323,9 +327,11 @@ function ActionsContent({ brand }: { brand: Brand }) {
     setLoadFailed(false);
     try {
       // Together, so the page doesn't show its empty state and then the steps.
+      // With the simplified layout on, the set-up steps are Today's card
+      // ("Finish setting up"), and Actions lists no Getting started rows.
       const [list, started] = await Promise.all([
         getActions(brand.id),
-        getGettingStarted(brand.id).catch(() => null),
+        simpleNav ? null : getGettingStarted(brand.id).catch(() => null),
       ]);
       setActions(list);
       if (started) setGettingStarted(started);
@@ -334,7 +340,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     } finally {
       setIsLoading(false);
     }
-  }, [brand.id]);
+  }, [brand.id, simpleNav]);
 
   const startedActive = gettingStarted?.active ?? false;
 
@@ -517,7 +523,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     [actions],
   );
   useEffect(() => {
-    if (!listed) return;
+    if (!listed || simpleNav) return;
     let live = true;
     setTodayLoading(true);
     getToday(brand.id, viewerTimeZone())
@@ -532,7 +538,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     return () => {
       live = false;
     };
-  }, [brand.id, listed, todayKey]);
+  }, [brand.id, listed, todayKey, simpleNav]);
 
   // The card and its filter read one set, so they cannot disagree.
   const topIds = useMemo(() => topActionIds(actions ?? []), [actions]);
@@ -900,18 +906,20 @@ function ActionsContent({ brand }: { brand: Brand }) {
 
   return frame(
     <div className="space-y-4">
-      <TodayCard
-        read={today}
-        loading={todayLoading}
-        actions={list}
-        steps={startedActive && gettingStarted ? gettingStarted.steps : null}
-        onOpenAction={selectAction}
-        onOpenStep={(step) => {
-          showStepsCategory();
-          openStep(step);
-        }}
-        gear={<AgentWorkGear />}
-      />
+      {!simpleNav && (
+        <TodayCard
+          read={today}
+          loading={todayLoading}
+          actions={list}
+          steps={startedActive && gettingStarted ? gettingStarted.steps : null}
+          onOpenAction={selectAction}
+          onOpenStep={(step) => {
+            showStepsCategory();
+            openStep(step);
+          }}
+          gear={<AgentWorkGear />}
+        />
+      )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {startedActive && gettingStarted && (
           <GettingStartedSummaryCard

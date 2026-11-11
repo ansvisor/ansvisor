@@ -24,7 +24,8 @@ const FOCUS_SKILLS = [
 describe('ANSVISOR_SKILLS', () => {
   it("lists every library skill, in the library's order, the focus areas' seven, then the AGENTS plan's three", () => {
     expect(ANSVISOR_SKILLS.map((skill) => skill.id)).toEqual([...SKILL_ORDER]);
-    expect(ANSVISOR_SKILLS.slice(14, 21).map((skill) => skill.id)).toEqual(FOCUS_SKILLS);
+    // The fourteen and /chatgpt-profile (after /facts, ChatGPT Business Hub plan PR 7), then the seven.
+    expect(ANSVISOR_SKILLS.slice(15, 22).map((skill) => skill.id)).toEqual(FOCUS_SKILLS);
     expect(ANSVISOR_SKILLS.slice(-3).map((skill) => skill.id)).toEqual([
       'setup',
       'fanout',
@@ -38,6 +39,10 @@ describe('ANSVISOR_SKILLS', () => {
       expect(titles[skill.name], skill.name).toBe(skill.title);
     }
     expect(Object.keys(titles).sort()).toEqual(ANSVISOR_SKILLS.map((skill) => skill.id).sort());
+  });
+
+  it('gives /chatgpt-profile no connection: it reads answers, facts and the brand’s pages, and saves drafts', () => {
+    expect(skillOf('chatgpt-profile')?.uses).toEqual([]);
   });
 
   it('gives /setup no connection: it says how to connect one, and reads Ansvisor’s own data', () => {

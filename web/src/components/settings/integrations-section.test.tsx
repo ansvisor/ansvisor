@@ -89,6 +89,9 @@ vi.mock('./slack-card', () => ({ SlackCard: () => <div data-card="slack">Slack</
 vi.mock('./hubspot-card', () => ({
   HubspotCard: () => <div data-card="hubspot">HubSpot</div>,
 }));
+// ChatGPT Business Hub (BUSINESS_HUB_ENABLED, read on the server): off unless a test turns it on.
+const businessHub = vi.hoisted(() => ({ readBusinessHubSetup: vi.fn() }));
+vi.mock('@/lib/actions/business-hub-setup', () => businessHub);
 
 const { IntegrationsSection } = await import('./integrations-section');
 const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
@@ -109,6 +112,7 @@ beforeEach(() => {
   for (const key of Object.keys(statuses)) delete statuses[key];
   config.answer = { googleMerchantCenter: true };
   client.readIntegrationsConfig.mockImplementation(async () => config.answer);
+  businessHub.readBusinessHubSetup.mockResolvedValue({ enabled: false });
   client.readIntegrationStatus.mockImplementation(async (provider: string) => {
     const status = statuses[provider] ?? 'not_connected';
     if (typeof status === 'string') return { ok: true, value: status };
@@ -203,6 +207,39 @@ describe('IntegrationsSection', () => {
     // The Google data sources come first, in no group.
     expect(groupOf(byText('Google Search Console'))).toBeNull();
     expect(groupOf(byText('Google Analytics'))).toBeNull();
+  });
+
+  it('has no ChatGPT Business Hub group or card with the flag off', async () => {
+    await render();
+    expect(businessHub.readBusinessHubSetup).toHaveBeenCalled();
+    expect(groupNamed('Business profiles')).toBeNull();
+    expect(container.querySelector('[data-integration="chatgpt-business-hub"]')).toBeNull();
+    expect(container.textContent).not.toContain('ChatGPT Business Hub');
+  });
+
+  it('shows ChatGPT Business Hub last, in Business profiles, with the flag on', async () => {
+    businessHub.readBusinessHubSetup.mockResolvedValue({
+      enabled: true,
+      actionHref: '/dashboard/action-center/actions/AC-7',
+      failed: false,
+    });
+    await render();
+    expect(headings().map((h) => h.textContent)).toEqual([
+      'Stores and marketplaces',
+      'Content management systems',
+      'Team and alerts',
+      'CRM',
+      'Business profiles',
+    ]);
+    const hub = container.querySelector(
+      '#chatgpt-business-hub [data-integration="chatgpt-business-hub"]',
+    );
+    expect(groupOf(hub)).toBe('Business profiles');
+    expect(byText('ChatGPT Business Hub')).not.toBeNull();
+    // A manual setup: no Connect, no Connected.
+    expect(badges(hub!)).toEqual(['Manual: Business Hub has no API yet']);
+    expect(hub!.querySelector('button')).toBeNull();
+    expect(hub!.textContent).not.toMatch(/\bConnect(ed)?\b/);
   });
 
   it("hides Merchant Center's card where the server doesn't offer it, with no Coming soon", async () => {

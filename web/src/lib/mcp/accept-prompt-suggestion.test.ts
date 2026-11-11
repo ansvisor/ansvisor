@@ -16,6 +16,10 @@ let inserts: string[] = [];
 let promptRows: Record<string, unknown>[] = [];
 /** The suggestion's catalog source (AC plan P-8), or none. */
 let catalogData: Record<string, unknown> | null = null;
+/** A ChatGPT Business Hub suggestion's discovery topic (00527), or none. */
+let hubTopic: string | null = null;
+/** Topics deleted. */
+let deletes: string[] = [];
 
 vi.mock('@/lib/guards/plan-guard', () => ({
   ORG_PLAN_COLUMNS: 'plan',
@@ -28,23 +32,31 @@ vi.mock('@/lib/supabase/admin', () => ({
     rpc: async () => ({ data: [{ brand_id: 'b1', locations: 0 }], error: null }),
     from: (table: string) => {
       let inserting = false;
+      let deleting = false;
+      // A topic asked for by name: the Business Hub suggestion's has none yet.
+      let byName = false;
       const row = () => {
-        if (inserting) return table === 'prompts' ? { id: 'p1', text: 'Best GEO tools?' } : null;
+        if (inserting) {
+          if (table === 'topics') return { id: 'made-topic' };
+          return table === 'prompts' ? { id: 'p1', text: 'Best GEO tools?' } : null;
+        }
         switch (table) {
           case 'prompt_suggestions':
             return {
               id: 's1',
               brand_id: 'b1',
               suggested_text: 'Best GEO tools?',
-              topic_name: null,
-              source: catalogData ? 'catalog' : 'llm',
-              source_data: catalogData,
+              topic_name: hubTopic,
+              source: hubTopic ? 'business_hub' : catalogData ? 'catalog' : 'llm',
+              source_data: hubTopic
+                ? { topic: hubTopic, periodEnd: null, enteredAt: '2026-11-09T08:00:00Z' }
+                : catalogData,
               generated_at: '2026-11-09T08:00:00+00:00',
             };
           case 'brands':
             return { id: 'b1', organization_id: 'org-1', region: 'US', state: null };
           case 'topics':
-            return topic;
+            return byName && hubTopic ? null : topic;
           case 'prompt_sets':
             return { id: 'ps1' };
           case 'organizations':
@@ -55,10 +67,18 @@ vi.mock('@/lib/supabase/admin', () => ({
       };
       const chain = {
         select: () => chain,
-        eq: () => chain,
+        eq: (column: string, value: string) => {
+          if (column === 'name') byName = true;
+          if (deleting) deletes.push(value);
+          return chain;
+        },
         order: () => chain,
         limit: () => chain,
         update: () => chain,
+        delete: () => {
+          deleting = true;
+          return chain;
+        },
         insert: (row: Record<string, unknown>) => {
           inserting = true;
           inserts.push(table);
@@ -89,6 +109,8 @@ beforeEach(() => {
   inserts = [];
   promptRows = [];
   catalogData = null;
+  hubTopic = null;
+  deletes = [];
 });
 
 describe('acceptPromptSuggestionFor', () => {
@@ -130,6 +152,16 @@ describe('acceptPromptSuggestionFor', () => {
         suggested_at: '2026-11-09T08:00:00+00:00',
       },
     });
+  });
+
+  it('makes the topic a ChatGPT Business Hub suggestion names, and files the prompt under it', async () => {
+    topic = { id: 't1' };
+    hubTopic = 'Decaf beans';
+    expect(await acceptPromptSuggestionFor(auth, 's1')).toMatchObject({ status: 'added' });
+    expect(inserts).toEqual(['topics', 'prompts']);
+    expect(promptRows[0]).toMatchObject({ category: 'Decaf beans', topic_id: 'made-topic' });
+    expect('source_data' in promptRows[0]).toBe(false);
+    expect(deletes).toEqual([]);
   });
 
   it('names no source for any other suggestion', async () => {

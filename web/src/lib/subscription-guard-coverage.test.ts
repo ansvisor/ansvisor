@@ -64,8 +64,15 @@ const OPEN_ACTIONS: Record<string, string> = {
     'a column layout: costs nothing, and read-only shows the data the same way',
   'prompt-table-views.ts:removePromptTableView':
     'a column layout: costs nothing, and read-only shows the data the same way',
+  // A person's Today and menu state on a brand (00529): UI state, on the demo brand too.
+  'user-brand-state.ts:markSeen':
+    "the person's own record of opening a page (a menu dot clears), nothing that costs",
+  'user-brand-state.ts:setFocus':
+    "the person's own Today focus: which open actions they keep in view, nothing that costs",
+  'user-brand-state.ts:hideCard':
+    "the person's own hidden or snoozed Today cards, nothing that costs",
   'menu-access.ts:setMyWorkAreas':
-    'the person\'s own profile; it answers "What do you work on?", which /dashboard/welcome waits on',
+    "the person's own profile: their work areas only narrow their own menu",
   'chat-uploads.ts:prepareChatUpload':
     'checks the plan itself (isSubscriptionActive), to answer read_only instead of throwing',
   'chat-uploads.ts:finishChatUpload':

@@ -695,6 +695,8 @@ beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('CHAT_AGENTIC', 'true');
   vi.stubEnv('CHAT_AGENTIC_ORGS', '');
+  // The ChatGPT profile check is offered only with ChatGPT Business Hub on (skills/flagged.ts).
+  vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
   vi.stubGlobal('fetch', guardedFetch);
   seed();
   const draft = fakeCreateDraft(db);
@@ -1258,6 +1260,44 @@ describe('the agents’ test set harness, on a scripted model', () => {
     expect(result.checks.find((c) => c.name === 'loads the skill')?.ok).toBe(true);
     expect(result.checks.find((c) => c.name === 'makes what it promises: draft')?.ok).toBe(true);
     expect(result.passed).toBe(true);
+  });
+
+  it('runs the ChatGPT profile check: asks for what no source gives, never fills it in', async () => {
+    scripted([
+      calls(
+        toolCall('r1', 'list_mentions', {
+          brand_id: BRAND,
+          platform: 'chatgpt-web',
+          date_from: '2026-10-12T00:00:00.000Z',
+        }),
+      ),
+      calls(toolCall('r2', 'get_brand_facts', { brand_id: BRAND })),
+      text(
+        '| Field | What ChatGPT says | What’s true | Status |\n|---|---|---|---|\n| Policies | "charges a fee to cancel" | Pause, skip or cancel anytime online, with no fees (your approved facts) | wrong |\n| Hours | not stated | [confirm: your opening hours] | needs your answer |\n\n## Paste into Business Hub\n\n- Policies: Pause, skip or cancel anytime online, with no fees.\n- Hours: [confirm: your opening hours]\n\n## Needs your answer\n\n- [confirm: your opening hours]',
+      ),
+    ]);
+    const result = await runScenario(skillOf('chatgpt-profile'));
+    expect(result.run.skillsLoaded).toEqual(['chatgpt-profile']);
+    expect(result.checks.find((c) => c.name === 'loads the skill')?.ok).toBe(true);
+    expect(result.checks.find((c) => c.name === 'makes what it promises: list')?.ok).toBe(true);
+    expect(result.checks.find((c) => c.name === 'makes what it promises: needs_answer')?.ok).toBe(
+      true,
+    );
+    expect(result.passed).toBe(true);
+  });
+
+  it('fails a ChatGPT profile check that fills in what no source gives', async () => {
+    scripted([
+      calls(toolCall('r1', 'get_brand_facts', { brand_id: BRAND })),
+      text(
+        '| Field | What ChatGPT says | What’s true | Status |\n|---|---|---|---|\n| Hours | not stated | Open every day, morning to evening | missing |\n| Policies | "charges a fee to cancel" | No fees | wrong |',
+      ),
+    ]);
+    const result = await runScenario(skillOf('chatgpt-profile'));
+    expect(result.checks.find((c) => c.name === 'makes what it promises: needs_answer')?.ok).toBe(
+      false,
+    );
+    expect(result.passed).toBe(false);
   });
 
   it('refuses every network call but the model’s', async () => {

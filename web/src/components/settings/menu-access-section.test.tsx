@@ -20,6 +20,7 @@ vi.mock('@/components/providers/menu-access-provider', async (importOriginal) =>
 }));
 let chatOn = true;
 let adsOn = false;
+let simpleNav = false;
 
 const actions = vi.hoisted(() => ({
   getMenuAccessSettings: vi.fn(),
@@ -30,6 +31,7 @@ vi.mock('@/lib/actions/menu-access', () => actions);
 const { MenuAccessSection, hiddenForSet } = await import('./menu-access-section');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { AdsProvider } = await import('@/components/providers/ads-provider');
+const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -42,6 +44,7 @@ beforeEach(() => {
   canManageMenus = true;
   chatOn = true;
   adsOn = false;
+  simpleNav = false;
   actions.getMenuAccessSettings.mockResolvedValue({
     roles: { manager: [], analyst: ['content', 'audit'], agency_partner: [] },
     members: [],
@@ -62,11 +65,13 @@ async function render() {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ChatAgenticProvider enabled={chatOn}>
-          <AdsProvider enabled={adsOn}>
-            <MenuAccessSection />
-          </AdsProvider>
-        </ChatAgenticProvider>
+        <SimpleNavProvider enabled={simpleNav}>
+          <ChatAgenticProvider enabled={chatOn}>
+            <AdsProvider enabled={adsOn}>
+              <MenuAccessSection />
+            </AdsProvider>
+          </ChatAgenticProvider>
+        </SimpleNavProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -229,5 +234,76 @@ describe('hiddenForSet', () => {
     // The sets that don't compare the brand with others leave Competitors off.
     expect(hiddenForSet('content')).toContain('competitors');
     expect(hiddenForSet('all')).toEqual([]);
+  });
+});
+
+// The simplified menu (SIMPLE_NAV): the same sections, saved by the same
+// names, in its groups; Agent Center is Action Center › Agents.
+describe('MenuAccessSection with the simplified menu', () => {
+  const rows = () =>
+    [...container.querySelectorAll('tbody tr')].map(
+      (row) => row.querySelector('td')?.textContent ?? '',
+    );
+
+  it('lists Agents under the Action Center’s row, and More for Execution', async () => {
+    simpleNav = true;
+    await render();
+    expect(rows()).toEqual([
+      'Chat',
+      'Action Center',
+      'Agents · in Action Center',
+      'Analytics',
+      'Prompts',
+      'Visibility',
+      'Mentions',
+      'Citations',
+      'Product Visibility',
+      'AI Referral Traffic',
+      'More',
+      'Content',
+      'Audit',
+      'Reports',
+      'Competitors',
+    ]);
+    expect(container.textContent).not.toContain('Execution');
+    expect(container.textContent).not.toContain('Agent Center');
+  });
+
+  it('hides Agents for a role under its old name, agents, as before', async () => {
+    simpleNav = true;
+    actions.getMenuAccessSettings.mockResolvedValue({
+      roles: { manager: [], analyst: ['agents', 'content'], agency_partner: [] },
+      members: [],
+      viewerIsAdmin: true,
+    });
+    await render();
+    expect(box('Analyst sees Agents · in Action Center')?.getAttribute('aria-checked')).toBe(
+      'false',
+    );
+    expect(box('Manager sees Agents · in Action Center')?.getAttribute('aria-checked')).toBe(
+      'true',
+    );
+    await act(async () => box('Manager sees Agents · in Action Center')!.click());
+    expect(actions.setRoleMenu).toHaveBeenCalledWith('manager', ['agents']);
+    // Action Center, Today and its other tabs with it, stays on every menu.
+    expect(box('Everyone sees Action Center')?.disabled).toBe(true);
+  });
+
+  it('leaves Agents out while the new Chat is off, and lists Ads last in Analytics with Ads on', async () => {
+    simpleNav = true;
+    chatOn = false;
+    adsOn = true;
+    await render();
+    expect(rows()).not.toContain('Agents · in Action Center');
+    const all = rows();
+    expect(all.indexOf('Ads')).toBe(all.indexOf('AI Referral Traffic') + 1);
+    expect(all.indexOf('More')).toBe(all.indexOf('Ads') + 1);
+  });
+
+  it('is as it was without SIMPLE_NAV', async () => {
+    await render();
+    expect(rows().slice(0, 3)).toEqual(['Chat', 'Agent Center', 'Analytics']);
+    expect(container.textContent).toContain('Execution');
+    expect(container.textContent).not.toContain('Agents · in Action Center');
   });
 });

@@ -27,17 +27,15 @@ export function joinedAt(
 }
 
 /**
- * Whether the section shows: once the person answered or skipped Your work
- * areas (profiles.work_areas_asked_at), in their first 14 days in the
+ * Whether the section shows: in the person's first 14 days in the
  * workspace, until they hide it (chat_user_prefs.agents_for_you_dismissed_at).
  */
 export function agentsForYouOpen(facts: {
-  workAreasAskedAt: string | null;
   joinedAt: string | null;
   dismissedAt: string | null;
   now: number;
 }): boolean {
-  if (!facts.workAreasAskedAt || facts.dismissedAt || !facts.joinedAt) return false;
+  if (facts.dismissedAt || !facts.joinedAt) return false;
   const joined = Date.parse(facts.joinedAt);
   if (Number.isNaN(joined)) return false;
   return facts.now - joined < AGENTS_FOR_YOU_DAYS * DAY_MS;

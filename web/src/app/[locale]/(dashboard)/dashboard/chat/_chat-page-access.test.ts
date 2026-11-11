@@ -266,6 +266,17 @@ describe('chatComposerSetup', () => {
     expect((await chatComposerSetup()).skills).toEqual([]);
   });
 
+  it('lists the ChatGPT profile check in the / menu only with ChatGPT Business Hub on', async () => {
+    facts.ctx = ctxOf('manager', true, true);
+    expect((await chatComposerSetup()).skills.map((skill) => skill.name)).not.toContain(
+      'chatgpt-profile',
+    );
+    vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+    const { skills } = await chatComposerSetup();
+    expect(skills).toContainEqual({ name: 'chatgpt-profile', title: 'ChatGPT profile check' });
+    expect(skills).toHaveLength(25);
+  });
+
   it("adds the person's own and the shared skills to the / menu, without what the workspace turned off (W3-06)", async () => {
     facts.ctx = ctxOf('manager', true, true);
     const own = { organization_id: 'org-1', status: 'approved', enabled: true, source: 'user' };
