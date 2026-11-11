@@ -108,7 +108,6 @@ export function cleanTopics(raw: string[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const item of raw) {
-    // eslint-disable-next-line no-control-regex
     const topic = item
       .replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ')
       .replace(/\s+/g, ' ')

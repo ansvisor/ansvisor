@@ -127,8 +127,8 @@ export function BusinessHubCard({ brandId, className }: { brandId: string; class
     }
   }, [brandId]);
 
+  // Its own read, once per brand: the page keys the card by its brand.
   useEffect(() => {
-    setCard(null);
     void load();
   }, [load]);
 

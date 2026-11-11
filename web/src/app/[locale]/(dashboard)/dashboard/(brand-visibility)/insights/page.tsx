@@ -1041,10 +1041,14 @@ export default function InsightsPage() {
                       }}
                     />
                   )}
-                  <BusinessHubCard className="min-w-0 flex-[1_1_420px]" brandId={brand.id} />
+                  <BusinessHubCard
+                    key={brand.id}
+                    className="min-w-0 flex-[1_1_420px]"
+                    brandId={brand.id}
+                  />
                 </div>
               ) : (
-                <BusinessHubCard brandId={brand.id} />
+                <BusinessHubCard key={brand.id} brandId={brand.id} />
               )}
 
               {/* Topics vs competitors (VIS-010): the trend's brands, topic by topic. */}
