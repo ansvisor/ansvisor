@@ -32,8 +32,9 @@ import { useHiddenMenuSections } from '@/components/providers/menu-access-provid
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { useMenuStateStore } from '@/stores/use-menu-state-store';
-import { MenuDot, useDotLabel, useDotViewer } from '@/components/layout/menu-dot';
+import { MenuDot, useDotLabel, useDotViewer } from './menu-dot';
 
+// The dot, its words and its viewer live in menu-dot.tsx; re-exported for the menu's callers.
 export { MenuDot, useDotLabel, useDotViewer };
 
 /** How old a read may be before a page change reads again. */

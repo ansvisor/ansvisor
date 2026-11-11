@@ -1,7 +1,13 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { DOT_STYLE, type Dot, type DotColour, type DotViewer } from '@/lib/menu-dots';
+import {
+  DOT_STYLE,
+  type DotColour,
+  type DotReason,
+  type DotViewer,
+  type RowReason,
+} from '@/lib/menu-dots';
 import { cn } from '@/lib/utils';
 import { useDemoBrand } from '@/components/providers/demo-brand-provider';
 import { usePlanContext } from '@/components/providers/plan-provider';
@@ -9,9 +15,12 @@ import { useUserRole } from '@/hooks/use-user-role';
 
 /*
  * The dot itself, its words and who sees which (#2340), apart from the
- * menu's reads (menu-dots.tsx) so a page's own dot (page-dot.tsx) shows the
- * same dot without them.
+ * menu's reads (menu-dots.tsx) so a row's dot elsewhere (Chat, Agents,
+ * Settings, a page's own rows: page-dot.tsx) shows the same dot without them.
  */
+
+/** A dot to show: the menu's (its reason, red and grey only) or a row's elsewhere. */
+type DotLike = { colour: DotColour; reason?: DotReason | RowReason };
 
 /**
  * Who is looking, for which dots they see: yellow for admins and managers,
@@ -36,14 +45,11 @@ const DOT_WORDS = {
 /**
  * What a dot says, on hover and to screen readers: "New results", "Needs
  * you", and for red and grey why ("Needs attention: Search Console
- * disconnected", "Working on it: an agent is running"); after an item's
- * name where only its icon shows ("Audit, Needs attention").
+ * disconnected", "Working on it: an agent is running"), or the reason a page
+ * gives in words (`why`: "Needs you: a task waits for approval"); after an
+ * item's name where only its icon shows ("Audit, Needs attention").
  */
-export function useDotLabel(): (
-  dot: Pick<Dot, 'colour' | 'reason'>,
-  name?: string,
-  why?: string,
-) => string {
+export function useDotLabel(): (dot: DotLike, name?: string, why?: string) => string {
   const t = useTranslations('menuDots');
   return ({ colour, reason }, name, why) => {
     const words = t(DOT_WORDS[colour]);
@@ -60,15 +66,19 @@ export function useDotLabel(): (
  */
 export function MenuDot({
   dot,
+  label: words,
   why,
   className,
 }: {
-  dot: Pick<Dot, 'colour' | 'reason'>;
-  /** Why it is lit, in words, for a page's own dot (PageDot): "Needs you: waiting for approval". */
+  dot: DotLike;
+  /** Its words in full, when they are not the colour's and reason's (Settings' dots). */
+  label?: string;
+  /** Why it is lit, in words, after the colour's (a page's own dot, PageDot). */
   why?: string;
   className?: string;
 }) {
-  const label = useDotLabel()(dot, undefined, why);
+  const named = useDotLabel()(dot, undefined, why);
+  const label = words ?? named;
   return (
     <span
       role="img"

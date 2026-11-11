@@ -38,6 +38,10 @@ interface PlanContextValue {
    * and every page says so. Null when it renews, and self-hosted.
    */
   planEndsAt: string | null;
+  /** When the trial ends, while the plan is a trial; null otherwise, and self-hosted. */
+  trialEndsAt: string | null;
+  /** The workspace's name, as the account menu says it; null where it isn't read. */
+  workspaceName: string | null;
 }
 
 const PlanContext = createContext<PlanContextValue>({
@@ -48,6 +52,8 @@ const PlanContext = createContext<PlanContextValue>({
   subscriptionActive: true,
   subscriptionStatus: null,
   planEndsAt: null,
+  trialEndsAt: null,
+  workspaceName: null,
 });
 
 export function PlanProvider({
@@ -56,6 +62,8 @@ export function PlanProvider({
   subscriptionActive = true,
   subscriptionStatus = null,
   planEndsAt = null,
+  trialEndsAt = null,
+  workspaceName = null,
   children,
 }: {
   planId: PlanId;
@@ -63,6 +71,8 @@ export function PlanProvider({
   subscriptionActive?: boolean;
   subscriptionStatus?: string | null;
   planEndsAt?: string | null;
+  trialEndsAt?: string | null;
+  workspaceName?: string | null;
   children: React.ReactNode;
 }) {
   const isCloud = process.env.NEXT_PUBLIC_IS_CLOUD === 'true';
@@ -85,6 +95,8 @@ export function PlanProvider({
         subscriptionActive: isCloud ? subscriptionActive : true,
         subscriptionStatus: isCloud ? subscriptionStatus : null,
         planEndsAt: isCloud ? planEndsAt : null,
+        trialEndsAt: isCloud ? trialEndsAt : null,
+        workspaceName,
       }}
     >
       {children}

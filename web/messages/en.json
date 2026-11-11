@@ -568,6 +568,38 @@
     "collapseRail": "Collapse the Ansvisor menu",
     "railTip": "Ansvisor · hover or click to expand"
   },
+  "accountMenu": {
+    "open": "Account menu",
+    "openFor": "{name}, account menu",
+    "workspacePlan": "{workspace} · {plan}",
+    "trialLeft": "{days, plural, =0 {Trial · ends today} one {Trial · # day left} other {Trial · # days left}}",
+    "settings": "Settings",
+    "account": "Your account",
+    "members": "Members & invites",
+    "integrations": "Integrations",
+    "api": "API & MCP",
+    "billing": "Plans & billing",
+    "whatsNew": "What’s new",
+    "whatsNewUnread": "New updates",
+    "help": "Help",
+    "signOut": "Sign out"
+  },
+  "settingsDots": {
+    "people": "{count, plural, one {# person} other {# people}}",
+    "namesAndMore": "{names} and {count} more",
+    "joined": "{count, plural, one {# person joined: {names}} other {# people joined: {names}}}",
+    "inviteExpired": "{count, plural, one {an invite expired without being accepted} other {# invites expired without being accepted}}",
+    "seatsFull": "the seat limit is reached",
+    "integrationBroken": "{provider} disconnected",
+    "integrationNew": "{by} connected {provider}",
+    "integrationNewSomeone": "{provider} connected",
+    "clientNew": "{name} connected to this workspace",
+    "trialEnding": "{days, plural, =0 {the trial ends today} one {the trial ends in # day} other {the trial ends in # days}}",
+    "paymentFailed": "a payment failed",
+    "membersNote": "{names} joined since your last visit.",
+    "setRoles": "Set roles",
+    "menuAccess": "Menu access"
+  },
   "menuDots": {
     "newResults": "New results",
     "needsYou": "Needs you",
@@ -584,7 +616,14 @@
       "agentRunning": "an agent is running",
       "writing": "the Content Agent is writing a page",
       "trackingRunning": "today’s tracking is running",
-      "auditRunning": "an audit is running"
+      "auditRunning": "an audit is running",
+      "chatRunning": "Chat is working in this chat",
+      "chatWaiting": "Chat is waiting for your answer or OK",
+      "chatResults": "Chat finished since you last opened it",
+      "chatFailed": "the last run stopped with an error",
+      "agentWorking": "it is running now",
+      "agentNeedsOk": "it is waiting for your OK",
+      "agentRunFailed": "its last run failed"
     },
     "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
   },
@@ -4163,6 +4202,14 @@
         "done": "Finished. Bold until you open the result.",
         "failed": "You stopped it, or a step failed. Open it to retry.",
         "idle": "A normal chat. Nothing is running."
+      },
+      "menuLegend": {
+        "red": "The last run stopped with an error. Open the chat to try again.",
+        "yellow": "Waiting for your answer or OK. Nothing moves until you reply.",
+        "green": "Finished while you were away. Goes once you open the chat.",
+        "grey": "Working now. The thin line shows how far it is.",
+        "noneTitle": "No dot",
+        "none": "You have seen it, and nothing runs."
       }
     },
     "newPill": "New",

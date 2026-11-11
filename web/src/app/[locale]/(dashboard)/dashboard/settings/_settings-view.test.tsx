@@ -3,6 +3,10 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../../../messages/en.json';
+import { RoleProvider } from '@/components/providers/role-provider';
+import type { SettingsState } from '@/lib/settings-dots';
+import { useBrandStore } from '@/stores/use-brand-store';
+import { useSettingsStateStore } from '@/stores/use-settings-state-store';
 
 /**
  * Settings' list of sections: Menu access is listed for admins and the
@@ -10,7 +14,17 @@ import messages from '../../../../../../messages/en.json';
  * person's time zone (00468).
  */
 
-vi.mock('@/i18n/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock('@/i18n/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/dashboard/settings',
+}));
+// Settings' dots: read for admins and managers (lib/actions/settings-state).
+let settingsState: SettingsState | null = null;
+vi.mock('@/lib/actions/settings-state', () => ({ getSettingsState: async () => settingsState }));
+const markSeen = vi.fn(async () => ({ ok: true }));
+vi.mock('@/lib/actions/user-brand-state', () => ({
+  markSeen: (...args: unknown[]) => markSeen(...(args as [])),
+}));
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({ auth: { getUser: async () => ({ data: { user: null } }) } }),
 }));
@@ -85,6 +99,51 @@ async function sections() {
 }
 
 describe('SettingsView', () => {
+  it("shows an admin Settings' dots on the tabs, and who joined at the top of Members", async () => {
+    const brandId = '11111111-1111-4111-8111-111111111111';
+    useBrandStore.setState({ activeBrandId: brandId });
+    useSettingsStateStore.setState({ read: null, pending: null, opened: {} });
+    settingsState = {
+      joined: { count: 3, names: ['Ayşe', 'Mehmet', 'Can'], at: new Date(0).toISOString() },
+      expiredInvites: 0,
+      seatsFull: false,
+      brokenIntegration: { provider: 'google-search-console', label: null },
+      newIntegration: null,
+      newClient: null,
+    };
+    const view = (section: 'account' | 'team') => (
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <RoleProvider role="admin">
+          <SettingsView key={section} section={section} />
+        </RoleProvider>
+      </NextIntlClientProvider>
+    );
+    try {
+      await act(async () => root.render(view('account')));
+      const dotOf = (label: string) =>
+        [...container.querySelectorAll('nav button')]
+          .find((b) => b.textContent?.startsWith(label))
+          ?.querySelector('[data-menu-dot]');
+      expect(dotOf('Team')?.getAttribute('aria-label')).toBe(
+        'New results: 3 people joined: Ayşe, Mehmet, Can',
+      );
+      expect(dotOf('Integrations')?.getAttribute('data-menu-dot')).toBe('red');
+      expect(container.querySelector('[data-slot="members-joined"]')).toBeNull();
+      expect(markSeen).not.toHaveBeenCalled();
+
+      // Opening Members clears its green and names who joined.
+      await act(async () => root.render(view('team')));
+      expect(markSeen).toHaveBeenCalledWith(brandId, 'settings/members');
+      expect(dotOf('Team')).toBeNull();
+      expect(container.querySelector('[data-slot="members-joined"]')?.textContent).toBe(
+        'Ayşe, Mehmet, Can joined since your last visit.Set roles',
+      );
+    } finally {
+      settingsState = null;
+      useBrandStore.setState({ activeBrandId: null });
+    }
+  });
+
   it('lists Menu access, marked new, for someone who can change menus', async () => {
     canManageMenus = true;
     expect(await sections()).toContain('Menu accessNew');

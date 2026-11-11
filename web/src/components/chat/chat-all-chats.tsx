@@ -4,13 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import { useRouter } from '@/i18n/navigation';
-import { ListDot } from '@/components/agentic/list-dot';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { ChatListItem, ChatListResult } from '@/lib/chat/conversations';
 import { agoOf } from '@/lib/chat/home';
 import { cn } from '@/lib/utils';
 import { useChatList } from './chat-list-provider';
+import { ChatDot } from './chat-dot';
 import { useNow } from './chat-inbox';
 import { chatLineOf, rowTime } from './chat-row';
 import { useChatSearch } from './chat-search';
@@ -350,7 +350,7 @@ export function ChatAllChats({
                   )}
                 </span>
                 <span className="flex min-w-0 items-start gap-2">
-                  <ListDot state={chat.state} className="mt-0.5" />
+                  <ChatDot chat={chat} className="mt-0.5" />
                   <span className="min-w-0">
                     <b
                       className={cn(

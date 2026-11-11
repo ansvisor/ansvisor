@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -42,6 +42,17 @@ import {
   type SettingsSection,
 } from './_sections';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
+import {
+  SettingsDotMark,
+  markSettingsSeen,
+  settingsPlaceOf,
+  useJoinedNames,
+  useSettingsDots,
+} from '@/components/layout/settings-dots';
+import { SETTINGS_SEEN_KEYS, type SettingsState } from '@/lib/settings-dots';
+import { useUserRole } from '@/hooks/use-user-role';
+import { useBrandStore } from '@/stores/use-brand-store';
+import { UserPlus } from 'lucide-react';
 
 /**
  * Settings, opened on `section`: from its own address (/dashboard/settings/
@@ -86,6 +97,25 @@ export function SettingsView({ section }: { section: SettingsSection }) {
       window.history.replaceState(null, '', settingsSectionPath(window.location.pathname, opened));
     }
   }, [opened, section]);
+
+  // Settings' dots on the tabs (admins and managers); opening a tab clears its green.
+  const { dots, state: dotState } = useSettingsDots();
+  const { canManage } = useUserRole();
+  const brandId = useBrandStore((s) => s.activeBrandId);
+  const place = settingsPlaceOf(active);
+  useEffect(() => {
+    if (canManage && place && place in SETTINGS_SEEN_KEYS) {
+      markSettingsSeen(brandId, place as keyof typeof SETTINGS_SEEN_KEYS);
+    }
+  }, [canManage, place, brandId]);
+  // Who joined since the last visit, kept while Members is open: the read clears it later.
+  const [joinedNote, setJoinedNote] = useState<SettingsState['joined']>(null);
+  if (place === 'members' && dotState?.joined && joinedNote === null) {
+    setJoinedNote(dotState.joined);
+  }
+  const joinedNames = useJoinedNames();
+  const membersRef = useRef<HTMLDivElement>(null);
+  const tDots = useTranslations('settingsDots');
 
   const show = (next: SettingsSection) => {
     setActive(next);
@@ -150,7 +180,10 @@ export function SettingsView({ section }: { section: SettingsSection }) {
       ((id !== 'roles-access' && id !== 'chat') || chatAgentic) &&
       // With the new Chat on, Team is in Team, roles & access.
       (id !== 'team' || !chatAgentic),
-  ).map((id) => ({ id, label: labels[id] }));
+  ).map((id) => {
+    const at = settingsPlaceOf(id);
+    return { id, label: labels[id], dot: at ? (dots[at] ?? null) : null };
+  });
 
   return (
     <div className="space-y-6">
@@ -178,6 +211,7 @@ export function SettingsView({ section }: { section: SettingsSection }) {
               )}
             >
               {item.label}
+              {item.dot && <SettingsDotMark dot={item.dot} className="ml-2 align-middle" />}
               {item.id === 'roles-access' && pendingRequests > 0 && (
                 <Badge className="ml-2 px-1.5 py-0 text-[10px] tabular-nums">
                   {pendingRequests}
@@ -194,6 +228,38 @@ export function SettingsView({ section }: { section: SettingsSection }) {
 
         {/* Main content — only active section shown */}
         <div className="lg:col-span-2">
+          {/* Who joined since the last visit, with the way to their role and menu access. */}
+          {place === 'members' && joinedNote && (
+            <p
+              data-slot="members-joined"
+              className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-muted/40 px-3 py-2 text-sm"
+            >
+              <UserPlus className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+              <span className="min-w-0 flex-1">
+                {tDots('membersNote', {
+                  count: joinedNote.count,
+                  names: joinedNames(joinedNote.names, joinedNote.count),
+                })}
+              </span>
+              <button
+                type="button"
+                className="font-medium underline underline-offset-2 hover:text-foreground"
+                onClick={() => membersRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              >
+                {tDots('setRoles')}
+              </button>
+              {canManageMenus && (
+                <button
+                  type="button"
+                  className="font-medium underline underline-offset-2 hover:text-foreground"
+                  onClick={() => show('menu-access')}
+                >
+                  {tDots('menuAccess')}
+                </button>
+              )}
+            </p>
+          )}
+
           {/* Account */}
           {active === 'account' && (
             <Card>
@@ -259,11 +325,15 @@ export function SettingsView({ section }: { section: SettingsSection }) {
           )}
 
           {/* Team */}
-          {active === 'team' && <TeamSection />}
+          {active === 'team' && (
+            <div ref={membersRef}>
+              <TeamSection />
+            </div>
+          )}
 
           {/* Team, roles & access: the team and its invitations, then the roles and access. */}
           {active === 'roles-access' && chatAgentic && (
-            <div className="space-y-6">
+            <div ref={membersRef} className="space-y-6">
               {/* One members table: the team's, with the roles' columns (owner, 2026-11-09). */}
               <TeamSection withChatAccess />
               <RolesAccessSection

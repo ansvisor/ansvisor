@@ -51,6 +51,9 @@ describe('the names the state accepts', () => {
       'prompts/suggestions',
       'traffic',
       'content',
+      'settings/members',
+      'settings/integrations',
+      'settings/api',
     ]);
     expect(isNavArea('prompts/tracked')).toBe(true);
     for (const value of ['agents', 'Today', '', null, 3]) expect(isNavArea(value)).toBe(false);
