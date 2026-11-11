@@ -19,6 +19,7 @@ vi.mock('@/lib/actions/menu-access', () => actions);
 
 const { MenuManagersCard, MenuPeopleCard, memberMenuWith } = await import('./menu-access-people');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
+const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -91,13 +92,15 @@ function Cards() {
   );
 }
 
-async function render(chatOn = false) {
+async function render(chatOn = false, simpleNav = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ChatAgenticProvider enabled={chatOn}>
-          <Cards />
-        </ChatAgenticProvider>
+        <SimpleNavProvider enabled={simpleNav}>
+          <ChatAgenticProvider enabled={chatOn}>
+            <Cards />
+          </ChatAgenticProvider>
+        </SimpleNavProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -235,5 +238,23 @@ describe('MenuPeopleCard', () => {
     expect(onFailed).toHaveBeenCalled();
     expect(el('[aria-label="Mert Aydın sees Content"]').getAttribute('aria-checked')).toBe('false');
     expect(toast.error).toHaveBeenCalled();
+  });
+});
+
+describe('MenuPeopleCard with the simplified menu (SIMPLE_NAV)', () => {
+  it('names Agent Center Agents · in Action Center, the same section counted the same', async () => {
+    await render(true, true);
+    expect(row('deniz').textContent).toContain('8 of 13 sections');
+    await act(async () => buttonIn(row('mert'), 'Customize').click());
+    expect(
+      el('[aria-label="Mert Aydın sees Agents · in Action Center"]').getAttribute('aria-checked'),
+    ).toBe('true');
+    expect(container.querySelector('[aria-label="Mert Aydın sees Agent Center"]')).toBeNull();
+    const boxes = [...row('mert').querySelectorAll('label')].map((l) => l.textContent);
+    expect(boxes.slice(0, 3)).toEqual([
+      'Chat',
+      'Action Centeralways on',
+      'Agents · in Action Center',
+    ]);
   });
 });

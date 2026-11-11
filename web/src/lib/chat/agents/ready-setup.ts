@@ -65,11 +65,11 @@ export async function readMyWorkAreas(): Promise<WorkAreaId[]> {
     if (!user) return [];
     const { data, error } = await supabase
       .from('profiles')
-      .select('work_areas')
+      .select('work_areas, work_areas_asked_at')
       .eq('id', user.id)
       .maybeSingle();
     if (error) throw new Error(error.message);
-    return workAreasOf((data?.work_areas as string[] | null | undefined) ?? null);
+    return workAreasOf(data);
   } catch (err) {
     console.error('[chat/agents] could not read the person’s work areas:', err);
     return [];

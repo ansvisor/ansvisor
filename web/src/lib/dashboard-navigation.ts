@@ -34,12 +34,22 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   // Products' section where menu access lists the sections.
   'Product Visibility': 'shopping',
   Reports: 'reports',
+  // The Action Center's entries in the simplified menu (SIMPLE_NAV).
+  Today: 'today',
+  Actions: 'actions',
+  Signals: 'signals',
+  Agents: 'agents',
+  History: 'history',
+  // Agents' section where menu access lists the sections, in the simplified menu.
+  'Agents · in Action Center': 'agentsInActionCenter',
 };
 
 /** Map from the static group title string in dashboard.ts to its nav key. */
 export const dashboardNavGroupKeys: Record<string, string> = {
   Execution: 'execution',
   Analytics: 'analytics',
+  // The simplified menu's (SIMPLE_NAV).
+  More: 'more',
 };
 
 /** Resolve a NavGroup.title to its translated label, or return the raw string
@@ -56,7 +66,8 @@ export function getDashboardNavLabel(title: string, t: Translator): string {
 
 /**
  * The submenu entry the current page belongs to: its own route, or a page
- * under it (a topic's page sits under Topics, a draft under the Editor).
+ * under it (a topic's page sits under Topics, a draft under the Editor), or
+ * one it names as its own (`currentOn`: History on KPIs).
  * When one entry's route holds another's
  * (Opportunities is /dashboard/content, the Library is
  * /dashboard/content/library), the longer match wins, so only one is current.
@@ -64,11 +75,13 @@ export function getDashboardNavLabel(title: string, t: Translator): string {
 export function activeChildHref(children: NavChild[], pathname: string): string | null {
   let best: string | null = null;
   let bestLength = -1;
-  for (const { href } of children) {
-    const matches = pathname === href || pathname.startsWith(`${href}/`);
-    if (matches && href.length > bestLength) {
-      best = href;
-      bestLength = href.length;
+  for (const { href, currentOn = [] } of children) {
+    for (const route of [href, ...currentOn]) {
+      const matches = pathname === route || pathname.startsWith(`${route}/`);
+      if (matches && route.length > bestLength) {
+        best = href;
+        bestLength = route.length;
+      }
     }
   }
   return best;
@@ -97,6 +110,8 @@ export function isNavItemActive(
 export interface NavChildGates {
   brandPrefs: Record<BrandPrefKey, boolean>;
   canUse: (feature: Feature) => boolean;
+  /** The new Chat on for the workspace (CHAT_AGENTIC): an entry only it has (Action Center › Agents). */
+  chatAgentic?: boolean;
 }
 
 /**
@@ -113,6 +128,7 @@ export function visibleNavChildren(
 ): NavChild[] {
   return (item.children ?? []).filter((child) => {
     if (child.requiresBrandPref && !gates?.brandPrefs[child.requiresBrandPref]) return false;
+    if (child.requiresChatAgentic && !gates?.chatAgentic) return false;
     if (child.requiredFeature && !gates?.canUse(child.requiredFeature)) return false;
     const section = menuSectionOf(child.href);
     return !section || !hiddenSections.has(section);
@@ -146,7 +162,7 @@ export function shouldShowDashboardNavItem(
   if (item.children?.length) {
     // A submenu shows while one of its entries does: Brand Visibility with
     // only Citations on someone's menu still shows, with Citations alone.
-    const gates = canUse ? { brandPrefs, canUse } : undefined;
+    const gates = canUse ? { brandPrefs, canUse, chatAgentic } : undefined;
     if (visibleNavChildren(item, hiddenSections, gates).length === 0) return false;
   } else {
     const section = menuSectionOf(item.href);

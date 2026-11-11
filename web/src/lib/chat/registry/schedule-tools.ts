@@ -2,6 +2,7 @@ import { createTranslator } from 'next-intl';
 import messages from '../../../../messages/en.json';
 import { createChatSchedule } from '@/lib/actions/chat-schedules';
 import { percentOf } from '@/lib/chat/agent-view';
+import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import { readRunEstimate } from '@/lib/chat/schedule/estimate';
 import {
   PROMPT_MAX,
@@ -206,6 +207,17 @@ export const SCHEDULE_TOOLS = [
       output && typeof output === 'object' && (output as { ok?: unknown }).ok === true
         ? madeStep(output as MadeSchedule)
         : null,
+    // Recurring work, with the simplified layout on: its card, and its row on Action Center › Agents.
+    scheduleCard: (_input, output) => {
+      const made = output as Partial<MadeSchedule> | null;
+      if (!simpleNavEnabled() || made?.ok !== true || made.recurring !== true) return null;
+      if (typeof made.schedule_id !== 'string') return null;
+      return {
+        title: String(made.title),
+        when: String(made.when),
+        href: `/dashboard/chat/scheduled/${made.schedule_id}`,
+      };
+    },
     fixture: {
       input: {
         brand_id: FIXTURE_IDS.brand,

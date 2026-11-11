@@ -1,7 +1,14 @@
-import { DASHBOARD_HOME, INSIGHTS_HOME, landingPageFor, startsOnInsights } from '@/config/home';
+import {
+  DASHBOARD_HOME,
+  INSIGHTS_HOME,
+  TODAY_HOME,
+  landingPageFor,
+  startsOnInsights,
+} from '@/config/home';
 import { isCloud } from '@/config/plans';
 import { TRIAL_DAYS } from '@/lib/billing/trial';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
+import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import {
   menuOfProfile,
   menuSectionOf,
@@ -71,7 +78,10 @@ async function insightsWorkspace(
 }
 
 /**
- * The page the person lands on (landingPageFor), on Ansvisor Cloud:
+ * The page the person lands on (landingPageFor). With the simplified layout
+ * on (SIMPLE_NAV): Action Center › Today for everyone, read from nothing,
+ * since the Action Center is on every menu and no plan changes it.
+ * Otherwise, on Ansvisor Cloud:
  * Insights for a paid workspace, or a free trial past its first day, while
  * Insights is on their menu; else Chat
  * Home while the new Chat is on for their workspace and on their menu; else
@@ -85,6 +95,7 @@ export async function dashboardHomeFor(
   supabase: Reader,
   profile: LandingProfile | null,
 ): Promise<string> {
+  if (simpleNavEnabled()) return TODAY_HOME;
   const organizationId = profile?.organization_id ?? null;
   if (!profile || !organizationId || !isCloud()) return DASHBOARD_HOME;
   const chatOn = chatAgenticEnabled(organizationId);
@@ -108,8 +119,12 @@ export async function dashboardHomeFor(
   }
 }
 
-/** The signed-in person's landing page (dashboardHomeFor); the Action Center without a session. */
+/**
+ * The signed-in person's landing page (dashboardHomeFor); the Action Center
+ * without a session (Today with SIMPLE_NAV on, read from nothing).
+ */
 export async function dashboardHome(): Promise<string> {
+  if (simpleNavEnabled()) return TODAY_HOME;
   const supabase = await createClient();
   const {
     data: { user },

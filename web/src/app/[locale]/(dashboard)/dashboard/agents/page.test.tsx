@@ -28,6 +28,8 @@ vi.mock('@/lib/chat/agents/ready-setup', () => ({
 }));
 vi.mock('@/components/chat/agents/agent-detail', () => ({ AgentDetail: () => null }));
 vi.mock('@/components/chat/agents/agent-form', () => ({ AgentForm: () => null }));
+// Action Center › Agents with SIMPLE_NAV on (layout.test.tsx); a client frame.
+vi.mock('@/components/action-center/agents-tab-frame', () => ({ AgentsTabFrame: () => null }));
 const form = vi.hoisted(() => ({
   setup: { role: 'manager' } as unknown,
   agent: {

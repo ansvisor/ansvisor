@@ -20,6 +20,8 @@ import {
 } from '@/lib/chat/panel';
 import type { ChatThread } from '@/lib/chat/thread';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
+import { navFor } from '@/config/dashboard';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { ChatActionsProvider, useChatActions } from '../chat-actions';
@@ -141,6 +143,8 @@ export function ChatSidePanel() {
   const tNav = useTranslations('nav');
   const panel = useChatPanel();
   const pathname = usePathname();
+  // The page's chip names it as the menu shown does (SIMPLE_NAV: Today, Agents).
+  const simpleNav = useSimpleNav();
   const brand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId));
   const isMac = useIsMac();
   const tour = useChatTour();
@@ -328,7 +332,7 @@ export function ChatSidePanel() {
 
   if (!panel || !started) return null;
   const { size, setup, page } = panel;
-  const menuTitle = menuTitleOf(pathname);
+  const menuTitle = menuTitleOf(pathname, navFor(simpleNav));
   const chips = contextChips(
     page,
     {

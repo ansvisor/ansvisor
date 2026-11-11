@@ -44,10 +44,8 @@ import {
 } from '@/components/billing/plan-start';
 import { setPersonProperties, track } from '@/lib/analytics';
 
-/** "What do you work on?" (menu access): once the brand is set up, before the plan. */
-const WORK_AREAS_STEP = 6;
-/** Choose a plan (cloud only): the last step. */
-const PLAN_STEP = 7;
+/** Choose a plan (cloud only): the last step, right after the competitors. */
+const PLAN_STEP = 6;
 
 const ONBOARDING_STEP_NAMES: Record<number, string> = {
   1: 'brand_setup',
@@ -55,7 +53,6 @@ const ONBOARDING_STEP_NAMES: Record<number, string> = {
   3: 'topics',
   4: 'prompts',
   5: 'competitors',
-  [WORK_AREAS_STEP]: 'work_areas',
   [PLAN_STEP]: 'plan',
 };
 import type { Brand } from '@/types';
@@ -105,7 +102,6 @@ import { DemoSetupDialog } from '@/components/demo/demo-setup-dialog';
 import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
 import { wantsDemoAhead } from '@/lib/demo/demo-ahead';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
-import { WorkAreasStep } from '@/components/onboarding/work-areas-step';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
@@ -256,7 +252,6 @@ const STATE_ITEMS = [{ value: 'nationwide', label: 'Nationwide (no state)' }, ..
 const STEP_FRAME_WIDTH: Record<number, 'medium' | 'wide'> = {
   3: 'wide',
   4: 'wide',
-  [WORK_AREAS_STEP]: 'wide',
   [PLAN_STEP]: 'medium',
 };
 
@@ -284,7 +279,6 @@ export default function OnboardingPage() {
   const tWizard = useTranslations('brands.wizard');
   const tOffer = useTranslations('planOffer');
   const tPlans = useTranslations('readOnly.plans');
-  const tWelcome = useTranslations('welcome');
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
 
   const [step, setStep] = useState(1);
@@ -494,8 +488,7 @@ export default function OnboardingPage() {
     };
   }, [step, planBrandId]);
 
-  // Self-host has no plan step, and asks "What do you work on?" on the
-  // dashboard's first visit instead (/dashboard/welcome).
+  // Self-host has no plan step.
   const totalSteps = isCloud() ? PLAN_STEP : 5;
 
   // Determine which scrapers/models are available based on the plan
@@ -581,7 +574,7 @@ export default function OnboardingPage() {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('organization_id, onboarding_completed, work_areas_asked_at')
+          .select('organization_id, onboarding_completed')
           .eq('id', user.id)
           .single();
 
@@ -598,7 +591,7 @@ export default function OnboardingPage() {
             if (subStatus !== 'active' && subStatus !== 'trialing') {
               setOrganizationId(profile.organization_id);
               void loadResumedPreview(profile.organization_id);
-              setStep(profile.work_areas_asked_at ? PLAN_STEP : WORK_AREAS_STEP);
+              setStep(PLAN_STEP);
               setInitialLoading(false);
               return;
             }
@@ -1090,11 +1083,11 @@ export default function OnboardingPage() {
         onboarding_completed: true,
       });
 
-      // Cloud mode → what they work on, then the subscription step (tracking
-      // triggered after payment)
+      // Cloud mode → subscription step (tracking triggered after payment)
       if (isCloud()) {
         setSavingCompetitors(false);
-        setStep(WORK_AREAS_STEP);
+        toast.success('Almost done! Choose a plan to get started.');
+        setStep(PLAN_STEP);
         return;
       }
 
@@ -1876,38 +1869,6 @@ export default function OnboardingPage() {
       );
     }
 
-    // ── What do you work on? (menu access) ──
-
-    if (step === WORK_AREAS_STEP) {
-      return (
-        <WorkAreasStep
-          title={tWelcome('title')}
-          lede={tWelcome('lede')}
-          onDone={() => {
-            track('onboarding_step_completed', {
-              step: WORK_AREAS_STEP,
-              step_name: 'work_areas',
-            });
-            toast.success('Almost done! Choose a plan to get started.');
-            setStep(PLAN_STEP);
-          }}
-          footer={
-            <div className="flex mx-auto w-full max-w-4xl items-center justify-between mt-8">
-              <button
-                onClick={() => setStep(5)}
-                className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-              >
-                <ArrowLeft className="h-3.5 w-3.5" />
-                Back
-              </button>
-              <StepDots current={WORK_AREAS_STEP} total={totalSteps} />
-              <div className="w-12" />
-            </div>
-          }
-        />
-      );
-    }
-
     // ── Choose Plan (cloud only) ──
 
     if (step !== PLAN_STEP) return null;
@@ -2019,7 +1980,7 @@ export default function OnboardingPage() {
 
         <div className="flex mx-auto w-full max-w-2xl items-center justify-between mt-5">
           <button
-            onClick={() => setStep(WORK_AREAS_STEP)}
+            onClick={() => setStep(5)}
             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" />

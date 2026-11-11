@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { TeamRole } from '@/components/providers/role-provider';
 import type { Feature, PlanId } from '@/config/plans';
 import type { McpAuthContext } from '@/lib/mcp-auth';
-import type { ChatConfirmForm } from '../events';
+import type { ChatConfirmForm, ChatScheduleMade } from '../events';
 import type { PageVersionRead, VersionRun } from '../page-versions';
 
 /**
@@ -345,6 +345,11 @@ interface ToolFields<S extends z.ZodObject> {
   alwaysCardWhen?(input: z.output<S>): boolean;
   /** What it made, as a card with its Open (CHAT-09 item 19); null when nothing. */
   resultCard?(input: z.output<S>, output: unknown): ToolResultCard | null;
+  /**
+   * Recurring work it set up, as its card with Run it now, Open in Agents
+   * and Change the schedule (SIMPLE_NAV); null when none.
+   */
+  scheduleCard?(input: z.output<S>, output: unknown): ChatScheduleMade | null;
   /**
    * The kind of step its card and its change are (CHAT-03): `schedule` for a
    * job Chat schedules. Without it, a write's step is `write`.

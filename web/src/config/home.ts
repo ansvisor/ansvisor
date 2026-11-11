@@ -1,4 +1,5 @@
 import { isCloud } from '@/config/plans';
+import { ACTION_CENTER_TODAY } from '@/lib/action-center/tabs';
 
 /**
  * The Action Center's Actions, where Getting started and the actions live
@@ -8,6 +9,19 @@ import { isCloud } from '@/config/plans';
  * /dashboard, which sends each person to their page.
  */
 export const DASHBOARD_HOME = '/dashboard/action-center/actions';
+
+/**
+ * Action Center › Today: where everyone lands with the simplified layout on
+ * (SIMPLE_NAV, the owner's decisions of 2026-11-11), whatever the plan, the
+ * day of the trial, the role or the install. /dashboard/action-center opens
+ * it then.
+ */
+export const TODAY_HOME = ACTION_CENTER_TODAY;
+
+/** The dashboard's home: Today with SIMPLE_NAV on, the Action Center's Actions otherwise. */
+export function dashboardHomeOf(simpleNav: boolean): string {
+  return simpleNav ? TODAY_HOME : DASHBOARD_HOME;
+}
 
 /** Chat Home: where Ansvisor starts (owner decisions 2026-11-06 and 2026-11-09). */
 export const CHAT_HOME = '/dashboard/chat';
@@ -19,7 +33,9 @@ export const CHAT_HOME = '/dashboard/chat';
 export const INSIGHTS_HOME = '/dashboard/insights';
 
 /**
- * The page a person lands on, each time they come to Ansvisor, on Ansvisor
+ * The page a person lands on, each time they come to Ansvisor. With the
+ * simplified layout on (`simpleNav`, SIMPLE_NAV): Action Center › Today, for
+ * everyone, which is on every menu. Otherwise, on Ansvisor
  * Cloud: Insights while it is on the person's menu, for a workspace that
  * starts there (`onInsights`, startsOnInsights): its plan is active (set to
  * cancel at the period's end too), or its free trial is past its first day
@@ -36,12 +52,15 @@ export function landingPageFor({
   chatHidden = false,
   onInsights = false,
   insightsHidden = false,
+  simpleNav = false,
 }: {
   chatOn: boolean;
   chatHidden?: boolean;
   onInsights?: boolean;
   insightsHidden?: boolean;
+  simpleNav?: boolean;
 }): string {
+  if (simpleNav) return TODAY_HOME;
   if (!isCloud()) return DASHBOARD_HOME;
   if (onInsights && !insightsHidden) return INSIGHTS_HOME;
   return chatOn && !chatHidden ? CHAT_HOME : DASHBOARD_HOME;
@@ -98,7 +117,8 @@ export function startsOnInsights({
   return calendarDay(now, timeZone) > calendarDay(began, timeZone);
 }
 
-/** Whether a sidebar item leads to the home page (it or a parent of it). */
-export function isDashboardHomeItem(href: string): boolean {
-  return DASHBOARD_HOME === href || DASHBOARD_HOME.startsWith(`${href}/`);
+/** Whether a sidebar item leads to the home page (it or a parent of it); Today's with SIMPLE_NAV on. */
+export function isDashboardHomeItem(href: string, simpleNav = false): boolean {
+  const home = dashboardHomeOf(simpleNav);
+  return home === href || home.startsWith(`${href}/`);
 }
