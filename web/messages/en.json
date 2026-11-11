@@ -547,6 +547,7 @@
     "signals": "Signals",
     "agents": "Agents",
     "history": "History",
+    "agentsInActionCenter": "Agents · in Action Center",
     "toggleMenu": "Toggle navigation menu",
     "keepSidebarOpen": "Keep sidebar open",
     "collapseSidebar": "Collapse sidebar",
@@ -4782,6 +4783,14 @@
       "toastCreated": "Sent to Action Center",
       "toastAdded": "Added to the action in Action Center"
     },
+    "scheduleMade": {
+      "label": "Recurring work set up",
+      "title": "Set up: {title}",
+      "note": "It runs by itself, in a chat of its own, where its results go. You'll find it in Action Center › Agents, made in Chat.",
+      "runNow": "Run it now",
+      "openAgents": "Open in Agents",
+      "change": "Change the schedule"
+    },
     "status": {
       "thinking": "Thinking…",
       "writing": "Writing the answer…",
@@ -5317,6 +5326,36 @@
       "all": "All time"
     }
   },
+  "chatRange": {
+    "day": "Last 24 hours",
+    "days": "Last {days} days",
+    "custom": "{from} – {to}",
+    "pageDay": "This page's range: last 24 hours",
+    "pageDays": "This page's range: last {days} days",
+    "pageCustom": "This page's range: {from} – {to}",
+    "question": "Which time range should I use?",
+    "then": "I'll keep it as your default for every analysis. You can change it any time.",
+    "customButton": "Custom",
+    "from": "From",
+    "to": "To",
+    "useDates": "Use these dates",
+    "datesInvalid": "Pick a first and a last day: the first not after the last, and neither after today.",
+    "kept": "{range} · your default from now on",
+    "pressToPick": "Click a range, or press 1–{max}",
+    "lineDay": "Range: last 24 hours",
+    "lineDays": "Range: last {days} days",
+    "lineCustom": "Range: {from} – {to}",
+    "lineNotSet": "Range: not set yet",
+    "lineTitle": "The period Chat reads when your message names none",
+    "change": "change",
+    "choose": "choose",
+    "menuLabel": "Chat's date range",
+    "save": "Save",
+    "saveFailed": "Couldn't save your date range. Try again.",
+    "settingLabel": "Date range",
+    "settingNote": "The period Chat reads when your message names none, in Chat and beside every page. Write \"last 7d\" in a message to change it there.",
+    "settingAsk": "Ask me before the first analysis"
+  },
   "chatPagePane": {
     "label": "Page beside the chat",
     "loading": "Opening the page…",
@@ -5449,7 +5488,10 @@
       "files": "Files",
       "scheduled": "Scheduled",
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
-      "agents": "Agent Center"
+      "agents": "Agent Center",
+      "agentsShort": "Agents",
+      "agentsWhere": "in Action Center",
+      "agentsLabel": "Agents · in Action Center"
     },
     "actions": {
       "more": "More for {name}",
@@ -7399,13 +7441,26 @@
         "clear": "Clear search"
       },
       "loadFailed": "Couldn't load the agents.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "openInChat": {
+        "running": "Open the run in Chat",
+        "needsYou": "Review in Chat",
+        "last": "Open the last run"
+      }
     },
     "center": {
       "tabs": {
         "ready": "Ready to use",
         "yours": "Your agents"
-      }
+      },
+      "askChat": "Ask Chat to make one",
+      "askChatText": "Help me set up an agent for recurring work. Ask me what it should do and how often.",
+      "askChatTip": "Opens Chat with this filled in. You read it and send it."
+    },
+    "madeInChat": {
+      "title": "Made in Chat",
+      "when": "{when} · made in Chat",
+      "lastRun": "Last run {date} · {status}"
     },
     "ready": {
       "filters": {
@@ -15311,19 +15366,6 @@
     "mentionEvidenceDescription": "The answers that mentioned you most in this period, with the passage around the mention.",
     "citationEvidence": "Citation Evidence",
     "citationEvidenceDescription": "The URLs AI answers cited most in this period, and which tracked prompts surfaced them."
-  },
-  "welcome": {
-    "title": "What do you work on?",
-    "invitedTitle": "Welcome to {workspace} Workspace, {name}",
-    "invitedTitleNoName": "Welcome to {workspace} Workspace",
-    "lede": "Pick what you work on or lead, one or more. We'll set up your menu around it; your team can pick their own when they join.",
-    "invitedLede": "You've joined as {role}. What do you work on or lead? We'll set up your menu around it.",
-    "yourMenu": "Your menu",
-    "hiddenByAdmin": "{count} hidden by your admin",
-    "changeLater": "You can change this any time in Settings › Account.",
-    "skip": "Skip: show me everything",
-    "continue": "Continue",
-    "saveFailed": "Couldn't save your work areas. Try again."
   },
   "settings": {
     "title": "Settings",

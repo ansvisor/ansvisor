@@ -19,11 +19,10 @@ import { createClient } from '@/lib/supabase/server';
  * "Agents for you" on Chat Home (AGENTS plan §8 and #11, its new member
  * half; lib/chat/agents-for-you.ts): for the active brand, the ready-to-use
  * agents that fit its site type and the person's own work areas, while the
- * section is open for them: they answered or skipped Your work areas, they
- * joined the workspace in the last 14 days (the invitation they accepted,
- * read as the service role since only Admins read invitations; else, for
- * whoever made the workspace, when their account was made), and they
- * haven't hidden it (00483). `canTurnOn`: they may turn an agent on (Admins
+ * section is open for them: they joined the workspace in the last 14 days
+ * (the invitation they accepted, read as the service role since only Admins
+ * read invitations; else, for whoever made the workspace, when their account
+ * was made), and they haven't hidden it (00483). `canTurnOn`: they may turn an agent on (Admins
  * and Managers, CHAT-21 §K item 51); everyone else asks their Admin.
  * Read as the person otherwise. No AI is used. Behind CHAT_AGENTIC; never
  * throws (#1777): a section that can't be read isn't shown.
@@ -60,17 +59,14 @@ async function profileOf(
 }
 
 /**
- * Whether the section is open for the person (agentsForYouOpen): once they
- * answered or skipped Your work areas, from when they joined the workspace,
- * until they hide it. Throws on a failed read.
+ * Whether the section is open for the person (agentsForYouOpen): from when
+ * they joined the workspace, until they hide it. Throws on a failed read.
  */
 async function sectionOpen(
   supabase: ChatClient,
   user: { id: string; email?: string | null },
   profile: Profile & { organization_id: string },
 ): Promise<boolean> {
-  // Asked first: the section waits for Your work areas, answered or skipped.
-  if (!profile.work_areas_asked_at) return false;
   const email = user.email?.trim().toLowerCase() ?? '';
   const [prefs, invitation] = await Promise.all([
     supabase
@@ -93,7 +89,6 @@ async function sectionOpen(
   const failed = prefs.error ?? invitation.error;
   if (failed) throw new Error(failed.message);
   return agentsForYouOpen({
-    workAreasAskedAt: profile.work_areas_asked_at,
     joinedAt: joinedAt(
       (invitation.data as { accepted_at: string | null } | null)?.accepted_at,
       profile.created_at,
@@ -140,7 +135,6 @@ export async function readAgentsForYou(brandId: string): Promise<AgentsForYouRes
     if (!profile) return { ok: false };
     const canTurnOn = canWriteAgents(profile.role);
     const none: AgentsForYouResult = { ok: true, agents: [], canTurnOn };
-    if (!profile.work_areas_asked_at) return none;
 
     const [open, brand] = await Promise.all([
       sectionOpen(supabase, user, profile),
@@ -165,7 +159,7 @@ export async function readAgentsForYou(brandId: string): Promise<AgentsForYouRes
         industry: site.industry,
         shoppingModeEnabled: site.shopping_mode_enabled === true,
       }),
-      workAreas: workAreasOf(profile.work_areas),
+      workAreas: workAreasOf(profile),
     });
     return { ok: true, agents, canTurnOn };
   } catch (error) {

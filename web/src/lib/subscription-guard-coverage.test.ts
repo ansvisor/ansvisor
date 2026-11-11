@@ -72,7 +72,7 @@ const OPEN_ACTIONS: Record<string, string> = {
   'user-brand-state.ts:hideCard':
     "the person's own hidden or snoozed Today cards, nothing that costs",
   'menu-access.ts:setMyWorkAreas':
-    'the person\'s own profile; it answers "What do you work on?", which /dashboard/welcome waits on',
+    "the person's own profile: their work areas only narrow their own menu",
   'chat-uploads.ts:prepareChatUpload':
     'checks the plan itself (isSubscriptionActive), to answer read_only instead of throwing',
   'chat-uploads.ts:finishChatUpload':
@@ -97,6 +97,8 @@ const OPEN_ACTIONS: Record<string, string> = {
   'chat-prefs.ts:skipChatFocus': "the person's own Chat focus left empty, nothing that costs",
   'chat-prefs.ts:markFocusPrompted':
     "the person's own record of being asked their focus, nothing that costs",
+  'chat-range.ts:saveChatDateRange':
+    "the person's own Chat date range (00528): it only sets the period a run reads, nothing that costs",
   // requestAccess writes through lib/chat/access-request-store.ts: asking an Admin
   // costs nothing, and a read-only workspace is one of the things to ask about.
   'chat-access-requests.ts:withdrawAccessRequest': 'takes back a request, never gives access',

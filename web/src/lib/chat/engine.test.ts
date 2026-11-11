@@ -550,6 +550,8 @@ function seed() {
     chat_run_events: [],
     chat_asks: [],
     chat_next_moves: [],
+    // Everyone picked Chat's date range already (00528): the range card's tests clear it.
+    chat_user_prefs: Object.values(PEOPLE).map((id) => ({ user_id: id, date_range: '30d' })),
   });
   let clock = Date.parse('2026-10-29T09:00:00.000Z');
   const at = () => new Date((clock += 1000)).toISOString();
@@ -827,17 +829,18 @@ describe("a read's scope (W1-17)", () => {
   const day = (offset: number) =>
     new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
 
-  it('reads the last 30 days when no dates are given, and says so on the step', async () => {
+  it("reads the person's range when no dates are given, as the app's pages do, and says so on the step", async () => {
     useModels(
       [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
       [text('Ok.')],
     );
     const runId = await turn(ADMIN, 'How are we doing?');
-    expect(readInput()).toMatchObject({ date_from: day(-30), date_to: day(0) });
+    // Last 30 days: today and the 29 days before, as Visibility's own 30 days.
+    expect(readInput()).toMatchObject({ date_from: day(-29), date_to: day(0) });
     const step = stepsOf(runId)[0];
     expect(step.scope_json).toMatchObject({
       dateRange: 'Last 30 days',
-      used: { dates: 'default', dateFrom: day(-30), dateTo: day(0) },
+      used: { dates: 'default', range: '30d', dateFrom: day(-29), dateTo: day(0) },
     });
   });
 
@@ -1466,7 +1469,9 @@ describe("the answer's language: the question's (CHAT-05 item 2)", () => {
   };
 
   it("follows the language the person set, over the question's, unless the message asks for one", async () => {
-    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, answer_language: 'tr' }];
+    db.tables.chat_user_prefs = [
+      { user_id: PEOPLE.admin, date_range: '30d', answer_language: 'tr' },
+    ];
     const english = 'Visibility on Perplexity fell this week, and the CRM prompts lost the most.';
     const turkish = 'Perplexity görünürlüğü bu hafta düştü, en çok CRM soruları kaybetti.';
     const { sonnet } = useModels([READY, READY], [text(english), text(turkish), text(english)]);
@@ -2428,7 +2433,7 @@ describe('"Thought for N s" (Settings › Chat)', () => {
   });
 
   it('keeps none for a person who turned it off', async () => {
-    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, show_thought: false }];
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d', show_thought: false }];
     useModels([READY], [text('Up 12%.')]);
     const runId = await turn(ADMIN, 'How are we doing?');
     expect(ofType(await eventsOf(runId), 'run.finished')[0].data).not.toHaveProperty('thoughtMs');
@@ -4384,6 +4389,7 @@ describe('who may do what (W1-22: CHAT-05 test set 27–30, CHAT-20 §4c, §5)',
       organization_id: ORG,
       brand_scope: 'all',
     });
+    db.tables.chat_user_prefs.push({ user_id: AGENCY, date_range: '30d' });
   });
 
   /** A workspace's Chat settings row (00401), as an Admin set it. */
@@ -7504,7 +7510,7 @@ describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
     vi.stubEnv('CHAT_AGENTIC', 'true');
     vi.stubEnv('CHAT_AGENTIC_ORGS', '');
     db.tables.chat_memory_items = [];
-    db.tables.chat_user_prefs = [];
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
     db.tables.brands.push({ id: BRAND_TWO, organization_id: ORG, name: 'Contoso' });
   });
 
@@ -7550,7 +7556,9 @@ describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
 
   it('carries no notes and shows no step with "Use memory" off', async () => {
     seedLine({ text: 'Write in US English' });
-    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, memory_enabled: false }];
+    db.tables.chat_user_prefs = [
+      { user_id: PEOPLE.admin, date_range: '30d', memory_enabled: false },
+    ];
     const { sonnet } = useModels([READY], [text('Done.')]);
     const runId = await turn(ADMIN, 'How are we doing?');
     expect(String(systemsOf(sonnet.seen[0])[1].content)).not.toContain('saved_notes');
@@ -7724,11 +7732,13 @@ describe('memory (W3-11, CHAT-14 items 2, 14–17, 24)', () => {
     });
 
     it('offers nothing with Use memory off, nor for an explicit "Remember that…"', async () => {
-      db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, memory_enabled: false }];
+      db.tables.chat_user_prefs = [
+        { user_id: PEOPLE.admin, date_range: '30d', memory_enabled: false },
+      ];
       useModels([READY], [answer('Ok.', 'Blog posts use US English spelling')]);
       const off = await turn(ADMIN, 'From now on our blog posts use US English spelling');
       expect(await offers(off)).toEqual([]);
-      db.tables.chat_user_prefs = [];
+      db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
       useModels([READY], [answer('Ok.', 'Blog posts use US English spelling')]);
       const asked = await turn(ADMIN, 'Remember that our blog posts use US English spelling');
       expect(await offers(asked)).toEqual([]);
@@ -9432,5 +9442,399 @@ describe('a run in parts (CHAT-27 phase 1)', () => {
     expect(runRow(runId).status).toBe('paused_cap');
     const events = await eventsOf(runId);
     expect(ofType(events, 'run.paused_cap').at(-1)!.data.limit).toBe('run');
+  });
+});
+
+describe('the date range Chat asks for (owner request 2026-11-11)', () => {
+  const JOB = '88888888-8888-4888-8888-888888888888';
+  const read = () => calls(toolCall('r1', 'read_visibility', { brand_id: BRAND }));
+  const readInput = () => fakes.readRun.mock.calls.at(-1)?.[1] as Record<string, unknown>;
+  const day = (offset: number) =>
+    new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const savedRange = (userId: string = PEOPLE.admin) =>
+    db.tables.chat_user_prefs.find((p) => p.user_id === userId)?.date_range ?? null;
+  const asksOf = (runId: string) => db.tables.chat_asks.filter((a) => a.run_id === runId);
+  const cardsOf = async (runId: string) =>
+    ofType(await eventsOf(runId), 'ask.created').map((e) => e.data);
+  const promptOf = (options: CallOptions) => JSON.stringify(options.prompt);
+  const CONFIRM =
+    "From now on I'll use the last 7 days by default. To change it, just write 'last 30d', 'last 7d', 'last 24h': I'll switch the default right away and answer.";
+
+  /** Picks on the range card the run waits on, and drives on. */
+  async function pick(actor: ChatActor, runId: string, body: Record<string, unknown>) {
+    const n = (await cardsOf(runId)).at(-1)!.n;
+    const prepared = await engine.prepareResume(actor, runId, 'answer', { n, ...body });
+    if (prepared.ok) await engine.driveRun(actor, runId, prepared.resume);
+    return prepared;
+  }
+
+  /** A message in an open chat, driven until it waits or ends. */
+  async function say(conversationId: string, message: string) {
+    const started = await engine.startChatRun(ADMIN, { message, conversationId, mode: 'auto' });
+    if (!started.ok) throw new Error(`not started: ${started.code}`);
+    await engine.driveRun(ADMIN, started.runId);
+    return started.runId;
+  }
+
+  // Nobody picked one yet.
+  beforeEach(() => {
+    db.tables.chat_user_prefs = [];
+  });
+
+  it('asks before the first analysis that reads data, and reads nothing before the pick', async () => {
+    const { haiku, sonnet } = useModels([read(), READY], [text('Up 12%.')]);
+    const runId = await turn(ADMIN, 'How is our visibility?');
+    expect(runRow(runId).status).toBe('waiting');
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    expect(haiku.seen).toHaveLength(1);
+    expect(sonnet.seen).toHaveLength(0);
+    expect(await cardsOf(runId)).toEqual([
+      {
+        n: 1,
+        question: 'Which time range should I use?',
+        options: [
+          { label: 'Last 24 hours', recommended: false },
+          { label: 'Last 7 days', recommended: false },
+          { label: 'Last 30 days', recommended: true },
+          { label: 'Last 90 days', recommended: false },
+        ],
+        allowOther: true,
+        multi: false,
+        then: "I'll keep it as your default for every analysis. You can change it any time.",
+        dateRange: true,
+      },
+    ]);
+    expect(stepsOf(runId)).toMatchObject([
+      { kind: 'ask', status: 'waiting', label: 'Waiting for your answer' },
+    ]);
+    // Each button's range is kept on the question for its answer; the card gets none.
+    expect(asksOf(runId)[0].options_json).toMatchObject([
+      { range: '24h' },
+      { range: '7d' },
+      { range: '30d' },
+      { range: '90d' },
+    ]);
+    expect(savedRange()).toBeNull();
+    expectClean(await eventsOf(runId));
+  });
+
+  it('keeps a click as the default, reads with it, says so, and asks no more', async () => {
+    const said =
+      "Bundan sonra varsayılan olarak son 7 günü kullanacağım. Değiştirmek için 'son 30d', 'son 7d', 'son 24h' yazman yeterli. Görünürlük %12 arttı.";
+    const { haiku, sonnet } = useModels([read(), READY], [text(said)]);
+    const runId = await turn(ADMIN, 'How is our visibility?');
+    expect(await pick(ADMIN, runId, { selected: [1] })).toMatchObject({ ok: true });
+    expect(savedRange()).toBe('7d');
+    // Last 7 days as Visibility's own: today and the 6 days before.
+    expect(fakes.readRun).toHaveBeenCalledTimes(1);
+    expect(readInput()).toMatchObject({ date_from: day(-6), date_to: day(0) });
+    expect(stepsOf(runId).slice(0, 2)).toMatchObject([
+      {
+        kind: 'ask',
+        status: 'done',
+        label: 'Which time range should I use?',
+        detail: 'Last 7 days · your default from now on',
+      },
+      { kind: 'read', status: 'done', detail: 'Last 7 days · 3 rows' },
+    ]);
+    // The reading went on where it stopped: its second step has the first's read.
+    expect(haiku.seen).toHaveLength(2);
+    expect(promptOf(haiku.seen[1])).toContain('best crm');
+    // The writer confirms it, in the person's language, then answers.
+    expect(promptOf(sonnet.seen[0])).toContain(CONFIRM);
+    expect(runRow(runId).status).toBe('done');
+    const events = await eventsOf(runId);
+    expectClean(events);
+    expect(runFromEvents(events).question).toBeNull();
+    // Its short ranges aren't figures the fact check takes out.
+    expect(runFromEvents(events).text).toBe(said);
+
+    // Asked once: the next analysis, in another chat, reads the default with no card.
+    const next = useModels([read(), READY], [text('Fine.')]);
+    const again = await turn(ADMIN, 'And our mentions?');
+    expect(runRow(again).status).toBe('done');
+    expect(await cardsOf(again)).toEqual([]);
+    expect(readInput()).toMatchObject({ date_from: day(-6), date_to: day(0) });
+    expect(promptOf(next.sonnet.seen[0])).not.toContain('From now on');
+  });
+
+  it('reads the Recommended range once on Skip, keeps nothing, and asks again next time', async () => {
+    const { sonnet } = useModels([read(), READY], [text('Up 12%.')]);
+    const runId = await turn(ADMIN, 'How is our visibility?');
+    expect(await pick(ADMIN, runId, { skipped: true })).toMatchObject({ ok: true });
+    expect(savedRange()).toBeNull();
+    expect(readInput()).toMatchObject({ date_from: day(-29), date_to: day(0) });
+    expect(stepsOf(runId)[0]).toMatchObject({ detail: 'Skipped · used Last 30 days' });
+    expect(promptOf(sonnet.seen[0])).not.toContain('From now on');
+    useModels([read(), READY], [text('Up 12%.')]);
+    expect(runRow(await turn(ADMIN, 'And mentions?')).status).toBe('waiting');
+  });
+
+  it('keeps two days picked under Custom, and refuses ones that make no range', async () => {
+    useModels([read(), READY], [text('Up 12%.')]);
+    const runId = await turn(ADMIN, 'How is our visibility?');
+    expect(await pick(ADMIN, runId, { other: `${day(-3)}/${day(2)}`, via: 'card' })).toMatchObject({
+      ok: false,
+      status: 400,
+      message: expect.stringContaining('neither after'),
+    });
+    expect(runRow(runId).status).toBe('waiting');
+    expect(asksOf(runId)[0].answered_at).toBeNull();
+    const custom = `${day(-20)}/${day(-10)}`;
+    expect(await pick(ADMIN, runId, { other: custom, via: 'card' })).toMatchObject({ ok: true });
+    expect(savedRange()).toBe(custom);
+    expect(readInput()).toMatchObject({ date_from: day(-20), date_to: day(-10) });
+  });
+
+  it('takes a reply typed in the box as the pick when it names a range', async () => {
+    useModels([read(), READY], [text('Up 12%.')]);
+    const runId = await turn(ADMIN, 'Görünürlüğümüz nasıl?');
+    expect(await pick(ADMIN, runId, { other: 'son 90 gün', via: 'composer' })).toMatchObject({
+      ok: true,
+    });
+    expect(savedRange()).toBe('90d');
+    expect(readInput()).toMatchObject({ date_from: day(-89), date_to: day(0) });
+  });
+
+  it("offers the page's own range first in the side panel, so the numbers match the screen", async () => {
+    useModels([read(), READY], [text('Up 12%.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'Why did visibility drop?',
+      brandId: BRAND,
+      mode: 'auto',
+      origin: 'panel',
+      context: {
+        route: '/dashboard/insights',
+        chips: [
+          { key: 'page', label: 'Visibility' },
+          { key: 'dates', label: 'Last 7 days', value: '7d/' },
+        ],
+      },
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    expect((await cardsOf(started.runId))[0].options).toEqual([
+      { label: "This page's range: last 7 days", recommended: true },
+      { label: 'Last 24 hours', recommended: false },
+      { label: 'Last 30 days', recommended: false },
+      { label: 'Last 90 days', recommended: false },
+    ]);
+    expect(await pick(ADMIN, started.runId, { selected: [0] })).toMatchObject({ ok: true });
+    expect(savedRange()).toBe('7d');
+    expect(readInput()).toMatchObject({ date_from: day(-6), date_to: day(0) });
+
+    // A page's custom range is the first of five.
+    db.tables.chat_user_prefs = [];
+    useModels([read(), READY], [text('Up 12%.')]);
+    const custom = await engine.startChatRun(ADMIN, {
+      message: 'Why did visibility drop?',
+      brandId: BRAND,
+      origin: 'panel',
+      context: { chips: [{ key: 'dates', label: 'Custom', value: `${day(-14)}/${day(-1)}` }] },
+    });
+    if (!custom.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, custom.runId);
+    const options = (await cardsOf(custom.runId))[0].options;
+    expect(options).toHaveLength(5);
+    expect(options[0]).toMatchObject({ recommended: true });
+    expect(options[0].label).toMatch(/^This page's range: \w{3} \d+ – \w{3} \d+$/);
+    expect((asksOf(custom.runId)[0].options_json as unknown[])[0]).toMatchObject({
+      range: `${day(-14)}/${day(-1)}`,
+    });
+  });
+
+  it("doesn't take the page's range as dates: the reader is told the app sets the period", async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
+    const { haiku } = useModels([read(), READY], [text('Up 12%.')]);
+    const started = await engine.startChatRun(ADMIN, {
+      message: 'How are we doing?',
+      brandId: BRAND,
+      origin: 'panel',
+      context: { chips: [{ key: 'dates', label: 'Last 7 days', value: '7d/' }] },
+    });
+    if (!started.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, started.runId);
+    const seen = promptOf(haiku.seen[0]);
+    expect(seen).toContain('give dates only when the person');
+    expect(seen).toContain("except its date range: the app sets each read's period");
+    expect(readInput()).toMatchObject({ date_from: day(-29), date_to: day(0) });
+  });
+
+  it('changes the default at once on a short range, and answers the chat’s question again', async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
+    useModels([read(), READY], [text('Up 12%.')]);
+    const first = await engine.startChatRun(ADMIN, {
+      message: 'How is our visibility?',
+      brandId: BRAND,
+      mode: 'auto',
+    });
+    if (!first.ok) throw new Error('not started');
+    await engine.driveRun(ADMIN, first.runId);
+    expect(readInput()).toMatchObject({ date_from: day(-29) });
+
+    const { haiku, sonnet } = useModels([read(), READY], [text('Up 12%.')]);
+    const runId = await say(first.conversationId, 'son 7d');
+    expect(savedRange()).toBe('7d');
+    expect(await cardsOf(runId)).toEqual([]);
+    // No Help answer for it: it reads the earlier question again over the new range.
+    expect(stepsOf(runId)[0]).toMatchObject({ kind: 'read', detail: 'Last 7 days · 3 rows' });
+    expect(stepsOf(runId).map((s) => s.label)).not.toContain('Read Ansvisor Help');
+    expect(readInput()).toMatchObject({ date_from: day(-6), date_to: day(0) });
+    expect(promptOf(haiku.seen[0])).toContain('only changes their default date range');
+    expect(promptOf(sonnet.seen[0])).toContain(
+      'changes their default date range to the last 7 days; the app kept it',
+    );
+    expect(promptOf(sonnet.seen[0])).toContain('answer that question again over the new range');
+    expect(runRow(runId).status).toBe('done');
+
+    useModels([READY], [text('Done.')]);
+    await say(first.conversationId, 'varsayılanı 90d yap');
+    expect(savedRange()).toBe('90d');
+  });
+
+  it('sets the default from a short range before any is picked, with no card', async () => {
+    useModels([READY], [text('From now on I’ll use the last 24 hours by default.')]);
+    const runId = await turn(ADMIN, 'last 24h');
+    expect(savedRange()).toBe('24h');
+    expect(runRow(runId).status).toBe('done');
+    expect(await cardsOf(runId)).toEqual([]);
+  });
+
+  it('reads a period the question names for that answer only, and keeps the default', async () => {
+    db.tables.chat_user_prefs = [{ user_id: PEOPLE.admin, date_range: '30d' }];
+    const { sonnet } = useModels([read(), READY], [text('Up 12%.')]);
+    const runId = await turn(ADMIN, 'How did visibility change in the last 7 days?');
+    expect(readInput()).toMatchObject({ date_from: day(-6), date_to: day(0) });
+    expect(savedRange()).toBe('30d');
+    expect(promptOf(sonnet.seen[0])).not.toContain('default date range');
+    expect(runRow(runId).status).toBe('done');
+
+    // None picked yet: a named period still asks nothing, and keeps nothing.
+    db.tables.chat_user_prefs = [];
+    useModels([read(), READY], [text('Up 12%.')]);
+    const week = await turn(ADMIN, 'How was last week?');
+    expect(await cardsOf(week)).toEqual([]);
+    expect(readInput()).toMatchObject({ date_from: day(-6) });
+    expect(savedRange()).toBeNull();
+  });
+
+  it('asks nothing when the model gives the dates the person named', async () => {
+    useModels(
+      [
+        calls(
+          toolCall('r1', 'read_visibility', {
+            brand_id: BRAND,
+            date_from: day(-10),
+            date_to: day(-3),
+          }),
+        ),
+        READY,
+      ],
+      [text('Up 12%.')],
+    );
+    const runId = await turn(ADMIN, 'Visibility from the 1st to the 8th');
+    expect(await cardsOf(runId)).toEqual([]);
+    expect(readInput()).toMatchObject({ date_from: day(-10), date_to: day(-3) });
+    expect(savedRange()).toBeNull();
+  });
+
+  it('never asks for a question that reads no data, nor for all time', async () => {
+    useModels([READY], [text('I can read your brand’s data and make changes for you.')]);
+    const hello = await turn(ADMIN, 'Hi, what can you do?');
+    expect(runRow(hello).status).toBe('done');
+    expect(await cardsOf(hello)).toEqual([]);
+    // A how-to question is Help's answer, before anything is read.
+    useModels([READY], [text('Unused.')]);
+    const help = await turn(ADMIN, 'How do I add prompts?');
+    expect(await cardsOf(help)).toEqual([]);
+    useModels([read(), READY], [text('Up 12%.')]);
+    const all = await turn(ADMIN, 'How have we done since we started?');
+    expect(await cardsOf(all)).toEqual([]);
+    expect(readInput().date_from).toBeUndefined();
+    expect(savedRange()).toBeNull();
+  });
+
+  it('asks in a run on one model too, before the read it calls', async () => {
+    const one = scripted('deepseek-v4.1-flash', [read(), text('Up 12%.')]);
+    fakes.resolveModels.mockResolvedValue({
+      source: 'ansvisor',
+      provider: 'openrouter',
+      model: 'deepseek/deepseek-v4.1-flash',
+      keyFailing: false,
+      phases: 'single',
+      pick: () => ({
+        model: one.model,
+        budgetModel: 'deepseek/deepseek-v4.1-flash',
+        maxOutputTokens: 16_000,
+        providerOptions: {},
+        claude: false,
+      }),
+    });
+    const runId = await turn(ADMIN, 'How is our visibility?');
+    expect(runRow(runId).status).toBe('waiting');
+    expect(fakes.readRun).not.toHaveBeenCalled();
+    expect(await pick(ADMIN, runId, { selected: [3] })).toMatchObject({ ok: true });
+    expect(savedRange()).toBe('90d');
+    expect(readInput()).toMatchObject({ date_from: day(-89), date_to: day(0) });
+    expect(runRow(runId).status).toBe('done');
+  });
+
+  it('asks before a job in parts, whose parts then read the pick', async () => {
+    subtaskTests.on = true;
+    try {
+      const PARTS = [
+        { title: 'Competitor Bravo', instruction: "Read Bravo's citations." },
+        { title: 'Competitor Charlie', instruction: "Read Charlie's citations." },
+      ];
+      const partStep = (options: CallOptions) =>
+        simulateReadableStream({
+          chunks: [
+            { type: 'stream-start', warnings: [] },
+            ...(options.responseFormat?.type === 'json' ? READY : text('Cited on pricing pages.')),
+          ],
+        });
+      useModels(
+        [READY, partStep, partStep, partStep, partStep],
+        [calls(toolCall('w1', 'run_subtasks', { parts: PARTS })), text('Both are cited.')],
+      );
+      const runId = await turn(ADMIN, 'Compare my two competitors');
+      expect(runRow(runId).status).toBe('waiting');
+      expect(db.tables.chat_runs.filter((r) => r.parent_run_id === runId)).toEqual([]);
+      expect(await pick(ADMIN, runId, { selected: [1] })).toMatchObject({ ok: true });
+      const parts = db.tables.chat_runs.filter((r) => r.parent_run_id === runId);
+      expect(parts).toHaveLength(2);
+      for (const part of parts) {
+        const state = db.tables.chat_run_state.find((s) => s.run_id === part.id)!;
+        expect((state.progress as { range?: unknown }).range).toEqual({
+          range: '7d',
+          how: 'question',
+        });
+      }
+      expect(savedRange()).toBe('7d');
+      expect(runRow(runId).status).toBe('done');
+    } finally {
+      subtaskTests.on = false;
+    }
+  });
+
+  it("asks nobody in a job's run: it reads the app's 30 days and keeps nothing", async () => {
+    useModels([read(), READY], [text('Up 12%.')]);
+    const started = await engine.startChatRun(ADMIN, { message: 'Weekly check', brandId: BRAND });
+    if (!started.ok) throw new Error('not started');
+    scheduledRun(started, JOB);
+    await engine.driveRun(ADMIN, started.runId);
+    expect(runRow(started.runId).status).toBe('done');
+    expect(await cardsOf(started.runId)).toEqual([]);
+    expect(readInput()).toMatchObject({ date_from: day(-29), date_to: day(0) });
+    expect(savedRange()).toBeNull();
+  });
+
+  it('asks nothing, and reads 30 days, where the range can’t be kept', async () => {
+    db.failures = { chat_user_prefs: { message: 'column "date_range" does not exist' } };
+    useModels([read(), READY], [text('Up 12%.')]);
+    const runId = await turn(ADMIN, 'How is our visibility?');
+    expect(runRow(runId).status).toBe('done');
+    expect(await cardsOf(runId)).toEqual([]);
+    expect(readInput()).toMatchObject({ date_from: day(-29) });
   });
 });

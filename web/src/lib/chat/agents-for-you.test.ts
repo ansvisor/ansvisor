@@ -4,8 +4,7 @@ import { ONBOARDING_PRESET, RECOMMENDED_MAX, RECOMMENDED_MIN } from './agents/ca
 
 /**
  * "Agents for you" on Chat Home (AGENTS plan §8, #11's new member half):
- * when it shows (Your work areas answered or skipped, the first 14 days in
- * the workspace, until hidden), when the person joined, and which agents:
+ * when it shows (the first 14 days in the workspace, until hidden), when the person joined, and which agents:
  * Ready to use's own 3 to 5 for them.
  */
 
@@ -13,7 +12,6 @@ const NOW = Date.parse('2026-11-05T12:00:00Z');
 const daysAgo = (days: number) => new Date(NOW - days * 86_400_000).toISOString();
 const open = (over: Partial<Parameters<typeof agentsForYouOpen>[0]> = {}) =>
   agentsForYouOpen({
-    workAreasAskedAt: daysAgo(1),
     joinedAt: daysAgo(1),
     dismissedAt: null,
     now: NOW,
@@ -21,7 +19,7 @@ const open = (over: Partial<Parameters<typeof agentsForYouOpen>[0]> = {}) =>
   });
 
 describe('when Agents for you shows', () => {
-  it('shows once Your work areas is answered or skipped, in the first 14 days', () => {
+  it('shows in the first 14 days, with no question to answer first', () => {
     expect(AGENTS_FOR_YOU_DAYS).toBe(14);
     expect(open()).toBe(true);
     expect(open({ joinedAt: daysAgo(13.9) })).toBe(true);
@@ -29,8 +27,7 @@ describe('when Agents for you shows', () => {
     expect(open({ joinedAt: daysAgo(90) })).toBe(false);
   });
 
-  it('waits for Your work areas, and stays hidden once hidden', () => {
-    expect(open({ workAreasAskedAt: null })).toBe(false);
+  it('stays hidden once hidden', () => {
     expect(open({ dismissedAt: daysAgo(0.5) })).toBe(false);
   });
 

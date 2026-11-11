@@ -169,12 +169,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
     }
   }
 
-  // "What do you work on?", asked once (menu access): an invited person on
-  // their first visit, a self-hosted admin after onboarding.
-  if (!menu.workAreasAsked) {
-    redirect('/dashboard/welcome');
-  }
-
   const planId = toPlanId(org?.plan);
 
   // Effective API-model allowlist for the client (null = all allowed).
