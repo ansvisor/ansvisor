@@ -570,6 +570,12 @@
     "collapseRail": "Collapse the Ansvisor menu",
     "railTip": "Ansvisor · hover or click to expand"
   },
+  "menuDots": {
+    "newResults": "New results",
+    "needsYou": "Needs you",
+    "withDot": "{label}, {dot}",
+    "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
+  },
   "brandVisibility": {
     "title": "Visibility",
     "loading": "Loading…",
