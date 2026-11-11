@@ -4525,6 +4525,14 @@
       "toastCreated": "Sent to Action Center",
       "toastAdded": "Added to the action in Action Center"
     },
+    "scheduleMade": {
+      "label": "Recurring work set up",
+      "title": "Set up: {title}",
+      "note": "It runs by itself, in a chat of its own, where its results go. You'll find it in Action Center › Agents, made in Chat.",
+      "runNow": "Run it now",
+      "openAgents": "Open in Agents",
+      "change": "Change the schedule"
+    },
     "status": {
       "thinking": "Thinking…",
       "writing": "Writing the answer…",
@@ -7160,6 +7168,11 @@
       "askChat": "Ask Chat to make one",
       "askChatText": "Help me set up an agent for recurring work. Ask me what it should do and how often.",
       "askChatTip": "Opens Chat with this filled in. You read it and send it."
+    },
+    "madeInChat": {
+      "title": "Made in Chat",
+      "when": "{when} · made in Chat",
+      "lastRun": "Last run {date} · {status}"
     },
     "ready": {
       "filters": {

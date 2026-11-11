@@ -51,6 +51,9 @@ vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: vi.fn(async () => ({ ok: true, id: 'request-1' })),
 }));
 vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
+// Action Center › Agents' jobs made in Chat (SIMPLE_NAV), read with the Scheduled page's action.
+const schedules = vi.hoisted(() => ({ listChatSchedules: vi.fn(async () => ({ ok: false })) }));
+vi.mock('@/lib/actions/chat-schedules', () => schedules);
 
 const { AgentCenter } = await import('./agent-center');
 const { track } = await import('@/lib/analytics');
@@ -530,6 +533,55 @@ describe('Action Center › Agents (SIMPLE_NAV)', () => {
     await click(ask);
     expect(track).toHaveBeenCalledWith('agents_ask_chat_clicked');
     expect(action('agents.new')[0].getAttribute('href')).toBe('/dashboard/agents/new');
+  });
+
+  it('lists the recurring work made in Chat under Your agents, before Ready to use', async () => {
+    schedules.listChatSchedules.mockResolvedValueOnce({
+      ok: true,
+      jobs: [
+        {
+          id: 'a1111111-1111-4111-8111-111111111111',
+          kind: 'recurring',
+          title: 'Espresso watch',
+          skill: null,
+          prompt: 'Check my espresso prompts',
+          brand: null,
+          when: { kind: 'recurring', rrule: 'FREQ=WEEKLY;BYDAY=MO;BYHOUR=8;BYMINUTE=0' },
+          timezone: 'UTC',
+          nextRunAt: '2026-11-02T08:00:00.000Z',
+          dueAt: null,
+          enabled: true,
+          pausedReason: null,
+          deliver: 'chat',
+          external: [],
+          changeOnly: false,
+          mode: 'auto',
+          auto: false,
+          createdBy: null,
+          mine: true,
+          lastRun: null,
+          chatHref: null,
+          canManage: true,
+          canEdit: true,
+          canTakeOver: false,
+        },
+      ],
+      agents: [],
+      admin: false,
+      active: 1,
+      limit: 25,
+      canCreate: true,
+    } as never);
+    await render('manager', true);
+    const made = container.querySelector<HTMLElement>('[data-slot="chat-made-agents"]')!;
+    expect(made.closest('[data-slot="agent-center-yours"]')).not.toBeNull();
+    expect(made.querySelector('[data-slot="chat-made-when"]')?.textContent).toBe(
+      'Every Monday, 08:00 · made in Chat',
+    );
+    // Flag off: Agent Center doesn't read them.
+    schedules.listChatSchedules.mockClear();
+    await render('manager');
+    expect(schedules.listChatSchedules).not.toHaveBeenCalled();
   });
 
   it('gives readers the read-only line, and neither Ask Chat nor New agent', async () => {

@@ -59,6 +59,7 @@ describe('createSchedule', () => {
       next_run_at: '2026-10-19T06:00:00.000Z',
       deliver: 'Chat',
       ready_by: false,
+      recurring: true,
     });
     expect(jobs()).toHaveLength(1);
     expect(jobs()[0]).toMatchObject({
@@ -93,7 +94,12 @@ describe('createSchedule', () => {
       job({ when: 'Have it ready by Monday', deliver: 'both' }),
       NOW,
     );
-    expect(made).toMatchObject({ ok: true, ready_by: true, deliver: 'Chat + Email' });
+    expect(made).toMatchObject({
+      ok: true,
+      ready_by: true,
+      recurring: false,
+      deliver: 'Chat + Email',
+    });
     expect(jobs()[0]).toMatchObject({
       kind: 'once',
       run_mode: 'ready_by',

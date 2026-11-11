@@ -56,6 +56,7 @@ import {
 } from './composer/chat-composer';
 import { useUserRole } from '@/hooks/use-user-role';
 import { ActionSentCard } from './run/action-sent-card';
+import { ScheduleMadeCards } from './run/schedule-made-cards';
 import { ReadyByLine } from './run/ready-by-line';
 import { TaskStrip } from './run/task-strip';
 import { ProposalDetails } from './run/proposal-details';
@@ -146,6 +147,7 @@ function turnsOf(thread: ChatThread | null): Turn[] {
         steps: message.run.steps,
         deliverables: message.run.deliverables ?? [],
         sent: message.run.sent ?? [],
+        scheduled: message.run.scheduled ?? [],
         tasks: message.run.tasks ?? null,
         nextMoves: message.run.nextMoves ?? [],
         remember: message.run.remember ?? null,
@@ -1196,6 +1198,7 @@ function Answer({
       {run.sent.map((sent, i) => (
         <ActionSentCard key={`${sent.actionNo}-${i}`} sent={sent} />
       ))}
+      <ScheduleMadeCards cards={run.scheduled} />
       {run.status === 'paused_cap' && (
         <p className="text-sm text-amber-700 dark:text-amber-400">{t('pausedCap')}</p>
       )}
