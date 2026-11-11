@@ -44,7 +44,7 @@ export function useTodayRead<T>(
 }
 
 /** The parts a visit waits on before it counts as seen, with what each counted. */
-export type TodayVisitPart = 'since' | 'focus' | 'waiting';
+export type TodayVisitPart = 'since' | 'focus' | 'waiting' | 'prompts';
 
 export interface TodayVisit {
   /** The person's state on the brand: undefined while it reads, null when it couldn't be read. */
