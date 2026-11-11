@@ -8417,6 +8417,41 @@ export type Database = {
           },
         ]
       }
+      user_brand_state: {
+        Row: {
+          brand_id: string
+          focus: Json
+          hidden: Json
+          nav_seen: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          brand_id: string
+          focus?: Json
+          hidden?: Json
+          nav_seen?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          brand_id?: string
+          focus?: Json
+          hidden?: Json
+          nav_seen?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_brand_state_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       volume_usage: {
         Row: {
           action: string
