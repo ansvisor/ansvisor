@@ -187,6 +187,21 @@ describe('the run in the browser', () => {
     ]);
   });
 
+  it('keeps the recurring work it set up, each its card, apart from what it sent (SIMPLE_NAV)', () => {
+    const made = {
+      title: 'Espresso watch',
+      when: 'Every Monday, 08:00 · Europe/Istanbul',
+      href: '/dashboard/chat/scheduled/5c1e2d3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f' as const,
+    };
+    const run = applyChatEvent(
+      applyChatEvent(emptyRun(), chatEvent('schedule.made', 1, made)),
+      chatEvent('schedule.made', 2, { ...made, title: 'Weekly report' }),
+    );
+    expect(run.scheduled.map((s) => s.title)).toEqual(['Espresso watch', 'Weekly report']);
+    expect(run.sent).toEqual([]);
+    expect(emptyRun().scheduled).toEqual([]);
+  });
+
   it('keeps the task strip as the last tasks.updated says it (CHAT-09 §B)', () => {
     const row = {
       at: 1,

@@ -16,6 +16,7 @@ import { isDemoSelected } from '@/lib/demo/demo-brand';
 import { cn } from '@/lib/utils';
 import { useBrandStore } from '@/stores/use-brand-store';
 import { AgentsList } from './agents-list';
+import { ChatMadeAgents } from './chat-made-agents';
 import { useAgentWords } from './agent-words';
 import { ReadyAgents } from './ready-agents';
 
@@ -32,9 +33,10 @@ import { ReadyAgents } from './ready-agents';
  *
  * As Action Center › Agents (SIMPLE_NAV; mockup Agents.dc.html), under the
  * Action Center's header and tabs: no title or tabs of its own, Your agents
- * first and Ready to use under it, both on the page. Ask Chat to make one
- * opens Chat with its box filled (the person reads it and sends it); New
- * agent stays, beside it.
+ * first, with the recurring work made in Chat under its agents
+ * (chat-made-agents.tsx), and Ready to use under it, both on the page. Ask
+ * Chat to make one opens Chat with its box filled (the person reads it and
+ * sends it); New agent stays, beside it.
  */
 
 export function AgentCenter({
@@ -159,6 +161,8 @@ export function AgentCenter({
             {count}
           </h2>
           {yours}
+          {/* Recurring work made in Chat, as agents of its own kind (owner's decision, option A). */}
+          <ChatMadeAgents now={nowProp} />
         </section>
         <section aria-labelledby="agent-center-ready-title" data-slot="agent-center-ready">
           <h2 id="agent-center-ready-title" className="text-[17px] font-semibold">

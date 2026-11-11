@@ -215,6 +215,8 @@ export interface MadeSchedule {
   next_run_at: string | null;
   deliver: string;
   ready_by: boolean;
+  /** It runs on repeat ("Every Monday"), not once. */
+  recurring: boolean;
 }
 
 /** When a new job first runs: its first slot, its time, or now for ready by (it starts at once). */
@@ -292,6 +294,7 @@ export async function createSchedule(
     next_run_at: next,
     deliver: deliverWords(input.deliver),
     ready_by: when.kind === 'once' && when.runMode === 'ready_by',
+    recurring,
   };
 }
 
