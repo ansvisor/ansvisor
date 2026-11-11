@@ -16,6 +16,7 @@ import actionCenterRoutes from './action-center.js';
 import botRoutes from './bots.js';
 import billingRoutes from './billing.js';
 import brandFactRoutes from './brand-facts.js';
+import businessHubRoutes from './business-hub.js';
 import catalogRoutes from './catalog.js';
 import cmsRoutes from './cms.js';
 import cmsWordPressRoutes from './cms-wordpress.js';
@@ -47,6 +48,8 @@ router.use('/action-center', actionCenterRoutes);
 router.use('/bots', botRoutes);
 router.use('/billing', billingRoutes);
 router.use('/brand-facts', brandFactRoutes);
+// ChatGPT Business Hub numbers: not found unless the server's BUSINESS_HUB_ENABLED is on.
+router.use('/business-hub', businessHubRoutes);
 router.use('/catalog', catalogRoutes);
 router.use('/cms', cmsRoutes);
 router.use('/cms', cmsWordPressRoutes);
