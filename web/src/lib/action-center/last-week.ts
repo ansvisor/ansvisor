@@ -2,7 +2,7 @@ import { dayIn, nextDay, startOfDayIn } from '@/lib/time-zone';
 import { weekStart } from '@/lib/action-center/today';
 
 /**
- * Today on Mondays and after the plan ends (SIMPLE_NAV, simplification plan
+ * Today on Mondays and after the plan ends (simplification plan
  * PR 12). Pure: the week's days on the person's clock, and whether the
  * brand has a full week of runs to sum up.
  */

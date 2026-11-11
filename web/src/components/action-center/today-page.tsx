@@ -56,8 +56,7 @@ const VISIT_PARTS: Record<TodayMode, readonly TodayVisitPart[]> = {
 };
 
 /**
- * Action Center › Today (SIMPLE_NAV), the page everyone lands on with the
- * simplified layout on (mockup Main): the date, brand and when AI answers
+ * Action Center › Today, the page everyone lands on (mockup Main): the date, brand and when AI answers
  * last came in, with how many changes and things wait; the loop strip; then
  * Since yesterday and Today's focus, with Waiting for you, Finish setting
  * up and Where you stand beside them; and Ask Chat at the bottom. A brand's

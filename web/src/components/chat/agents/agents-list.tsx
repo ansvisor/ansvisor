@@ -13,7 +13,6 @@ import { useTranslations } from 'next-intl';
 import { AgentAvatar } from '@/components/agentic/agent-avatar';
 import { ListDot } from '@/components/agentic/list-dot';
 import { RoleContext } from '@/components/providers/role-provider';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { Button } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -46,13 +45,13 @@ import { useAgentActions } from './use-agent-actions';
  * scope, last run, the last 30 days' outcomes and its AI use as a share of
  * the monthly limit with a thin bar. Each card's Run now and Pause / Resume
  * are the ones the server's `can` gives the row. Analysts and Agency
- * partners read, and start on Workspace. As Action Center › Agents
- * (SIMPLE_NAV), a card's first button opens its run in Chat (runInChatOf).
+ * partners read, and start on Workspace. A card's first button opens its
+ * run in Chat (runInChatOf).
  */
 
 /**
  * The run a card's main button opens in Chat, as Action Center › Agents
- * shows it (SIMPLE_NAV): "Open the run in Chat" while it runs, "Review in
+ * shows it: "Open the run in Chat" while it runs, "Review in
  * Chat" while it waits on someone, "Open the last run" otherwise. None
  * without a chat the person can open (lastRun.chatId).
  */
@@ -136,8 +135,8 @@ function AgentCard({
   const can = agent.can;
   const live = liveRunOf(agent);
   const href = `/dashboard/agents/${agent.id}`;
-  // Action Center › Agents (SIMPLE_NAV): the card's main button opens its run in Chat.
-  const inChat = useSimpleNav() ? runInChatOf(agent) : null;
+  // The card's main button opens its run in Chat.
+  const inChat = runInChatOf(agent);
   const next = words.nextRun(agent.triggers);
   const outcomes = words.outcomes(agent.outcomes30d);
   const cell = (label: string, value: ReactNode, slot: string) => (

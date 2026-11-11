@@ -57,7 +57,6 @@ vi.mock('@/components/providers/ai-usage-provider', () => ({
 }));
 
 const { ChatMenuView } = await import('./chat-menu');
-const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 const { ChatShell } = await import('./chat-shell');
 const { useChatCrumb } = await import('./chat-crumb');
 const { AgentsSeen } = await import('./agents/agents-seen');
@@ -183,9 +182,9 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openSettings')[0].textContent).toBe('Settings');
     expect(action('chatMenu.openInbox')[0].getAttribute('href')).toBe('/dashboard/chat/inbox');
     expect(action('chatMenu.openFiles')[0].getAttribute('href')).toBe('/dashboard/chat/files');
-    // Agent Center, out of Chat, with "New" until it is first opened (governance mockup #cnav).
+    // Action Center › Agents, out of Chat, with "New" until it is first opened (governance mockup #cnav).
     expect(action('chatMenu.openAgents')[0].getAttribute('href')).toBe('/dashboard/agents');
-    expect(action('chatMenu.openAgents')[0].textContent).toBe('Agent CenterNew');
+    expect(action('chatMenu.openAgents')[0].textContent).toBe('AgentsNewin Action Center');
     // Skills (W3-07).
     expect(action('chatMenu.openSkills')[0].getAttribute('href')).toBe('/dashboard/chat/skills');
     // Scheduled (W3-03), with no count while no job is on.
@@ -381,12 +380,12 @@ describe('ChatMenuView', () => {
     expect(action('chatMenu.openChat')).toHaveLength(4);
   });
 
-  it('names Agent Center "Agents · in Action Center" with the simplified layout on, and keeps Agents at work (SIMPLE_NAV)', async () => {
+  it('names Agents "Agents · in Action Center", and keeps Agents at work', async () => {
     const chats = [
       chat('a', { state: 'needsYou', progress: { done: 3, total: 6 } }),
       chat('b', { state: 'running' }),
     ];
-    await render(<SimpleNavProvider enabled>{menu(chats)}</SimpleNavProvider>);
+    await render(menu(chats));
     const agents = action('chatMenu.openAgents')[0];
     // The same page, its New pill until it is first opened, and where it is now.
     expect(agents.getAttribute('href')).toBe('/dashboard/agents');
@@ -395,10 +394,6 @@ describe('ChatMenuView', () => {
     expect(agents.querySelector('[data-slot="agents-where"] svg')).not.toBeNull();
     expect(text()).toContain('Agents at work2');
     expect(text()).toContain('Needs your OK · step 4 of 6');
-    // Off: as it was.
-    await render(menu(chats));
-    expect(action('chatMenu.openAgents')[0].textContent).toBe('Agent CenterNew');
-    expect(action('chatMenu.openAgents')[0].hasAttribute('aria-label')).toBe(false);
   });
 
   it("leaves a teammate's shared chat out of the Inbox: it waits on its author", async () => {
@@ -622,7 +617,7 @@ describe('ChatShell', () => {
     expect(host.querySelector('header h1')?.textContent).toBe('Settings');
   });
 
-  it('leads to Agent Center out of Chat, and drops its New once Agent Center was opened', async () => {
+  it('leads to Agents out of Chat, and drops its New once Agents was opened', async () => {
     // A browser's storage, where the pill's "seen" is kept.
     const kept = new Map<string, string>();
     vi.stubGlobal('localStorage', {
@@ -637,7 +632,7 @@ describe('ChatShell', () => {
       host.querySelector<HTMLAnchorElement>('#chat-menu [data-action="chatMenu.openAgents"]')!;
     expect(item().getAttribute('href')).toBe('/dashboard/agents');
     expect(item().getAttribute('aria-current')).toBeNull();
-    expect(item().textContent).toBe('Agent CenterNew');
+    expect(item().textContent).toBe('AgentsNewin Action Center');
     // Its pages have no Chat header: the shell names none of them.
     expect(host.querySelector('header nav')?.textContent).toBe('Chat›Inbox');
 
@@ -649,7 +644,7 @@ describe('ChatShell', () => {
     root = createRoot(host);
     nav.pathname = '/dashboard/chat/all';
     await render(<ChatShell menuOpen>{<p>page</p>}</ChatShell>);
-    expect(item().textContent).toBe('Agent Center');
+    expect(item().textContent).toBe('Agentsin Action Center');
     vi.unstubAllGlobals();
   });
 

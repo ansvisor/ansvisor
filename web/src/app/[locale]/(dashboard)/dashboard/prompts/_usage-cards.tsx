@@ -31,11 +31,11 @@ export const NEW_PROMPT_MS = 24 * 60 * 60 * 1000;
 /**
  * A row's Status: paused, new (tracked and added within the last day),
  * active, or waiting for a spot (saved past the plan's limit, not tracked;
- * SIMPLE_NAV, 00535).
+ * 00535).
  */
 export type PromptStatus = 'active' | 'new' | 'paused' | 'waiting';
 
-/** What a row's Status is read from. `waitingSince` is set only with SIMPLE_NAV on. */
+/** What a row's Status is read from. `waitingSince` is set while it waits for a spot. */
 type StatusFields = { isActive: boolean; createdAt: string; waitingSince?: string | null };
 
 /**

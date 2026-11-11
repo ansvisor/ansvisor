@@ -4,7 +4,7 @@ import { shouldShowDashboardNavItem, visibleNavChildren } from '@/lib/dashboard-
 import type { NavArea } from '@/lib/user-brand-state';
 
 /**
- * The simplified menu's dots (SIMPLE_NAV; Sadeleştirme PR 13, the owner's
+ * The menu's dots (Sadeleştirme PR 13, the owner's
  * decisions of 2026-11-11). Green, "New results": the night's tracking ran
  * since the person last opened the page. Yellow, "Needs you": something new
  * waits for someone who can act on it. Each clears when its page is opened

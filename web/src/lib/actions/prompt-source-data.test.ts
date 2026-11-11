@@ -133,9 +133,8 @@ describe('addPromptToSet and where a prompt came from', () => {
     expect(inserts).toHaveLength(1);
   });
 
-  it('is refused at the plan’s limit like any other prompt, writing nothing', async () => {
+  it('waits for a spot at the plan’s limit like any other prompt', async () => {
     locationsUsed = PLANS.growth.limits.maxPrompts;
-    expect(await add(fromProduct)).toMatchObject({ code: 'plan_limit' });
-    expect(inserts).toEqual([]);
+    expect(await add(fromProduct)).toMatchObject({ waiting: true });
   });
 });

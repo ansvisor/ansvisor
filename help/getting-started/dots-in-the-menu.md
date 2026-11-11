@@ -8,10 +8,10 @@ updated: 2026-11-11
 last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
-approved: false
+approved: true
 sources: [docs/guides/menu-access.mdx, docs/guides/action-center.mdx]
 ---
-Small dots in the main menu show where something is new since you last opened a page. They are part of the simplified menu, an internal preview that is not on for customers yet.
+Small dots in the main menu show where something is new since you last opened a page.
 
 ## Green: New results
 

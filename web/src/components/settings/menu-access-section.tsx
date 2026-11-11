@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { dashboardNav, simpleDashboardNav, type NavGroup } from '@/config/dashboard';
+import { dashboardNav } from '@/config/dashboard';
 import { getDashboardNavGroupLabel, getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import {
   ALWAYS_ON_SECTION,
@@ -38,23 +38,18 @@ import {
   type MenuRole,
 } from '@/lib/actions/menu-access';
 import { useCanManageMenus, useMenuSections } from '@/components/providers/menu-access-provider';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { MenuManagersCard, MenuPeopleCard } from '@/components/settings/menu-access-people';
 
 const MENU_ROLES: MenuRole[] = ['manager', 'analyst', 'agency_partner'];
 
-/** A menu's sections, by its groups, as the role table lists them. */
-const groupsOf = (nav: NavGroup[]) =>
-  nav.map((group) => ({
-    title: group.title,
-    items: menuSectionEntries(group.items),
-  }));
-const GROUPS = groupsOf(dashboardNav);
 /**
- * The simplified menu's (SIMPLE_NAV): Agents right under the Action Center,
- * named "Agents · in Action Center", and More for Execution.
+ * The menu's sections, by its groups, as the role table lists them: Agents
+ * right under the Action Center, named "Agents · in Action Center".
  */
-const SIMPLE_GROUPS = groupsOf(simpleDashboardNav);
+const GROUPS = dashboardNav.map((group) => ({
+  title: group.title,
+  items: menuSectionEntries(group.items),
+}));
 
 /** What a ready-made set hides: every section it doesn't name; none for Everything. */
 export function hiddenForSet(set: string): string[] {
@@ -87,9 +82,9 @@ function MenuAccessSettingsView() {
   const t = useTranslations('settings.menuAccess');
   const tSettings = useTranslations('settings');
   const tNav = useTranslations('nav');
-  // The rows: the sections the workspace has (Agent Center only with the new Chat on).
+  // The rows: the sections the workspace has (Agents only with the new Chat on).
   const sections = useMenuSections();
-  const groups = (useSimpleNav() ? SIMPLE_GROUPS : GROUPS).map((group) => ({
+  const groups = GROUPS.map((group) => ({
     ...group,
     items: group.items.filter((item) => sections.includes(item.section)),
   }));

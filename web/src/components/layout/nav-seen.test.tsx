@@ -18,7 +18,6 @@ vi.mock('@/i18n/navigation', () => ({ usePathname: () => nav.pathname }));
 vi.mock('@/lib/actions/user-brand-state', () => ({ markSeen }));
 
 const { NavSeen } = await import('./nav-seen');
-const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 const { useMenuStateStore } = await import('@/stores/use-menu-state-store');
 
@@ -35,14 +34,8 @@ beforeEach(() => {
 });
 afterEach(() => act(() => root.unmount()));
 
-async function render(simpleNav = true) {
-  await act(async () =>
-    root.render(
-      <SimpleNavProvider enabled={simpleNav}>
-        <NavSeen />
-      </SimpleNavProvider>,
-    ),
-  );
+async function render() {
+  await act(async () => root.render(<NavSeen />));
 }
 
 describe('NavSeen', () => {
@@ -82,8 +75,7 @@ describe('NavSeen', () => {
     expect(markSeen).toHaveBeenLastCalledWith(other, 'mentions');
   });
 
-  it('writes nothing without SIMPLE_NAV, or before a brand is chosen', async () => {
-    await render(false);
+  it('writes nothing before a brand is chosen', async () => {
     await act(async () => useBrandStore.setState({ activeBrandId: null }));
     await render();
     expect(markSeen).not.toHaveBeenCalled();

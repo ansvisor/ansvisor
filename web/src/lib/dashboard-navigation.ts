@@ -9,7 +9,6 @@ type Translator = (key: string) => string;
  * mobile menus from silently falling out of sync. */
 export const dashboardNavLabelKeys: Record<string, string> = {
   Chat: 'chat',
-  'Agent Center': 'agentCenter',
   'Action Center': 'actionCenter',
   Visibility: 'insights',
   Overview: 'overview',
@@ -34,21 +33,19 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   // Products' section where menu access lists the sections.
   'Product Visibility': 'shopping',
   Reports: 'reports',
-  // The Action Center's entries in the simplified menu (SIMPLE_NAV).
+  // The Action Center's entries.
   Today: 'today',
   Actions: 'actions',
   Signals: 'signals',
   Agents: 'agents',
   History: 'history',
-  // Agents' section where menu access lists the sections, in the simplified menu.
+  // Agents' section where menu access lists the sections.
   'Agents · in Action Center': 'agentsInActionCenter',
 };
 
 /** Map from the static group title string in dashboard.ts to its nav key. */
 export const dashboardNavGroupKeys: Record<string, string> = {
-  Execution: 'execution',
   Analytics: 'analytics',
-  // The simplified menu's (SIMPLE_NAV).
   More: 'more',
 };
 

@@ -28,7 +28,7 @@ type Load =
   | { promptId: string; status: 'failed' };
 
 /**
- * The Prompt-limit dialog (mockup Prompt-limit, SIMPLE_NAV): a prompt that
+ * The Prompt-limit dialog (mockup Prompt-limit): a prompt that
  * waits for a spot (or a paused one that doesn't fit back), the plan's
  * numbers, and the tracked prompts the person could pause for it, the
  * least useful first, this brand's before the workspace's other brands'.

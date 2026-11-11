@@ -302,7 +302,7 @@ export async function dismissSuggestions(
 export type AcceptSuggestionResult =
   | {
       promptId: string;
-      /** Saved waiting for a spot, not tracked (SIMPLE_NAV: the plan was full). */
+      /** Saved waiting for a spot, not tracked (the plan was full). */
       waiting?: true;
     }
   | { error: string; code?: PromptAddFailureCode };
@@ -479,8 +479,7 @@ export interface TrackSuggestionsResult {
   trackedIds: string[];
   /**
    * The ones among trackedIds saved waiting for a spot, not tracked: the
-   * plan's prompt locations were full (SIMPLE_NAV; without it the run stops
-   * there with `plan_limit`). Absent when none waits.
+   * plan's prompt locations were full. Absent when none waits.
    */
   waitingIds?: string[];
   /** Already accepted or dismissed elsewhere: skipped, nothing to track. */
@@ -502,8 +501,8 @@ const MAX_TRACK_AT_ONCE = 25;
  * on its own through addPromptToSet, so each passes the same plan check as a
  * single Track, and the run stops at the first one that fails: the plan's
  * prompt locations are full, or the rest can't be added either. Suggestions
- * already accepted or dismissed elsewhere are skipped, not a failure. With
- * SIMPLE_NAV a full plan isn't a failure: the rest are saved waiting for a
+ * already accepted or dismissed elsewhere are skipped, not a failure. A full
+ * plan isn't a failure: the rest are saved waiting for a
  * spot (waitingIds).
  */
 export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSuggestionsResult> {
@@ -577,7 +576,7 @@ export interface TrackPagePromptsResult {
   promptIds: string[];
   /**
    * The ones among promptIds saved waiting for a spot, not tracked
-   * (SIMPLE_NAV: the plan's prompt locations were full). Absent when none.
+   * (the plan's prompt locations were full). Absent when none.
    */
   waitingIds?: string[];
   /**
@@ -601,7 +600,7 @@ const MAX_PAGE_PROMPTS = 10;
  * cites the page; a target that can't be saved leaves the prompt tracked.
  * Their first answers come with the next tracking run. A brand with no topic
  * yet gets `no_topics` before any topic is made for it: the person adds one.
- * With SIMPLE_NAV, the prompts past the plan's limit are saved waiting for a
+ * The prompts past the plan's limit are saved waiting for a
  * spot (waitingIds), their page target kept for when they are tracked.
  */
 export async function trackPagePrompts(

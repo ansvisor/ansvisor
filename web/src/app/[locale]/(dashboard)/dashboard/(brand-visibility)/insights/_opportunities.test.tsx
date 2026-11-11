@@ -66,7 +66,6 @@ describe('Opportunities — estimated volume (PROMPT-013)', () => {
             trackedTopicIds={[]}
             topics={null}
             entities={null}
-            slotsLeft={null}
             contentUsage={null}
             onTracked={() => {}}
           />
@@ -95,7 +94,6 @@ describe("Opportunities' Track and Suggest content by role", () => {
             trackedTopicIds={[]}
             topics={null}
             entities={null}
-            slotsLeft={null}
             contentUsage={null}
             onTracked={() => {}}
           />
@@ -147,7 +145,6 @@ describe('Opportunities on a read-only workspace (plan not active)', () => {
               trackedTopicIds={[]}
               topics={null}
               entities={null}
-              slotsLeft={null}
               contentUsage={null}
               onTracked={() => {}}
             />
@@ -209,7 +206,6 @@ describe('Opportunities on a brand without topics', () => {
             trackedTopicIds={[]}
             topics={null}
             entities={null}
-            slotsLeft={null}
             contentUsage={null}
             onTracked={() => {}}
           />

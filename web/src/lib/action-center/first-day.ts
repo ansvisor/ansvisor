@@ -1,7 +1,7 @@
 import { ALL_SCRAPERS } from '@/config/prompt-options';
 
 /**
- * Today on a brand's first day (SIMPLE_NAV, simplification plan PR 11):
+ * Today on a brand's first day (simplification plan PR 11):
  * before its first tracking run is stamped, Today asks the person to check
  * the prompts tracked for them while the first answers come in. Pure: the
  * server action reads, this words what it read.

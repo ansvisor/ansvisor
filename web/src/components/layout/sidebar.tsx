@@ -8,7 +8,7 @@ import { useSearchParams } from 'next/navigation';
 import { usePathname, Link } from '@/i18n/navigation';
 import { getTrackedPromptCount } from '@/lib/actions/prompt';
 import { carriedParams, PROMPTS_BASE } from '@/lib/prompts-routes';
-import { dashboardNav, navFor, simpleDashboardNav, type NavGroup } from '@/config/dashboard';
+import { dashboardNav, type NavGroup } from '@/config/dashboard';
 import { saveChatRailOpen } from '@/lib/actions/chat-prefs';
 import {
   activeChildHref,
@@ -26,7 +26,6 @@ import { brandVisibilityTabOf, isEcommerceBrand } from '@/lib/brand-visibility';
 import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAdsEnabled } from '@/components/providers/ads-provider';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { useSidebarStore } from '@/stores/use-sidebar-store';
 import { useChatRailStore } from '@/stores/use-chat-rail-store';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -88,22 +87,16 @@ const NAV_VIEWPORT =
 const NAV_SCROLLBAR =
   'data-vertical:w-2 opacity-0 transition-opacity duration-300 data-hovering:opacity-100 data-scrolling:opacity-100 data-scrolling:duration-75 [&>[data-slot=scroll-area-thumb]]:bg-muted-foreground/25 [&>[data-slot=scroll-area-thumb]:hover]:bg-muted-foreground/45';
 
-/**
- * Both menus while the simplified one is built (SIMPLE_NAV): the choices
- * stored for either load, whichever is shown.
- */
-const MENUS = [dashboardNav, simpleDashboardNav];
-
-/** A menu's items that open a submenu (Brand Visibility, Prompts, Content; the Action Center in the simplified one). */
+/** A menu's items that open a submenu (the Action Center, Prompts, Brand Visibility, Content). */
 function expandableItemsOf(nav: NavGroup[]) {
   return nav.flatMap((group) => group.items.filter((item) => item.children?.length));
 }
-const EXPANDABLE_HREFS = [...new Set(MENUS.flatMap(expandableItemsOf).map((item) => item.href))];
+const EXPANDABLE_HREFS = expandableItemsOf(dashboardNav).map((item) => item.href);
 
 /**
  * Where a submenu's open/closed state is remembered, per item: Prompts keeps
  * its key from PROMPT-001 (ansvisor.sidebar.promptsOpen), Content gets
- * ansvisor.sidebar.contentOpen, the simplified menu's Action Center
+ * ansvisor.sidebar.contentOpen, the Action Center
  * ansvisor.sidebar.action-centerOpen.
  */
 function submenuKey(href: string) {
@@ -112,17 +105,14 @@ function submenuKey(href: string) {
 
 /**
  * Where a titled group's open/closed state is remembered:
- * ansvisor.sidebar.group.executionOpen; the simplified menu's More,
- * ansvisor.sidebar.group.moreOpen.
+ * ansvisor.sidebar.group.analyticsOpen, ansvisor.sidebar.group.moreOpen.
  */
 function groupKey(title: string) {
   return `ansvisor.sidebar.group.${title.toLowerCase()}Open`;
 }
 
-/** The titled groups (Execution, Analytics; More in the simplified menu), which fold under their title. */
-const GROUP_TITLES = [
-  ...new Set(MENUS.flatMap((nav) => nav.flatMap((group) => (group.title ? [group.title] : [])))),
-];
+/** The titled groups (Analytics, More), which fold under their title. */
+const GROUP_TITLES = dashboardNav.flatMap((group) => (group.title ? [group.title] : []));
 
 /**
  * Arrow keys in the sidebar's links (PROMPT-001): up and down move between
@@ -171,8 +161,7 @@ export function Sidebar() {
   // person expanded it with the logo, a choice kept on them for every device
   // (CHAT-01 item 4f); elsewhere it keeps its own pinned state.
   const chatAgentic = useChatAgentic();
-  // The menu shown: the simplified one with SIMPLE_NAV on, as it is built.
-  const nav = navFor(useSimpleNav());
+  const nav = dashboardNav;
   const onChat =
     chatAgentic && (pathname === CHAT_AGENTIC_HREF || pathname.startsWith(`${CHAT_AGENTIC_HREF}/`));
   const railOpen = useChatRailStore((s) => s.open);
@@ -235,7 +224,7 @@ export function Sidebar() {
       ),
     }))
     .filter((group) => group.items.length > 0);
-  // The simplified menu's dots and Action Center count (SIMPLE_NAV); off, none.
+  // The menu's dots and the Action Center's count.
   const dots = useMenuDots(nav, compact);
   const dotLabel = useDotLabel();
   const { resolvedTheme } = useTheme();

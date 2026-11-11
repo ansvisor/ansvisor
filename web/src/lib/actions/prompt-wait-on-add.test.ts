@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FakeSupabase } from '@/lib/chat/testing/fake-supabase';
 
 /**
- * Prompts added over the plan's limit (Simplify PR 15): with SIMPLE_NAV on,
- * every add path saves the ones past the limit "Waiting for a spot"
- * (inactive, waiting_since set; 00535) instead of refusing them, and says
- * how many wait. Off, a full plan is refused as before. The limit is the
+ * Prompts added over the plan's limit (Simplify PR 15): every add path
+ * saves the ones past the limit "Waiting for a spot" (inactive,
+ * waiting_since set; 00535) instead of refusing them, and says how many
+ * wait. The limit is the
  * organization's, across its brands, counted in prompt locations.
  */
 
@@ -144,7 +144,6 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllEnvs());
 
-const simpleNav = () => vi.stubEnv('SIMPLE_NAV', 'true');
 const add = () =>
   addPromptToSet({
     promptSetId: 'set-1',
@@ -157,7 +156,6 @@ const added = () => prompts().find((p) => p.text === 'best crm');
 describe('addPromptToSet (Add prompt, suggestions, Track N, traffic, page prompts)', () => {
   it('tracks the prompt while the plan has room', async () => {
     prompts().push(tracked('set-1'), tracked('set-1'));
-    simpleNav();
 
     const result = await add();
 
@@ -166,16 +164,8 @@ describe('addPromptToSet (Add prompt, suggestions, Track N, traffic, page prompt
     expect(added()?.waiting_since).toBeUndefined();
   });
 
-  it('without SIMPLE_NAV, refuses it at the limit and saves nothing', async () => {
+  it('saves it waiting for a spot at the limit', async () => {
     prompts().push(tracked('set-1'), tracked('set-1'), tracked('set-1'));
-
-    expect(await add()).toMatchObject({ code: 'plan_limit' });
-    expect(added()).toBeUndefined();
-  });
-
-  it('with SIMPLE_NAV, saves it waiting for a spot at the limit', async () => {
-    prompts().push(tracked('set-1'), tracked('set-1'), tracked('set-1'));
-    simpleNav();
 
     const result = await add();
 
@@ -186,14 +176,12 @@ describe('addPromptToSet (Add prompt, suggestions, Track N, traffic, page prompt
   it('counts multi-location prompts once per location', async () => {
     // One prompt in three places fills a plan of three.
     prompts().push(tracked('set-1', ['US', 'DE', 'TR']));
-    simpleNav();
 
     expect(await add()).toMatchObject({ waiting: true });
   });
 
   it('counts the whole organization: a second brand waits once the first used the plan', async () => {
     prompts().push(tracked('set-2'), tracked('set-2'), tracked('set-2'));
-    simpleNav();
 
     expect(await add()).toMatchObject({ waiting: true });
   });
@@ -201,7 +189,6 @@ describe('addPromptToSet (Add prompt, suggestions, Track N, traffic, page prompt
   it('never makes a prompt wait on an unlimited plan', async () => {
     fake.maxPrompts = -1;
     prompts().push(tracked('set-2'), tracked('set-1'), tracked('set-1'), tracked('set-1'));
-    simpleNav();
 
     expect(await add()).toEqual({ prompt: expect.objectContaining({ isActive: true }) });
   });
@@ -227,17 +214,9 @@ describe('savePromptSet (onboarding, a new brand)', () => {
     });
   const byText = (text: string) => prompts().find((p) => p.text === text);
 
-  it('without SIMPLE_NAV, refuses the whole save past the limit', async () => {
-    prompts().push(tracked('set-1'));
-
-    expect(await save(3)).toMatchObject({ code: 'plan_limit' });
-    expect(byText('prompt 1')).toBeUndefined();
-  });
-
-  it('with SIMPLE_NAV, tracks the ones that fit and keeps the rest waiting, in order', async () => {
+  it('tracks the ones that fit and keeps the rest waiting, in order', async () => {
     // The first brand already uses one of the organization's three locations.
     prompts().push(tracked('set-1'));
-    simpleNav();
 
     const result = await save(4, 1);
 
@@ -258,8 +237,6 @@ describe('savePromptSet (onboarding, a new brand)', () => {
   });
 
   it('says nothing waits when every prompt fits', async () => {
-    simpleNav();
-
     const result = await save(3);
 
     expect(result).toHaveProperty('promptSet');
@@ -278,16 +255,7 @@ describe('importPrompts (Add prompt dialog, Bulk import)', () => {
       regions: r,
     }));
 
-  it('without SIMPLE_NAV, skips the rows past the limit', async () => {
-    const result = await importPrompts(BRAND, rows([['US'], ['US'], ['US'], ['US']]));
-
-    expect(fake.overLimit).toEqual(['skip']);
-    expect(result).toMatchObject({ importedIdx: [0, 1, 2] });
-    expect(result).not.toHaveProperty('waitingIdx');
-  });
-
-  it('with SIMPLE_NAV, saves them waiting and starts the first run for the tracked ones only', async () => {
-    simpleNav();
+  it('saves them waiting and starts the first run for the tracked ones only', async () => {
     // The second brand holds one location; a two-location row then doesn't fit.
     prompts().push(tracked('set-2'));
 
@@ -301,9 +269,8 @@ describe('importPrompts (Add prompt dialog, Bulk import)', () => {
 });
 
 describe('addTopicPrompts (Chat add_prompts)', () => {
-  it('with SIMPLE_NAV, returns the added and the waiting ones apart', async () => {
+  it('returns the added and the waiting ones apart', async () => {
     prompts().push(tracked('set-2'));
-    simpleNav();
 
     const result = await addTopicPrompts(BRAND, TOPIC, ['one', 'two', 'three']);
 
@@ -320,9 +287,8 @@ describe('addTopicPrompts (Chat add_prompts)', () => {
     });
   });
 
-  it('with SIMPLE_NAV, a full plan saves them all waiting instead of refusing', async () => {
+  it('a full plan saves them all waiting instead of refusing', async () => {
     prompts().push(tracked('set-2'), tracked('set-2'), tracked('set-2'));
-    simpleNav();
 
     const result = await addTopicPrompts(BRAND, TOPIC, ['one', 'two']);
 
@@ -330,15 +296,6 @@ describe('addTopicPrompts (Chat add_prompts)', () => {
       ok: true,
       added: [],
       waiting: [{ text: 'one' }, { text: 'two' }],
-    });
-  });
-
-  it('without SIMPLE_NAV, a full plan is refused as before', async () => {
-    prompts().push(tracked('set-2'), tracked('set-2'), tracked('set-2'));
-
-    expect(await addTopicPrompts(BRAND, TOPIC, ['one'])).toMatchObject({
-      ok: false,
-      reason: 'quota_exceeded',
     });
   });
 });

@@ -1,23 +1,23 @@
 ---
-title: See and run your agents in Agent Center
+title: See and run your agents in Action Center › Agents
 route: /dashboard/agents
 keywords: [agents, agent center, chat agents, ready to use, ready-to-use agents, use this agent, your agents, new agent, create agent, edit agent, delete agent, run now, pause agent, resume agent, archive agent, agent ai use, by agent, top agent, ai use by agent, agent runs, triggers, max per run, schedule, signal trigger, needs you, stopped at its limit, run agent on an action, agent connections, required connection, agent skills, follow-on skills, library skills in an agent, buyer questions, rival brief, listing gaps, site audit fixes, business type, for your role, for your site type, agent packs, e-commerce agents, b2b agents, b2c agents, mobile app agents, ceo brief, publish on its own, go live on its own, daily limit, went live notice, can call, run another agent, called by, sub-agents, agent calls agent, send to webhook, what this agent did, agent impact, changes shipped by an agent, agent results, onboarding, onboarding & help, onboarding agent, help agent, setup guide, /setup, recommended agents, which agents should i use, fan-out gap filler, fan-out gaps, prompt portfolio manager, prompts to add, prompts to pause, when a brand is added, brand added, new brand trigger, goal, role, filter agents, agent work, i approve first, agent starts on its own]
 synonyms: [my agents, saved agents, automations, scheduled agents, agent templates, ready-made agents, agent gallery, agent history, what does this agent cost, make an agent, change an agent, remove an agent, publish without a click, agent sends to cms, agent runs an agent, chain agents, helper agent, agents for me, agent recommendations, setup help, new member setup, what did my agent do, did my agent work, run an agent on a new brand, agent for new brands]
 plan: all
-updated: 2026-11-07
-last_checked: 2026-11-07
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json, web/src/config/dashboard.ts, web/src/lib/chat/agent-rules.ts, web/src/lib/chat/agent-form.ts, web/src/lib/chat/agent-triggers.ts, web/src/lib/chat/agent-driver.ts, web/src/lib/chat/agent-skills.ts, web/src/lib/chat/agent-connections.ts, web/src/lib/chat/agents/catalog.ts, web/src/lib/content/page-types.ts, web/src/lib/menu-access.ts, web/src/lib/chat/agent-go-live.ts, web/src/lib/chat/go-live.ts, web/src/lib/chat/precedence.ts, web/src/lib/chat/agent-calls.ts, web/src/lib/chat/agent-impact.ts, web/src/lib/chat/untrusted.ts, web/src/lib/chat/key.ts, skills/setup/SKILL.md, web/src/lib/mcp/ready-agents.ts, web/src/lib/actions/brand.ts, web/src/lib/billing/ai-usage-agents.ts]
 ---
-An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, when a brand is added, or when someone clicks **Run now**. **Agent Center** offers ready-to-use agents and lists every agent you can see, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
+An agent is a saved skill, mode, connections and model that runs in Chat again and again: on a schedule, when Action Center finds a signal, when a KPI changes, when a brand is added, or when someone clicks **Run now**. **Agents**, a tab of the **Action Center** (formerly Agent Center), lists every agent you can see and offers ready-to-use agents, and each agent has its own page with its triggers, its runs and how much of your monthly AI limit it uses.
 
-## Open Agent Center
+## Open Agents
 
-Click **Agent Center** on the left menu, right under **Chat**. It has a page of its own, outside Chat. It is also in the chat menu, under **Inbox**, where it shows **New** until you first open Agent Center. You can also press Ctrl K (⌘K on a Mac) in Chat and type "Agent Center". Old links to Agents in Chat open Agent Center.
+Click **Agents** under **Action Center** on the left menu. It is also in the chat menu, under **Inbox**, as **Agents · in Action Center**, with **New** until you first open it. Old links to Agent Center still open it.
 
-It has two tabs: **Ready to use**, which opens first, and **Your agents**. In **Your agents**, the filters above the list show how many agents each holds:
+**Your agents** comes first, with **Ready to use** under it. **Ask Chat to make one** opens Chat with a request filled in for you to send; **New agent** opens the form. In **Your agents**, the filters above the list show how many agents each holds:
 
 - **Mine**: the agents you own.
 - **Workspace**: the agents shared with everyone in your workspace. Admins also see their teammates' private agents here.
@@ -45,7 +45,7 @@ Agents made for the site type of the brand you have open are marked **For your s
 
 ## Onboarding & Help
 
-**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**). It starts on **All brands** with **When a brand is added**: once it's on, each brand someone adds gets one run, which acts as the agent's owner and shows in their Inbox. You can also click **Run now** on its page. Each run says how many **Getting started** steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help.
+**Onboarding & Help** gets a new brand or a new teammate going. Its skill is **Setup guide** (**/setup**). It starts on **All brands** with **When a brand is added**: once it's on, each brand someone adds gets one run, which acts as the agent's owner and shows in their Inbox. You can also click **Run now** on its page. Each run says how many set-up steps are done, lists the open ones with a link to each page, then recommends 3 to 5 ready-to-use agents for the brand's site type and your work areas, each linked to its card in **Ready to use**. It never turns an agent on: you click **Use this agent**, then **Turn on**. It runs on **Ask me first**, so it asks before every change, such as adding competitors. Ask it how to do something in Ansvisor, and Chat answers from Help.
 
 ## Prompt Portfolio Manager
 
@@ -63,6 +63,10 @@ In **Your agents**, each agent has a card with:
 - **AI use · 30 days**: its share of your monthly AI limit, with a thin bar. Hover over it to see its runs, the average share a run and its cap a run.
 
 Usage is always shown as a share of your monthly AI limit.
+
+## Runs open in Chat
+
+Each card's first button opens its run in Chat: **Open the run in Chat** while it runs, **Review in Chat** when it waits for your OK, and **Open the last run** otherwise. Recurring work you set up in Chat is listed under your agents too, marked as made in Chat.
 
 ## An agent's page
 
@@ -103,7 +107,7 @@ The demo brand's sample agents show their runs, but running or changing one open
 
 ## Create an agent
 
-Admins and Managers click **New agent** in **Agent Center**. Four steps open, with a summary of the agent on the right:
+Admins and Managers click **New agent** on **Agents**. Four steps open, with a summary of the agent on the right:
 
 1. **Skill**: pick what it does, add up to 2 follow-on skills, and write instructions if you like.
 2. **Trigger**: add up to 5, such as **Schedule** or **Signal created**. Each shows its next run or when it fires. **Manual** is always on: **Run now**. Next to **FOR**, pick its brands, and narrow it to platforms, topics, prompt tags or URLs.
@@ -209,4 +213,4 @@ Analysts and Agency partners see agents but can't create, run or change them. Ag
 
 When your workspace runs on its own AI key and the key fails (the provider turns it down, the account is out of credit, or the key can't reach its model), a run ends **Stopped · AI key not working**. An agent a trigger started pauses with **Your AI key isn't working**. These runs don't count toward 3 failed runs in a row.
 
-While the key fails, Agent Center says so at the top, and **Run now**, **Run agent**, **Turn on** and **Resume** are refused before anything starts. Admins get **Fix in AI Providers**; others read that an Admin can fix it there.
+While the key fails, **Agents** says so at the top, and **Run now**, **Run agent**, **Turn on** and **Resume** are refused before anything starts. Admins get **Fix in AI Providers**; others read that an Admin can fix it there.

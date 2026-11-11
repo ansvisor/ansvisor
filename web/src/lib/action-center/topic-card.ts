@@ -1,7 +1,7 @@
 import { isCardHidden, topicKey } from '@/lib/user-brand-state';
 
 /**
- * "New area to track" on Action Center › Today (SIMPLE_NAV, simplification
+ * "New area to track" on Action Center › Today (simplification
  * plan PR 17): one topic the brand doesn't track yet, when stored data makes
  * a strong case for it. Pure: the server action reads, this picks.
  *

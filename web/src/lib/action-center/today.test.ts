@@ -1,21 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { ActionItem } from '@/lib/actions/action-center';
-import type { GettingStartedStep } from '@/lib/getting-started/steps';
-import {
-  TODAY_STEPS,
-  firstOpenTask,
-  nextSteps,
-  patchToday,
-  todayAction,
-  todayRows,
-  todayStep,
-  weekStart,
-  whoDoesIt,
-  type TodayRead,
-  type TodayTaskRow,
-} from './today';
+import { firstOpenTask, todayStep, weekStart, whoDoesIt, type TodayTaskRow } from './today';
 
-/** The Today card's helpers (AC-011): first step, who does it, the week, the rows. */
+/** Today's helpers: first step, who does it, the week. */
 
 function task(position: number, overrides: Partial<TodayTaskRow> = {}): TodayTaskRow {
   return {
@@ -27,30 +13,6 @@ function task(position: number, overrides: Partial<TodayTaskRow> = {}): TodayTas
     status: 'todo',
     mode: 'human',
     url: null,
-    ...overrides,
-  };
-}
-
-function action(id: string, overrides: Partial<ActionItem> = {}): ActionItem {
-  return {
-    id,
-    actionNo: 1,
-    category: 'growth',
-    kind: 'recover_lost_citations',
-    impact: 'high',
-    status: 'new',
-    payload: {},
-    kpiKeys: [],
-    assignee: null,
-    dueDate: null,
-    createdAt: '2026-10-16T09:05:31Z',
-    updatedAt: '2026-10-16T09:05:31Z',
-    taskTotal: 1,
-    taskCompleted: 0,
-    signalCount: 1,
-    priorityScore: 80,
-    priorityLevel: 'high',
-    priorityReason: null,
     ...overrides,
   };
 }
@@ -123,84 +85,5 @@ describe('weekStart', () => {
     expect(weekStart(new Date('2026-11-08T16:00:00Z'), 'Asia/Tokyo')).toBe(
       '2026-11-08T15:00:00.000Z',
     );
-  });
-});
-
-describe('todayRows', () => {
-  const item = (id: string, overrides: Partial<ActionItem> = {}) => ({
-    id,
-    action: action(id, overrides),
-  });
-
-  it('keeps the server’s order and leaves out what closed or went on hold since', () => {
-    const actions = [
-      action('a'),
-      action('b', { status: 'completed' }),
-      action('c', { status: 'in_progress' }),
-      action('d', { status: 'on_hold' }),
-      action('e', { status: 'dismissed' }),
-    ];
-    const rows = todayRows([item('c'), item('b'), item('a'), item('d'), item('e')], actions);
-    expect(rows.map((row) => row.action.id)).toEqual(['c', 'a']);
-  });
-
-  it('shows an item the page’s list doesn’t hold from its own action', () => {
-    // The list holds at most 1000 actions, in no order: Today's may not be among them.
-    const rows = todayRows(
-      [item('far', { priorityScore: 97 }), item('a'), item('gone', { status: 'completed' })],
-      [action('a', { priorityScore: 60 })],
-    );
-    expect(rows.map((row) => [row.action.id, row.action.priorityScore])).toEqual([
-      ['far', 97],
-      ['a', 60],
-    ]);
-  });
-
-  it('takes the list’s copy when it holds one, as a change made on the page shows there first', () => {
-    const rows = todayRows([item('a'), item('b')], [action('a', { status: 'on_hold' })]);
-    expect(rows.map((row) => row.action.id)).toEqual(['b']);
-  });
-});
-
-describe('todayAction and patchToday', () => {
-  const read: TodayRead = {
-    today: [{ id: 'a', action: action('a'), suggested: false, firstStep: null, who: 'team' }],
-    next: [{ id: 'b', action: action('b') }],
-    doneThisWeek: 0,
-  };
-
-  it('finds an item’s own action, today’s or the Next ones’', () => {
-    expect(todayAction(read, 'a')?.id).toBe('a');
-    expect(todayAction(read, 'b')?.id).toBe('b');
-    expect(todayAction(read, 'other')).toBeNull();
-    expect(todayAction(read, null)).toBeNull();
-    expect(todayAction(null, 'a')).toBeNull();
-  });
-
-  it('shows a change made on the page on that item’s own action only', () => {
-    const patched = patchToday(read, 'b', { status: 'completed' });
-    expect(patched.next[0].action.status).toBe('completed');
-    expect(patched.today[0]).toBe(read.today[0]);
-    expect(read.next[0].action.status).toBe('new');
-    expect(patchToday(read, 'other', { status: 'completed' })).toBe(read);
-  });
-});
-
-describe('nextSteps', () => {
-  const step = (key: string, state: GettingStartedStep['state']) =>
-    ({ key, state }) as unknown as GettingStartedStep;
-
-  it('is the first three steps ready now, in order', () => {
-    const steps = [
-      step('kpis', 'done'),
-      step('competitors', 'new'),
-      step('topics', 'waiting'),
-      step('prompts', 'new'),
-      step('gsc', 'skipped'),
-      step('ga', 'new'),
-      step('snippet', 'new'),
-    ];
-    expect(TODAY_STEPS).toBe(3);
-    expect(nextSteps(steps).map((s) => s.key)).toEqual(['competitors', 'prompts', 'ga']);
   });
 });

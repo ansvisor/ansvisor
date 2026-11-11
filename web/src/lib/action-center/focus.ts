@@ -1,7 +1,7 @@
 import type { FocusPin } from '@/lib/user-brand-state';
 
 /**
- * Today's focus (SIMPLE_NAV, simplification plan PR 7): the 3 actions a
+ * Today's focus (simplification plan PR 7): the 3 actions a
  * person works on, on Action Center › Today.
  *
  * The ranking is the server's (GET /api/action-center/today), shared with

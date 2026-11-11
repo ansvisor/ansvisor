@@ -262,7 +262,7 @@ export default function PromptsPage() {
       const defaultModels = allowedModelIds;
 
       let targetSetId = promptSets[0]?.id;
-      // Saved waiting for a spot (SIMPLE_NAV: the plan's locations were full).
+      // Saved waiting for a spot (the plan's locations were full).
       let waiting = 0;
 
       if (!targetSetId) {

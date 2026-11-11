@@ -15,13 +15,12 @@ import {
 } from '@/lib/prompt-locations';
 import { rankPauseCandidates, type PauseCandidate } from '@/lib/prompt-swap';
 import { isManager } from '@/lib/session-role';
-import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import { assertWritable } from '@/lib/subscription-guard';
 import type { VolumeEstimate } from '@/lib/volume-estimate';
 import type { Prompt } from '@/types';
 
 /**
- * "Waiting for a spot" made room for (Simplify PR 16, behind SIMPLE_NAV;
+ * "Waiting for a spot" made room for (Simplify PR 16;
  * 00535): what the Prompt-limit dialog shows, and its one-click swap. A
  * waiting prompt never starts by itself when a spot frees up (the owner's
  * decision, 2026-11-11): the person picks it here.
@@ -248,7 +247,6 @@ export type SwapResult =
  */
 export async function swapPrompts(waitingId: string, pauseIds: string[]): Promise<SwapResult> {
   await assertWritable();
-  if (!simpleNavEnabled()) return { ok: false, code: 'not_allowed', error: 'Not available' };
   const ids = [...new Set(Array.isArray(pauseIds) ? pauseIds : [])];
   if (typeof waitingId !== 'string' || ids.includes(waitingId) || ids.length > MAX_PAUSE) {
     return { ok: false, code: 'not_found', error: 'Prompt not found' };

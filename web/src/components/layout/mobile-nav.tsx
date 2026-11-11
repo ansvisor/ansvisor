@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { usePathname, Link } from '@/i18n/navigation';
-import { navFor } from '@/config/dashboard';
+import { dashboardNav } from '@/config/dashboard';
 import { BrandSwitcher } from '@/components/layout/brand-switcher';
 import {
   activeChildHref,
@@ -19,7 +19,6 @@ import { brandVisibilityTabOf, isEcommerceBrand } from '@/lib/brand-visibility';
 import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAdsEnabled } from '@/components/providers/ads-provider';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { NewPill } from '@/components/agentic/new-pill';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
@@ -52,8 +51,7 @@ export function MobileNav() {
   const chatAgentic = useChatAgentic();
   // Ads only with Ads on (ADS_ENABLED), as the sidebar has it.
   const ads = useAdsEnabled();
-  // The menu shown: the simplified one with SIMPLE_NAV on, as the sidebar has it.
-  const nav = navFor(useSimpleNav());
+  const nav = dashboardNav;
   // Probe once per session — shares the module-level cache with sidebar.tsx
   // so at most one network request is made even when both components mount.
   // None with the new Chat on: that one runs on the plan's AI limit.
@@ -65,7 +63,7 @@ export function MobileNav() {
   const brandPrefs = { ecommerce: isEcommerceBrand(activeBrand) };
   const childGates = { brandPrefs, canUse, chatAgentic };
   const hiddenSections = useHiddenMenuSections();
-  // The simplified menu's dots and Action Center count (SIMPLE_NAV), as the sidebar shows them.
+  // The menu's dots and the Action Center's count, as the sidebar shows them.
   const dots = useMenuDots(nav);
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -225,8 +223,8 @@ export function MobileNav() {
                   </Link>
                 );
                 if (children.length === 0) return link;
-                // A submenu (Brand Visibility, Prompts, Content; the Action
-                // Center in the simplified menu), always shown on mobile.
+                // A submenu (the Action Center, Prompts, Brand Visibility,
+                // Content), always shown on mobile.
                 const currentChild = activeChildHref(children, pathname);
                 return (
                   <div key={item.href}>

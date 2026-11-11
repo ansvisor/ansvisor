@@ -142,7 +142,6 @@ vi.mock('@/lib/actions/brand', () => ({
 }));
 
 const { default: DashboardLayout } = await import('./layout');
-const { useSimpleNav } = await import('@/components/providers/simple-nav-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -309,23 +308,6 @@ describe('the dashboard layout', () => {
     // The panel's own code (thread, composer, runs) isn't part of the layout's.
     expect(panel.codeLoaded).toBe(false);
     expect(container.querySelector('[data-action="panel.open"]')).toBeNull();
-  });
-
-  it('hands the page the simplified layout’s switch: off unless SIMPLE_NAV is "true"', async () => {
-    function Probe() {
-      return <i data-simple-nav={String(useSimpleNav())} />;
-    }
-    const simpleNav = () =>
-      container.querySelector('[data-simple-nav]')?.getAttribute('data-simple-nav');
-    vi.stubEnv('SIMPLE_NAV', undefined);
-    expect(await open(<Probe />)).toBeNull();
-    expect(simpleNav()).toBe('false');
-    vi.stubEnv('SIMPLE_NAV', 'yes');
-    expect(await open(<Probe />)).toBeNull();
-    expect(simpleNav()).toBe('false');
-    vi.stubEnv('SIMPLE_NAV', 'true');
-    expect(await open(<Probe />)).toBeNull();
-    expect(simpleNav()).toBe('true');
   });
 
   it('never locks self-hosted', async () => {

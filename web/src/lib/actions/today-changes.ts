@@ -18,7 +18,7 @@ export interface TodayChanges {
 }
 
 /**
- * "Since yesterday" on Action Center › Today (SIMPLE_NAV): the brand's open
+ * "Since yesterday" on Action Center › Today: the brand's open
  * signals (new or acknowledged) found or found again since the person's
  * last visit or the latest nightly run's start, whichever is earlier, at
  * most a week back (lib/action-center/since.ts). `hidden` is the person's

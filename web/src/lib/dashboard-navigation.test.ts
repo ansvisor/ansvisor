@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { Bot, Megaphone, Sparkles, Target } from 'lucide-react';
+import { Bot, Megaphone, Target } from 'lucide-react';
 import messages from '../../messages/en.json';
-import { dashboardNav, navFor, simpleDashboardNav } from '@/config/dashboard';
+import { dashboardNav } from '@/config/dashboard';
 import {
   activeChildHref,
   CHAT_AGENTIC_HREF,
@@ -20,8 +20,8 @@ import {
 const translateNav = (key: string) => `nav.${key}`;
 
 describe('getDashboardNavLabel', () => {
-  it('maps every dashboard item through an i18n key, in both menus (SIMPLE_NAV)', () => {
-    const titles = [...dashboardNav, ...simpleDashboardNav].flatMap((group) =>
+  it('maps every dashboard item through an i18n key', () => {
+    const titles = dashboardNav.flatMap((group) =>
       group.items.flatMap((item) => [
         item.title,
         ...(item.children ?? []).flatMap((c) => [
@@ -95,21 +95,6 @@ describe('shouldShowDashboardNavItem', () => {
     expect(shouldShowDashboardNavItem(content, prefs, new Set(['audit']))).toBe(true);
   });
 
-  it('shows Agent Center only with the new Chat on, and not when the viewer’s menu hides it', () => {
-    const items = dashboardNav.flatMap((group) => group.items);
-    const agentCenter = items.find((item) => item.href === '/dashboard/agents')!;
-    const chat = items.find((item) => item.href === CHAT_HREF)!;
-    const prefs = { ecommerce: false };
-
-    expect(shouldShowDashboardNavItem(agentCenter, prefs)).toBe(false);
-    expect(shouldShowDashboardNavItem(agentCenter, prefs, new Set(), false)).toBe(false);
-    expect(shouldShowDashboardNavItem(agentCenter, prefs, new Set(), true)).toBe(true);
-    expect(shouldShowDashboardNavItem(agentCenter, prefs, new Set(['agents']), true)).toBe(false);
-    // Chat stays either way: its old page answers while the new Chat is off.
-    expect(shouldShowDashboardNavItem(chat, prefs, new Set(), false)).toBe(true);
-    expect(shouldShowDashboardNavItem(chat, prefs, new Set(['agents']), true)).toBe(true);
-  });
-
   it('shows Ads only with Ads on, and not when the viewer’s menu hides it', () => {
     const items = dashboardNav.flatMap((group) => group.items);
     const ads = items.find((item) => item.href === '/dashboard/ads')!;
@@ -143,10 +128,10 @@ describe('shouldShowDashboardNavItem', () => {
 describe('the Ads item', () => {
   const analytics = dashboardNav.find((group) => group.title === 'Analytics')!.items;
 
-  it('closes Analytics, right after AI Referral Traffic, before the Reports group', () => {
+  it('closes Analytics, right after AI Referral Traffic, before More', () => {
     expect(analytics.map((item) => item.title)).toEqual([
-      'Visibility',
       'Prompts',
+      'Visibility',
       'AI Referral Traffic',
       'Ads',
     ]);
@@ -291,10 +276,10 @@ describe('the Competitors item', () => {
   const reports = dashboardNav[dashboardNav.length - 1].items;
   const index = (title: string) => analytics.findIndex((item) => item.title === title);
 
-  it('sits right under Reports, gated by competitor tracking, with no badge', () => {
+  it('sits right under Reports in More, gated by competitor tracking, with no badge', () => {
     expect(index('Competitors')).toBe(-1);
-    expect(reports.map((item) => item.title)).toEqual(['Reports', 'Competitors']);
-    const item = reports[1];
+    expect(reports.map((item) => item.title).slice(-2)).toEqual(['Reports', 'Competitors']);
+    const item = reports.at(-1)!;
     expect(item).toMatchObject({
       href: '/dashboard/competitors',
       requiredFeature: 'competitor_tracking',
@@ -303,8 +288,8 @@ describe('the Competitors item', () => {
     expect(item.children).toBeUndefined();
   });
 
-  it('leaves Prompts right under Visibility', () => {
-    expect(index('Prompts')).toBe(index('Visibility') + 1);
+  it('puts Prompts first, right above Visibility', () => {
+    expect(index('Visibility')).toBe(index('Prompts') + 1);
   });
 
   it('reads Competitors from the nav namespace', () => {
@@ -313,53 +298,10 @@ describe('the Competitors item', () => {
   });
 });
 
-// New Ansvisor: Chat and Agent Center on their own above the groups, then
-// Execution (do the work) above Analytics (measure it); the Optimization
-// group is gone, its items moved under Execution.
 describe('the sidebar groups', () => {
-  // Analytics before Execution (owner, 2026-11-09): the data first, then the work.
-  it('runs Chat and Agent Center, Analytics, Execution, then Reports', () => {
-    expect(dashboardNav.map((group) => group.title ?? null)).toEqual([
-      null,
-      'Analytics',
-      'Execution',
-      null,
-    ]);
-    expect(dashboardNav[0].items.map((item) => item.href)).toEqual([
-      '/dashboard/agent',
-      '/dashboard/agents',
-    ]);
-    expect(dashboardNav[3].items.map((item) => item.title)).toEqual(['Reports', 'Competitors']);
-  });
-
-  // Was Chat › Agents (/dashboard/chat/agents, which redirects there).
-  it('puts Agent Center right under Chat, gated as Chat is, with the new Chat on only', () => {
-    const [chat, agentCenter] = dashboardNav[0].items;
-    expect(chat).toMatchObject({ title: 'Chat', icon: Sparkles, requiredFeature: 'ai_agent' });
-    expect(agentCenter).toEqual({
-      title: 'Agent Center',
-      href: '/dashboard/agents',
-      icon: Bot,
-      requiredFeature: chat.requiredFeature,
-      requiresChatAgentic: true,
-    });
-    expect(chat.requiresChatAgentic).toBeUndefined();
-    expect(getDashboardNavLabel('Agent Center', translateNav)).toBe('nav.agentCenter');
-    expect(messages.nav.agentCenter).toBe('Agent Center');
-  });
-
   it('leaves the brands page to the brand switcher', () => {
     const hrefs = dashboardNav.flatMap((group) => group.items.map((item) => item.href));
     expect(hrefs).not.toContain('/dashboard/brands');
-  });
-
-  it('puts Action Center, Content and Audit under Execution, in that order', () => {
-    const execution = dashboardNav.find((group) => group.title === 'Execution')!;
-    expect(execution.items.map((item) => item.href)).toEqual([
-      '/dashboard/action-center',
-      '/dashboard/content',
-      '/dashboard/audit',
-    ]);
   });
 
   it('translates every group title', () => {
@@ -489,20 +431,11 @@ describe('navItemHref', () => {
  * 2026-11-11, every item but the Action Center reused from dashboardNav.
  */
 describe('the simplified menu', () => {
-  const tabs = simpleDashboardNav[0].items[1].children ?? [];
-
-  it('is the menu only with SIMPLE_NAV on: dashboardNav otherwise', () => {
-    expect(navFor(false)).toBe(dashboardNav);
-    expect(navFor(true)).toBe(simpleDashboardNav);
-  });
+  const tabs = dashboardNav[0].items[1].children ?? [];
 
   it('runs Chat and the Action Center, ANALYTICS, then MORE', () => {
-    expect(simpleDashboardNav.map((group) => group.title ?? null)).toEqual([
-      null,
-      'Analytics',
-      'More',
-    ]);
-    expect(simpleDashboardNav.map((group) => group.items.map((item) => item.href))).toEqual([
+    expect(dashboardNav.map((group) => group.title ?? null)).toEqual([null, 'Analytics', 'More']);
+    expect(dashboardNav.map((group) => group.items.map((item) => item.href))).toEqual([
       ['/dashboard/agent', '/dashboard/action-center'],
       ['/dashboard/prompts', '/dashboard/insights', '/dashboard/traffic', '/dashboard/ads'],
       ['/dashboard/content', '/dashboard/audit', '/dashboard/reports', '/dashboard/competitors'],
@@ -510,7 +443,7 @@ describe('the simplified menu', () => {
   });
 
   it('opens the Action Center on Today, Actions, Signals, Agents and History', () => {
-    const actionCenter = simpleDashboardNav[0].items[1];
+    const actionCenter = dashboardNav[0].items[1];
     expect(actionCenter).toMatchObject({ title: 'Action Center', icon: Target });
     expect(actionCenter.requiredFeature).toBeUndefined();
     expect(tabs.map((tab) => [tab.title, tab.href])).toEqual([
@@ -529,22 +462,22 @@ describe('the simplified menu', () => {
       requiredFeature: 'ai_agent',
       requiresChatAgentic: true,
     });
-    const hrefs = simpleDashboardNav.flatMap((group) => group.items.map((item) => item.href));
+    const hrefs = dashboardNav.flatMap((group) => group.items.map((item) => item.href));
     expect(hrefs).not.toContain('/dashboard/agents');
   });
 
   it('reuses every other item as it is, Ads with its flag and New pill', () => {
     const classic = dashboardNav.flatMap((group) => group.items);
-    for (const item of simpleDashboardNav.flatMap((group) => group.items)) {
+    for (const item of dashboardNav.flatMap((group) => group.items)) {
       if (item.href === '/dashboard/action-center') continue;
       expect(classic).toContain(item);
     }
-    const ads = simpleDashboardNav[1].items.at(-1)!;
+    const ads = dashboardNav[1].items.at(-1)!;
     expect(ads).toMatchObject({ href: '/dashboard/ads', requiresAds: true, newPill: true });
   });
 
   it('shows Agents only with the new Chat on, a plan with agents and its section on the menu', () => {
-    const actionCenter = simpleDashboardNav[0].items[1];
+    const actionCenter = dashboardNav[0].items[1];
     const shown = (gates: { chatAgentic?: boolean; agents?: boolean }, hidden: string[] = []) =>
       visibleNavChildren(actionCenter, new Set(hidden), {
         brandPrefs: { ecommerce: false },
@@ -576,7 +509,7 @@ describe('the simplified menu', () => {
   });
 
   it('keeps the Action Center on every menu: its tabs are its own section', () => {
-    const actionCenter = simpleDashboardNav[0].items[1];
+    const actionCenter = dashboardNav[0].items[1];
     expect(
       shouldShowDashboardNavItem(
         actionCenter,
@@ -589,7 +522,7 @@ describe('the simplified menu', () => {
   });
 
   it('is current on the Action Center’s pages and on Agents’', () => {
-    const actionCenter = simpleDashboardNav[0].items[1];
+    const actionCenter = dashboardNav[0].items[1];
     expect(isNavItemActive(actionCenter, '/dashboard/action-center/today')).toBe(true);
     expect(isNavItemActive(actionCenter, '/dashboard/agents/abc')).toBe(true);
     expect(activeChildHref(tabs, '/dashboard/agents/abc/edit')).toBe('/dashboard/agents');

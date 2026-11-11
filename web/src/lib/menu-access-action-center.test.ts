@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { simpleDashboardNav } from '@/config/dashboard';
+import { dashboardNav } from '@/config/dashboard';
 import { visibleNavChildren } from '@/lib/dashboard-navigation';
 import {
   ALWAYS_ON_SECTION,
   CHAT_AGENTIC_SECTIONS,
   MENU_SECTIONS,
-  SIMPLE_MENU_SECTIONS,
   WORK_AREAS,
   hiddenMenuSections,
   menuOfProfile,
@@ -14,14 +13,14 @@ import {
 } from './menu-access';
 
 /**
- * Menu access with the simplified menu (SIMPLE_NAV): the same sections by
+ * Menu access with the menu of 2026-11-11: the same sections by
  * the same names, so menus saved for roles, people and work areas keep
  * working with no data change; Agent Center's section, `agents`, is Action
  * Center › Agents there, and the Action Center (Today, Actions, Signals,
  * History) stays on every menu.
  */
 
-const actionCenter = simpleDashboardNav[0].items[1];
+const actionCenter = dashboardNav[0].items[1];
 const tabsShown = (hidden: Iterable<string>) =>
   visibleNavChildren(actionCenter, new Set(hidden), {
     brandPrefs: { ecommerce: false },
@@ -29,10 +28,9 @@ const tabsShown = (hidden: Iterable<string>) =>
     chatAgentic: true,
   }).map((tab) => tab.title);
 
-describe('the simplified menu’s sections', () => {
+describe('the menu’s sections', () => {
   it('are the menu’s sections, none added or renamed, in its order', () => {
-    expect([...SIMPLE_MENU_SECTIONS].sort()).toEqual([...MENU_SECTIONS].sort());
-    expect(SIMPLE_MENU_SECTIONS).toEqual([
+    expect(MENU_SECTIONS).toEqual([
       'agent',
       'action-center',
       'agents',
@@ -51,7 +49,7 @@ describe('the simplified menu’s sections', () => {
   });
 
   it('name Agents’ section agents, under the Action Center', () => {
-    const entries = menuSectionEntries(simpleDashboardNav.flatMap((group) => group.items));
+    const entries = menuSectionEntries(dashboardNav.flatMap((group) => group.items));
     expect(entries.find((entry) => entry.section === 'agents')?.title).toBe(
       'Agents · in Action Center',
     );
@@ -60,19 +58,15 @@ describe('the simplified menu’s sections', () => {
     );
   });
 
-  it('have Agents only with the new Chat on, from either menu', () => {
+  it('have Agents only with the new Chat on', () => {
     expect(CHAT_AGENTIC_SECTIONS).toEqual(['agents']);
-    expect(menuSectionsFor(false, false, true)).not.toContain('agents');
-    expect(menuSectionsFor(true, false, true)).toContain('agents');
-    expect(menuSectionsFor(true, false, true).indexOf('agents')).toBe(2);
+    expect(menuSectionsFor(false, false)).not.toContain('agents');
+    expect(menuSectionsFor(true, false)).toContain('agents');
+    expect(menuSectionsFor(true, false).indexOf('agents')).toBe(2);
     // Ads only with Ads on, last of Analytics.
-    expect(menuSectionsFor(true, false, true)).not.toContain('ads');
-    expect(menuSectionsFor(true, true, true).indexOf('ads')).toBe(
-      menuSectionsFor(true, true, true).indexOf('traffic') + 1,
-    );
-    // The same set either way; only the order is the menu's.
-    expect([...menuSectionsFor(true, true, true)].sort()).toEqual(
-      [...menuSectionsFor(true, true)].sort(),
+    expect(menuSectionsFor(true, false)).not.toContain('ads');
+    expect(menuSectionsFor(true, true).indexOf('ads')).toBe(
+      menuSectionsFor(true, true).indexOf('traffic') + 1,
     );
     expect(menuSectionsFor(true, true)).toEqual(MENU_SECTIONS);
   });
@@ -82,7 +76,7 @@ describe('menus saved before', () => {
   it('hide Agents in the Action Center where a role hid Agent Center', () => {
     const hidden = hiddenMenuSections(
       { role: 'analyst', roleHidden: ['agents'], shown: [], hidden: [], workAreas: [] },
-      menuSectionsFor(true, false, true),
+      menuSectionsFor(true, false),
     );
     expect([...hidden]).toEqual(['agents']);
     expect(tabsShown(hidden)).toEqual(['Today', 'Actions', 'Signals', 'History']);
@@ -97,7 +91,7 @@ describe('menus saved before', () => {
       menu_hidden: ['agents'],
       can_manage_menus: false,
     };
-    const sections = menuSectionsFor(true, false, true);
+    const sections = menuSectionsFor(true, false);
     expect(menuOfProfile(profile, [], sections).hidden).toEqual(['agents']);
     expect(
       menuOfProfile({ ...profile, menu_hidden: [], menu_shown: ['agents'] }, ['agents'], sections)
@@ -114,7 +108,7 @@ describe('menus saved before', () => {
         hidden: [ALWAYS_ON_SECTION],
         workAreas: ['developers'],
       },
-      menuSectionsFor(true, false, true),
+      menuSectionsFor(true, false),
     );
     expect(hidden.has(ALWAYS_ON_SECTION)).toBe(false);
     expect(tabsShown(hidden)).toEqual(['Today', 'Actions', 'Signals', 'History']);

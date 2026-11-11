@@ -72,11 +72,7 @@ const onAccepted = vi.fn();
 let isLocked = false;
 const openUpgrade = vi.fn();
 
-async function render(
-  count: number,
-  planId: 'starter' | 'growth' = 'starter',
-  onAddTopic?: () => void,
-) {
+async function render(count: number, onAddTopic?: () => void) {
   actions.getPromptSuggestions.mockResolvedValue({
     ok: true,
     suggestions: Array.from({ length: count }, (_, i) => suggestion(i + 1)),
@@ -93,7 +89,6 @@ async function render(
             onAccepted={onAccepted}
             onAddTopic={onAddTopic}
             sourceStates={null}
-            planId={planId}
             limitActions={<button type="button">Upgrade plan</button>}
           />
         </UpgradeDialogContext.Provider>
@@ -164,65 +159,6 @@ describe('SuggestionsCard — Add All', () => {
     expect(actions.trackSuggestions.mock.calls).toEqual([[ids(1, 25)], [ids(26, 30)]]);
     expect(rows()).toHaveLength(0);
     expect(toast.success).toHaveBeenCalledWith('30 prompts added to your tracked list');
-  });
-
-  it('keeps the rest and says how to make room when the plan limit is reached', async () => {
-    await render(25);
-    actions.trackSuggestions.mockResolvedValue({
-      trackedIds: ids(1, 10),
-      skippedIds: [],
-      error: 'Your Starter plan allows up to 50 active prompt locations…',
-      code: 'plan_limit',
-    } satisfies TrackSuggestionsResult);
-
-    await clickAddAll();
-
-    expect(rows()).toHaveLength(15);
-    expect(rows()[0].textContent).toContain('Prompt 11');
-    expect(toast.success).toHaveBeenCalledWith('10 prompts added to your tracked list');
-    expect(toast.error).not.toHaveBeenCalled();
-    const note = container.querySelector('[role="alert"]')!;
-    expect(note.textContent).toContain("15 suggestions couldn't be added");
-    expect(note.textContent).toContain(
-      "10 were added before your plan's prompt limit was reached.",
-    );
-    expect(note.textContent).toContain(
-      'Upgrade your plan, or pause 15 prompts in Tracked Prompts first and try again.',
-    );
-    expect(note.querySelector('a[href="/dashboard/prompts/tracked"]')?.textContent).toBe(
-      'Go to Tracked Prompts',
-    );
-    // The page's own Upgrade / Contact us buttons.
-    expect([...note.querySelectorAll('button')].map((b) => b.textContent)).toContain(
-      'Upgrade plan',
-    );
-  });
-
-  it('stops after the batch that reached the limit', async () => {
-    await render(30, 'growth');
-    actions.trackSuggestions.mockResolvedValue({
-      trackedIds: [],
-      skippedIds: ['s1'],
-      error: 'limit',
-      code: 'plan_limit',
-    } satisfies TrackSuggestionsResult);
-
-    await clickAddAll();
-
-    expect(actions.trackSuggestions).toHaveBeenCalledOnce();
-    expect(onAccepted).not.toHaveBeenCalled();
-    // The skipped one was handled elsewhere: it leaves, the other 29 stay.
-    expect(rows()).toHaveLength(29);
-    const note = container.querySelector('[role="alert"]')!;
-    expect(note.textContent).toContain("29 suggestions couldn't be added");
-    expect(note.textContent).toContain(
-      "Your plan's prompt limit is reached. Contact us to raise your limit, or pause 29 prompts",
-    );
-
-    await act(async () => {
-      (note.querySelector('button[aria-label="Close"]') as HTMLButtonElement).click();
-    });
-    expect(container.querySelector('[role="alert"]')).toBeNull();
   });
 
   it('reports any other failure as an error and keeps what was not added', async () => {
@@ -348,12 +284,7 @@ describe('SuggestionsCard — estimated volume', () => {
     await act(async () => {
       root.render(
         <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-          <SuggestionsCard
-            brandId="b1"
-            onAccepted={onAccepted}
-            sourceStates={null}
-            planId="growth"
-          />
+          <SuggestionsCard brandId="b1" onAccepted={onAccepted} sourceStates={null} />
         </NextIntlClientProvider>,
       );
     });
@@ -420,7 +351,7 @@ describe('SuggestionsCard on a brand without topics', () => {
   it('asks for a topic first when Generate Suggestions finds none, and opens Add Topic in place', async () => {
     actions.refreshPromptSuggestions.mockResolvedValue({ ok: false, failure: 'no_topics' });
     const onAddTopic = vi.fn();
-    await render(0, 'starter', onAddTopic);
+    await render(0, onAddTopic);
     await act(async () => button('Generate Suggestions').click());
     expect(askedForTopic()).toBe(true);
     expect(toast.error).not.toHaveBeenCalled();

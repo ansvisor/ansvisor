@@ -45,7 +45,7 @@ export function useSinceTitle() {
 }
 
 /**
- * Since yesterday on Action Center › Today (SIMPLE_NAV): the 3–5 biggest
+ * Since yesterday on Action Center › Today: the 3–5 biggest
  * changes the nightly checks found since the person's last look (Up, Down,
  * Rival), each with a link to the action it added; on a quiet day, that
  * nothing big changed, with the score from Where you stand's read. Signals

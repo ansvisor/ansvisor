@@ -1,8 +1,7 @@
 import { redirect } from 'next/navigation';
-import { dashboardHomeOf } from '@/config/home';
-import { simpleNavEnabled } from '@/lib/simple-nav/flag';
+import { DASHBOARD_HOME } from '@/config/home';
 
-// Actions is the Action Center's first tab; Today with the simplified layout on (SIMPLE_NAV).
+// Today is the Action Center's first tab.
 export default function ActionCenterPage() {
-  redirect(dashboardHomeOf(simpleNavEnabled()));
+  redirect(DASHBOARD_HOME);
 }

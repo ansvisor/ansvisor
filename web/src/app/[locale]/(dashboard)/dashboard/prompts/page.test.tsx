@@ -121,7 +121,6 @@ const analytics = vi.hoisted(() => ({ track: vi.fn() }));
 vi.mock('@/lib/analytics', () => analytics);
 
 const { default: PromptsPage } = await import('./page');
-const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 const { ChatPageSetterContext } = await import('@/components/chat/panel/chat-panel-context');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -146,23 +145,17 @@ let container: HTMLDivElement;
 let root: Root;
 const openUpgrade = vi.fn();
 
-async function render(
-  isLocked: boolean,
-  setChatPage: ((page: unknown) => void) | null = null,
-  simpleNav = false,
-) {
+async function render(isLocked: boolean, setChatPage: ((page: unknown) => void) | null = null) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <SimpleNavProvider enabled={simpleNav}>
-          <ChatPageSetterContext.Provider value={setChatPage}>
-            <UpgradeDialogContext.Provider
-              value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-            >
-              <PromptsPage />
-            </UpgradeDialogContext.Provider>
-          </ChatPageSetterContext.Provider>
-        </SimpleNavProvider>
+        <ChatPageSetterContext.Provider value={setChatPage}>
+          <UpgradeDialogContext.Provider
+            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+          >
+            <PromptsPage />
+          </UpgradeDialogContext.Provider>
+        </ChatPageSetterContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -275,7 +268,7 @@ describe('Tracked Prompts on a read-only workspace', () => {
   });
 });
 
-describe('prompts waiting for a spot (SIMPLE_NAV)', () => {
+describe('prompts waiting for a spot', () => {
   // Saved past the plan's limit (PR 15): inactive, waiting since yesterday.
   const waiting: Prompt = {
     ...prompt,
@@ -302,7 +295,7 @@ describe('prompts waiting for a spot (SIMPLE_NAV)', () => {
 
   it('says how many wait in a yellow banner, and shows them with their own pill and filter', async () => {
     withWaiting(waiting, older);
-    await render(false, null, true);
+    await render(false);
     expect(banner()?.textContent).toContain('2 prompts waiting for a spot');
     // Tracked opens without them.
     expect(container.textContent).not.toContain('Best cold brew concentrate?');
@@ -318,7 +311,7 @@ describe('prompts waiting for a spot (SIMPLE_NAV)', () => {
 
   it('opens the swap dialog for the prompt waiting longest from Free up a spot', async () => {
     withWaiting(waiting, older);
-    await render(false, null, true);
+    await render(false);
     await act(async () => button('Free up a spot')!.click());
     expect(swap.getSwapOptions).toHaveBeenCalledWith('p3');
     expect(dialog()).not.toBeNull();
@@ -327,7 +320,7 @@ describe('prompts waiting for a spot (SIMPLE_NAV)', () => {
   it('opens the swap dialog when tracking one from its row finds no room', async () => {
     withWaiting(waiting);
     actions.setPromptActive.mockResolvedValue({ error: 'Your plan…', code: 'plan_limit' });
-    await render(false, null, true);
+    await render(false);
     await act(async () => button('Show them')!.click());
     const trigger = container.querySelector<HTMLElement>(
       `[aria-label="Actions for ${waiting.text}"]`,
@@ -345,7 +338,7 @@ describe('prompts waiting for a spot (SIMPLE_NAV)', () => {
   it("opens on the waiting prompts and the dialog from Today's link", async () => {
     withWaiting(waiting, older);
     query.search = 'status=waiting&swap=1';
-    await render(false, null, true);
+    await render(false);
     expect(container.textContent).toContain('Prompts waiting for a spot (2)');
     expect(swap.getSwapOptions).toHaveBeenCalledWith('p3');
   });
@@ -354,7 +347,7 @@ describe('prompts waiting for a spot (SIMPLE_NAV)', () => {
     withWaiting(waiting);
     role.canManage = false;
     query.search = 'status=waiting&swap=1';
-    await render(false, null, true);
+    await render(false);
     expect(banner()?.textContent).toContain('1 prompt waiting for a spot');
     expect(button('Show them')).toBeDefined();
     expect(button('Free up a spot')).toBeUndefined();
@@ -362,18 +355,9 @@ describe('prompts waiting for a spot (SIMPLE_NAV)', () => {
     expect(swap.getSwapOptions).not.toHaveBeenCalled();
 
     role.canManage = true;
-    await render(true, null, true);
+    await render(true);
     expect(banner()).not.toBeNull();
     expect(button('Free up a spot')).toBeUndefined();
-  });
-
-  it('without SIMPLE_NAV, reads a waiting prompt as paused, with no banner', async () => {
-    withWaiting(waiting);
-    await render(false);
-    expect(banner()).toBeNull();
-    await act(async () => button('Show all 2')!.click());
-    expect(container.textContent).toContain('Best cold brew concentrate?');
-    expect(container.textContent).not.toContain('Waiting for a spot');
   });
 });
 

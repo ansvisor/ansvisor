@@ -4,11 +4,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 
-/**
- * The Action Center's tabs: Needs review (AC-010) for admins and managers,
- * with its count; and with the simplified layout on (SIMPLE_NAV), Today,
- * Actions, Signals, Agents and History.
- */
+/** The Action Center's tabs: Today, Actions, Signals, Agents and History. */
 
 (
   globalThis as typeof globalThis & {
@@ -29,10 +25,6 @@ vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (selector: (state: { activeBrandId: string }) => unknown) =>
     selector({ activeBrandId: 'b1' }),
 }));
-let canManage = true;
-vi.mock('@/hooks/use-user-role', () => ({
-  useUserRole: () => ({ role: canManage ? 'admin' : 'analyst', canManage, canAdmin: canManage }),
-}));
 const { getNewSignalCount, getMyOpenActionCount } = vi.hoisted(() => ({
   getNewSignalCount: vi.fn(async () => 0),
   getMyOpenActionCount: vi.fn(async () => 0),
@@ -43,12 +35,9 @@ let planHasAgents = true;
 vi.mock('@/hooks/use-feature-gate', () => ({
   useFeatureGate: () => ({ canUse: (feature: string) => feature !== 'ai_agent' || planHasAgents }),
 }));
-const { getTaskReviewCount } = vi.hoisted(() => ({ getTaskReviewCount: vi.fn() }));
-vi.mock('@/lib/actions/action-task-reviews', () => ({ getTaskReviewCount }));
 vi.mock('./first-run-note', () => ({ FirstRunNote: () => null }));
 
 import { ActionCenterTabs } from './action-center-tabs';
-import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { MenuAccessProvider } from '@/components/providers/menu-access-provider';
 
@@ -59,7 +48,6 @@ beforeEach(() => {
   container = document.createElement('div');
   document.body.appendChild(container);
   root = createRoot(container);
-  getTaskReviewCount.mockResolvedValue(3);
 });
 
 afterEach(() => {
@@ -67,62 +55,28 @@ afterEach(() => {
   container.remove();
   vi.clearAllMocks();
   vi.unstubAllGlobals();
-  canManage = true;
   planHasAgents = true;
   pathname = '/dashboard/action-center/actions';
 });
 
 async function render({
-  simpleNav = false,
   chatAgentic = false,
   hidden = [] as string[],
-}: { simpleNav?: boolean; chatAgentic?: boolean; hidden?: string[] } = {}) {
+}: { chatAgentic?: boolean; hidden?: string[] } = {}) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <SimpleNavProvider enabled={simpleNav}>
-          <ChatAgenticProvider enabled={chatAgentic}>
-            <MenuAccessProvider hidden={hidden} canManageMenus={false}>
-              <ActionCenterTabs />
-            </MenuAccessProvider>
-          </ChatAgenticProvider>
-        </SimpleNavProvider>
+        <ChatAgenticProvider enabled={chatAgentic}>
+          <MenuAccessProvider hidden={hidden} canManageMenus={false}>
+            <ActionCenterTabs />
+          </MenuAccessProvider>
+        </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
   });
 }
 
 const tabs = () => [...container.querySelectorAll('nav a')].map((a) => a.textContent);
-
-describe('ActionCenterTabs', () => {
-  it('shows Needs review last, with how many wait, to an admin or a manager', async () => {
-    await render();
-    expect(getTaskReviewCount).toHaveBeenCalledWith('b1');
-    expect(tabs()).toEqual(['Actions', 'Signals', 'KPIs', 'History', 'Needs review3']);
-  });
-
-  it('counts again when a review is approved or dismissed on its page', async () => {
-    await render();
-    getTaskReviewCount.mockResolvedValue(2);
-    await act(async () => {
-      window.dispatchEvent(new Event('action-task-reviews-changed'));
-    });
-    expect(tabs().at(-1)).toBe('Needs review2');
-  });
-
-  it('shows no count when nothing waits', async () => {
-    getTaskReviewCount.mockResolvedValue(0);
-    await render();
-    expect(tabs().at(-1)).toBe('Needs review');
-  });
-
-  it('leaves it out for anyone else, and reads no count', async () => {
-    canManage = false;
-    await render();
-    expect(tabs()).toEqual(['Actions', 'Signals', 'KPIs', 'History']);
-    expect(getTaskReviewCount).not.toHaveBeenCalled();
-  });
-});
 
 /**
  * The person's agents as GET /api/chat/agents?view=mine answers: `waiting`
@@ -149,21 +103,10 @@ function stubAgents(waiting: number, others = 0) {
 
 const current = () => container.querySelector('nav a[aria-current="page"]')?.textContent;
 
-describe('ActionCenterTabs without SIMPLE_NAV', () => {
-  it('stay as they were whatever Chat and the menu say, and read none of the new counts', async () => {
-    const fetch = stubAgents(2);
-    await render({ simpleNav: false, chatAgentic: true });
-    expect(tabs()).toEqual(['Actions', 'Signals', 'KPIs', 'History', 'Needs review3']);
-    expect(getMyOpenActionCount).not.toHaveBeenCalled();
-    expect(fetch).not.toHaveBeenCalled();
-    expect(container.querySelector('nav[data-tabs="simple"]')).toBeNull();
-  });
-});
-
-describe('ActionCenterTabs with SIMPLE_NAV', () => {
+describe('ActionCenterTabs', () => {
   it('are Today, Actions, Signals, Agents and History with the new Chat on, Needs review on none', async () => {
     stubAgents(0);
-    await render({ simpleNav: true, chatAgentic: true });
+    await render({ chatAgentic: true });
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'Agents', 'History']);
     const hrefs = [...container.querySelectorAll('nav a')].map((a) => a.getAttribute('href'));
     expect(hrefs).toEqual([
@@ -173,14 +116,13 @@ describe('ActionCenterTabs with SIMPLE_NAV', () => {
       '/dashboard/agents',
       '/dashboard/action-center/history',
     ]);
-    // Needs review moves to Today: no tab and no count read here.
-    expect(getTaskReviewCount).not.toHaveBeenCalled();
+    // Needs review is on Today: no tab here.
     expect(current()).toBe('Actions');
   });
 
   it('leave Agents out without the new Chat, and read no agent runs', async () => {
     const fetch = stubAgents(1);
-    await render({ simpleNav: true, chatAgentic: false });
+    await render({ chatAgentic: false });
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'History']);
     expect(fetch).not.toHaveBeenCalled();
   });
@@ -188,28 +130,21 @@ describe('ActionCenterTabs with SIMPLE_NAV', () => {
   it('leave Agents out on a plan without agents', async () => {
     planHasAgents = false;
     stubAgents(1);
-    await render({ simpleNav: true, chatAgentic: true });
+    await render({ chatAgentic: true });
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'History']);
   });
 
   it('leave Agents out when its section is off the person’s menu (menu access), the rest stays', async () => {
     stubAgents(1);
-    await render({ simpleNav: true, chatAgentic: true, hidden: ['agents', 'insights'] });
+    await render({ chatAgentic: true, hidden: ['agents', 'insights'] });
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'History']);
-  });
-
-  it('show the same to every role', async () => {
-    canManage = false;
-    stubAgents(0);
-    await render({ simpleNav: true, chatAgentic: true });
-    expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'Agents', 'History']);
   });
 
   it('count the person’s open actions, the new signals and their agents whose run waits on them', async () => {
     getMyOpenActionCount.mockResolvedValue(3);
     getNewSignalCount.mockResolvedValue(5);
     const fetch = stubAgents(1, 2);
-    await render({ simpleNav: true, chatAgentic: true });
+    await render({ chatAgentic: true });
     expect(getMyOpenActionCount).toHaveBeenCalledWith('b1');
     expect(getNewSignalCount).toHaveBeenCalledWith('b1');
     expect(fetch).toHaveBeenCalledWith('/api/chat/agents?view=mine', { cache: 'no-store' });
@@ -229,7 +164,7 @@ describe('ActionCenterTabs with SIMPLE_NAV', () => {
       'fetch',
       vi.fn(async () => ({ ok: false, json: async () => ({ ok: false }) })),
     );
-    await render({ simpleNav: true, chatAgentic: true });
+    await render({ chatAgentic: true });
     expect(tabs()).toEqual(['Today', 'Actions', 'Signals', 'Agents', 'History']);
   });
 
@@ -242,11 +177,11 @@ describe('ActionCenterTabs with SIMPLE_NAV', () => {
       ['/dashboard/action-center/kpis', 'History'],
     ] as const) {
       pathname = path;
-      await render({ simpleNav: true, chatAgentic: true });
+      await render({ chatAgentic: true });
       expect(current()).toBe(tab);
     }
     pathname = '/dashboard/action-center/review';
-    await render({ simpleNav: true, chatAgentic: true });
+    await render({ chatAgentic: true });
     expect(current()).toBeUndefined();
   });
 });

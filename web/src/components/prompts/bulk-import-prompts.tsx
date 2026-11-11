@@ -17,7 +17,6 @@ import { cn } from '@/lib/utils';
 import { toCsv } from '@/lib/csv';
 import { formatNumber } from '@/lib/format';
 import { importPrompts } from '@/lib/actions/prompt';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 import {
   MAX_IMPORT_ROWS,
@@ -93,22 +92,18 @@ export function BulkImportPrompts({
 
   const planSlots =
     !quota || quota.maxPrompts === -1 ? -1 : Math.max(0, quota.maxPrompts - quota.used);
-  // SIMPLE_NAV: the rows past the plan's limit are imported too, saved
-  // waiting for a spot, so the preview holds none back.
-  const waitOverLimit = useSimpleNav();
-  const freeSlots = waitOverLimit ? -1 : planSlots;
+  // The rows past the plan's limit are imported too, saved waiting for a
+  // spot, so the preview holds none back.
   const tWaiting = useTranslations('prompts.waiting');
   const showWaiting = useWaitingForSpotToast();
 
   const preview = useMemo(
-    () => (sheet ? buildPreview(sheet, { existingTexts, freeSlots }) : null),
-    [sheet, existingTexts, freeSlots],
+    () => (sheet ? buildPreview(sheet, { existingTexts, freeSlots: -1 }) : null),
+    [sheet, existingTexts],
   );
-  // Rows that will wait for a spot (SIMPLE_NAV): one location each, past the free slots.
+  // Rows that will wait for a spot: one location each, past the free slots.
   const waitingRows =
-    waitOverLimit && planSlots !== -1 && preview
-      ? Math.max(0, preview.counts.valid - planSlots)
-      : 0;
+    planSlots !== -1 && preview ? Math.max(0, preview.counts.valid - planSlots) : 0;
 
   const readFile = useCallback(async (file: File) => {
     setReadError(null);

@@ -347,7 +347,7 @@ interface ToolFields<S extends z.ZodObject> {
   resultCard?(input: z.output<S>, output: unknown): ToolResultCard | null;
   /**
    * Recurring work it set up, as its card with Run it now, Open in Agents
-   * and Change the schedule (SIMPLE_NAV); null when none.
+   * and Change the schedule; null when none.
    */
   scheduleCard?(input: z.output<S>, output: unknown): ChatScheduleMade | null;
   /**

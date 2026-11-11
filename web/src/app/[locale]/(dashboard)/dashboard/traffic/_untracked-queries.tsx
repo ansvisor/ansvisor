@@ -26,7 +26,6 @@ import { useRangeReady } from './_range-ready';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { isNoTopics } from '@/lib/topics-required';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 
 /**
@@ -114,10 +113,8 @@ export function UntrackedQueriesCard({
   const result = current?.result ?? null;
   const slotsLeft = current ? (quota?.slotsLeft ?? null) : null;
   const busy = tracking.size > 0;
-  // SIMPLE_NAV: no free slot doesn't stop Track; the prompts wait for a spot.
-  const waitOverLimit = useSimpleNav();
+  // No free slot doesn't stop Track; the prompts wait for a spot.
   const showWaiting = useWaitingForSpotToast();
-  const slotsLimit = waitOverLimit ? null : slotsLeft;
 
   const track = guard(
     async (queries: string[]) => {
@@ -150,9 +147,9 @@ export function UntrackedQueriesCard({
     { action: tActions('trackPrompts') },
   );
 
-  const trackTitle = !canTrack ? t('trackNotAllowed') : slotsLimit === 0 ? t('noSlots') : undefined;
-  const trackable = canTrack && slotsLimit !== 0 && !busy;
-  const allCount = result ? Math.min(result.rows.length, slotsLimit ?? result.rows.length) : 0;
+  const trackTitle = !canTrack ? t('trackNotAllowed') : undefined;
+  const trackable = canTrack && !busy;
+  const allCount = result ? result.rows.length : 0;
 
   const message = (text: string) => (
     <p className="px-6 py-4 text-sm text-muted-foreground">{text}</p>

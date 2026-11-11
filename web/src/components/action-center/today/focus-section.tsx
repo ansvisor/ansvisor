@@ -20,7 +20,7 @@ export const actionHref = (id: string) =>
   `/dashboard/action-center/actions?action=${encodeURIComponent(id)}`;
 
 /**
- * Today's focus (SIMPLE_NAV): the person's 3 actions, held until they
+ * Today's focus: the person's 3 actions, held until they
  * finish or skip them (lib/action-center/focus.ts). Each card says why it
  * matters, its impact, effort and steps done, and opens the action at its
  * first step. "Skip for now" takes it out of this person's focus for 7

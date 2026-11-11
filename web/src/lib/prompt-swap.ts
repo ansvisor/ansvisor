@@ -1,7 +1,7 @@
 import type { Demand } from '@/lib/action-center/first-day';
 
 /**
- * The swap dialog's candidates (Simplify PR 16, behind SIMPLE_NAV): tracked
+ * The swap dialog's candidates (Simplify PR 16): tracked
  * prompts someone could pause to make room for one waiting for a spot (or a
  * paused one they want back). Pure: the server action reads, this orders.
  *

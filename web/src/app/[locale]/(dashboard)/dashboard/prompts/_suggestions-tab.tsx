@@ -6,7 +6,6 @@ import {
   type SourceState,
   type SuggestionSourceStates,
 } from '@/lib/actions/integrations';
-import type { PlanId } from '@/config/plans';
 import { DataSourcesPanel } from './_data-sources-panel';
 import { SuggestionsCard } from './_suggestions-card';
 
@@ -30,14 +29,12 @@ export function SuggestionsTab({
   brandId,
   onAccepted,
   onAddTopic,
-  planId,
   limitActions,
 }: {
   brandId: string;
   onAccepted?: () => void;
   /** "Add a topic" on a brand without one: the page's Topics tab, with Add Topic open. */
   onAddTopic?: () => void;
-  planId?: PlanId;
   limitActions?: React.ReactNode;
 }) {
   // undefined while loading; null when the read failed — both render nothing
@@ -76,7 +73,6 @@ export function SuggestionsTab({
         onAccepted={onAccepted}
         onAddTopic={onAddTopic}
         sourceStates={states ?? null}
-        planId={planId}
         limitActions={limitActions}
       />
     </>

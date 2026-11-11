@@ -30,7 +30,6 @@ import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { useUserRole } from '@/hooks/use-user-role';
 import { useTopicFirstDialog } from '@/components/prompts/topic-first';
 import { NO_TOPICS } from '@/lib/topics-required';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 
 /** Items shown, as in the mockup; "See all" opens the rest. */
@@ -54,7 +53,6 @@ export function Opportunities({
   trackedTopicIds,
   topics,
   entities,
-  slotsLeft,
   contentUsage,
   onTracked,
   className,
@@ -66,8 +64,6 @@ export function Opportunities({
   topics: TopicCompetitors[] | null;
   /** The trend's brands, for the names of the competitors leading topics. */
   entities: { key: string; name: string; isOwnBrand: boolean }[] | null;
-  /** Prompt locations left on the plan; null when unlimited. */
-  slotsLeft: number | null;
   /** The month's content quota (CONTENT-001); null when it couldn't be read. */
   contentUsage: ContentUsage | null;
   onTracked: (count: number) => void;
@@ -93,8 +89,7 @@ export function Opportunities({
   const [contentSpent, setContentSpent] = useState(0);
   // A brand with no topic yet: Track asks for one first.
   const topicFirst = useTopicFirstDialog();
-  // SIMPLE_NAV: a full plan doesn't stop Track; the prompts wait for a spot.
-  const waitOverLimit = useSimpleNav();
+  // A full plan doesn't stop Track; the prompts wait for a spot.
   const showWaiting = useWaitingForSpotToast();
 
   const result = useMemo(() => {
@@ -106,7 +101,6 @@ export function Opportunities({
       topicStandings(topics, names, trackedTopicIds && new Set(trackedTopicIds)),
     );
   }, [suggestions, trackedIds, topics, entities, trackedTopicIds]);
-  const planFull = !waitOverLimit && slotsLeft !== null && slotsLeft <= 0;
   const left = contentLeft(contentUsage?.opportunities, contentSpent);
   const contentFullHint = contentUsage?.periodEnd
     ? t('contentLimitResets', {
@@ -371,17 +365,15 @@ export function Opportunities({
                       {canManage && (
                         <span
                           title={
-                            planFull
-                              ? t('planFull')
-                              : isTopic
-                                ? t('trackCountHint', { count, topic: item.title })
-                                : t('trackHint')
+                            isTopic
+                              ? t('trackCountHint', { count, topic: item.title })
+                              : t('trackHint')
                           }
                         >
                           <Button
                             size="sm"
                             className="h-7 gap-1.5 px-2.5 text-xs"
-                            disabled={planFull || busy !== null}
+                            disabled={busy !== null}
                             onClick={guard(() => track(item), { action: tActions('trackPrompts') })}
                           >
                             {/* Track N adds one prompt at a time, so a big topic takes a moment. */}

@@ -4,7 +4,6 @@ import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
 import { RoleProvider, type TeamRole } from '@/components/providers/role-provider';
-import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 import type { AgentListResult } from '@/lib/chat/agents';
 import { AGENT_ID, NOW, listItem, listResult } from '@/lib/chat/testing/agent-fixtures';
 
@@ -51,7 +50,7 @@ vi.mock('@/lib/actions/chat-access-requests', () => ({
   requestAccess: vi.fn(async () => ({ ok: true, id: 'request-1' })),
 }));
 vi.mock('@/lib/analytics', () => ({ track: vi.fn() }));
-// Action Center › Agents' jobs made in Chat (SIMPLE_NAV), read with the Scheduled page's action.
+// Action Center › Agents' jobs made in Chat, read with the Scheduled page's action.
 const schedules = vi.hoisted(() => ({ listChatSchedules: vi.fn(async () => ({ ok: false })) }));
 vi.mock('@/lib/actions/chat-schedules', () => schedules);
 
@@ -70,15 +69,13 @@ const fetchMock = vi.fn(async (url: string, init?: RequestInit) => answer(url, i
 async function settle() {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
 }
-async function render(role: TeamRole = 'manager', simpleNav = false) {
+async function render(role: TeamRole = 'manager') {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <SimpleNavProvider enabled={simpleNav}>
-          <RoleProvider role={role}>
-            <AgentCenter initialTab="yours" now={NOW} timeZone="UTC" />
-          </RoleProvider>
-        </SimpleNavProvider>
+        <RoleProvider role={role}>
+          <AgentCenter now={NOW} timeZone="UTC" />
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -459,7 +456,7 @@ describe('AgentsList (Agent Center › Your agents)', () => {
   });
 });
 
-describe('Action Center › Agents (SIMPLE_NAV)', () => {
+describe('Action Center › Agents', () => {
   const CHAT = 'cccccccc-0000-4000-8000-000000000001';
   const withRun = (n: number, status: string, chatId: string | null) =>
     listItem({
@@ -481,7 +478,7 @@ describe('Action Center › Agents (SIMPLE_NAV)', () => {
       withRun(4, 'done', null),
       listItem({ id: 'aaaaaaaa-0000-4000-8000-000000000015', name: 'Never ran', lastRun: null }),
     ]);
-    await render('manager', true);
+    await render('manager');
     const buttons = cards().map((card) =>
       card.querySelector<HTMLAnchorElement>('[data-action="agents.openInChat"]'),
     );
@@ -502,14 +499,8 @@ describe('Action Center › Agents (SIMPLE_NAV)', () => {
     expect(track).toHaveBeenCalledWith('agents_open_in_chat', { state: 'needsYou' });
   });
 
-  it('shows no Chat button with the flag off: the cards are as they were', async () => {
-    page = listResult([withRun(1, 'running', CHAT)]);
-    await render('manager');
-    expect(action('agents.openInChat')).toHaveLength(0);
-  });
-
   it('puts Your agents first and Ready to use under it, with Ask Chat to make one and New agent', async () => {
-    await render('manager', true);
+    await render('manager');
     expect(container.querySelector('[role="tablist"]')).toBeNull();
     expect(container.querySelector('h1')).toBeNull();
     const titles = all('h2').map((h) => h.textContent);
@@ -572,7 +563,7 @@ describe('Action Center › Agents (SIMPLE_NAV)', () => {
       limit: 25,
       canCreate: true,
     } as never);
-    await render('manager', true);
+    await render('manager');
     const made = container.querySelector<HTMLElement>('[data-slot="chat-made-agents"]')!;
     expect(made.closest('[data-slot="agent-center-yours"]')).not.toBeNull();
     expect(made.querySelector('[data-slot="chat-made-when"]')?.textContent).toBe(
@@ -585,7 +576,7 @@ describe('Action Center › Agents (SIMPLE_NAV)', () => {
   });
 
   it('gives readers the read-only line, and neither Ask Chat nor New agent', async () => {
-    await render('analyst', true);
+    await render('analyst');
     expect(container.querySelector('[data-slot="agents-read-only"]')).not.toBeNull();
     expect(action('agents.askChat')).toHaveLength(0);
     expect(action('agents.new')).toHaveLength(0);

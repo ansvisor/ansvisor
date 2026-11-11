@@ -125,8 +125,7 @@ export function locationLimitMessage(plan: Plan, used: number, adding: number): 
 /**
  * How many of these new prompts, taken in order, the plan has room to track,
  * each costing its locations (`costs`, promptLocationCount). The rest are
- * saved waiting for a spot instead of being refused (Simplify PR 15, behind
- * SIMPLE_NAV). As import_prompts does with p_over_limit 'wait' (00535): once
+ * saved waiting for a spot instead of being refused (Simplify PR 15). As import_prompts does with p_over_limit 'wait' (00535): once
  * one doesn't fit, it and every one after it wait, so a smaller prompt
  * further down never jumps the order the person gave. Same rules as
  * locationLimitMessage: unlimited plans fit everything, landing exactly on

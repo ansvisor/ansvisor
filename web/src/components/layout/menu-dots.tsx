@@ -24,7 +24,6 @@ import {
   type MenuState,
 } from '@/lib/menu-dots';
 import { cn } from '@/lib/utils';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
 import { useAdsEnabled } from '@/components/providers/ads-provider';
 import { useHiddenMenuSections } from '@/components/providers/menu-access-provider';
@@ -52,16 +51,6 @@ export interface MenuDotsView {
   clicked: (dot: Dot | null, collapsed: boolean) => void;
 }
 
-const NONE: MenuDotsView = {
-  dotOf: () => null,
-  itemDot: () => null,
-  groupDot: () => null,
-  openActions: null,
-  clicked: () => {},
-};
-
-const NO_AREAS: ReadonlySet<DotArea> = new Set();
-
 /**
  * Reads the brand's menu state for these areas (comma-separated) unless the
  * same read is on its way or under 5 minutes old. One read serves every
@@ -83,16 +72,14 @@ function readMenuState(brandId: string, areasKey: string, count: boolean, waitin
 }
 
 /**
- * The simplified menu's dots and Action Center count (SIMPLE_NAV; PR 13):
- * read once per brand (getMenuState) on a brand switch, and again on a page
- * change once the read is 5 minutes old, shared by every menu on the page.
- * Off, nothing is read and every row is as it was. Yellow only for admins
+ * The menu's dots and the Action Center's count: read once per brand
+ * (getMenuState) on a brand switch, and again on a page change once the
+ * read is 5 minutes old, shared by every menu on the page. Yellow only for admins
  * and managers, and neither yellow nor the count once the plan ended; the
  * demo brand gets green alone. A section off the person's menu or locked
  * by the plan has none.
  */
 export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
-  const simpleNav = useSimpleNav();
   const pathname = usePathname();
   const brandId = useBrandStore((s) => s.activeBrandId);
   const activeBrand = useBrandStore((s) => s.brands.find((b) => b.id === s.activeBrandId) ?? null);
@@ -105,29 +92,27 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
   const ads = useAdsEnabled();
   const viewer = { canAct: canManage, demo: isDemo, ended: !subscriptionActive };
 
-  const onMenu = simpleNav
-    ? dotAreasOnMenu(nav, {
-        brandPrefs: { ecommerce: isEcommerceBrand(activeBrand) },
-        hiddenSections,
-        chatAgentic,
-        ads,
-        canUse,
-        isCloud,
-      })
-    : NO_AREAS;
+  const onMenu = dotAreasOnMenu(nav, {
+    brandPrefs: { ecommerce: isEcommerceBrand(activeBrand) },
+    hiddenSections,
+    chatAgentic,
+    ads,
+    canUse,
+    isCloud,
+  });
   // What to read, as text: the read waits for a change in it, not in a list.
   const areasKey = areasToRead(onMenu, viewer).join(',');
-  const count = simpleNav && !viewer.ended;
+  const count = !viewer.ended;
   // Prompts waiting for a spot light Tracked Prompts yellow: counted only for those who see yellow.
   const waiting = needsYouShown(viewer) && onMenu.has('prompts/tracked');
 
   useEffect(() => {
-    if (simpleNav && brandId) readMenuState(brandId, areasKey, count, waiting);
-  }, [simpleNav, brandId, areasKey, count, waiting, pathname]);
+    if (brandId) readMenuState(brandId, areasKey, count, waiting);
+  }, [brandId, areasKey, count, waiting, pathname]);
 
   const read = useMenuStateStore((s) => s.read);
   const opened = useMenuStateStore((s) => (brandId ? s.opened[brandId] : undefined));
-  const state = simpleNav && read && read.brandId === brandId ? read.state : null;
+  const state = read && read.brandId === brandId ? read.state : null;
   const dots = menuDots(withOpened(state, opened), viewer, onMenu);
 
   // menu_dot_shown: once per area each session.
@@ -144,7 +129,6 @@ export function useMenuDots(nav: NavGroup[], collapsed = false): MenuDotsView {
     }
   }, [shownKey, collapsed]);
 
-  if (!simpleNav) return NONE;
   return {
     dotOf: (href) => dotOf(dots, href),
     itemDot: (item) => itemDot(dots, item),

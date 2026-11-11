@@ -24,8 +24,6 @@ import { CITY_PLATFORMS } from '@/config/cities';
 import { parseLocation, regionFlag, regionLabel } from '@/lib/region';
 import { cn } from '@/lib/utils';
 import type { Prompt } from '@/types';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
-import { PromptLimitActions } from './_prompt-limit-actions';
 import { PlanLimitButtons } from './_plan-limit-buttons';
 
 type Scope = 'one' | 'selected' | 'topic' | 'all';
@@ -80,8 +78,6 @@ export function AddLocationsDialog({
   onDone: () => void;
 }) {
   const t = useTranslations('prompts.addLocations');
-  // SIMPLE_NAV: the plan's way out is the Prompt-limit dialog's (Simplify PR 16).
-  const simpleNav = useSimpleNav();
   const [mode, setMode] = useState<Mode>('add');
   const [locations, setLocations] = useState<string[]>([]);
   const [scope, setScope] = useState<Scope>('all');
@@ -379,11 +375,7 @@ export function AddLocationsDialog({
               </p>
               <p className="text-xs">{t('overHint', { plan: quota.planId })}</p>
               <div className="flex flex-wrap gap-2">
-                {simpleNav ? (
-                  <PlanLimitButtons planId={quota.planId} source="locations" size="sm" />
-                ) : (
-                  <PromptLimitActions planId={quota.planId} />
-                )}
+                <PlanLimitButtons planId={quota.planId} source="locations" size="sm" />
               </div>
             </div>
           )}

@@ -9,8 +9,7 @@ import { track } from '@/lib/analytics';
 
 /**
  * Prompts someone adds while the plan's prompt locations are all in use are
- * saved "Waiting for a spot" instead of being refused (Simplify PR 15, behind
- * SIMPLE_NAV; 00535). They aren't tracked and don't start by themselves when
+ * saved "Waiting for a spot" instead of being refused (Simplify PR 15; 00535). They aren't tracked and don't start by themselves when
  * a spot frees up: the person picks them in Tracked Prompts.
  */
 

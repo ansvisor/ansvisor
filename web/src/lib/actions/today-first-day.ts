@@ -44,7 +44,7 @@ export interface TodayFirstDay {
 type Client = Awaited<ReturnType<typeof createClient>>;
 
 /**
- * A brand's first day on Action Center › Today (SIMPLE_NAV): the person's
+ * A brand's first day on Action Center › Today: the person's
  * first name, the engines its first answers come from, its tracked prompts
  * with their topic and demand (prompt_volumes, where there is one), whether
  * "Looks good" was said, the suggestions already stored for it and the

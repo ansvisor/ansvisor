@@ -18,26 +18,24 @@ const segment = (selected: boolean) =>
 
 /**
  * History's views: its actions and the scorecard of what each kind did,
- * switched in place on its page (`onPick`). With the simplified layout on
- * (SIMPLE_NAV, `kpis`), KPIs is the third, a link to its page, which keeps
- * its address but is no tab of its own any more; on that page (`current`
+ * switched in place on its page (`onPick`), and KPIs, a link to its page,
+ * which keeps its address but is no tab of its own; on that page (`current`
  * "kpis") the other two link back to History.
  */
 export function HistoryViews({
   current,
   onPick,
-  kpis = false,
 }: {
   current: HistoryOwnView | 'kpis';
   onPick?: (view: HistoryOwnView) => void;
-  kpis?: boolean;
 }) {
   const t = useTranslations('actionCenter.historyPage');
   const own: HistoryOwnView[] = ['actions', 'scorecard'];
   return (
     <div
       className="inline-flex overflow-hidden rounded-md border"
-      {...(kpis ? { role: 'group', 'aria-label': t('view.label') } : {})}
+      role="group"
+      aria-label={t('view.label')}
     >
       {own.map((option) =>
         onPick ? (
@@ -60,16 +58,15 @@ export function HistoryViews({
           </Link>
         ),
       )}
-      {kpis &&
-        (current === 'kpis' ? (
-          <span aria-current="page" className={segment(true)}>
-            {t('view.kpis')}
-          </span>
-        ) : (
-          <Link href={ACTION_CENTER_KPIS} className={segment(false)}>
-            {t('view.kpis')}
-          </Link>
-        ))}
+      {current === 'kpis' ? (
+        <span aria-current="page" className={segment(true)}>
+          {t('view.kpis')}
+        </span>
+      ) : (
+        <Link href={ACTION_CENTER_KPIS} className={segment(false)}>
+          {t('view.kpis')}
+        </Link>
+      )}
     </div>
   );
 }

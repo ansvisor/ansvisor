@@ -188,13 +188,7 @@ describe('acceptPromptSuggestionFor with the plan full (Simplify PR 15)', () => 
     ];
   });
 
-  it('refuses it without SIMPLE_NAV, and adds nothing', async () => {
-    expect(await acceptPromptSuggestionFor(auth, 's1')).toMatchObject({ code: 'plan_limit' });
-    expect(inserts).toEqual([]);
-  });
-
-  it('with SIMPLE_NAV, saves the prompt waiting for a spot and says so', async () => {
-    vi.stubEnv('SIMPLE_NAV', 'true');
+  it('saves the prompt waiting for a spot and says so', async () => {
     expect(await acceptPromptSuggestionFor(auth, 's1')).toMatchObject({
       prompt_id: 'p1',
       status: 'added',
@@ -204,7 +198,6 @@ describe('acceptPromptSuggestionFor with the plan full (Simplify PR 15)', () => 
   });
 
   it('tracks it as before while there is room', async () => {
-    vi.stubEnv('SIMPLE_NAV', 'true');
     usage = [{ brand_id: 'b2', locations: FULL - 1 }];
     const result = await acceptPromptSuggestionFor(auth, 's1');
     expect(result).not.toHaveProperty('waiting_for_spot');

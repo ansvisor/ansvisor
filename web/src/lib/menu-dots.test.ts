@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { simpleDashboardNav } from '@/config/dashboard';
+import { dashboardNav } from '@/config/dashboard';
 import type { Feature } from '@/config/plans';
 import {
   DOT_AREAS,
@@ -54,7 +54,7 @@ describe('the areas', () => {
     for (const area of DOT_AREAS) expect(NAV_AREAS).toContain(area);
     // Today keeps its own visit and has no dot.
     expect(DOT_AREAS).not.toContain('today');
-    const hrefs = simpleDashboardNav.flatMap((group) =>
+    const hrefs = dashboardNav.flatMap((group) =>
       group.items.flatMap((item) => [item.href, ...(item.children ?? []).map((c) => c.href)]),
     );
     for (const area of DOT_AREAS) expect(hrefs).toContain(`/dashboard/${area}`);
@@ -187,7 +187,7 @@ describe('pages opened here before the next read', () => {
 });
 
 describe('where a dot shows', () => {
-  const nav = simpleDashboardNav;
+  const nav = dashboardNav;
   const item = (href: string) =>
     nav.flatMap((group) => group.items).find((entry) => entry.href === href)!;
 
@@ -230,12 +230,12 @@ describe('the menu’s areas', () => {
   });
 
   it('are every area on a full menu', () => {
-    expect([...dotAreasOnMenu(simpleDashboardNav, gates())].sort()).toEqual([...DOT_AREAS].sort());
+    expect([...dotAreasOnMenu(dashboardNav, gates())].sort()).toEqual([...DOT_AREAS].sort());
   });
 
   it('leave out sections off the person’s menu', () => {
     const areas = dotAreasOnMenu(
-      simpleDashboardNav,
+      dashboardNav,
       gates({ hiddenSections: new Set(['mentions', 'content', 'traffic']) }),
     );
     expect(areas.has('mentions')).toBe(false);
@@ -247,15 +247,12 @@ describe('the menu’s areas', () => {
   it('leave out items the plan locks, on the cloud only', () => {
     const starter = (feature: Feature) =>
       feature !== 'advanced_analytics' && feature !== 'basic_insights';
-    const locked = dotAreasOnMenu(simpleDashboardNav, gates({ canUse: starter }));
+    const locked = dotAreasOnMenu(dashboardNav, gates({ canUse: starter }));
     expect(locked.has('traffic')).toBe(false);
     expect(locked.has('insights')).toBe(false);
     expect(locked.has('mentions')).toBe(false);
     expect(locked.has('prompts/tracked')).toBe(true);
-    const selfHosted = dotAreasOnMenu(
-      simpleDashboardNav,
-      gates({ canUse: starter, isCloud: false }),
-    );
+    const selfHosted = dotAreasOnMenu(dashboardNav, gates({ canUse: starter, isCloud: false }));
     expect(selfHosted.has('traffic')).toBe(true);
   });
 

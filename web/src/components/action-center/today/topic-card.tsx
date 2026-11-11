@@ -46,7 +46,7 @@ type Step =
 const topicHref = (id: string) => `/dashboard/prompts/topics/${encodeURIComponent(id)}`;
 
 /**
- * "New area to track" on Action Center › Today (SIMPLE_NAV, mockup
+ * "New area to track" on Action Center › Today (mockup
  * Bugun-pazartesi): a topic the brand doesn't track yet, why it is worth
  * tracking, and the prompt spots it needs. The page shows it on the
  * person's Monday or once today's focus is finished; it is for admins and

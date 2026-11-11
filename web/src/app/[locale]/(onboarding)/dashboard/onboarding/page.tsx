@@ -279,6 +279,7 @@ export default function OnboardingPage() {
   const tWizard = useTranslations('brands.wizard');
   const tOffer = useTranslations('planOffer');
   const tPlans = useTranslations('readOnly.plans');
+  const tWaiting = useTranslations('prompts.waiting');
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
 
   const [step, setStep] = useState(1);
@@ -1166,13 +1167,14 @@ export default function OnboardingPage() {
   };
 
   const totalPrompts = topicPrompts.reduce((sum, tp) => sum + tp.prompts.length, 0);
-  // Prompts this brand may save before hitting the org's plan cap (null =
-  // unknown or unlimited); over that, Continue is disabled with an inline hint.
+  // Prompts this brand may track before hitting the org's plan cap (null =
+  // unknown or unlimited); past it, the rest are saved waiting for a spot
+  // (savePromptSet), as on a new brand's wizard, and a note says how many.
   const promptLimit =
     promptCapacity && promptCapacity.maxPrompts !== -1
       ? Math.max(0, promptCapacity.maxPrompts - promptCapacity.used)
       : null;
-  const excessPrompts = promptLimit !== null ? Math.max(0, totalPrompts - promptLimit) : 0;
+  const overPrompts = promptLimit !== null ? Math.max(0, totalPrompts - promptLimit) : 0;
 
   async function loadResumedPreview(orgId: string) {
     try {
@@ -1621,13 +1623,13 @@ export default function OnboardingPage() {
               </div>
             )}
 
-            {excessPrompts > 0 && (
+            {overPrompts > 0 && (
               <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
-                Your plan includes up to {promptLimit} prompts — remove {excessPrompts} to continue.
+                {tWaiting('brandNote', { room: promptLimit ?? 0, count: overPrompts })}
               </div>
             )}
 
-            {saveError && excessPrompts === 0 && (
+            {saveError && (
               <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm">
                 {saveError}
               </div>
@@ -1662,7 +1664,7 @@ export default function OnboardingPage() {
             <Button
               className="mt-6 w-full"
               onClick={handleSavePromptsAndContinue}
-              disabled={isLoading || totalPrompts === 0 || excessPrompts > 0}
+              disabled={isLoading || totalPrompts === 0}
             >
               {isLoading ? (
                 <>

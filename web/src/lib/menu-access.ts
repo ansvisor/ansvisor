@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { dashboardNav, simpleDashboardNav, type NavItem } from '@/config/dashboard';
+import { dashboardNav, type NavItem } from '@/config/dashboard';
 import type { UserRole } from '@/types';
 
 /**
@@ -52,29 +52,24 @@ export function menuSectionEntries(items: readonly NavItem[]): MenuSectionEntry[
   return entries;
 }
 
-/** Every section of the left menu, in its order. */
+/**
+ * Every section of the left menu, in its order: Chat, the Action Center and
+ * Agents under it, then Analytics' and More's. Agents keeps Agent Center's
+ * section name, so every menu saved for a role, a person or a work area
+ * keeps working.
+ */
 export const MENU_SECTIONS: string[] = menuSectionEntries(
   dashboardNav.flatMap((group) => group.items),
 ).map((entry) => entry.section);
 
 /**
- * The same sections in the simplified menu's order (SIMPLE_NAV): Chat, the
- * Action Center and Agents under it, then Analytics' and More's. No section
- * is added or renamed, so every menu saved for a role, a person or a work
- * area keeps working (`agents` is Action Center › Agents there).
- */
-export const SIMPLE_MENU_SECTIONS: string[] = menuSectionEntries(
-  simpleDashboardNav.flatMap((group) => group.items),
-).map((entry) => entry.section);
-
-/**
- * Sections only the new Chat has (CHAT_AGENTIC): Agent Center, an item of
- * the menu, or Action Center › Agents, an entry of the simplified one. While
- * it is off for the workspace they are on no menu and in no list of sections.
+ * Sections only the new Chat has (CHAT_AGENTIC): Action Center › Agents.
+ * While it is off for the workspace they are on no menu and in no list of
+ * sections.
  */
 export const CHAT_AGENTIC_SECTIONS: string[] = [
   ...new Set(
-    [...dashboardNav, ...simpleDashboardNav]
+    dashboardNav
       .flatMap((group) => group.items)
       .flatMap((item) => [item, ...(item.children ?? [])])
       .filter((entry) => entry.requiresChatAgentic)
@@ -95,12 +90,11 @@ export const ADS_SECTIONS: string[] = dashboardNav
   .filter((section): section is string => section !== null);
 
 /**
- * The left menu's sections a workspace has, in its order: Agent Center only
- * with the new Chat on, Ads only with Ads on; all of them with both. In the
- * simplified menu's order with it on (`simpleNav`), where they are listed.
+ * The left menu's sections a workspace has, in its order: Agents only with
+ * the new Chat on, Ads only with Ads on; all of them with both.
  */
-export function menuSectionsFor(chatAgentic: boolean, ads = false, simpleNav = false): string[] {
-  return (simpleNav ? SIMPLE_MENU_SECTIONS : MENU_SECTIONS).filter(
+export function menuSectionsFor(chatAgentic: boolean, ads = false): string[] {
+  return MENU_SECTIONS.filter(
     (section) =>
       (chatAgentic || !CHAT_AGENTIC_SECTIONS.includes(section)) &&
       (ads || !ADS_SECTIONS.includes(section)),

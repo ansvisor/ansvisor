@@ -57,7 +57,6 @@ const { Sidebar } = await import('./sidebar');
 const { MobileNav } = await import('./mobile-nav');
 const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
-const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 const { RoleProvider } = await import('@/components/providers/role-provider');
 const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
 const { useSidebarStore } = await import('@/stores/use-sidebar-store');
@@ -116,35 +115,26 @@ afterEach(() => {
 });
 
 interface Setup {
-  simpleNav?: boolean;
   role?: 'admin' | 'manager' | 'analyst';
   hidden?: string[];
   demo?: boolean;
   mobile?: boolean;
 }
 
-async function render({
-  simpleNav = true,
-  role = 'manager',
-  hidden = [],
-  demo = false,
-  mobile = false,
-}: Setup = {}) {
+async function render({ role = 'manager', hidden = [], demo = false, mobile = false }: Setup = {}) {
   const demoState = { isDemo: demo, demoBrand: null, offer: 'first_month', neverSubscribed: false };
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <SimpleNavProvider enabled={simpleNav}>
-          <RoleProvider role={role}>
-            <DemoBrandContext.Provider value={demoState as never}>
-              <ChatAgenticProvider enabled>
-                <MenuAccessProvider hidden={hidden} canManageMenus={false}>
-                  {mobile ? <MobileNav /> : <Sidebar />}
-                </MenuAccessProvider>
-              </ChatAgenticProvider>
-            </DemoBrandContext.Provider>
-          </RoleProvider>
-        </SimpleNavProvider>
+        <RoleProvider role={role}>
+          <DemoBrandContext.Provider value={demoState as never}>
+            <ChatAgenticProvider enabled>
+              <MenuAccessProvider hidden={hidden} canManageMenus={false}>
+                {mobile ? <MobileNav /> : <Sidebar />}
+              </MenuAccessProvider>
+            </ChatAgenticProvider>
+          </DemoBrandContext.Provider>
+        </RoleProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -170,7 +160,7 @@ const dotted = (scope: ParentNode = container) =>
     ]),
   );
 
-describe('the dots after a nightly run (SIMPLE_NAV)', () => {
+describe('the dots after a nightly run', () => {
   it('reads the brand’s state once, for the areas on the menu and the count', async () => {
     await render();
     expect(getMenuState).toHaveBeenCalledTimes(1);
@@ -344,15 +334,6 @@ describe('who sees which dot', () => {
     await act(async () => groupHeader('More')!.click());
     expect(dotIn(groupHeader('More'))).toBeNull();
     expect(dotIn(link('/dashboard/citations'))).toBe('green');
-  });
-});
-
-describe('without SIMPLE_NAV', () => {
-  it('reads nothing and shows no dot or count', async () => {
-    await render({ simpleNav: false });
-    expect(getMenuState).not.toHaveBeenCalled();
-    expect(container.querySelector('[data-menu-dot]')).toBeNull();
-    expect(container.querySelector('[data-open-actions]')).toBeNull();
   });
 });
 
