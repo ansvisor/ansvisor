@@ -21,6 +21,7 @@ vi.mock('@/hooks/use-user-role', () => ({
 const actions = vi.hoisted(() => ({ getMyMenu: vi.fn(), setMyWorkAreas: vi.fn() }));
 vi.mock('@/lib/actions/menu-access', () => actions);
 
+const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 const { WorkAreasCard, menuWithWorkAreas } = await import('./work-areas-card');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
 const { menuSectionsFor } = await import('@/lib/menu-access');
@@ -53,14 +54,16 @@ afterEach(() => {
   container.remove();
 });
 
-async function render(start: MyMenu, chatOn = false) {
+async function render(start: MyMenu, chatOn = false, simpleNav = false) {
   actions.getMyMenu.mockResolvedValue(start);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <ChatAgenticProvider enabled={chatOn}>
-          <WorkAreasCard />
-        </ChatAgenticProvider>
+        <SimpleNavProvider enabled={simpleNav}>
+          <ChatAgenticProvider enabled={chatOn}>
+            <WorkAreasCard />
+          </ChatAgenticProvider>
+        </SimpleNavProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -175,5 +178,20 @@ describe('WorkAreasCard', () => {
     canAdmin = true;
     await render(menu());
     expect(container.textContent).toContain("Nobody else can take a section off an admin's menu.");
+  });
+});
+
+describe('WorkAreasCard with the simplified menu (SIMPLE_NAV)', () => {
+  it('lists the menu in its order, Agents under the Action Center, and narrows it as before', async () => {
+    await render(menu(), true, true);
+    const listed = [...container.querySelectorAll('[data-section]')].map((li) =>
+      li.getAttribute('data-section'),
+    );
+    expect(listed.slice(0, 4)).toEqual(['agent', 'action-center', 'agents', 'prompts']);
+    expect(section('agents').textContent).toBe('Agents · in Action Center');
+    expect(container.textContent).toContain('13 of 13 sections');
+    await act(async () => chip('AEO/GEO & Audit').click());
+    expect(section('agents').textContent).not.toContain('Not in your work areas');
+    expect(section('agent').textContent).toContain('Not in your work areas');
   });
 });
