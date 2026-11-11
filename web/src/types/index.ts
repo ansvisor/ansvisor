@@ -82,6 +82,11 @@ export interface Prompt {
   /** Target URLs cited by at least one answer. */
   citedUrlCount: number;
   createdAt: string;
+  /**
+   * When it started waiting for a spot on the plan (00535): saved past the
+   * limit, inactive and not tracked. Absent when it isn't waiting.
+   */
+  waitingSince?: string | null;
 }
 
 export interface Topic {

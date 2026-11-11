@@ -571,6 +571,42 @@ describe('Action Center › Today', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it('says prompts wait for a spot, with Free up a spot and, on Starter, See Growth', async () => {
+    reads.getTodayWaiting.mockResolvedValue({
+      ...waiting,
+      prompts: { count: 3, free: 0, fits: false, plan: 'starter' },
+    });
+    await draw();
+    const types = [...container.querySelectorAll('[data-waiting]')].map((row) =>
+      row.getAttribute('data-waiting'),
+    );
+    expect(types).toEqual(['agent', 'drafts', 'due', 'review', 'prompts', 'ideas']);
+    const row = container.querySelector('[data-waiting="prompts"]')!;
+    expect(row.textContent).toContain('3 prompts are waiting for a spot.');
+    const links = [...row.querySelectorAll('a')];
+    expect(links.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['Free up a spot', '/dashboard/prompts/tracked?status=waiting&swap=1'],
+      ['See Growth', '/dashboard/settings?tab=billing'],
+    ]);
+    await act(async () => links[1].click());
+    expect(track).toHaveBeenCalledWith('prompt_limit_see_growth', { source: 'today' });
+    await act(async () => links[0].click());
+    expect(track).toHaveBeenCalledWith('today_waiting_clicked', { type: 'prompts' });
+  });
+
+  it('says a spot is free for one, which a waiting prompt never takes by itself', async () => {
+    reads.getTodayWaiting.mockResolvedValue({
+      ...waiting,
+      prompts: { count: 2, free: 1, fits: true, plan: 'growth' },
+    });
+    await draw();
+    const row = container.querySelector('[data-waiting="prompts"]')!;
+    expect(row.textContent).toContain('1 spot free · 2 prompts wait for one.');
+    expect(
+      [...row.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]),
+    ).toEqual([['Track a waiting prompt', '/dashboard/prompts/tracked?status=waiting&swap=1']]);
+  });
+
   it('says nothing waits, and offers the focus action furthest along', async () => {
     reads.getTodayWaiting.mockResolvedValue({
       ...waiting,

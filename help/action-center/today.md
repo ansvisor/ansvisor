@@ -1,7 +1,7 @@
 ---
 title: Today in the Action Center
 route: /dashboard/action-center/today
-keywords: [today, action center, todays focus, since yesterday, waiting for you, finish setting up, where you stand, new area to track]
+keywords: [today, action center, todays focus, since yesterday, waiting for you, finish setting up, where you stand, new area to track, waiting for a spot]
 synonyms: [start page, home page, daily summary, what to do today, my day]
 plan: all
 updated: 2026-11-11
@@ -34,6 +34,12 @@ The top line has the date, the brand and when AI answers last came in, with how 
 - **Finish setting up**: the next of the 7 set-up steps (KPIs, competitors, topics, prompts, Search Console, Analytics, the AI traffic snippet), until all 7 are done. **Hide** hides the steps for the brand when an admin or manager hides them, and for you otherwise.
 - **Where you stand**: your score, its change since the run before, your rank among competitors and the gap to the next brand.
 - **Ask Chat**: with Chat on, a question goes to Chat's side panel.
+
+## Prompts waiting for a spot
+
+When your plan's prompt locations are all in use, prompts you add are saved as **Waiting for a spot**: kept, but not tracked. Admins and managers see them under **Waiting for you**, with **Free up a spot**, and on Starter, **See Growth**. A waiting prompt never starts by itself when a spot frees up; Today says "1 spot free" instead, so you pick which one to track.
+
+**Free up a spot** opens Tracked Prompts and lists prompts you could pause, least useful first: low demand, and AI rarely names you there. Your other brands' prompts are listed too, since the limit is shared. A prompt in several locations needs that many spots. **Pause it and track this one** does both at once; if tracking fails, the paused prompts are tracked again.
 
 ## A brand's first day
 

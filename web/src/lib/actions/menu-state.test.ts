@@ -13,11 +13,14 @@ const USER = '99999999-9999-4999-8999-999999999999';
 const BRAND = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const ORG = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 
-type Answer = { data: unknown; error: { message: string } | null };
+type Answer = { data: unknown; error: { message: string } | null; count?: number };
 
 const db = vi.hoisted(() => ({
   user: { id: '99999999-9999-4999-8999-999999999999' } as { id: string } | null,
-  answers: {} as Record<string, { data: unknown; error: { message: string } | null }>,
+  answers: {} as Record<
+    string,
+    { data: unknown; error: { message: string } | null; count?: number }
+  >,
   calls: {} as Record<string, [string, ...unknown[]][]>,
   count: vi.fn(async () => 4),
 }));
@@ -174,6 +177,30 @@ describe('getMenuState', () => {
     expect(state).not.toHaveProperty('traffic');
     expect(state?.navSeen).toBeNull();
     expect(state?.newActionAt).toBe('2026-11-11T04:00:00.000Z');
+  });
+
+  it('counts the prompts waiting for a spot with one head count, only when asked', async () => {
+    db.answers.prompts = { data: null, error: null, count: 2 } as Answer;
+    expect(await getMenuState(BRAND, everything)).not.toHaveProperty('waitingPrompts');
+    expect(db.calls.prompts).toBeUndefined();
+
+    const state = await getMenuState(BRAND, { ...everything, waiting: true });
+    expect(state?.waitingPrompts).toBe(2);
+    expect(db.calls.prompts).toEqual([
+      ['select', 'id, prompt_sets!inner(brand_id)', { count: 'exact', head: true }],
+      ['eq', 'prompt_sets.brand_id', BRAND],
+      ['not', 'waiting_since', 'is', null],
+    ]);
+
+    // Not on the menu: not counted.
+    db.calls = {};
+    await getMenuState(BRAND, { areas: ['mentions'], count: false, waiting: true });
+    expect(db.calls.prompts).toBeUndefined();
+
+    db.answers.prompts = { data: null, error: { message: 'boom' } };
+    expect(await getMenuState(BRAND, { ...everything, waiting: true })).not.toHaveProperty(
+      'waitingPrompts',
+    );
   });
 
   it('is the empty visit list for a person who has none yet', async () => {
