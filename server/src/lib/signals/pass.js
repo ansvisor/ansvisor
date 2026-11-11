@@ -26,7 +26,10 @@ import { generateActionsForBrand } from '../action-center/generate.js';
 import { rescoreBrandActions } from '../action-center/priority-data.js';
 import { sweepActionTasks } from '../action-center/task-writer/index.js';
 import { sweepStaleActions } from '../action-center/stale.js';
-import { syncBusinessHubSetupAction } from '../action-center/from-business-hub.js';
+import {
+  syncBusinessHubNumbersAction,
+  syncBusinessHubSetupAction,
+} from '../action-center/from-business-hub.js';
 import { businessHubEnabled } from '../business-hub/flag.js';
 import { resolve } from '../../config/action-engine.js';
 
@@ -84,22 +87,31 @@ async function markStaleActions(brandId, now) {
 }
 
 /**
- * The ChatGPT Business Hub setup action (action-center/from-business-hub.js),
- * once per brand, behind BUSINESS_HUB_ENABLED. It takes one of the day's new
+ * The ChatGPT Business Hub actions (action-center/from-business-hub.js),
+ * behind BUSINESS_HUB_ENABLED: the setup action, once per brand, then the
+ * weekly reminder to enter the numbers. Each takes one of the day's new
  * actions, so it opens only while tonight's generator left one. Best effort,
- * as the stale sweep: an action that can't be raised tonight is tried again
- * the next night, and is no reason to fail the pass. Null when the flag is
- * off or it failed.
+ * each on its own, as the stale sweep: an action that can't be raised
+ * tonight is tried again the next night, and is no reason to fail the pass.
+ * Null when the flag is off or both failed.
  */
+const BUSINESS_HUB_SYNCS = [
+  ['setup', syncBusinessHubSetupAction],
+  ['numbers', syncBusinessHubNumbersAction],
+];
+
 async function syncBusinessHub(brandId, generated, now) {
   if (!businessHubEnabled()) return null;
-  try {
-    const open = (generated?.created ?? 0) < resolve().noise.maxNewActionsPerDay;
-    return { setup: await syncBusinessHubSetupAction(brandId, { now, open }) };
-  } catch (err) {
-    logger.warn({ brandId, err: err.message }, '[actions] business hub sync failed');
-    return null;
+  const open = (generated?.created ?? 0) < resolve().noise.maxNewActionsPerDay;
+  const done = {};
+  for (const [name, sync] of BUSINESS_HUB_SYNCS) {
+    try {
+      done[name] = await sync(brandId, { now, open });
+    } catch (err) {
+      logger.warn({ brandId, err: err.message, sync: name }, '[actions] business hub sync failed');
+    }
   }
+  return Object.keys(done).length ? done : null;
 }
 
 /**

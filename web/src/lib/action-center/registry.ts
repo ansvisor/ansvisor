@@ -136,7 +136,10 @@ export type ActionKind =
   | 'chat_finding'
   // Raised once per brand by the nightly pass: set up its ChatGPT Business
   // Hub profile (BUSINESS_HUB_ENABLED).
-  | 'business_hub_setup';
+  | 'business_hub_setup'
+  // Raised each week a brand's Business Hub numbers are 7 days old, and
+  // closed when they are entered.
+  | 'business_hub_numbers';
 
 export type TaskStatus =
   | 'todo'
@@ -317,6 +320,7 @@ export const ACTION_KINDS: readonly ActionKind[] = [
   'shopping_links',
   'chat_finding',
   'business_hub_setup',
+  'business_hub_numbers',
 ];
 
 /**

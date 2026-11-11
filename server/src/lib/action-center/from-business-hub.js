@@ -197,41 +197,22 @@ export function businessHubSetupTasks({ brandName, domain, open, ecommerce, dire
 }
 
 /**
- * Completes the setup action's Enter your first Business Hub numbers task
- * once the brand's numbers are saved (business-hub/snapshots.js
- * afterBusinessHubSave), as checked automatically: its card's last check
- * and a task_checked line in its History, as the shopping check's
- * (from-shopping-check.js). The action itself stays as it is: the person
- * closes it, as any action. Returns whether a task was completed.
- *
- * @param {string} brandId
- * @param {{ db?: object, now?: Date }} [opts]
+ * Completes an action's own Business Hub task of `step`, as checked
+ * automatically: its card's last check and a task_checked line in its
+ * History, as the shopping check's (from-shopping-check.js). A task someone
+ * changed meanwhile is left as it is. Returns how many it completed, and
+ * how many other tasks are still open on the action (someone's own work).
  */
-export async function completeFirstNumbersTask(
-  brandId,
-  { db = supabaseAdmin, now = new Date() } = {},
-) {
-  const { data: actions, error } = await db
-    .from('actions')
-    .select('id, status')
-    .eq('brand_id', brandId)
-    .eq('dedup_key', businessHubSetupDedupKey(brandId))
-    .in('status', ACTIVE)
-    .limit(1);
-  if (error) throw new Error(`actions read: ${error.message}`);
-  const action = actions?.[0];
-  if (!action) return false;
-
-  const { data: tasks, error: tasksErr } = await db
+async function checkOwnTasks(db, action, step, at) {
+  const { data: tasks, error } = await db
     .from('action_tasks')
     .select('id, title, status, details')
     .eq('action_id', action.id)
     .in('status', OPEN_TASKS);
-  if (tasksErr) throw new Error(`action_tasks read: ${tasksErr.message}`);
+  if (error) throw new Error(`action_tasks read: ${error.message}`);
   const own = (tasks ?? []).filter(
-    (t) => t.details?.source === BUSINESS_HUB_SOURCE && t.details?.step === 'numbers',
+    (t) => t.details?.source === BUSINESS_HUB_SOURCE && t.details?.step === step,
   );
-  const at = now.toISOString();
   let completed = 0;
   for (const t of own) {
     const autoCheck = { at, triedAt: at, passed: true, missing: [] };
@@ -257,9 +238,224 @@ export async function completeFirstNumbersTask(
       actor_id: null,
     });
   }
+  return { completed, others: (tasks ?? []).length - own.length };
+}
+
+/** The brand's open action of a dedup key, or null. */
+async function openAction(db, brandId, dedupKey) {
+  const { data, error } = await db
+    .from('actions')
+    .select('id, status')
+    .eq('brand_id', brandId)
+    .eq('dedup_key', dedupKey)
+    .in('status', ACTIVE)
+    .limit(1);
+  if (error) throw new Error(`actions read: ${error.message}`);
+  return data?.[0] ?? null;
+}
+
+/**
+ * Completes the setup action's Enter your first Business Hub numbers task
+ * once the brand's numbers are saved (business-hub/snapshots.js
+ * afterBusinessHubSave). The action itself stays as it is: the person
+ * closes it, as any action. Returns whether a task was completed.
+ *
+ * @param {string} brandId
+ * @param {{ db?: object, now?: Date }} [opts]
+ */
+export async function completeFirstNumbersTask(
+  brandId,
+  { db = supabaseAdmin, now = new Date() } = {},
+) {
+  const action = await openAction(db, brandId, businessHubSetupDedupKey(brandId));
+  if (!action) return false;
+  const at = now.toISOString();
+  const { completed } = await checkOwnTasks(db, action, 'numbers', at);
   // The action moves up its list.
   if (completed) await db.from('actions').update({ updated_at: at }).eq('id', action.id);
   return completed > 0;
+}
+
+// ─── The weekly reminder ────────────────────────────────────────────────────
+
+export const BUSINESS_HUB_NUMBERS_KIND = 'business_hub_numbers';
+/** The numbers are due again once the newest entry ended this many days ago. */
+export const REMIND_AFTER_DAYS = 7;
+/** A reminder dismissed (other than as Not relevant) or closed rests this long. */
+export const REMINDER_REST_DAYS = 7;
+
+/** One open reminder per brand; a new one each week the numbers are due. */
+export function businessHubNumbersDedupKey(brandId) {
+  return `${BUSINESS_HUB_NUMBERS_KIND}:${brandId}`;
+}
+
+/** The reminder's one task: this week's numbers, checked when they are saved. */
+export function businessHubNumbersTask({ lastEnd }) {
+  return task('reminder', "Enter this week's ChatGPT Business Hub numbers", {
+    url: NUMBERS_PATH,
+    where: 'Visibility › Overview',
+    why: `Your last Business Hub numbers end ${lastEnd}. Business Hub shows only the last 7 or 28 days, so a week that isn't entered is gone from it.`,
+    how: [
+      'In Business Hub, open Insights and pick 7 days.',
+      'In Visibility, choose Enter numbers on the ChatGPT Business Hub card.',
+      "Copy Mentions, Website clicks, Profile views and the top discovery topics, and save. Leave a number empty if Business Hub doesn't show it.",
+    ],
+    doneWhen: "This week's numbers are saved. Checked automatically when they are.",
+    check: 'auto',
+    type: 'technical',
+    effort: '~10m',
+    role: 'Marketing lead',
+  });
+}
+
+/**
+ * Completes the open reminder's task once numbers are saved, and the
+ * reminder too, with its History line, unless someone added work to it,
+ * which is theirs to finish (as the shopping check's closeAction). Returns
+ * whether the reminder was closed.
+ *
+ * @param {string} brandId
+ * @param {{ db?: object, now?: Date }} [opts]
+ */
+export async function closeNumbersReminder(brandId, { db = supabaseAdmin, now = new Date() } = {}) {
+  const action = await openAction(db, brandId, businessHubNumbersDedupKey(brandId));
+  if (!action) return false;
+  const at = now.toISOString();
+  const { completed, others } = await checkOwnTasks(db, action, 'reminder', at);
+  if (others > 0) {
+    if (completed) await db.from('actions').update({ updated_at: at }).eq('id', action.id);
+    return false;
+  }
+  const { data: closed, error } = await db
+    .from('actions')
+    .update({ status: 'completed', completed_at: at, updated_at: at })
+    .eq('id', action.id)
+    .eq('status', action.status)
+    .select('id');
+  if (error) throw new Error(`actions write: ${error.message}`);
+  if (!closed?.length) return false;
+  await db.from('action_events').insert({
+    action_id: action.id,
+    event: 'status_changed',
+    data: { to: 'completed', source: BUSINESS_HUB_SOURCE },
+    actor_id: null,
+  });
+  return true;
+}
+
+/**
+ * Raises the brand's weekly reminder to enter its Business Hub numbers.
+ * Returns 'opened'; 'exists' (one is open); 'fresh' (the newest entry ended
+ * less than REMIND_AFTER_DAYS ago); 'opted_out' (the last one was dismissed
+ * as Not relevant: no more reminders); 'resting' (the last one was
+ * dismissed or closed less than REMINDER_REST_DAYS ago); 'ineligible' (the
+ * flag is off, no entry yet, or a demo brand); or 'held' (the day's new
+ * actions are spent).
+ *
+ * @param {string} brandId
+ * @param {{ db?: object, now?: Date, open?: boolean, env?: NodeJS.ProcessEnv }} [opts]
+ */
+export async function syncBusinessHubNumbersAction(
+  brandId,
+  { db = supabaseAdmin, now = new Date(), open = true, env = process.env } = {},
+) {
+  if (!businessHubEnabled(env)) return 'ineligible';
+  const { data: newest, error: snapErr } = await db
+    .from('business_hub_snapshots')
+    .select('period_days, period_end')
+    .eq('brand_id', brandId)
+    .order('period_end', { ascending: false })
+    .limit(1);
+  if (snapErr) throw new Error(`business_hub_snapshots read: ${snapErr.message}`);
+  const last = newest?.[0];
+  if (!last) return 'ineligible';
+  const today = Date.parse(now.toISOString().slice(0, 10));
+  const lastEnd = Date.parse(`${last.period_end}T00:00:00Z`);
+  if (today - lastEnd < REMIND_AFTER_DAYS * DAY_MS) return 'fresh';
+
+  const { data: reminders, error } = await db
+    .from('actions')
+    .select('id, status, dismiss_reason, completed_at, updated_at, created_at')
+    .eq('brand_id', brandId)
+    .eq('dedup_key', businessHubNumbersDedupKey(brandId))
+    .order('created_at', { ascending: false })
+    .limit(5);
+  if (error) throw new Error(`actions read: ${error.message}`);
+  if ((reminders ?? []).some((a) => ACTIVE.includes(a.status))) return 'exists';
+  const previous = reminders?.[0];
+  if (previous?.status === 'dismissed' && previous.dismiss_reason === 'not_relevant') {
+    return 'opted_out';
+  }
+  if (previous) {
+    const closedAt = Date.parse(previous.completed_at ?? previous.updated_at ?? '') || 0;
+    if (now.getTime() - closedAt < REMINDER_REST_DAYS * DAY_MS) return 'resting';
+  }
+
+  const { data: brand, error: brandErr } = await db
+    .from('brands')
+    .select('is_demo')
+    .eq('id', brandId)
+    .maybeSingle();
+  if (brandErr) throw new Error(`brands read: ${brandErr.message}`);
+  if (!brand || brand.is_demo) return 'ineligible';
+
+  if (!open) return 'held';
+  if ((await actionsToday(db, brandId, now)) >= resolve().noise.maxNewActionsPerDay) return 'held';
+
+  const payload = {
+    source: BUSINESS_HUB_SOURCE,
+    lastEnd: last.period_end,
+    lastDays: last.period_days,
+    targetEntity: 'platforms',
+    targetCount: 1,
+    targets: [{ id: CHATGPT_PLATFORM, label: 'ChatGPT' }],
+  };
+  const category = 'growth';
+  const impact = 'low';
+  const nowIso = now.toISOString();
+  const { data: action, error: insertErr } = await db
+    .from('actions')
+    .insert({
+      brand_id: brandId,
+      category,
+      kind: BUSINESS_HUB_NUMBERS_KIND,
+      definition_version: 1,
+      impact,
+      status: 'new',
+      payload,
+      kpi_keys: [],
+      baseline: { capturedAt: nowIso, lastEnd: last.period_end },
+      dedup_key: businessHubNumbersDedupKey(brandId),
+      // Its task is complete as written: the task writer leaves it be.
+      tasks_generated_at: nowIso,
+      ...(await priorityOnCreate(
+        { brand_id: brandId, kind: BUSINESS_HUB_NUMBERS_KIND, category, impact, payload },
+        now,
+      )),
+    })
+    .select('id, action_no')
+    .single();
+  if (insertErr) {
+    // A pass beside this one opened it (the open-action dedup index, 00084).
+    if (insertErr.code === '23505') return 'exists';
+    throw new Error(`actions write: ${insertErr.message}`);
+  }
+  const reminder = businessHubNumbersTask({ lastEnd: last.period_end });
+  const { error: taskErr } = await db.from('action_tasks').insert({
+    action_id: action.id,
+    position: 1,
+    title: reminder.title,
+    details: reminder.details,
+    status: 'todo',
+  });
+  if (taskErr) throw new Error(`action_tasks write: ${taskErr.message}`);
+  await db.from('action_events').insert({
+    action_id: action.id,
+    event: 'created',
+    actor_id: null,
+    data: { source: BUSINESS_HUB_SOURCE, lastEnd: last.period_end, taskCount: 1 },
+  });
+  return 'opened';
 }
 
 /**

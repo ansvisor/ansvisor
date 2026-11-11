@@ -30,7 +30,7 @@ Ansvisor raises it once for each brand, on a nightly run, when the brand has a w
 5. **Turn on your Business Agent**, in the US only, and only if Business Hub offers it.
 6. **Enter your first Business Hub numbers** on Visibility's ChatGPT Business Hub card. **Enter numbers** in the action opens it.
 
-Each task says why it matters, how to do it and when it is done.
+Each task says why it matters, how to do it and when it is done. After your first numbers, a weekly reminder asks for the next week's.
 
 ## Outside the US
 

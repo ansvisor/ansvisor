@@ -43,3 +43,9 @@ Entering the same days again replaces that entry. Your first entry completes the
 ## Who can enter, edit and delete
 
 Every member of the workspace can enter numbers and edit an entry from **All entries**. Only admins and managers can delete an entry.
+
+## Weekly reminder
+
+After your first entry, the Action Center opens **Enter this week's ChatGPT Business Hub numbers** each week your newest entry is 7 days old or more. Business Hub keeps only the last 7 or 28 days, so a week you don't enter is gone from it.
+
+Saving the numbers completes the reminder by itself. Dismissed as **Not now**, it comes back a week later. Dismissed as **Not relevant**, the weekly reminders stop.

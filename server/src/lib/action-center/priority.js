@@ -423,6 +423,16 @@ function sentByHand(action) {
   // Setting up a ChatGPT Business Hub profile (from-business-hub.js): room to
   // grow on one platform, raised once from its tracked answers, and work a
   // person can finish in a few sittings.
+  // Its weekly reminder to enter the numbers is small, sure work.
+  if (action.kind === 'business_hub_numbers') {
+    return {
+      change: 'opportunity',
+      severity: SEVERITY.opportunity,
+      confidence: 0.8,
+      recoverability: 1,
+      subject: { entity: 'platforms', count: 1 },
+    };
+  }
   if (action.kind === 'business_hub_setup') {
     return {
       change: 'opportunity',

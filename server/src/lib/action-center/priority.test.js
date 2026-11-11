@@ -455,6 +455,20 @@ describe('scorePriority', () => {
       subject: { entity: 'platforms', count: 1 },
     });
     expect(setup.reason.factors).toMatchObject({ confidence: 0.6, recoverability: 0.8 });
+    const reminder = scorePriority(
+      {
+        action: action({
+          kind: 'business_hub_numbers',
+          category: 'growth',
+          impact: 'low',
+          created_at: daysAgo(0),
+          payload: { source: 'business_hub', targetEntity: 'platforms', targetCount: 1 },
+        }),
+      },
+      NOW,
+    );
+    expect(reminder.reason.change).toBe('opportunity');
+    expect(reminder.score).toBeLessThan(setup.score);
   });
 
   it('stays within 0–100 and returns whole numbers', () => {

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../config/supabase.js', () => ({ default: {} }));
-vi.mock('../action-center/from-business-hub.js', () => ({ completeFirstNumbersTask: vi.fn() }));
+vi.mock('../action-center/from-business-hub.js', () => ({
+  completeFirstNumbersTask: vi.fn(),
+  closeNumbersReminder: vi.fn(),
+}));
 
 import {
   MAX_TOPICS,
@@ -221,14 +224,18 @@ describe('snapshotOut and afterBusinessHubSave', () => {
     expect(snapshotOut({ id: 's1', period_days: 7, discovery_topics: null }).topics).toEqual([]);
   });
 
-  it('completes the setup action’s first numbers task', async () => {
-    const completeFirstNumbersTask = vi.mocked(
-      (await import('../action-center/from-business-hub.js')).completeFirstNumbersTask,
-    );
-    completeFirstNumbersTask.mockResolvedValue(true);
+  it('completes the setup action’s first numbers task, and closes the weekly reminder', async () => {
+    const actionCenter = await import('../action-center/from-business-hub.js');
+    vi.mocked(actionCenter.completeFirstNumbersTask).mockResolvedValue(true);
+    vi.mocked(actionCenter.closeNumbersReminder).mockResolvedValue(false);
     expect(await afterBusinessHubSave('b1', { db: 'db', now: NOW })).toEqual({
       firstNumbers: true,
+      reminderClosed: false,
     });
-    expect(completeFirstNumbersTask).toHaveBeenCalledWith('b1', { db: 'db', now: NOW });
+    expect(actionCenter.completeFirstNumbersTask).toHaveBeenCalledWith('b1', {
+      db: 'db',
+      now: NOW,
+    });
+    expect(actionCenter.closeNumbersReminder).toHaveBeenCalledWith('b1', { db: 'db', now: NOW });
   });
 });

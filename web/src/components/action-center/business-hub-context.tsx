@@ -17,9 +17,17 @@ export const ENTER_NUMBERS_HREF = '/dashboard/insights?businessHub=enter';
  * follow here open pages of the app. There is no Business Hub API, so the
  * person marks each task done; outside the regions where claiming is open
  * (the payload's `variant`), Business Agents aren't offered. Enter numbers
- * opens Visibility's Business Hub card with its dialog.
+ * opens Visibility's Business Hub card with its dialog. The weekly reminder
+ * to enter the numbers shows it too, saying how the reminder ends.
  */
-export function BusinessHubContext({ payload }: { payload: Record<string, unknown> }) {
+export function BusinessHubContext({
+  payload,
+  reminder = false,
+}: {
+  payload: Record<string, unknown>;
+  /** The weekly reminder to enter the numbers: it closes itself, and Not relevant stops it. */
+  reminder?: boolean;
+}) {
   const t = useTranslations('actionCenter.actionsPage.drawer.businessHub');
   const waitlist = payload.variant === 'waitlist';
 
@@ -43,7 +51,7 @@ export function BusinessHubContext({ payload }: { payload: Record<string, unknow
           {t('enterNumbers')}
         </Link>
       </div>
-      <p className="text-xs text-muted-foreground">{t('noApi')}</p>
+      <p className="text-xs text-muted-foreground">{t(reminder ? 'reminder' : 'noApi')}</p>
       {waitlist && <p className="text-xs text-muted-foreground">{t('usOnlyAgent')}</p>}
     </section>
   );

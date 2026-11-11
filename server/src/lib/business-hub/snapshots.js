@@ -13,7 +13,10 @@
 
 import { z } from 'zod';
 import supabaseAdmin from '../../config/supabase.js';
-import { completeFirstNumbersTask } from '../action-center/from-business-hub.js';
+import {
+  closeNumbersReminder,
+  completeFirstNumbersTask,
+} from '../action-center/from-business-hub.js';
 
 export const PERIOD_DAYS = [7, 28];
 export const MAX_TOPICS = 5;
@@ -217,15 +220,16 @@ export async function saveSnapshots(
 }
 
 /**
- * What follows a save of the brand's numbers: the setup action's Enter your
- * first Business Hub numbers task is completed (action-center/
- * from-business-hub.js). Best effort for the caller: a failure here never
- * undoes the save.
+ * What follows a save of the brand's numbers (action-center/
+ * from-business-hub.js): the setup action's Enter your first Business Hub
+ * numbers task is completed, and the open weekly reminder closed. Best
+ * effort for the caller: a failure here never undoes the save.
  *
  * @param {string} brandId
  * @param {{ db?: object, now?: Date }} [opts]
  */
 export async function afterBusinessHubSave(brandId, { db = supabaseAdmin, now = new Date() } = {}) {
   const firstNumbers = await completeFirstNumbersTask(brandId, { db, now });
-  return { firstNumbers };
+  const reminderClosed = await closeNumbersReminder(brandId, { db, now });
+  return { firstNumbers, reminderClosed };
 }

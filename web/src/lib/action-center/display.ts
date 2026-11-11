@@ -139,6 +139,19 @@ export function actionTexts(
           : t('business_hub_setup.descriptionGeneric'),
     };
   }
+  // The weekly reminder to enter the numbers names the last entry's days.
+  if (action.kind === 'business_hub_numbers') {
+    const end = str(p, 'lastEnd');
+    return {
+      title: t('business_hub_numbers.title'),
+      description: end
+        ? t('business_hub_numbers.description', {
+            days: num(p, 'lastDays') === 28 ? 28 : 7,
+            end,
+          })
+        : t('business_hub_numbers.descriptionGeneric'),
+    };
+  }
   // A finding sent from Chat (CHAT-09 §E) carries the title and the finding
   // the person approved.
   if (action.kind === 'chat_finding' && typeof p.title === 'string' && p.title) {
@@ -411,6 +424,7 @@ const PERSON_SENT_KINDS: string[] = [
   'shopping_links',
   'chat_finding',
   'business_hub_setup',
+  'business_hub_numbers',
 ];
 
 /** Compact evidence chips under the title: signal count plus the kind's own

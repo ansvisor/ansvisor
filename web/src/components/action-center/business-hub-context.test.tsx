@@ -23,11 +23,11 @@ vi.mock('@/i18n/navigation', () => ({
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(payload: Record<string, unknown>) {
+async function render(payload: Record<string, unknown>, reminder = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
-        <BusinessHubContext payload={payload} />
+        <BusinessHubContext payload={payload} reminder={reminder} />
       </NextIntlClientProvider>,
     );
   });
@@ -64,6 +64,14 @@ describe('BusinessHubContext', () => {
       (a) => a.textContent === 'Enter numbers',
     );
     expect(enter?.getAttribute('href')).toBe('/dashboard/insights?businessHub=enter');
+  });
+
+  it('says how the weekly reminder ends: a save, or Not relevant', async () => {
+    await render({ source: 'business_hub', lastEnd: '2026-11-03' }, true);
+    expect(container.textContent).toContain(
+      'Saving the numbers completes this reminder. Dismiss it as Not relevant to stop the weekly reminders.',
+    );
+    expect(container.textContent).not.toContain("There's no Business Hub API");
   });
 
   it('says Business Agents are for US businesses only outside the open regions', async () => {
