@@ -1,10 +1,18 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../messages/en.json';
 import { BUSINESS_HUB_URL } from '@/lib/business-hub/links';
 import { BusinessHubContext } from './business-hub-context';
+
+vi.mock('@/i18n/navigation', () => ({
+  Link: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
 
 (
   globalThis as typeof globalThis & {

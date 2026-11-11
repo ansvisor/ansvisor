@@ -4,14 +4,14 @@ route: /dashboard/brands/new
 keywords: [add brand, onboarding, setup wizard, first brand, brand setup, target market, free trial]
 synonyms: [get started, create a brand, set up my account, onboard, add another brand]
 plan: all
-updated: 2026-11-10
-last_checked: 2026-11-10
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
 sources: [docs/guides/add-your-first-brand.mdx]
 ---
-When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and seven on the cloud: the extra two ask what you work on and pick your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
+When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and six on the cloud: the extra one picks your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped.
 
 ## Step 1: Brand basics
 
@@ -63,13 +63,7 @@ Select at least one competitor to continue. **Start tracking with N competitors*
 
 If your site looks like an online store, Ansvisor turns on Product Visibility for the brand and says so on this step. You can turn it off in the brand settings.
 
-## Step 6 on the cloud: What do you work on?
-
-Pick what you work on or lead, such as Founders & leaders, Brand & PR, Content or Growth, and your left menu keeps only the sections you need. **Skip: show me everything** keeps every section. You can change it later in **Settings › Account**.
-
-A self-hosted install asks the same the first time you open the dashboard.
-
-## Step 7 on the cloud: Plan and checkout
+## Step 6 on the cloud: Plan and checkout
 
 The final step picks your plan, **Starter** or **Growth**, and starts checkout.
 

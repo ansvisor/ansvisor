@@ -467,3 +467,75 @@ describe('suggestion refresh keeps the list', () => {
     expect(suggestions[3]).toMatchObject({ id: 'o1', suggested_text: repeated });
   });
 });
+
+describe('suggestion refresh keeps the Business Hub suggestions (00527)', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const hub = (id, text, expiresInDays = 20) => ({
+    id,
+    brand_id: 'b1',
+    suggested_text: text,
+    status: 'new',
+    source: 'business_hub',
+    source_data: { topic: 'office coffee', periodEnd: null, enteredAt: '2026-11-01T00:00:00Z' },
+    expires_at: new Date(Date.now() + expiresInDays * DAY).toISOString(),
+  });
+  const old = (id, text) => ({ id, brand_id: 'b1', suggested_text: text, status: 'new' });
+  const deletedIds = () =>
+    db.deletes.filter((d) => d.table === 'prompt_suggestions').flatMap((d) => d.filters.id);
+
+  it('neither removes nor rewrites one, and lists it after the new batch', async () => {
+    db.current = [hub('h1', 'which office coffee subscription is best'), old('o1', 'an old one')];
+
+    const res = await refresh();
+
+    expect(res.status).toBe(200);
+    expect(deletedIds()).toEqual(['o1']);
+    expect(db.updates).toEqual([]);
+    const { suggestions } = await res.json();
+    expect(suggestions).toHaveLength(16);
+    expect(suggestions.at(-1)).toMatchObject({ id: 'h1', source: 'business_hub' });
+  });
+
+  it('leaves out a refreshed text one of them has, and keeps that one as it is', async () => {
+    const repeated = suggestion(2).text;
+    db.current = [hub('h1', repeated.toUpperCase())];
+
+    const res = await refresh();
+
+    expect(res.status).toBe(200);
+    const [rows] = insertsInto('prompt_suggestions');
+    expect(rows).toHaveLength(14);
+    expect(rows.some((r) => r.suggested_text === repeated)).toBe(false);
+    expect(db.updates).toEqual([]);
+    expect(deletedIds()).toEqual([]);
+    const { suggestions } = await res.json();
+    expect(suggestions.filter((s) => s.id === 'h1')).toHaveLength(1);
+  });
+
+  it('removes one past its 30 days with the old batch', async () => {
+    db.current = [hub('h1', 'which office coffee subscription is best', -1)];
+
+    expect((await refresh()).status).toBe(200);
+    expect(deletedIds()).toEqual(['h1']);
+  });
+});
+
+describe('the suggestions list', () => {
+  it('leaves out a Business Hub suggestion past its 30 days, and reads staleness from the batch', async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const at = (days) => new Date(Date.now() + days * day).toISOString();
+    db.current = [
+      { id: 'h1', source: 'business_hub', status: 'new', expires_at: at(10) },
+      { id: 'h2', source: 'business_hub', status: 'new', expires_at: at(-1) },
+      { id: 'l1', source: 'llm', status: 'new', expires_at: at(-1) },
+    ];
+
+    const res = await fetch(`${baseUrl}/suggestions/b1`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.suggestions.map((s) => s.id)).toEqual(['h1', 'l1']);
+    // The refresh's batch is past its 48 hours: stale, whatever Business Hub's say.
+    expect(body.stale).toBe(true);
+  });
+});

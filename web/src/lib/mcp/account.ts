@@ -20,7 +20,7 @@ export interface McpMe {
   organization_id: string | null;
   organization_name: string | null;
   role: UserRole | null;
-  /** What they work on, from "What do you work on?" (Settings › Account). */
+  /** What they work on (Settings › Account; workAreasOf); none is Everything. */
   work_areas: { id: WorkAreaId; name: string }[];
   /** Admin, or a manager an admin let choose who sees which menu sections. */
   can_manage_menus: boolean;
@@ -36,7 +36,7 @@ export async function getMeFor(auth: McpAuthContext): Promise<McpMe> {
     await Promise.all([
       supabaseAdmin
         .from('profiles')
-        .select('role, work_areas, can_manage_menus')
+        .select('role, work_areas, work_areas_asked_at, can_manage_menus')
         .eq('id', auth.userId)
         .maybeSingle(),
       auth.organizationId
@@ -56,9 +56,7 @@ export async function getMeFor(auth: McpAuthContext): Promise<McpMe> {
     organization_id: auth.organizationId,
     organization_name: (org?.name as string | null | undefined) ?? null,
     role,
-    work_areas: workAreasOf((profile?.work_areas as string[] | null | undefined) ?? null).map(
-      (id) => ({ id, name: workAreaName(id) }),
-    ),
+    work_areas: workAreasOf(profile).map((id) => ({ id, name: workAreaName(id) })),
     can_manage_menus: role
       ? canManageMenus({
           role,
