@@ -14,6 +14,8 @@ export type PriorityLevel = (typeof PRIORITY_LEVELS)[number];
 
 const CHANGES = ['lost', 'dropped', 'slipping', 'gap', 'issue', 'opportunity', 'gain'] as const;
 type PriorityChange = (typeof CHANGES)[number];
+/** Changes that are a standing state rather than an event: said without "N days ago". */
+const STATES = new Set<PriorityChange>(['gap', 'opportunity']);
 
 /** The facts the server stored with the score (`actions.priority_reason`). */
 export interface PriorityReason {
@@ -308,8 +310,10 @@ export function priorityReasonText(reason: PriorityReason, t: Translator): strin
           }),
         })
       : t(`reason.alone.${key}`, named);
+  // When it happened, for a change that happened: a gap or room to grow is a
+  // standing state, and "Room to grow on 3 prompts 1 day ago" reads as noise.
   const when =
-    reason.change && reason.days !== null
+    reason.change && !STATES.has(reason.change) && reason.days !== null
       ? reason.days === 0
         ? t('reason.when.today')
         : t('reason.when.days', { days: reason.days })

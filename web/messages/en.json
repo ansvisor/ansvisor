@@ -2931,12 +2931,14 @@
       },
       "close_competitor_gap": {
         "title": "Close the visibility gap with {targets}",
+        "promptTitle": "Close the gap with {competitor}, starting with “{prompt}”",
         "titleGeneric": "Close the visibility gap with competitors",
         "description": "A competitor is mentioned well more often than you.",
         "goal": "Close the gap."
       },
       "protect_visibility": {
         "title": "Protect visibility across {targets}",
+        "namedTitle": "Protect your visibility on {targets}",
         "titleGeneric": "Protect your visibility",
         "description": "A real visibility position is losing ground, before it becomes a collapse.",
         "goal": "Hold the position while it still exists to hold."
@@ -2959,6 +2961,7 @@
       },
       "expand_prompt_visibility": {
         "title": "Expand visibility across {targets}",
+        "namedTitle": "Get into AI answers on {targets}",
         "titleGeneric": "Expand prompt visibility",
         "description": "Your brand is absent from answers to these tracked prompts.",
         "goal": "Become visible in AI answers to these prompts."
@@ -2995,6 +2998,7 @@
       },
       "strengthen_emerging_content": {
         "title": "Strengthen momentum across {targets}",
+        "namedTitle": "Build on your gain on {targets}",
         "titleGeneric": "Strengthen emerging content",
         "description": "Visibility is improving on these prompts but has not reached its potential.",
         "goal": "Build on content that is starting to win."
@@ -3137,6 +3141,7 @@
       },
       "recover_lost_mentions": {
         "title": "Recover lost mentions across {targets}",
+        "namedTitle": "Win back mentions on {targets}",
         "titleGeneric": "Recover lost mentions",
         "description": "Your brand disappeared from prompts where it was mentioned.",
         "goal": "Be named again where you were."
@@ -3303,6 +3308,11 @@
         "description": "A competitor leads a topic you have no content for.",
         "goal": "Create the content to compete."
       },
+      "namedTargets": {
+        "prompts": "{more, plural, =0 {“{name}”} one {“{name}” and # more prompt} other {“{name}” and # more prompts}}",
+        "competitors": "{more, plural, =0 {{name}} one {{name} and # more competitor} other {{name} and # more competitors}}",
+        "topics": "{more, plural, =0 {“{name}”} one {“{name}” and # more topic} other {“{name}” and # more topics}}"
+      },
       "targets": {
         "prompts": "{count, plural, one {# prompt} other {# prompts}}",
         "pages": "{count, plural, one {# page} other {# pages}}",
@@ -3317,6 +3327,7 @@
         "title": "Act on a content opportunity for {targets}",
         "titleGeneric": "Act on a content opportunity",
         "description": "Sent from Content Optimization: a piece of content, or work on an existing page, that answers a group of related prompts.",
+        "why": "{page, select, none {A new page} other {An update to {page}}} that answers {prompts}.",
         "goal": "Get the brand into AI answers for these prompts with the content this opportunity calls for."
       },
       "prompt_improve": {

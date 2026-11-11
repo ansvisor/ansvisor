@@ -414,6 +414,23 @@ describe('priorityReasonText', () => {
     ).toBe('A gap to close on 12 prompts.');
   });
 
+  it('says no "days ago" for a standing gap or room to grow', () => {
+    const standing = (change: 'gap' | 'opportunity') =>
+      priorityReasonText(
+        reason({
+          change,
+          subject: { entity: 'prompts', count: 3 },
+          demand: null,
+          commercial: true,
+          heldBefore: false,
+          days: 1,
+        }),
+        t,
+      );
+    expect(standing('opportunity')).toBe('Room to grow on 3 prompts — commercial intent.');
+    expect(standing('gap')).toBe('A gap to close on 3 prompts — commercial intent.');
+  });
+
   it('falls back to a plain subject when the count is unknown', () => {
     expect(
       priorityReasonText(
