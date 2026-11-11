@@ -54,8 +54,42 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it("holds copy for all sixty-two definitions and the AC plan's, the eleven person-sent kinds and the catalog check's", () => {
-    expect(ACTION_KINDS).toHaveLength(77);
+  it("holds copy for all sixty-two definitions and the AC plan's, the eleven person-sent kinds, the catalog check's and Business Hub's", () => {
+    expect(ACTION_KINDS).toHaveLength(78);
+  });
+
+  it('names the ChatGPT Business Hub setup for where claiming is open, or the waitlist, with its evidence', () => {
+    const evidence = { answers: 120, named: 34, cited: 9, since: '2026-10-13T03:00:00.000Z' };
+    const open = actionTexts(
+      action({ kind: 'business_hub_setup', payload: { variant: 'open', evidence } }),
+      t,
+    );
+    expect(open).toEqual({
+      title: 'Set up your ChatGPT Business Hub profile',
+      // Plurals read as their `other` branch here (see `t` above).
+      description:
+        'ChatGPT named you in 34 of 120 tracked answers in the last 30 days; your site was cited in 9.',
+    });
+    const waitlist = actionTexts(
+      action({ kind: 'business_hub_setup', payload: { variant: 'waitlist', evidence } }),
+      t,
+    );
+    expect(waitlist.title).toBe('Get your business into ChatGPT Business Hub');
+    // No evidence on it: no "0 of 0".
+    expect(actionTexts(action({ kind: 'business_hub_setup', payload: {} }), t).description).toBe(
+      messages.actionCenter.actionTexts.business_hub_setup.descriptionGeneric,
+    );
+    // Raised once from its answers, not from signals: no "0 signals".
+    expect(
+      actionContextTags(
+        action({
+          kind: 'business_hub_setup',
+          signalCount: 0,
+          payload: { targetEntity: 'platforms', targetCount: 1 },
+        }),
+        (key, values) => `${key}:${values?.count ?? ''}`,
+      ),
+    ).toEqual(['tags.platforms:1']);
   });
 
   it('says a store’s topic action optimizes its category page when that is its play (AC plan P-7)', () => {
