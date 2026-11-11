@@ -262,7 +262,7 @@ Parts only read, on the same brand and with the same access as you. When a part 
 
 ## When something goes wrong
 
-A step that fails shows a red mark and why, such as **Timed out**. Chat goes on where it can, and the answer says what it couldn't read.
+A step that fails shows a red mark and why, such as **Timed out**. Chat goes on where it can, and the answer says what it couldn't read. A read that timed out isn't tried again in the same answer, so it doesn't hold up the rest.
 
 If the whole answer stops on an error, it says **Stopped: something went wrong** and why, and it still says so after you reload the page. Click **Retry** to send your message again.
 

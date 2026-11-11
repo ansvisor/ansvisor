@@ -236,6 +236,20 @@ vi.mock('./model-providers', async (importOriginal) => {
 });
 // Step 4b's guards' facts, as their reads would give them (go-live-facts.test.ts reads them).
 vi.mock('./go-live-facts', () => ({ readGoLiveFacts: fakes.goLiveFacts }));
+// A read's time limit, made a few milliseconds where a test runs a read out of it (the limit and
+// its retry are read-attempt.test.ts's).
+const readLimits = vi.hoisted(() => ({ short: false }));
+vi.mock('./read-attempt', async (importOriginal) => {
+  const real = await importOriginal<typeof import('./read-attempt')>();
+  return {
+    ...real,
+    attemptRead: (
+      run: () => Promise<unknown>,
+      signal: AbortSignal,
+      limits?: { timeoutMs: number; retryMs: number },
+    ) => real.attemptRead(run, signal, readLimits.short ? { timeoutMs: 20, retryMs: 5 } : limits),
+  };
+});
 // A page's Rules and Quality (W4-12b part 2), as their reads would give them: none unless a test says.
 const pageReads = vi.hoisted(() => ({
   rules: vi.fn(async (..._args: unknown[]): Promise<unknown> => null),
@@ -1046,6 +1060,45 @@ describe("the chat's kept reads and each step's measure (W1-19)", () => {
     expect(fakes.readRun).toHaveBeenCalledTimes(2);
     expect(runRow(second).status).toBe('done');
     vi.mocked(console.error).mockRestore();
+  });
+});
+
+describe('a read that runs out of time (2026-11-11)', () => {
+  afterEach(() => {
+    readLimits.short = false;
+  });
+
+  it("isn't read again, and the writer is told what couldn't be read", async () => {
+    readLimits.short = true;
+    fakes.readRun.mockImplementation(() => new Promise(() => {}));
+    const { haiku, sonnet } = useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text("Visibility couldn't be read just now.")],
+    );
+    const runId = await turn(ADMIN, 'Make me a 30-day plan to raise visibility');
+
+    expect(runRow(runId).status).toBe('done');
+    // Once: the same read would take as long again, while the first still runs.
+    expect(fakes.readRun).toHaveBeenCalledTimes(1);
+    expect(stepsOf(runId)).toHaveLength(1);
+    expect(stepsOf(runId)[0]).toMatchObject({ status: 'error', detail: 'Timed out' });
+    // The reader is told not to read it again, and the writer that it wasn't read.
+    expect(JSON.stringify(haiku.seen[1].prompt)).toContain('took too long and was stopped');
+    const written = JSON.stringify(sonnet.seen[0].prompt);
+    expect(written).toContain('read_visibility');
+    expect(written).toContain('took too long and was stopped');
+  });
+
+  it('still reads a failed read once more', async () => {
+    readLimits.short = true;
+    fakes.readRun.mockRejectedValueOnce(new Error('connection reset'));
+    useModels(
+      [calls(toolCall('r1', 'read_visibility', { brand_id: BRAND })), READY],
+      [text('Ok.')],
+    );
+    const runId = await turn(ADMIN, 'How visible are we?');
+    expect(fakes.readRun).toHaveBeenCalledTimes(2);
+    expect(stepsOf(runId)[0]).toMatchObject({ status: 'done' });
   });
 });
 
