@@ -55,6 +55,12 @@ export interface NavChild {
    */
   requiredFeature?: Feature;
   requiresBrandPref?: BrandPrefKey;
+  /**
+   * Only with the new Chat on for the workspace (CHAT_AGENTIC), as an item's
+   * flag of that name: off, the entry is on no menu and in no list of the
+   * menu's sections. Action Center › Agents in the simplified menu.
+   */
+  requiresChatAgentic?: boolean;
 }
 
 export interface NavItem {
@@ -257,3 +263,71 @@ export const dashboardNav: NavGroup[] = [
     ],
   },
 ];
+
+/** An item of dashboardNav by its route: the simplified menu reuses them as they are. */
+function menuItem(href: string): NavItem {
+  const item = dashboardNav.flatMap((group) => group.items).find((entry) => entry.href === href);
+  if (!item) throw new Error(`No menu item at ${href}`);
+  return item;
+}
+
+/**
+ * The simplified menu (SIMPLE_NAV, lib/simple-nav/flag.ts; the owner's
+ * decisions of 2026-11-11), while it is built: dashboardNav stays the menu
+ * until the launch. Chat, then the Action Center, where everyone lands, as
+ * a group of its own tabs: Today, Actions, Signals, Agents (Agent Center at
+ * its own address, so its menu section, links and Chat's routes stay; only
+ * with the new Chat on and a plan with agents) and History. ANALYTICS, with
+ * Prompts first (adding prompts is the way in), then Visibility, AI Referral
+ * Traffic and Ads, still last and only with ADS_ENABLED. MORE: Content, Site
+ * Audit, Reports and Competitors. Every item keeps its route, gates and
+ * submenu; Agent Center is no item of its own.
+ */
+export const simpleDashboardNav: NavGroup[] = [
+  {
+    items: [
+      menuItem('/dashboard/agent'),
+      {
+        title: 'Action Center',
+        href: '/dashboard/action-center',
+        icon: Target,
+        children: [
+          { title: 'Today', href: '/dashboard/action-center/today' },
+          { title: 'Actions', href: '/dashboard/action-center/actions' },
+          { title: 'Signals', href: '/dashboard/action-center/signals' },
+          {
+            title: 'Agents',
+            href: '/dashboard/agents',
+            icon: Bot,
+            requiredFeature: 'ai_agent',
+            requiresChatAgentic: true,
+          },
+          { title: 'History', href: '/dashboard/action-center/history' },
+        ],
+      },
+    ],
+  },
+  {
+    title: 'Analytics',
+    items: [
+      menuItem('/dashboard/prompts'),
+      menuItem('/dashboard/insights'),
+      menuItem('/dashboard/traffic'),
+      menuItem('/dashboard/ads'),
+    ],
+  },
+  {
+    title: 'More',
+    items: [
+      menuItem('/dashboard/content'),
+      menuItem('/dashboard/audit'),
+      menuItem('/dashboard/reports'),
+      menuItem('/dashboard/competitors'),
+    ],
+  },
+];
+
+/** The menu shown: the simplified one with SIMPLE_NAV on, dashboardNav otherwise. */
+export function navFor(simpleNav: boolean): NavGroup[] {
+  return simpleNav ? simpleDashboardNav : dashboardNav;
+}

@@ -50,6 +50,7 @@ const { Sidebar } = await import('./sidebar');
 const { MobileNav } = await import('./mobile-nav');
 const { MenuAccessProvider } = await import('@/components/providers/menu-access-provider');
 const { useSidebarStore } = await import('@/stores/use-sidebar-store');
+const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -57,16 +58,18 @@ const { useSidebarStore } = await import('@/stores/use-sidebar-store');
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(path: string, hidden: string[] = []) {
+async function render(path: string, hidden: string[] = [], simpleNav = false) {
   const [pathname] = path.split('?');
   nav.pathname = pathname;
   window.history.replaceState(null, '', path);
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <MenuAccessProvider hidden={hidden} canManageMenus={false}>
-          <Sidebar />
-        </MenuAccessProvider>
+        <SimpleNavProvider enabled={simpleNav}>
+          <MenuAccessProvider hidden={hidden} canManageMenus={false}>
+            <Sidebar />
+          </MenuAccessProvider>
+        </SimpleNavProvider>
       </NextIntlClientProvider>,
     );
   });
@@ -97,6 +100,20 @@ afterEach(() => {
 });
 
 describe('the Visibility group', () => {
+  it('is the same group in the simplified menu (SIMPLE_NAV), under ANALYTICS after Prompts', async () => {
+    await render('/dashboard/mentions', [], true);
+    expect(group().textContent).toBe('Visibility');
+    expect(entries()).toEqual([
+      { label: 'Overview', href: '/dashboard/insights', current: null },
+      { label: 'Mentions', href: '/dashboard/mentions', current: 'page' },
+      { label: 'Citations', href: '/dashboard/citations', current: null },
+    ]);
+    const parents = [...container.querySelectorAll('[data-nav-item="parent"]')].map((el) =>
+      el.getAttribute('data-submenu'),
+    );
+    expect(parents.indexOf('/dashboard/insights')).toBe(parents.indexOf('/dashboard/prompts') + 1);
+  });
+
   it('lists Overview, Mentions and Citations under it, with no Mentions or Citations items of their own', async () => {
     await render('/dashboard/action-center');
     expect(group().textContent).toBe('Visibility');
