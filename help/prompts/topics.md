@@ -1,11 +1,11 @@
 ---
 title: Topics tab for prompts grouped by theme
 route: /dashboard/prompts/topics
-keywords: [topics, topic, add topic, delete topic, rename topic, manage topics, topic suggestions, topic leaderboard, topic visibility, top competitor]
+keywords: [topics, topic, add topic, delete topic, rename topic, manage topics, topic suggestions, topic leaderboard, topic visibility, top competitor, catalog topics]
 synonyms: [themes, prompt groups, clusters, categories]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-09
+last_checked: 2026-11-09
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -60,6 +60,8 @@ A topic's page shows all of its results, not only the date range picked on the T
 The **Topic Suggestions** card on the Topics tab starts folded, and remembers whether you left it open. Open it to see AI-generated topic ideas for your brand. Topics you already track and ideas you dismissed don't come back.
 
 Admins and managers can **Refresh** for new ideas, add an idea to your topics, or dismiss it. A new topic starts empty: assign prompts to it to start tracking it.
+
+On an online shop with a product catalog, **Refresh** also suggests the catalog's categories that have at least three products in stock and that none of your topics covers yet. They come first, marked **Your catalog**, with the category and how many of its products are in stock. Adding one creates a topic named after the category, which links it to that category.
 
 ## Add and rename topics
 

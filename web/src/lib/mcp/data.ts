@@ -60,6 +60,12 @@ import { readPromptDemand, type PromptDemand } from './prompt-demand';
 import { getOrgLocationUsage, locationLimitMessage } from '@/lib/prompt-locations';
 import { NO_TOPICS, brandHasTopics } from '@/lib/topics-required';
 import {
+  promptSourceData,
+  sourceDataRefused,
+  type PromptSuggestionSource,
+  type SuggestionSourceData,
+} from '@/lib/prompt-suggestion-source';
+import {
   filterPromptSuggestionEngines,
   promptSuggestionsAreStale,
 } from './prompt-suggestions-utils';
@@ -698,7 +704,9 @@ export async function acceptPromptSuggestionFor(
 
   const { data: suggestion, error: suggestionError } = await supabaseAdmin
     .from('prompt_suggestions')
-    .select('id, brand_id, suggested_text, topic_name, brands!inner(organization_id)')
+    .select(
+      'id, brand_id, suggested_text, topic_name, source, source_data, generated_at, brands!inner(organization_id)',
+    )
     .eq('id', suggestionId)
     .eq('brands.organization_id', auth.organizationId)
     .eq('status', 'new')
@@ -789,20 +797,33 @@ export async function acceptPromptSuggestionFor(
     topicId = topic?.id ?? null;
   }
 
-  const { data: prompt, error: promptError } = await supabaseAdmin
-    .from('prompts')
-    .insert({
-      prompt_set_id: promptSet.id,
-      text: suggestion.suggested_text,
-      category: suggestion.topic_name ?? null,
-      topic_id: topicId,
-      platforms,
-      regions: [region],
-      models: filtered.models,
-      is_active: true,
-    })
-    .select('id, text')
-    .single();
+  // A catalog suggestion's prompt keeps the category or product it came
+  // from (prompts.source_data, 00525), as on the dashboard.
+  const sourceData = promptSourceData({
+    source: suggestion.source as PromptSuggestionSource,
+    sourceData: (suggestion.source_data ?? null) as SuggestionSourceData | null,
+    generatedAt: suggestion.generated_at,
+  });
+  const promptRow = {
+    prompt_set_id: promptSet.id,
+    text: suggestion.suggested_text,
+    category: suggestion.topic_name ?? null,
+    topic_id: topicId,
+    platforms,
+    regions: [region],
+    models: filtered.models,
+    is_active: true,
+  };
+  const insertPrompt = (withSource: boolean) =>
+    supabaseAdmin
+      .from('prompts')
+      .insert(withSource && sourceData ? { ...promptRow, source_data: sourceData } : promptRow)
+      .select('id, text')
+      .single();
+  let { data: prompt, error: promptError } = await insertPrompt(true);
+  if (sourceData && sourceDataRefused(promptError)) {
+    ({ data: prompt, error: promptError } = await insertPrompt(false));
+  }
   if (promptError || !prompt) {
     return { error: promptError?.message ?? 'Failed to add the prompt.' };
   }

@@ -12,6 +12,10 @@ import { PLANS } from '@/config/plans';
 let topic: { id: string } | null = null;
 /** Rows inserted, by table. */
 let inserts: string[] = [];
+/** The prompts rows inserted. */
+let promptRows: Record<string, unknown>[] = [];
+/** The suggestion's catalog source (AC plan P-8), or none. */
+let catalogData: Record<string, unknown> | null = null;
 
 vi.mock('@/lib/guards/plan-guard', () => ({
   ORG_PLAN_COLUMNS: 'plan',
@@ -33,6 +37,9 @@ vi.mock('@/lib/supabase/admin', () => ({
               brand_id: 'b1',
               suggested_text: 'Best GEO tools?',
               topic_name: null,
+              source: catalogData ? 'catalog' : 'llm',
+              source_data: catalogData,
+              generated_at: '2026-11-09T08:00:00+00:00',
             };
           case 'brands':
             return { id: 'b1', organization_id: 'org-1', region: 'US', state: null };
@@ -52,9 +59,10 @@ vi.mock('@/lib/supabase/admin', () => ({
         order: () => chain,
         limit: () => chain,
         update: () => chain,
-        insert: () => {
+        insert: (row: Record<string, unknown>) => {
           inserting = true;
           inserts.push(table);
+          if (table === 'prompts') promptRows.push(row);
           return chain;
         },
         maybeSingle: async () => ({ data: row(), error: null }),
@@ -79,6 +87,8 @@ const auth = {
 beforeEach(() => {
   topic = null;
   inserts = [];
+  promptRows = [];
+  catalogData = null;
 });
 
 describe('acceptPromptSuggestionFor', () => {
@@ -98,5 +108,33 @@ describe('acceptPromptSuggestionFor', () => {
       status: 'added',
     });
     expect(inserts).toEqual(['prompts']);
+  });
+
+  it('keeps the category a catalog suggestion came from with its prompt (00525)', async () => {
+    topic = { id: 't1' };
+    catalogData = {
+      category: 'Bags > Hiking backpacks',
+      categoryId: '7a1c2b9e-2222-4c3d-8e9f-000000000002',
+      products: 18,
+      priceLow: null,
+      priceHigh: null,
+      priceUnder: null,
+      currency: null,
+    };
+    await acceptPromptSuggestionFor(auth, 's1');
+    expect(promptRows[0]).toMatchObject({
+      source_data: {
+        kind: 'catalog_category',
+        category_id: '7a1c2b9e-2222-4c3d-8e9f-000000000002',
+        category: 'Bags > Hiking backpacks',
+        suggested_at: '2026-11-09T08:00:00+00:00',
+      },
+    });
+  });
+
+  it('names no source for any other suggestion', async () => {
+    topic = { id: 't1' };
+    await acceptPromptSuggestionFor(auth, 's1');
+    expect('source_data' in promptRows[0]).toBe(false);
   });
 });

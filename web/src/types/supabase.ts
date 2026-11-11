@@ -7464,6 +7464,7 @@ export type Database = {
           platforms: string[]
           prompt_set_id: string
           regions: string[]
+          source_data: Json | null
           text: string
           tags: string[]
           topic_id: string | null
@@ -7478,6 +7479,7 @@ export type Database = {
           platforms?: string[]
           prompt_set_id: string
           regions?: string[]
+          source_data?: Json | null
           text: string
           tags?: string[]
           topic_id?: string | null
@@ -7492,6 +7494,7 @@ export type Database = {
           platforms?: string[]
           prompt_set_id?: string
           regions?: string[]
+          source_data?: Json | null
           text?: string
           tags?: string[]
           topic_id?: string | null
@@ -8237,6 +8240,7 @@ export type Database = {
           name: string
           reason: string | null
           source: string
+          source_data: Json | null
           status: string
           updated_at: string
         }
@@ -8249,6 +8253,7 @@ export type Database = {
           name: string
           reason?: string | null
           source?: string
+          source_data?: Json | null
           status?: string
           updated_at?: string
         }
@@ -8261,6 +8266,7 @@ export type Database = {
           name?: string
           reason?: string | null
           source?: string
+          source_data?: Json | null
           status?: string
           updated_at?: string
         }

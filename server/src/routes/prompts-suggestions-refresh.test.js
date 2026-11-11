@@ -45,6 +45,8 @@ function table(name) {
     if (name === 'topics') {
       return { data: single && !db.noTopics ? { id: 't1' } : single ? null : [], error: null };
     }
+    // The brand's prompts, whose texts a suggestion mustn't repeat.
+    if (name === 'prompts') return { data: db.prompts, error: null };
     return { data: [], error: null };
   };
   const chain = new Proxy(
@@ -103,7 +105,11 @@ vi.mock('../lib/ai-provider.js', () => ({ resolveModel: vi.fn(() => 'model') }))
 vi.mock('../lib/gsc-suggestions.js', () => ({ getGscSuggestionCandidates: async () => [] }));
 vi.mock('../lib/ga-suggestions.js', () => ({ getGaSuggestionCandidates: async () => [] }));
 const getCatalogSuggestionCandidates = vi.fn();
-vi.mock('../lib/catalog-suggestions.js', () => ({ getCatalogSuggestionCandidates }));
+const getCatalogProductCandidates = vi.fn();
+vi.mock('../lib/catalog-suggestions.js', () => ({
+  getCatalogSuggestionCandidates,
+  getCatalogProductCandidates,
+}));
 // Retries without the real backoff delay.
 vi.mock('../lib/retry.js', () => ({
   withRetry: async (fn, { attempts }) => {
@@ -142,9 +148,18 @@ const modelEnv = process.env.PROMPT_SUGGESTION_MODEL;
 beforeEach(async () => {
   vi.clearAllMocks();
   delete process.env.PROMPT_SUGGESTION_MODEL;
-  db = { inserts: [], updates: [], deletes: [], current: [], insertError: null, noTopics: false };
+  db = {
+    inserts: [],
+    updates: [],
+    deletes: [],
+    current: [],
+    insertError: null,
+    noTopics: false,
+    prompts: [],
+  };
   reserveRelevanceAllowance.mockResolvedValue({ unlimited: false, id: 'r1' });
   getCatalogSuggestionCandidates.mockResolvedValue([]);
+  getCatalogProductCandidates.mockResolvedValue([]);
   settleRelevanceUsage.mockResolvedValue();
   generateObject.mockResolvedValue(answer({ relevance: 8 }));
 
@@ -294,6 +309,95 @@ describe('suggestion refresh from the catalog (ECOM-003)', () => {
     const { system, prompt } = generateObject.mock.calls[0][0];
     expect(system).not.toContain('WHAT THE BRAND SELLS');
     expect(prompt).not.toContain('product catalog categories');
+    expect(system).not.toContain("THE BRAND'S TOP PRODUCTS");
+    expect(prompt).not.toContain('top products');
+  });
+});
+
+describe('suggestion refresh from the top products (AC plan P-8)', () => {
+  const atmos = {
+    productId: '7a1c2b9e-1111-4c3d-8e9f-000000000001',
+    product: 'Atmos AG 65',
+    productType: 'Backpack',
+    category: 'Bags > Hiking backpacks',
+    categoryId: '7a1c2b9e-2222-4c3d-8e9f-000000000002',
+    cardPrompts: 4,
+    orders: 12,
+    aiVisits: 30,
+  };
+
+  it('asks for buyer questions about them in the same call, and keeps the product each is about', async () => {
+    getCatalogProductCandidates.mockResolvedValue([atmos]);
+    getCatalogSuggestionCandidates.mockResolvedValue([
+      {
+        category: 'Bags > Hiking backpacks',
+        categoryId: atmos.categoryId,
+        products: 18,
+        priceLow: 60,
+        priceHigh: 180,
+        priceUnder: 150,
+        currency: 'USD',
+      },
+    ]);
+    const suggestions = Array.from({ length: 15 }, (_, i) => suggestion(i));
+    // A product says more than its category: the product wins.
+    suggestions[0] = suggestion(0, {
+      sourceProduct: 'atmos ag 65',
+      sourceCategory: 'Bags > Hiking backpacks',
+    });
+    suggestions[1] = suggestion(1, { sourceCategory: 'Bags > Hiking backpacks' });
+    // A product the catalog never offered: a plain suggestion.
+    suggestions[2] = suggestion(2, { sourceProduct: 'Exos 48' });
+    generateObject.mockResolvedValue({ object: { suggestions }, usage: {} });
+
+    expect((await refresh()).status).toBe(200);
+    // One model call for every source.
+    expect(generateObject).toHaveBeenCalledTimes(1);
+    const { system, prompt } = generateObject.mock.calls[0][0];
+    expect(system).toContain("THE BRAND'S TOP PRODUCTS");
+    expect(system).toContain('Derive at least 1 buyer suggestions');
+    expect(prompt).toContain(
+      '"Atmos AG 65" — in "Bags > Hiking backpacks", type: Backpack; shown on shopping cards for 4 tracked prompts, 12 orders, 30 AI visits',
+    );
+
+    const [rows] = insertsInto('prompt_suggestions');
+    expect(rows[0]).toMatchObject({
+      source: 'catalog',
+      source_data: {
+        product: 'Atmos AG 65',
+        productId: atmos.productId,
+        productType: 'Backpack',
+        category: 'Bags > Hiking backpacks',
+        categoryId: atmos.categoryId,
+        cardPrompts: 4,
+        orders: 12,
+      },
+    });
+    // A category's suggestion keeps the category's id too.
+    expect(rows[1]).toMatchObject({
+      source: 'catalog',
+      source_data: { category: 'Bags > Hiking backpacks', categoryId: atmos.categoryId },
+    });
+    expect(rows[2]).toMatchObject({ source: 'llm', source_data: null });
+  });
+
+  it("tells the products' reader which prompts the brand has, so a named product isn't offered", async () => {
+    db.prompts = [{ text: 'Is the Atmos AG 65 good for long hikes?' }];
+    expect((await refresh()).status).toBe(200);
+    expect(getCatalogProductCandidates).toHaveBeenCalledWith('b1', {
+      trackedTexts: ['Is the Atmos AG 65 good for long hikes?'],
+    });
+  });
+});
+
+describe('suggestion refresh never repeats a prompt the brand has', () => {
+  it('leaves out a suggestion whose text is a prompt of the brand, case and spacing aside', async () => {
+    db.prompts = [{ text: `${suggestion(4).text.toUpperCase()}  ?` }, { text: 'something else' }];
+
+    expect((await refresh()).status).toBe(200);
+    const [rows] = insertsInto('prompt_suggestions');
+    expect(rows).toHaveLength(14);
+    expect(rows.some((r) => r.suggested_text === suggestion(4).text)).toBe(false);
   });
 });
 
