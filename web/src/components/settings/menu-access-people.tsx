@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { dashboardNav } from '@/config/dashboard';
+import { dashboardNav, simpleDashboardNav } from '@/config/dashboard';
 import { getDashboardNavLabel } from '@/lib/dashboard-navigation';
 import {
   ALWAYS_ON_SECTION,
@@ -18,6 +18,7 @@ import {
   menuSectionEntries,
 } from '@/lib/menu-access';
 import { useMenuSections } from '@/components/providers/menu-access-provider';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import {
   setMemberMenu,
   setMenuManager,
@@ -28,6 +29,10 @@ import {
 
 /** The menu's sections with their nav titles, in its order. */
 const SECTION_TITLES = menuSectionEntries(dashboardNav.flatMap((group) => group.items));
+/** The simplified menu's (SIMPLE_NAV): Agents is "Agents · in Action Center". */
+const SIMPLE_SECTION_TITLES = menuSectionEntries(
+  simpleDashboardNav.flatMap((group) => group.items),
+);
 
 function initials(member: MenuMember): string {
   const source = member.fullName?.trim() || member.email;
@@ -171,9 +176,10 @@ export function MenuPeopleCard({ settings, onChange, onFailed }: Props) {
   const tNav = useTranslations('nav');
   const [editing, setEditing] = useState<string | null>(null);
   const sections = useMenuSections();
+  const titles = useSimpleNav() ? SIMPLE_SECTION_TITLES : SECTION_TITLES;
   const people = settings.members.filter((m) => m.role !== 'admin');
   const label = (section: string) =>
-    getDashboardNavLabel(SECTION_TITLES.find((s) => s.section === section)?.title ?? section, tNav);
+    getDashboardNavLabel(titles.find((s) => s.section === section)?.title ?? section, tNav);
   const roleName = (role: MenuRole) => tSettings(`team_role_${role}`);
 
   const save = async (member: MenuMember, menu: { shown: string[]; hidden: string[] }) => {
