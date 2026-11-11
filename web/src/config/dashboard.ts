@@ -61,6 +61,11 @@ export interface NavChild {
    * menu's sections. Action Center › Agents in the simplified menu.
    */
   requiresChatAgentic?: boolean;
+  /**
+   * Pages of another address it is also the current entry on: History on
+   * KPIs, one of its views, in the simplified menu (SIMPLE_NAV).
+   */
+  currentOn?: string[];
 }
 
 export interface NavItem {
@@ -304,7 +309,11 @@ export const simpleDashboardNav: NavGroup[] = [
             requiredFeature: 'ai_agent',
             requiresChatAgentic: true,
           },
-          { title: 'History', href: '/dashboard/action-center/history' },
+          {
+            title: 'History',
+            href: '/dashboard/action-center/history',
+            currentOn: ['/dashboard/action-center/kpis'],
+          },
         ],
       },
     ],

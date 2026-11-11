@@ -66,7 +66,8 @@ export function getDashboardNavLabel(title: string, t: Translator): string {
 
 /**
  * The submenu entry the current page belongs to: its own route, or a page
- * under it (a topic's page sits under Topics, a draft under the Editor).
+ * under it (a topic's page sits under Topics, a draft under the Editor), or
+ * one it names as its own (`currentOn`: History on KPIs).
  * When one entry's route holds another's
  * (Opportunities is /dashboard/content, the Library is
  * /dashboard/content/library), the longer match wins, so only one is current.
@@ -74,11 +75,13 @@ export function getDashboardNavLabel(title: string, t: Translator): string {
 export function activeChildHref(children: NavChild[], pathname: string): string | null {
   let best: string | null = null;
   let bestLength = -1;
-  for (const { href } of children) {
-    const matches = pathname === href || pathname.startsWith(`${href}/`);
-    if (matches && href.length > bestLength) {
-      best = href;
-      bestLength = href.length;
+  for (const { href, currentOn = [] } of children) {
+    for (const route of [href, ...currentOn]) {
+      const matches = pathname === route || pathname.startsWith(`${route}/`);
+      if (matches && route.length > bestLength) {
+        best = href;
+        bestLength = route.length;
+      }
     }
   }
   return best;
