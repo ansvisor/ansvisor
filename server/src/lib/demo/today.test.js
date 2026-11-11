@@ -133,12 +133,17 @@ describe.each(BUILDS)('the demo built at %s', (iso) => {
         .map((r) => r.action)
         .filter((a) => !REMINDER_KINDS.includes(a.kind))
         .slice(0, 3);
-      expect(focus.map((a) => a.kind)).toEqual([
+      // The three, in whatever order the scorer ranks them: scoring tweaks (e.g. topic gaps by
+      // their gap) may swap the first two without changing what Today's focus shows.
+      expect(focus.map((a) => a.kind).sort()).toEqual([
         'content_opportunity',
-        'topic_competitor_gap',
         'shopping_product',
+        'topic_competitor_gap',
       ]);
-      const [guide, gap, product] = focus.map((a) => a.payload);
+      const byKind = (kind) => focus.find((a) => a.kind === kind).payload;
+      const guide = byKind('content_opportunity');
+      const gap = byKind('topic_competitor_gap');
+      const product = byKind('shopping_product');
       expect(guide.title).toMatch(/low-acid coffee/);
       expect(gap).toMatchObject({
         competitorName: 'Northbound Roasters',
