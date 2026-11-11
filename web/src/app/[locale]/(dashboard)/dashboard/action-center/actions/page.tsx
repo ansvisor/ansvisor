@@ -327,9 +327,11 @@ function ActionsContent({ brand }: { brand: Brand }) {
     setLoadFailed(false);
     try {
       // Together, so the page doesn't show its empty state and then the steps.
+      // With the simplified layout on, the set-up steps are Today's card
+      // ("Finish setting up"), and Actions lists no Getting started rows.
       const [list, started] = await Promise.all([
         getActions(brand.id),
-        getGettingStarted(brand.id).catch(() => null),
+        simpleNav ? null : getGettingStarted(brand.id).catch(() => null),
       ]);
       setActions(list);
       if (started) setGettingStarted(started);
@@ -338,7 +340,7 @@ function ActionsContent({ brand }: { brand: Brand }) {
     } finally {
       setIsLoading(false);
     }
-  }, [brand.id]);
+  }, [brand.id, simpleNav]);
 
   const startedActive = gettingStarted?.active ?? false;
 
