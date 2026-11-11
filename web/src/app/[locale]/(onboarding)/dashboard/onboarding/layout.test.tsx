@@ -85,3 +85,25 @@ describe('OnboardingWizardLayout', () => {
     expect(await adsOn()).toBe(false);
   });
 });
+
+describe('OnboardingWizardLayout and the simplified menu', () => {
+  it('hands the preview SIMPLE_NAV: on only with "true", for every workspace or none', async () => {
+    const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
+    const simpleNavOn = async () => {
+      const tree = (await OnboardingWizardLayout({ children: null })) as {
+        props: {
+          children: { props: { children: { type: unknown; props: { enabled: boolean } } } };
+        };
+      };
+      const provider = tree.props.children.props.children;
+      expect(provider.type).toBe(SimpleNavProvider);
+      return provider.props.enabled;
+    };
+    vi.stubEnv('SIMPLE_NAV', undefined);
+    expect(await simpleNavOn()).toBe(false);
+    vi.stubEnv('SIMPLE_NAV', 'true');
+    expect(await simpleNavOn()).toBe(true);
+    db.organizationId = null;
+    expect(await simpleNavOn()).toBe(true);
+  });
+});

@@ -299,6 +299,8 @@ export const simpleDashboardNav: NavGroup[] = [
             title: 'Agents',
             href: '/dashboard/agents',
             icon: Bot,
+            // Where menu access lists the sections: under the Action Center's row.
+            sectionTitle: 'Agents · in Action Center',
             requiredFeature: 'ai_agent',
             requiresChatAgentic: true,
           },

@@ -525,6 +525,7 @@ describe('the simplified menu', () => {
       title: 'Agents',
       href: '/dashboard/agents',
       icon: Bot,
+      sectionTitle: 'Agents · in Action Center',
       requiredFeature: 'ai_agent',
       requiresChatAgentic: true,
     });

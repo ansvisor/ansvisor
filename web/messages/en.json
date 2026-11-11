@@ -547,6 +547,7 @@
     "signals": "Signals",
     "agents": "Agents",
     "history": "History",
+    "agentsInActionCenter": "Agents · in Action Center",
     "toggleMenu": "Toggle navigation menu",
     "keepSidebarOpen": "Keep sidebar open",
     "collapseSidebar": "Collapse sidebar",

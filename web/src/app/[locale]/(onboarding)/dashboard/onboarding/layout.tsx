@@ -4,6 +4,8 @@ import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
 import { adsEnabled } from '@/lib/ads/flag';
 import { AdsProvider } from '@/components/providers/ads-provider';
+import { simpleNavEnabled } from '@/lib/simple-nav/flag';
+import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 
 /**
  * The onboarding wizard, with whether the new Chat is on for the workspace
@@ -23,7 +25,10 @@ export default async function OnboardingWizardLayout({ children }: { children: R
     : { data: null };
   return (
     <ChatAgenticProvider enabled={chatAgenticEnabled(profile?.organization_id ?? null)}>
-      <AdsProvider enabled={adsEnabled()}>{children}</AdsProvider>
+      <AdsProvider enabled={adsEnabled()}>
+        {/* The simplified menu (SIMPLE_NAV) in the dashboard preview, as the dashboard will have it. */}
+        <SimpleNavProvider enabled={simpleNavEnabled()}>{children}</SimpleNavProvider>
+      </AdsProvider>
     </ChatAgenticProvider>
   );
 }

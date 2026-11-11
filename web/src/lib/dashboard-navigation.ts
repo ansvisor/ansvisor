@@ -40,6 +40,8 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   Signals: 'signals',
   Agents: 'agents',
   History: 'history',
+  // Agents' section where menu access lists the sections, in the simplified menu.
+  'Agents · in Action Center': 'agentsInActionCenter',
 };
 
 /** Map from the static group title string in dashboard.ts to its nav key. */
