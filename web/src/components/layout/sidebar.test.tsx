@@ -84,6 +84,13 @@ vi.mock('@/config/dashboard', () => {
             children: [{ title: 'Tracked Prompts', href: '/dashboard/prompts/tracked' }],
           },
           { title: 'Mentions', href: '/dashboard/mentions', icon: Icon },
+          {
+            title: 'Ads',
+            href: '/dashboard/ads',
+            icon: Icon,
+            requiresAds: true,
+            newPill: true,
+          },
         ],
       },
     ],
@@ -103,6 +110,7 @@ const { MenuAccessProvider } = await import('@/components/providers/menu-access-
 const { useSidebarStore } = await import('@/stores/use-sidebar-store');
 const { useChatRailStore } = await import('@/stores/use-chat-rail-store');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
+const { AdsProvider } = await import('@/components/providers/ads-provider');
 const { useBrandStore } = await import('@/stores/use-brand-store');
 const { DemoBrandContext } = await import('@/components/providers/demo-brand-provider');
 
@@ -312,6 +320,67 @@ describe('Sidebar', () => {
       await render(true, ['agents']);
       expect(link('/dashboard/agents')).toBeNull();
       expect(link('/dashboard/chat')).not.toBeNull();
+    });
+  });
+
+  // Ads (ADS-01), in development: only with ADS_ENABLED on, as the layout
+  // hands it down; there, an item like the others, with an outlined New pill.
+  describe('Ads', () => {
+    const render = (adsOn: boolean | null, hidden: string[] = []) =>
+      act(async () => {
+        const sidebar = (
+          <MenuAccessProvider hidden={hidden} canManageMenus={false}>
+            <Sidebar />
+          </MenuAccessProvider>
+        );
+        root.render(
+          <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+            {adsOn === null ? sidebar : <AdsProvider enabled={adsOn}>{sidebar}</AdsProvider>}
+          </NextIntlClientProvider>,
+        );
+      });
+    const link = (href: string) => container.querySelector<HTMLElement>(`a[href="${href}"]`);
+
+    it('is on no menu with Ads off, or without the layout saying', async () => {
+      await render(null);
+      expect(link('/dashboard/ads')).toBeNull();
+      await render(false);
+      expect(link('/dashboard/ads')).toBeNull();
+      expect(container.textContent).not.toContain('Ads');
+      // Nothing else changes.
+      expect(link('/dashboard/mentions')).not.toBeNull();
+    });
+
+    it('closes Analytics with Ads on, with its outlined New pill', async () => {
+      await render(true);
+      const ads = link('/dashboard/ads');
+      expect(ads?.textContent).toBe('AdsNew');
+      expect(ads?.querySelector('[data-slot="new-pill"]')?.textContent).toBe('New');
+      expect(ads?.querySelector('[data-slot="badge"]')).toBeNull();
+      const items = [...container.querySelectorAll('a[data-nav-item]')].map((a) =>
+        a.getAttribute('href'),
+      );
+      expect(items.indexOf('/dashboard/ads')).toBe(items.indexOf('/dashboard/mentions') + 1);
+    });
+
+    it('is the current page on its page', async () => {
+      nav.pathname = '/dashboard/ads';
+      await render(true);
+      expect(link('/dashboard/ads')?.getAttribute('aria-current')).toBe('page');
+    });
+
+    it('leaves the menu when the viewer’s menu hides it, and counts as off it', async () => {
+      await render(true, ['ads']);
+      expect(link('/dashboard/ads')).toBeNull();
+      expect(link('/dashboard/mentions')).not.toBeNull();
+      expect(container.textContent).toContain('1 section off your menu.');
+    });
+
+    it('opens on Starter: the plan gate is on its page, not the menu', async () => {
+      gate.isCloud = true;
+      gate.features = ['basic_insights'];
+      await render(true);
+      expect(link('/dashboard/ads')).not.toBeNull();
     });
   });
 

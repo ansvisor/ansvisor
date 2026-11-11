@@ -19,6 +19,7 @@ vi.mock('@/components/providers/menu-access-provider', async (importOriginal) =>
   useCanManageMenus: () => canManageMenus,
 }));
 let chatOn = true;
+let adsOn = false;
 
 const actions = vi.hoisted(() => ({
   getMenuAccessSettings: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('@/lib/actions/menu-access', () => actions);
 
 const { MenuAccessSection, hiddenForSet } = await import('./menu-access-section');
 const { ChatAgenticProvider } = await import('@/components/providers/chat-agentic-provider');
+const { AdsProvider } = await import('@/components/providers/ads-provider');
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -39,6 +41,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   canManageMenus = true;
   chatOn = true;
+  adsOn = false;
   actions.getMenuAccessSettings.mockResolvedValue({
     roles: { manager: [], analyst: ['content', 'audit'], agency_partner: [] },
     members: [],
@@ -60,7 +63,9 @@ async function render() {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages}>
         <ChatAgenticProvider enabled={chatOn}>
-          <MenuAccessSection />
+          <AdsProvider enabled={adsOn}>
+            <MenuAccessSection />
+          </AdsProvider>
         </ChatAgenticProvider>
       </NextIntlClientProvider>,
     );
@@ -101,6 +106,22 @@ describe('MenuAccessSection', () => {
     }
     await act(async () => box('Analyst sees Agent Center')!.click());
     expect(actions.setRoleMenu).toHaveBeenCalledWith('analyst', ['agents', 'content', 'audit']);
+  });
+
+  it('lists Ads only while Ads is on, after AI Referral Traffic, for each role to hide', async () => {
+    await render();
+    expect(box('Analyst sees Ads')).toBeNull();
+    expect(box('Analyst sees AI Referral Traffic')).not.toBeNull();
+
+    adsOn = true;
+    await render();
+    const text = container.textContent ?? '';
+    expect(text.indexOf('Ads')).toBeGreaterThan(text.indexOf('AI Referral Traffic'));
+    for (const role of ['Manager', 'Analyst', 'Agency Partner']) {
+      expect(box(`${role} sees Ads`)?.getAttribute('aria-checked')).toBe('true');
+    }
+    await act(async () => box('Analyst sees Ads')!.click());
+    expect(actions.setRoleMenu).toHaveBeenCalledWith('analyst', ['ads', 'content', 'audit']);
   });
 
   it('leaves Agent Center out while the new Chat is off, Chat staying', async () => {
@@ -170,6 +191,7 @@ describe('MenuAccessSection', () => {
       'shopping',
       'prompts',
       'traffic',
+      'ads',
       'content',
       'audit',
     ]);
@@ -194,7 +216,16 @@ describe('MenuAccessSection', () => {
 
 describe('hiddenForSet', () => {
   it('hides what a ready-made set leaves out, never Action Center', () => {
-    expect(hiddenForSet('brand')).toEqual(['shopping', 'prompts', 'traffic', 'content', 'audit']);
+    expect(hiddenForSet('brand')).toEqual([
+      'shopping',
+      'prompts',
+      'traffic',
+      'ads',
+      'content',
+      'audit',
+    ]);
+    // Ads is for the sets that weigh paid and earned answers.
+    expect(hiddenForSet('growth')).not.toContain('ads');
     // The sets that don't compare the brand with others leave Competitors off.
     expect(hiddenForSet('content')).toContain('competitors');
     expect(hiddenForSet('all')).toEqual([]);

@@ -67,18 +67,36 @@ export const CHAT_AGENTIC_SECTIONS: string[] = dashboardNav
   .map((item) => menuSectionOf(item.href))
   .filter((section): section is string => section !== null);
 
-/** The left menu's sections a workspace has, in its order: all of them with the new Chat on. */
-export function menuSectionsFor(chatAgentic: boolean): string[] {
-  return chatAgentic
-    ? MENU_SECTIONS
-    : MENU_SECTIONS.filter((section) => !CHAT_AGENTIC_SECTIONS.includes(section));
+/**
+ * Sections only Ads has (ADS_ENABLED, lib/ads/flag.ts): Ads. While it is off
+ * they are on no menu and in no list of sections; on, roles, people and work
+ * areas hide it as they hide any other.
+ */
+export const ADS_SECTIONS: string[] = dashboardNav
+  .flatMap((group) => group.items)
+  .filter((item) => item.requiresAds)
+  .map((item) => menuSectionOf(item.href))
+  .filter((section): section is string => section !== null);
+
+/**
+ * The left menu's sections a workspace has, in its order: Agent Center only
+ * with the new Chat on, Ads only with Ads on; all of them with both.
+ */
+export function menuSectionsFor(chatAgentic: boolean, ads = false): string[] {
+  return MENU_SECTIONS.filter(
+    (section) =>
+      (chatAgentic || !CHAT_AGENTIC_SECTIONS.includes(section)) &&
+      (ads || !ADS_SECTIONS.includes(section)),
+  );
 }
 
 /**
  * What a person works on or leads, with the sections that work needs. They
  * follow the audiences on ansvisor.com › Solutions. Agent Center is in every
  * area Chat is in, right after it; AEO/GEO & Audit, Developers and Analytics
- * have it without Chat, right after Action Center.
+ * have it without Chat, right after Action Center. Ads, paid and earned
+ * answers side by side, is for Founders & leaders, Growth and Analytics,
+ * right after AI Referral Traffic where they have it.
  */
 export const WORK_AREAS = [
   {
@@ -91,6 +109,7 @@ export const WORK_AREAS = [
       'competitors',
       'mentions',
       'traffic',
+      'ads',
       'reports',
     ],
   },
@@ -126,6 +145,7 @@ export const WORK_AREAS = [
       'prompts',
       'citations',
       'traffic',
+      'ads',
       'reports',
     ],
   },
@@ -172,6 +192,7 @@ export const WORK_AREAS = [
       'citations',
       'shopping',
       'traffic',
+      'ads',
       'reports',
     ],
   },

@@ -77,7 +77,15 @@ describe('menuWithWorkAreas', () => {
   it('keeps what the admin takes off and narrows the rest to the areas', () => {
     const next = menuWithWorkAreas(menu({ hiddenByAdmin: ['mentions'] }), ['brand']);
     expect(next.workAreas).toEqual(['brand']);
-    expect(next.hidden).toEqual(['mentions', 'shopping', 'prompts', 'traffic', 'content', 'audit']);
+    expect(next.hidden).toEqual([
+      'mentions',
+      'shopping',
+      'prompts',
+      'traffic',
+      'ads',
+      'content',
+      'audit',
+    ]);
     expect(menuWithWorkAreas(next, []).hidden).toEqual(['mentions']);
   });
 

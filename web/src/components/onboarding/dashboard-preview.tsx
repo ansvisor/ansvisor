@@ -16,6 +16,7 @@ import { getFaviconUrl } from '@/lib/favicon';
 import { cn } from '@/lib/utils';
 import { isDashboardHomeItem } from '@/config/home';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
+import { useAdsEnabled } from '@/components/providers/ads-provider';
 
 export interface DashboardPreviewCompetitor {
   name: string;
@@ -41,8 +42,8 @@ const MAX_ROWS = 6;
  * Purely presentational: it renders the real navigation from dashboardNav but
  * reads no plan, brand or tracking state, because none exists yet. Metrics are
  * placeholder bars, never numbers — nothing has been measured at this point.
- * Agent Center is in it only with the new Chat on (CHAT_AGENTIC), as in the
- * menu the wizard leads to.
+ * Agent Center is in it only with the new Chat on (CHAT_AGENTIC), and Ads
+ * only with Ads on (ADS_ENABLED), as in the menu the wizard leads to.
  */
 export function DashboardPreview({
   brandName,
@@ -53,6 +54,7 @@ export function DashboardPreview({
 }: DashboardPreviewProps) {
   const t = useTranslations('nav');
   const chatAgentic = useChatAgentic();
+  const ads = useAdsEnabled();
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
@@ -97,7 +99,14 @@ export function DashboardPreview({
               <div className="space-y-0.5">
                 {group.items
                   .filter((item) =>
-                    shouldShowDashboardNavItem(item, { ecommerce: false }, new Set(), chatAgentic),
+                    shouldShowDashboardNavItem(
+                      item,
+                      { ecommerce: false },
+                      new Set(),
+                      chatAgentic,
+                      undefined,
+                      ads,
+                    ),
                   )
                   .map((item) => (
                     <div

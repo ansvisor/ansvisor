@@ -5,6 +5,7 @@ import { type Feature, isCloud } from '@/config/plans';
 import { ALL_DATE_PRESETS } from '@/config/date-presets';
 import { PROMPT_RANGE_PRESETS, SCRAPER_GROUPS } from '@/config/prompt-options';
 import { dashboardNavLabelKeys } from '@/lib/dashboard-navigation';
+import { adsEnabled } from '@/lib/ads/flag';
 import {
   SETTINGS_SECTIONS,
   hasSettingsSection,
@@ -185,13 +186,18 @@ function route(
 /**
  * Every page Chat can open, from the live sidebar and Settings, in the
  * sidebar's order: Settings' sections this install shows (no Billing or AI
- * Providers on a self-hosted one). Chat itself (its own page) isn't one.
+ * Providers on a self-hosted one). Chat itself (its own page) isn't one, and
+ * Ads is one only with Ads on (ADS_ENABLED), as its page is.
  */
-export function routeRegistry({ cloud = isCloud() }: { cloud?: boolean } = {}): ChatRoute[] {
+export function routeRegistry({
+  cloud = isCloud(),
+  ads = adsEnabled(),
+}: { cloud?: boolean; ads?: boolean } = {}): ChatRoute[] {
   const out: ChatRoute[] = [];
   for (const group of dashboardNav) {
     for (const item of group.items) {
       if (item.href === '/dashboard/agent') continue;
+      if (item.requiresAds && !ads) continue;
       const name = navName(item.title);
       out.push(route(item.href as ChatHref, name, null, item.requiredFeature));
       for (const child of item.children ?? []) {

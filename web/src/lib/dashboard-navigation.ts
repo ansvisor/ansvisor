@@ -15,6 +15,7 @@ export const dashboardNavLabelKeys: Record<string, string> = {
   Overview: 'overview',
   Competitors: 'competitors',
   'AI Referral Traffic': 'traffic',
+  Ads: 'ads',
   Prompts: 'prompts',
   'Tracked Prompts': 'trackedPrompts',
   'Prompt Suggestions': 'promptSuggestions',
@@ -131,15 +132,17 @@ export function childLinkHref(child: NavChild, pathname: string): string {
  * the sections the viewer's menu leaves out (menu access): off the menu, the
  * page still opens from a link. And so does the new Chat off for the
  * workspace (CHAT_AGENTIC) an item only it has (Agent Center), whose pages
- * aren't there then. */
+ * aren't there then, and Ads off (ADS_ENABLED, `ads`) for Ads. */
 export function shouldShowDashboardNavItem(
   item: NavItem,
   brandPrefs: Record<BrandPrefKey, boolean>,
   hiddenSections: ReadonlySet<string> = new Set(),
   chatAgentic = false,
   canUse?: (feature: Feature) => boolean,
+  ads = false,
 ): boolean {
   if (item.requiresChatAgentic && !chatAgentic) return false;
+  if (item.requiresAds && !ads) return false;
   if (item.children?.length) {
     // A submenu shows while one of its entries does: Brand Visibility with
     // only Citations on someone's menu still shows, with Citations alone.

@@ -80,6 +80,25 @@ describe('routeRegistry', () => {
     expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 
+  // Ads (ADS-01), in development: Chat opens it only where its page is there.
+  it('opens Ads only with Ads on (ADS_ENABLED), after AI Referral Traffic', () => {
+    expect(routeById('ads', routes)).toBeUndefined();
+    expect(routeRequest('open ads', routes)).toBeNull();
+    const withAds = routeRegistry({ cloud: true, ads: true });
+    expect(routeById('ads', withAds)).toMatchObject({
+      href: '/dashboard/ads',
+      name: 'Ads',
+      section: null,
+    });
+    expect(routeById('ads', withAds)?.requiredFeature).toBeUndefined();
+    expect(routeRequest('open ads', withAds)?.route.href).toBe('/dashboard/ads');
+    const ids = withAds.map((r) => r.id);
+    expect(ids.indexOf('ads')).toBe(ids.indexOf('traffic') + 1);
+    expect(withAds.filter((r) => !pageExists(r.href))).toEqual([]);
+    // The rest of the registry is the same either way.
+    expect(withAds.filter((r) => r.id !== 'ads')).toEqual(routes);
+  });
+
   it('sets only the filters a page keeps, with the values it takes', () => {
     const insights = routeById('insights')!;
     const citations = routeById('citations')!;

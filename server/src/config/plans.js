@@ -46,6 +46,8 @@ export const PLANS = {
         'slack_approvals',
         // HubSpot (#2140), with the server's own Composio keys.
         'crm_integrations',
+        // Ads (ADS-01), reading: Growth and above. No route reads it yet.
+        'ads_read',
       ],
     },
   },
@@ -156,6 +158,8 @@ export const PLANS = {
         'slack_approvals',
         // HubSpot (#2140): Growth and above (owner, 2026-11-09).
         'crm_integrations',
+        // Ads (ADS-01), reading: Growth and above (owner A2, 2026-11-06).
+        'ads_read',
       ],
     },
   },
@@ -213,6 +217,8 @@ export const PLANS = {
         'slack_approvals',
         // HubSpot (#2140): Growth and above (owner, 2026-11-09).
         'crm_integrations',
+        // Ads (ADS-01), reading: Growth and above (owner A2, 2026-11-06).
+        'ads_read',
       ],
     },
   },

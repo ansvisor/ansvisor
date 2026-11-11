@@ -9,6 +9,8 @@ import {
 } from '@/lib/dashboard-home';
 import { chatAgenticEnabled } from '@/lib/chat/flag';
 import { ChatAgenticProvider } from '@/components/providers/chat-agentic-provider';
+import { adsEnabled } from '@/lib/ads/flag';
+import { AdsProvider } from '@/components/providers/ads-provider';
 import type { TeamRole } from '@/components/providers/role-provider';
 import { WelcomeView } from './_welcome-view';
 
@@ -46,14 +48,16 @@ export default async function WelcomePage() {
 
   return (
     <OnboardingFrame width="wide" preview={null}>
-      {/* The menu it shows has Agent Center only with the new Chat on. */}
+      {/* The menu it shows has Agent Center only with the new Chat on, Ads only with Ads on. */}
       <ChatAgenticProvider enabled={chatAgenticEnabled(profile.organization_id)}>
-        <WelcomeView
-          role={profile.role as TeamRole}
-          workspace={workspace}
-          firstName={fullName.trim().split(/\s+/)[0] ?? ''}
-          hiddenByAdmin={menu?.hiddenByAdmin ?? []}
-        />
+        <AdsProvider enabled={adsEnabled()}>
+          <WelcomeView
+            role={profile.role as TeamRole}
+            workspace={workspace}
+            firstName={fullName.trim().split(/\s+/)[0] ?? ''}
+            hiddenByAdmin={menu?.hiddenByAdmin ?? []}
+          />
+        </AdsProvider>
       </ChatAgenticProvider>
     </OnboardingFrame>
   );

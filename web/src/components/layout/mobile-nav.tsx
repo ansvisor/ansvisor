@@ -18,6 +18,8 @@ import {
 import { brandVisibilityTabOf, isEcommerceBrand } from '@/lib/brand-visibility';
 import { BrandVisibilityTabLink } from '@/components/brand-visibility/tabs';
 import { useChatAgentic } from '@/components/providers/chat-agentic-provider';
+import { useAdsEnabled } from '@/components/providers/ads-provider';
+import { NewPill } from '@/components/agentic/new-pill';
 import { useFeatureGate } from '@/hooks/use-feature-gate';
 import { useAgentKeyStatus } from '@/hooks/use-agent-key-status';
 import { siteConfig } from '@/config/site';
@@ -40,6 +42,8 @@ export function MobileNav() {
   const t = useTranslations('nav');
   const { canUse, requiredPlanFor, isCloud } = useFeatureGate();
   const chatAgentic = useChatAgentic();
+  // Ads only with Ads on (ADS_ENABLED), as the sidebar has it.
+  const ads = useAdsEnabled();
   // Probe once per session — shares the module-level cache with sidebar.tsx
   // so at most one network request is made even when both components mount.
   // None with the new Chat on: that one runs on the plan's AI limit.
@@ -116,7 +120,14 @@ export function MobileNav() {
             {dashboardNav.flatMap((group) =>
               group.items.map((item) => {
                 if (
-                  !shouldShowDashboardNavItem(item, brandPrefs, hiddenSections, chatAgentic, canUse)
+                  !shouldShowDashboardNavItem(
+                    item,
+                    brandPrefs,
+                    hiddenSections,
+                    chatAgentic,
+                    canUse,
+                    ads,
+                  )
                 ) {
                   return null;
                 }
@@ -181,6 +192,7 @@ export function MobileNav() {
                           {effectiveBadge}
                         </Badge>
                       )}
+                      {item.newPill && <NewPill />}
                     </span>
                   </Link>
                 );

@@ -33,6 +33,12 @@ export const FEATURES = [
   // revenue, and pages to the CRM's CMS. Growth and above (owner, 2026-11-09);
   // self-host gets it, with its own Composio keys.
   'crm_integrations',
+  // Ads (ADS-01 §8, owner A2): reading it (opportunities, paid share of
+  // voice, connections, reports) is Growth and above; Starter and the free
+  // trial see what it adds, locked (DECISIONS J). Writing (building and
+  // changing campaigns) comes later, on its own feature. Ads itself is in
+  // development behind ADS_ENABLED (lib/ads/flag.ts).
+  'ads_read',
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -188,6 +194,8 @@ export const PLANS: Record<PlanId, Plan> = {
         'slack_approvals',
         // HubSpot (#2140), with the server's own Composio keys.
         'crm_integrations',
+        // Ads (ADS-01), reading: Growth and above.
+        'ads_read',
       ],
       // Self-host runs against the operator's own infrastructure / API
       // keys — no platform quota to enforce.
@@ -301,6 +309,8 @@ export const PLANS: Record<PlanId, Plan> = {
         'slack_approvals',
         // HubSpot (#2140): Growth and above (owner, 2026-11-09).
         'crm_integrations',
+        // Ads (ADS-01), reading: Growth and above (owner A2, 2026-11-06).
+        'ads_read',
       ],
     },
   },
@@ -363,6 +373,8 @@ export const PLANS: Record<PlanId, Plan> = {
         'slack_approvals',
         // HubSpot (#2140): Growth and above (owner, 2026-11-09).
         'crm_integrations',
+        // Ads (ADS-01), reading: Growth and above (owner A2, 2026-11-06).
+        'ads_read',
       ],
       // Enterprise — no platform quota; usage governed by contract.
     },

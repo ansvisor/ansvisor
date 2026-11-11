@@ -6,6 +6,7 @@ import {
   Gauge,
   Globe,
   LineChart,
+  Megaphone,
   MessageCircleMore,
   Quote,
   ShoppingBag,
@@ -72,6 +73,14 @@ export interface NavItem {
    * there either. Agent Center.
    */
   requiresChatAgentic?: boolean;
+  /**
+   * Only with Ads on (ADS_ENABLED, lib/ads/flag.ts): off, the item is on no
+   * menu and in no list of the menu's sections, as its page isn't there
+   * either. Ads, while it is in development.
+   */
+  requiresAds?: boolean;
+  /** An outlined "New" pill after the label (NewPill), for a new area: Ads. */
+  newPill?: boolean;
 }
 
 export interface NavGroup {
@@ -168,6 +177,18 @@ export const dashboardNav: NavGroup[] = [
         href: '/dashboard/traffic',
         icon: LineChart,
         requiredFeature: 'advanced_analytics',
+      },
+      // Ads (ADS-01): earn the AI answer, pay for it, or both. Last of
+      // Analytics, after AI Referral Traffic and before Reports, new. Only
+      // with ADS_ENABLED on, while it is in development (owner, 2026-11-10).
+      // No requiredFeature: Starter opens the page and sees what Growth adds
+      // there (DECISIONS J), so the item isn't locked here.
+      {
+        title: 'Ads',
+        href: '/dashboard/ads',
+        icon: Megaphone,
+        requiresAds: true,
+        newPill: true,
       },
     ],
   },
