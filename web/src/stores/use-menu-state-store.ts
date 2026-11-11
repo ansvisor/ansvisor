@@ -7,6 +7,8 @@ export interface MenuStateRead {
   brandId: string;
   at: number;
   state: MenuState | null;
+  /** The one re-read a grey dot asks for, about a minute on: it asks for no other. */
+  recheck?: boolean;
 }
 
 /**

@@ -9,6 +9,7 @@ import type { TodayStanding } from '@/lib/action-center/focus';
 import type { Signal } from '@/lib/signals/map';
 import { buildGettingStarted, type GettingStartedFacts } from '@/lib/getting-started/steps';
 import { UpgradeDialogContext, type UpgradeDialogState } from '@/components/providers/upgrade-gate';
+import { useMenuStateStore } from '@/stores/use-menu-state-store';
 import messages from '../../../../../../../messages/en.json';
 
 /**
@@ -548,6 +549,44 @@ describe('Action Center › Today', () => {
     await act(async () => (link('ideas') as HTMLAnchorElement).click());
     expect(track).toHaveBeenCalledWith('today_waiting_clicked', { type: 'ideas' });
     expect(text('header')).toContain('Since yesterday: 3 changes · 5 things waiting for you');
+  });
+
+  it('lists what broke first, "Fix this", from the menu’s own read', async () => {
+    useMenuStateStore.setState({
+      read: {
+        key: 'b1|traffic|count||red',
+        brandId: 'b1',
+        at: Date.now(),
+        state: {
+          nightlyRunAt: null,
+          newSuggestionAt: null,
+          newActionAt: null,
+          newOpportunityAt: null,
+          openActions: null,
+          navSeen: null,
+          broken: { traffic: 'searchConsole' },
+        },
+      },
+    });
+    try {
+      await draw();
+      const rows = [...container.querySelectorAll('[data-waiting]')];
+      expect(rows.map((row) => row.getAttribute('data-waiting'))).toEqual([
+        'fix',
+        'agent',
+        'drafts',
+        'due',
+        'review',
+        'ideas',
+      ]);
+      expect(rows[0].textContent).toContain('Fix this: Search Console is disconnected');
+      const link = rows[0].querySelector('a');
+      expect(link?.textContent).toBe('Reconnect');
+      expect(link?.getAttribute('href')).toBe('/dashboard/settings?tab=integrations');
+      expect(text('header')).toContain('6 things waiting for you');
+    } finally {
+      useMenuStateStore.setState({ read: null });
+    }
   });
 
   it("lists the agent runs of the brand on screen, never another brand's", async () => {

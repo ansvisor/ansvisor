@@ -594,9 +594,9 @@ export function Sidebar() {
                             <span className={nameDot ? 'truncate' : 'flex-1 truncate'}>
                               {label}
                             </span>
-                            {nameDot && <MenuDot colour={nameDot.colour} className="mr-auto" />}
+                            {nameDot && <MenuDot dot={nameDot} className="mr-auto" />}
                             {iconDot && (
-                              <MenuDot colour={iconDot.colour} className={cn(ICON_DOT, 'left-5')} />
+                              <MenuDot dot={iconDot} className={cn(ICON_DOT, 'left-5')} />
                             )}
                             {words && <NewResultsWords />}
                             {openActions !== null && <OpenActionsCount count={openActions} />}
@@ -628,9 +628,7 @@ export function Sidebar() {
                                     <span className={childDot ? 'truncate' : 'flex-1 truncate'}>
                                       {getDashboardNavLabel(child.title, t)}
                                     </span>
-                                    {childDot && (
-                                      <MenuDot colour={childDot.colour} className="mr-auto" />
-                                    )}
+                                    {childDot && <MenuDot dot={childDot} className="mr-auto" />}
                                   </>
                                 );
                                 const onDotClick = childDot
@@ -699,7 +697,7 @@ export function Sidebar() {
                         ? children[0].href
                         : href;
                     // Icons only, the item's name says its dot ("Visibility, New results").
-                    const iconName = compact && dot ? dotLabel(dot.colour, label) : undefined;
+                    const iconName = compact && dot ? dotLabel(dot, label) : undefined;
                     return (
                       <Link
                         key={item.href}
@@ -729,12 +727,12 @@ export function Sidebar() {
                         >
                           <item.icon className="h-4 w-4 shrink-0" />
                           {iconName && dot && (
-                            <MenuDot colour={dot.colour} className={cn(ICON_DOT, 'left-7')} />
+                            <MenuDot dot={dot} className={cn(ICON_DOT, 'left-7')} />
                           )}
                           {!compact && (
                             <>
                               <span className={dot ? 'truncate' : 'flex-1 truncate'}>{label}</span>
-                              {dot && <MenuDot colour={dot.colour} className="mr-auto" />}
+                              {dot && <MenuDot dot={dot} className="mr-auto" />}
                               {effectiveBadge && (
                                 <Badge
                                   variant="secondary"

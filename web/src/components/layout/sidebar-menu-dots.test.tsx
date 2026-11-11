@@ -174,9 +174,14 @@ describe('the dots after a nightly run', () => {
         'traffic',
         'action-center/actions',
         'content',
+        'content/editor',
+        'content/library',
+        'agents',
+        'audit',
       ],
       count: true,
       waiting: true,
+      red: true,
     });
   });
 
@@ -242,6 +247,36 @@ describe('the dots after a nightly run', () => {
     expect(groupHeader('More')?.querySelector('[data-menu-dot]')?.getAttribute('aria-label')).toBe(
       'Needs you',
     );
+  });
+
+  it('draws red with a "!" and grey pulsing, each saying why, on the entry and the icon', async () => {
+    menu.state = {
+      ...afterNight(),
+      broken: { audit: 'aiBotsBlocked' },
+      working: { 'content/editor': 'writing' },
+    };
+    await render();
+    const red = link('/dashboard/audit')!.querySelector<HTMLElement>('[data-menu-dot]')!;
+    expect(red.dataset.menuDot).toBe('red');
+    expect(red.getAttribute('role')).toBe('img');
+    expect(red.getAttribute('aria-label')).toBe('Needs attention: your site blocks AI crawlers');
+    expect(red.getAttribute('title')).toBe('Needs attention: your site blocks AI crawlers');
+    expect(red.textContent).toBe('!');
+    act(() => root.unmount());
+    root = createRoot(container);
+    // A member sees no red, and grey on Content's icon, nothing stronger there.
+    await render({ role: 'analyst' });
+    expect(dotIn(link('/dashboard/audit'))).toBeNull();
+    const grey = container.querySelector<HTMLElement>('[data-menu-dot="grey"]')!;
+    expect(grey.getAttribute('aria-label')).toBe(
+      'Working on it: the Content Agent is writing a page',
+    );
+    expect(grey.className).toContain('motion-reduce:animate-none');
+    act(() => root.unmount());
+    root = createRoot(container);
+    useSidebarStore.setState({ isCollapsed: true });
+    await render();
+    expect(link('/dashboard/audit')?.getAttribute('aria-label')).toBe('Audit, Needs attention');
   });
 
   it('puts them on the icons when collapsed, the item named with its dot', async () => {
@@ -317,9 +352,20 @@ describe('who sees which dot', () => {
       '/dashboard/citations': 'green',
     });
     expect(getMenuState).toHaveBeenCalledWith(BRAND, {
-      areas: ['insights', 'mentions', 'citations', 'prompts/tracked', 'traffic'],
+      // No Library: it is only ever red, and red is for admins and managers.
+      areas: [
+        'insights',
+        'mentions',
+        'citations',
+        'prompts/tracked',
+        'traffic',
+        'content/editor',
+        'agents',
+        'audit',
+      ],
       count: true,
       waiting: false,
+      red: false,
     });
   });
 

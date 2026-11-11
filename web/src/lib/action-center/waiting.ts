@@ -1,11 +1,14 @@
 import type { ActionItem } from '@/lib/actions/action-center';
 import type { TodayStep } from '@/lib/action-center/today';
+import type { BrokenReason } from '@/lib/menu-dots';
 
 /**
  * Today's "Waiting for you" (simplification plan PR 9): what
  * waits on the person, in order, each row only for a role that can act on
  * it and only while its section is on the person's menu:
  *
+ *   0. fix      what broke, the menu's red dots (admins and managers), each
+ *               "Fix this: …" with its fix, from the menu's own read
  *   1. agent    their agent runs on this brand waiting for an OK (Chat's
  *               Agents at work), with the new Chat on and Chat on their menu
  *   2. drafts   drafts in review in the Library (Content)
@@ -21,7 +24,15 @@ import type { TodayStep } from '@/lib/action-center/today';
  * server action and the page read, this orders and filters.
  */
 
-export type WaitingType = 'agent' | 'drafts' | 'due' | 'reminder' | 'review' | 'prompts' | 'ideas';
+export type WaitingType =
+  | 'fix'
+  | 'agent'
+  | 'drafts'
+  | 'due'
+  | 'reminder'
+  | 'review'
+  | 'prompts'
+  | 'ideas';
 
 /**
  * The brand's prompts waiting for a spot (00535), and the plan's room: a
@@ -48,6 +59,7 @@ export interface WaitingAction {
 }
 
 export type WaitingRow =
+  | { type: 'fix'; reason: BrokenReason }
   | { type: 'agent'; count: number; chatId: string; title: string | null }
   | { type: 'drafts'; count: number; draftId: string; title: string }
   | { type: 'due'; item: WaitingAction; overdue: boolean }
@@ -58,6 +70,8 @@ export type WaitingRow =
 
 /** The menu section a row belongs to; the Action Center's rows are always on. */
 const SECTION: Record<WaitingType, string | null> = {
+  // Read only for a red entry on the person's menu.
+  fix: null,
   agent: 'agent',
   drafts: 'content',
   due: null,
@@ -68,7 +82,7 @@ const SECTION: Record<WaitingType, string | null> = {
 };
 
 /** Rows only admins and managers act on. */
-const MANAGERS_ONLY: readonly WaitingType[] = ['review', 'prompts', 'ideas'];
+const MANAGERS_ONLY: readonly WaitingType[] = ['fix', 'review', 'prompts', 'ideas'];
 
 /** Due rows listed at most; the rest wait in All actions. */
 export const DUE_ROWS = 3;
@@ -93,11 +107,16 @@ export interface WaitingInput {
   /** Prompts waiting for a spot (admins and managers); absent or null when not read. */
   prompts?: WaitingPrompts | null;
   ideas: { count: number; sources: ('gsc' | 'ga')[] } | null;
+  /**
+   * What broke, the menu's red dots, from the menu's own read (admins and
+   * managers): first, each as "Fix this: …". Absent when not read.
+   */
+  broken?: readonly BrokenReason[] | null;
 }
 
 /** The rows, in order. */
 export function waitingRows(input: WaitingInput): WaitingRow[] {
-  const rows: WaitingRow[] = [];
+  const rows: WaitingRow[] = (input.broken ?? []).map((reason) => ({ type: 'fix', reason }));
   if (input.chatOn && input.agents && input.agents.length > 0) {
     const [first] = input.agents;
     rows.push({ type: 'agent', count: input.agents.length, chatId: first.id, title: first.title });

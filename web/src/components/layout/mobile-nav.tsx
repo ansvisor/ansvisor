@@ -207,7 +207,7 @@ export function MobileNav() {
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
                       <span className={dot ? undefined : 'flex-1'}>{label}</span>
-                      {dot && <MenuDot colour={dot.colour} className="mr-auto" />}
+                      {dot && <MenuDot dot={dot} className="mr-auto" />}
                       {words && <NewResultsWords />}
                       {openActions !== null && <OpenActionsCount count={openActions} />}
                       {effectiveBadge && (
@@ -247,7 +247,7 @@ export function MobileNav() {
                             )}
                           >
                             {getDashboardNavLabel(child.title, t)}
-                            {childDot && <MenuDot colour={childDot.colour} />}
+                            {childDot && <MenuDot dot={childDot} />}
                             {child.badge && (
                               <Badge
                                 variant="secondary"

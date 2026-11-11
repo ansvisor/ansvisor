@@ -22,6 +22,8 @@ const db = vi.hoisted(() => ({
     { data: unknown; error: { message: string } | null; count?: number }
   >,
   calls: {} as Record<string, [string, ...unknown[]][]>,
+  /** Answers given in turn, before `answers`, for a table read more than once. */
+  queue: {} as Record<string, { data: unknown; error: { message: string } | null }[]>,
   count: vi.fn(async () => 4),
 }));
 
@@ -31,10 +33,25 @@ vi.mock('@/lib/supabase/server', () => ({
     auth: { getUser: async () => ({ data: { user: db.user } }) },
     from: (table: string) => {
       const calls: [string, ...unknown[]][] = [];
-      db.calls[table] = calls;
-      const answer = () => db.answers[table] ?? { data: null, error: null };
+      // A table read again in one call keeps each: tracking_runs, then tracking_runs#2.
+      let key = table;
+      for (let n = 2; db.calls[key]; n++) key = `${table}#${n}`;
+      db.calls[key] = calls;
+      const answer = () =>
+        db.queue[table]?.shift() ?? db.answers[table] ?? { data: null, error: null };
       const chain: Record<string, unknown> = {};
-      for (const method of ['select', 'eq', 'is', 'not', 'or', 'order', 'limit']) {
+      for (const method of [
+        'select',
+        'eq',
+        'is',
+        'not',
+        'or',
+        'order',
+        'limit',
+        'in',
+        'gt',
+        'gte',
+      ]) {
         chain[method] = (...args: unknown[]) => (calls.push([method, ...args]), chain);
       }
       chain.maybeSingle = async () => (calls.push(['maybeSingle']), answer());
@@ -51,6 +68,7 @@ let errorLog: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   db.user = { id: USER };
   db.calls = {};
+  db.queue = {};
   db.count.mockClear();
   db.answers = {
     tracking_runs: { data: { completed_at: '2026-11-11T03:10:00+00:00' }, error: null },
@@ -70,6 +88,128 @@ beforeEach(() => {
 afterEach(() => errorLog.mockRestore());
 
 const everything = { areas: [...DOT_AREAS], count: true };
+
+describe('getMenuState, red and grey', () => {
+  const now = () => new Date().toISOString();
+  const status = ['traffic', 'audit', 'content/library', 'agents', 'content/editor'] as DotArea[];
+
+  it('reads what broke only when asked for red, and each only for its area', async () => {
+    db.answers.site_audits = {
+      data: { id: 'a1', status: 'completed', created_at: now() },
+      error: null,
+    };
+    const member = await getMenuState(BRAND, { areas: status, count: false });
+    const read = Object.keys(db.calls);
+    for (const table of ['site_audits', 'chat_agent_runs', 'content_agent_runs'])
+      expect(read).toContain(table);
+    for (const table of ['brand_integrations', 'audit_signal_results', 'content_draft_deliveries'])
+      expect(read).not.toContain(table);
+    expect(member?.broken).toBeUndefined();
+
+    db.calls = {};
+    await getMenuState(BRAND, { areas: ['mentions'], count: false, red: true });
+    expect(Object.keys(db.calls).sort()).toEqual(['tracking_runs', 'user_brand_state']);
+  });
+
+  it('lights red from the stored signals, for admins and managers', async () => {
+    db.answers.brand_integrations = {
+      data: [
+        { provider: 'google-search-console', account: { id: 's', status: 'disconnected' } },
+        { provider: 'google-analytics', account: { id: 'g', status: 'connected' } },
+      ],
+      error: null,
+    };
+    db.answers.site_audits = {
+      data: { id: 'a1', status: 'completed', created_at: now() },
+      error: null,
+    };
+    db.answers.audit_signal_results = { data: { status: 'fail' }, error: null };
+    db.queue.content_draft_deliveries = [
+      { data: { draft_id: 'd1', created_at: '2026-11-10T08:00:00Z' }, error: null },
+      { data: null, error: null },
+    ];
+    db.queue.chat_agent_runs = [
+      { data: null, error: null },
+      {
+        data: [
+          { agent_id: 'x', status: 'done' },
+          { agent_id: 'y', status: 'failed' },
+          { agent_id: 'x', status: 'failed' },
+        ],
+        error: null,
+      },
+    ];
+    const state = await getMenuState(BRAND, { areas: status, count: false, red: true });
+    expect(state?.broken).toEqual({
+      traffic: 'searchConsole',
+      audit: 'aiBotsBlocked',
+      'content/library': 'publishFailed',
+      agents: 'agentFailed',
+    });
+    expect(state?.working).toBeUndefined();
+    expect(db.calls.audit_signal_results).toContainEqual(['eq', 'signal_key', 'ai-bot-access']);
+    expect(db.calls['chat_agent_runs#2']).toContainEqual(['eq', 'chat_agents.owner_id', USER]);
+    // A later send that went through, and an agent's later run that did, clear them.
+    db.queue.content_draft_deliveries = [
+      { data: { draft_id: 'd1', created_at: '2026-11-10T08:00:00Z' }, error: null },
+      { data: { id: 'later' }, error: null },
+    ];
+    db.queue.chat_agent_runs = [
+      { data: null, error: null },
+      {
+        data: [
+          { agent_id: 'x', status: 'done' },
+          { agent_id: 'x', status: 'failed' },
+        ],
+        error: null,
+      },
+    ];
+    db.answers.audit_signal_results = { data: { status: 'warn' }, error: null };
+    db.answers.brand_integrations = { data: [], error: null };
+    expect((await getMenuState(BRAND, { areas: status, count: false, red: true }))?.broken).toEqual(
+      {},
+    );
+  });
+
+  it('lights grey while a job runs, and not for a run left open for hours', async () => {
+    db.queue.tracking_runs = [
+      { data: { completed_at: '2026-11-11T03:10:00Z' }, error: null },
+      { data: { started_at: now(), completed_at: null }, error: null },
+    ];
+    db.answers.site_audits = {
+      data: { id: 'a1', status: 'running', created_at: now() },
+      error: null,
+    };
+    db.answers.chat_agent_runs = { data: { id: 'r1' }, error: null };
+    db.answers.content_agent_runs = { data: { id: 'c1' }, error: null };
+    const state = await getMenuState(BRAND, {
+      areas: ['insights', 'agents', 'content/editor', 'audit'],
+      count: false,
+    });
+    expect(state?.working).toEqual({
+      insights: 'trackingRunning',
+      'prompts/tracked': 'trackingRunning',
+      agents: 'agentRunning',
+      'content/editor': 'writing',
+      audit: 'auditRunning',
+    });
+    expect(db.calls.content_agent_runs).toContainEqual(['in', 'kind', ['write', 'rewrite']]);
+    expect(db.calls['tracking_runs#2']).toEqual([
+      ['select', 'started_at, completed_at'],
+      ['eq', 'brand_id', BRAND],
+      ['order', 'started_at', { ascending: false }],
+      ['limit', 1],
+      ['maybeSingle'],
+    ]);
+    db.answers.site_audits = {
+      data: { id: 'a1', status: 'running', created_at: '2026-01-01T00:00:00Z' },
+      error: null,
+    };
+    // Once the run completed (the answer's completed_at), the grey goes.
+    const later = await getMenuState(BRAND, { areas: ['insights', 'audit'], count: false });
+    expect(later?.working).toBeUndefined();
+  });
+});
 
 describe('getMenuState', () => {
   it('reads each newest time, the count and the person’s visits', async () => {

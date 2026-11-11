@@ -571,7 +571,21 @@
   "menuDots": {
     "newResults": "New results",
     "needsYou": "Needs you",
+    "needsAttention": "Needs attention",
+    "workingOnIt": "Working on it",
     "withDot": "{label}, {dot}",
+    "withReason": "{dot}: {reason}",
+    "reasons": {
+      "searchConsole": "Search Console disconnected",
+      "analytics": "Google Analytics disconnected",
+      "aiBotsBlocked": "your site blocks AI crawlers",
+      "publishFailed": "a page didn’t reach your CMS",
+      "agentFailed": "an agent’s last run failed",
+      "agentRunning": "an agent is running",
+      "writing": "the Content Agent is writing a page",
+      "trackingRunning": "today’s tracking is running",
+      "auditRunning": "an audit is running"
+    },
     "openActions": "{count, plural, one {# open action} other {# open actions}}, unassigned or yours"
   },
   "brandVisibility": {
@@ -728,6 +742,20 @@
       },
       "waiting": {
         "title": "Waiting for you",
+        "fix": {
+          "searchConsole": "Fix this: Search Console is disconnected",
+          "analytics": "Fix this: Google Analytics is disconnected",
+          "aiBotsBlocked": "Fix this: your site blocks AI crawlers",
+          "publishFailed": "Fix this: a page didn’t reach your CMS",
+          "agentFailed": "Fix this: an agent’s last run failed",
+          "open": {
+            "searchConsole": "Reconnect",
+            "analytics": "Reconnect",
+            "aiBotsBlocked": "Open Site Audit",
+            "publishFailed": "Open the Library",
+            "agentFailed": "Open Agents"
+          }
+        },
         "agent": {
           "one": "An agent is waiting for your OK on “{title}”.",
           "oneUntitled": "An agent is waiting for your OK.",
