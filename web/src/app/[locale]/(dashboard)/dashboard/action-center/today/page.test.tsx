@@ -6,6 +6,7 @@ import type { ActionItem } from '@/lib/actions/action-center';
 import type { FocusCard } from '@/lib/actions/today-focus';
 import type { TodayOverview } from '@/lib/actions/today';
 import type { TodayStanding } from '@/lib/action-center/focus';
+import type { Signal } from '@/lib/signals/map';
 import messages from '../../../../../../../messages/en.json';
 
 /**
@@ -69,6 +70,12 @@ const reads = vi.hoisted(() => ({
   skipTodayFocus: vi.fn(),
   readUserBrandState: vi.fn(),
   markSeen: vi.fn(async () => ({ ok: true })),
+  getTodayChanges: vi.fn(),
+}));
+vi.mock('@/lib/actions/today-changes', () => ({ getTodayChanges: reads.getTodayChanges }));
+let hidden = new Set<string>();
+vi.mock('@/components/providers/menu-access-provider', () => ({
+  useHiddenMenuSections: () => hidden,
 }));
 vi.mock('@/lib/actions/today', () => ({
   getTodayOverview: reads.getTodayOverview,
@@ -136,6 +143,52 @@ const standing: TodayStanding = {
   competitors: [],
 };
 
+function signal(id: string, overrides: Partial<Signal> = {}): Signal {
+  return {
+    id,
+    category: 'visibility',
+    kind: 'prompt_gain',
+    impact: 'high',
+    status: 'new',
+    source: ['ai_results'],
+    detectedAt: '2026-11-11T04:00:00Z',
+    lastDetectedAt: '2026-11-11T04:00:00Z',
+    resolvedAt: null,
+    previousValue: null,
+    currentValue: null,
+    changeValue: 12,
+    payload: { promptText: 'best whole bean coffee for espresso' },
+    kpiKeys: [],
+    actionId: null,
+    where: { platforms: [], locations: [] } as unknown as Signal['where'],
+    ...overrides,
+  };
+}
+
+const changes = {
+  since: new Date(Date.now() - 6 * 3600_000).toISOString(),
+  items: [
+    signal('s1'),
+    signal('s2', {
+      category: 'citation',
+      kind: 'first_citation',
+      changeValue: null,
+      actionId: 'a9',
+      payload: { url: 'beanbulletin.example', promptText: 'low-acid coffee' },
+    }),
+    signal('s3', {
+      category: 'competitor',
+      kind: 'competitor_surge',
+      impact: 'medium',
+      previousValue: 20,
+      currentValue: 24.1,
+      payload: { competitorName: 'Morning Ritual Co.' },
+    }),
+  ],
+  total: 3,
+  small: 2,
+};
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -154,6 +207,7 @@ beforeEach(() => {
     card('a3', { action: action('a3', { taskCompleted: 2 }) }),
   ]);
   reads.skipTodayFocus.mockResolvedValue({ ok: true });
+  reads.getTodayChanges.mockResolvedValue(changes);
   reads.readUserBrandState.mockResolvedValue({
     navSeen: { today: '2026-11-10T08:00:00.000Z' },
     focus: [],
@@ -170,6 +224,7 @@ afterEach(() => {
   chatOn = true;
   firstRun = null;
   panel.available = true;
+  hidden = new Set();
 });
 
 async function draw() {
@@ -276,7 +331,12 @@ describe('Action Center › Today', () => {
     await draw();
     expect(reads.getTodayFocus).toHaveBeenCalledWith('b1', '2026-11-10T08:00:00.000Z');
     expect(reads.markSeen).toHaveBeenCalledWith('b1', 'today');
-    expect(track).toHaveBeenCalledWith('today_viewed', { state: 'normal', focus_count: 3 });
+    expect(reads.getTodayChanges).toHaveBeenCalledWith('b1', '2026-11-10T08:00:00.000Z', []);
+    expect(track).toHaveBeenCalledWith('today_viewed', {
+      state: 'normal',
+      since_count: 3,
+      focus_count: 3,
+    });
   });
 
   it('skips a card for the person and reads the focus again', async () => {
@@ -353,5 +413,59 @@ describe('Action Center › Today', () => {
     await draw();
     expect(container.querySelector('[data-action="today.needsReview"]')).toBeNull();
     expect(getTaskReviewCount).not.toHaveBeenCalled();
+  });
+  it('lists the night’s biggest changes as Up, Down and Rival, and counts them in the header', async () => {
+    hidden = new Set(['traffic']);
+    await draw();
+    const rows = [...container.querySelectorAll('[data-today-part="since"] li')];
+    expect(rows.map((row) => row.querySelector('span')?.textContent)).toEqual([
+      'Up',
+      'Up',
+      'Rival',
+    ]);
+    expect(rows[2].textContent).toContain('Morning Ritual Co.');
+    const added = rows[1].querySelector('a');
+    expect(added?.textContent).toBe('An action was added');
+    expect(added?.getAttribute('href')).toBe('/dashboard/action-center/actions?action=a9');
+    await act(async () => added?.click());
+    expect(track).toHaveBeenCalledWith('today_since_clicked', {
+      kind: 'first_citation',
+      direction: 'up',
+      target: 'action',
+    });
+    expect(text('header')).toContain('Since yesterday: 3 changes');
+    expect(reads.getTodayChanges).toHaveBeenCalledWith('b1', '2026-11-10T08:00:00.000Z', [
+      'traffic',
+    ]);
+  });
+
+  it('names the day the window starts when it is before yesterday', async () => {
+    const friday = new Date(Date.now() - 3 * 86_400_000);
+    reads.getTodayChanges.mockResolvedValue({ ...changes, since: friday.toISOString() });
+    await draw();
+    const day = friday.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
+    expect(text('#today-since-title')).toBe(`Since ${day}`);
+    expect(text('header')).toContain(`Since ${day}: 3 changes`);
+  });
+
+  it('says a quiet day is quiet, with the score held and small moves in all signals', async () => {
+    reads.getTodayChanges.mockResolvedValue({ ...changes, items: [], total: 0, small: 2 });
+    reads.getTodayStanding.mockResolvedValue({
+      ...standing,
+      change: 0,
+      competitors: [{ name: 'Northbound Roasters', score: 60.1, change: 0.6 }],
+    });
+    await draw();
+    const since = container.querySelector('[data-today-part="since"]');
+    expect(since?.textContent).toContain(
+      'No big changes. Your score held at 53.9, and no competitor moved more than 1 point.',
+    );
+    expect(since?.textContent).toContain(
+      'Next update tomorrow morning. Small moves are in all signals.',
+    );
+    expect(since?.querySelector('a')?.getAttribute('href')).toBe(
+      '/dashboard/action-center/signals',
+    );
+    expect(text('header')).toContain('Since yesterday: no big changes');
   });
 });

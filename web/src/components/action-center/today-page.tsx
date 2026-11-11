@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useBrandStore } from '@/stores/use-brand-store';
@@ -13,6 +13,7 @@ import { viewerTimeZone } from '@/lib/time-zone';
 import { ActionCenterHeader } from './action-center-header';
 import { ActionCenterTabs } from './action-center-tabs';
 import { FocusSection } from './today/focus-section';
+import { SinceSection } from './today/since-section';
 import {
   AskChatBox,
   LoopStrip,
@@ -24,7 +25,7 @@ import {
 import { useTodayRead, useTodayVisit, type TodayVisitPart } from './today/use-today';
 
 /** The parts a visit waits on before it counts as seen. */
-const VISIT_PARTS: readonly TodayVisitPart[] = ['focus'];
+const VISIT_PARTS: readonly TodayVisitPart[] = ['since', 'focus'];
 
 /**
  * Action Center › Today (SIMPLE_NAV), the page everyone lands on with the
@@ -52,6 +53,13 @@ export function TodayPage() {
     firstRun,
   );
   const tLoop = useTranslations('actionCenter.today.loop');
+
+  // The header's line: what the parts that have read say, the others left out.
+  const [since, setSince] = useState<{ title: string; count: number } | null>(null);
+  const onSince = useCallback((summary: { title: string; count: number } | null) => {
+    setSince(summary);
+  }, []);
+  const summary = since ? t('summary.changes', since) : null;
   const count = (value: number | null | undefined, key: 'tracked' | 'open' | 'doneWeek') =>
     value === null || value === undefined ? null : tLoop(key, { count: value });
 
@@ -59,6 +67,7 @@ export function TodayPage() {
     <div className="space-y-6">
       <ActionCenterHeader
         subtitle={<TodayLine zone={zone} brand={brandName ?? null} lastRunAt={ready?.lastRunAt} />}
+        aside={summary}
       />
       <ActionCenterTabs />
       <p
@@ -84,7 +93,15 @@ export function TodayPage() {
       />
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="space-y-4">
-          <Placeholder part="since" link={{ href: '/dashboard/action-center/signals' }} />
+          {brandId && (
+            <SinceSection
+              brandId={brandId}
+              visit={visit}
+              zone={zone}
+              standing={standing}
+              onSummary={onSince}
+            />
+          )}
           {brandId && <FocusSection brandId={brandId} visit={visit} />}
         </div>
         <div className="space-y-4">
@@ -129,21 +146,14 @@ function TodayLine({
 /** A part still being built: what it will show. */
 function Placeholder({
   part,
-  link,
   children,
 }: {
-  part: 'since' | 'waiting' | 'setup';
-  link?: { href: string };
+  part: 'waiting' | 'setup';
   children?: React.ReactNode;
 }) {
   const t = useTranslations('actionCenter.today');
   return (
-    <TodaySection
-      part={part}
-      title={t(`sections.${part}.title`)}
-      link={link ? { href: link.href, label: t('allSignals') } : undefined}
-      dashed={part === 'setup'}
-    >
+    <TodaySection part={part} title={t(`sections.${part}.title`)} dashed={part === 'setup'}>
       <p className="text-sm text-muted-foreground">{t(`sections.${part}.body`)}</p>
       {children}
     </TodaySection>

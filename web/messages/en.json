@@ -647,10 +647,6 @@
       "needsReview": "Tasks waiting for review",
       "backToToday": "Back to Today",
       "sections": {
-        "since": {
-          "title": "Since yesterday",
-          "body": "The biggest changes in AI answers since your last visit: a better or worse rank, a citation won or lost, a rival's move."
-        },
         "focus": {
           "title": "Today's focus",
           "body": "Your 3 highest-impact actions. They stay here until you finish or skip them."
@@ -720,6 +716,28 @@
         "label": "Ask Chat",
         "placeholder": "Ask Chat, e.g. why did my score change?",
         "button": "Ask"
+      },
+      "summary": {
+        "changes": "{title}: {count, plural, =0 {no big changes} one {# change} other {# changes}}"
+      },
+      "since": {
+        "title": "Since yesterday",
+        "titleDay": "Since {day}",
+        "direction": {
+          "up": "Up",
+          "down": "Down",
+          "rival": "Rival"
+        },
+        "actionAdded": "<link>An action was added</link>.",
+        "quiet": {
+          "none": "No big changes.",
+          "held": "No big changes. Your score held at {score}.",
+          "heldCalm": "No big changes. Your score held at {score}, and no competitor moved more than 1 point.",
+          "moved": "No big changes. Your score is {score} ({change}).",
+          "movedCalm": "No big changes. Your score is {score} ({change}), and no competitor moved more than 1 point.",
+          "next": "Next update tomorrow morning.",
+          "small": "Small moves are in <link>all signals</link>."
+        }
       }
     },
     "firstRun": {
