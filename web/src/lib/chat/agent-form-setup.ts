@@ -3,12 +3,14 @@ import { PLANS } from '@/config/plans';
 import { readChosenTimeZone } from '@/lib/account-time-zone';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import type { AgentFormSetup } from './agent-form';
+import { ANSVISOR_SKILLS } from './agent-skills';
 import { readGoLiveSwitch } from './agent-go-live';
 import { AGENT_ENGINES, enginesDenial, modeDenial } from './agent-rules';
 import { readAgent, readAgentContext, type AgentContext, type AgentDetail } from './agents';
 import { OwnKeyUnreadableError, ownChatKeyProviders, resolveChatModelKey } from './key';
 import { modelChoiceOpen } from './models';
 import { chatActor } from './run-api';
+import { skillFlagOn } from './skills/flagged';
 
 /**
  * What the create and edit pages of an agent (CHAT-21 §D) know before the
@@ -157,6 +159,7 @@ export async function agentFormSetupFor(ctx: AgentContext): Promise<AgentFormSet
     callable,
     canCallLocked: !ctx.plan.fullAuto,
     librarySkills,
+    offSkills: ANSVISOR_SKILLS.map((skill) => skill.id).filter((id) => !skillFlagOn(id)),
   };
 }
 

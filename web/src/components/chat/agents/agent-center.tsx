@@ -7,7 +7,7 @@ import { AskAdminButton } from '@/components/chat-access/ask-admin-button';
 import { RoleContext } from '@/components/providers/role-provider';
 import { buttonVariants } from '@/components/ui/button-variants';
 import { Link } from '@/i18n/navigation';
-import type { PresetLock } from '@/lib/chat/agents/catalog';
+import type { AgentPreset, PresetLock } from '@/lib/chat/agents/catalog';
 import { AGENT_CENTER_TABS, writesAgents, type AgentCenterTab } from '@/lib/chat/agent-view';
 import { isDemoSelected } from '@/lib/demo/demo-brand';
 import { cn } from '@/lib/utils';
@@ -32,6 +32,7 @@ export function AgentCenter({
   initialTab = 'ready',
   locks = {},
   workAreas = [],
+  presets,
   now: nowProp,
   timeZone,
 }: {
@@ -40,6 +41,8 @@ export function AgentCenter({
   locks?: Record<string, PresetLock>;
   /** The person's work areas: Ready to use puts the agents made for them first. */
   workAreas?: readonly string[];
+  /** The ready-to-use agents as this install offers them (presetOnInstall); the catalog's otherwise. */
+  presets?: readonly AgentPreset[];
   now?: Date;
   timeZone?: string;
 }) {
@@ -162,7 +165,13 @@ export function AgentCenter({
         data-slot="agent-center-ready"
         hidden={tab !== 'ready'}
       >
-        <ReadyAgents locks={locks} writer={writer} words={words} workAreas={workAreas} />
+        <ReadyAgents
+          locks={locks}
+          writer={writer}
+          words={words}
+          workAreas={workAreas}
+          presets={presets}
+        />
       </div>
       <div
         role="tabpanel"

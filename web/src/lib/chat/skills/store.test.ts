@@ -25,6 +25,8 @@ const store = await import('./store');
 const { offAgentSkill } = await import('../agent-skills');
 const { planFactsFromOrgRow } = await import('../plan-facts');
 const { SKILL_LIBRARY } = await import('./library');
+// The library this install offers: the ChatGPT profile check waits on BUSINESS_HUB_ENABLED (flagged.ts).
+const OFFERED = SKILL_LIBRARY.filter((s) => s.name !== 'chatgpt-profile');
 const { SHORTCUT_IDS } = await import('../shortcuts');
 
 const AGENCY = 'aaaaaaaa-0000-4000-8000-000000000005';
@@ -241,7 +243,7 @@ describe('enabledSkillsFor and the / menu (CHAT-13 items 3, 5)', () => {
     seedSkill({ name: 'analyze', visibility: 'workspace' });
 
     const enabled = await store.enabledSkillsFor(ORG, PEOPLE.manager);
-    const library = SKILL_LIBRARY.filter((s) => !['faq', 'report'].includes(s.name));
+    const library = OFFERED.filter((s) => !['faq', 'report'].includes(s.name));
     expect(enabled.map((s) => s.name)).toEqual([
       ...library.map((s) => s.name),
       'my-brief',
@@ -274,11 +276,20 @@ describe('enabledSkillsFor and the / menu (CHAT-13 items 3, 5)', () => {
     expect(menu.every((item) => Object.keys(item).join() === 'name,title')).toBe(true);
   });
 
+  it('offers the ChatGPT profile check only with BUSINESS_HUB_ENABLED on, and lists it on the Skills page then', async () => {
+    const names = async () =>
+      (await store.enabledSkillsFor(ORG, PEOPLE.manager)).map((s) => s.name);
+    vi.stubEnv('BUSINESS_HUB_ENABLED', '');
+    expect(await names()).not.toContain('chatgpt-profile');
+    vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+    expect(await names()).toContain('chatgpt-profile');
+  });
+
   it('gives the menu the library when the skills can’t be read, so the page still opens', async () => {
     db.failures.chat_skills = { message: 'down' };
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
     const menu = await store.skillMenuFor(ORG, PEOPLE.manager);
-    expect(menu.map((item) => item.name)).toEqual(SKILL_LIBRARY.map((s) => s.name));
+    expect(menu.map((item) => item.name)).toEqual(OFFERED.map((s) => s.name));
     await expect(store.enabledSkillsFor(ORG, PEOPLE.manager)).rejects.toThrow(/skills/);
     errors.mockRestore();
   });
@@ -533,6 +544,15 @@ describe('listSkills', () => {
     const analyst = await store.listSkills(await viewer(PEOPLE.analyst));
     expect(analyst.skills.map((s) => s.name)).toEqual(['c-shared']);
     expect(analyst.can).toEqual({ save: false, manageLibrary: false });
+  });
+
+  it('lists the ChatGPT profile check among Ansvisor’s skills only with BUSINESS_HUB_ENABLED on', async () => {
+    const listed = async () =>
+      (await store.listSkills(await viewer(PEOPLE.manager))).library.map((s) => s.name);
+    vi.stubEnv('BUSINESS_HUB_ENABLED', '');
+    expect(await listed()).not.toContain('chatgpt-profile');
+    vi.stubEnv('BUSINESS_HUB_ENABLED', 'true');
+    expect(await listed()).toContain('chatgpt-profile');
   });
 
   it('keeps a skill added from the Library apart from an import, and runs it as a third party’s (W4-19)', async () => {

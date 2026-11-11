@@ -91,6 +91,9 @@ export const ANSVISOR_SKILLS: readonly AgentSkill[] = [
   { id: 'wrongclaim', uses: [] },
   { id: 'answerfirst', uses: [] },
   { id: 'facts', uses: [] },
+  // ChatGPT Business Hub plan, PR 7: reads tracked answers, approved facts and
+  // the brand's own pages, and saves drafts: no connection.
+  { id: 'chatgpt-profile', uses: [] },
   { id: 'compare', uses: [] },
   { id: 'translate', uses: [] },
   { id: 'questions', uses: [] },

@@ -460,6 +460,8 @@ function AgentFormBody({
   const activeBrandId = useBrandStore((s) => s.activeBrandId);
 
   const librarySkills = setup.librarySkills ?? [];
+  // Ansvisor's skills this install offers now: one behind a flag that is off is left out.
+  const offered = ANSVISOR_SKILLS.filter((s) => !(setup.offSkills ?? []).includes(s.id));
   // An Ansvisor skill's title, a Library skill's own (W4-19), else its /command.
   const skillTitle = (id: string) =>
     tSkills.has(id) ? tSkills(id) : (librarySkills.find((s) => s.name === id)?.title ?? id);
@@ -491,7 +493,7 @@ function AgentFormBody({
     if (preset) {
       return named(formFromPreset(setup, preset, { timeZone: zone, brandId: activeBrandId }));
     }
-    const skill = initialSkill && ANSVISOR_SKILLS.some((s) => s.id === initialSkill);
+    const skill = initialSkill && offered.some((s) => s.id === initialSkill);
     return named(
       newForm(setup, {
         timeZone: zone,
@@ -1006,10 +1008,10 @@ function AgentFormBody({
                   >
                     {[
                       // A skill kept from elsewhere (a library skill) shows first.
-                      ...(primary && !ANSVISOR_SKILLS.some((s) => s.id === primary)
+                      ...(primary && !offered.some((s) => s.id === primary)
                         ? [{ id: primary, uses: [] as readonly SkillConnection[] }]
                         : []),
-                      ...ANSVISOR_SKILLS,
+                      ...offered,
                     ].map((skill, i) => {
                       const on = primary === skill.id;
                       return (
@@ -1117,11 +1119,13 @@ function AgentFormBody({
                           className={TOK}
                         >
                           <option value="">{t('skill.addFollowOn')}</option>
-                          {ANSVISOR_SKILLS.filter((s) => !state.skills.includes(s.id)).map((s) => (
-                            <option key={s.id} value={s.id}>
-                              /{s.id} · {skillTitle(s.id)}
-                            </option>
-                          ))}
+                          {offered
+                            .filter((s) => !state.skills.includes(s.id))
+                            .map((s) => (
+                              <option key={s.id} value={s.id}>
+                                /{s.id} · {skillTitle(s.id)}
+                              </option>
+                            ))}
                         </select>
                       )}
                     </div>
