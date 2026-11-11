@@ -814,7 +814,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       const quota = await getSiteAuditQuotaFor(auth);
       if (!quota) {
         return {
-          content: [{ type: 'text', text: 'No organization found for this API key' }],
+          content: [{ type: 'text', text: 'No organization found for this connection' }],
           isError: true,
         };
       }
@@ -1466,7 +1466,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: "Set a task's status",
       description:
-        "Record progress on one task of an Action Center action: in_progress, completed, skipped (skip_reason required) or failed. This reports work a person has done or decided; it does not carry the task out. It is a write logged under the API key's user — only fire on explicit user intent for a specific task, never as part of an exploratory query.",
+        "Record progress on one task of an Action Center action: in_progress, completed, skipped (skip_reason required) or failed. This reports work a person has done or decided; it does not carry the task out. It is a write logged under the user this connection acts as (the API key's owner, or the person who connected the app) — only fire on explicit user intent for a specific task, never as part of an exploratory query.",
       inputSchema: {
         task_id: relaxedUuid.describe('Task UUID, from get_action.'),
         status: z
@@ -1510,7 +1510,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Send Improve suggestions to Action Center',
       description:
-        'Send Improve suggestions for one prompt to Action Center as a new `prompt_improve` action, one human task per suggestion — the same as the Positions panel\'s Improve tab "Send Actions". The prompt must already have an Improve suggestion set for this exact range (generated in the dashboard); otherwise it errors with "Generate suggestions for this range first". Needs a plan that includes Improve. Reuse the same idempotency_key when retrying: a repeated call returns the action the first one created (created: false) instead of a duplicate. It is a write logged under the API key\'s user — only fire on explicit user intent, never as part of an exploratory query. Needs an admin or a manager (get_me returns the role).',
+        'Send Improve suggestions for one prompt to Action Center as a new `prompt_improve` action, one human task per suggestion — the same as the Positions panel\'s Improve tab "Send Actions". The prompt must already have an Improve suggestion set for this exact range (generated in the dashboard); otherwise it errors with "Generate suggestions for this range first". Needs a plan that includes Improve. Reuse the same idempotency_key when retrying: a repeated call returns the action the first one created (created: false) instead of a duplicate. It is a write logged under the user this connection acts as (the API key\'s owner, or the person who connected the app) — only fire on explicit user intent, never as part of an exploratory query. Needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         prompt_id: relaxedUuid.describe('Prompt UUID, from list_prompts.'),
         range: z
@@ -1731,7 +1731,8 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       description:
         '"Sentiment is wrong": set one response\'s sentiment toward the brand, with an optional ' +
         'note. Every figure that reads it follows (Mentions, Insights) and the change is logged ' +
-        "under the API key's user, who must be an admin or manager of the brand's organization. " +
+        "under the user this connection acts as (the API key's owner, or the person who " +
+        "connected the app), who must be an admin or manager of the brand's organization. " +
         'It is a write — only fire on explicit user intent for a specific response, never as ' +
         'part of an exploratory query.',
       inputSchema: {
@@ -1995,7 +1996,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     },
   );
 
-  // ─── The account: who the key acts as, and the AI allowance (B2) ───
+  // ─── The account: who the connection acts as, and the AI allowance (B2) ───
 
   server.registerTool(
     'get_me',
@@ -2385,7 +2386,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
     {
       title: 'Approve a task waiting for review',
       description:
-        "Approve a task waiting for review onto its action's task list, as the Needs review tab's Approve does: the fields given here replace what was written, the rest stays, and it needs all four — url (the exact page), change.after (the change to make), done_when and check — filled once merged. Title optional (the written one stays). The task goes after the action's last task, as the key's user's (the trail says they added it). Refused on an action that is closed or deleted. Only for an admin or a manager of the brand's organization. It is a write — only on the user's explicit decision for this review, never as part of exploring.",
+        "Approve a task waiting for review onto its action's task list, as the Needs review tab's Approve does: the fields given here replace what was written, the rest stays, and it needs all four — url (the exact page), change.after (the change to make), done_when and check — filled once merged. Title optional (the written one stays). The task goes after the action's last task, as added by the user this connection acts as (the trail says they did). Refused on an action that is closed or deleted. Only for an admin or a manager of the brand's organization. It is a write — only on the user's explicit decision for this review, never as part of exploring.",
       inputSchema: {
         review_id: relaxedUuid.describe('Task review UUID, from list_task_reviews.'),
         ...taskReviewEditShape,

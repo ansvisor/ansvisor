@@ -96,13 +96,13 @@ describe('requireManager', () => {
       expect(() => requireManager({ role })).toThrow(RoleRequiredError);
     }
     expect(() => requireManager({ role: 'analyst' })).toThrow(
-      'Only an admin or a manager can do this. This API key acts as an analyst: ask an admin or a manager of the organization to do it.',
+      'Only an admin or a manager can do this. This connection acts as an analyst: ask an admin or a manager of the organization to do it.',
     );
   });
 
   it('names every role allowed when more than two are', () => {
     expect(() => requireRole({ role: 'agency_partner' }, MEMBER_ROLES)).toThrow(
-      'Only an admin, a manager or an analyst can do this. This API key acts as an agency partner',
+      'Only an admin, a manager or an analyst can do this. This connection acts as an agency partner',
     );
     expect(() => requireRole({ role: 'analyst' }, MEMBER_ROLES)).not.toThrow();
   });

@@ -4,8 +4,8 @@ import { requestIp } from './events';
 import { rateHit } from './rate-limit';
 
 /**
- * What the OAuth endpoints share (MCP over OAuth, #2141): off (404) unless
- * MCP_OAUTH_ENABLED; CORS for browser-based clients such as MCP Inspector
+ * What the OAuth endpoints share (MCP over OAuth, #2141): 404 while it is
+ * off (mcpOAuthEnabled); CORS for browser-based clients such as MCP Inspector
  * (no cookies are read, so any origin may call); RFC 6749 §5.2 errors; and
  * no caching of anything that carries a token (§5.1).
  */

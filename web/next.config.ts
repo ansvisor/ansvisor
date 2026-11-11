@@ -34,8 +34,9 @@ const nextConfig: NextConfig = {
     ];
   },
   // MCP over OAuth (#2141): the discovery documents sit at the root's
-  // /.well-known, where RFC 9728 and RFC 8414 put them; their handlers are
-  // API routes. The proxy skips both (a dot in the path, /api).
+  // /.well-known, where RFC 9728 and RFC 8414 put them, and so does OpenAI's
+  // domain check for the ChatGPT app; their handlers are API routes. The
+  // proxy skips both (a dot in the path, /api).
   async rewrites() {
     return [
       {
@@ -47,6 +48,10 @@ const nextConfig: NextConfig = {
         destination: '/api/oauth/protected-resource',
       },
       { source: '/.well-known/oauth-authorization-server', destination: '/api/oauth/metadata' },
+      {
+        source: '/.well-known/openai-apps-challenge',
+        destination: '/api/well-known/openai-apps-challenge',
+      },
     ];
   },
   // The Prompts area has a route per view (PROMPT-001). Older links and

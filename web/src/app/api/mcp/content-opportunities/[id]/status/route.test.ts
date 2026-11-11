@@ -51,7 +51,7 @@ describe('PATCH /api/mcp/content-opportunities/[id]/status', () => {
       error: 'forbidden',
       code: 'role_required',
       message:
-        'Only an admin or a manager can do this. This API key acts as an analyst: ask an admin or a manager of the organization to do it.',
+        'Only an admin or a manager can do this. This connection acts as an analyst: ask an admin or a manager of the organization to do it.',
     });
   });
 

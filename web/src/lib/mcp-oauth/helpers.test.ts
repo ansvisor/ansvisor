@@ -54,10 +54,31 @@ describe('the issuer and the flag', () => {
     expect(oauthIssuer()).toBeNull();
   });
 
-  it('is on only with MCP_OAUTH_ENABLED=true and an issuer', () => {
+  it('is on by default wherever the app has an issuer, and off where it has none', () => {
+    vi.stubEnv('MCP_OAUTH_ENABLED', undefined);
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.ansvisor.com');
+    expect(mcpOAuthEnabled()).toBe(true);
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://localhost:3000');
+    expect(mcpOAuthEnabled()).toBe(true);
+    // A self-hosted install on plain http, or no address at all.
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://ansvisor.mycompany.internal');
     expect(mcpOAuthEnabled()).toBe(false);
-    vi.stubEnv('MCP_OAUTH_ENABLED', 'true');
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', undefined);
+    expect(mcpOAuthEnabled()).toBe(false);
+  });
+
+  it.each(['false', 'FALSE', ' false\n', '0', 'off', 'no'])(
+    'is switched off by MCP_OAUTH_ENABLED=%j, the kill switch',
+    (value) => {
+      vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.ansvisor.com');
+      vi.stubEnv('MCP_OAUTH_ENABLED', value);
+      expect(mcpOAuthEnabled()).toBe(false);
+    },
+  );
+
+  it.each(['true', '', '1'])('stays on with MCP_OAUTH_ENABLED=%j', (value) => {
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.ansvisor.com');
+    vi.stubEnv('MCP_OAUTH_ENABLED', value);
     expect(mcpOAuthEnabled()).toBe(true);
     vi.stubEnv('NEXT_PUBLIC_APP_URL', 'http://app.example.com');
     expect(mcpOAuthEnabled()).toBe(false);

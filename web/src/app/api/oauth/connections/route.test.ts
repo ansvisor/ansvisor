@@ -105,7 +105,8 @@ const del = (id: string) =>
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
   vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://app.ansvisor.com');
-  vi.stubEnv('MCP_OAUTH_ENABLED', 'true');
+  // App sign-in is on by default (MCP_OAUTH_ENABLED unset), with an https issuer.
+  vi.stubEnv('MCP_OAUTH_ENABLED', undefined);
   state.user = { id: 'user-1' };
   state.profiles = {
     'user-1': { organization_id: 'org-1', role: 'admin', brand_scope: 'all' },

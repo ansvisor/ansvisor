@@ -136,6 +136,61 @@ describe('ApiKeysSection', () => {
     for (const el of shown) expect(el.closest('.ph-no-capture')).not.toBeNull();
   });
 
+  it.each([
+    ['on', true],
+    ['off', false],
+  ])('says Claude and ChatGPT can sign in only while app sign-in is %s', async (_on, on) => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url === '/api/oauth/connections') {
+        return on
+          ? json({ connections: [], access: 'ok', isAdmin: true })
+          : json({ error: 'not_found' }, 404);
+      }
+      return init?.method === 'POST'
+        ? json({ key: { id: 'k2', name: 'laptop', prefix: 'ak_9876', token: 'ak_9876_secret' } })
+        : json({ keys: [] });
+    });
+    await render(false);
+    expect(container.textContent?.includes('Claude and ChatGPT: add this address')).toBe(on);
+    expect(container.textContent?.includes('Create a key to get a ready-to-paste setup')).toBe(!on);
+
+    // The new key's setup for Claude Desktop: with sign-in on, it says the key can be left out.
+    await act(async () => button('New key')!.click());
+    const name = document.querySelector<HTMLInputElement>('#apiKeyName')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        name,
+        'laptop',
+      );
+      name.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await act(async () => button('Create')!.click());
+    const trigger = document.querySelector<HTMLElement>('[role="dialog"] [role="combobox"]')!;
+    await act(async () => {
+      trigger.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      trigger.click();
+    });
+    const list = document.getElementById(trigger.getAttribute('aria-controls')!)!;
+    const option = [...list.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (o) => o.textContent === 'Claude Desktop',
+    )!;
+    // Base UI picks the highlighted option: the pointer moves onto it first.
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+    await act(async () => {
+      option.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+      option.click();
+    });
+    const where = document.querySelector('[data-slot="mcp-connect-where"]')?.textContent;
+    expect(where).toBe(
+      on
+        ? messages.settings.apiKeys_connectWhereClaudeDesktopSignIn
+        : messages.settings.apiKeysConnectWhere['claude-desktop'],
+    );
+    expect(document.querySelector('pre')?.textContent).toContain('Authorization = Bearer');
+  });
+
   it('opens New key on an active plan', async () => {
     await render(false);
     await act(async () => button('New key')!.click());

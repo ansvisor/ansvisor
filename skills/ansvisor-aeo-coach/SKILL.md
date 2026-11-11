@@ -382,7 +382,8 @@ Tools marked *(write)* change the user's account, spend a credit or run
 an LLM. Call one **only** when the user asked for that specific change
 (this suggestion, this task, this URL) — never while exploring, never
 "to be helpful". Say what you are about to do in one line first. The
-change is logged under the API key's user.
+change is logged under the person the API key or the app's sign-in acts
+as.
 
 If a tool fails with `"code": "subscription_inactive"`, the workspace's
 plan has ended (trial over, plan cancelled or payment failed) and it is

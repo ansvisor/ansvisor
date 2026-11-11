@@ -31,4 +31,16 @@ describe('mcpClientSnippet', () => {
     });
     expect(parse('zed').context_servers.ansvisor.url).toBe(URL_);
   });
+
+  it('adds Gemini CLI to the user settings, not the folder it runs in', () => {
+    // The default scope, project, writes the key into ./.gemini/settings.json,
+    // which can end up committed.
+    expect(mcpClientSnippet('gemini-cli', URL_, TOKEN)).toBe(
+      [
+        'gemini mcp add --scope user --transport http \\',
+        `  --header 'Authorization: Bearer ${TOKEN}' \\`,
+        `  ansvisor ${URL_}`,
+      ].join('\n'),
+    );
+  });
 });
