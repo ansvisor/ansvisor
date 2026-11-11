@@ -99,6 +99,71 @@ describe('routeRegistry', () => {
     expect(withAds.filter((r) => r.id !== 'ads')).toEqual(routes);
   });
 
+  // The simplified layout (SIMPLE_NAV), being built: Chat opens Today only
+  // where its page is there.
+  it('opens Action Center › Today only with SIMPLE_NAV on, first of the Action Center’s pages', () => {
+    const off = routeRegistry({ cloud: true, simpleNav: false });
+    expect(routeById('action-center/today', off)).toBeUndefined();
+    expect(routeRequest('open today', off)).toBeNull();
+    const on = routeRegistry({ cloud: true, simpleNav: true });
+    expect(routeById('action-center/today', on)).toMatchObject({
+      href: '/dashboard/action-center/today',
+      name: 'Today',
+      section: 'Action Center',
+    });
+    expect(routeRequest('open today', on)?.route.href).toBe('/dashboard/action-center/today');
+    expect(routeRequest('take me to action center › today', on)?.route.href).toBe(
+      '/dashboard/action-center/today',
+    );
+    // A page's filters still win over "today" as a range word.
+    expect(routeRequest('open citations for today', on)).toMatchObject({
+      route: { href: '/dashboard/citations' },
+      filters: { range: '24h' },
+    });
+    expect(on.filter((r) => !pageExists(r.href))).toEqual([]);
+    const hrefs = on.map((r) => r.href);
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+    expect(off).toEqual(routes);
+  });
+
+  // The simplified menu (SIMPLE_NAV): its pages in its order, the Action
+  // Center's tabs under it, Agents among them; the same pages either way.
+  it('reads the simplified menu with SIMPLE_NAV on: the same pages, the tabs under the Action Center', () => {
+    const off = routeRegistry({ cloud: true, simpleNav: false });
+    const on = routeRegistry({ cloud: true, simpleNav: true });
+    expect(routeById('agents', off)).toMatchObject({ name: 'Agent Center', section: null });
+    expect(routeById('agents', on)).toMatchObject({
+      href: '/dashboard/agents',
+      name: 'Agents',
+      section: 'Action Center',
+      requiredFeature: 'ai_agent',
+    });
+    for (const id of ['action-center/actions', 'action-center/signals', 'action-center/history']) {
+      expect(routeById(id, on)).toMatchObject({ section: 'Action Center' });
+    }
+    // KPIs, no tab, is still a page Chat opens.
+    expect(routeById('action-center/kpis', on)).toMatchObject({ name: 'KPIs' });
+    // Its old name still opens it, as "my agents" does.
+    expect(routeRequest('open agent center', on)?.route.href).toBe('/dashboard/agents');
+    expect(routeRequest('open my agents', on)?.route.href).toBe('/dashboard/agents');
+    const ids = on.map((r) => r.id);
+    expect(ids.indexOf('prompts')).toBeLessThan(ids.indexOf('insights'));
+    expect(ids.indexOf('action-center/today')).toBe(ids.indexOf('action-center') + 1);
+    // Today and the Actions tab are the pages added; none goes.
+    expect(new Set(on.map((r) => r.href))).toEqual(
+      new Set([
+        ...off.map((r) => r.href),
+        '/dashboard/action-center/today',
+        '/dashboard/action-center/actions',
+      ]),
+    );
+    // "Actions" opens the Actions tab with it on, the Action Center (Actions) with it off.
+    expect(routeRequest('open actions', on)?.route.href).toBe('/dashboard/action-center/actions');
+    expect(routeRequest('open actions', off)?.route.href).toBe('/dashboard/action-center');
+    expect(routeRequest('open action center', on)?.route.href).toBe('/dashboard/action-center');
+    expect(on.filter((r) => !pageExists(r.href))).toEqual([]);
+  });
+
   it('sets only the filters a page keeps, with the values it takes', () => {
     const insights = routeById('insights')!;
     const citations = routeById('citations')!;

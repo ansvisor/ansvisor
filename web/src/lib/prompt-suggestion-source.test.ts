@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  businessHubSourceData,
   catalogProductSourceData,
   catalogSourceData,
+  fromBusinessHub,
   fromCatalog,
   fromYourData,
   gaSourceData,
@@ -128,6 +130,34 @@ describe('catalogSourceData and catalogProductSourceData', () => {
     expect(fromCatalog({ source: 'catalog', sourceData: productData })).toBe(true);
     expect(fromCatalog({ source: 'llm', sourceData: productData })).toBe(false);
     expect(fromCatalog({ source: 'catalog', sourceData: null })).toBe(false);
+  });
+});
+
+describe('businessHubSourceData and fromBusinessHub (Business Hub plan, PR 6)', () => {
+  const hubData = {
+    topic: 'office coffee subscriptions',
+    periodEnd: '2026-11-09',
+    enteredAt: '2026-11-11T09:00:00.000Z',
+  };
+
+  it('reads the discovery topic when the source and shape agree', () => {
+    expect(businessHubSourceData({ source: 'business_hub', sourceData: hubData })).toBe(hubData);
+    expect(businessHubSourceData({ source: 'llm', sourceData: hubData })).toBeNull();
+    expect(businessHubSourceData({ source: 'business_hub', sourceData: categoryData })).toBeNull();
+    expect(businessHubSourceData({ source: 'business_hub', sourceData: null })).toBeNull();
+  });
+
+  it('takes every Business Hub row for its filter, its topic read or not', () => {
+    expect(fromBusinessHub({ source: 'business_hub', sourceData: hubData })).toBe(true);
+    expect(fromBusinessHub({ source: 'business_hub', sourceData: null })).toBe(true);
+    expect(fromBusinessHub({ source: 'catalog', sourceData: categoryData })).toBe(false);
+  });
+
+  it('keeps nothing on the prompt it becomes, and is neither Shopping nor your data', () => {
+    const s = { source: 'business_hub' as const, sourceData: hubData };
+    expect(promptSourceData({ ...s, generatedAt: SUGGESTED_AT })).toBeNull();
+    expect(fromCatalog(s)).toBe(false);
+    expect(fromYourData(s)).toBe(false);
   });
 });
 

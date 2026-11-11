@@ -1,7 +1,7 @@
 ---
 title: Set up your ChatGPT Business Hub profile
 route: /dashboard/action-center/actions
-keywords: [chatgpt business hub, business hub, businesses in chatgpt, claim business, chatgpt profile, verify business, product feed, business agent]
+keywords: [chatgpt business hub, business hub, businesses in chatgpt, claim business, chatgpt profile, verify business, product feed, business agent, check what chatgpt says, chatgpt profile check]
 synonyms: [claim my business in chatgpt, chatgpt business profile, openai business hub, get listed in chatgpt, chatgpt waitlist]
 plan: all
 updated: 2026-11-11
@@ -15,7 +15,7 @@ ChatGPT Business Hub is OpenAI's free place for a business to claim its profile 
 
 ## What Business Hub is
 
-In Business Hub you claim your business, verify it is yours, and correct the facts ChatGPT shows: name, category, address or service area, hours, contact details, products and services. An online shop can also connect its product feed. Claiming the profile doesn't move you up in answers by itself, and OpenAI may still fill in a field from other sources, so keep the same facts on your site. Open Business Hub from ChatGPT, or with **Open Business Hub** in the action.
+In Business Hub you claim your business, verify it is yours, and correct the facts ChatGPT shows: name, category, address or service area, hours, contact details, products and services. An online shop can also connect its product feed. Claiming the profile doesn't move you up in answers by itself, and OpenAI may still fill in a field from other sources, so keep the same facts on your site. Open Business Hub from ChatGPT, or with **Open Business Hub** in the action. **Settings › Integrations** lists Business Hub as a manual setup, with nothing to connect since it has no API yet, and its **Set up your profile** opens this action.
 
 ## When the action appears
 
@@ -25,7 +25,7 @@ Ansvisor raises it once for each brand, on a nightly run, when the brand has a w
 
 1. **Claim** your business.
 2. **Verify** it is yours. Your website domain is the surest way; Business Hub may also ask for an ID check.
-3. **Correct your business facts**, using the facts as your own site states them.
+3. **Correct your business facts**, using the facts as your own site states them. **Check what ChatGPT says** in the action opens Chat with the **ChatGPT profile check**: it lists what ChatGPT gets wrong and writes the corrections to paste, asking you for anything nothing confirms.
 4. **Connect your product feed**, for an online shop only. If you already send OpenAI a product feed, this task is done from the start.
 5. **Turn on your Business Agent**, in the US only, and only if Business Hub offers it.
 6. **Enter your first Business Hub numbers** on Visibility's ChatGPT Business Hub card. **Enter numbers** in the action opens it.

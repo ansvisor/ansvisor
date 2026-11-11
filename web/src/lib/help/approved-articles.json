@@ -383,6 +383,48 @@
       ]
     },
     {
+      "id": "action-center/bridge-links",
+      "title": "Link the pages AI sends readers to, to pages that convert",
+      "route": "/dashboard/action-center/actions",
+      "keywords": [
+        "bridge links",
+        "internal links",
+        "link plan",
+        "copy link plan",
+        "pages that convert",
+        "ai traffic",
+        "conversions",
+        "anchor text"
+      ],
+      "synonyms": [
+        "link building on my site",
+        "internal linking",
+        "link to pricing",
+        "link to product",
+        "link blog to sales page"
+      ],
+      "plan": "all",
+      "updated": "2026-11-07",
+      "sections": [
+        {
+          "heading": null,
+          "text": "AI sends readers to some of your pages, often guides and blog posts, that rarely lead to a sale or a sign-up. Other pages convert well, but AI sends them few readers. A **Link AI-visited pages to pages that convert** action pairs them: a link from the first to the second puts the selling page one click away, and lets AI find it through the page it already cites."
+        },
+        {
+          "heading": "Which pages are paired",
+          "text": "Ansvisor looks at the last 28 days of AI visits, citations and Google Analytics conversions. It needs AI traffic and a Google Analytics connection.\n\n- **From:** a page with at least 10 AI visits or 10 citations, no sales, and key events per session under half your site's.\n- **To:** a page that sells, converts well above your site, is a pricing, demo, product, category or feature page, or is new on your sitemap with no AI visits yet.\n\nPages are paired by the words their titles and headings share. One action holds up to five pairs."
+        },
+        {
+          "heading": "The drawer",
+          "text": "Each pair shows the page's AI visits and citations, the page it should link to and why, and the suggested link text. **Copy link plan** copies the pairs, one line each, to paste where your pages are edited."
+        },
+        {
+          "heading": "The tasks",
+          "text": "1. **Review the links to add**: change a pair or its link text, then mark it done.\n2. **Optimize content**: **Start now** opens each page in the Content Editor. Its links are under **Brief › Your input**.\n3. **Add internal links**: checked automatically. Ansvisor reads each page and finds its link. It completes once every page has one.\n\nNothing is changed on your site for you."
+        }
+      ]
+    },
+    {
       "id": "action-center/getting-started-steps",
       "title": "Getting started steps in the Action Center",
       "route": "/dashboard/action-center/actions",
@@ -429,6 +471,111 @@
         {
           "heading": "Steps are not actions",
           "text": "Getting started steps are not actions: they have no Priority Score and never come from signals. Your actions are listed beside them, under **All** and the other categories."
+        }
+      ]
+    },
+    {
+      "id": "action-center/product-pages",
+      "title": "Optimize the product pages AI asks about",
+      "route": "/dashboard/action-center/actions",
+      "keywords": [
+        "product pages",
+        "optimize product pages",
+        "online store",
+        "shopping cards",
+        "group size",
+        "pages at a time",
+        "ga item revenue"
+      ],
+      "synonyms": [
+        "improve product pages",
+        "product page seo for ai",
+        "which products to optimize",
+        "ecommerce pages",
+        "store pages"
+      ],
+      "plan": "all",
+      "updated": "2026-11-07",
+      "sections": [
+        {
+          "heading": null,
+          "text": "On an online store, Ansvisor picks the product pages most worth improving for AI shopping answers and opens an **Optimize the product pages AI asks about** action for them. It needs your site type set to an online store and a product catalog."
+        },
+        {
+          "heading": "Which products",
+          "text": "Ansvisor looks at the last 30 days:\n\n- the AI shopping cards that showed the product for your prompts, weighted by how often those prompts are searched;\n- its orders and AI visits, and its revenue in Google Analytics, matched to your catalog by SKU, GTIN or product name;\n- whether it's in stock and has a live page.\n\nA page whose draft you marked ready or published in the last 30 days waits for a later action."
+        },
+        {
+          "heading": "A few pages at a time",
+          "text": "The action keeps up to ten products, best first. Under **Pages at a time**, pick **3 pages**, **5 pages** or **10 pages** (5 to start). The action works on that many: its title, its pages and **Start now** follow. The rest are listed under **Next**."
+        },
+        {
+          "heading": "The work",
+          "text": "**Start now** opens each page of the group in the Content Editor as an optimize draft. When you publish the pages, the action measures them as AI answers run again. Nothing changes on your site until you publish."
+        }
+      ]
+    },
+    {
+      "id": "action-center/start-now",
+      "title": "Start an action's writing in one click",
+      "route": "/dashboard/action-center/actions",
+      "keywords": [
+        "start now",
+        "content editor",
+        "start in content editor",
+        "write page",
+        "open draft",
+        "chat",
+        "what to do",
+        "play",
+        "also worth doing"
+      ],
+      "synonyms": [
+        "one click to editor",
+        "start writing",
+        "draft from action",
+        "work on action",
+        "which page to write",
+        "playbook"
+      ],
+      "plan": "all",
+      "updated": "2026-11-09",
+      "sections": [
+        {
+          "heading": null,
+          "text": "When an action's work is writing, a new page or a better existing one, its drawer opens with a **Start now** block at the top of **Overview**. It takes you straight to the writing, with what the action knows already filled in."
+        },
+        {
+          "heading": "What to do for your kind of site",
+          "text": "When an action asks for new content for prompts or a topic, Ansvisor reads what those prompts ask and picks the page to write. Overview then starts with **What to do for an online store** (or a SaaS, an app, a travel brand) and the page, such as **Write a comparison page**, with why: how many of the prompts ask for it and their share of the estimated AI searches. A page qualifies when at least 15% of the searches ask for it.\n\n**Also worth doing here** lists up to two more pages the same prompts ask for. When the prompts' search intents aren't known yet, nothing is picked.\n\n**Start now** sits under it and writes that kind of page."
+        },
+        {
+          "heading": "A store's category page or buying guide",
+          "text": "On an online store, a topic action whose topic is linked to a catalog category with a live page (**Settings › Integrations**, **Topics and categories**) reads **Optimize the category page** instead of a new page. Its draft opens that page, with the category's best sellers in stock picked for its shopping path.\n\nWhen the category has products in stock but no live page, it reads **Write a buying guide**: a new page for the topic, its shopping path starting with the category's best sellers."
+        },
+        {
+          "heading": "A buying guide next to the category page",
+          "text": "When the category page is live but the category has no buying guide yet, **Also worth doing here** starts with **Write a buying guide next to** that page: a guide for the topic that links the category page and its best sellers.\n\nA draft or a published page counts as the category's guide when its title names the category or its shopping path links it, as in the Content plan's **Shopping opportunities**. The category needs at least three products in stock."
+        },
+        {
+          "heading": "What Content Editor opens",
+          "text": "Click **Content Editor**. A draft is written for the action's writing task and opens in the Content Editor:\n\n- the action's prompts, so its sources and brief answer them;\n- the page it works on, read from your site, for an existing page;\n- the page type, from the page's address, or from the kind of page the action picked;\n- on an online shop, the products the action is about, locked into the page's shopping path.\n\nA new draft builds its brief as it opens, from your AI usage. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it."
+        },
+        {
+          "heading": "Several pages",
+          "text": "When an action works on several pages, **Content Editor** writes one draft for each of them and opens the **Library** with only that action's drafts. Click **Show all drafts** to see the rest again. Each draft builds its brief when you ask for it in the editor."
+        },
+        {
+          "heading": "Chat",
+          "text": "**Chat** works the action's tasks with you in a chat, in your default mode, beside the action. Closing tasks stays your click. Until Chat is on for your workspace, the button shows **Soon** and does nothing. Admins and Managers start it."
+        },
+        {
+          "heading": "From the Actions list",
+          "text": "On an action's row, its menu offers **Start in Content Editor**, which does what the drawer's button does without opening the action."
+        },
+        {
+          "heading": "What stays yours",
+          "text": "Nothing is written or started on its own: each draft and each chat starts with your click, and nothing is published. On the demo brand, or when your plan has ended, both buttons open the plan dialog instead."
         }
       ]
     },
@@ -584,6 +731,46 @@
         {
           "heading": "Weekly AI Traffic e-mail",
           "text": "Every Monday, an e-mail about the week before goes to each brand's Daily Pulse recipients, if the brand had AI visits that week or the one before. It shows AI visits with the change, the top platform, the summary line, visits by day and platform, and the top changes.\n\nTo turn it off for a brand, untick **AI Traffic weekly digest** in **Settings › Notifications**; admins and managers can change it. It isn't sent while the brand's Daily Pulse is **Off**. The e-mail is on Ansvisor Cloud only."
+        }
+      ]
+    },
+    {
+      "id": "ai-traffic/ai-sourced-pipeline",
+      "title": "AI-sourced pipeline from HubSpot",
+      "route": "/dashboard/traffic",
+      "keywords": [
+        "ai-sourced pipeline",
+        "ai-sourced contacts",
+        "ai revenue",
+        "hubspot deals",
+        "revenue from ai answers",
+        "ai-influenced deals"
+      ],
+      "synonyms": [
+        "which deals came from chatgpt",
+        "crm revenue from ai",
+        "contacts from ai answers",
+        "hubspot ai report",
+        "pipeline by ai engine"
+      ],
+      "plan": "growth",
+      "updated": "2026-11-10",
+      "sections": [
+        {
+          "heading": null,
+          "text": "**AI-sourced pipeline** on the AI Traffic page shows which HubSpot contacts, deals and revenue came from AI answers, by AI engine and landing page. It needs HubSpot connected for the brand, with **Mark contacts who came from an AI answer** allowed, and the Growth plan or above."
+        },
+        {
+          "heading": "What the numbers mean",
+          "text": "- **AI-sourced contacts**: contacts whose first visit came from an AI answer, up to 30 days before they converted, counted by when they converted.\n- **AI-influenced deals**: their deals created in the range. A deal counts once, in full, even when several of its contacts came from AI. It goes to the earliest of those contacts' engine and page.\n- **Won revenue**: those deals closed won in the range.\n- **Open pipeline**: those deals open now, not weighted by stage.\n\nAmounts are in your HubSpot account's currency. The tables split them by AI engine and by landing page."
+        },
+        {
+          "heading": "HubSpot's own AI Referrals",
+          "text": "HubSpot marks some contacts with its own **AI Referrals** traffic source. Those on your brand's domains that Ansvisor didn't mark show on a line of their own, so nothing counts twice."
+        },
+        {
+          "heading": "When it updates",
+          "text": "Ansvisor reads HubSpot once a day. Admins and managers can read it again with **Sync now** on the HubSpot card in **Settings › Integrations**. Until the first read, the section says it's reading HubSpot.\n\nWhen the brand switches to another HubSpot account, or disconnects HubSpot, the contacts and deals read from the old account are removed at once. With a new account, the section fills again after its first read."
         }
       ]
     },
@@ -1227,7 +1414,7 @@
         },
         {
           "heading": "Agents for you",
-          "text": "In your first 14 days in a workspace, once you've answered or skipped **What do you work on?**, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nIt shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.\n\nAdmins and Managers click an agent to open it in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide it on all your devices."
+          "text": "In your first 14 days in a workspace, Chat Home shows **Agents for you**: 3 to 5 ready-to-use agents for the open brand's site type and your work areas, each with what it does and why it fits. Showing them runs nothing and uses none of your AI limit.\n\nIt shows on the **Default view** too, and with Home's other sections when Home has a focus. In the free trial and the demo, it waits until the welcome card is gone.\n\nAdmins and Managers click an agent to open it in **Agent Center › Ready to use**, then **Use this agent** and **Turn on**. Analysts and Agency partners see the same agents with **Ask your Admin**, which asks your Admins to turn one on.\n\nClick **×** (**Hide Agents for you**) to hide it on all your devices."
         },
         {
           "heading": "The welcome card",
@@ -1937,6 +2124,73 @@
         {
           "heading": "Your own API key, usage and plan",
           "text": "The bottom of the menu shows:\n\n- **Use your own API key**: on Enterprise, **Included in your plan** opens **Settings › AI Providers**, where an Admin saves keys. A key saved before Chat started works until the date shown. On other plans, own keys come with Enterprise. Models that run on your own key say **Your key**.\n- **Monthly AI usage**: how much of this month's AI limit your workspace has used, and when it resets.\n- **Your plan**, with **See plans**."
+        }
+      ]
+    },
+    {
+      "id": "chat/product-tour",
+      "title": "Take the product tour",
+      "route": "/dashboard/chat",
+      "keywords": [
+        "product tour",
+        "take the tour",
+        "quick tour",
+        "show me everything",
+        "ansvisor tour",
+        "next topic",
+        "another topic",
+        "end the tour"
+      ],
+      "synonyms": [
+        "walkthrough",
+        "guided tour",
+        "show me around",
+        "how to get started",
+        "restart the tour",
+        "tour again"
+      ],
+      "plan": "all",
+      "updated": "2026-11-06",
+      "sections": [
+        {
+          "heading": null,
+          "text": "The product tour shows you Ansvisor's main pages one at a time. Each topic opens its page with Chat in the side panel beside it, where a few short lines explain what the page shows. The tour's text is written ahead, so it uses none of your AI usage. In the free trial, and while you explore the demo brand, Chat Home offers it on its welcome card."
+        },
+        {
+          "heading": "Start the tour",
+          "text": "On Chat Home's welcome card, **Want a quick tour?** lists the topics. Pick one to start there, or click **Show me everything** to start with the first. **Not now** hides the card for good; you can still take the tour later from Chat's settings."
+        },
+        {
+          "heading": "The topics",
+          "text": "The tour has five topics, in this order:\n\n- **Visibility**: the Visibility page and its Overview, Mentions and Citations tabs.\n- **Topics and prompts**: the Prompts page, with Tracked Prompts, Topics and Prompt Suggestions.\n- **Positions and locations**: Tracked Prompts' Positions column and its Locations view.\n- **Content**: Content's Opportunities, Plan and Library.\n- **Connections**: Settings › Integrations, for Google Search Console, Google Analytics and your CMS."
+        },
+        {
+          "heading": "Move through the tour",
+          "text": "The panel says where you are, such as **Ansvisor tour · 2 of 5**. Under each explanation:\n\n- **Next** opens the next topic's page, with the panel still open.\n- On Prompts, **Suggest prompts for me** asks Chat for prompt ideas, as any question does.\n- **Another topic** lists the other topics to jump to.\n- **End the tour** ends it with one last line on where to find Chat from now on."
+        },
+        {
+          "heading": "The panel on every page",
+          "text": "While the tour is on, every page you open, from the menu too, opens with Chat beside it on the tour. On a page the tour explained, the panel brings that page's explanation into view and marks it for a moment, with the tour's chips under it. On the page itself, the part it explains, such as Visibility's score cards or the Search Console card, is outlined in amber for a few seconds. On a topic's page it hasn't explained yet, **Show me this page** explains it. On other pages the panel stays on the latest explanation.\n\nIf you close the panel, it stays closed on the next pages until you open Chat again or click one of the tour's chips."
+        },
+        {
+          "heading": "While your first results come in",
+          "text": "If your brand's first tracking run is still going, each explanation ends with a line saying your first results are still coming in, with about how long is left when known. Visibility, Prompts and Content say the same where they have nothing to show yet."
+        },
+        {
+          "heading": "Ask your own questions",
+          "text": "You can type a question in the panel at any point of the tour. It goes to Chat like any other question, in the same chat, and uses AI as usual; on the demo brand, asking opens the plans. The tour's chips come back under the answer, so you can go on."
+        },
+        {
+          "heading": "The tour in your language",
+          "text": "The tour follows **Answer language** in Chat's settings. With a language picked there, its lines come in that language; the names of pages, tabs and buttons stay as the app shows them, in English. With **Same as my question**, the tour is in English."
+        },
+        {
+          "heading": "Take the tour again",
+          "text": "The tour is kept as a chat named **Ansvisor tour** in your chats, so you can read it again. To take it again, open **Settings** in the chat menu and click **Take the tour** under **Product tour**. It starts from the first topic and adds to the same chat."
+        },
+        {
+          "heading": "When the tour isn't offered",
+          "text": "The tour runs in Chat's side panel. If you turned off **Open Chat on every page** in Chat's settings, the welcome card's topics only open their pages, and **Take the tour** doesn't show."
         }
       ]
     },
@@ -3344,11 +3598,11 @@
         "add another brand"
       ],
       "plan": "all",
-      "updated": "2026-11-10",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and seven on the cloud: the extra two ask what you work on and pick your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped."
+          "text": "When you start with Ansvisor, a setup wizard walks you through your first brand. It usually takes a few minutes, and you need the website of the brand you want to track. The wizard has five steps on a self-hosted install and six on the cloud: the extra one picks your plan. From the second step on, your progress is saved as you go, so if you leave, you pick up where you stopped."
         },
         {
           "heading": "Step 1: Brand basics",
@@ -3371,11 +3625,7 @@
           "text": "On **Add your competitors**, Ansvisor suggests competitors for your brand. Check the real rivals, and uncheck or remove the ones that aren't comparable. Add your own with a company name and domain, using the name as it appears in AI answers rather than the website address.\n\nSelect at least one competitor to continue. **Start tracking with N competitors** finishes the brand. Competitor tracking is on every plan.\n\nIf your site looks like an online store, Ansvisor turns on Product Visibility for the brand and says so on this step. You can turn it off in the brand settings."
         },
         {
-          "heading": "Step 6 on the cloud: What do you work on?",
-          "text": "Pick what you work on or lead, such as Founders & leaders, Brand & PR, Content or Growth, and your left menu keeps only the sections you need. **Skip: show me everything** keeps every section. You can change it later in **Settings › Account**.\n\nA self-hosted install asks the same the first time you open the dashboard."
-        },
-        {
-          "heading": "Step 7 on the cloud: Plan and checkout",
+          "heading": "Step 6 on the cloud: Plan and checkout",
           "text": "The final step picks your plan, **Starter** or **Growth**, and starts checkout.\n\nWhile a free trial is on offer, **Choose how to start** lets you pick the trial, **Monthly** or **Yearly**. With the trial you enter card details, nothing is charged until the trial ends, and the step tells you the day of the first charge. The trial comes with an organization's first subscription only. **Buy now**, or a plan without a trial, starts the plan the same day.\n\nNot ready to add a card? Pick **Demo**, after **Yearly**, then **Explore the sample brand**, or select **Explore a sample brand first** under the plans. The demo is a made-up brand with sample data: you can open every page, but nothing runs or changes. Your brand stays saved, and its tracking starts when you pick a plan.\n\nA self-hosted install skips this step."
         },
         {
@@ -3450,6 +3700,41 @@
         {
           "heading": "Add more topics and prompts later",
           "text": "You can add more at any time. On the **Topics** tab of the **Prompts** page, admins and managers add topics with **Add Topic** or from the **Topic Suggestions** card. **Prompt Suggestions** offers new prompts to track. New prompts run with the next daily run."
+        }
+      ]
+    },
+    {
+      "id": "getting-started/light-and-dark-mode",
+      "title": "Switch between light and dark mode",
+      "route": "/dashboard",
+      "keywords": [
+        "dark mode",
+        "light mode",
+        "theme",
+        "night mode",
+        "appearance"
+      ],
+      "synonyms": [
+        "change colors",
+        "dark theme",
+        "light theme",
+        "make it darker",
+        "brighter screen"
+      ],
+      "plan": "all",
+      "updated": "2026-11-10",
+      "sections": [
+        {
+          "heading": null,
+          "text": "Ansvisor has a light and a dark mode. You can switch between them at any time, from any page."
+        },
+        {
+          "heading": "Which mode you start in",
+          "text": "On Ansvisor Cloud, a new account starts in dark mode for now, from the sign-up page on. Anyone who used Ansvisor before keeps the mode they had. Self-hosted installs start in light mode."
+        },
+        {
+          "heading": "Switch the mode",
+          "text": "Open the main menu: its sun or moon button sits beside the Ansvisor logo, at the top. When the menu is folded to icons, the button is hidden until you open it. On a phone, it is at the top of the menu. The moon switches to dark mode, and the sun to light mode.\n\nYour choice is kept in this browser, so each page opens in it. On another browser or device, Ansvisor opens in its usual mode until you switch there too."
         }
       ]
     },
@@ -4707,6 +4992,94 @@
       ]
     },
     {
+      "id": "settings/hubspot",
+      "title": "Connect HubSpot",
+      "route": "/dashboard/settings/integrations",
+      "keywords": [
+        "hubspot",
+        "connect hubspot",
+        "crm",
+        "ai-sourced contacts",
+        "ansvisor properties",
+        "hubspot consent"
+      ],
+      "synonyms": [
+        "link hubspot",
+        "hubspot integration",
+        "crm integration",
+        "mark ai contacts in hubspot",
+        "disconnect hubspot"
+      ],
+      "plan": "growth",
+      "updated": "2026-11-10",
+      "sections": [
+        {
+          "heading": null,
+          "text": "HubSpot shows which contacts, deals and revenue a brand's AI answers bring. Each brand connects its own HubSpot account, or uses the account another brand uses. HubSpot comes with the Growth plan and above."
+        },
+        {
+          "heading": "Connect HubSpot",
+          "text": "Open **Settings › Integrations** and find **HubSpot** under **CRM**. Admins and managers click **Connect HubSpot**. Ansvisor first asks what it may do in HubSpot:\n\n- **Mark contacts who came from an AI answer**: Ansvisor creates a property group called **Ansvisor** with six contact properties, fills them on contacts who first came from an AI answer and then converted, and reads those contacts and their deals for its report. A contact that already has an AI source keeps it.\n- **Send pages to HubSpot as drafts**: lets Send to CMS create draft pages. You publish them in HubSpot.\n\nTick at least one, click **Continue to HubSpot**, then sign in to HubSpot and approve the access in the window that opens."
+        },
+        {
+          "heading": "Send pages to your HubSpot blog",
+          "text": "With **Send pages to HubSpot as drafts** on, the card has **Blog posts go to**: pick one of the HubSpot account's blogs and click **Save**. **Send to CMS** then offers HubSpot, and each page goes to that blog as a draft post. You publish it in HubSpot. If HubSpot didn't give Ansvisor access to its blogs, the card asks you to connect HubSpot again."
+        },
+        {
+          "heading": "What Ansvisor never does",
+          "text": "Ansvisor never deletes contacts or deals, never changes your own properties, never publishes a page, and never copies names or emails into Ansvisor. Nothing is written to HubSpot without the choices above."
+        },
+        {
+          "heading": "Change what Ansvisor may write",
+          "text": "The HubSpot card has a switch for each choice. Turning one off stops it at once. The card says who allowed the writes, and when. If the Ansvisor properties couldn't be created, the card says why, with **Try again**.\n\nWith marking contacts on, the card also says when Ansvisor last read HubSpot for the AI-sourced pipeline on the AI Traffic page. **Sync now** reads it again."
+        },
+        {
+          "heading": "Share one HubSpot account between brands",
+          "text": "When another brand already uses a HubSpot account, pick it from **Use the account another brand uses**. Each brand still chooses what Ansvisor may write. The card lists the other brands on the same account."
+        },
+        {
+          "heading": "Disconnect, or a plan change",
+          "text": "**Disconnect** stops all reading and writing for the brand at once, and removes the AI-sourced contacts and deals Ansvisor read for it. The Ansvisor properties and their values stay in HubSpot. If the plan no longer includes HubSpot, the card says **Paused**: nothing is read or written until you upgrade, and the connection stays."
+        }
+      ]
+    },
+    {
+      "id": "settings/indexnow",
+      "title": "Tell search engines when a page goes live (IndexNow)",
+      "route": "/dashboard/settings/integrations",
+      "keywords": [
+        "indexnow",
+        "bing",
+        "ping search engines",
+        "index a new page",
+        "announce page",
+        "copilot",
+        "faster indexing"
+      ],
+      "synonyms": [
+        "submit url to bing",
+        "tell google about a page",
+        "get a page indexed",
+        "crawl my new page"
+      ],
+      "plan": "all",
+      "updated": "2026-11-06",
+      "sections": [
+        {
+          "heading": null,
+          "text": "**IndexNow** tells Bing, Yandex and other search engines that share it when a page of your brand goes live through **Send to CMS**, so they don't wait for their next crawl. It is free, uses no AI and never holds up a publish."
+        },
+        {
+          "heading": "Set it up",
+          "text": "In **Settings › Integrations**, find **IndexNow** under the CMS cards, for the brand open now, and click **Set up IndexNow**. Admins and managers can do this.\n\n1. Ansvisor makes a key. Make a text file named after it, ending in .txt, that holds only the key. **Copy key** puts it on your clipboard.\n2. Put the file at your site's root, on the domain the card shows, so it opens at the address under the key.\n3. Click **Check**. When Ansvisor finds the file, the card says **On**."
+        },
+        {
+          "heading": "What happens next",
+          "text": "Each page that goes live through Send to CMS on that domain is announced once. A page on another domain or subdomain isn't. If an announcement fails, the page is still published.\n\nWebflow and Wix can't put a file at your site's root, so on a brand that uses them, the card says so and IndexNow stays off. **Turn off** stops announcing pages; you can then remove the file from your site."
+        }
+      ]
+    },
+    {
       "id": "settings/mcp-server",
       "title": "Use Ansvisor in AI assistants with MCP",
       "route": "/dashboard/settings/api-keys",
@@ -4883,6 +5256,65 @@
       ]
     },
     {
+      "id": "settings/slack",
+      "title": "Send a brand's Daily Pulse and alerts to Slack",
+      "route": "/dashboard/settings/integrations",
+      "keywords": [
+        "slack",
+        "slack channel",
+        "connect slack",
+        "pulse in slack",
+        "daily pulse",
+        "drop alert",
+        "daily suggestion",
+        "agent needs me",
+        "notifications"
+      ],
+      "synonyms": [
+        "post to slack",
+        "slack integration",
+        "send updates to a channel",
+        "slack app",
+        "team chat alerts"
+      ],
+      "plan": "starter",
+      "updated": "2026-11-10",
+      "sections": [
+        {
+          "heading": null,
+          "text": "Each brand can post to one Slack channel: its **Daily Pulse**, with the same numbers, highlights and warnings as the Pulse e-mail, an alert when visibility or citations drop more than usual, one daily suggestion, and a message when an agent needs someone. Each message links back to Ansvisor. Slack is on every paid plan."
+        },
+        {
+          "heading": "Connect Slack",
+          "text": "In **Settings › Integrations**, find **Slack** under **Team and alerts**, for the brand open now. Admins and managers can connect it.\n\n1. Click **Connect Slack**. Slack opens in a new window: pick your workspace and allow the Ansvisor app.\n2. Back in Ansvisor, pick the **Channel** the brand's messages go to. Search by name.\n3. Click **Send a test message** to check it arrives.\n\nA public channel works right away. A private channel shows in the list once the Ansvisor app is in it: in Slack, type /invite @Ansvisor in that channel.\n\nIf another brand already posts to a Slack workspace, **Use the same workspace as…** uses it without connecting again."
+        },
+        {
+          "heading": "When the Pulse is posted",
+          "text": "With **Daily Pulse** on under the channel, the Pulse is posted as often as it goes out by e-mail: **Daily**, **Weekly** on Mondays, or **Only when notable**. Change how often in **Settings › Notifications**. When it is **Off** there, nothing is posted. Turn **Daily Pulse** off on the Slack card to keep the e-mail and stop the Slack post.\n\nEach Pulse is posted once. If Slack doesn't take it, Ansvisor tries once more, then leaves it for that day."
+        },
+        {
+          "heading": "Drop alerts",
+          "text": "With **Drops beyond normal swing** on, Ansvisor checks the brand after each daily tracking run. When its visibility or its citation rate fell more than its usual swing, the last 7 days against the 7 before, it posts what fell, from what to what, and how far normal swing goes for these prompts.\n\nOnly prompts tracked in both weeks count, so adding or removing prompts or engines isn't a drop. Each metric is alerted on at most once a week. Where the new Chat is on, **Ask Chat why** opens it with the question ready, to see what changed it."
+        },
+        {
+          "heading": "Daily suggestion",
+          "text": "With **Daily suggestion** on, the channel gets one Action Center action a day for the brand. Daily suggestions are each person's own, in their Chat Inbox: the channel gets the action most of the brand's people were suggested that morning, with its priority, how long it has waited, and **Open in Action Center**. It is posted once a day, with the first suggestions of the day."
+        },
+        {
+          "heading": "Agents that need someone",
+          "text": "With **Agents that need someone** on, when an agent's run on the brand stops to ask someone or wait for their OK, the channel gets a message that mentions them, with **Open the run**. Only for people who chose **Inbox + Slack** under **Notify me when an agent needs me** in their Chat settings, and only once per run. Ansvisor finds their Slack account by their email; when it can't, the message names them. If the brand doesn't post these, they get the email instead."
+        },
+        {
+          "heading": "When the card asks you to reconnect",
+          "text": "- **Reconnect**: Slack no longer accepts the connection, for example because the app was removed from the workspace. Click **Reconnect Slack**.\n- **Paused**: the person who connected Slack can no longer see this brand, so nothing is posted for it. Reconnect, or use another brand's workspace.\n- **Pick a channel**: the channel was archived or deleted, or the app was removed from it. Pick another one."
+        },
+        {
+          "heading": "Disconnect",
+          "text": "**Disconnect** stops posting the brand's messages. Other brands that use the same workspace keep theirs, and messages already posted stay in Slack. Disconnecting works even when your plan has ended.\n\nPeople who aren't admins or managers see which channel the brand's messages go to. On the sample brand, Slack shows as connected with sample data. If Ansvisor runs on your own server, the card says **Not configured** until Slack is set up there."
+        }
+      ]
+    },
+    {
       "id": "settings/team-brands",
       "title": "Choose which brands each person sees",
       "route": "/dashboard/settings/team",
@@ -4961,6 +5393,45 @@
         {
           "heading": "Jobs you already have",
           "text": "Changing your time zone never moves a scheduled job or an agent's Schedule trigger. Each keeps the time zone it was made with. To change a job's time zone, open it from **Scheduled** and pick another under **Time zone**, then click **Save**."
+        }
+      ]
+    },
+    {
+      "id": "settings/topic-categories",
+      "title": "Link your topics to your catalog's categories",
+      "route": "/dashboard/settings/integrations",
+      "keywords": [
+        "topics and categories",
+        "catalog categories",
+        "topic category",
+        "product catalog",
+        "category page",
+        "online store"
+      ],
+      "synonyms": [
+        "map topics to categories",
+        "which category is a topic",
+        "link topic to category",
+        "store categories"
+      ],
+      "plan": "all",
+      "updated": "2026-11-07",
+      "sections": [
+        {
+          "heading": null,
+          "text": "On an online store, each topic you track can be about one or more categories of your product catalog: the topic \"cold brew\" and the category \"Coffee > Cold Brew\". The link lets a topic's work reach the category's page and its products."
+        },
+        {
+          "heading": "Where to find it",
+          "text": "Open **Settings › Integrations** and go to **Product catalog**. **Topics and categories** is under **Category pages**, once your brand has topics and its catalog has categories."
+        },
+        {
+          "heading": "How they're linked",
+          "text": "Ansvisor matches them for you: a category is a topic's when every word of its own name (the last part, \"Cold Brew\") is in the topic's name, or in at least two of the topic's prompts. A part above it counts too: \"Whole Bean\" in \"Coffee > Whole Bean > Blends\" links the topic \"Whole bean coffee\". A top part most of your categories share, such as a coffee shop's \"Coffee\", doesn't. When a category's own name matches, parts above add no others. Up to three categories are matched per topic. Each shows **matched**."
+        },
+        {
+          "heading": "Change a link",
+          "text": "Admins and managers can change them; everyone else sees the list.\n\n- **Take a category away:** select **×** on it. It stays away, even when the words still match.\n- **Add a category:** pick one under **Add a category**. It shows **set by hand**.\n\nMatching runs again whenever the list is read, so a new topic or category is linked without a sync."
         }
       ]
     },
@@ -5080,23 +5551,23 @@
         "my role focus"
       ],
       "plan": "all",
-      "updated": "2026-11-06",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "Each person can say what they work on or lead. Their left menu then keeps only those areas' sections. Pick one or more; picking none keeps every section. **Settings** is always on the menu, with your API keys and MCP."
+          "text": "Everyone starts on **Everything**: every section of the left menu their role shows. Each person can then say what they work on or lead, and their left menu keeps only those areas' sections. Pick one or more; picking none keeps every section. **Settings** is always on the menu, with your API keys and MCP."
         },
         {
           "heading": "The work areas",
           "text": "- **Founders & leaders**: Action Center, Chat, Agent Center, Visibility, Mentions, AI Referral Traffic, Reports, Competitors.\n- **AEO/GEO & Audit**: Action Center, Agent Center, Content, Audit, Citations, AI Referral Traffic, Reports.\n- **Content**: Action Center, Chat, Agent Center, Content, Prompts, Citations, Reports.\n- **Brand & PR**: Action Center, Chat, Agent Center, Visibility, Mentions, Citations, Reports, Competitors.\n- **Growth**: Action Center, Chat, Agent Center, Visibility, Prompts, Citations, AI Referral Traffic, Reports, Competitors.\n- **Product Development**: Action Center, Chat, Agent Center, Visibility, Prompts, Mentions, Product Visibility, Reports.\n- **Business Development**: Action Center, Chat, Agent Center, Visibility, Prompts, Mentions, Citations, Reports, Competitors.\n- **Developers**: Action Center, Agent Center, Audit, Prompts, Citations, AI Referral Traffic, Reports.\n- **Analytics**: Action Center, Agent Center, Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors."
         },
         {
-          "heading": "When you're asked",
-          "text": "**What do you work on?** is asked once:\n\n- when you sign up, after your competitors and before you choose a plan;\n- when you join from an invitation, on your first sign-in;\n- on a self-hosted install, the first time the admin opens the dashboard.\n\n**Skip: show me everything** keeps every section. Either way, for your first 14 days in the workspace, Chat Home then shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas. It shows on Home's Default view too."
+          "heading": "Where you pick them",
+          "text": "Nobody is asked at sign-up or on joining: new people, invited teammates and the demo start on **Everything**. Work areas picked before November 11, 2026, such as at sign-up, went back to **Everything** then; pick them again to narrow your menu.\n\nFor your first 14 days in the workspace, Chat Home shows **Agents for you**: ready-to-use agents for your brand's site type and your work areas. It shows on Home's Default view too."
         },
         {
           "heading": "Change your work areas",
-          "text": "Change your answer any time in **Settings › Account › Your work areas**. It also shows your menu, and why a section is off it: **Hidden by your admin** or **Not in your work areas**.\n\nWhen something is off your menu, the bottom of the sidebar says how much, such as **3 sections off your menu**, with **Change** leading to your work areas."
+          "text": "Pick or change them any time in **Settings › Account › Your work areas**; **Everything** shows every section. It also shows your menu, and why a section is off it: **Hidden by your admin** or **Not in your work areas**.\n\nWhen something is off your menu, the bottom of the sidebar says how much, such as **3 sections off your menu**, with **Change** leading to your work areas."
         }
       ]
     },
@@ -5473,6 +5944,54 @@
         {
           "heading": "A weekly review",
           "text": "1. Set the range to **7d**. Is your Visibility up or down? If it's down, **Why it changed** shows which platforms, topics and prompts moved it.\n2. In **By AI platform**, find the platform with the lowest score or the highlighted biggest drop: that's your next investment.\n3. Look at the suggested topics and prompts in **Opportunities**, and track one to three of them.\n4. From **Opportunities** under **Content** in the sidebar, open the opportunity for the topic that did worst this week and click **Generate Brief**."
+        }
+      ]
+    },
+    {
+      "id": "visibility/product-visibility",
+      "title": "Visibility’s Product Visibility tab",
+      "route": "/dashboard/shopping",
+      "keywords": [
+        "product visibility",
+        "ai shelf",
+        "shopping",
+        "products tab",
+        "shelf share",
+        "readiness",
+        "categories",
+        "shopping cards",
+        "chatgpt shopping"
+      ],
+      "synonyms": [
+        "which of my products AI recommends",
+        "AI shopping results",
+        "products in AI answers",
+        "shopping visibility",
+        "product shelf",
+        "online store visibility"
+      ],
+      "plan": "growth",
+      "updated": "2026-11-06",
+      "sections": [
+        {
+          "heading": null,
+          "text": "**Product Visibility** is the fourth tab of **Visibility**, for brands that sell online. It shows which of your products AI shopping answers put on their shelf, why some don't make it, and what AI visits sell. Open it from the tabs under Visibility's header, or from **Visibility › Products** in the sidebar. It used to be a page of its own in the sidebar; links to it still open it."
+        },
+        {
+          "heading": "Who sees it",
+          "text": "The tab, and **Products** in the sidebar, show for a brand that sells online: one with **Shopping mode** on in its brand settings, or one whose site type is an online store. Your plan needs to include Product Visibility. Other brands see no fourth tab.\n\nWhen the brand's site is an online store but Shopping mode is off, the tab says so at the top. Admins and managers can click **Turn on Shopping mode** there: it adds ChatGPT Shopping to the brand's prompts. Others see who can turn it on."
+        },
+        {
+          "heading": "Its views",
+          "text": "A second row of tabs holds its views, as on the Mentions tab:\n\n- **Shelf**: your share of the product slots in AI answers, your products on the shelf, AI revenue and the top AI channel; where AI sends shoppers, resellers cheaper than you, and each shopping question's latest shelf, with **Why not you?** where you're missing.\n- **Categories**: each category of your catalog, its shelf share and its rival.\n- **Products**: your catalog's products with their shelves and readiness, or, before a catalog is connected, the products AI showed.\n- **Readiness**: a checklist of what AI shopping needs from your catalog and feed.\n- **Competitors**: your competitors' products in AI answers."
+        },
+        {
+          "heading": "Filters, market and sources",
+          "text": "Under the views: **Date range** (7, 30 or 90 days, or All time), **Platform** and **Region**, shared by every view. The **ChatGPT Shopping market** switch picks the US or Europe, where ChatGPT's products come from different sources. The **Data sources** strip shows your product catalog, Google Analytics and Search Console, with **Connect** where one is missing. **Why Ansvisor Product Visibility?** in the header explains what the tab does."
+        },
+        {
+          "heading": "Loading",
+          "text": "The tab opens on the view in its address, the Shelf by default, and loads only that view's figures, all at once. Each other view loads when you open it. A view you opened before shows its figures at once while they're refreshed. A shelf that can't be read says so, with **Try again**, and the rest keeps working."
         }
       ]
     },

@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
+import { ArrowUpRight } from 'lucide-react';
 import { Link, usePathname } from '@/i18n/navigation';
 import { DotLegend } from '@/components/agentic/dot-legend';
 import { NewPill } from '@/components/agentic/new-pill';
 import { useAiUsage } from '@/components/providers/ai-usage-provider';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { Skeleton } from '@/components/ui/skeleton';
 import { aiUsageTone, percentLabel } from '@/lib/billing/ai-usage';
 import { countChatSchedules } from '@/lib/actions/chat-schedules';
@@ -270,6 +272,8 @@ export function ChatMenuView({
   const [query, setQuery] = useState('');
   const found = useChatSearch(query);
   const searching = query.trim() !== '';
+  // Agent Center is Action Center › Agents with the simplified layout on (SIMPLE_NAV).
+  const simpleNav = useSimpleNav();
   // The "New" pill beside Agent Center, until it is first opened in this browser.
   const [agentsNew, setAgentsNew] = useState(false);
   useEffect(() => {
@@ -407,15 +411,26 @@ export function ChatMenuView({
               </span>
             )}
           </MenuItem>
-          {/* Agent Center is its own page, out of Chat: never the one open here. */}
+          {/* Agent Center is its own page, out of Chat: never the one open here. With the
+              simplified layout on it is Action Center › Agents: "Agents · in Action Center ↗". */}
           <MenuItem
             href="/dashboard/agents"
             action="chatMenu.openAgents"
             active={false}
             onNavigate={onNavigate}
+            label={simpleNav ? t('agentsLabel') : undefined}
           >
-            {t('agents')}
-            {agentsNew && <NewPill className="ml-auto" />}
+            {simpleNav ? t('agentsShort') : t('agents')}
+            {agentsNew && <NewPill className={simpleNav ? undefined : 'ml-auto'} />}
+            {simpleNav && (
+              <span
+                data-slot="agents-where"
+                className="ml-auto flex shrink-0 items-center gap-1 text-[11.5px] text-muted-foreground"
+              >
+                {t('agentsWhere')}
+                <ArrowUpRight className="size-3" aria-hidden />
+              </span>
+            )}
           </MenuItem>
           <MenuItem
             href="/dashboard/chat/skills"

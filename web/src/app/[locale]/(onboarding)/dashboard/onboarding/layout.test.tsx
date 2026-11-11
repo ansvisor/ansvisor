@@ -3,9 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * The onboarding wizard reads whether the new Chat is on for the workspace
- * (CHAT_AGENTIC) as the welcome page does, so its work areas show Agent
- * Center only where the menu will; and whether Ads is on (ADS_ENABLED), for
- * the same reason.
+ * (CHAT_AGENTIC), so its dashboard preview shows Agent Center only where the
+ * menu will; and whether Ads is on (ADS_ENABLED), for the same reason.
  */
 
 const db = vi.hoisted(() => ({ organizationId: null as string | null }));
@@ -83,5 +82,27 @@ describe('OnboardingWizardLayout', () => {
     expect(await adsOn()).toBe(true);
     vi.stubEnv('ADS_ENABLED', 'false');
     expect(await adsOn()).toBe(false);
+  });
+});
+
+describe('OnboardingWizardLayout and the simplified menu', () => {
+  it('hands the preview SIMPLE_NAV: on only with "true", for every workspace or none', async () => {
+    const { SimpleNavProvider } = await import('@/components/providers/simple-nav-provider');
+    const simpleNavOn = async () => {
+      const tree = (await OnboardingWizardLayout({ children: null })) as {
+        props: {
+          children: { props: { children: { type: unknown; props: { enabled: boolean } } } };
+        };
+      };
+      const provider = tree.props.children.props.children;
+      expect(provider.type).toBe(SimpleNavProvider);
+      return provider.props.enabled;
+    };
+    vi.stubEnv('SIMPLE_NAV', undefined);
+    expect(await simpleNavOn()).toBe(false);
+    vi.stubEnv('SIMPLE_NAV', 'true');
+    expect(await simpleNavOn()).toBe(true);
+    db.organizationId = null;
+    expect(await simpleNavOn()).toBe(true);
   });
 });

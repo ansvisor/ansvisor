@@ -20,8 +20,13 @@ const actions = vi.hoisted(() => ({
   dismissSuggestion: vi.fn(),
   dismissSuggestions: vi.fn(),
   trackSuggestions: vi.fn(),
+  suggestPromptsFromBusinessHub: vi.fn(),
 }));
 vi.mock('@/lib/actions/prompt-suggestions', () => actions);
+
+// The Business Hub dialog's quota line.
+const quota = vi.hoisted(() => ({ getLocationQuota: vi.fn() }));
+vi.mock('@/lib/actions/prompt', () => quota);
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -758,5 +763,175 @@ describe('SuggestionsCard — a failed read', () => {
     });
     expect(container.textContent).toContain("Ansvisor isn't answering right now.");
     expect(container.textContent).not.toContain('Minified React error');
+  });
+});
+
+describe('SuggestionsCard — ChatGPT Business Hub topics (Business Hub plan, PR 6)', () => {
+  const fromHub = (n: number, topic = 'office coffee subscriptions'): PromptSuggestion => ({
+    ...suggestion(n),
+    suggestedText: `Hub prompt ${n}`,
+    topicName: 'Coffee Subscriptions',
+    reason: `From ChatGPT Business Hub: real ChatGPT conversations citing your site are about “${topic}”.`,
+    source: 'business_hub',
+    sourceData: { topic, periodEnd: '2026-11-09', enteredAt: '2026-11-11T09:00:00.000Z' },
+  });
+  const button = (name: string) =>
+    [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === name,
+    );
+  const dialogOpen = () =>
+    document.body.textContent?.includes('Suggest prompts from ChatGPT Business Hub') ?? false;
+
+  async function show({
+    search = '',
+    list = [suggestion(1), fromHub(2)],
+    businessHub = true,
+  }: { search?: string; list?: PromptSuggestion[]; businessHub?: boolean } = {}) {
+    window.history.replaceState(null, '', `/dashboard/prompts${search}`);
+    actions.getPromptSuggestions.mockResolvedValue({
+      ok: true,
+      suggestions: list,
+      stale: false,
+      businessHub,
+    });
+    // A fresh card each time, as on opening the page: the link is read on mount.
+    mounts += 1;
+    await act(async () => {
+      root.render(
+        <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+          <SuggestionsCard key={mounts} brandId="b1" onAccepted={onAccepted} sourceStates={null} />
+        </NextIntlClientProvider>,
+      );
+    });
+  }
+  let mounts = 0;
+
+  function type(input: HTMLInputElement, value: string) {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    setValue.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  beforeEach(() => {
+    quota.getLocationQuota.mockResolvedValue({
+      maxPrompts: 50,
+      used: 47,
+      planId: 'starter',
+      planName: 'Starter',
+    });
+  });
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('offers From ChatGPT Business Hub to admins and managers, only while it is on', async () => {
+    await show();
+    expect(button('From ChatGPT Business Hub')).toBeDefined();
+
+    await show({ businessHub: false });
+    expect(button('From ChatGPT Business Hub')).toBeUndefined();
+
+    viewer.role = 'analyst';
+    await show();
+    expect(button('From ChatGPT Business Hub')).toBeUndefined();
+  });
+
+  it('offers it on an empty list too', async () => {
+    await show({ list: [] });
+    expect(button('Generate Suggestions')).toBeDefined();
+    expect(button('From ChatGPT Business Hub')).toBeDefined();
+  });
+
+  it('marks a Business Hub suggestion with its badge, beside Ansvisor Agents', async () => {
+    await show();
+    const [plain, hub] = [...rows()];
+    expect(plain.textContent).not.toContain('ChatGPT Business Hub');
+    expect(hub.textContent).toContain('ChatGPT Business Hub');
+    expect(hub.textContent).toContain('Ansvisor Agents');
+  });
+
+  it('lists only the Business Hub ones under their filter, and never under Ansvisor Agents only', async () => {
+    await show({ search: '?source=business_hub' });
+    expect([...rows()].map((li) => li.textContent)).toEqual([
+      expect.stringContaining('Hub prompt 2'),
+    ]);
+
+    await show({ search: '?source=agents' });
+    expect([...rows()].map((li) => li.textContent)).toEqual([expect.stringContaining('Prompt 1')]);
+  });
+
+  it('opens the dialog from ?source=business_hub&hub=1, with how many more prompts the plan tracks', async () => {
+    await show({ search: '?source=business_hub&hub=1' });
+    expect(dialogOpen()).toBe(true);
+    expect(document.body.textContent).toContain('You can track 3 more prompts on your plan.');
+    expect(document.body.querySelectorAll('input[id^="business-hub-topic-"]')).toHaveLength(5);
+  });
+
+  it('does not open it from the link for an analyst', async () => {
+    viewer.role = 'analyst';
+    await show({ search: '?source=business_hub&hub=1' });
+    expect(dialogOpen()).toBe(false);
+  });
+
+  it('sends the topics given, says what it did, and lists the new ones under their filter', async () => {
+    actions.suggestPromptsFromBusinessHub.mockResolvedValue({
+      ok: true,
+      result: {
+        added: 2,
+        alreadyTracked: 1,
+        alreadySuggested: 0,
+        topics: [
+          { topic: 'decaf beans', added: 2, matchedTopic: null },
+          { topic: 'office coffee', added: 0, matchedTopic: 'Coffee Subscriptions' },
+        ],
+        suggestions: [fromHub(8, 'decaf beans'), fromHub(9, 'decaf beans')],
+      },
+    });
+    await show();
+    await act(async () => button('From ChatGPT Business Hub')!.click());
+    const inputs = document.body.querySelectorAll<HTMLInputElement>(
+      'input[id^="business-hub-topic-"]',
+    );
+    await act(async () => {
+      type(inputs[0], ' decaf beans ');
+      type(inputs[2], 'office coffee');
+    });
+    await act(async () => button('Suggest prompts')!.click());
+
+    expect(actions.suggestPromptsFromBusinessHub).toHaveBeenCalledWith('b1', [
+      'decaf beans',
+      'office coffee',
+    ]);
+    expect(document.body.textContent).toContain(
+      '2 new suggestions, listed under ChatGPT Business Hub',
+    );
+    expect(document.body.textContent).toContain(
+      'Left out: 1 already tracked, 0 already suggested.',
+    );
+    expect(document.body.textContent).toContain('2 prompts, new topic');
+    expect(document.body.textContent).toContain('nothing new under Coffee Subscriptions');
+    expect([...rows()].map((li) => li.textContent)).toEqual([
+      expect.stringContaining('Hub prompt 8'),
+      expect.stringContaining('Hub prompt 9'),
+      expect.stringContaining('Hub prompt 2'),
+    ]);
+  });
+
+  it('sends nothing without a topic', async () => {
+    await show();
+    await act(async () => button('From ChatGPT Business Hub')!.click());
+    expect(button('Suggest prompts')!.disabled).toBe(true);
+    expect(actions.suggestPromptsFromBusinessHub).not.toHaveBeenCalled();
+  });
+
+  it('asks for a topic first on a brand without one', async () => {
+    actions.suggestPromptsFromBusinessHub.mockResolvedValue({ ok: false, failure: 'no_topics' });
+    await show();
+    await act(async () => button('From ChatGPT Business Hub')!.click());
+    const [first] = document.body.querySelectorAll<HTMLInputElement>(
+      'input[id^="business-hub-topic-"]',
+    );
+    await act(async () => type(first, 'decaf beans'));
+    await act(async () => button('Suggest prompts')!.click());
+    expect(dialogOpen()).toBe(false);
+    expect(document.body.textContent).toContain('Add a topic first');
   });
 });

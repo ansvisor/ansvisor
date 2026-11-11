@@ -68,13 +68,16 @@ const {
 
 const writes = () => calls.filter((c) => c.op !== 'select');
 
+/** Work areas picked in Settings since WORK_AREAS_RESET_AT, so they count. */
+const PICKED_AT = '2026-11-12T09:00:00Z';
+
 function signedInAs(profile: Record<string, unknown>) {
   answers['user.profiles.select'] = {
     data: {
       id: ME,
       organization_id: ORG,
       work_areas: [],
-      work_areas_asked_at: null,
+      work_areas_asked_at: PICKED_AT,
       menu_shown: [],
       menu_hidden: [],
       can_manage_menus: false,
@@ -104,7 +107,6 @@ describe('getMyMenu', () => {
     );
     expect(menu.hiddenByAdmin).toEqual(['citations']);
     expect(menu.workAreas).toEqual(['brand']);
-    expect(menu.workAreasAsked).toBe(false);
     expect(menu.canManageMenus).toBe(false);
     const roleRead = calls.find((c) => c.table === 'organization_menu_roles');
     expect(roleRead?.client).toBe('user');
@@ -127,8 +129,23 @@ describe('getMyMenu', () => {
   });
 
   it('counts a manager an admin let change menus', async () => {
-    signedInAs({ role: 'manager', can_manage_menus: true, work_areas_asked_at: '2026-10-28' });
-    expect(await getMyMenu()).toMatchObject({ canManageMenus: true, workAreasAsked: true });
+    signedInAs({ role: 'manager', can_manage_menus: true });
+    expect(await getMyMenu()).toMatchObject({ canManageMenus: true });
+  });
+
+  it('shows everything for work areas saved before the reset, or never saved; the role still hides its sections', async () => {
+    for (const work_areas_asked_at of ['2026-10-28T10:00:00Z', null]) {
+      signedInAs({ role: 'analyst', work_areas: ['brand'], work_areas_asked_at });
+      answers['user.organization_menu_roles.select'] = {
+        data: { hidden_sections: ['citations'] },
+        error: null,
+      };
+      expect(await getMyMenu()).toMatchObject({
+        hidden: ['citations'],
+        hiddenByAdmin: ['citations'],
+        workAreas: [],
+      });
+    }
   });
 
   it('has Agent Center only with the new Chat on for the workspace', async () => {
@@ -312,13 +329,23 @@ describe('getMenuAccessSettings', () => {
     };
     answers['admin.profiles.select'] = {
       data: [
-        { id: ME, role: 'manager', full_name: 'Me', can_manage_menus: true, work_areas: ['brand'] },
+        {
+          id: ME,
+          role: 'manager',
+          full_name: 'Me',
+          can_manage_menus: true,
+          work_areas: ['brand'],
+          work_areas_asked_at: PICKED_AT,
+        },
         {
           id: ADA,
           role: 'analyst',
           full_name: null,
           can_manage_menus: true,
           menu_hidden: ['audit'],
+          // The old onboarding answer: Everything now.
+          work_areas: ['content'],
+          work_areas_asked_at: '2026-10-28T10:00:00Z',
         },
       ],
       error: null,
@@ -337,7 +364,12 @@ describe('getMenuAccessSettings', () => {
         isCurrentUser: true,
       }),
       // A flag left from when they were a manager counts for nothing.
-      expect.objectContaining({ userId: ADA, hidden: ['audit'], canManageMenus: false }),
+      expect.objectContaining({
+        userId: ADA,
+        hidden: ['audit'],
+        workAreas: [],
+        canManageMenus: false,
+      }),
     ]);
   });
 });

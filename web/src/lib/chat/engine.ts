@@ -4592,18 +4592,25 @@ async function cardAgain(
   };
 }
 
-/** What a change made, as a card with its Open (its row's resultCard, CHAT-09 item 19). */
+/**
+ * What a change made, as a card with its Open (its row's resultCard, CHAT-09
+ * item 19), or recurring work it set up (its scheduleCard, SIMPLE_NAV).
+ */
 function showResultCard(
   rc: RunContext,
   tool: ChatTool,
   input: Record<string, unknown>,
   output: unknown,
 ) {
-  if (!tool.resultCard) return;
+  if (!tool.resultCard && !tool.scheduleCard) return;
   try {
-    const card = tool.resultCard(input as never, output);
+    const card = tool.resultCard?.(input as never, output);
     if (card && isChatHref(card.href)) {
       rc.sink.emit('action.sent', { ...card, title: maskIds(card.title).slice(0, 200) });
+    }
+    const made = tool.scheduleCard?.(input as never, output);
+    if (made && isChatHref(made.href)) {
+      rc.sink.emit('schedule.made', { ...made, title: maskIds(made.title).slice(0, 200) });
     }
   } catch (err) {
     console.error('[chat/engine] could not show what a change made:', err);
