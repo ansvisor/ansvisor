@@ -4,7 +4,7 @@ route: /dashboard/action-center/actions
 keywords: [start now, content editor, start in content editor, write page, open draft, chat, what to do, play, also worth doing]
 synonyms: [one click to editor, start writing, draft from action, work on action, which page to write, playbook]
 plan: all
-updated: 2026-11-09
+updated: 2026-11-11
 last_checked: 2026-11-07
 owner: Cihan
 app_version: 0.3.0
@@ -37,12 +37,13 @@ A draft or a published page counts as the category's guide when its title names 
 
 Click **Content Editor**. A draft is written for the action's writing task and opens in the Content Editor:
 
+- a page title, not the action's: the existing page's, or the main prompt a new page answers;
 - the action's prompts, so its sources and brief answer them;
 - the page it works on, read from your site, for an existing page;
-- the page type, from the page's address, or from the kind of page the action picked;
+- the page type, from the page's address, or the kind of page the action or its opportunity picked;
 - on an online shop, the products the action is about, locked into the page's shopping path.
 
-A new draft builds its brief as it opens, from your AI usage. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it.
+The Content Agent then builds a new draft's brief and writes the page, or suggests changes, as **Write this** does, from your AI usage. An unreadable page builds only its brief. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it.
 
 ## Several pages
 

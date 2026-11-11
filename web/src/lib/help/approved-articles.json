@@ -539,7 +539,7 @@
         "playbook"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -559,7 +559,7 @@
         },
         {
           "heading": "What Content Editor opens",
-          "text": "Click **Content Editor**. A draft is written for the action's writing task and opens in the Content Editor:\n\n- the action's prompts, so its sources and brief answer them;\n- the page it works on, read from your site, for an existing page;\n- the page type, from the page's address, or from the kind of page the action picked;\n- on an online shop, the products the action is about, locked into the page's shopping path.\n\nA new draft builds its brief as it opens, from your AI usage. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it."
+          "text": "Click **Content Editor**. A draft is written for the action's writing task and opens in the Content Editor:\n\n- a page title, not the action's: the existing page's, or the main prompt a new page answers;\n- the action's prompts, so its sources and brief answer them;\n- the page it works on, read from your site, for an existing page;\n- the page type, from the page's address, or the kind of page the action or its opportunity picked;\n- on an online shop, the products the action is about, locked into the page's shopping path.\n\nThe Content Agent then builds a new draft's brief and writes the page, or suggests changes, as **Write this** does, from your AI usage. An unreadable page builds only its brief. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it."
         },
         {
           "heading": "Several pages",
