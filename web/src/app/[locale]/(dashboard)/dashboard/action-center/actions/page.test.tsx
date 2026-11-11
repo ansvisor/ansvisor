@@ -559,6 +559,20 @@ describe('Getting started in the actions list', () => {
     expect(setActiveBrand).not.toHaveBeenCalled();
   });
 
+  /** Where actions/[id] sends a Chat answer's "AC-1497": its drawer, or none for an action not here. */
+  it('opens the drawer of the action a link names, and none for one it doesn’t hold', async () => {
+    const opened = () => drawer.props?.action?.id ?? null;
+    window.history.replaceState(null, '', '/?action=a1&brand=brand-id');
+    await render();
+    expect(opened()).toBe('a1');
+    act(() => root.unmount());
+    root = createRoot(container);
+    drawer.props = null;
+    window.history.replaceState(null, '', '/?action=not-here&brand=brand-id');
+    await render();
+    expect(opened()).toBeNull();
+  });
+
   it('keeps a category the URL names, and lists the actions', async () => {
     window.history.replaceState(null, '', '/?category=all');
     getGettingStarted.mockResolvedValue(started());

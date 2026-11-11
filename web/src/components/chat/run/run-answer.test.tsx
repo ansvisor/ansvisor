@@ -197,6 +197,90 @@ describe('RunAnswer', () => {
     expect(container.textContent).toContain('mail, rel and proto');
   });
 
+  it('links each AC number to its action, in a new tab, in a paragraph, a list and a table', async () => {
+    await render({
+      run: run({
+        status: 'done',
+        text: [
+          'Önümüzdeki 30 gün için AC-1497 önce, sonra **AC-62**.',
+          '1. AC-1497 – Kaybedilen mention’ları geri kazan\n2. AC-62 – Atıf kaybeden 11 sayfayı yenile',
+          '| Action | Due |\n|---|---|\n| AC-429 | Nov 20 |',
+        ].join('\n\n'),
+      }),
+    });
+    const text = container.querySelector('[data-slot="run-text"]')!;
+    const links = [...text.querySelectorAll<HTMLAnchorElement>('a')];
+    expect(links.map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['AC-1497', '/dashboard/action-center/actions/AC-1497'],
+      ['AC-62', '/dashboard/action-center/actions/AC-62'],
+      ['AC-1497', '/dashboard/action-center/actions/AC-1497'],
+      ['AC-62', '/dashboard/action-center/actions/AC-62'],
+      ['AC-429', '/dashboard/action-center/actions/AC-429'],
+    ]);
+    for (const a of links) {
+      expect(a.getAttribute('target')).toBe('_blank');
+      expect(a.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(a.getAttribute('data-action')).toBe('answer.openAction');
+    }
+    expect(links[0].getAttribute('aria-label')).toBe('Open AC-1497 in Action Center, new tab');
+    // The words around a number stay as they were.
+    expect(text.querySelector('li')!.textContent).toBe(
+      'AC-1497 – Kaybedilen mention’ları geri kazan',
+    );
+    expect(text.querySelector('strong a')?.textContent).toBe('AC-62');
+    expect(text.querySelector('td a')?.textContent).toBe('AC-429');
+  });
+
+  it('leaves an AC number as text in code, in a link and in a longer word', async () => {
+    await render({
+      run: run({
+        status: 'done',
+        text: [
+          'Run `AC-1497` as is.',
+          '```\nAC-62 stays code\n```',
+          'See [the plan for AC-59](/dashboard/citations) and [AC-12](https://example.com/AC-12).',
+          'Not AC- alone, XAC-12, AC-12a, AC-1.497 or ac-12.',
+        ].join('\n\n'),
+      }),
+    });
+    const text = container.querySelector('[data-slot="run-text"]')!;
+    expect(
+      [...text.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')]),
+    ).toEqual([
+      ['the plan for AC-59', '/dashboard/citations'],
+      ['AC-12', 'https://example.com/AC-12'],
+    ]);
+    expect(text.querySelector('a a')).toBeNull();
+    expect(text.textContent).toContain('AC-1497');
+    expect(text.textContent).toContain('AC-62 stays code');
+    expect(text.textContent).toContain('Not AC- alone, XAC-12, AC-12a, AC-1.497 or ac-12.');
+  });
+
+  it('opens a link to one action in a new tab, and the Action Center’s pages in this one', async () => {
+    await render({
+      run: run({
+        status: 'done',
+        text: [
+          '[Win back mentions](/dashboard/action-center/actions/3f6c1d2e-8b7a-4c1d-9e2f-0a1b2c3d4e5f)',
+          '[AC-62](/dashboard/action-center/actions?action=a1)',
+          '[Actions](/dashboard/action-center/actions) and [Signals](/dashboard/action-center/signals)',
+        ].join('\n\n'),
+      }),
+    });
+    const links = [...container.querySelectorAll<HTMLAnchorElement>('[data-slot="run-text"] a')];
+    expect(links.map((a) => [a.textContent, a.getAttribute('target')])).toEqual([
+      ['Win back mentions', '_blank'],
+      ['AC-62', '_blank'],
+      ['Actions', null],
+      ['Signals', null],
+    ]);
+    expect(links[0].getAttribute('aria-label')).toBe(
+      'Open Win back mentions in Action Center, new tab',
+    );
+    expect(links[1].getAttribute('rel')).toBe('noopener noreferrer');
+    expect(links[1].getAttribute('aria-label')).toBe('Open AC-62 in Action Center, new tab');
+  });
+
   it('holds what follows while the run works, and says in its header when it reconnects', async () => {
     await render({ run: run({ steps }), footer: <p>Next moves</p>, reconnecting: true });
     expect(container.textContent).not.toContain('Next moves');
