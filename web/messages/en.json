@@ -3873,6 +3873,39 @@
       "not_measurable": "Not measurable"
     }
   },
+  "topicCard": {
+    "eyebrow": "New area to track",
+    "why": {
+      "lead": "No topic you track covers it yet.",
+      "catalog": "You sell {count, plural, one {# product} other {# products}} in {category}.",
+      "search": "People look for it: {count} prompt ideas from your {source, select, gsc {Search Console} ga {Analytics} other {Search Console and Analytics}} are about it.",
+      "businessHub": "ChatGPT Business Hub shows people asking ChatGPT about it.",
+      "llm": "It is among your topic ideas too.",
+      "competitors": "AI answers name {names} here."
+    },
+    "spots": "Needs {count} prompt spots · {left} left on {plan}",
+    "spotsOpen": "Needs {count} prompt spots",
+    "suggest": "Suggest {count} prompts",
+    "opening": "Adding the topic…",
+    "notNow": "Not now",
+    "notNowFailed": "Couldn't hide it. Try again.",
+    "openFailed": "Couldn't add the topic. Try again.",
+    "writing": "Writing {count} prompts for this topic…",
+    "writeFailed": "Couldn't write prompts just now.",
+    "tryAgain": "Try again",
+    "stored": "Ideas you already have for this topic, the most searched first. Tick the ones to track.",
+    "written": "Written just now for this topic. Tick the ones to track.",
+    "noneNew": "You track every prompt we found for it already.",
+    "waits": "Waits for a spot",
+    "track": "{count, plural, =0 {Track prompts} one {Track # prompt} other {Track # prompts}}",
+    "trackFailed": "Couldn't track them. Try again.",
+    "done": {
+      "tracked": "{count, plural, one {# prompt} other {# prompts}} added to {topic}.",
+      "allWaiting": "{count, plural, one {# prompt} other {# prompts}} saved to {topic}, waiting for a spot.",
+      "some": "{added} added to {topic}, {waiting} waiting for a spot."
+    },
+    "openTopic": "Open the topic"
+  },
   "agent": {
     "newChat": "New chat",
     "noConversations": "No conversations yet.",
@@ -13519,6 +13552,15 @@
     }
   },
   "prompts": {
+    "waiting": {
+      "resultTitle": "{added} added, {waiting} waiting for a spot",
+      "savedTitle": "{count, plural, one {Saved, but not tracked yet} other {# prompts saved, but not tracked yet}}",
+      "body": "Your plan's prompt locations are all in use, so {count, plural, one {it waits} other {they wait}} for a spot. To track {count, plural, one {it} other {them}}, pause a prompt you need less in Tracked Prompts, or raise your plan's limit.",
+      "open": "Go to Tracked Prompts",
+      "full": "Your plan's prompt locations are all in use. Prompts you add now are saved as waiting for a spot and aren't tracked until you pause another or raise your limit.",
+      "overNote": "{count, plural, one {# prompt} other {# prompts}} past your plan's limit will be saved as waiting for a spot, not tracked until you pause another or raise your limit.",
+      "brandNote": "Your plan has room for {room} more prompts: the other {count} will be saved as waiting for a spot, not tracked until you pause another or raise your limit."
+    },
     "tags": {
       "label": "Tags",
       "removeTag": "Remove tag {tag}",

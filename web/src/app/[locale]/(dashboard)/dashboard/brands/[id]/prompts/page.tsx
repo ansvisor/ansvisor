@@ -46,6 +46,7 @@ import {
   TopicFirstNotice,
   useTopicFirstDialog,
 } from '@/components/prompts/topic-first';
+import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 import { isNoTopics } from '@/lib/topics-required';
 import { PLANS } from '@/config/plans';
 import { saveTrackingJob } from '@/lib/tracking-job-store';
@@ -107,6 +108,7 @@ export default function PromptsPage() {
   // on this brand's own Topics page (the active brand may be another).
   const addTopicHref = `/dashboard/brands/${brandId}/topics#add-topic`;
   const topicFirst = useTopicFirstDialog({ href: addTopicHref });
+  const showWaiting = useWaitingForSpotToast();
   const allowedScraperIds = useMemo(() => {
     const allowed = PLANS[planId].limits.allowedScrapers;
     const ids = allowed ? [...allowed] : ALL_SCRAPERS.map((s) => s.id);
@@ -260,6 +262,8 @@ export default function PromptsPage() {
       const defaultModels = allowedModelIds;
 
       let targetSetId = promptSets[0]?.id;
+      // Saved waiting for a spot (SIMPLE_NAV: the plan's locations were full).
+      let waiting = 0;
 
       if (!targetSetId) {
         const result = await savePromptSet({
@@ -277,6 +281,7 @@ export default function PromptsPage() {
           return;
         }
         targetSetId = result.promptSet.id;
+        waiting = result.waiting ?? 0;
       } else {
         const results = await Promise.all(
           activePrompts.map((p) =>
@@ -298,10 +303,13 @@ export default function PromptsPage() {
           await loadData();
           return;
         }
+        waiting = results.filter((r) => 'waiting' in r && r.waiting).length;
       }
 
       setSuggestions([]);
-      toast.success(`Saved ${activePrompts.length} prompts`);
+      if (!showWaiting('brand_page', activePrompts.length - waiting, waiting)) {
+        toast.success(`Saved ${activePrompts.length} prompts`);
+      }
       await loadData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to save prompts');
@@ -328,6 +336,7 @@ export default function PromptsPage() {
         models: manualModels,
       };
 
+      let waiting = false;
       if (existingSet) {
         const result = await addPromptToSet({
           promptSetId: existingSet.id,
@@ -338,6 +347,7 @@ export default function PromptsPage() {
           else toast.error(result.error);
           return;
         }
+        waiting = !!result.waiting;
       } else {
         const result = await savePromptSet({
           brandId,
@@ -348,12 +358,13 @@ export default function PromptsPage() {
           toast.error(result.error);
           return;
         }
+        waiting = !!result.waiting;
       }
 
       setManualText('');
       setManualModels(allowedModelIds);
       setManualScrapers(allowedScraperIds);
-      toast.success('Prompt added');
+      if (!showWaiting('brand_page', 0, waiting ? 1 : 0)) toast.success('Prompt added');
       await loadData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add prompt');

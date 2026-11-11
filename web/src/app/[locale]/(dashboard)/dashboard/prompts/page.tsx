@@ -148,6 +148,8 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { usePlanContext } from '@/components/providers/plan-provider';
+import { useSimpleNav } from '@/components/providers/simple-nav-provider';
+import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { isNoPlan } from '@/lib/billing/no-plan';
 import {
@@ -697,9 +699,14 @@ function AddPromptDialog({
   /** "Add a topic" on a brand without one: the page's Topics tab, with Add Topic open. */
   onAddTopic: () => void;
 }) {
-  const limitReached =
+  const planFull =
     !!locationQuota &&
     isPromptLimitReached(getPromptUsage(locationQuota.used, locationQuota.maxPrompts));
+  // SIMPLE_NAV: a full plan keeps the form; what is added waits for a spot.
+  const waitOverLimit = useSimpleNav();
+  const limitReached = planFull && !waitOverLimit;
+  const showWaiting = useWaitingForSpotToast();
+  const tWaiting = useTranslations('prompts.waiting');
   const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
     useAllowedEngines(shoppingEnabled);
   const tCommon = useTranslations('common');
@@ -813,6 +820,7 @@ function AddPromptDialog({
       }
       const added = result.importedIdx.length;
       const skipped = toSave.length - added;
+      const waiting = result.waitingIdx?.length ?? 0;
       if (added === 0) {
         PROMPT_ADD.failed('none_added');
         setError(
@@ -820,14 +828,16 @@ function AddPromptDialog({
         );
         return;
       }
-      toast.success(
-        `${added} prompt${added === 1 ? '' : 's'} added${skipped ? ` · ${skipped} not added (plan limit or duplicate)` : ''}`,
-        {
-          description: result.analysisStarted
-            ? 'Analyzing them now.'
-            : 'They will be picked up by the next tracking run.',
-        },
-      );
+      if (!showWaiting('dialog', added - waiting, waiting)) {
+        toast.success(
+          `${added} prompt${added === 1 ? '' : 's'} added${skipped ? ` · ${skipped} not added (plan limit or duplicate)` : ''}`,
+          {
+            description: result.analysisStarted
+              ? 'Analyzing them now.'
+              : 'They will be picked up by the next tracking run.',
+          },
+        );
+      }
       PROMPT_ADD.completed();
       setStaged([]);
       setText('');
@@ -900,6 +910,11 @@ function AddPromptDialog({
               <TabsTrigger value="bulk">Bulk import</TabsTrigger>
             </TabsList>
             <TabsContent value="single" className="mt-3 space-y-4">
+              {planFull && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                  {tWaiting('full')}
+                </p>
+              )}
               <div className="space-y-3">
                 <PromptFormFields
                   autoFocus

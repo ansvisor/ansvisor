@@ -1316,3 +1316,29 @@ describe('the reads that run only within a skill', () => {
     expect(chatTool('get_fanout_gaps')?.class).toBe('read');
   });
 });
+
+describe('add_prompts over the plan limit (Simplify PR 15)', () => {
+  /** add_prompts' description as the registry reads it when its module loads. */
+  const description = async (simpleNav: boolean) => {
+    vi.resetModules();
+    if (simpleNav) vi.stubEnv('SIMPLE_NAV', 'true');
+    try {
+      const { PROMPT_TOOLS } = await import('./prompt-tools');
+      return PROMPT_TOOLS.find((tool) => tool.name === 'add_prompts')!.description;
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  };
+
+  it('says the prompts past the limit wait for a spot, apart from the added ones, with SIMPLE_NAV', async () => {
+    expect(await description(true)).toContain(
+      "When the plan's prompt locations run out, the rest are saved waiting for a spot: listed in `waiting`, not in `added`",
+    );
+  });
+
+  it('keeps today’s description without it', async () => {
+    const text = await description(false);
+    expect(text).toContain("the plan's prompt locations may stop the rest (partial)");
+    expect(text).not.toContain('waiting');
+  });
+});

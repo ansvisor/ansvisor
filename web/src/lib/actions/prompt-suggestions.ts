@@ -300,7 +300,11 @@ export async function dismissSuggestions(
 }
 
 export type AcceptSuggestionResult =
-  | { promptId: string }
+  | {
+      promptId: string;
+      /** Saved waiting for a spot, not tracked (SIMPLE_NAV: the plan was full). */
+      waiting?: true;
+    }
   | { error: string; code?: PromptAddFailureCode };
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -462,14 +466,23 @@ export async function acceptSuggestion(
     return { error: result.error, code: result.code };
   }
 
+  // A prompt saved waiting for a spot is still the suggestion's: it is added.
   await ackAccepted(session.access_token, suggestionId, result.prompt.id);
   revalidatePath('/dashboard/prompts');
-  return { promptId: result.prompt.id };
+  return result.waiting
+    ? { promptId: result.prompt.id, waiting: true }
+    : { promptId: result.prompt.id };
 }
 
 export interface TrackSuggestionsResult {
-  /** Tracked, in the order given. */
+  /** Added, in the order given: tracked, or waiting for a spot (waitingIds). */
   trackedIds: string[];
+  /**
+   * The ones among trackedIds saved waiting for a spot, not tracked: the
+   * plan's prompt locations were full (SIMPLE_NAV; without it the run stops
+   * there with `plan_limit`). Absent when none waits.
+   */
+  waitingIds?: string[];
   /** Already accepted or dismissed elsewhere: skipped, nothing to track. */
   skippedIds: string[];
   /**
@@ -489,7 +502,9 @@ const MAX_TRACK_AT_ONCE = 25;
  * on its own through addPromptToSet, so each passes the same plan check as a
  * single Track, and the run stops at the first one that fails: the plan's
  * prompt locations are full, or the rest can't be added either. Suggestions
- * already accepted or dismissed elsewhere are skipped, not a failure.
+ * already accepted or dismissed elsewhere are skipped, not a failure. With
+ * SIMPLE_NAV a full plan isn't a failure: the rest are saved waiting for a
+ * spot (waitingIds).
  */
 export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSuggestionsResult> {
   const ids = Array.isArray(suggestionIds)
@@ -526,7 +541,7 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
   const topics = (rows ?? []).some((r) => r.source === 'business_hub')
     ? await readTopicNames(supabase, brandId)
     : null;
-  const added: { id: string; promptId: string }[] = [];
+  const added: { id: string; promptId: string; waiting?: true }[] = [];
   let failure: { error: string; code?: PromptAddFailureCode } | undefined;
   for (const id of ids) {
     const row = byId.get(id);
@@ -543,17 +558,28 @@ export async function trackSuggestions(suggestionIds: string[]): Promise<TrackSu
       failure = { error: result.error, code: result.code };
       break;
     }
-    added.push({ id, promptId: result.prompt.id });
+    added.push({ id, promptId: result.prompt.id, waiting: result.waiting });
   }
 
   await Promise.all(added.map((a) => ackAccepted(session.access_token, a.id, a.promptId)));
   if (added.length > 0) revalidatePath('/dashboard/prompts');
-  return { trackedIds: added.map((a) => a.id), skippedIds, ...failure };
+  const waitingIds = added.filter((a) => a.waiting).map((a) => a.id);
+  return {
+    trackedIds: added.map((a) => a.id),
+    ...(waitingIds.length > 0 && { waitingIds }),
+    skippedIds,
+    ...failure,
+  };
 }
 
 export interface TrackPagePromptsResult {
-  /** The prompts added, in the order given. */
+  /** The prompts added, in the order given: tracked, or waiting for a spot (waitingIds). */
   promptIds: string[];
+  /**
+   * The ones among promptIds saved waiting for a spot, not tracked
+   * (SIMPLE_NAV: the plan's prompt locations were full). Absent when none.
+   */
+  waitingIds?: string[];
   /**
    * Why the rest weren't; `code` 'plan_limit' when the plan's prompt
    * locations ran out, 'no_topics' when the brand has no topic yet.
@@ -575,6 +601,8 @@ const MAX_PAGE_PROMPTS = 10;
  * cites the page; a target that can't be saved leaves the prompt tracked.
  * Their first answers come with the next tracking run. A brand with no topic
  * yet gets `no_topics` before any topic is made for it: the person adds one.
+ * With SIMPLE_NAV, the prompts past the plan's limit are saved waiting for a
+ * spot (waitingIds), their page target kept for when they are tracked.
  */
 export async function trackPagePrompts(
   brandId: string,
@@ -604,6 +632,7 @@ export async function trackPagePrompts(
   const topics = new Map((topicRows ?? []).map((t) => [keyOf(t.name as string), t.name as string]));
 
   const promptIds: string[] = [];
+  const waitingIds: string[] = [];
   let failure: { error: string; code?: PromptAddFailureCode } | undefined;
   for (const p of wanted) {
     const named = typeof p.topic === 'string' ? p.topic.trim().slice(0, 60) : '';
@@ -634,6 +663,7 @@ export async function trackPagePrompts(
       break;
     }
     promptIds.push(result.prompt.id);
+    if (result.waiting) waitingIds.push(result.prompt.id);
     if (pageUrl) {
       const targeted = await addPromptTargetUrl(result.prompt.id, pageUrl);
       if ('error' in targeted) console.error('Page target URL not saved:', targeted.error);
@@ -641,5 +671,5 @@ export async function trackPagePrompts(
   }
 
   if (promptIds.length > 0) revalidatePath('/dashboard/prompts');
-  return { promptIds, ...failure };
+  return { promptIds, ...(waitingIds.length > 0 && { waitingIds }), ...failure };
 }
