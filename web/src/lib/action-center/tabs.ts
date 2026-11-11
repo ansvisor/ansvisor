@@ -41,6 +41,20 @@ export const SIMPLE_TABS = [
 
 export type SimpleTabKey = (typeof SIMPLE_TABS)[number]['key'];
 
+/**
+ * How many of the person's agents wait on them: their newest run needs them
+ * (the "Needs your OK" a card on Agents › Your agents shows), archived ones
+ * aside. The count beside the Agents tab (SIMPLE_NAV), from the list that
+ * tab shows (GET /api/chat/agents?view=mine).
+ */
+export function agentsWaitingOn(
+  agents: readonly { status: string; lastRun: { status: string } | null }[],
+): number {
+  return agents.filter(
+    (agent) => agent.status !== 'archived' && agent.lastRun?.status === 'needs_you',
+  ).length;
+}
+
 /** The menu section of the Agents tab (menu access): Agent Center's, by its route. */
 export const AGENTS_SECTION = 'agents';
 
