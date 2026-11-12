@@ -1696,8 +1696,10 @@ describe('the fact check (W1-21)', () => {
       .join('');
     expect(streamed).toBe('Visibility is up 12% on ChatGPT and [real metric] on Perplexity.');
     expect(streamed).not.toContain('37');
+    // Then the line with the placeholder goes from the answer kept and shown (placeholders.ts).
     const answer = db.tables.chat_messages.find((m) => m.role === 'assistant')!;
-    expect(answer.content_md).toBe(streamed);
+    expect(answer.content_md).toBe('');
+    expect(ofType(events, 'text.replaced').at(-1)!.data.text).toBe('');
 
     const check = stepsOf(runId).at(-1)!;
     expect(check).toMatchObject({
@@ -6231,7 +6233,7 @@ describe('files attached to a message (00409; owner bug report 2026-11-06)', () 
     });
     expect(
       db.tables.chat_messages.find((m) => m.id === runRow(started.runId).message_id)?.content_md,
-    ).toBe('Sessions were [real metric] last week.');
+    ).toBe('');
     // The reading step still sees the image.
     expect(filesOf(userParts(haiku.seen[1]))).toHaveLength(1);
     expect(holds[0].release).toHaveBeenCalled();
@@ -8554,6 +8556,7 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
     '<h2>Which AI platforms does it track?</h2><p>Six of them.</p>',
     '<h2>Can I get a refund?</h2><p>Yes, within [REFUND PERIOD] of your first payment.</p>',
   ].join('');
+  const FILLED = PAGE.replace('[REFUND PERIOD]', '30 days');
 
   beforeEach(() => {
     seedDraft(db);
@@ -8572,10 +8575,26 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
     });
   });
 
+  it('never saves a page with a placeholder: the model is told which facts are missing', async () => {
+    const { sonnet } = useModels(
+      [READY],
+      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: PAGE })), text('Asked.')],
+    );
+    await turn(ADMIN, 'Add a refunds question', 'full_auto');
+    expect(updateContentDraft).not.toHaveBeenCalled();
+    expect(db.tables.content_draft_versions).toEqual([]);
+    const told = JSON.stringify(sonnet.seen[1].prompt);
+    expect(told).toContain('[REFUND PERIOD]');
+    expect(told).toContain('Ask the person for these facts in one question');
+  });
+
   it('shows a change to a Library page as version 2, with what changed, and Undo kept on the server', async () => {
     useModels(
       [READY],
-      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: PAGE })), text('Done.')],
+      [
+        calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: FILLED })),
+        text('Done.'),
+      ],
     );
     const runId = await turn(ADMIN, 'Add a refunds question', 'full_auto');
     expect(runRow(runId).status).toBe('done');
@@ -8594,7 +8613,7 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
         changes: {
           shortened: [],
           added: ['Which AI platforms does it track?', 'Can I get a refund?'],
-          placeholders: ['[REFUND PERIOD]'],
+          placeholders: [],
         },
         canUndo: true,
       },
@@ -8605,12 +8624,6 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
     expect((state.progress as { pageUndos?: unknown }).pageUndos).toEqual({
       [file.id as string]: { draftId: DRAFT, versionId: BEFORE },
     });
-    // Filling the placeholder comes first among the next moves.
-    expect(
-      db.tables.chat_next_moves
-        .filter((m) => m.run_id === runId)
-        .sort((a, b) => (a.rank as number) - (b.rank as number))[0],
-    ).toMatchObject({ prompt: 'Fill the refund period', class: 'write', ghost_ok: true });
   });
 
   it('makes no card for a change of the title alone', async () => {
@@ -8917,7 +8930,10 @@ describe('a page’s versions in chat (CHAT-25 §6, W4-12a)', () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {});
     useModels(
       [READY],
-      [calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: PAGE })), text('Done.')],
+      [
+        calls(toolCall('w1', 'update_draft', { draft_id: DRAFT, body_html: FILLED })),
+        text('Done.'),
+      ],
     );
     const runId = await turn(ADMIN, 'Add a refunds question', 'full_auto');
     const [card] = ofType(await eventsOf(runId), 'deliverable.created').map((e) => e.data);

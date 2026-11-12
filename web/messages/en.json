@@ -4014,7 +4014,7 @@
       "not_enough_data": "Not enough data",
       "other": "Other",
       "normal_swing": "Normal swing",
-      "unexplained": "Unexplained"
+      "unexplained": "Shifts across AI answers"
     },
     "prompt": "Prompt",
     "citedBefore": "Cited before",
@@ -4022,7 +4022,7 @@
     "date": "Date",
     "answer": "Answer",
     "openAnswer": "Open the answer for {prompt}",
-    "partial": "Some answers couldn't be read, so part of the change is unexplained.",
+    "partial": "Some answers couldn't be read, so this covers the answers that could.",
     "notCited": "not cited",
     "noRows": "No single prompt explains this part.",
     "detection": "Detection from stored snapshots, no model reads",

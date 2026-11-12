@@ -18,3 +18,19 @@ describe('SAFETY_RULES', () => {
     expect(rules).toContain('an estimate or a scenario, not a guarantee');
   });
 });
+
+describe('PERSONA_RULES facts', () => {
+  it('never invent a fact, never collapse one that varies, and ask for the missing ones', () => {
+    expect(PERSONA_RULES).toContain(
+      "unless it comes from the brand's facts, the brand's own pages read in this run, or an official source cited in this run",
+    );
+    expect(PERSONA_RULES).toContain('is never collapsed into one figure');
+    expect(PERSONA_RULES).toContain('ask the person for the missing facts in one question');
+    expect(PERSONA_RULES).not.toContain('anything else is a [placeholder]');
+  });
+
+  it('explain a change by its drivers, never by a share left unexplained', () => {
+    expect(PERSONA_RULES).toContain('explain the drivers the data supports');
+    expect(PERSONA_RULES).toContain('also reflects shifts across AI answers');
+  });
+});

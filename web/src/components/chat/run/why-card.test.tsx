@@ -130,7 +130,7 @@ describe('WhyCard', () => {
     // An offset in points, never a share.
     expect(text).toContain('+0.8');
     expect(text).toContain('partly offset the change');
-    expect(text).toContain('Unexplained');
+    expect(text).toContain('Shifts across AI answers');
     expect(text).toContain('Detection from stored snapshots, no model reads');
   });
 
@@ -214,7 +214,7 @@ describe('WhyCard', () => {
   it('says when some answers couldn’t be read', async () => {
     await render({ ...why, partial: true });
     expect(container.textContent).toContain(
-      "Some answers couldn't be read, so part of the change is unexplained.",
+      "Some answers couldn't be read, so this covers the answers that could.",
     );
   });
 
