@@ -33,34 +33,64 @@ export function placeholdersIn(text: string, keep = ''): string[] {
 
 const headingLevel = (line: string) => /^ {0,3}(#{1,6})\s/.exec(line)?.[1].length ?? 0;
 
+/** The facts placeholders stand for: "[refund period]" → "refund period"; each once. */
+export function factsOf(placeholders: readonly string[]): string[] {
+  const named = placeholders.map((p) => p.slice(1, -1).trim()).filter((n) => /\p{L}/u.test(n));
+  return [...new Set(named.length > 0 ? named : placeholders)];
+}
+
+/** A heading's words, for finding it in the person's message. */
+const headingWords = (line: string) =>
+  line
+    .replace(/^ {0,3}#{1,6}\s+/, '')
+    .replace(/[*_`#:]/g, '')
+    .trim()
+    .toLowerCase();
+
 /**
  * A report or an answer without the lines that hold a placeholder, and
  * without a heading whose section that leaves empty. Blank lines a cut
  * leaves twice are kept once. The text as it is when nothing is cut.
+ * `note` says what was left out, naming the missing facts: it stands in for
+ * the answer when nothing else would be left, and under an emptied section's
+ * heading when the person's message (`keep`) names that section.
  */
-export function withoutPlaceholderLines(text: string, keep = ''): string {
+export function withoutPlaceholderLines(
+  text: string,
+  keep = '',
+  note?: (facts: string[]) => string,
+): string {
   const lines = text.split('\n');
-  const dropped = new Set<number>();
+  const dropped = new Map<number, string[]>();
   let fence = false;
   lines.forEach((line, i) => {
     if (FENCE_RE.test(line)) fence = !fence;
-    else if (!fence && placeholdersIn(line, keep).length > 0) dropped.add(i);
+    else if (!fence) {
+      const found = placeholdersIn(line, keep);
+      if (found.length > 0) dropped.set(i, found);
+    }
   });
   if (dropped.size === 0) return text;
-  const removed = new Set(dropped);
+  const removed = new Set(dropped.keys());
+  const noted = new Map<number, string[]>();
+  const asked = keep.toLowerCase();
   // Last first, so a sub-section emptied before is gone when its parent is looked at.
   for (let i = lines.length - 1; i >= 0; i--) {
     const level = headingLevel(lines[i]);
     if (level === 0 || removed.has(i)) continue;
-    let lost = false;
+    const lost: string[] = [];
     let left = false;
     for (let j = i + 1; j < lines.length; j++) {
       const next = headingLevel(lines[j]);
       if (next > 0 && next <= level) break;
-      if (dropped.has(j)) lost = true;
+      const found = dropped.get(j);
+      if (found) lost.push(...found);
       else if (!removed.has(j) && lines[j].trim()) left = true;
     }
-    if (lost && !left) removed.add(i);
+    if (lost.length === 0 || left) continue;
+    const words = headingWords(lines[i]);
+    if (note && words && asked.includes(words)) noted.set(i, lost);
+    else removed.add(i);
   }
   const out: string[] = [];
   let cut = false;
@@ -73,8 +103,12 @@ export function withoutPlaceholderLines(text: string, keep = ''): string {
     if (cut && blank && (out.length === 0 || !out[out.length - 1].trim())) return;
     if (!blank) cut = false;
     out.push(line);
+    const facts = noted.get(i);
+    if (facts && note) out.push(note(factsOf(facts)));
   });
-  return out.join('\n').trimEnd();
+  const kept = out.join('\n').trimEnd();
+  if (kept.trim() || !note) return kept;
+  return note(factsOf([...dropped.values()].flat()));
 }
 
 /**

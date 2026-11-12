@@ -4558,6 +4558,7 @@
     }
   },
   "chatEngine": {
+    "missingFacts": "I left this out: it needs facts I don't have ({facts}). Add them to Brand facts or tell me, and I'll fill it in.",
     "subtasks": {
       "label": "Working on {count, plural, one {# part} other {# parts}}",
       "progress": "{ended} of {count} done",

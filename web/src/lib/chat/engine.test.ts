@@ -1698,8 +1698,11 @@ describe('the fact check (W1-21)', () => {
     expect(streamed).not.toContain('37');
     // Then the line with the placeholder goes from the answer kept and shown (placeholders.ts).
     const answer = db.tables.chat_messages.find((m) => m.role === 'assistant')!;
-    expect(answer.content_md).toBe('');
-    expect(ofType(events, 'text.replaced').at(-1)!.data.text).toBe('');
+    // Nothing else is left, so a line naming the missing fact stands in for it.
+    const note =
+      "I left this out: it needs facts I don't have (real metric). Add them to Brand facts or tell me, and I'll fill it in.";
+    expect(answer.content_md).toBe(note);
+    expect(ofType(events, 'text.replaced').at(-1)!.data.text).toBe(note);
 
     const check = stepsOf(runId).at(-1)!;
     expect(check).toMatchObject({
@@ -6233,7 +6236,9 @@ describe('files attached to a message (00409; owner bug report 2026-11-06)', () 
     });
     expect(
       db.tables.chat_messages.find((m) => m.id === runRow(started.runId).message_id)?.content_md,
-    ).toBe('');
+    ).toBe(
+      "I left this out: it needs facts I don't have (real metric). Add them to Brand facts or tell me, and I'll fill it in.",
+    );
     // The reading step still sees the image.
     expect(filesOf(userParts(haiku.seen[1]))).toHaveLength(1);
     expect(holds[0].release).toHaveBeenCalled();

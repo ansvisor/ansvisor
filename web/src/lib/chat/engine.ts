@@ -5476,8 +5476,11 @@ async function finish(rc: RunContext): Promise<void> {
   // one stopped at the limit too.
   rc.progress.text = withAssumptions(rc.progress.text, rc.progress.assumptions);
   // A report or an answer never keeps a placeholder for a missing fact (placeholders.ts):
-  // its line goes, and a section that leaves empty. The person's own ones stay.
-  const filled = withoutPlaceholderLines(rc.progress.text, rc.progress.question ?? '');
+  // its line goes, and a section that leaves empty. The person's own ones stay. What would be
+  // left empty, the answer or a section they asked for, says which facts are missing instead.
+  const filled = withoutPlaceholderLines(rc.progress.text, rc.progress.question ?? '', (facts) =>
+    t('missingFacts', { facts: facts.join(', ') }),
+  );
   if (filled !== rc.progress.text) {
     rc.progress.text = filled;
     rc.sink.emit('text.replaced', { text: filled });

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { missingFactsIssue, placeholdersIn, withoutPlaceholderLines } from './placeholders';
+import {
+  factsOf,
+  missingFactsIssue,
+  placeholdersIn,
+  withoutPlaceholderLines,
+} from './placeholders';
 
 describe('placeholdersIn', () => {
   it('finds bracketed stand-ins for facts', () => {
@@ -88,6 +93,33 @@ describe('withoutPlaceholderLines', () => {
   it('returns the text as it is when nothing is cut', () => {
     const text = 'See [the guide](https://example.com).\n\n\n[1] cited.\n';
     expect(withoutPlaceholderLines(text)).toBe(text);
+  });
+});
+
+describe('factsOf', () => {
+  it('names the facts, each once', () => {
+    expect(factsOf(['[refund period]', '[price]', '[price]', '[…]'])).toEqual([
+      'refund period',
+      'price',
+    ]);
+  });
+});
+
+describe('withoutPlaceholderLines with a note', () => {
+  const note = (facts: string[]) => `Left out: needs ${facts.join(', ')}.`;
+
+  it('never leaves an answer empty: the note names the missing facts', () => {
+    expect(withoutPlaceholderLines('Refunds within [refund period] […].', '', note)).toBe(
+      'Left out: needs refund period.',
+    );
+  });
+
+  it('keeps a section the person asked for, with the note in its place', () => {
+    const text =
+      '## Summary\n- Up 4 points.\n\n## Prices\n- Visa fee: [visa fee]\n\n## Notes\n- [TBD]';
+    expect(withoutPlaceholderLines(text, 'Add a Prices section', note)).toBe(
+      '## Summary\n- Up 4 points.\n\n## Prices\nLeft out: needs visa fee.',
+    );
   });
 });
 
