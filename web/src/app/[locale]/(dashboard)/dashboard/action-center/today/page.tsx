@@ -1,12 +1,6 @@
-import { notFound } from 'next/navigation';
 import { TodayPage } from '@/components/action-center/today-page';
-import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 
-/**
- * Action Center › Today, the simplified layout's first tab and landing page.
- * Only with SIMPLE_NAV on, while it is built; otherwise not found.
- */
+/** Action Center › Today: the Action Center's first tab, where everyone lands. */
 export default function ActionCenterTodayPage() {
-  if (!simpleNavEnabled()) notFound();
   return <TodayPage />;
 }

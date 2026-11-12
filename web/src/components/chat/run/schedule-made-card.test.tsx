@@ -3,7 +3,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { NextIntlClientProvider } from 'next-intl';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import messages from '../../../../messages/en.json';
-import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 import type { ChatScheduleMade } from '@/lib/chat/events';
 
 /**
@@ -45,13 +44,11 @@ const MADE: ChatScheduleMade = {
 let container: HTMLDivElement;
 let root: Root;
 
-async function render(cards: ChatScheduleMade[], simpleNav = true) {
+async function render(cards: ChatScheduleMade[]) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <SimpleNavProvider enabled={simpleNav}>
-          <ScheduleMadeCards cards={cards} />
-        </SimpleNavProvider>
+        <ScheduleMadeCards cards={cards} />
       </NextIntlClientProvider>,
     );
   });
@@ -126,9 +123,7 @@ describe('ScheduleMadeCards', () => {
     ]);
   });
 
-  it('shows nothing with the flag off, or without a card', async () => {
-    await render([MADE], false);
-    expect(container.innerHTML).toBe('');
+  it('shows nothing without a card', async () => {
     await render([]);
     expect(container.innerHTML).toBe('');
   });

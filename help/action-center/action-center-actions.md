@@ -1,11 +1,11 @@
 ---
 title: Work with Action Center actions
 route: /dashboard/action-center/actions
-keywords: [actions, today, next 7, done this week, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence]
+keywords: [actions, today, todays focus, agent work, i approve first, agent starts on its own, action status, assign action, dismiss action, export actions, top actions, run agent, run with chat, stale actions, still relevant, confidence]
 synonyms: [recommendations, work items, to-dos, action list, let an agent do this, agent on an action, what should I do today, what to do first, who starts agent work]
 plan: all
-updated: 2026-11-06
-last_checked: 2026-11-06
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -13,17 +13,13 @@ sources: [docs/guides/action-center.mdx]
 ---
 An action is one piece of work with an outcome, built from the evidence behind it. Ansvisor groups many signals into one action: six valuable pages with no AI traffic become one "Capture AI traffic" action with six linked signals, not six rows. New actions are added after the daily tracking run, on the **Actions** tab.
 
-## Today
+## Today's focus
 
-The **Today** card at the top of the **Actions** tab lists up to three things to do today: open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. An action Chat's Inbox suggested to you today comes first.
-
-Each item says why it matters, its first step and page, and who does it: **Me** (assigned to you), **Agent** (an agent can do the first step) or **Team** (no one's yet). **Open** opens the action.
-
-Under the card, **Next** lists the seven after them, and **Done this week** counts actions completed since Monday; click it for History. While Getting started runs, the card shows its next three steps instead.
+What to do today is on the **Today** tab: **Today's focus** lists your three highest-impact open actions that are yours or no one's yet, ranked as your daily suggestion in Chat is. That's the **Priority Score**, plus a little for each day an action has waited and for writing you can start in the Content Editor now. The **Actions** tab lists every action; sort it by Priority to see what comes next.
 
 ## Agent work
 
-When Chat is on, the **Agent work** gear on the **Today** card sets how far your workspace's agents go without a person:
+When Chat is on, the **Agent work** gear beside **Today's focus** sets how far your workspace's agents go without a person:
 
 - **I approve first**, where every workspace starts: every change an agent makes waits for someone to approve it, whatever the agent's mode.
 - **Agent starts on its own**: each agent works in its own mode, **Ask me first**, **Auto** or **Full auto**.
@@ -46,7 +42,7 @@ The cards at the top count and filter the list, all but **Highest Priority**. Cl
 - **At Risk**: open Recover and Fix actions.
 - **Opportunities**: open Growth actions.
 - **In Progress**: actions someone is working on.
-- **Highest Priority**: the highest level among open actions; it doesn't filter. While Getting started runs, its card shows instead.
+- **Highest Priority**: the highest level among open actions; it doesn't filter.
 
 Below them, filter by category, **Priority**, **Status** (including **Stale**) and **Assignee**, or search. **Sort** by Priority (the default), Newest, Due date or Recently updated. Filters are kept in the page's address, so a filtered view can be shared. For an online shop, the **From Products** chip lists only the actions sent from Products.
 

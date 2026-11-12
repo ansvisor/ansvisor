@@ -2,7 +2,7 @@ import type { Signal } from '@/lib/signals/map';
 import { SIGNAL_KINDS, type SignalCategory } from '@/lib/signals/registry';
 
 /**
- * Today's "Since yesterday" (SIMPLE_NAV, simplification plan PR 8): the
+ * Today's "Since yesterday" (simplification plan PR 8): the
  * biggest changes the nightly checks found since the person last looked,
  * read from the brand's signals. No thresholds of its own: the detectors'
  * noise rules already decide what becomes a signal, and Today shows only

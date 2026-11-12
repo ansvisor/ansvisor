@@ -156,34 +156,22 @@ describe('UntrackedQueriesCard', () => {
     expect(trackPagePrompts).not.toHaveBeenCalled();
   });
 
-  it('tracks as many as the slots allow, and says when the plan ran out', async () => {
-    getLocationQuota.mockResolvedValue({ maxPrompts: 50, used: 48 });
-    trackPagePrompts.mockResolvedValue({ promptIds: ['n1'], error: 'limit', code: 'plan_limit' });
+  it('tracks them all past the slots left: the rest wait for a spot', async () => {
+    getLocationQuota.mockResolvedValue({ maxPrompts: 50, used: 50 });
     await render();
-    const all = button('Track all (2)');
+    const all = button('Track all (3)');
     expect(all).toBeTruthy();
+    expect(all!.disabled).toBe(false);
     await act(async () => all!.click());
     expect(trackPagePrompts).toHaveBeenCalledWith('b1', null, [
       { text: 'cold brew ratio', topic: '' },
       { text: 'how to descale an espresso machine', topic: '' },
+      { text: 'oat milk latte', topic: '' },
     ]);
-    expect(toast.error).toHaveBeenCalledWith(
-      "1 query needs another prompt slot: your plan's are used up.",
-    );
   });
 
-  it('turns tracking off without slots or for members', async () => {
-    getLocationQuota.mockResolvedValue({ maxPrompts: 50, used: 50 });
-    await render();
-    expect(button('Track')!.disabled).toBe(true);
-    expect(button('Track all (0)')!.disabled).toBe(true);
-    expect(button('Track')!.parentElement!.getAttribute('title')).toBe(
-      'No prompt slots left on your plan',
-    );
-
+  it('turns tracking off for members', async () => {
     getLocationQuota.mockResolvedValue({ maxPrompts: -1, used: 3 });
-    act(() => root.unmount());
-    root = createRoot(container);
     await render(false);
     expect(button('Track')!.disabled).toBe(true);
     expect(button('Track all (3)')!.parentElement!.getAttribute('title')).toBe(

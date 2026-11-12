@@ -41,7 +41,6 @@ import { HistoryTable } from '@/components/action-center/history-table';
 import { HistoryDrawer } from '@/components/action-center/history-drawer';
 import { ScorecardTable } from '@/components/action-center/scorecard-table';
 import { HistoryViews } from '@/components/action-center/history-views';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { cn } from '@/lib/utils';
 import { HeaderWithAiUsage } from '@/components/ai-usage/ai-usage-meter';
 
@@ -77,9 +76,6 @@ export default function ActionCenterHistoryPage() {
   const tTypes = useTranslations('actionCenter.actionCategories');
   const tActions = useTranslations('actionCenter.actionsPage');
   const tSources = useTranslations('actionCenter.signalsPage.sources');
-  // The simplified layout (SIMPLE_NAV): KPIs is one of History's views, shown
-  // under the tabs whatever the list holds.
-  const simpleNav = useSimpleNav();
 
   const [items, setItems] = useState<ActionHistoryItem[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -260,7 +256,7 @@ export default function ActionCenterHistoryPage() {
     <div className="space-y-6">
       {header}
       <ActionCenterTabs />
-      {simpleNav && <HistoryViews current={view} onPick={setView} kpis />}
+      <HistoryViews current={view} onPick={setView} />
 
       {isLoading ? (
         <div className="space-y-4">
@@ -320,7 +316,6 @@ export default function ActionCenterHistoryPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {!simpleNav && <HistoryViews current={view} onPick={setView} />}
             <div className="inline-flex overflow-hidden rounded-md border">
               {RANGE_PRESETS.map((preset) => (
                 <button

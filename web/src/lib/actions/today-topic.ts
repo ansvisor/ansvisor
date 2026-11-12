@@ -24,7 +24,7 @@ import {
 } from '@/lib/action-center/topic-card';
 
 /**
- * "New area to track" on Action Center › Today (SIMPLE_NAV, simplification
+ * "New area to track" on Action Center › Today (simplification
  * plan PR 17), as the signed-in person (RLS). The page shows it on the
  * person's Monday or once today's focus is finished; these read the
  * candidate, make its topic, and track the prompts the person ticks.

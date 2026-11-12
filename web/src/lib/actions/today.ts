@@ -11,7 +11,7 @@ import { standingFrom, type TodayStanding } from '@/lib/action-center/focus';
 import { effectiveTimeZone } from '@/lib/time-zone';
 
 /**
- * Action Center › Today's reads (SIMPLE_NAV), as the signed-in person.
+ * Action Center › Today's reads, as the signed-in person.
  * Each part of the page reads on its own, so a slow or failed read hides
  * only its part. No model call: these are the counts and the overview read
  * the rest of the app already makes.

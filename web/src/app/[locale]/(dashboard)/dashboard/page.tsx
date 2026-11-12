@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
-import { dashboardHome } from '@/lib/dashboard-home';
+import { DASHBOARD_HOME } from '@/config/home';
 
-/** Each person's start (dashboardHome): Insights on a paid plan, Chat Home, or the Action Center. */
-export default async function DashboardPage() {
-  redirect(await dashboardHome());
+/** Everyone starts on Action Center › Today. */
+export default function DashboardPage() {
+  redirect(DASHBOARD_HOME);
 }

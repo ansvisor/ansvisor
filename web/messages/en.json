@@ -524,7 +524,6 @@
     "overview": "Overview",
     "chat": "Chat",
     "chatSetUp": "Set up",
-    "agentCenter": "Agent Center",
     "actionCenter": "Action Center",
     "insights": "Visibility",
     "traffic": "AI Referral Traffic",
@@ -539,7 +538,6 @@
     "products": "Products",
     "reports": "Reports",
     "settings": "Settings",
-    "execution": "Execution",
     "analytics": "Analytics",
     "more": "More",
     "today": "Today",
@@ -1704,36 +1702,6 @@
     "actionsPage": {
       "title": "Actions",
       "subtitle": "Know what changed, what matters, and what to do next.",
-      "today": {
-        "title": "Today",
-        "subtitle": "{count, plural, one {# thing} other {# things}} · ranked by Priority Score",
-        "rankHint": "Ranked as your daily suggestion in Chat: by Priority Score, plus a little for each day an action has waited and for writing you can start in the Content Editor now. Only open actions that are yours or no one's yet.",
-        "stepsSubtitle": "{count, plural, one {# step} other {# steps}} of Getting started, ready now",
-        "empty": "Nothing waits on you today: every open action is someone else's, or there are none.",
-        "firstStep": "First step: {step}",
-        "firstStepOn": "First step: {step} · {page}",
-        "noStep": "No step left to do: open it to finish or close it.",
-        "suggested": "Also today's suggestion in your Chat Inbox",
-        "who": {
-          "me": "Me",
-          "agent": "Agent",
-          "team": "Team"
-        },
-        "whoHint": {
-          "me": "Assigned to you",
-          "agent": "An agent can do the first step",
-          "team": "No one's yet: anyone on the team can take it"
-        },
-        "open": "Open",
-        "next": "Next {count}",
-        "columns": {
-          "action": "Action",
-          "category": "Category",
-          "priority": "Priority"
-        },
-        "doneThisWeek": "Done this week · {count}",
-        "doneThisWeekHint": "Actions completed since Monday. Open History to see them."
-      },
       "cards": {
         "top": "Top Actions",
         "topSub": "Highest-priority actions to work on next",
@@ -2625,20 +2593,12 @@
     "gettingStarted": {
       "category": "Getting started",
       "card": {
-        "title": "Getting started",
-        "value": "{done} / {total}",
-        "sub": "steps done · at your own pace"
+        "title": "Getting started"
       },
       "firstSignals": "Start with your first signals",
       "note": "AI actions start here as soon as your first signals appear. Usually within a few days.",
       "table": {
         "stage": "Stage",
-        "ready": "Ready"
-      },
-      "stages": {
-        "setup": "Set up",
-        "explore": "Explore",
-        "act": "Act",
         "ready": "Ready"
       },
       "status": {
@@ -2648,17 +2608,7 @@
         "skipped": "Skipped"
       },
       "optional": "Optional",
-      "readyNow": "Ready now",
       "everyone": "Everyone in the workspace",
-      "readyWhen": {
-        "arriving": "Arriving now",
-        "setup": "Now",
-        "explore": "First answers · ~1h",
-        "dataPrompts": "24h after Search Console or Analytics",
-        "act": "Suggestions · ~24h",
-        "ready": "After the steps above"
-      },
-      "opensWhenReady": "Opens when its data is ready: {when}",
       "steps": {
         "kpis": {
           "title": "Set your KPIs",
@@ -2856,28 +2806,7 @@
         }
       },
       "panel": {
-        "close": "Close",
-        "ready": "Ready: {when}",
-        "optionalRecommended": "Optional · recommended",
-        "why": "Why it’s important",
-        "how": "How to do this",
-        "videosSoon": "Videos coming soon",
-        "doneWhen": "Done when: {condition}",
-        "doneAuto": "Done · checked automatically",
-        "inNewTab": "Finish it in the new tab. This step updates when you come back.",
-        "skip": "Skip",
-        "skippedNote": "Skipped. Suggestions may be less accurate. You can still connect it."
-      },
-      "skipDialog": {
-        "title": "Skip {name}?",
-        "body": "This is the last time we suggest it. Without it:",
-        "lessAccurate": "Prompt and content suggestions are less accurate",
-        "noClicks": "We can’t show whether your work brings clicks",
-        "later": "You can connect it any time from Settings.",
-        "skip": "Skip anyway",
-        "connect": "Connect now",
-        "skipped": "Skipped · you can connect it later",
-        "failed": "Couldn’t skip the step. Try again."
+        "close": "Close"
       },
       "start": {
         "button": "Get Started",
@@ -2885,21 +2814,9 @@
         "started": "{count, plural, =0 {Getting started is on} one {Getting started · # step already done} other {Getting started · # steps already done}}",
         "failed": "Couldn’t start Getting started. Try again."
       },
-      "skip": {
-        "button": "Skip Get Started",
-        "title": "Skip Get Started?",
-        "body": "Your actions list goes back to normal. Steps you finished stay done.",
-        "later": "You can start again any time from the same button.",
-        "confirm": "Skip",
-        "keep": "Keep going",
-        "done": "Back to your actions",
-        "failed": "Couldn’t skip Getting started. Try again."
-      },
       "secondBrand": {
         "title": "Run Getting started for {brand}?",
         "body": "You already know Ansvisor. Run the setup steps for this brand, or skip them.",
-        "runLine": "Run: KPIs, competitors, topics and prompts for {brand}, guided",
-        "skipLine": "Skip: go straight to the actions list",
         "run": "Run Getting started",
         "skip": "Skip",
         "ran": "Getting started is on for {brand}",
@@ -7426,14 +7343,6 @@
     "deniedTitle": "I can't do this for you",
     "closeDenial": "Close",
     "list": {
-      "title": "Agent Center",
-      "formula": {
-        "skill": "skill",
-        "mode": "mode",
-        "connections": "connections",
-        "model": "model"
-      },
-      "formulaTip": "An agent is a skill, a mode, connections and a model, saved to run again",
       "newAgent": "New agent",
       "activeTip": "{active, plural, one {# agent on} other {# agents on}}{limit, select, none {} other { · your plan keeps up to {limit} on}}",
       "tabsLabel": "Agents to show",
@@ -13411,7 +13320,6 @@
         "count": "{shown} of {count} queries · the export has them all",
         "tracked": "{count, plural, one {Tracking # query as a prompt} other {Tracking # queries as prompts}}",
         "planLimit": "{count, plural, one {# query needs another prompt slot} other {# queries need more prompt slots}}: your plan's are used up.",
-        "noSlots": "No prompt slots left on your plan",
         "trackNotAllowed": "Only admins and managers can add prompts.",
         "failed": "Couldn't load these queries.",
         "noData": "Google Search Console has no queries for this brand yet.",
@@ -13650,7 +13558,6 @@
         "fromQuery": "From Search Console: “{query}” · {impressions} impressions",
         "slotsLeft": "{count, plural, one {# prompt} other {# prompts}} left to add on your plan",
         "unlimited": "No prompt limit on your plan",
-        "overSlots": "Select up to {count, plural, one {# prompt} other {# prompts}}: that's what your plan has left",
         "addOwn": "Add your own",
         "track": "Track {count, plural, one {# prompt} other {# prompts}}",
         "tracked": "Now tracking {count, plural, one {# prompt} other {# prompts}}",
@@ -13855,8 +13762,6 @@
       "addAllDone": "{count, plural, one {# prompt added to your tracked list} other {# prompts added to your tracked list}}",
       "addAllHandled": "These suggestions were already added or dismissed",
       "addAllFailed": "Couldn't add the suggestions",
-      "limitTitle": "{count, plural, one {# suggestion couldn't be added} other {# suggestions couldn't be added}}",
-      "limitBody": "{added, plural, =0 {Your plan's prompt limit is reached.} one {# was added before your plan's prompt limit was reached.} other {# were added before your plan's prompt limit was reached.}} {plan, select, growth {Contact us to raise your limit} enterprise {Contact us to raise your limit} other {Upgrade your plan}}, or pause {count, plural, one {# prompt} other {# prompts}} in Tracked Prompts first and try again.",
       "openTracked": "Go to Tracked Prompts",
       "closeLimitNote": "Close",
       "include": "Include this prompt",

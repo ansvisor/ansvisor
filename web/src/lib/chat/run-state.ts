@@ -54,7 +54,7 @@ export interface ClientRun {
   deliverables: ChatDeliverable[];
   /** What it sent to the Action Center, in order (CHAT-09 item 19). */
   sent: ChatActionSent[];
-  /** The recurring work it set up, in order (SIMPLE_NAV): each its card. */
+  /** The recurring work it set up, in order: each its card. */
   scheduled: ChatScheduleMade[];
   /** The Action Center tasks it works on (CHAT-09 §B); null when it has none. */
   tasks: ChatTaskStrip | null;

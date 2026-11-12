@@ -1,6 +1,25 @@
 {
   "entries": [
     {
+      "slug": "today",
+      "feature": "Today",
+      "homeLine": "Ansvisor now opens on Today: the night's biggest changes, your three actions and what waits for you.",
+      "route": "/dashboard/action-center/today",
+      "plans": [
+        "starter",
+        "growth",
+        "enterprise"
+      ],
+      "planMode": "hide",
+      "published": "2026-11-11",
+      "lines": [
+        "Opening Ansvisor should tell you what to do first, not leave you to look for it.",
+        "Today, the Action Center's first tab, lists the night's biggest changes, your three actions and what waits for you.",
+        "You start each day on the work that moves your AI visibility, with set-up steps and agent work in the same place.",
+        "Open Today, start on the first action in your focus, and skip what can wait for a week."
+      ]
+    },
+    {
       "slug": "mcp-app-sign-in",
       "feature": "Connected apps",
       "homeLine": "Connect your AI assistant to Ansvisor by signing in, with no key to copy.",
@@ -268,8 +287,8 @@
     },
     {
       "slug": "agent-center",
-      "feature": "Agent Center",
-      "homeLine": "Agent Center runs your routine AI visibility work on a schedule or when something changes.",
+      "feature": "Agents",
+      "homeLine": "Agents, in the Action Center, run your routine AI visibility work on a schedule or when something changes.",
       "route": "/dashboard/agents",
       "plans": [
         "starter",
@@ -282,7 +301,7 @@
         "Weekly checks and fixes took the same hours every week.",
         "An agent runs a skill on a schedule or when Action Center finds a signal, within its share of your AI limit.",
         "The routine work gets done, and you choose which changes wait for your approval.",
-        "Open Agent Center and pick a ready-made agent, or build your own in four steps."
+        "Open Agents in the Action Center, pick a ready-made agent or ask Chat to make one; each run opens in Chat."
       ]
     },
     {

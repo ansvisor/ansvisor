@@ -18,7 +18,6 @@ import {
   promptsThatFit,
   waitingPromptColumns,
 } from '@/lib/prompt-locations';
-import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import { ALL_MODELS, ALL_SCRAPERS, DEFAULT_PROMPT_RANGE_DAYS } from '@/config/prompt-options';
 import { PROMPT_DELETE_BATCH } from '@/lib/prompt-bulk-actions';
 import { isValidLocation, locationCode } from '@/lib/region';
@@ -197,7 +196,7 @@ interface SavePromptSetInput {
 export type SavePromptSetResult =
   | {
       promptSet: PromptSet;
-      /** How many were saved waiting for a spot (SIMPLE_NAV); absent when none. */
+      /** How many were saved waiting for a spot; absent when none. */
       waiting?: number;
     }
   | { error: string; code?: 'plan_limit' };
@@ -252,12 +251,8 @@ export async function savePromptSet(input: SavePromptSetInput): Promise<SaveProm
   const otherLocations = usage.total - (usage.byBrand.get(input.brandId) ?? 0);
   const adding = input.prompts.filter((p) => p.isActive ?? true).length;
   const limitError = locationLimitMessage(plan, otherLocations, adding);
-  // SIMPLE_NAV: the active prompts past the limit are saved waiting for a
-  // spot, in the order given, instead of the whole save being refused.
-  const waitOverLimit = simpleNavEnabled();
-  if (limitError && !waitOverLimit) {
-    return { code: 'plan_limit', error: limitError };
-  }
+  // The active prompts past the limit are saved waiting for a spot, in the
+  // order given, instead of the whole save being refused.
   const fitting = limitError
     ? promptsThatFit(plan, otherLocations, new Array<number>(adding).fill(1))
     : adding;
@@ -666,7 +661,7 @@ export type AddPromptToSetResult =
       prompt: Prompt;
       /**
        * Saved waiting for a spot, not tracked: the plan's prompt locations
-       * were full (SIMPLE_NAV on; off, a full plan is refused). Absent when
+       * were full. Absent when
        * it is tracked.
        */
       waiting?: true;
@@ -680,10 +675,9 @@ export type AddPromptToSetResult =
  * meaningless digest message (#427). Prompts are grouped under topics, so a
  * brand without one gets `no_topics` and nothing is written.
  *
- * With the plan's prompt locations full, SIMPLE_NAV keeps the prompt as
- * waiting for a spot (inactive, waiting_since now; 00535) and says so with
- * `waiting`; it doesn't start by itself when a spot frees up. Without
- * SIMPLE_NAV a full plan is refused (`plan_limit`), as before.
+ * With the plan's prompt locations full, the prompt is kept waiting for a
+ * spot (inactive, waiting_since now; 00535) and the result says so with
+ * `waiting`; it doesn't start by itself when a spot frees up.
  */
 export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptToSetResult> {
   await assertWritable();
@@ -714,9 +708,6 @@ export async function addPromptToSet(input: AddPromptInput): Promise<AddPromptTo
   // across every brand of the organization.
   const usage = await getOrgLocationUsage(supabase, orgId);
   const waiting = placeNewPrompt(plan, usage.total, 1) === 'wait';
-  if (waiting && !simpleNavEnabled()) {
-    return { error: locationLimitMessage(plan, usage.total, 1) ?? '', code: 'plan_limit' };
-  }
   const filtered = filterByPlan(plan, input.platforms, input.models ?? []);
   if (filtered.platforms.length === 0 && filtered.models.length === 0) {
     return { error: 'At least one platform or model must be selected.' };
@@ -944,9 +935,8 @@ export type ImportPromptsResult =
       importedIdx: number[];
       promptIds: string[];
       /**
-       * The saved rows waiting for a spot (SIMPLE_NAV: the plan's locations
-       * ran out); absent when none waits, as always without SIMPLE_NAV, where
-       * those rows aren't saved.
+       * The saved rows waiting for a spot (the plan's locations ran out);
+       * absent when none waits.
        */
       waitingIdx?: number[];
       analysisStarted: boolean;
@@ -962,9 +952,9 @@ export type ImportPromptsResult =
  * brand's existing ones. The imported prompts are submitted for their first
  * run in one request. A brand with no topic yet gets `no_topics`.
  *
- * Past the limit, SIMPLE_NAV saves the rest waiting for a spot (p_over_limit
- * 'wait', 00535) and lists them in `waitingIdx`; they aren't tracked, so
- * they get no first run. Without it they are skipped, as before.
+ * Past the limit, the rest are saved waiting for a spot (p_over_limit
+ * 'wait', 00535) and listed in `waitingIdx`; they aren't tracked, so they
+ * get no first run.
  */
 export async function importPrompts(
   brandId: string,
@@ -1055,7 +1045,7 @@ export async function importPrompts(
     p_prompt_set_id: promptSetId,
     p_organization_id: orgId,
     p_max_locations: plan.limits.maxPrompts,
-    p_over_limit: simpleNavEnabled() ? 'wait' : 'skip',
+    p_over_limit: 'wait',
     p_rows: clean.map((r) => ({
       idx: r.idx,
       text: r.text,
@@ -1092,8 +1082,7 @@ export type AddTopicPromptsResult =
       added: { id: string; text: string }[];
       /**
        * Saved waiting for a spot, not tracked: the plan's prompt locations
-       * ran out (SIMPLE_NAV; without it they are skipped as plan_limit). The
-       * person picks which to track once a spot is free (Tracked Prompts).
+       * ran out. The person picks which to track once a spot is free (Tracked Prompts).
        * Absent when none waits.
        */
       waiting?: { id: string; text: string }[];

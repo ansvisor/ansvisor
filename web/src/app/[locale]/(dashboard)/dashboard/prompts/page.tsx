@@ -148,7 +148,6 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { useUserRole } from '@/hooks/use-user-role';
 import { usePlanContext } from '@/components/providers/plan-provider';
-import { useSimpleNav } from '@/components/providers/simple-nav-provider';
 import { useWaitingForSpotToast } from '@/components/prompts/waiting-for-spot';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { isNoPlan } from '@/lib/billing/no-plan';
@@ -209,7 +208,6 @@ import {
 } from './prompt-sort';
 import { BulkActionBar } from './_bulk-action-bar';
 import { ColumnsPanel } from './_columns-panel';
-import { PromptLimitActions } from './_prompt-limit-actions';
 import { PlanLimitButtons } from './_plan-limit-buttons';
 import { PromptLimitDialog } from './_prompt-limit-dialog';
 import { WaitingBanner, oldestWaiting } from './_waiting-banner';
@@ -705,9 +703,7 @@ function AddPromptDialog({
   const planFull =
     !!locationQuota &&
     isPromptLimitReached(getPromptUsage(locationQuota.used, locationQuota.maxPrompts));
-  // SIMPLE_NAV: a full plan keeps the form; what is added waits for a spot.
-  const waitOverLimit = useSimpleNav();
-  const limitReached = planFull && !waitOverLimit;
+  // A full plan keeps the form; what is added waits for a spot.
   const showWaiting = useWaitingForSpotToast();
   const tWaiting = useTranslations('prompts.waiting');
   const { allowedScraperIds, allowedModelIds, visibleScrapers, visibleModels } =
@@ -859,7 +855,7 @@ function AddPromptDialog({
       <DialogContent
         className={cn(
           'max-h-[85vh] overflow-y-auto',
-          mode === 'bulk' && !limitReached ? 'sm:max-w-3xl' : 'sm:max-w-md',
+          mode === 'bulk' ? 'sm:max-w-3xl' : 'sm:max-w-md',
         )}
       >
         <DialogHeader>
@@ -871,32 +867,7 @@ function AddPromptDialog({
             Track a new prompt for this brand across the selected platforms.
           </DialogDescription>
         </DialogHeader>
-        {limitReached && locationQuota ? (
-          <>
-            <div className="flex items-start gap-2.5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900/50 dark:bg-red-950/30">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-500" />
-              <div className="space-y-1">
-                <p className="font-medium text-red-900 dark:text-red-200">
-                  You&apos;ve reached your prompt limit
-                </p>
-                <p className="text-red-800/80 dark:text-red-300/80">
-                  Your {locationQuota.planName} plan tracks up to {locationQuota.maxPrompts} active
-                  prompt locations and {locationQuota.used} are in use. Each prompt counts once per
-                  location it targets; paused prompts don&apos;t count. Pause or remove prompts or
-                  locations to free a slot, or{' '}
-                  {locationQuota.planId === 'starter' ? 'upgrade your plan' : 'contact us'} to track
-                  more.
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleClose}>
-                Close
-              </Button>
-              <PromptLimitActions planId={locationQuota.planId} />
-            </DialogFooter>
-          </>
-        ) : noTopics ? (
+        {noTopics ? (
           <>
             <TopicFirstNotice />
             <DialogFooter>
@@ -1023,11 +994,9 @@ function AddPromptDialog({
                 defaultRegion={defaultRegion}
                 quota={locationQuota}
                 limitActions={
-                  !locationQuota ? null : waitOverLimit ? (
+                  locationQuota ? (
                     <PlanLimitButtons planId={locationQuota.planId} source="import" size="sm" />
-                  ) : (
-                    <PromptLimitActions planId={locationQuota.planId} />
-                  )
+                  ) : null
                 }
                 onImported={() => {
                   PROMPT_ADD.completed();
@@ -1447,14 +1416,13 @@ export default function PromptsPage() {
   const usage = usageState.status === 'ready' ? usageState.usage : null;
   const locationQuota = useMemo(() => (usage ? locationQuotaFromUsage(usage) : null), [usage]);
   const searchParams = useSearchParams();
-  // SIMPLE_NAV: prompts saved past the plan's limit wait for a spot (00535),
-  // with their own Status, a banner, and the swap dialog (Simplify PR 16).
-  const simpleNav = useSimpleNav();
-  // Today's "Free up a spot" opens the waiting prompts, and the dialog for the oldest.
+  // Prompts saved past the plan's limit wait for a spot (00535), with their
+  // own Status, a banner, and the swap dialog. Today's "Free up a spot"
+  // opens the waiting prompts, and the dialog for the oldest.
   const [statusFilter, setStatusFilter] = useState<PromptStatusFilter>(() =>
-    simpleNav && searchParams.get('status') === 'waiting' ? 'waiting' : 'tracked',
+    searchParams.get('status') === 'waiting' ? 'waiting' : 'tracked',
   );
-  const swapAsked = useRef(simpleNav && searchParams.get('swap') === '1');
+  const swapAsked = useRef(searchParams.get('swap') === '1');
   const [swapFor, setSwapFor] = useState<string | null>(null);
   // On /dashboard/prompts/{tracked,suggestions,topics,fan-outs,insights} the route
   // names the view (PROMPT-001); ?tab= / ?view= are the older links' shape.
@@ -1657,12 +1625,7 @@ export default function PromptsPage() {
         setVolumes(page.volumes);
         if (page.quota) setQuota(page.quota);
         const prompts = page.promptSets.flatMap((ps) => ps.prompts);
-        // Without SIMPLE_NAV a prompt waiting for a spot reads as paused, as before.
-        setAllPrompts(
-          simpleNav
-            ? prompts
-            : prompts.map((p) => (p.waitingSince ? { ...p, waitingSince: null } : p)),
-        );
+        setAllPrompts(prompts);
         setVisibility(page.visibility);
         setPositions(page.positions);
         // A read-only workspace's volumes are refused (402): their columns
@@ -1680,7 +1643,7 @@ export default function PromptsPage() {
         if (!isCancelled?.()) setLoading(false);
       }
     },
-    [activeBrandId, range, regionFilter, tPrompts, isLocked, simpleNav],
+    [activeBrandId, range, regionFilter, tPrompts, isLocked],
   );
 
   useEffect(() => {
@@ -1702,7 +1665,7 @@ export default function PromptsPage() {
   }, [loadData]);
 
   // The swap dialog is for those who can act, on a plan that hasn't ended.
-  const canSwap = simpleNav && canManage && !isLocked;
+  const canSwap = canManage && !isLocked;
   const waitingFirst = useMemo(() => oldestWaiting(allPrompts), [allPrompts]);
   // Opened with ?swap=1 (Today's "Free up a spot"): once the prompts are in,
   // the dialog for the prompt waiting longest. The link's words then leave the URL.
@@ -2269,17 +2232,14 @@ export default function PromptsPage() {
                   brandId={activeBrandId}
                   onAccepted={reloadAfterChange}
                   onAddTopic={addTopicInPlace}
-                  planId={locationQuota?.planId}
                   limitActions={
-                    !locationQuota ? null : simpleNav ? (
+                    locationQuota ? (
                       <PlanLimitButtons
                         planId={locationQuota.planId}
                         source="suggestions"
                         size="sm"
                       />
-                    ) : (
-                      <PromptLimitActions planId={locationQuota.planId} />
-                    )
+                    ) : null
                   }
                 />
               </>
@@ -2297,7 +2257,7 @@ export default function PromptsPage() {
                   onRetry={retryUsage}
                 />
               )}
-              {simpleNav && !loading && waitingFirst && (
+              {!loading && waitingFirst && (
                 <WaitingBanner
                   prompts={allPrompts}
                   quota={locationQuota}
@@ -3036,10 +2996,8 @@ const STATUS_BADGE: Record<PromptStatus, string> = {
   waiting: 'border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-300',
 };
 
-const STATUS_FILTERS: PromptStatusFilter[] = ['tracked', 'active', 'new', 'paused', 'all'];
-
-/** With SIMPLE_NAV, the prompts waiting for a spot have a filter of their own. */
-const STATUS_FILTERS_WAITING: PromptStatusFilter[] = [
+/** The Status filter: the prompts waiting for a spot have one of their own. */
+const STATUS_FILTERS: PromptStatusFilter[] = [
   'tracked',
   'active',
   'new',
@@ -3107,7 +3065,7 @@ function AllPromptsTab({
   statusFilter: PromptStatusFilter;
   onStatusFilterChange: (filter: PromptStatusFilter) => void;
   /**
-   * Opens the swap dialog for a prompt that doesn't fit the plan (SIMPLE_NAV):
+   * Opens the swap dialog for a prompt that doesn't fit the plan:
    * tracking a waiting one or resuming a paused one past the limit. Undefined
    * keeps the refusal's toast (flag off, members, a plan that ended).
    */
@@ -3132,8 +3090,6 @@ function AllPromptsTab({
   const tPerformance = useTranslations('prompts.performance');
   const tStatus = useTranslations('prompts.status');
   const tWaiting = useTranslations('prompts.waiting');
-  const simpleNav = useSimpleNav();
-  const statusFilters = simpleNav ? STATUS_FILTERS_WAITING : STATUS_FILTERS;
   const statusLabel = (value: PromptStatusFilter) =>
     value === 'waiting' ? tWaiting('status') : tStatus(value);
   const tColumns = useTranslations('prompts.columns');
@@ -3348,7 +3304,7 @@ function AllPromptsTab({
       try {
         const result = await setPromptActive(prompt.id, !prompt.isActive);
         if ('error' in result) {
-          // SIMPLE_NAV: past the limit, the swap dialog offers what to pause for it.
+          // Past the limit, the swap dialog offers what to pause for it.
           if (result.code === 'plan_limit' && onSwap) {
             onSwap(prompt);
             return;
@@ -4124,17 +4080,17 @@ function AllPromptsTab({
             <Select
               value={statusFilter}
               onValueChange={(v) => onStatusFilterChange((v as PromptStatusFilter | null) ?? 'all')}
-              items={statusFilters.map((value) => ({ value, label: statusLabel(value) }))}
+              items={STATUS_FILTERS.map((value) => ({ value, label: statusLabel(value) }))}
             >
               <SelectTrigger
-                // "Waiting for a spot" needs the room (SIMPLE_NAV).
-                className={cn('h-8 text-xs', simpleNav ? 'w-40' : 'w-32')}
+                // "Waiting for a spot" needs the room.
+                className="h-8 w-40 text-xs"
                 aria-label={tStatus('label')}
               >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {statusFilters.map((value) => (
+                {STATUS_FILTERS.map((value) => (
                   <SelectItem key={value} value={value}>
                     {statusLabel(value)}
                   </SelectItem>

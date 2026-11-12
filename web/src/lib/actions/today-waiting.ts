@@ -32,7 +32,7 @@ const settled = <T>(result: PromiseSettledResult<T>): T | null =>
   result.status === 'fulfilled' ? result.value : null;
 
 /**
- * "Waiting for you" on Action Center › Today (SIMPLE_NAV), as the signed-in
+ * "Waiting for you" on Action Center › Today, as the signed-in
  * person (RLS): the brand's drafts in review, its open actions due today or
  * before that are theirs or no one's, its open reminders (read by kind, so
  * the weekly Business Hub reminder shows once it exists), and for admins

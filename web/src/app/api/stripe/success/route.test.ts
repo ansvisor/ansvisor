@@ -122,7 +122,7 @@ describe('GET /api/stripe/success', () => {
     });
     expect(db.eq).toHaveBeenCalledWith('id', 'org1');
     expect(align).toHaveBeenCalledWith('org1', 'starter');
-    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
+    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/today$/);
   });
 
   it('reads an unexpanded subscription, and leaves the period end alone without one', async () => {
@@ -194,7 +194,7 @@ describe('GET /api/stripe/success, the first run', () => {
     expect(api).not.toHaveBeenCalled();
     // Nor is the demo brand hidden: no plan was bought.
     expect(brands.update).not.toHaveBeenCalled();
-    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
+    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/today$/);
   });
 
   it('starts nothing for a checkout that is not paid', async () => {
@@ -216,7 +216,7 @@ describe('GET /api/stripe/success, the first run', () => {
 
     const res = await back();
 
-    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
+    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/today$/);
   });
 });
 
@@ -235,7 +235,7 @@ describe('GET /api/stripe/success and the demo brand', () => {
       ['eq', 'is_demo', true],
       ['is', 'demo_hidden_at', null],
     ]);
-    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
+    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/today$/);
   });
 
   it('opens the dashboard all the same when the demo brand could not be hidden', async () => {
@@ -247,13 +247,13 @@ describe('GET /api/stripe/success and the demo brand', () => {
       subscription: subscription(),
     });
     const res = await back();
-    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/actions$/);
+    expect(res.headers.get('location')).toMatch(/\/dashboard\/action-center\/today$/);
   });
 });
 
 /**
- * Where the person lands (owner decisions 2026-11-06 and 2026-11-09): Chat
- * Home while the new Chat is on, whatever the plan; else the Action Center.
+ * Where the person lands (owner decisions 2026-11-11): Action Center ›
+ * Today, whatever the plan and whether the new Chat is on.
  */
 describe('GET /api/stripe/success, the start page', () => {
   const checkout = (status: string, planId = 'starter') => ({
@@ -275,29 +275,29 @@ describe('GET /api/stripe/success, the start page', () => {
     api.mockResolvedValue(Response.json({ success: true, jobId: 'job-s', created: true }));
   });
 
-  it('opens Chat Home for the free trial, with the first run carried along', async () => {
+  it('opens Today for the free trial, with the first run carried along', async () => {
     stripeApi.retrieveSession.mockResolvedValue(checkout('trialing'));
     const res = await back();
     const location = new URL(res.headers.get('location')!);
-    expect(location.pathname).toBe('/dashboard/chat');
+    expect(location.pathname).toBe('/dashboard/action-center/today');
     expect(location.searchParams.get('jobId')).toBe('job-s');
   });
 
-  it('opens Chat Home for a plan bought without a trial, and an Enterprise trial, too', async () => {
+  it('opens Today for a plan bought without a trial, and an Enterprise trial, too', async () => {
     stripeApi.retrieveSession.mockResolvedValue(checkout('active'));
     let res = await back();
-    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/chat');
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/action-center/today');
 
     stripeApi.retrieveSession.mockResolvedValue(checkout('trialing', 'enterprise'));
     res = await back();
-    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/chat');
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/action-center/today');
   });
 
-  it('keeps the Action Center while the new Chat is off', async () => {
+  it('opens Today while the new Chat is off, too', async () => {
     vi.stubEnv('CHAT_AGENTIC', 'false');
     stripeApi.retrieveSession.mockResolvedValue(checkout('trialing'));
     const res = await back();
-    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/action-center/actions');
+    expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard/action-center/today');
   });
 
   it('leaves it to /dashboard without a checkout, or when the plan was not written', async () => {
@@ -309,46 +309,5 @@ describe('GET /api/stripe/success, the start page', () => {
     stripeApi.retrieveSession.mockRejectedValue(new Error('stripe down'));
     res = await back();
     expect(new URL(res.headers.get('location')!).pathname).toBe('/dashboard');
-  });
-});
-
-/** The simplified layout (SIMPLE_NAV): the new buyer lands on Action Center › Today too. */
-describe('GET /api/stripe/success with SIMPLE_NAV', () => {
-  const checkout = (status: string) => ({
-    payment_status: 'paid',
-    status: 'complete',
-    customer: 'cus1',
-    created: 1_800_000_000,
-    subscription: { ...subscription(), status },
-  });
-
-  beforeEach(() => {
-    vi.stubEnv('NEXT_PUBLIC_IS_CLOUD', 'true');
-    vi.stubEnv('CHAT_AGENTIC', 'true');
-    vi.stubEnv('SIMPLE_NAV', 'true');
-    db.brand = { id: 'brand1' };
-    api.mockResolvedValue(Response.json({ success: true, jobId: 'job-s', created: true }));
-  });
-
-  it('opens Today for the free trial or a plan, the first run carried along', async () => {
-    stripeApi.retrieveSession.mockResolvedValue(checkout('trialing'));
-    const location = new URL((await back()).headers.get('location')!);
-    expect(location.pathname).toBe('/dashboard/action-center/today');
-    expect(location.searchParams.get('jobId')).toBe('job-s');
-    stripeApi.retrieveSession.mockResolvedValue(checkout('active'));
-    expect(new URL((await back()).headers.get('location')!).pathname).toBe(
-      '/dashboard/action-center/today',
-    );
-    vi.stubEnv('CHAT_AGENTIC', 'false');
-    stripeApi.retrieveSession.mockResolvedValue(checkout('trialing'));
-    expect(new URL((await back()).headers.get('location')!).pathname).toBe(
-      '/dashboard/action-center/today',
-    );
-  });
-
-  it('opens Chat Home as before with it off', async () => {
-    vi.stubEnv('SIMPLE_NAV', 'false');
-    stripeApi.retrieveSession.mockResolvedValue(checkout('trialing'));
-    expect(new URL((await back()).headers.get('location')!).pathname).toBe('/dashboard/chat');
   });
 });

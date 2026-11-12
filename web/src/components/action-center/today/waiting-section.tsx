@@ -6,7 +6,7 @@ import { Link } from '@/i18n/navigation';
 import { track } from '@/lib/analytics';
 import { actionTexts, taskText } from '@/lib/action-center/display';
 import { isReminderKind } from '@/lib/action-center/focus';
-import { REVIEW_TAB } from '@/lib/action-center/tabs';
+import { ACTION_CENTER_REVIEW } from '@/lib/action-center/tabs';
 import { waitingRows, type WaitingAction, type WaitingRow } from '@/lib/action-center/waiting';
 import { getTodayWaiting } from '@/lib/actions/today-waiting';
 import type { FocusCard } from '@/lib/actions/today-focus';
@@ -38,7 +38,7 @@ async function readAgentsWaiting(brandId: string): Promise<{ id: string; title: 
 }
 
 /**
- * Waiting for you on Action Center › Today (SIMPLE_NAV): the brand's agent
+ * Waiting for you on Action Center › Today: the brand's agent
  * runs and drafts waiting for an OK, tasks due, weekly reminders, Needs
  * review, prompts waiting for a spot and new prompt ideas, each for a role
  * that can act on it and only while its section is on the person's menu
@@ -213,7 +213,7 @@ function WaitingActionLine({ row }: { row: Exclude<WaitingRow, { type: 'prompts'
         return [
           t('review.line', { count: row.count }),
           t('review.open'),
-          REVIEW_TAB.href,
+          ACTION_CENTER_REVIEW,
           'today.needsReview',
         ];
       case 'ideas':

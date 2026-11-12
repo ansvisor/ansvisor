@@ -4,8 +4,8 @@ route: /dashboard/settings/account
 keywords: [time zone, timezone, my time zone, automatic time zone, wrong time, schedule time zone]
 synonyms: [change my clock, times are off, local time, set my region time]
 plan: all
-updated: 2026-11-03
-last_checked: 2026-11-03
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -22,7 +22,7 @@ A fixed time zone helps when you travel, or when your browser's time zone isn't 
 ## What uses it
 
 - **New scheduled jobs**: the schedule card's **When** line shows your time zone, and the job is made on it.
-- **New agent schedules**: a **Schedule** trigger you add to an agent in **Agent Center** starts on your time zone, shown beside its time.
+- **New agent schedules**: a **Schedule** trigger you add to an agent in **Action Center › Agents** starts on your time zone, shown beside its time.
 - **Chat's dates and times**: when an answer was made and how old its data is, from your next message on.
 - **Daily suggestions**: they arrive in your morning, in this time zone.
 

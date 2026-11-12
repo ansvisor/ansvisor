@@ -265,33 +265,30 @@ const waiting = {
 let chats: Record<string, unknown>[] = [];
 
 const setUp = (over: Partial<GettingStartedFacts> = {}) =>
-  buildGettingStarted(
-    {
-      startedAt: '2026-10-20T10:00:00Z',
-      dismissedAt: null,
-      confirmedAt: '2026-10-20T10:00:00Z',
-      records: {},
-      recordedAt: {},
-      kpiSetupAt: '2026-10-01T00:00:00Z',
-      competitors: 4,
-      topicPrompts: [3, 3, 3],
-      gsc: false,
-      ga: false,
-      firstAnswer: true,
-      firstVisit: false,
-      dataSuggestions: 0,
-      dataTracked: 0,
-      contentSuggestions: 0,
-      contentPicked: 0,
-      contentCreated: 0,
-      contentRecent: 0,
-      audits: 0,
-      draftsCreated: 0,
-      draftsOptimized: 0,
-      ...over,
-    },
-    { setupOnly: true },
-  );
+  buildGettingStarted({
+    startedAt: '2026-10-20T10:00:00Z',
+    dismissedAt: null,
+    confirmedAt: '2026-10-20T10:00:00Z',
+    records: {},
+    recordedAt: {},
+    kpiSetupAt: '2026-10-01T00:00:00Z',
+    competitors: 4,
+    topicPrompts: [3, 3, 3],
+    gsc: false,
+    ga: false,
+    firstAnswer: true,
+    firstVisit: false,
+    dataSuggestions: 0,
+    dataTracked: 0,
+    contentSuggestions: 0,
+    contentPicked: 0,
+    contentCreated: 0,
+    contentRecent: 0,
+    audits: 0,
+    draftsCreated: 0,
+    draftsOptimized: 0,
+    ...over,
+  });
 
 let container: HTMLDivElement;
 let root: Root;
@@ -370,7 +367,6 @@ afterEach(() => {
 
 let upgrade: UpgradeDialogState | null = null;
 async function draw() {
-  vi.stubEnv('SIMPLE_NAV', 'true');
   const page = ActionCenterTodayPage();
   await act(async () => {
     root.render(
@@ -387,15 +383,7 @@ const button = (label: string) =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === label);
 
 describe('Action Center › Today', () => {
-  it('is not found while SIMPLE_NAV is off, as production leaves it', () => {
-    vi.stubEnv('SIMPLE_NAV', undefined);
-    expect(() => ActionCenterTodayPage()).toThrow('NEXT_NOT_FOUND');
-    vi.stubEnv('SIMPLE_NAV', 'false');
-    expect(() => ActionCenterTodayPage()).toThrow('NEXT_NOT_FOUND');
-  });
-
-  it('shows Today with SIMPLE_NAV on', () => {
-    vi.stubEnv('SIMPLE_NAV', 'true');
+  it('shows Today', () => {
     const page = ActionCenterTodayPage();
     expect(isValidElement(page) && page.type).toBe(TodayPage);
   });

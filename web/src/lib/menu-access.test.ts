@@ -50,12 +50,11 @@ describe('menuSectionOf', () => {
 });
 
 describe('MENU_SECTIONS', () => {
-  // Analytics before Execution (owner, 2026-11-09): Action Center opens
-  // Execution. Ads (ADS-01) closes Analytics, after AI Referral Traffic.
-  it('lists the left menu, Chat and Agent Center first, Analytics, then Execution from Action Center', () => {
-    expect(MENU_SECTIONS.slice(0, 3)).toEqual(['agent', 'agents', 'insights']);
+  // Chat, the Action Center and its Agents first, then Analytics; Ads
+  // (ADS-01) closes Analytics, after AI Referral Traffic.
+  it('lists the left menu, Chat, the Action Center and Agents first, then Analytics', () => {
+    expect(MENU_SECTIONS.slice(0, 3)).toEqual(['agent', ALWAYS_ON_SECTION, 'agents']);
     expect(MENU_SECTIONS.indexOf('ads')).toBe(MENU_SECTIONS.indexOf('traffic') + 1);
-    expect(MENU_SECTIONS.indexOf(ALWAYS_ON_SECTION)).toBe(MENU_SECTIONS.indexOf('ads') + 1);
     expect(MENU_SECTIONS).toEqual(
       expect.arrayContaining(['agent', 'content', 'audit', 'insights', 'shopping', 'reports']),
     );
@@ -71,7 +70,7 @@ describe('MENU_SECTIONS', () => {
       'mentions',
       'citations',
       'shopping',
-      'prompts',
+      'traffic',
     ]);
     expect(cleanMenuSections(['citations', 'mentions'])).toEqual(['mentions', 'citations']);
     // Product Visibility keeps its name and icon where the sections are listed,
@@ -313,9 +312,9 @@ describe('workAreaSections', () => {
 describe('hiddenWithWorkAreas', () => {
   it('keeps what the admin takes off and narrows the rest to the areas', () => {
     expect(hiddenWithWorkAreas(['mentions'], ['brand'])).toEqual([
+      'prompts',
       'mentions',
       'shopping',
-      'prompts',
       'traffic',
       'ads',
       'content',
@@ -337,7 +336,7 @@ describe('menuOfProfile', () => {
 
   it('builds the menu from the profile and the role’s row', () => {
     expect(menuOfProfile(profile, ['citations'])).toEqual({
-      hidden: ['citations', 'shopping', 'prompts', 'traffic', 'ads', 'content', 'audit'],
+      hidden: ['prompts', 'citations', 'shopping', 'traffic', 'ads', 'content', 'audit'],
       hiddenByAdmin: ['citations'],
       workAreas: ['brand'],
       canManageMenus: true,
@@ -375,8 +374,8 @@ describe('menuOfProfile', () => {
   it('narrows the menu again once work areas are picked in Settings after the reset', () => {
     const repicked = { ...profile, work_areas_asked_at: PICKED_AT };
     expect(menuOfProfile(repicked, []).hidden).toEqual([
-      'shopping',
       'prompts',
+      'shopping',
       'traffic',
       'ads',
       'content',

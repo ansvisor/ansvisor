@@ -4,8 +4,8 @@ route: /dashboard/prompts/tracked
 keywords: [add prompt, bulk import, track prompts, new prompt]
 synonyms: [add a question, add queries, track a search]
 plan: all
-updated: 2026-10-31
-last_checked: 2026-10-31
+updated: 2026-11-11
+last_checked: 2026-11-11
 owner: Cihan
 app_version: 0.3.0
 approved: true
@@ -23,7 +23,7 @@ On **Prompts › Tracked Prompts**, click **Add prompt**. On the **Single** tab,
 
 ## Add many at once
 
-In the same dialog, open the **Bulk import** tab and upload a one-column Excel or CSV file of prompts. A preview marks each row **Valid**, **Duplicate**, **Error** or **Over plan limit**, and the valid rows that fit are imported. They get the platforms and models picked in the dialog and the brand's location. Set their topic afterwards from each prompt's **Edit**, and add locations with **Track in more locations**.
+In the same dialog, open the **Bulk import** tab and upload a one-column Excel or CSV file of prompts. A preview marks each row **Valid**, **Duplicate** or **Error**, and the valid rows are imported; past your plan's limit, the rest are saved as **Waiting for a spot**. They get the platforms and models picked in the dialog and the brand's location. Set their topic afterwards from each prompt's **Edit**, and add locations with **Track in more locations**.
 
 ## Add from suggestions
 
@@ -35,4 +35,4 @@ A prompt has no results until it is first asked. **Add prompt** and **Bulk impor
 
 ## What counts on your plan
 
-Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor adds the prompts that fit and says how many weren't added. Once the limit is reached, it adds nothing until you pause or remove prompts.
+Every prompt counts on your plan's prompt limit, once in each location it is tracked in. Paused prompts don't count. If adding would pass the limit, Ansvisor tracks the prompts that fit and saves the rest as **Waiting for a spot**: kept, but not tracked and not counted. A waiting prompt never starts by itself; in **Tracked Prompts**, admins and managers can **Free up a spot** to swap one in.

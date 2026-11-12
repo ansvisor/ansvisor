@@ -14,7 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import type { TodayLoad } from './use-today';
 
 /**
- * Today's parts that read nothing of their own (SIMPLE_NAV): the frame each
+ * Today's parts that read nothing of their own: the frame each
  * part sits in, the loop strip, Where you stand and the Ask Chat box. The
  * page reads, and hands each its answer.
  */

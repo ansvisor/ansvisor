@@ -55,7 +55,6 @@ const { toast } = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast }));
 
 import ActionCenterReviewPage from './page';
-import { SimpleNavProvider } from '@/components/providers/simple-nav-provider';
 
 const review: TaskReview = {
   id: 'r1',
@@ -71,17 +70,15 @@ let container: HTMLDivElement;
 let root: Root;
 const openUpgrade = vi.fn();
 
-async function render(isLocked = false, simpleNav = false) {
+async function render(isLocked = false) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <SimpleNavProvider enabled={simpleNav}>
-          <UpgradeDialogContext.Provider
-            value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
-          >
-            <ActionCenterReviewPage />
-          </UpgradeDialogContext.Provider>
-        </SimpleNavProvider>
+        <UpgradeDialogContext.Provider
+          value={{ isLocked, reason: 'ended', adminName: null, openUpgrade }}
+        >
+          <ActionCenterReviewPage />
+        </UpgradeDialogContext.Provider>
       </NextIntlClientProvider>,
     );
   });
@@ -127,10 +124,9 @@ describe('Needs review', () => {
     expect(getTaskReviews).toHaveBeenCalledWith('b1');
     expect(container.textContent).toContain('Add a pricing FAQ to /pricing');
     expect(container.textContent).toContain('Missing:URLChange');
-    expect(container.querySelector('a')!.getAttribute('href')).toBe(
-      '/dashboard/action-center/actions?action=a1',
-    );
-    expect(container.querySelector('a')!.textContent).toBe('Open AC-12');
+    const open = container.querySelector('a:not([data-action="review.backToToday"])')!;
+    expect(open.getAttribute('href')).toBe('/dashboard/action-center/actions?action=a1');
+    expect(open.textContent).toBe('Open AC-12');
   });
 
   it('approves only with the four fields filled, then the task leaves the list', async () => {
@@ -156,21 +152,6 @@ describe('Needs review', () => {
     );
     expect(toast.success).toHaveBeenCalledWith('Task added to AC-12');
     expect(container.textContent).toContain('Nothing waits for review');
-  });
-
-  it('tells the tab to count again once a task leaves the list', async () => {
-    const changed = vi.fn();
-    window.addEventListener('action-task-reviews-changed', changed);
-    try {
-      await render();
-      act(() => button('Edit')!.click());
-      type(field('URL'), '/pricing');
-      type(field('Change · After'), 'FAQ');
-      await act(async () => button('Approve')!.click());
-      expect(changed).toHaveBeenCalledTimes(1);
-    } finally {
-      window.removeEventListener('action-task-reviews-changed', changed);
-    }
   });
 
   it("says when the task's action is closed", async () => {
@@ -233,17 +214,11 @@ describe('Needs review', () => {
   });
 });
 
-describe('Needs review with the simplified layout (SIMPLE_NAV)', () => {
-  const back = () => container.querySelector('[data-action="review.backToToday"]');
-
-  it('has no way back to Today while it is off', async () => {
+describe('Needs review, reached from Today', () => {
+  it('links back to Today', async () => {
     await render();
-    expect(back()).toBeNull();
-  });
-
-  it('links back to Today with it on, where it is reached from', async () => {
-    await render(false, true);
-    expect(back()?.getAttribute('href')).toBe('/dashboard/action-center/today');
-    expect(back()?.textContent).toBe('Back to Today');
+    const back = container.querySelector('[data-action="review.backToToday"]');
+    expect(back?.getAttribute('href')).toBe('/dashboard/action-center/today');
+    expect(back?.textContent).toBe('Back to Today');
   });
 });

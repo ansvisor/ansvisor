@@ -15,15 +15,15 @@ Everyone starts on **Everything**: every section of the left menu their role sho
 
 ## The work areas
 
-- **Founders & leaders**: Action Center, Chat, Agent Center, Visibility, Mentions, AI Referral Traffic, Reports, Competitors.
-- **AEO/GEO & Audit**: Action Center, Agent Center, Content, Audit, Citations, AI Referral Traffic, Reports.
-- **Content**: Action Center, Chat, Agent Center, Content, Prompts, Citations, Reports.
-- **Brand & PR**: Action Center, Chat, Agent Center, Visibility, Mentions, Citations, Reports, Competitors.
-- **Growth**: Action Center, Chat, Agent Center, Visibility, Prompts, Citations, AI Referral Traffic, Reports, Competitors.
-- **Product Development**: Action Center, Chat, Agent Center, Visibility, Prompts, Mentions, Product Visibility, Reports.
-- **Business Development**: Action Center, Chat, Agent Center, Visibility, Prompts, Mentions, Citations, Reports, Competitors.
-- **Developers**: Action Center, Agent Center, Audit, Prompts, Citations, AI Referral Traffic, Reports.
-- **Analytics**: Action Center, Agent Center, Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors.
+- **Founders & leaders**: Action Center, Agents, Chat, Visibility, Mentions, AI Referral Traffic, Reports, Competitors.
+- **AEO/GEO & Audit**: Action Center, Agents, Content, Audit, Citations, AI Referral Traffic, Reports.
+- **Content**: Action Center, Agents, Chat, Content, Prompts, Citations, Reports.
+- **Brand & PR**: Action Center, Agents, Chat, Visibility, Mentions, Citations, Reports, Competitors.
+- **Growth**: Action Center, Agents, Chat, Visibility, Prompts, Citations, AI Referral Traffic, Reports, Competitors.
+- **Product Development**: Action Center, Agents, Chat, Visibility, Prompts, Mentions, Product Visibility, Reports.
+- **Business Development**: Action Center, Agents, Chat, Visibility, Prompts, Mentions, Citations, Reports, Competitors.
+- **Developers**: Action Center, Agents, Audit, Prompts, Citations, AI Referral Traffic, Reports.
+- **Analytics**: Action Center, Agents, Visibility, Prompts, Mentions, Citations, Product Visibility, AI Referral Traffic, Reports, Competitors.
 
 ## Where you pick them
 

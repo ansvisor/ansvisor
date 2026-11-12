@@ -1,63 +1,50 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACTION_CENTER_REVIEW,
   ACTION_CENTER_TABS,
   ACTION_CENTER_TODAY,
-  REVIEW_TAB,
-  SIMPLE_TABS,
+  actionCenterTabOf,
   agentsWaitingOn,
-  simpleTabOf,
 } from './tabs';
 
-/**
- * The Action Center's tabs: as they were without SIMPLE_NAV; Today, Actions,
- * Signals, Agents and History with it, KPIs a History view.
- */
+/** The Action Center's tabs: Today, Actions, Signals, Agents and History, KPIs a History view. */
 
 describe('the Action Center tabs', () => {
-  it('stay Actions, Signals, KPIs and History, with Needs review, without SIMPLE_NAV', () => {
+  it('are Today, Actions, Signals, Agents and History, Agents at Agent Center’s address', () => {
     expect(ACTION_CENTER_TABS.map((tab) => tab.key)).toEqual([
-      'actions',
-      'signals',
-      'kpis',
-      'history',
-    ]);
-    expect(REVIEW_TAB.href).toBe('/dashboard/action-center/review');
-  });
-
-  it('are Today, Actions, Signals, Agents and History with it, Agents at Agent Center’s address', () => {
-    expect(SIMPLE_TABS.map((tab) => tab.key)).toEqual([
       'today',
       'actions',
       'signals',
       'agents',
       'history',
     ]);
-    expect(SIMPLE_TABS[0].href).toBe(ACTION_CENTER_TODAY);
-    expect(SIMPLE_TABS.find((tab) => tab.key === 'agents')?.href).toBe('/dashboard/agents');
+    expect(ACTION_CENTER_TABS[0].href).toBe(ACTION_CENTER_TODAY);
+    expect(ACTION_CENTER_TABS.find((tab) => tab.key === 'agents')?.href).toBe('/dashboard/agents');
+    expect(ACTION_CENTER_REVIEW).toBe('/dashboard/action-center/review');
   });
 });
 
-describe('simpleTabOf', () => {
+describe('actionCenterTabOf', () => {
   it('names the tab a page is under, the pages under it included', () => {
-    expect(simpleTabOf('/dashboard/action-center/today')).toBe('today');
-    expect(simpleTabOf('/dashboard/action-center/actions')).toBe('actions');
-    expect(simpleTabOf('/dashboard/action-center/actions/AC-12')).toBe('actions');
-    expect(simpleTabOf('/dashboard/action-center/signals')).toBe('signals');
-    expect(simpleTabOf('/dashboard/agents')).toBe('agents');
-    expect(simpleTabOf('/dashboard/agents/new')).toBe('agents');
-    expect(simpleTabOf('/dashboard/agents/abc/edit')).toBe('agents');
-    expect(simpleTabOf('/dashboard/action-center/history')).toBe('history');
+    expect(actionCenterTabOf('/dashboard/action-center/today')).toBe('today');
+    expect(actionCenterTabOf('/dashboard/action-center/actions')).toBe('actions');
+    expect(actionCenterTabOf('/dashboard/action-center/actions/AC-12')).toBe('actions');
+    expect(actionCenterTabOf('/dashboard/action-center/signals')).toBe('signals');
+    expect(actionCenterTabOf('/dashboard/agents')).toBe('agents');
+    expect(actionCenterTabOf('/dashboard/agents/new')).toBe('agents');
+    expect(actionCenterTabOf('/dashboard/agents/abc/edit')).toBe('agents');
+    expect(actionCenterTabOf('/dashboard/action-center/history')).toBe('history');
   });
 
   it('shows History on KPIs, one of its views', () => {
-    expect(simpleTabOf('/dashboard/action-center/kpis')).toBe('history');
+    expect(actionCenterTabOf('/dashboard/action-center/kpis')).toBe('history');
   });
 
   it('shows none on Needs review or off the Action Center', () => {
-    expect(simpleTabOf('/dashboard/action-center/review')).toBeNull();
-    expect(simpleTabOf('/dashboard/agent')).toBeNull();
-    expect(simpleTabOf('/dashboard/agentsx')).toBeNull();
-    expect(simpleTabOf('/dashboard/insights')).toBeNull();
+    expect(actionCenterTabOf('/dashboard/action-center/review')).toBeNull();
+    expect(actionCenterTabOf('/dashboard/agent')).toBeNull();
+    expect(actionCenterTabOf('/dashboard/agentsx')).toBeNull();
+    expect(actionCenterTabOf('/dashboard/insights')).toBeNull();
   });
 });
 

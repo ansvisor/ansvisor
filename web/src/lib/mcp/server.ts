@@ -90,7 +90,6 @@ import {
   getShoppingShelfFor,
 } from './product-visibility';
 import { getPromptLocationsFor } from './prompt-locations';
-import { simpleNavEnabled } from '@/lib/simple-nav/flag';
 import {
   approveTaskReviewFor,
   dismissTaskReviewFor,
@@ -450,9 +449,7 @@ export function createMcpServer(auth: McpAuthContext): McpServer {
       title: 'Accept a prompt suggestion',
       description:
         "Accept one pending prompt suggestion by creating a tracked prompt with the brand's default platform/model settings and marking the suggestion added. This consumes one active prompt location and respects the organization's plan limit and allowed engines. " +
-        (simpleNavEnabled()
-          ? "When the plan's prompt locations are all in use, the prompt is saved waiting for a spot instead (waiting_for_spot: true): it isn't tracked and doesn't start by itself; the person frees a spot or upgrades, then tracks it in Ansvisor. "
-          : '') +
+        "When the plan's prompt locations are all in use, the prompt is saved waiting for a spot instead (waiting_for_spot: true): it isn't tracked and doesn't start by itself; the person frees a spot or upgrades, then tracks it in Ansvisor. " +
         'Prompts are grouped under topics: a brand with no topic yet is refused until one is added (accept_topic_suggestion). Only fire on explicit user intent for a specific suggestion from list_prompt_suggestions, never as part of an exploratory query. Accepting the same suggestion twice does not create a duplicate prompt. Needs an admin or a manager (get_me returns the role).',
       inputSchema: {
         suggestion_id: relaxedUuid.describe(

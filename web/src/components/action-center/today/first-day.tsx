@@ -26,7 +26,7 @@ const TRACKED_HREF = '/dashboard/prompts/tracked';
 const WAIT_STEPS = ['gsc', 'kpis'] as const;
 
 /**
- * Today on a brand's first day (SIMPLE_NAV, mockup Bugun-ilk-gun), before
+ * Today on a brand's first day (mockup Bugun-ilk-gun), before
  * its first run is stamped: "Check the prompts we track for you" (remove
  * any that don't fit, add one, Looks good), "Worth tracking too" from the
  * suggestions already stored for the brand (hidden when there are none),

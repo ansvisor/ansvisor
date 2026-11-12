@@ -2,7 +2,7 @@ import type { ActionItem } from '@/lib/actions/action-center';
 import type { TodayStep } from '@/lib/action-center/today';
 
 /**
- * Today's "Waiting for you" (SIMPLE_NAV, simplification plan PR 9): what
+ * Today's "Waiting for you" (simplification plan PR 9): what
  * waits on the person, in order, each row only for a role that can act on
  * it and only while its section is on the person's menu:
  *

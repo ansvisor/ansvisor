@@ -82,7 +82,6 @@ const updates = () =>
   fake.db.log.filter(([table, kind]) => table === 'prompts' && kind === 'update');
 
 beforeEach(() => {
-  vi.stubEnv('SIMPLE_NAV', 'true');
   fake.maxPrompts = 4;
   fake.demand = {};
   fake.answers = {};
@@ -272,11 +271,8 @@ describe('swapPrompts', () => {
     expect(updates()).toHaveLength(0);
   });
 
-  it('is for admins and managers, with SIMPLE_NAV on', async () => {
+  it('is for admins and managers', async () => {
     (fake.db.tables.profiles as Row[])[0].role = 'analyst';
-    expect(await swapPrompts('w', ['b'])).toMatchObject({ ok: false, code: 'not_allowed' });
-    (fake.db.tables.profiles as Row[])[0].role = 'admin';
-    vi.stubEnv('SIMPLE_NAV', 'false');
     expect(await swapPrompts('w', ['b'])).toMatchObject({ ok: false, code: 'not_allowed' });
     expect(updates()).toHaveLength(0);
   });

@@ -6,8 +6,8 @@ import { NIGHTLY_AREAS, isDotArea, type DotArea, type MenuState } from '@/lib/me
 import { isoTime, isUuid, readNavSeen } from '@/lib/user-brand-state';
 
 /**
- * What the simplified menu's dots and the Action Center's count compare
- * (SIMPLE_NAV; lib/menu-dots.ts), in one read per brand: run on a brand
+ * What the menu's dots and the Action Center's count compare
+ * (lib/menu-dots.ts), in one read per brand: run on a brand
  * switch and at most every 5 minutes while the person moves around, never
  * at night. A handful of indexed single-row reads in parallel, as the
  * person (RLS), each only for an area the person's menu shows:

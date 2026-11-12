@@ -72,8 +72,8 @@ export function contextChips(
 /**
  * The menu entry a page is under, by the longest route that holds it (a
  * topic's page is under Topics): its title, for the menu's translations;
- * null off the menu (Settings, Brands). Of the menu shown (`nav`, navFor):
- * Today and Agents are the Action Center's entries in the simplified one.
+ * null off the menu (Settings, Brands). Today and Agents are the Action
+ * Center's entries.
  */
 export function menuTitleOf(pathname: string, nav: NavGroup[] = dashboardNav): string | null {
   let best: { title: string; length: number } | null = null;

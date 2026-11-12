@@ -11,8 +11,7 @@ import { useUpgradeWallShown } from '@/lib/friction-events';
 const BILLING = '/dashboard/settings?tab=billing';
 
 /**
- * Where to go past the plan's prompt limit, with SIMPLE_NAV (Simplify PR 16,
- * replacing _prompt-limit-actions.tsx): Starter sees Growth's limit in
+ * Where to go past the plan's prompt limit (Simplify PR 16): Starter sees Growth's limit in
  * billing; Growth and Enterprise (custom limits) are raised by Ansvisor, so
  * they contact us. Self-hosted has no limit and no button. Each showing
  * counts as an upgrade wall, as before.

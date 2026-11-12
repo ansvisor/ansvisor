@@ -73,7 +73,7 @@ async function run(supabase: Client, brandId: string, first: boolean) {
 }
 
 /**
- * Monday's "Last week" on Action Center › Today (SIMPLE_NAV), on the
+ * Monday's "Last week" on Action Center › Today, on the
  * person's Monday once the brand has a full week of runs; null otherwise.
  * Visibility over last week against the week before and the rank (the
  * overview read behind Chat's get_overview_summary, over 7 days), the
@@ -152,7 +152,7 @@ export async function getTodayLastWeek(
 }
 
 /**
- * Today after the plan or trial ended (SIMPLE_NAV), read-only: when
+ * Today after the plan or trial ended, read-only: when
  * tracking last ran, what the trial found (the last run's score against the
  * first's, the rank and the gap to the leader), the actions completed and
  * improved, what is kept (prompts, competitors), what waits for a plan

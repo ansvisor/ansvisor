@@ -36,7 +36,7 @@ const BUTTON = 'h-[34px]';
 
 /**
  * Recurring work made in Chat (create_schedule on repeat), on Action Center
- * › Agents under Your agents (SIMPLE_NAV; owner's decision, option A: no new
+ * › Agents under Your agents (owner's decision, option A: no new
  * kind of agent): the person's own recurring jobs, each with when it runs
  * and "made in Chat", what it does, and its last run or next one. Its main
  * button opens its run in Chat, as an agent card's does, or runs it now when
@@ -62,7 +62,14 @@ export function ChatMadeAgents({
   const [busy, setBusy] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
-    setList(await listChatSchedules().catch((): ScheduleListRead => ({ ok: false })));
+    // A failed (or, in a test, unmocked) read just shows no "Made in Chat" rows.
+    let read: ScheduleListRead | null | undefined;
+    try {
+      read = await listChatSchedules();
+    } catch {
+      read = null;
+    }
+    setList(read ?? { ok: false });
   }, []);
   useEffect(() => {
     if (!initial) void reload();

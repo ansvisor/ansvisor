@@ -17,8 +17,8 @@ export function oldestWaiting(prompts: readonly Prompt[]): Prompt | null {
 }
 
 /**
- * Tracked Prompts' yellow banner while prompts wait for a spot (SIMPLE_NAV,
- * Simplify PR 16): how many, whether the plan has room now (waiting prompts
+ * Tracked Prompts' yellow banner while prompts wait for a spot (Simplify
+ * PR 16): how many, whether the plan has room now (waiting prompts
  * never start by themselves), the waiting ones a click away, and for those
  * who can act, the swap dialog for the one waiting longest. Members and a
  * plan that ended see the banner without the action.

@@ -1,18 +1,18 @@
 /**
- * Getting started (New Ansvisor, AC-ALT2 §4): the fixed steps a brand walks
- * through in the Actions page, and how each step's state follows from the
- * brand's data (getting_started_facts, 00196). They sit beside the generated
- * actions and never go through the signal engine or get a Priority Score.
+ * Getting started: the 7 set-up steps a brand walks through, shown on
+ * Action Center › Today as "Finish setting up · x of 7", and how each
+ * step's state follows from the brand's data (getting_started_facts, 00196).
+ * They sit beside the generated actions and never go through the signal
+ * engine or get a Priority Score. Every state is worked out from the
+ * brand's data and records, so a brand's steps done carry over.
  *
- * Steps unlock when their data is ready, not on a schedule:
- *   - Set up: now.
- *   - Explore: when the first AI answers are in. The high-value prompts step
- *     waits for prompt suggestions built from Search Console or Analytics.
- *   - Act: when the first content suggestions are in.
- *   - Ready: after every step above is done or skipped.
+ * The explore pages (Visibility, the answers, Mentions, Citations and AI
+ * Referral Traffic) still record their first visit (PAGE_STEPS), but aren't
+ * listed; Today's focus covers the first work on content.
  */
 
-export type GettingStartedStage = 'setup' | 'explore' | 'act' | 'ready';
+/** Every step is a set-up step (Chat's and MCP's onboarding reads name it). */
+export type GettingStartedStage = 'setup';
 
 export type GettingStartedStepKey =
   | 'kpis'
@@ -21,17 +21,10 @@ export type GettingStartedStepKey =
   | 'prompts'
   | 'gsc'
   | 'ga'
-  | 'snippet'
-  | 'visibility'
-  | 'answers'
-  | 'data_prompts'
-  | 'mentions'
-  | 'citations'
-  | 'traffic'
-  | 'pick_content'
-  | 'create_content'
-  | 'optimize_page'
-  | 'ready';
+  | 'snippet';
+
+/** The explore pages whose first visit is recorded (getting_started_page_opened). */
+export type PageOpenedStepKey = 'visibility' | 'answers' | 'mentions' | 'citations' | 'traffic';
 
 /** waiting: locked until its data is ready ("Waiting for data"). */
 export type GettingStartedState = 'new' | 'done' | 'waiting' | 'skipped';
@@ -47,6 +40,7 @@ export interface GettingStartedStepDef {
 
 const INTEGRATIONS_HREF = '/dashboard/settings?tab=integrations';
 
+/** The set-up steps, in order. */
 export const GETTING_STARTED_STEPS: readonly GettingStartedStepDef[] = [
   { key: 'kpis', stage: 'setup', href: '/dashboard/action-center/kpis' },
   { key: 'competitors', stage: 'setup', href: '/dashboard/competitors' },
@@ -55,40 +49,14 @@ export const GETTING_STARTED_STEPS: readonly GettingStartedStepDef[] = [
   { key: 'gsc', stage: 'setup', href: INTEGRATIONS_HREF, optional: true },
   { key: 'ga', stage: 'setup', href: INTEGRATIONS_HREF, optional: true },
   { key: 'snippet', stage: 'setup', href: '/dashboard/traffic' },
-  { key: 'visibility', stage: 'explore', href: '/dashboard/insights' },
-  { key: 'answers', stage: 'explore', href: '/dashboard/prompts/tracked' },
-  // Opens on Prompt Suggestions' "From your data" filter.
-  { key: 'data_prompts', stage: 'explore', href: '/dashboard/prompts/suggestions?source=data' },
-  { key: 'mentions', stage: 'explore', href: '/dashboard/mentions' },
-  { key: 'citations', stage: 'explore', href: '/dashboard/citations' },
-  { key: 'traffic', stage: 'explore', href: '/dashboard/traffic' },
-  { key: 'pick_content', stage: 'act', href: '/dashboard/content' },
-  // The Content Plan's top Create row and top Optimize row, open in Start (00234).
-  { key: 'create_content', stage: 'act', href: '/dashboard/content/plan?start=create' },
-  { key: 'optimize_page', stage: 'act', href: '/dashboard/content/plan?start=optimize' },
-  { key: 'ready', stage: 'ready', href: '/dashboard/action-center/actions' },
 ];
-
-/**
- * The set-up steps, in order: with the simplified layout on (SIMPLE_NAV),
- * the whole list, as Today's "Finish setting up · x of 7". The explore
- * steps still complete when their page is first opened (PAGE_STEPS), but
- * aren't listed; Today's focus takes over the act steps; and there is no
- * Ready step. Every state is worked out from the brand's data and records
- * as before, so a brand's steps done carry over.
- */
-export const SETUP_STEPS: readonly GettingStartedStepDef[] = GETTING_STARTED_STEPS.filter(
-  (step) => step.stage === 'setup',
-);
 
 export const MIN_COMPETITORS = 3;
 export const MIN_TOPICS = 3;
 export const PROMPTS_PER_TOPIC = 3;
-/** Search Console / Analytics prompt suggestions to track. */
-export const DATA_PROMPTS_TARGET = 5;
 
-/** The explore steps that are done once their page is opened. */
-const PAGE_STEPS: readonly { path: string; step: GettingStartedStepKey }[] = [
+/** The explore pages whose first visit is recorded. */
+const PAGE_STEPS: readonly { path: string; step: PageOpenedStepKey }[] = [
   { path: '/dashboard/insights', step: 'visibility' },
   { path: '/dashboard/prompts/tracked', step: 'answers' },
   { path: '/dashboard/mentions', step: 'mentions' },
@@ -96,15 +64,15 @@ const PAGE_STEPS: readonly { path: string; step: GettingStartedStepKey }[] = [
   { path: '/dashboard/traffic', step: 'traffic' },
 ];
 
-/** The explore step a dashboard path opens, if any (no locale prefix). */
-export function pageOpenedStep(pathname: string): GettingStartedStepKey | null {
+/** The explore page a dashboard path opens, if any (no locale prefix). */
+export function pageOpenedStep(pathname: string): PageOpenedStepKey | null {
   // /dashboard/prompts shows the tracked prompts too.
   const path = pathname === '/dashboard/prompts' ? '/dashboard/prompts/tracked' : pathname;
   const hit = PAGE_STEPS.find((p) => path === p.path || path.startsWith(`${p.path}/`));
   return hit?.step ?? null;
 }
 
-export function isPageOpenedStep(step: string): step is GettingStartedStepKey {
+export function isPageOpenedStep(step: string): step is PageOpenedStepKey {
   return PAGE_STEPS.some((p) => p.step === step);
 }
 
@@ -163,7 +131,7 @@ export interface GettingStartedStatus {
    * getting started" while it isn't running.
    */
   needsSetup: boolean;
-  /** Skipped from the Actions page (or a new brand's question); Start brings it back. */
+  /** Skipped (Today's Hide for the brand, or a new brand's question). */
   skipped: boolean;
   steps: GettingStartedStep[];
   /** Steps done or skipped. */
@@ -272,88 +240,18 @@ function stepState(
       return { state: optionalState(f.ga, f.records.ga), progress: null };
     case 'snippet':
       return { state: stateOf(f.firstVisit, true), progress: null };
-    case 'visibility':
-    case 'answers':
-    case 'mentions':
-    case 'citations':
-    case 'traffic':
-      return { state: stateOf(Boolean(f.records[key]), f.firstAnswer), progress: null };
-    case 'data_prompts': {
-      const finished = f.dataTracked >= DATA_PROMPTS_TARGET;
-      // With both sources skipped and neither connected, no such suggestion
-      // can come: the step goes with them.
-      const noSource = !f.gsc && !f.ga && f.records.gsc === 'skipped' && f.records.ga === 'skipped';
-      return {
-        state: !finished && noSource ? 'skipped' : stateOf(finished, f.dataSuggestions > 0),
-        progress: progress(f.dataTracked, DATA_PROMPTS_TARGET),
-      };
-    }
-    case 'pick_content':
-      return { state: stateOf(f.contentPicked > 0, f.contentSuggestions > 0), progress: null };
-    // A draft made ready or published in the Content Editor completes them
-    // (00234); the old ways still count, so a step already done stays done.
-    case 'create_content':
-      return {
-        state: stateOf(f.contentCreated > 0 || f.draftsCreated > 0, f.contentSuggestions > 0),
-        progress: null,
-      };
-    case 'optimize_page':
-      return {
-        state: stateOf(f.draftsOptimized > 0 || f.audits > 0, f.contentSuggestions > 0),
-        progress: null,
-      };
-    case 'ready':
-      // Filled in once the others are known.
-      return { state: 'waiting', progress: null };
   }
 }
 
 const complete = (s: GettingStartedStep) => s.state === 'done' || s.state === 'skipped';
 
-/**
- * Whether a step's page shows the first tracking run's answers: the explore
- * pages. The high-value prompts step waits for Search Console or Analytics
- * instead.
- */
-export function needsFirstAnswers(step: Pick<GettingStartedStepDef, 'key' | 'stage'>): boolean {
-  return step.stage === 'explore' && step.key !== 'data_prompts';
-}
-
-/**
- * Whether a step needs what the brand's tracking brings: the first answers,
- * then the content suggestions built from them (the act steps). The set-up
- * steps need nothing.
- */
-export function needsTrackingData(step: Pick<GettingStartedStepDef, 'key' | 'stage'>): boolean {
-  return needsFirstAnswers(step) || step.stage === 'act';
-}
-
-/** A step to do while the first run goes on ("Ready now"): open, and needing none of its data. */
-export function readyNow(step: GettingStartedStep): boolean {
-  return step.state === 'new' && !needsTrackingData(step);
-}
-
-/**
- * The steps as listed while the brand's first run goes on: the ones ready
- * now first, then the rest, each in their usual order. Once it's done, the
- * usual order.
- */
-export function firstRunOrder(steps: GettingStartedStep[]): GettingStartedStep[] {
-  return [...steps.filter(readyNow), ...steps.filter((step) => !readyNow(step))];
-}
-
-/** `setupOnly`: the 7 set-up steps (SETUP_STEPS), for the simplified layout. */
-export function buildGettingStarted(
-  f: GettingStartedFacts,
-  { setupOnly = false }: { setupOnly?: boolean } = {},
-): GettingStartedStatus {
-  const steps = (setupOnly ? SETUP_STEPS : GETTING_STARTED_STEPS).map((def) => ({
+/** The brand's 7 set-up steps and where Getting started stands for it. */
+export function buildGettingStarted(f: GettingStartedFacts): GettingStartedStatus {
+  const steps = GETTING_STARTED_STEPS.map((def) => ({
     ...def,
     ...stepState(def.key, f),
     updatedAt: f.recordedAt[def.key] ?? null,
   }));
-  const ready = steps.find((s) => s.key === 'ready');
-  if (ready) ready.state = steps.every((s) => s === ready || complete(s)) ? 'done' : 'waiting';
   const running = Boolean(f.startedAt) && !f.dismissedAt;
   return {
     active: running && Boolean(f.confirmedAt),

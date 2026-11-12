@@ -6,8 +6,7 @@ import { ActionCenterHeader } from './action-center-header';
 import { ActionCenterTabs } from './action-center-tabs';
 
 /**
- * Agent Center's pages as Action Center › Agents with the simplified layout
- * on (SIMPLE_NAV, which their layout reads): the Action Center's header and
+ * Agent Center's pages as Action Center › Agents: the Action Center's header and
  * tabs above them, at their own addresses (/dashboard/agents and the pages
  * under it), so links, menu access and Chat's routes to them don't change.
  */

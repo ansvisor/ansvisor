@@ -258,8 +258,7 @@ export interface ChatActionSent {
 /**
  * Recurring work Chat set up (create_schedule, a job on repeat), as its card
  * under the answer with Run it now, Open in Agents and Change the schedule.
- * Only with the simplified layout on (SIMPLE_NAV), where such jobs show on
- * Action Center › Agents as "made in Chat".
+ * Such jobs show on Action Center › Agents as "made in Chat".
  */
 export interface ChatScheduleMade {
   /** The job's title: "Espresso watch". */
@@ -521,7 +520,7 @@ export interface ChatEventPayloads {
   'access.denied': ChatDenialCard;
   /** Sent to Action Center, or added to an action there (CHAT-09 item 19). */
   'action.sent': ChatActionSent;
-  /** Recurring work it set up (SIMPLE_NAV): its card with Run it now and Open in Agents. */
+  /** Recurring work it set up: its card with Run it now and Open in Agents. */
   'schedule.made': ChatScheduleMade;
   /** The task strip as it stands (CHAT-09 §B): the whole strip each time. */
   'tasks.updated': ChatTaskStrip;

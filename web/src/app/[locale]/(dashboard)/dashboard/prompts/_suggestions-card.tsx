@@ -57,7 +57,6 @@ import {
   type BusinessHubTopicsResult,
   type PromptSuggestion,
 } from '@/lib/actions/prompt-suggestions';
-import type { PlanId } from '@/config/plans';
 import { priceText } from '@/lib/shopping/price';
 import {
   businessHubSourceData,
@@ -324,8 +323,6 @@ interface Props {
   onAddTopic?: () => void;
   /** Connected sources and whether their data has landed; null when unknown. */
   sourceStates: SuggestionSourceStates | null;
-  /** The organization's plan, for the prompt limit note's wording; absent while unknown. */
-  planId?: PlanId;
   /** Where to go for more prompts (upgrade or contact us), shown in the prompt limit note. */
   limitActions?: React.ReactNode;
 }
@@ -379,7 +376,6 @@ export function SuggestionsCard({
   onAccepted,
   onAddTopic,
   sourceStates,
-  planId,
   limitActions,
 }: Props) {
   const t = useTranslations('prompts.suggestions');
@@ -418,13 +414,8 @@ export function SuggestionsCard({
   // from Search Console or Analytics (hidden for 30 days once dismissed).
   const [confirmClear, setConfirmClear] = useState(false);
   const [adding, setAdding] = useState(false);
-  // What Add All left behind when the plan's prompt limit stopped it.
-  // `waiting`: Add All saved some waiting for a spot (SIMPLE_NAV) rather than stopping.
-  const [limitNote, setLimitNote] = useState<{
-    added: number;
-    left: number;
-    waiting?: number;
-  } | null>(null);
+  // Add All saved some waiting for a spot, the plan's prompt locations full.
+  const [limitNote, setLimitNote] = useState<{ added: number; waiting: number } | null>(null);
   const tWaiting = useTranslations('prompts.waiting');
   const showWaiting = useWaitingForSpotToast();
   const [, startTransition] = useTransition();
@@ -608,13 +599,11 @@ export function SuggestionsCard({
     if (waiting > 0) {
       // "N added, M waiting for a spot" in the note, in place of the success toast.
       trackSavedWaiting('add_all', waiting);
-      setLimitNote({ added: added.length - waiting, left: 0, waiting });
+      setLimitNote({ added: added.length - waiting, waiting });
     } else if (added.length > 0) {
       toast.success(t('addAllDone', { count: added.length }));
     }
-    if (failure?.code === 'plan_limit') {
-      setLimitNote({ added: added.length, left: ids.length - leaving.size });
-    } else if (isNoTopics(failure)) {
+    if (isNoTopics(failure)) {
       topicFirst.show();
     } else if (failure) {
       toast.error(failure.error);
@@ -814,18 +803,10 @@ export function SuggestionsCard({
             <div className="min-w-0 flex-1 space-y-2.5 text-sm">
               <div>
                 <p className="font-medium text-amber-900 dark:text-amber-200">
-                  {limitNote.waiting
-                    ? waitingTitle(tWaiting, limitNote.added, limitNote.waiting)
-                    : t('limitTitle', { count: limitNote.left })}
+                  {waitingTitle(tWaiting, limitNote.added, limitNote.waiting)}
                 </p>
                 <p className="text-amber-800/80 dark:text-amber-300/80">
-                  {limitNote.waiting
-                    ? tWaiting('body', { count: limitNote.waiting })
-                    : t('limitBody', {
-                        added: limitNote.added,
-                        count: limitNote.left,
-                        plan: planId ?? 'unknown',
-                      })}
+                  {tWaiting('body', { count: limitNote.waiting })}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
