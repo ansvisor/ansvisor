@@ -1,0 +1,72 @@
+---
+title: "Connect Ansvisor to n8n"
+description: "Receive verified Ansvisor webhooks and read AI visibility metrics from n8n."
+---
+
+Connect Ansvisor to n8n with the `n8n-nodes-ansvisor` community package.
+
+## What the package provides
+
+- **Ansvisor Trigger** receives a brand's webhook events and verifies the configured shared secret. For `content_draft.sent`, it also checks the HMAC-SHA256 signature over the raw request body.
+- **Ansvisor** reads brands, visibility summaries, visibility trends, citations and AI traffic through the read-only Metrics API.
+
+The API node only makes documented `GET` requests. Your API key is subject to the same brand access as the person who created it.
+
+## Install the community node
+
+After the package is published to npm, open **Settings → Community Nodes** in n8n, choose **Install**, and enter `n8n-nodes-ansvisor`. Restart n8n if your installation asks you to.
+
+For local development, install the package from `integrations/n8n` in a custom-node directory.
+
+## Connect the Metrics API
+
+1. In Ansvisor, open **Settings → MCP & API Keys** and create an API key. Copy it when it is shown; it is only displayed once.
+2. In n8n, create an **Ansvisor API** credential.
+3. Paste the `ans_` key into **API Key**.
+4. Keep **Base URL** as `https://app.ansvisor.com` for Ansvisor Cloud. For self-hosted Ansvisor, enter the origin of your web app.
+5. Save the credential and use the credential test to check `GET /api/v1/whoami`.
+
+The key is stored as an n8n password credential and sent as `Authorization: Bearer`. Do not put it in node parameters or expressions.
+
+The node exposes these read-only operations:
+
+| Resource | Operation | API endpoint |
+|---|---|---|
+| Brand | Get Many | `GET /api/v1/brands` |
+| Visibility | Get Summary | `GET /api/v1/visibility-summary` |
+| Visibility | Get Trend | `GET /api/v1/visibility-trend` |
+| Citations | Get | `GET /api/v1/citations` |
+| AI Traffic | Get | `GET /api/v1/ai-traffic` |
+
+For metrics, select a brand ID returned by **Brand → Get Many**. Optional date filters use `YYYY-MM-DD`.
+
+## Receive webhooks
+
+1. In Ansvisor, open the brand's **Content → Configure Webhook** settings.
+2. Set a webhook secret and enable the events the workflow should receive.
+3. In n8n, add **Ansvisor Trigger** and create an **Ansvisor Webhook Secret** credential containing that brand's secret.
+4. Activate the workflow and copy its Production URL.
+5. Paste that URL into the same brand's Ansvisor webhook settings and save.
+
+Use a separate trigger credential for each brand. Ansvisor secrets are per brand; the trigger rejects requests without a matching secret. It does not include the secret or signature headers in workflow output.
+
+### Signature checks
+
+Every configured webhook request carries `X-Webhook-Secret`. The trigger compares it to the credential using a constant-time comparison.
+
+The `content_draft.sent` event additionally carries `X-Ansvisor-Signature: sha256=<hex>`. The trigger reads the original raw request body and verifies HMAC-SHA256 with the same brand secret before parsing the event into workflow data. A missing or invalid shared secret, or a missing or invalid content-draft signature, receives HTTP 401 and does not start the workflow.
+
+Other documented events use the shared-secret header and do not require the additional HMAC header:
+
+- `opportunity.sent`
+- `daily_pulse.created`
+- `action_task.sent`
+- `webhook.test`
+
+Use an HTTPS webhook URL. Ansvisor sends each event once and does not automatically retry failed deliveries.
+
+## References
+
+- [Metrics API](/api-reference/metrics)
+- [Webhook API](/api-reference/webhooks)
+- [n8n community nodes](https://docs.n8n.io/integrations/community-nodes/)

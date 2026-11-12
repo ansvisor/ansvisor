@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2022",
+    "lib": ["es2022"],
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "strictNullChecks": true,
+    "declaration": true,
+    "sourceMap": true,
+    "outDir": "./dist/"
+  },
+  "include": ["credentials/**/*", "nodes/**/*", "package.json"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}

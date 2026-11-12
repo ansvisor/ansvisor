@@ -1,0 +1,34 @@
+name: n8n community node
+
+on:
+  push:
+    paths:
+      - 'integrations/n8n/**'
+      - 'docs/guides/n8n.mdx'
+      - 'help/content/n8n-webhooks.md'
+      - '.github/workflows/n8n-community-node.yml'
+  pull_request:
+    paths:
+      - 'integrations/n8n/**'
+      - 'docs/guides/n8n.mdx'
+      - 'help/content/n8n-webhooks.md'
+      - '.github/workflows/n8n-community-node.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/n8n
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: npm run build
+      - run: npm run lint
