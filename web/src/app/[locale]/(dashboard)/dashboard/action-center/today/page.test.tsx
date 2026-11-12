@@ -43,10 +43,19 @@ vi.mock('@/components/action-center/action-center-tabs', () => ({
 vi.mock('@/components/action-center/agent-work-gear', () => ({
   AgentWorkGear: () => <button type="button" data-testid="gear" />,
 }));
+// The brand on screen; a test switches it and draws again.
+let activeBrandId = 'b1';
 vi.mock('@/stores/use-brand-store', () => ({
   useBrandStore: (
     selector: (state: { activeBrandId: string; brands: { id: string; name: string }[] }) => unknown,
-  ) => selector({ activeBrandId: 'b1', brands: [{ id: 'b1', name: 'Brewline Coffee' }] }),
+  ) =>
+    selector({
+      activeBrandId,
+      brands: [
+        { id: 'b1', name: 'Brewline Coffee' },
+        { id: 'b2', name: 'Other Roasters' },
+      ],
+    }),
 }));
 let firstRun: { progress: { current: number; total: number } | null } | null = null;
 vi.mock('@/hooks/use-first-run', () => ({ useFirstRun: () => firstRun }));
@@ -351,6 +360,7 @@ afterEach(() => {
   vi.clearAllMocks();
   chatOn = true;
   firstRun = null;
+  activeBrandId = 'b1';
   panel.available = true;
   hidden = new Set();
   canManage = true;
@@ -547,6 +557,35 @@ describe('Action Center › Today', () => {
         r.getAttribute('data-focus-id'),
       ),
     ).toEqual(['a2', 'a3', 'a4']);
+  });
+
+  it("never shows the last brand's focus after a brand switch", async () => {
+    reads.getTodayWaiting.mockResolvedValue({
+      ...waiting,
+      drafts: [],
+      actions: [],
+      reviews: null,
+      ideas: null,
+    });
+    chats = [];
+    // The new brand's focus is still reading when its Waiting for you has read.
+    reads.getTodayFocus.mockImplementation((brandId: string) =>
+      brandId === 'b1'
+        ? Promise.resolve([
+            card('a3', { action: action('a3', { status: 'in_progress', taskCompleted: 2 }) }),
+          ])
+        : new Promise<FocusCard[]>(() => {}),
+    );
+    await draw();
+    const part = () => container.querySelector('[data-today-part="waiting"]');
+    expect(part()?.textContent).toContain('has 2 of 4 steps done.');
+
+    activeBrandId = 'b2';
+    await draw();
+    expect(reads.getTodayWaiting).toHaveBeenCalledWith('b2', expect.any(String));
+    expect(part()?.textContent).toContain('Nothing is waiting for you.');
+    expect(part()?.textContent).not.toContain('has 2 of 4 steps done.');
+    expect(container.querySelector('a[href$="action=a3"]')).toBeNull();
   });
 
   it('says where the brand stands', async () => {

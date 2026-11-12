@@ -132,7 +132,15 @@ export function TodayPage() {
   }, []);
   const [waiting, setWaiting] = useState<number | null>(null);
   // Today's focus as read: null until it has, for New area to track's "focus finished".
-  const [focusCards, setFocusCards] = useState<FocusCard[] | null>(null);
+  // Kept with its brand, so after a brand switch the last brand's cards never show.
+  const [focusRead, setFocusRead] = useState<{ brandId: string; cards: FocusCard[] } | null>(null);
+  const focusCards = brandId && focusRead?.brandId === brandId ? focusRead.cards : null;
+  const onFocusCards = useCallback(
+    (cards: FocusCard[]) => {
+      if (brandId) setFocusRead({ brandId, cards });
+    },
+    [brandId],
+  );
   const summary =
     mode === 'ended'
       ? tEnded('readOnly')
@@ -238,7 +246,7 @@ export function TodayPage() {
               <FocusSection
                 brandId={brandId}
                 visit={visit}
-                onCards={setFocusCards}
+                onCards={onFocusCards}
                 title={week ? tFocus('weekTitle') : undefined}
               />
             </div>
