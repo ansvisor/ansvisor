@@ -326,7 +326,7 @@ export const tr: CardCopy = {
     aiMore: (times) =>
       `${times} kat yapay zekâ kullanımı: her ay daha çok içerik fırsatı ve taslak, daha çok ajan çalışması ve Action Center önerisi.`,
     siteAudits: (pages) => `Site Audit: ayda ${pages} sayfa.`,
-    starterAgents: 'Chat ve her değişiklikten önce soran ajanlarıyla Agent Center.',
+    starterAgents: 'Chat ve her değişiklikten önce soran ajanlarıyla Agents.',
     growthAgents: 'Full auto: seçtiğiniz ajanlar kendi başına yayınlar.',
     mcpRead: 'MCP: Ansvisor verilerinizi yapay zekâ araçlarından okuyun.',
     mcpReadWrite: 'MCP: Ansvisor verilerinizi yapay zekâ araçlarından okuyun ve yazın.',
@@ -337,7 +337,7 @@ export const tr: CardCopy = {
         body: 'Kendi Ansvisor verilerinizden yanıt verir, bu karnenin ilk hafta işlerini hazırlar ve eklediğiniz dosyaları okur.',
       },
       {
-        title: 'Agent Center',
+        title: 'Agents',
         body: 'Kullanıma hazır ajanlar ve 700’den fazla skill: rutin yapay zekâ görünürlüğü işlerini bir takvime göre ya da bir şey değiştiğinde yürütür.',
       },
       {

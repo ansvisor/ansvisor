@@ -357,7 +357,7 @@ describe('AgentDetail', () => {
     await render();
     const back = action('agents.back')[0];
     expect(back.getAttribute('href')).toBe('/dashboard/agents?tab=yours');
-    expect(back.textContent).toBe('Back to Agent Center');
+    expect(back.textContent).toBe('Back to Agents');
   });
 
   // Out of Chat, the dashboard's read-only state (plan ended, trial over) still holds.

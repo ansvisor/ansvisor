@@ -217,7 +217,9 @@ describe('ReportCardPdfDocument', () => {
     expect(value).toContain('50 prompts tracked every day, 1 brand.');
     expect(value).toContain('AI usage included.');
     expect(value).toContain('Site Audit: 100 pages a month.');
-    expect(value).toContain('Chat, and Agent Center with agents that ask before every change.');
+    expect(value).toContain(
+      'Chat, and Agents in the Action Center: agents that ask before every change.',
+    );
     expect(value).toContain('MCP: read your Ansvisor data from AI tools.');
     expect(value).toContain(
       'Adds Google AI Overviews and Google AI Mode every day: the Growth band on page 1.',
@@ -232,7 +234,7 @@ describe('ReportCardPdfDocument', () => {
     // Chat, Agent Center and MCP, with no plan's figures repeated.
     expect(value).toContain('Ansvisor does the work with you');
     expect(value).toContain('ChatAnswers from your own Ansvisor data');
-    expect(value).toContain('Agent CenterReady-to-use agents and more than 700 skills');
+    expect(value).toContain('AgentsReady-to-use agents and more than 700 skills');
     expect(value).toContain('MCPUse your Ansvisor data from Claude, ChatGPT, Cursor');
     expect(value).toContain('Measure your own questions');
     expect(value).toContain('Starter tracks 50 prompts every day');
@@ -341,11 +343,11 @@ describe('ReportCardPdfDocument', () => {
     expect(pages[2]).toContain('Ansvisor’da · Content Editor');
     expect(pages[2]).toContain('her değişiklik Activity log’da');
     expect(pages[2]).toContain('Full auto modunda');
-    expect(pages[3]).toContain('Chat ve her değişiklikten önce soran ajanlarıyla Agent Center.');
+    expect(pages[3]).toContain('Chat ve her değişiklikten önce soran ajanlarıyla Agents.');
     expect(pages[3]).toContain('Site Audit: ayda 100 sayfa.');
     expect(pages[3]).toContain('Full auto: seçtiğiniz ajanlar kendi başına yayınlar.');
     expect(pages[3]).toContain('ChatKendi Ansvisor verilerinizden');
-    expect(pages[3]).toContain('Agent CenterKullanıma hazır ajanlar ve 700’den fazla skill');
+    expect(pages[3]).toContain('AgentsKullanıma hazır ajanlar ve 700’den fazla skill');
     expect(pages[3]).toContain('Action Center’ı açın');
     expect(pages[3]).toContain('Ansvisor’daki AI Traffic');
     expect(pages.join(' ')).not.toMatch(

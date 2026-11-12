@@ -573,14 +573,7 @@ describe('ChatShell', () => {
     );
     expect(
       [...popup.querySelectorAll('[data-action="search.openPage"]')].map((b) => b.textContent),
-    ).toEqual([
-      '☰All chats',
-      '✦Agent Center',
-      '⏲Scheduled',
-      '▤Files',
-      '⇄Connections',
-      '⚙Settings',
-    ]);
+    ).toEqual(['☰All chats', '✦Agents', '⏲Scheduled', '▤Files', '⇄Connections', '⚙Settings']);
     await act(async () =>
       (popup.querySelector('[data-action="search.openPage"]') as HTMLElement).click(),
     );

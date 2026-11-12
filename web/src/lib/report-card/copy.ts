@@ -391,7 +391,7 @@ export const en = {
     aiMore: (times: number) =>
       `${times}× the AI usage: more content opportunities and drafts, more agent runs and more Action Center suggestions every month.`,
     siteAudits: (pages: number) => `Site Audit: ${pages} pages a month.`,
-    starterAgents: 'Chat, and Agent Center with agents that ask before every change.',
+    starterAgents: 'Chat, and Agents in the Action Center: agents that ask before every change.',
     growthAgents: 'Full auto: the agents you choose publish on their own.',
     mcpRead: 'MCP: read your Ansvisor data from AI tools.',
     mcpReadWrite: 'MCP: read and write your Ansvisor data from AI tools.',
@@ -402,7 +402,7 @@ export const en = {
         body: 'Answers from your own Ansvisor data, prepares this card’s week-one work and reads the files you add.',
       },
       {
-        title: 'Agent Center',
+        title: 'Agents',
         body: 'Ready-to-use agents and more than 700 skills: they run routine AI-visibility work on a schedule or when something changes.',
       },
       {
