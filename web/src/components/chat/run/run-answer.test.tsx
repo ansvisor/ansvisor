@@ -79,6 +79,20 @@ afterEach(() => {
 });
 
 describe('RunAnswer', () => {
+  it('says "Waiting for your OK", never "Working on it", while a run waits on an approval', async () => {
+    await render({
+      run: run({
+        status: 'waiting',
+        steps: [
+          { n: 1, kind: 'read', label: 'Read Citations', status: 'done' },
+          { n: 2, kind: 'write', label: 'Update the page', status: 'waiting' },
+        ],
+      }),
+    });
+    expect(container.textContent).toContain('Waiting for your OK');
+    expect(container.textContent).not.toContain('Working on it');
+  });
+
   it('says what the running step does, and thinks with none', async () => {
     await render({
       run: run({

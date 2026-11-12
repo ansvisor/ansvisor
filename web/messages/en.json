@@ -4261,6 +4261,7 @@
     },
     "runSteps": {
       "working": "Working on it",
+      "waiting": "Waiting for your OK",
       "workedFor": "Worked for {duration}",
       "stoppedAfter": "Stopped after {duration}",
       "failed": "Stopped: something went wrong",
@@ -4402,7 +4403,7 @@
       "newChat": "New chat",
       "stepOf": "Step {n} of {total}",
       "stepOfLabel": "Step {n} of {total} · {label}",
-      "needsYou": "Needs your OK · step {n} of {total}",
+      "needsYou": "Waiting for your OK · step {n} of {total}",
       "paused": "Paused · step {n} of {total}",
       "done": "Done {time}",
       "failed": "Stopped · step {n} of {total}",
@@ -5529,8 +5530,8 @@
         "month": "Previous 30 days"
       },
       "line": {
-        "needsYou": "Needs your OK",
-        "needsYouStep": "Needs your OK · step {step} of {total}",
+        "needsYou": "Waiting for your OK",
+        "needsYouStep": "Waiting for your OK · step {step} of {total}",
         "running": "Working",
         "runningCount": "Step {step} of {total}",
         "runningStep": "Step {step} of {total} · {label}",
@@ -6908,7 +6909,7 @@
     "line": {
       "draft": "Not on yet",
       "running": "Running now",
-      "needsYou": "Needs you",
+      "needsYou": "Waiting for your OK",
       "nextRun": "Next run {when}",
       "event": "Runs when a trigger fires",
       "manual": "Runs when someone clicks Run now",
@@ -7056,7 +7057,7 @@
     "runStatus": {
       "queued": "Queued",
       "running": "Running",
-      "needs_you": "Needs you",
+      "needs_you": "Waiting for your OK",
       "done": "Done",
       "failed": "Failed",
       "stopped": "Stopped",

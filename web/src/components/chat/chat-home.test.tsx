@@ -593,7 +593,7 @@ describe('ChatInboxView', () => {
     expect(text()).toContain(
       '1 needs you · 1 running · 1 done today. Results from your agents land here.',
     );
-    expect(text()).toContain('Needs your OK · step 4 of 6');
+    expect(text()).toContain('Waiting for your OK · step 4 of 6');
     expect(text()).toContain('10 min ago');
     const buttons = [...host.querySelectorAll('[data-action^="inbox."]')]
       .map((el) => (el as HTMLElement).dataset.action)
