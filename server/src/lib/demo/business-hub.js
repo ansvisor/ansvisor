@@ -69,6 +69,13 @@ const WEEKS = [
   },
 ];
 
+/**
+ * The table's unique key (00526: unique (brand_id, period_days, period_end)),
+ * which a rebuild writes over. Keyed by id, a rebuild a week on moved each
+ * entry onto the end its newer neighbour still held, and broke that key.
+ */
+const KEYS = { business_hub_snapshots: 'brand_id,period_days,period_end' };
+
 /** A UTC day as YYYY-MM-DD. */
 const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
 
@@ -87,8 +94,9 @@ export function businessHubRows({ brandId, now }) {
     const weeksBack = WEEKS.length - 1 - i;
     const end = runDay - NEWEST_DAYS_AGO * DAY_MS - weeksBack * 7 * DAY_MS;
     const entered = new Date(Math.min(end + DAY_MS + 9 * 3_600_000, now.getTime())).toISOString();
+    // The id follows the key, so the row a rebuild writes over keeps its own.
     return {
-      id: demoId(brandId, `business-hub:${weeksBack}`),
+      id: demoId(brandId, `business-hub:7:${dayOf(end)}`),
       brand_id: brandId,
       period_days: 7,
       period_end: dayOf(end),
@@ -108,6 +116,7 @@ export const businessHub = {
   name: 'businessHub',
   // Rebuilt in place (write.js): written over, what isn't written again deleted after.
   inPlace: true,
+  keys: KEYS,
   tables: ['business_hub_snapshots'],
 
   /**
@@ -120,7 +129,7 @@ export const businessHub = {
     now,
     db = supabaseAdmin,
     rebuild = false,
-    write = demoWriter({ db, brandId, rebuild }).write,
+    write = demoWriter({ db, brandId, rebuild, keys: KEYS }).write,
   }) {
     const rows = businessHubRows({ brandId, now });
     await write('business_hub_snapshots', rows);

@@ -4,6 +4,7 @@ vi.mock('../../config/supabase.js', () => ({ default: {} }));
 
 const { businessHub, businessHubRows } = await import('./business-hub.js');
 const { TOPICS } = await import('./brewline.js');
+const { demoWriter } = await import('./write.js');
 
 /**
  * The demo brand's ChatGPT Business Hub numbers (00526): four weekly
@@ -13,6 +14,67 @@ const { TOPICS } = await import('./brewline.js');
 
 const BRAND_ID = '11111111-2222-4333-8444-555555555555';
 const NOW = new Date('2026-11-11T08:30:00Z');
+const WEEK_MS = 7 * 86_400_000;
+
+/**
+ * An in-memory business_hub_snapshots that holds to its keys as Postgres
+ * does: the primary key (id) and unique (brand_id, period_days, period_end).
+ * An upsert writes over the row its conflict key names; any other clash fails.
+ */
+function snapshotsDb() {
+  const unique = (r) => [r.brand_id, r.period_days, r.period_end].join('|');
+  const db = { rows: [] };
+  db.from = () => {
+    const q = { op: 'select', filters: [], range: null };
+    const run = async () => {
+      const hit = db.rows.filter((r) =>
+        q.filters.every(([c, v]) => (Array.isArray(v) ? v.includes(r[c]) : r[c] === v)),
+      );
+      if (q.op === 'delete') {
+        db.rows = db.rows.filter((r) => !hit.includes(r));
+        return { data: null, error: null };
+      }
+      if (q.op === 'upsert') {
+        const columns = q.onConflict.split(',');
+        for (const row of q.payload) {
+          const same = db.rows.find((r) => columns.every((c) => r[c] === row[c]));
+          const next = db.rows.filter((r) => r !== same).concat({ ...same, ...row });
+          if (new Set(next.map((r) => r.id)).size < next.length) {
+            return { data: null, error: { message: 'duplicate key: business_hub_snapshots_pkey' } };
+          }
+          if (new Set(next.map(unique)).size < next.length) {
+            return {
+              data: null,
+              error: { message: 'duplicate key: unique (brand_id, period_days, period_end)' },
+            };
+          }
+          db.rows = next;
+        }
+        return { data: null, error: null };
+      }
+      const [from, to] = q.range ?? [0, hit.length];
+      const columns = q.columns.split(',').map((c) => c.trim());
+      return {
+        data: hit.slice(from, to + 1).map((r) => Object.fromEntries(columns.map((c) => [c, r[c]]))),
+        error: null,
+      };
+    };
+    const chain = {
+      upsert: (payload, { onConflict }) =>
+        Object.assign(q, { op: 'upsert', payload, onConflict }) && chain,
+      select: (columns) => ((q.columns = columns), chain),
+      delete: () => ((q.op = 'delete'), chain),
+      eq: (c, v) => (q.filters.push([c, v]), chain),
+      in: (c, v) => (q.filters.push([c, v]), chain),
+      match: (obj) => (q.filters.push(...Object.entries(obj)), chain),
+      order: () => chain,
+      range: (from, to) => ((q.range = [from, to]), chain),
+      then: (resolve, reject) => run().then(resolve, reject),
+    };
+    return chain;
+  };
+  return db;
+}
 
 describe('businessHubRows', () => {
   const rows = businessHubRows({ brandId: BRAND_ID, now: NOW });
@@ -37,11 +99,13 @@ describe('businessHubRows', () => {
     }
   });
 
-  it('keeps the same ids from one build to the next, a week moving on with its end', () => {
+  it('keeps a week’s id while it is shown: the id follows its end', () => {
     expect(businessHubRows({ brandId: BRAND_ID, now: NOW }).map((r) => r.id)).toEqual(
       rows.map((r) => r.id),
     );
     expect(new Set(rows.map((r) => r.id)).size).toBe(4);
+    const weekOn = businessHubRows({ brandId: BRAND_ID, now: new Date(NOW.getTime() + WEEK_MS) });
+    expect(weekOn.slice(0, 3).map((r) => r.id)).toEqual(rows.slice(1).map((r) => r.id));
   });
 
   it('shows one week without Profile views, and topics the table takes', () => {
@@ -73,5 +137,30 @@ describe('businessHub', () => {
       snapshots: 4,
     });
     expect(write).toHaveBeenCalledWith('business_hub_snapshots', expect.any(Array));
+  });
+
+  it('rebuilds a week on, and again the same day, over the rows already there', async () => {
+    const db = snapshotsDb();
+    const ends = () => db.rows.map((r) => r.period_end).sort();
+    const build = async (now, rebuild) => {
+      const writer = demoWriter({ db, brandId: BRAND_ID, rebuild, keys: businessHub.keys });
+      await businessHub.build({ brandId: BRAND_ID, now, write: writer.write });
+      await writer.prune();
+    };
+    await build(NOW, false);
+    expect(ends()).toEqual(['2026-10-14', '2026-10-21', '2026-10-28', '2026-11-04']);
+    const weekOn = new Date(NOW.getTime() + WEEK_MS);
+    await build(weekOn, true);
+    expect(ends()).toEqual(['2026-10-21', '2026-10-28', '2026-11-04', '2026-11-11']);
+    await build(weekOn, true);
+    expect(db.rows).toHaveLength(4);
+    // Rows from before the ids followed the week's end are written over by their key.
+    db.rows[0].id = 'legacy-id';
+    await build(weekOn, true);
+    expect(db.rows.map((r) => r.id).sort()).toEqual(
+      businessHubRows({ brandId: BRAND_ID, now: weekOn })
+        .map((r) => r.id)
+        .sort(),
+    );
   });
 });
