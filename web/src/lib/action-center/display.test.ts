@@ -54,8 +54,30 @@ describe('actionTexts', () => {
     expect(() => actionGoal(kind, t)).not.toThrow();
   });
 
-  it("holds copy for all sixty-two definitions and the AC plan's, the eleven person-sent kinds, the catalog check's and Business Hub's", () => {
-    expect(ACTION_KINDS).toHaveLength(78);
+  it("holds copy for all sixty-two definitions and the AC plan's, the eleven person-sent kinds, the catalog check's and Business Hub's two", () => {
+    expect(ACTION_KINDS).toHaveLength(79);
+  });
+
+  it('names the weekly Business Hub reminder after the last entry’s days, with no signals tag', () => {
+    expect(
+      actionTexts(
+        action({
+          kind: 'business_hub_numbers',
+          payload: { lastEnd: '2026-11-03', lastDays: 7 },
+        }),
+        t,
+      ),
+    ).toEqual({
+      title: "Enter this week's ChatGPT Business Hub numbers",
+      description:
+        "Your last Business Hub numbers cover the 7 days to 2026-11-03. Business Hub shows only the last 7 or 28 days, so a week that isn't entered is gone from it.",
+    });
+    expect(actionTexts(action({ kind: 'business_hub_numbers', payload: {} }), t).description).toBe(
+      messages.actionCenter.actionTexts.business_hub_numbers.descriptionGeneric,
+    );
+    expect(
+      actionContextTags(action({ kind: 'business_hub_numbers', signalCount: 0, payload: {} }), t),
+    ).toEqual([]);
   });
 
   it('names the ChatGPT Business Hub setup for where claiming is open, or the waitlist, with its evidence', () => {

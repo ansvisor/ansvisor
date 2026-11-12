@@ -12,8 +12,13 @@ import {
   BUSINESS_HUB_SETUP_KIND,
   businessHubSetupDedupKey,
   businessHubSetupTasks,
+  BUSINESS_HUB_NUMBERS_KIND,
   NUMBERS_PATH,
+  businessHubNumbersDedupKey,
+  businessHubNumbersTask,
+  closeNumbersReminder,
   completeFirstNumbersTask,
+  syncBusinessHubNumbersAction,
   isOpenRegion,
   syncBusinessHubSetupAction,
 } from './from-business-hub.js';
@@ -529,5 +534,155 @@ describe('the first numbers task', () => {
     );
     expect(await completeFirstNumbersTask(BRAND, { db: fake.db, now: NOW })).toBe(false);
     expect(fake.rows('action_events')).toEqual([]);
+  });
+});
+
+describe('the weekly numbers reminder', () => {
+  const day = (n) => daysAgo(n).slice(0, 10);
+  /** The brand's entries, newest first, as the sync reads them. */
+  const remindSeed = ({ ends = [7, 14], actions = [], brand = {} } = {}) => ({
+    brands: [brandRow(brand)],
+    business_hub_snapshots: ends.map((n, i) => ({
+      id: `s${i}`,
+      brand_id: BRAND,
+      period_days: 7,
+      period_end: day(n),
+    })),
+    actions,
+  });
+  const reminder = (status, over = {}) => ({
+    id: `r-${status}`,
+    brand_id: BRAND,
+    dedup_key: businessHubNumbersDedupKey(BRAND),
+    kind: BUSINESS_HUB_NUMBERS_KIND,
+    status,
+    dismiss_reason: null,
+    created_at: daysAgo(20),
+    updated_at: daysAgo(20),
+    completed_at: null,
+    ...over,
+  });
+  const remind = (fake, opts = {}) =>
+    syncBusinessHubNumbersAction(BRAND, { db: fake.db, now: NOW, env: ON, ...opts });
+
+  it('opens once the newest entry ended 7 days ago: low impact, one task checked on the next save', async () => {
+    const fake = fakeDb(remindSeed({ ends: [7, 14] }));
+    expect(await remind(fake)).toBe('opened');
+    const [action] = fake.rows('actions');
+    expect(action).toMatchObject({
+      kind: BUSINESS_HUB_NUMBERS_KIND,
+      category: 'growth',
+      impact: 'low',
+      status: 'new',
+      kpi_keys: [],
+      dedup_key: businessHubNumbersDedupKey(BRAND),
+      payload: { source: 'business_hub', lastEnd: day(7), lastDays: 7, targetCount: 1 },
+    });
+    const [task] = fake.rows('action_tasks');
+    expect(task).toMatchObject({
+      action_id: action.id,
+      position: 1,
+      title: "Enter this week's ChatGPT Business Hub numbers",
+      status: 'todo',
+      details: { source: 'business_hub', step: 'reminder', check: 'auto', url: NUMBERS_PATH },
+    });
+    expect(task.details.how[0]).toBe('In Business Hub, open Insights and pick 7 days.');
+    within(task.details);
+    expect(fake.rows('action_events')).toEqual([
+      expect.objectContaining({ action_id: action.id, event: 'created' }),
+    ]);
+  });
+
+  it('waits while the numbers are fresh, and before the first entry', async () => {
+    expect(await remind(fakeDb(remindSeed({ ends: [6] })))).toBe('fresh');
+    expect(await remind(fakeDb(remindSeed({ ends: [] })))).toBe('ineligible');
+    expect(await remind(fakeDb(remindSeed()), { env: {} })).toBe('ineligible');
+    expect(await remind(fakeDb(remindSeed({ brand: { is_demo: true } })))).toBe('ineligible');
+  });
+
+  it('keeps one open, and holds a new one when the day’s actions are spent', async () => {
+    expect(await remind(fakeDb(remindSeed({ actions: [reminder('in_progress')] })))).toBe('exists');
+    const fake = fakeDb(remindSeed());
+    expect(await remind(fake, { open: false })).toBe('held');
+    expect(fake.rows('actions')).toEqual([]);
+  });
+
+  it('stops for good once dismissed as Not relevant', async () => {
+    const fake = fakeDb(
+      remindSeed({
+        ends: [60],
+        actions: [
+          reminder('dismissed', { dismiss_reason: 'not_relevant', updated_at: daysAgo(50) }),
+        ],
+      }),
+    );
+    expect(await remind(fake)).toBe('opted_out');
+    expect(fake.rows('actions')).toHaveLength(1);
+  });
+
+  it('rests a week after Not now, or after one was closed, then reminds again', async () => {
+    const notNow = (n) =>
+      fakeDb(
+        remindSeed({
+          ends: [14],
+          actions: [reminder('dismissed', { dismiss_reason: 'not_now', updated_at: daysAgo(n) })],
+        }),
+      );
+    expect(await remind(notNow(3))).toBe('resting');
+    expect(await remind(notNow(8))).toBe('opened');
+    const closed = fakeDb(
+      remindSeed({
+        actions: [reminder('completed', { completed_at: daysAgo(2), updated_at: daysAgo(2) })],
+      }),
+    );
+    expect(await remind(closed)).toBe('resting');
+  });
+
+  it('is closed by a save: its task checked, then the reminder completed, each in its History', async () => {
+    const fake = fakeDb(remindSeed());
+    await remind(fake);
+    const [action] = fake.rows('actions');
+    const later = new Date(NOW.getTime() + DAY);
+    expect(await closeNumbersReminder(BRAND, { db: fake.db, now: later })).toBe(true);
+    expect(fake.rows('action_tasks')[0]).toMatchObject({
+      status: 'completed',
+      details: { autoCheck: { passed: true, at: later.toISOString() } },
+    });
+    expect(action).toMatchObject({ status: 'completed', completed_at: later.toISOString() });
+    expect(
+      fake.rows('action_events').map((e) => [e.event, e.data.to ?? null, e.data.source ?? null]),
+    ).toEqual([
+      ['created', null, 'business_hub'],
+      ['task_checked', null, null],
+      ['status_changed', 'completed', 'business_hub'],
+    ]);
+    // Nothing open: nothing to close.
+    expect(await closeNumbersReminder(BRAND, { db: fake.db, now: later })).toBe(false);
+  });
+
+  it('stays open when someone added a task to it, its own task checked', async () => {
+    const fake = fakeDb(remindSeed());
+    await remind(fake);
+    const [action] = fake.rows('actions');
+    fake.rows('action_tasks').push({
+      id: 't-own',
+      action_id: action.id,
+      title: 'Share the numbers with the team',
+      status: 'todo',
+      details: null,
+    });
+    const later = new Date(NOW.getTime() + DAY);
+    expect(await closeNumbersReminder(BRAND, { db: fake.db, now: later })).toBe(false);
+    expect(action.status).toBe('new');
+    expect(action.updated_at).toBe(later.toISOString());
+    const tasks = fake.rows('action_tasks');
+    expect(tasks.find((t) => t.details?.step === 'reminder').status).toBe('completed');
+    expect(tasks.find((t) => t.id === 't-own').status).toBe('todo');
+  });
+
+  it('names the last entry’s day in its why', () => {
+    expect(businessHubNumbersTask({ lastEnd: '2026-11-03' }).details.why).toMatch(
+      /^Your last Business Hub numbers end 2026-11-03\./,
+    );
   });
 });

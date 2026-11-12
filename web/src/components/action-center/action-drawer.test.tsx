@@ -440,6 +440,20 @@ describe('ActionDrawer', () => {
       expect(dialog.textContent).not.toContain('0 signals');
     });
 
+    it('shows the weekly reminder with Business Hub’s block, and why it has no signals', async () => {
+      await renderDrawer({
+        ...setup,
+        kind: 'business_hub_numbers',
+        impact: 'low',
+        payload: { source: 'business_hub', lastEnd: '2026-11-03', lastDays: 7 },
+      } as ActionItem);
+      const dialog = () => document.body.querySelector('[role="dialog"]')!;
+      expect(dialog().textContent).toContain("Enter this week's ChatGPT Business Hub numbers");
+      expect(dialog().textContent).toContain('Saving the numbers completes this reminder.');
+      await act(async () => tab('Signals').click());
+      expect(dialog().textContent).toContain('This reminder opens each week');
+    });
+
     it('says why it has no signals', async () => {
       await renderDrawer(setup);
       await act(async () => tab('Signals').click());

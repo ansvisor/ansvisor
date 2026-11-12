@@ -2423,6 +2423,7 @@
         "noSignalsShoppingLinks": "This action comes from the catalog check after each sync, so it has no detection signals. Its evidence is the page and the products on the Overview tab.",
         "noSignalsChat": "This action was sent from Chat, so it has no detection signals. Its evidence is the finding on the Overview tab, and any added later in History.",
         "noSignalsBusinessHub": "This action comes from your tracked ChatGPT answers and is raised once for your brand, so it has no detection signals. Its evidence is under Why on the Overview tab.",
+        "noSignalsBusinessHubNumbers": "This reminder opens each week your Business Hub numbers are 7 days old or more, so it has no detection signals.",
         "chatFinding": {
           "source": "Source",
           "sourceValue": "Chat",
@@ -2512,7 +2513,8 @@
           "open": "Open Business Hub",
           "enterNumbers": "Enter numbers",
           "noApi": "There's no Business Hub API: mark each task done when its Done when is true.",
-          "usOnlyAgent": "Business Agents are for US businesses only."
+          "usOnlyAgent": "Business Agents are for US businesses only.",
+          "reminder": "Saving the numbers completes this reminder. Dismiss it as Not relevant to stop the weekly reminders."
         },
         "auditPage": {
           "source": "Source",
@@ -3420,6 +3422,13 @@
         "description": "ChatGPT named you in {named} of {answers, plural, one {# tracked answer} other {# tracked answers}} in the last 30 days; your site was cited in {cited}.",
         "descriptionGeneric": "ChatGPT describes your business in its answers. Business Hub is OpenAI's free place to claim that profile and correct it.",
         "goal": "Claim and verify your profile in Business Hub and keep its facts right, so ChatGPT describes your business correctly."
+      },
+      "business_hub_numbers": {
+        "title": "Enter this week's ChatGPT Business Hub numbers",
+        "titleGeneric": "Enter this week's ChatGPT Business Hub numbers",
+        "description": "Your last Business Hub numbers cover the {days} days to {end}. Business Hub shows only the last 7 or 28 days, so a week that isn't entered is gone from it.",
+        "descriptionGeneric": "Business Hub shows only the last 7 or 28 days, so a week that isn't entered is gone from it.",
+        "goal": "Keep a week-by-week record of your Business Hub numbers beside Ansvisor's."
       }
     },
     "actionTasks": {

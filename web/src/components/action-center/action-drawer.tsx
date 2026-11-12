@@ -793,10 +793,13 @@ export function ActionDrawer({
                   <Separator />
                   <ShoppingLinksContext payload={action.payload ?? {}} />
                 </>
-              ) : action.kind === 'business_hub_setup' ? (
+              ) : action.kind === 'business_hub_setup' || action.kind === 'business_hub_numbers' ? (
                 <>
                   <Separator />
-                  <BusinessHubContext payload={action.payload ?? {}} />
+                  <BusinessHubContext
+                    payload={action.payload ?? {}}
+                    reminder={action.kind === 'business_hub_numbers'}
+                  />
                 </>
               ) : action.kind === 'bridge_links' ? (
                 <>
@@ -959,9 +962,11 @@ export function ActionDrawer({
                                   ? t('drawer.noSignalsChat')
                                   : action.kind === 'business_hub_setup'
                                     ? t('drawer.noSignalsBusinessHub')
-                                    : opportunityId
-                                      ? t('drawer.noSignalsOpportunity')
-                                      : t('drawer.noSignals')}
+                                    : action.kind === 'business_hub_numbers'
+                                      ? t('drawer.noSignalsBusinessHubNumbers')
+                                      : opportunityId
+                                        ? t('drawer.noSignalsOpportunity')
+                                        : t('drawer.noSignals')}
                 </p>
               )}
               {detail.signals.map((signal) => {
