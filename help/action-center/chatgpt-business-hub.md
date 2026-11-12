@@ -24,9 +24,9 @@ Ansvisor raises it once for each brand, on a nightly run, when the brand has a w
 ## The steps
 
 1. **Claim** your business.
-2. **Verify** it is yours. Your website domain is the surest way; Business Hub may also ask for an ID check.
-3. **Correct your business facts**, using the facts as your own site states them. **Check what ChatGPT says** in the action opens Chat with the **ChatGPT profile check**: it lists what ChatGPT gets wrong and writes the corrections to paste, asking you for anything nothing confirms.
-4. **Connect your product feed**, for an online shop only. If you already send OpenAI a product feed, this task is done from the start.
+2. **Verify** it is yours. Your website domain is the surest way; Business Hub may also ask for ID.
+3. **Correct your business facts** as your own site states them. **Check what ChatGPT says** in the action opens Chat with the **ChatGPT profile check**: it lists what ChatGPT gets wrong and writes the corrections to paste, asking you for anything nothing confirms.
+4. **Connect your product feed**, online shops only. If you already send OpenAI one, this task starts done.
 5. **Turn on your Business Agent**, in the US only, and only if Business Hub offers it.
 6. **Enter your first Business Hub numbers** on Visibility's ChatGPT Business Hub card. **Enter numbers** in the action opens it.
 
