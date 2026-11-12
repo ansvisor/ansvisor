@@ -74,7 +74,7 @@ export interface MenuStateAsk {
 }
 
 /** A job running longer than this is taken for one a stopped server left open. */
-export const WORKING_WITHIN_MS = 6 * 60 * 60_000;
+const WORKING_WITHIN_MS = 6 * 60 * 60_000;
 
 /** What a red or grey read found for its area; null when it couldn't be read. */
 interface StatusOf {
