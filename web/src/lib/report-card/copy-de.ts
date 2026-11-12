@@ -329,7 +329,7 @@ export const de: CardCopy = {
     aiMore: (times) =>
       `${times}× die KI-Nutzung: jeden Monat mehr Content-Chancen, Entwürfe, Agentenläufe und Vorschläge.`,
     siteAudits: (pages) => `Site Audit: ${pages} Seiten pro Monat.`,
-    starterAgents: 'Chat und Agent Center mit Agenten, die vor jeder Änderung fragen.',
+    starterAgents: 'Chat und Agents mit Agenten, die vor jeder Änderung fragen.',
     growthAgents: 'Full auto: Ihre gewählten Agenten veröffentlichen selbst.',
     mcpRead: 'MCP: Ihre Ansvisor-Daten aus KI-Tools lesen.',
     mcpReadWrite: 'MCP: Ihre Ansvisor-Daten aus KI-Tools lesen und schreiben.',
@@ -340,7 +340,7 @@ export const de: CardCopy = {
         body: 'Antwortet aus Ihren eigenen Ansvisor-Daten, bereitet die Arbeit der ersten Woche aus diesem Bericht vor und liest Ihre Dateien.',
       },
       {
-        title: 'Agent Center',
+        title: 'Agents',
         body: 'Einsatzbereite Agenten und über 700 Skills: sie erledigen Routinearbeit für Ihre KI-Sichtbarkeit nach Zeitplan oder wenn sich etwas ändert.',
       },
       {

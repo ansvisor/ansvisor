@@ -4185,7 +4185,7 @@
     "splitWork": { "name": "Split work into parts", "step": "Worked on parts" },
     "followUpCheck": { "name": "Set follow-up checks", "step": "Set follow-up check" },
     "modelProviders": { "name": "Choose model providers", "step": "Changed the model providers" },
-    "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agent Center" }
+    "readyAgents": { "name": "Read ready-to-use agents", "step": "Read Agents" }
   },
   "agentic": {
     "avatar": {
@@ -4416,7 +4416,7 @@
       "motion": "With Reduce motion on, nothing moves.",
       "sections": {
         "avatar": "Agent avatar",
-        "avatarList": "Agent avatar in the Agent Center list",
+        "avatarList": "Agent avatar in the Agents list",
         "statusPill": "Status pill",
         "approvalPill": "Approval pills",
         "steps": "Step states",
@@ -5555,7 +5555,7 @@
       "files": "Files",
       "scheduled": "Scheduled",
       "scheduledLabel": "Scheduled, {count, plural, one {# job} other {# jobs}} on",
-      "agents": "Agent Center",
+      "agents": "Agents",
       "agentsShort": "Agents",
       "agentsWhere": "in Action Center",
       "agentsLabel": "Agents · in Action Center"
@@ -5784,8 +5784,8 @@
         "noteAsk": "Ready-to-use agents for your brand’s site type and your work. An Admin or Manager turns them on.",
         "agent": "Agent",
         "everyBrand": "For every brand",
-        "open": "See it in Agent Center",
-        "openLabel": "{name}: see it in Agent Center",
+        "open": "See it in Agents",
+        "openLabel": "{name}: see it in Agents",
         "asked": "Please turn on the {name} agent for me.",
         "hide": "Hide Agents for you"
       }
@@ -6049,7 +6049,7 @@
       "failed": "Couldn't search your chats.",
       "pages": {
         "allChats": "All chats",
-        "agents": "Agent Center",
+        "agents": "Agents",
         "scheduled": "Scheduled",
         "files": "Files",
         "settings": "Settings",
@@ -7186,7 +7186,7 @@
         "archivedDetail": "Restore it on its page to change it",
         "askedCreate": "Create an agent",
         "askedEdit": "Change an agent",
-        "back": "Back to Agent Center",
+        "back": "Back to Agents",
         "backToAgent": "Back to the agent"
       },
       "skill": {
@@ -7833,7 +7833,7 @@
         "notMetered": "—"
       },
       "notFound": "This agent isn't available. It may have been deleted, or it isn't shared with you.",
-      "backToAgents": "Back to Agent Center",
+      "backToAgents": "Back to Agents",
       "loadFailed": "Couldn't load this agent.",
       "retry": "Retry",
       "goLive": {
@@ -8496,7 +8496,7 @@
       "cancel": "Cancel",
       "open": "Open",
       "agent": "Agent: {name}",
-      "agentNote": "Edit its schedule in Agent Center",
+      "agentNote": "Edit its schedule under Agents in the Action Center",
       "agentEdit": "Edit",
       "empty": "No scheduled work yet. Ask Chat, such as “Every Monday at 9:00, summarise last week”, or click New schedule.",
       "loadFailed": "Couldn’t load your scheduled work.",
@@ -16030,22 +16030,19 @@
       "SSO / SAML and custom feature requests",
       "Your own AI keys: OpenAI, Anthropic, Google, Azure or OpenRouter"
     ],
-    "customPlanPointsChat": [
-      "Chat and Agent Center",
-      "Full auto, with agents that publish on their own"
-    ],
+    "customPlanPointsChat": ["Chat and Agents", "Full auto, with agents that publish on their own"],
     "planCards": {
       "starter": {
         "tagline": "For small teams getting started with AI visibility monitoring and optimization.",
         "engines": "ChatGPT & Gemini tracking",
         "extras": ["MCP & API access"],
-        "extrasChat": ["Chat and Agent Center"]
+        "extrasChat": ["Chat and Agents"]
       },
       "growth": {
         "tagline": "For growing teams that want to monitor AI visibility and optimize content for AI search.",
         "engines": "ChatGPT, Gemini, Google AI Mode and Google AI Overviews tracking",
         "extras": ["Multi-region tracking", "White-label reports & exports", "Looker Studio"],
-        "extrasChat": ["Chat and Agent Center", "Full auto, with agents that publish on their own"]
+        "extrasChat": ["Chat and Agents", "Full auto, with agents that publish on their own"]
       },
       "brands": "{count, plural, one {# brand} other {# brands}}",
       "unlimitedBrands": "Unlimited brands",

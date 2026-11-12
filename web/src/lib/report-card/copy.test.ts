@@ -67,7 +67,7 @@ describe('every language’s copy', () => {
   it.each(REPORT_LANGUAGES)('%s: keeps Ansvisor’s feature names in English', (language) => {
     const t = BY_LANGUAGE[language];
     expect(t.plan.feature).toEqual(en.plan.feature);
-    expect(t.value.work.map((item) => item.title)).toEqual(['Chat', 'Agent Center', 'MCP']);
+    expect(t.value.work.map((item) => item.title)).toEqual(['Chat', 'Agents', 'MCP']);
     expect(t.value.growthAgents).toMatch(/^Full auto/);
     expect(t.value.siteAudits(100)).toMatch(/^Site Audit/);
   });

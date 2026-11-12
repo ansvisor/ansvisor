@@ -328,7 +328,7 @@ export const nl: CardCopy = {
     aiMore: (times) =>
       `${times}× het AI-gebruik: elke maand meer contentkansen, concepten, agent-runs en suggesties.`,
     siteAudits: (pages) => `Site Audit: ${pages} pagina’s per maand.`,
-    starterAgents: 'Chat, en Agent Center met agents die vóór elke wijziging vragen.',
+    starterAgents: 'Chat, en Agents met agents die vóór elke wijziging vragen.',
     growthAgents: 'Full auto: de agents die je kiest publiceren zelf.',
     mcpRead: 'MCP: lees je Ansvisor-data vanuit AI-tools.',
     mcpReadWrite: 'MCP: lees en schrijf je Ansvisor-data vanuit AI-tools.',
@@ -339,7 +339,7 @@ export const nl: CardCopy = {
         body: 'Antwoordt vanuit je eigen Ansvisor-data, bereidt het werk van week 1 uit dit rapport voor en leest de bestanden die je toevoegt.',
       },
       {
-        title: 'Agent Center',
+        title: 'Agents',
         body: 'Kant-en-klare agents en meer dan 700 skills: ze doen routinewerk voor AI-zichtbaarheid volgens een schema of als er iets verandert.',
       },
       {

@@ -16,7 +16,7 @@ export const READY_AGENT_READS = [
     class: 'read',
     area: 'agents',
     description:
-      'The ready-to-use agents to recommend for the brand and the person: 3 to 5 from Agent Center › Ready to use, those made for the brand\'s site type or the person\'s work areas first, then ones for every brand. Each has its name, what it does, why it fits, its skills and `href`, the link to its card. For "which agents should I use" and setup. Recommend only these, each linked with its href; never create, turn on or run an agent: the person does that from its card.',
+      'The ready-to-use agents to recommend for the brand and the person: 3 to 5 from Action Center › Agents › Ready to use, those made for the brand\'s site type or the person\'s work areas first, then ones for every brand. Each has its name, what it does, why it fits, its skills and `href`, the link to its card. For "which agents should I use" and setup. Recommend only these, each linked with its href; never create, turn on or run an agent: the person does that from its card.',
     minRole: 'analyst',
     planGate: null,
     brandOf: { input: 'brand_id' },

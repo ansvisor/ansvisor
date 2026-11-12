@@ -983,7 +983,7 @@ describe('Agents for you (AGENTS plan §8, #11)', () => {
     ).toEqual(['For your site type', 'For your role', 'For every brand']);
     expect(section()?.textContent).not.toContain('Ask your Admin');
     expect(cards()[0].querySelector('a')?.getAttribute('aria-label')).toBe(
-      'Alternatives & Comparison Pages: see it in Agent Center',
+      'Alternatives & Comparison Pages: see it in Agents',
     );
   });
 
