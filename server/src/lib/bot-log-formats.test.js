@@ -6,6 +6,7 @@ import {
   LogUnreadableError,
   MAX_INFLATED_BYTES,
   MAX_LOG_LINES,
+  readFastlyBody,
   readJsonLinesBody,
   readLogpushBody,
   readSenderBody,
@@ -100,6 +101,51 @@ describe('readVercelBody', () => {
     ]);
     const fromLines = await readVercelBody(`${JSON.stringify(entry())}\n${JSON.stringify(build)}`);
     expect(fromLines).toEqual(fromArray);
+  });
+});
+
+describe('readFastlyBody (#2164)', () => {
+  it('reads Fastly JSON lines and arrays into the shared request shape', async () => {
+    const lines = fixture('fastly.jsonl');
+    const parsed = await readFastlyBody(lines);
+    expect(parsed.records).toBe(2);
+    expect(parsed.requests).toEqual([
+      {
+        userAgent: expect.stringContaining('GPTBot/1.2'),
+        ip: '20.171.206.9',
+        url: 'https://acme.example/pricing?from=fastly',
+        status: 200,
+        at: new Date(1792400000 * 1000).toISOString(),
+        country: 'US',
+      },
+      {
+        userAgent: 'Mozilla/5.0 Chrome/129',
+        ip: '203.0.113.9',
+        url: 'https://acme.example/about',
+        status: 404,
+        at: new Date(1792400001 * 1000).toISOString(),
+        country: 'GB',
+      },
+    ]);
+    expect(await readFastlyBody(JSON.stringify([JSON.parse(lines.split('\n')[0])]))).toMatchObject({
+      records: 1,
+      requests: [expect.objectContaining({ ip: '20.171.206.9' })],
+    });
+    const throughReader = await readSenderBody('fastly_log_stream', Buffer.from(lines));
+    expect(throughReader.requests).toHaveLength(2);
+  });
+
+  it('drops Fastly records without a readable timestamp', async () => {
+    const parsed = await readFastlyBody(
+      JSON.stringify({
+        timestamp: 'not-a-time',
+        client_ip: '1.2.3.4',
+        request_user_agent: 'GPTBot',
+        url: '/',
+        response_status: 200,
+      }),
+    );
+    expect(parsed).toEqual({ records: 1, requests: [] });
   });
 });
 

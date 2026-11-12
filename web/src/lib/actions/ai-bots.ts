@@ -5,9 +5,9 @@ import { API_BASE_URL } from '@/config/api';
 
 /**
  * The AI bot report's connections (AT-010): each way a brand sends AI-bot
- * requests from its own Cloudflare or Vercel, read and made through the
+ * requests from its own Cloudflare, Vercel or Fastly, read and made through the
  * server (/api/bots/connections). The secret comes back once, with what to
- * copy into Cloudflare or Vercel; only its hash is kept.
+ * copy into the sender; only its hash is kept.
  *
  * Errors are returned, not thrown: a thrown error's message is masked in
  * production.
@@ -17,6 +17,8 @@ export type BotConnectionKind =
   | 'cloudflare_worker'
   | 'cloudflare_logpush'
   | 'vercel_drain'
+  // Fastly HTTPS log streaming (#2164, 00495).
+  | 'fastly_log_stream'
   // A generic sender of JSON lines (#2170, 00492).
   | 'log_webhook';
 
@@ -39,7 +41,7 @@ export interface BotUsage {
   cappedAt: string | null;
   /** Rows a month: -1 no cap, 0 the report is locked (Starter). */
   cap: number;
-  /** Log records (Logpush, Vercel drain) received this month, read or not. */
+  /** Log records (Logpush, Vercel drain, Fastly) received this month, read or not. */
   raw: number;
   /** When this month's raw cap was reached: log files aren't read after it. */
   rawCappedAt: string | null;
@@ -57,7 +59,7 @@ export interface BotConnections {
   usage: BotUsage;
 }
 
-/** What to copy into Cloudflare or Vercel, with the secret in it once. */
+/** What to copy into a log sender, with the secret in it once. */
 export interface NewBotConnection {
   connection: BotConnection;
   secret: string;
@@ -67,6 +69,7 @@ export interface NewBotConnection {
   workerSecretName: string | null;
   logpushJob: Record<string, unknown> | null;
   vercelDrain: { endpoint: string; format: string; headers: string[]; sources: string[] } | null;
+  fastlyLogFormat: string | null;
 }
 
 type Failure = { error: string; code?: 'plan_limit' };
@@ -147,6 +150,7 @@ export async function createBotConnection(
     workerSecretName: typeof b.workerSecretName === 'string' ? b.workerSecretName : null,
     logpushJob: (b.logpushJob as Record<string, unknown> | null) ?? null,
     vercelDrain: (b.vercelDrain as NewBotConnection['vercelDrain']) ?? null,
+    fastlyLogFormat: typeof b.fastlyLogFormat === 'string' ? b.fastlyLogFormat : null,
   };
 }
 

@@ -171,6 +171,18 @@ describe('AI bot connections', () => {
     const logpush = await (await create({ kind: 'cloudflare_logpush' })).json();
     expect(logpush.logpushJob.destination_conf).toContain(encodeURIComponent(logpush.secret));
     expect(logpush.vercelDrain).toBeNull();
+
+    const fastly = await (await create({ kind: 'fastly_log_stream' })).json();
+    expect(fastly.endpoint).toBe('https://api.example.com/bots/ingest');
+    expect(fastly.fastlyLogFormat).toContain('request_user_agent');
+    expect(fastly.fastlyLogFormat).toContain('req.http.Fastly-Client-IP');
+    expect(fastly).toMatchObject({
+      workerScript: null,
+      workerSecretName: null,
+      logpushJob: null,
+      vercelDrain: null,
+    });
+    expect(inserted[3]).toMatchObject({ brand_id: 'b1', kind: 'fastly_log_stream' });
   });
 
   it('makes a generic webhook: the endpoint and its secret, nothing else to copy (#2170)', async () => {
@@ -184,6 +196,7 @@ describe('AI bot connections', () => {
       workerSecretName: null,
       logpushJob: null,
       vercelDrain: null,
+      fastlyLogFormat: null,
     });
     expect(inserted[0]).toMatchObject({ brand_id: 'b1', kind: 'log_webhook' });
   });

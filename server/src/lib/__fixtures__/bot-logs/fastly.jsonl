@@ -1,0 +1,2 @@
+{"timestamp":"1792400000","client_ip":"20.171.206.9","host":"acme.example","request_user_agent":"Mozilla/5.0 (compatible; GPTBot/1.2)","url":"/pricing?from=fastly","response_status":200,"country":"US"}
+{"timestamp":"1792400001","client_ip":"203.0.113.9","host":"acme.example","request_user_agent":"Mozilla/5.0 Chrome/129","url":"/about","response_status":404,"country":"GB"}

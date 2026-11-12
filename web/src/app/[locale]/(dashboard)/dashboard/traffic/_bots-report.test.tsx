@@ -40,7 +40,14 @@ const WEEK: TrafficDateWindow = { dateFrom: '2026-10-12T09:00:00.000Z' };
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 
 const info = (over: Partial<BotConnections> = {}): BotConnections => ({
-  connections: [{ id: 'c1', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: hoursAgo(1) }],
+  connections: [
+    {
+      id: 'c1',
+      kind: 'cloudflare_worker',
+      createdAt: 't',
+      lastEventAt: hoursAgo(1),
+    },
+  ],
   usage: {
     month: '2026-10-01',
     stored: 10,
@@ -64,12 +71,24 @@ const report = (over: Partial<TrafficBots> = {}): TrafficBots => ({
       lastSeen: hoursAgo(2),
       bots: ['gptbot', 'claudebot'],
     },
-    { type: 'search', hits: 400, pages: 120, lastSeen: hoursAgo(1), bots: ['oai-searchbot'] },
+    {
+      type: 'search',
+      hits: 400,
+      pages: 120,
+      lastSeen: hoursAgo(1),
+      bots: ['oai-searchbot'],
+    },
   ],
   bots: [],
   pageCount: 14,
   pages: [
-    { page: '/menu', hits: 90, trainingLast: hoursAgo(2), searchLast: null, userLast: hoursAgo(1) },
+    {
+      page: '/menu',
+      hits: 90,
+      trainingLast: hoursAgo(2),
+      searchLast: null,
+      userLast: hoursAgo(1),
+    },
   ],
   uncrawledCount: 3,
   uncrawled: [{ page: '/gifts', citations: 14 }],
@@ -147,7 +166,12 @@ describe('BotsReportSection', () => {
     getBotConnections.mockResolvedValue(info({ connections: [] }));
     getTrafficBots.mockResolvedValue(report({ lastSeen: null }));
     createBotConnection.mockResolvedValue({
-      connection: { id: 'c9', kind: 'cloudflare_worker', createdAt: 't', lastEventAt: null },
+      connection: {
+        id: 'c9',
+        kind: 'cloudflare_worker',
+        createdAt: 't',
+        lastEventAt: null,
+      },
       secret: 'abot_new_secret',
       endpoint: 'https://api.example/bots/ingest',
       workerScript: 'const SECRET = "abot_new_secret";',
@@ -178,7 +202,9 @@ describe('BotsReportSection', () => {
   it('shows the bot types, the pages each type last read, and the search-bot alert', async () => {
     await render();
     expect(getTrafficBots).toHaveBeenCalledWith('b1', WEEK);
-    expect(text()).toContain("Growth and above · needs Cloudflare, Vercel or your server's logs");
+    expect(text()).toContain(
+      "Growth and above · needs Cloudflare, Vercel, Fastly or your server's logs",
+    );
     expect(rows()).toEqual([
       ['Training (GPTBot, ClaudeBot)', '1,200', '300', '2h ago'],
       ['Search index (OAI-SearchBot)', '400', '120', '1h ago'],
@@ -215,7 +241,12 @@ describe('BotsReportSection', () => {
     getBotConnections.mockResolvedValue(
       info({
         connections: [
-          { id: 'c1', kind: 'cloudflare_logpush', createdAt: 't', lastEventAt: hoursAgo(30) },
+          {
+            id: 'c1',
+            kind: 'cloudflare_logpush',
+            createdAt: 't',
+            lastEventAt: hoursAgo(30),
+          },
         ],
         usage: {
           month: '2026-10-01',
@@ -286,14 +317,14 @@ describe('BotsReportSection', () => {
     getBotConnections.mockResolvedValue(info({ connections: [] }));
     getTrafficBots.mockResolvedValue(report({ lastSeen: null, types: [], pages: [] }));
     await render();
-    expect(text()).toContain('Connect Cloudflare or Vercel in 2 minutes, or upload');
+    expect(text()).toContain('Connect Cloudflare, Vercel or Fastly in 2 minutes, or upload');
     const preview = [...container.querySelectorAll('button')].find(
       (b) => b.textContent === 'Preview with sample data',
     )!;
     await act(async () => preview.click());
-    expect(text()).not.toContain('Connect Cloudflare or Vercel in 2 minutes, or upload');
+    expect(text()).not.toContain('Connect Cloudflare, Vercel or Fastly in 2 minutes, or upload');
     expect(text()).toContain(
-      'Sample data: connect Cloudflare or Vercel, or upload a log file, to see yours.',
+      'Sample data: connect Cloudflare, Vercel or Fastly, or upload a log file, to see yours.',
     );
 
     await remount(false);

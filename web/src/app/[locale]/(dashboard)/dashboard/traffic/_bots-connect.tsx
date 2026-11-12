@@ -47,6 +47,7 @@ const KINDS: BotConnectionKind[] = [
   'cloudflare_worker',
   'cloudflare_logpush',
   'vercel_drain',
+  'fastly_log_stream',
   'log_webhook',
 ];
 
@@ -104,7 +105,7 @@ function CopyBlock({
   );
 }
 
-/** What to do in Cloudflare, Vercel or a log shipper with the new connection's secret, shown once. */
+/** What to do in Cloudflare, Vercel or Fastly with the new connection's secret, shown once. */
 function SetupSteps({ created }: { created: NewBotConnection }) {
   const t = useTranslations('traffic.bots');
   const kind = created.connection.kind;
@@ -156,6 +157,13 @@ function SetupSteps({ created }: { created: NewBotConnection }) {
           <p className="text-xs text-muted-foreground">
             {t('vercelFormat', { sources: created.vercelDrain.sources.join(', ') })}
           </p>
+        </>
+      )}
+      {kind === 'fastly_log_stream' && created.fastlyLogFormat && (
+        <>
+          <CopyBlock label={t('copyEndpoint')} value={created.endpoint} />
+          <CopyBlock label={t('copyHeader')} value={`Authorization: Bearer ${created.secret}`} />
+          <CopyBlock label={t('copyFastlyFormat')} value={created.fastlyLogFormat} code />
         </>
       )}
     </div>

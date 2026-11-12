@@ -110,7 +110,7 @@ describe('SourcesStrip', () => {
         line: 'acme-coffee.example.com (GSC) · synced 5h ago',
         button: 'Manage',
       },
-      { title: 'AI bots', line: 'Cloudflare / Vercel', button: null },
+      { title: 'AI bots', line: 'Cloudflare / Vercel / Fastly', button: null },
     ]);
     expect(container.querySelector('a')!.getAttribute('href')).toBe(
       '/dashboard/settings?tab=integrations',

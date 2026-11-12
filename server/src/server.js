@@ -115,7 +115,7 @@ const server = http.createServer(app);
 // payload exactly as sent, and express.json()'s parse/re-serialize would break it.
 // Mounted first so the global JSON parser skips this path (body already consumed).
 app.use('/cloro/callback', express.raw({ type: 'application/json', limit: '50mb' }));
-// AI-bot requests from brands' Cloudflare / Vercel (AT-010): authenticated by
+// AI-bot requests from brands' Cloudflare / Vercel / Fastly (AT-010): authenticated by
 // each connection's secret, server to server. Mounted before the JSON and form
 // parsers: the route checks the secret first, then reads the Worker's JSON,
 // the gzipped Logpush file or the Vercel drain's logs raw itself.

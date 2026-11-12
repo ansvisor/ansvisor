@@ -1,7 +1,8 @@
 /**
  * The AI bot report's connections (AT-010): each way a brand sends AI-bot
- * requests — a Cloudflare Worker, a Logpush job, a Vercel drain, any log
- * shipper through the generic webhook (#2170) — with its own secret, shown
+ * requests — a Cloudflare Worker, a Logpush job, a Vercel drain, a Fastly
+ * HTTPS log stream or any log shipper through the generic webhook (#2170) —
+ * with its own secret, shown
  * once. Admins and managers make and revoke them, and upload access logs, on
  * plans with the bot report (Starter has it locked, spec §7).
  *
@@ -9,7 +10,7 @@
  *                                                   rows against the event cap, log records
  *                                                   against the raw cap
  * POST   /api/bots/connections/:brandId           — { kind } → a connection, its secret, the endpoint and
- *                                                   what to copy: the Worker, a Logpush job or a Vercel drain
+ *                                                   what to copy: the Worker, Logpush job, Vercel drain or Fastly format
  * DELETE /api/bots/connections/:brandId/:id       — revoke one
  * POST   /api/bots/upload/:brandId                — an access log file (#2170), read once, as a log
  *                                                   sender's file: { received, verified, stored, records },
@@ -33,7 +34,7 @@ import {
 } from '../lib/bot-ingest.js';
 import { LogTooLargeError, readSenderBody } from '../lib/bot-log-formats.js';
 import { WORKER_SECRET_NAME, buildWorkerScript } from '../lib/bot-worker-script.js';
-import { logpushJob, vercelDrain } from '../lib/bot-sender-setup.js';
+import { FASTLY_LOG_FORMAT, logpushJob, vercelDrain } from '../lib/bot-sender-setup.js';
 import { botUploadLimiter } from '../middleware/rate-limiter.js';
 
 const router = Router();
@@ -145,7 +146,7 @@ router.post('/connections/:brandId', async (req, res) => {
     if (error) throw new Error(error.message);
 
     const { kind } = parsed.data;
-    // What the person copies into Cloudflare or Vercel, with the secret in it once.
+    // What the person copies into Cloudflare, Vercel or Fastly, with the secret in it once.
     return res.status(201).json({
       connection,
       secret,
@@ -155,6 +156,7 @@ router.post('/connections/:brandId', async (req, res) => {
       workerSecretName: kind === 'cloudflare_worker' ? WORKER_SECRET_NAME : null,
       logpushJob: kind === 'cloudflare_logpush' ? logpushJob({ endpoint, secret }) : null,
       vercelDrain: kind === 'vercel_drain' ? vercelDrain({ endpoint, secret }) : null,
+      fastlyLogFormat: kind === 'fastly_log_stream' ? FASTLY_LOG_FORMAT : null,
     });
   } catch (error) {
     return fail(req, res, error, 'create the AI bot connection');

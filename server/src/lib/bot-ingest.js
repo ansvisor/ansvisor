@@ -1,5 +1,5 @@
 /**
- * AI-bot requests sent from a brand's own Cloudflare or Vercel (AT-010, spec
+ * AI-bot requests sent from a brand's own Cloudflare, Vercel or Fastly (AT-010, spec
  * §6). Each connection has its own secret: the sender presents it, only its
  * SHA-256 is stored, and the person sees it once when it is made.
  *
@@ -30,6 +30,8 @@ export const CONNECTION_KINDS = [
   'cloudflare_worker',
   'cloudflare_logpush',
   'vercel_drain',
+  // Fastly HTTPS log streaming (#2164, 00495).
+  'fastly_log_stream',
   // A generic sender of JSON lines (#2170, 00492).
   'log_webhook',
 ];

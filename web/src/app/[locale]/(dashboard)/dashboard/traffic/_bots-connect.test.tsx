@@ -111,7 +111,7 @@ describe('BotsSource', () => {
   it('offers Upgrade on a plan without the bot report', async () => {
     getBotConnections.mockResolvedValue(info({ usage: { ...info().usage, cap: 0 } }));
     await render();
-    expect(card()).toContain('Cloudflare / Vercel · Growth+');
+    expect(card()).toContain('Cloudflare / Vercel / Fastly · Growth+');
     expect(container.querySelector('a')?.getAttribute('href')).toBe(
       '/dashboard/settings?tab=billing',
     );
@@ -138,6 +138,7 @@ describe('BotsSource', () => {
         headers: ['Authorization: Bearer abot_s3cret'],
         sources: ['static', 'lambda'],
       },
+      fastlyLogFormat: null,
     };
     createBotConnection.mockResolvedValue(created);
     const vercel = [...document.querySelectorAll('[role="radio"]')].find((r) =>
@@ -169,7 +170,7 @@ describe('BotsSource', () => {
       }),
     );
     await render(true, true, 'growth');
-    expect(card()).toContain('Cloudflare / Vercel · last event 1h ago');
+    expect(card()).toContain('Cloudflare / Vercel / Fastly · last event 1h ago');
     expect(card()).not.toContain('Growth+');
     expect(container.querySelector('a[href="/dashboard/settings?tab=billing"]')).toBeNull();
     await act(async () => button('Manage')!.click());
@@ -185,7 +186,7 @@ describe('BotsSource', () => {
       info({ usage: { ...info().usage, cap: 0, rawCap: 0, noPlan: true } }),
     );
     await render(true, true, 'starter');
-    expect(card()).toContain('Cloudflare / Vercel · Growth+');
+    expect(card()).toContain('Cloudflare / Vercel / Fastly · Growth+');
     expect(container.querySelector('a')?.getAttribute('href')).toBe(
       '/dashboard/settings?tab=billing',
     );
@@ -213,12 +214,13 @@ describe('BotsSource', () => {
       workerSecretName: 'ANSVISOR_BOT_SECRET',
       logpushJob: null,
       vercelDrain: null,
+      fastlyLogFormat: null,
     } satisfies NewBotConnection);
     getBotConnections.mockResolvedValue({ error: 'Server error: 502' });
     await act(async () => button('Create connection')!.click());
 
     expect(getBotConnections).toHaveBeenCalledTimes(2);
-    expect(card()).toContain("Cloudflare / Vercel · couldn't be read");
+    expect(card()).toContain("Cloudflare / Vercel / Fastly · couldn't be read");
     expect(page()).toContain("the secret in them isn't shown again");
     expect(page()).toContain('abot_s3cret');
   });
@@ -236,6 +238,7 @@ describe('BotsSource', () => {
       workerSecretName: 'ANSVISOR_BOT_SECRET',
       logpushJob: null,
       vercelDrain: null,
+      fastlyLogFormat: null,
     } satisfies NewBotConnection);
     await act(async () => button('Create connection')!.click());
     expect(createBotConnection).toHaveBeenCalledWith('b1', 'cloudflare_worker');
@@ -259,6 +262,7 @@ describe('BotsSource', () => {
           'https://api.example/bots/ingest?header_Authorization=Bearer%20abot_s3cret',
       },
       vercelDrain: null,
+      fastlyLogFormat: null,
     } satisfies NewBotConnection);
     const logpush = [...document.querySelectorAll('[role="radio"]')].find((r) =>
       r.textContent?.includes('Cloudflare Logpush'),
@@ -290,7 +294,7 @@ describe('BotsSource', () => {
       }),
     );
     await render();
-    expect(card()).toContain('Cloudflare / Vercel · last event 1h ago');
+    expect(card()).toContain('Cloudflare / Vercel / Fastly · last event 1h ago');
     await act(async () => button('Manage')!.click());
     expect(page()).toContain('This month: 2,000,000 of 2,000,000 detailed rows.');
     expect(page()).toContain('Detailed rows paused until Nov 1, totals still counted.');
@@ -325,7 +329,7 @@ describe('BotsSource', () => {
     await act(async () => button('Manage')!.click());
     expect(page()).toContain('Log records this month: 20,000,400 of 20,000,000.');
     expect(page()).toContain(
-      "Log files paused until Nov 1: this month's log records are used up, so requests from Logpush, the Vercel drain, the webhook or an upload aren't read until then.",
+      "Log files paused until Nov 1: this month's log records are used up, so requests from Fastly, Logpush, the Vercel drain, the webhook or an upload aren't read until then.",
     );
   });
 
@@ -372,6 +376,7 @@ describe('BotsDialog: any server, by webhook or a log file (#2170)', () => {
       workerSecretName: null,
       logpushJob: null,
       vercelDrain: null,
+      fastlyLogFormat: null,
     } satisfies NewBotConnection);
     const webhook = [...document.querySelectorAll('[role="radio"]')].find((r) =>
       r.textContent?.includes('Any server (webhook)'),
