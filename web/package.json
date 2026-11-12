@@ -15,8 +15,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "format": "node ./node_modules/prettier/bin/prettier.cjs --config .prettierrc.json --write \"src/**/*.{ts,tsx}\" \"messages/**/*.json\"",
-    "format:check": "node ./node_modules/prettier/bin/prettier.cjs --config .prettierrc.json --check \"src/**/*.{ts,tsx}\" \"messages/**/*.json\"",
+    "format": "node ./node_modules/prettier/bin/prettier.cjs --single-quote --print-width 100 --trailing-comma all --semi --tab-width 2 --write \"src/**/*.{ts,tsx}\" \"messages/**/*.json\"",
+    "format:check": "node ./node_modules/prettier/bin/prettier.cjs --single-quote --print-width 100 --trailing-comma all --semi --tab-width 2 --check \"src/**/*.{ts,tsx}\" \"messages/**/*.json\"",
     "test": "vitest run",
     "test:watch": "vitest"
   },
