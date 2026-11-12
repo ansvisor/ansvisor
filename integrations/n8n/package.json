@@ -55,6 +55,6 @@
     "n8n-workflow": "^2.47.1"
   },
   "peerDependencies": {
-    "n8n-workflow": "^1.0.0 || ^2.0.0"
+    "n8n-workflow": "*"
   }
 }
