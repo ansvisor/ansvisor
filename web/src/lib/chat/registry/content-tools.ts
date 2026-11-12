@@ -151,7 +151,7 @@ export const CONTENT_TOOLS = [
     class: 'write',
     area: 'content',
     description:
-      'For the page open in the Content Editor beside this chat (the page context’s draft chip): pass the person’s request in their own words; the Content Agent leaves suggestions in the editor for them to accept or reject, with the editor’s guards (kept quotes, known links, no invented facts). The page doesn’t change until they accept. One request a call.',
+      'For the page open in the Content Editor beside this chat (the page context’s draft chip): pass the person’s request in their own words; the Content Agent leaves suggestions in the editor for them to accept or reject, with the editor’s guards (kept quotes, known links, no invented facts). The page doesn’t change until they accept. When they quote a passage (lines starting with “> ”), keep the quote in the request: only that passage changes. One request a call.',
     defaultPolicy: 'ask_full_auto',
     maxPolicy: 'always',
     minRole: 'manager',

@@ -8,6 +8,7 @@ import { Link } from '@/i18n/navigation';
 import { DRAFT_CHIP } from '@/lib/chat/editor-page';
 import { PANEL_FROM_PARAM } from '@/lib/chat/panel';
 import type { ChatThread } from '@/lib/chat/thread';
+import type { ComposerDraft } from '../composer/chat-composer';
 import { CONTENT_EDITOR_PATH, type DraftConversation } from '@/lib/content/drafts';
 import { ChatActionsProvider } from '../chat-actions';
 import { ChatThreadView } from '../chat-thread-view';
@@ -51,12 +52,15 @@ export function EditorChat({
   draftId,
   conversation,
   onSuggestions,
+  draft = null,
 }: {
   draftId: string;
   /** The chat that made the draft (00463), when Chat made it. */
   conversation: DraftConversation | null;
   /** The Content Agent left suggestions in the page: the editor reads them. */
   onSuggestions: (count: number) => void;
+  /** A passage asked about in the page (Ask Chat on a selection): quoted in the box, not sent. */
+  draft?: ComposerDraft | null;
 }) {
   const t = useTranslations('contentEditor.editor.chat');
   const panel = useChatPanel();
@@ -147,6 +151,7 @@ export function EditorChat({
             }}
             pageRoute={route}
             placeholder={t('placeholder')}
+            draft={draft}
             onSuggestions={onSuggestions}
             empty={<p className="pt-4 text-center text-sm text-muted-foreground">{t('empty')}</p>}
           />

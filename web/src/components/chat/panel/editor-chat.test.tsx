@@ -75,11 +75,19 @@ let container: HTMLDivElement;
 let root: Root;
 const onSuggestions = vi.fn();
 
-async function render(conversation: DraftConversation | null = null) {
+async function render(
+  conversation: DraftConversation | null = null,
+  draft: { nonce: number; text: string } | null = null,
+) {
   await act(async () => {
     root.render(
       <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
-        <EditorChat draftId={DRAFT} conversation={conversation} onSuggestions={onSuggestions} />
+        <EditorChat
+          draftId={DRAFT}
+          conversation={conversation}
+          onSuggestions={onSuggestions}
+          draft={draft}
+        />
       </NextIntlClientProvider>,
     );
   });
@@ -118,6 +126,12 @@ describe('EditorChat', () => {
       placeholder: 'Make the intro shorter',
       chips: [{ key: 'draft', label: 'This draft', value: DRAFT }],
     });
+  });
+
+  it('puts a passage asked about in the page (Ask Chat) in the box', async () => {
+    const draft = { nonce: 7, text: '> Our pricing\n\n' };
+    await render(null, draft);
+    expect(view.props).toMatchObject({ draft });
   });
 
   it('starts a chat from the page, keeps it for the draft, and reopens it next time', async () => {

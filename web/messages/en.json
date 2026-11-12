@@ -10781,6 +10781,11 @@
         "placeholder": "Make the intro shorter",
         "empty": "Ask for changes to this page. They come back here as suggestions to accept or reject."
       },
+      "askChat": {
+        "label": "Ask Chat",
+        "aria": "Ask Chat about the selected passage",
+        "title": "Ask Chat about this passage ({keys})"
+      },
       "panel": {
         "label": "Side panel",
         "show": "Show side panel",

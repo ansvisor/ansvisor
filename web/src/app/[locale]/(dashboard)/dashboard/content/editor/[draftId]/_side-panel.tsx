@@ -36,6 +36,7 @@ import type { DraftRulesState } from './_use-draft-rules';
 import { YourInput, type InputPrompt } from './_your-input';
 import { useUpgradeGate } from '@/components/providers/upgrade-gate';
 import { EditorChat } from '@/components/chat/panel/editor-chat';
+import type { ComposerDraft } from '@/components/chat/composer/chat-composer';
 
 /** Remembers whether the panel is open, across drafts and visits. */
 const PANEL_OPEN_KEY = 'aeo:content-editor-panel';
@@ -288,7 +289,12 @@ export function EditorSidePanel({
    * the chat that made the draft, and what to do once the Content Agent left
    * suggestions in the page.
    */
-  chat?: { conversation: DraftConversation | null; onSuggestions: (count: number) => void };
+  chat?: {
+    conversation: DraftConversation | null;
+    onSuggestions: (count: number) => void;
+    /** A passage asked about (Ask Chat on a selection), for the Chat tab's box. */
+    draft?: ComposerDraft | null;
+  };
   /** `bar`: a bottom bar in place of the side panel (embedded in Chat, CHAT-25 §4). */
   layout?: 'side' | 'bar';
 }) {
@@ -545,6 +551,7 @@ export function EditorSidePanel({
             draftId={draft.id}
             conversation={chat.conversation}
             onSuggestions={chat.onSuggestions}
+            draft={chat.draft}
           />
         </div>
       )}
