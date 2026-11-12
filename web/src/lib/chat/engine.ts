@@ -81,6 +81,7 @@ import {
   type ChatStepScope,
 } from './events';
 import { HOLD_MAX, checkFigures, figureHold, figuresOfRun, type KnownFigures } from './facts';
+import { withoutPlaceholderLines } from './placeholders';
 import { cutText, fitResult, toJson } from './fit';
 import { historyMessages, planHistory, type HistoryPlan, type HistoryRow } from './history';
 import { fitImageParts } from './images/chat-images';
@@ -5474,6 +5475,16 @@ async function finish(rc: RunContext): Promise<void> {
   // What a job's run assumed for nobody watching leads its answer (CHAT-12 item 12),
   // one stopped at the limit too.
   rc.progress.text = withAssumptions(rc.progress.text, rc.progress.assumptions);
+  // A report or an answer never keeps a placeholder for a missing fact (placeholders.ts):
+  // its line goes, and a section that leaves empty. The person's own ones stay. What would be
+  // left empty, the answer or a section they asked for, says which facts are missing instead.
+  const filled = withoutPlaceholderLines(rc.progress.text, rc.progress.question ?? '', (facts) =>
+    t('missingFacts', { facts: facts.join(', ') }),
+  );
+  if (filled !== rc.progress.text) {
+    rc.progress.text = filled;
+    rc.sink.emit('text.replaced', { text: filled });
+  }
   // No one was there to ask: the parts that fit are done and filed, and it stops at the limit.
   if (rc.progress.limitStop) return pauseAtCap(rc, rc.progress.limitStop);
   if (!(await moveRun(rc.run.id, ['running'], 'done', { finished: true }))) return stopNow(rc);

@@ -9,6 +9,7 @@ import { dismissSuggestion } from '@/lib/actions/prompt-suggestions';
 import { requestAccess } from '@/lib/actions/chat-access-requests';
 import { ACCESS_REQUEST_RULES } from '@/lib/chat/access-requests';
 import { escapeHtml } from '@/lib/content/attachments';
+import { refuseMissingFacts } from '../placeholders';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { PAGE_TYPES, type DraftMethod, type DraftStart, type PageType } from '@/lib/content/drafts';
 import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
@@ -86,27 +87,29 @@ export const WRITE_TOOLS = [
     route: '/dashboard/content/library',
     mcpTool: 'create_content_draft',
     specRow: '54',
-    inputSchema: z.object({
-      brand_id: contentUuid.describe('Brand id, from list_brands.'),
-      title: z.string().trim().min(1).max(MAX_TITLE_LENGTH).describe('The page title, its H1.'),
-      page_type: z.enum(PAGE_TYPES),
-      method: z
-        .enum(['create', 'optimize'])
-        .default('create')
-        .describe('create: a new page; optimize: a new version of the page at source_url.'),
-      source: z.discriminatedUnion('kind', [
-        z.object({ kind: z.enum(['opportunity', 'prompt', 'topic']), id: contentUuid }),
-        z.object({ kind: z.literal('content') }),
-      ]),
-      body_html: z.string().max(MAX_BODY_HTML_LENGTH).optional().describe('The page as HTML.'),
-      source_url: z
-        .string()
-        .trim()
-        .max(2048)
-        .refine(isHttpUrl, 'source_url must be an http(s) address')
-        .optional()
-        .describe('For optimize: the live page.'),
-    }),
+    inputSchema: z
+      .object({
+        brand_id: contentUuid.describe('Brand id, from list_brands.'),
+        title: z.string().trim().min(1).max(MAX_TITLE_LENGTH).describe('The page title, its H1.'),
+        page_type: z.enum(PAGE_TYPES),
+        method: z
+          .enum(['create', 'optimize'])
+          .default('create')
+          .describe('create: a new page; optimize: a new version of the page at source_url.'),
+        source: z.discriminatedUnion('kind', [
+          z.object({ kind: z.enum(['opportunity', 'prompt', 'topic']), id: contentUuid }),
+          z.object({ kind: z.literal('content') }),
+        ]),
+        body_html: z.string().max(MAX_BODY_HTML_LENGTH).optional().describe('The page as HTML.'),
+        source_url: z
+          .string()
+          .trim()
+          .max(2048)
+          .refine(isHttpUrl, 'source_url must be an http(s) address')
+          .optional()
+          .describe('For optimize: the live page.'),
+      })
+      .superRefine(refuseMissingFacts),
     run: (ctx, input) =>
       createContentDraft(input.brand_id, draftStart(input, ctx.chat, { asRun: false })),
     sessionFree: true,

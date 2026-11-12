@@ -13,6 +13,7 @@ import { MAX_BODY_HTML_LENGTH, MAX_TITLE_LENGTH } from '@/lib/content/editor';
 import { sanitizeDraftHtml } from '@/lib/content/sanitize-draft-html';
 import { contentUuid } from '@/lib/mcp/content-schemas';
 import { OPTIMIZE_TOOL, optimizeDraftHere, type OptimizeResult } from '../page-optimize';
+import { refuseMissingFacts } from '../placeholders';
 import { readPageVersion } from '../page-versions';
 import { FIXTURE_IDS, defineTool, type ChatToolContext } from './define-tool';
 import { draftPage, draftTitle, pageChanges } from './targets';
@@ -94,7 +95,8 @@ export const CONTENT_TOOLS = [
       })
       .refine((input) => input.title !== undefined || input.body_html !== undefined, {
         message: 'Change the title, the page, or both.',
-      }),
+      })
+      .superRefine(refuseMissingFacts),
     run: (_ctx, input) =>
       updateContentDraft(input.draft_id, { title: input.title, bodyHtml: input.body_html }),
     sessionFree: true,

@@ -168,7 +168,7 @@ The editor beside the chat is narrower: **Brief**, **Rules** and **Quality** sit
 
 ## Versions of a page in chat
 
-Each time Chat writes or changes a page, its card shows the version, such as **Version 2 · 7 questions · 905 characters**. **What changed** lists sections Chat made shorter, new questions or sections, and placeholders in [BRACKETS] for you to fill; the first next move offers to fill one. The card previews the first sections; **Show all** opens the rest. **Undo to version 1** puts the version before back, as the editor's History does. Every version is saved to the Library as a draft. Admins and Managers can **Send to CMS** from the card, as from the Library. Once nothing is left to fill, **Mark ready** is a next move: it sets the draft to Ready as the editor does, and Undo takes it back for 7 days.
+Each time Chat writes or changes a page, its card shows the version, such as **Version 2 · 7 questions · 905 characters**. **What changed** lists sections Chat made shorter and new questions or sections. Chat and its agents don't save a page with a placeholder for a missing fact, such as [price] or [departure dates]: they ask you for the missing facts first, or leave that part out and say so. The card previews the first sections; **Show all** opens the rest. **Undo to version 1** puts the version before back, as the editor's History does. Every version is saved to the Library as a draft. Admins and Managers can **Send to CMS** from the card, as from the Library. Once nothing is left to fill, **Mark ready** is a next move: it sets the draft to Ready as the editor does, and Undo takes it back for 7 days.
 
 ## Rules and Quality on a page's card
 
@@ -192,6 +192,8 @@ Chat reads your brand's approved facts: the prices and plans, trial, founding ye
 
 **/facts** (**Brand facts check**) compares your drafts with them, and **/wrongclaim** (**Fix wrong claims about us**) checks what AI answers say about your brand against them. The **Brand Facts Guardian** agent uses both. When a brand has no approved facts yet, Chat says so and asks you to approve them or to give the facts yourself. Chat never approves a fact.
 
+Chat and its agents never make up a price, fee, date, rule or contact detail. When one is missing, they ask you for it, or leave that part out.
+
 ## Open a web page
 
 Chat can open a public web page you name, such as a page of your site, a competitor's, or one AI answers cite. It reads the page's title, description, headings, structured data and main text, and the step says "Opened acme.com/pricing", or why a page couldn't be opened.
@@ -214,7 +216,7 @@ Everything comes from your scheduled tracking. Chat never asks an AI engine anyt
 
 ## What explains the change
 
-Under the answer, a card shows the same numbers. Click the two values for the periods, the tracking runs compared and the normal swing. Each cause shows its share of the change, or its points when it partly offset it. Open a cause to see its prompts, the page cited before and the one cited now, and the day. **Answer** opens that tracked answer, with your brand marked and the pages it cited. Each cause says how sure Chat is: **High** when 10 or more prompts show it, **Medium** for 3 to 9, **Low** for fewer. When some answers couldn't be read, the card says so, and part of the change stays unexplained.
+Under the answer, a card shows the same numbers. Click the two values for the periods, the tracking runs compared and the normal swing. Each cause shows its share of the change, or its points when it partly offset it. Open a cause to see its prompts, the page cited before and the one cited now, and the day. **Answer** opens that tracked answer, with your brand marked and the pages it cited. Each cause says how sure Chat is: **High** when 10 or more prompts show it, **Medium** for 3 to 9, **Low** for fewer. When some answers couldn't be read, the card says so. What the causes don't cover shows as **Shifts across AI answers**.
 
 ## Close a task from what Chat made
 
