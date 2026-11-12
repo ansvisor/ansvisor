@@ -23,8 +23,9 @@ const mocks = vi.hoisted(() => {
   query.select.mockReturnValue(query);
   query.eq.mockReturnValue(query);
   query.delete.mockReturnValue(query);
-  query.then.mockImplementation((resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
-    Promise.resolve({ error: null }).then(resolve, reject),
+  query.then.mockImplementation(
+    (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+      Promise.resolve({ error: null }).then(resolve, reject),
   );
   return {
     authenticateMcpRequest: vi.fn(),
@@ -45,10 +46,10 @@ vi.mock('@/lib/supabase/admin', () => ({ supabaseAdmin: { from: mocks.from } }))
 
 const { DELETE } = await import('./route');
 
-const remove = (id = ID) => DELETE(
-  new Request('http://localhost/api/mcp/webhooks/' + id, { method: 'DELETE' }),
-  { params: Promise.resolve({ id }) },
-);
+const remove = (id = ID) =>
+  DELETE(new Request('http://localhost/api/mcp/webhooks/' + id, { method: 'DELETE' }), {
+    params: Promise.resolve({ id }),
+  });
 
 beforeEach(() => {
   mocks.authenticateMcpRequest.mockReset().mockResolvedValue(AUTH);
@@ -62,9 +63,12 @@ beforeEach(() => {
     error: null,
   });
   mocks.query.delete.mockClear().mockReturnValue(mocks.query);
-  mocks.query.then.mockReset().mockImplementation((resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
-    Promise.resolve({ error: null }).then(resolve, reject),
-  );
+  mocks.query.then
+    .mockReset()
+    .mockImplementation(
+      (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+        Promise.resolve({ error: null }).then(resolve, reject),
+    );
 });
 
 describe('DELETE /api/mcp/webhooks/{id}', () => {
@@ -97,8 +101,9 @@ describe('DELETE /api/mcp/webhooks/{id}', () => {
     mocks.isDemoBrandOf.mockResolvedValueOnce(true);
     expect((await remove()).status).toBe(402);
 
-    mocks.query.then.mockImplementationOnce((resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
-      Promise.resolve({ error: { message: 'database detail' } }).then(resolve, reject),
+    mocks.query.then.mockImplementationOnce(
+      (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+        Promise.resolve({ error: { message: 'database detail' } }).then(resolve, reject),
     );
     const response = await remove();
     expect(response.status).toBe(500);

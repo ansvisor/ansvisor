@@ -11,11 +11,11 @@ app_version: 0.3.0
 approved: false
 sources: [docs/guides/zapier.mdx, docs/api-reference/webhooks.mdx]
 ---
-Send a brand's Ansvisor events to a Zapier workflow. Each brand has its own webhook secret, so connect a separate Ansvisor account in Zapier for each brand you want to use.
+Send a brand's Ansvisor events to a Zapier workflow. Each brand has its own private connection value, so connect a separate Ansvisor account in Zapier for each brand you want to use.
 
 ## Connect your account
 
-Create an API key under **Settings → MCP & API Keys** and add it to the Ansvisor connection in Zapier. For webhook triggers, also enter the secret configured for the target brand. The key's user must be an admin or manager with webhook write access.
+Create an API key under **Settings → MCP & API Keys** and add it to the Ansvisor connection in Zapier. For webhook triggers, also enter the private value configured for the target brand. The key's user must be an admin or manager with webhook write access.
 
 ## Enable a webhook trigger
 

@@ -99,8 +99,9 @@ describe('the REST mirrors on the demo brand', () => {
     const routes = (readdirSync(root, { recursive: true }) as string[])
       .filter((file) => file.endsWith('route.ts'))
       .map((file) => join(root, file));
-    // Through the data function, which refuses the demo brand itself.
-    const SELF_CHECKED = /\b(runSiteAuditFor|generateBriefFor|createImproveActionFor)\(/;
+    // Through a data function that refuses the demo brand itself, or an explicit demo-brand lookup.
+    const SELF_CHECKED =
+      /\b(runSiteAuditFor|generateBriefFor|createImproveActionFor|isDemoBrandOf)\(/;
     const unchecked = routes
       .filter((file) => relative(root, file) !== 'route.ts') // the MCP endpoint: its tools are gated
       .filter((file) => {

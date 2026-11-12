@@ -2,11 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
 import { listBrandsFor } from '@/lib/mcp/data';
-import {
-  requireManager,
-  RoleRequiredError,
-  roleRequiredResponse,
-} from '@/lib/mcp/role-gate';
+import { requireManager, RoleRequiredError, roleRequiredResponse } from '@/lib/mcp/role-gate';
 import { DEMO_BRAND, isDemoBrandOf } from '@/lib/mcp/demo-gate';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
@@ -39,7 +35,10 @@ export async function POST(request: Request) {
   const parsed = createSubscriptionSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: 'Provide a valid brand, supported event, HTTPS webhook URL, secret and subscription ID.' },
+      {
+        error:
+          'Provide a valid brand, supported event, HTTPS webhook URL, secret and subscription ID.',
+      },
       { status: 400 },
     );
   }
@@ -52,7 +51,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Webhook URL is invalid.' }, { status: 400 });
   }
   if (targetUrl.protocol !== 'https:' || targetUrl.username || targetUrl.password) {
-    return NextResponse.json({ error: 'Webhook URL must use HTTPS and must not contain credentials.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Webhook URL must use HTTPS and must not contain credentials.' },
+      { status: 400 },
+    );
   }
 
   try {
@@ -84,13 +86,25 @@ export async function POST(request: Request) {
       .single();
 
     if (error || !data) {
-      console.error('[api/mcp/webhooks] subscription upsert failed', error?.message || 'No row returned');
-      return NextResponse.json({ error: 'Unable to register the webhook subscription.' }, { status: 500 });
+      console.error(
+        '[api/mcp/webhooks] subscription upsert failed',
+        error?.message || 'No row returned',
+      );
+      return NextResponse.json(
+        { error: 'Unable to register the webhook subscription.' },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ id: data.id }, { status: 201 });
   } catch (error) {
-    console.error('[api/mcp/webhooks] subscription registration failed', error instanceof Error ? error.message : 'Unknown error');
-    return NextResponse.json({ error: 'Unable to register the webhook subscription.' }, { status: 500 });
+    console.error(
+      '[api/mcp/webhooks] subscription registration failed',
+      error instanceof Error ? error.message : 'Unknown error',
+    );
+    return NextResponse.json(
+      { error: 'Unable to register the webhook subscription.' },
+      { status: 500 },
+    );
   }
 }

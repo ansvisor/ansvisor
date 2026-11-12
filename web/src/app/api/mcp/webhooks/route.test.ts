@@ -47,11 +47,14 @@ const body = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-const post = (payload: unknown) => POST(new Request('http://localhost/api/mcp/webhooks', {
-  method: 'POST',
-  headers: { 'content-type': 'application/json' },
-  body: JSON.stringify(payload),
-}));
+const post = (payload: unknown) =>
+  POST(
+    new Request('http://localhost/api/mcp/webhooks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    }),
+  );
 
 beforeEach(() => {
   mocks.authenticateMcpRequest.mockReset().mockResolvedValue(AUTH);
@@ -84,7 +87,9 @@ describe('POST /api/mcp/webhooks', () => {
 
   it('rejects unsupported events, non-HTTPS targets and malformed subscription IDs', async () => {
     expect((await post(body({ event: 'webhook.test' }))).status).toBe(400);
-    expect((await post(body({ webhook_url: 'http://hooks.zapier.com/catch/123' }))).status).toBe(400);
+    expect((await post(body({ webhook_url: 'http://hooks.zapier.com/catch/123' }))).status).toBe(
+      400,
+    );
     expect((await post(body({ subscription_id: 'not-a-hash' }))).status).toBe(400);
   });
 
@@ -105,6 +110,8 @@ describe('POST /api/mcp/webhooks', () => {
     mocks.query.single.mockResolvedValueOnce({ data: null, error: { message: 'database detail' } });
     const response = await post(body());
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: 'Unable to register the webhook subscription.' });
+    expect(await response.json()).toEqual({
+      error: 'Unable to register the webhook subscription.',
+    });
   });
 });

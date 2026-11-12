@@ -2,20 +2,13 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { authenticateMcpRequest } from '@/lib/mcp-auth';
 import { listBrandsFor } from '@/lib/mcp/data';
-import {
-  requireManager,
-  RoleRequiredError,
-  roleRequiredResponse,
-} from '@/lib/mcp/role-gate';
+import { requireManager, RoleRequiredError, roleRequiredResponse } from '@/lib/mcp/role-gate';
 import { DEMO_BRAND, isDemoBrandOf } from '@/lib/mcp/demo-gate';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 
 const idSchema = z.string().uuid();
 
-export async function DELETE(
-  request: Request,
-  context: { params: Promise<{ id: string }> },
-) {
+export async function DELETE(request: Request, context: { params: Promise<{ id: string }> }) {
   const auth = await authenticateMcpRequest(request);
   if (auth instanceof NextResponse) return auth;
 
@@ -40,7 +33,10 @@ export async function DELETE(
 
     if (lookupError) {
       console.error('[api/mcp/webhooks] subscription lookup failed', lookupError.message);
-      return NextResponse.json({ error: 'Unable to remove the webhook subscription.' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Unable to remove the webhook subscription.' },
+        { status: 500 },
+      );
     }
 
     if (!config || !config.name.startsWith('Zapier:')) {
@@ -64,12 +60,21 @@ export async function DELETE(
 
     if (deleteError) {
       console.error('[api/mcp/webhooks] subscription delete failed', deleteError.message);
-      return NextResponse.json({ error: 'Unable to remove the webhook subscription.' }, { status: 500 });
+      return NextResponse.json(
+        { error: 'Unable to remove the webhook subscription.' },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('[api/mcp/webhooks] subscription removal failed', error instanceof Error ? error.message : 'Unknown error');
-    return NextResponse.json({ error: 'Unable to remove the webhook subscription.' }, { status: 500 });
+    console.error(
+      '[api/mcp/webhooks] subscription removal failed',
+      error instanceof Error ? error.message : 'Unknown error',
+    );
+    return NextResponse.json(
+      { error: 'Unable to remove the webhook subscription.' },
+      { status: 500 },
+    );
   }
 }
