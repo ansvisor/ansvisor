@@ -47,13 +47,13 @@
     ]
   },
   "devDependencies": {
-    "@n8n/node-cli": "*",
+    "@n8n/node-cli": "^0.56.2",
     "@types/node": "^22.15.30",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3",
     "vitest": "^3.1.1"
   },
   "peerDependencies": {
-    "n8n-workflow": "*"
+    "n8n-workflow": "^1.0.0 || ^2.0.0"
   }
 }
