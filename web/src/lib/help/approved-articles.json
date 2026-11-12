@@ -337,11 +337,11 @@
         "task checks"
       ],
       "plan": "all",
-      "updated": "2026-11-07",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
-          "text": "Each action comes with tasks: concrete steps such as \"Refresh content for these prompts\" or \"Add structured data to these pages\". You find them on the action's **Tasks** tab."
+          "text": "Each action comes with tasks: concrete steps such as \"Update /subscriptions to answer “Is a coffee subscription worth it?”\" or \"Add structured data to these pages\". You find them on the action's **Tasks** tab. A new action's tasks name the prompt, page or competitor they are about, and come with **Where**, **How** and **Done when** already filled in from what the action found."
         },
         {
           "heading": "What a task tells you",
@@ -531,7 +531,7 @@
         "playbook"
       ],
       "plan": "all",
-      "updated": "2026-11-09",
+      "updated": "2026-11-11",
       "sections": [
         {
           "heading": null,
@@ -551,7 +551,7 @@
         },
         {
           "heading": "What Content Editor opens",
-          "text": "Click **Content Editor**. A draft is written for the action's writing task and opens in the Content Editor:\n\n- the action's prompts, so its sources and brief answer them;\n- the page it works on, read from your site, for an existing page;\n- the page type, from the page's address, or from the kind of page the action picked;\n- on an online shop, the products the action is about, locked into the page's shopping path.\n\nA new draft builds its brief as it opens, from your AI usage. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it."
+          "text": "Click **Content Editor**. A draft is written for the action's writing task and opens in the Content Editor:\n\n- a page title, not the action's: the existing page's, or the main prompt a new page answers;\n- the action's prompts, so its sources and brief answer them;\n- the page it works on, read from your site, for an existing page;\n- the page type, from the page's address, or the kind of page the action or its opportunity picked;\n- on an online shop, the products the action is about, locked into the page's shopping path.\n\nAs in **Write this**, once you confirm its AI usage, the Content Agent builds the brief and writes the page, or suggests changes. If the page can't be read, only the brief is built. The task moves to **In Progress**. Once a draft is written, the button reads **Open draft** and opens it as you left it."
         },
         {
           "heading": "Several pages",
@@ -1687,7 +1687,7 @@
         },
         {
           "heading": "Copy, download or save an answer",
-          "text": "Under every finished answer, three small buttons show their names when you point at them:\n\n- **Copy** copies the answer, with its formatting where you paste it.\n- **Download** gives the answer as **Markdown**, **Word** or **PDF**, and as **CSV** or **Excel** when it has a table (one sheet per table). The file is named after your question and the day, and it carries when the answer was made and how fresh its data was. Downloads aren't kept and use no AI.\n- **Save to Files** keeps the answer for your whole workspace; it then reads **In Files**. Saved answers count toward your workspace's storage: 1 GB in the free trial, 5 GB on Starter, 25 GB on Growth, and what your contract says on Enterprise. When storage is full, the answer isn't saved, and the button says so.\n\nEvery role can copy, download and save answers it can open."
+          "text": "Under every finished answer, buttons show their names; in the narrow side panel, point at them:\n\n- **Copy** copies the answer, with its formatting where you paste it.\n- **Download** gives the answer as **Markdown**, **Word** or **PDF**, and as **CSV** or **Excel** when it has a table (one sheet per table). The file is named after your question and the day, and it carries when the answer was made and how fresh its data was. Downloads aren't kept and use no AI.\n- **Save to Files** keeps the answer for your whole workspace; it then reads **In Files**. Saved answers count toward your workspace's storage: 1 GB in the free trial, 5 GB on Starter, 25 GB on Growth, and what your contract says on Enterprise. When storage is full, the answer isn't saved, and the button says so.\n\nEvery role can copy, download and save answers it can open."
         },
         {
           "heading": "What Chat makes",
@@ -2458,7 +2458,12 @@
         "sub-questions ai searches",
         "prompt portfolio",
         "prompts to add",
-        "prompts to pause"
+        "prompts to pause",
+        "30-day plan",
+        "/plan",
+        "monthly plan",
+        "task list",
+        "plan actions"
       ],
       "synonyms": [
         "slash commands",
@@ -2473,7 +2478,7 @@
       "sections": [
         {
           "heading": null,
-          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-four Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief** and **Setup guide**."
+          "text": "Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-five Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan** and **Setup guide**."
         },
         {
           "heading": "Use a skill",
@@ -2517,7 +2522,7 @@
         },
         {
           "heading": "The Ansvisor skills",
-          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps and Prompt portfolio.\n\n**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
+          "text": "Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio and 30-day plan.\n\n**Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent."
         },
         {
           "heading": "Fan-out gaps",
@@ -2526,6 +2531,10 @@
         {
           "heading": "Prompt portfolio",
           "text": "**Prompt portfolio** (**/prompts**) proposes prompts to track, from your prompt suggestions, the sub-questions AI engines search and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each change is a card you approve, and the **Activity** log can undo it."
+        },
+        {
+          "heading": "30-day plan",
+          "text": "**30-day plan** (**/plan**) reads your brand's visibility, prompts, competitors, content opportunities and open actions over your date range, and proposes a plan for four weeks: 8 to 12 actions, each with why, its effort and the prompts and pages it covers. Chat asks you once before it adds them to the **Action Center**, then links each one (AC-n) and says what to do first. Where an open action already covers something, the plan links that action instead of adding another."
         }
       ]
     },

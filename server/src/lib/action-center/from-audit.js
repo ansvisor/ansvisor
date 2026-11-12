@@ -206,6 +206,7 @@ export async function sendAuditToActionCenter(brandId, { auditId, userId }) {
       mode: item.mode,
       permission: item.permission,
       depends_on: item.dependsOn,
+      title: item.title,
       title_params: item.titleParams,
       details: item.details,
       status: 'todo',

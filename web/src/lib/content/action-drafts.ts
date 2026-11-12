@@ -12,6 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { CLOSED_ACTION_STATUSES, type ActionStatus } from '@/lib/action-center/registry';
 import type { DraftMethod, DraftStatus } from './drafts';
 import { MAX_DATA_CELL } from './draft-inputs';
+import { pagePath } from './overlap';
 
 /** The library tasks a draft is the work of, by the draft's method. */
 export const DRAFT_TASK_KEYS: Record<DraftMethod, readonly string[]> = {
@@ -98,6 +99,27 @@ export function playAssetType(payload: Record<string, unknown> | null | undefine
   if (!play || typeof play !== 'object') return null;
   const type = (play as { assetType?: unknown }).assetType;
   return typeof type === 'string' && type.length <= 60 ? type : null;
+}
+
+/**
+ * The title a draft started from an action takes (Start now): the page's,
+ * never the action's ("Close the visibility gap with 1 competitor"). A page
+ * to update keeps its live title, else its path; a new page takes its
+ * opportunity brief's suggested title, else the main prompt it answers ("Is
+ * a coffee subscription worth it?"). The action's title only when nothing
+ * else names the page.
+ */
+export function actionDraftTitle(input: {
+  page: string | null;
+  pageTitle?: string | null;
+  suggestedTitle?: string | null;
+  prompt?: string | null;
+  actionTitle: string;
+}): string {
+  const named = input.page
+    ? input.pageTitle?.trim() || pagePath(input.page)
+    : input.suggestedTitle?.trim() || input.prompt?.trim();
+  return named || input.actionTitle.trim();
 }
 
 /** The words of the link table a bridge links page's draft gets, in the reader's language. */

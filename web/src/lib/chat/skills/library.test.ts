@@ -75,6 +75,8 @@ const MCP_COACH_SKILLS = ['ansvisor-aeo-coach', 'ansvisor-aeo-coach-standalone']
  * the Prompt Portfolio Manager's: each line says what the agent's card
  * does. The ChatGPT Business Hub plan's /chatgpt-profile (PR 7) follows
  * /facts, and is offered only with BUSINESS_HUB_ENABLED (flagged.ts).
+ * /plan comes last: a 30-day plan whose actions it adds to the Action
+ * Center with create_action, once the person says yes.
  */
 const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = {
   winback: {
@@ -184,6 +186,11 @@ const ANSVISOR_SKILLS: Record<string, { title: string; description: string }> = 
     description:
       'Proposes prompts to add and to pause, with the evidence for each. Every change waits for your click.',
   },
+  plan: {
+    title: '30-day plan',
+    description:
+      "Plans your next 30 days from your brand's data, and adds its actions to Action Center once you confirm.",
+  },
 };
 const LIBRARY_NAMES = Object.keys(ANSVISOR_SKILLS);
 
@@ -225,7 +232,7 @@ const folders = files.map((file) => file.folder);
 const playbookFiles = allFiles.filter(isHidden);
 
 describe('the skills in /skills', () => {
-  it("are Ansvisor's twenty-five, with the mockup's titles and descriptions", () => {
+  it("are Ansvisor's twenty-six, with the mockup's titles and descriptions", () => {
     expect([...folders].sort()).toEqual([...LIBRARY_NAMES].sort());
     const shown = Object.fromEntries(
       files.map(({ folder, text }) => {

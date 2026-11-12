@@ -1,7 +1,7 @@
 ---
 title: Skills in Chat
 route: /dashboard/chat
-keywords: [manager adds library skill, skills, skill, setup guide, /setup, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, skill from skills.sh, skills.sh, review a skill, skill update, update available, library, skill library, library skills, add a skill from the library, third-party skills, mit skills, pending approval, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, fan-out gaps, fanout, sub-questions ai searches, prompt portfolio, prompts to add, prompts to pause]
+keywords: [manager adds library skill, skills, skill, setup guide, /setup, create a skill, skill draft, save these steps as a skill, slash menu, ansvisor skills, used skill, save a skill, my skills, skills page, turn off a skill, schedule a skill, import a skill, upload a skill, skill from github, skill from skills.sh, skills.sh, review a skill, skill update, update available, library, skill library, library skills, add a skill from the library, third-party skills, mit skills, pending approval, faq from fan-outs, weekly report, win back citations, ready to publish, buyer questions, rival brief, listing gaps, fan-out gaps, fanout, sub-questions ai searches, prompt portfolio, prompts to add, prompts to pause, 30-day plan, /plan, monthly plan, task list, plan actions]
 synonyms: [slash commands, playbooks, how-tos, templates, marketplace, skills directory]
 plan: all
 updated: 2026-11-11
@@ -11,7 +11,7 @@ app_version: 0.3.0
 approved: true
 sources: [web/messages/en.json, skills/README.md]
 ---
-Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-four Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief** and **Setup guide**.
+Skills teach Chat how to do a task the way Ansvisor recommends: what to read, the steps to take and what the result looks like. Chat has twenty-five Ansvisor skills, such as **Win back lost citations**, **FAQ from fan-outs**, **Fan-out gaps**, **Prompt portfolio**, **Ready to publish**, **Weekly report**, **Buyer questions**, **Rival brief**, **30-day plan** and **Setup guide**.
 
 ## Use a skill
 
@@ -72,7 +72,7 @@ A skill shapes how Chat works, not what it may do. It gives Chat no new tools, d
 
 ## The Ansvisor skills
 
-Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps and Prompt portfolio.
+Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fan-outs, Weekly report, Beat a competitor, Refresh for this year, Ready to publish, AI shopping readiness, Fix wrong claims about us, Answer-first rewrite, Brand facts check, Comparison page, Translate a page, Buyer questions, How AI compares us, No clear leader, Who AI recommends by market, Listing gaps, Rival brief, Site audit fixes, Setup guide, Fan-out gaps, Prompt portfolio and 30-day plan.
 
 **Setup guide** (**/setup**) walks you through the open set-up steps of **Finish setting up**, then recommends 3 to 5 ready-to-use agents for your brand's site type and your work areas, each linked to its card in **Action Center › Agents**. It never turns an agent on. It is the skill of the **Onboarding & Help** agent.
 
@@ -83,3 +83,7 @@ Win back lost citations, Complete this week’s tasks, Quality pass, FAQ from fa
 ## Prompt portfolio
 
 **Prompt portfolio** (**/prompts**) proposes prompts to track, from your prompt suggestions, the sub-questions AI engines search and your Search Console queries, and prompts to pause: ones tracked for 8 weeks or more whose answers never named or cited your brand in that time, with little or no known search demand. Each change is a card you approve, and the **Activity** log can undo it.
+
+## 30-day plan
+
+**30-day plan** (**/plan**) reads your brand's visibility, prompts, competitors, content opportunities and open actions over your date range, and proposes a plan for four weeks: 8 to 12 actions, each with why, its effort and the prompts and pages it covers. Chat asks you once before it adds them to the **Action Center**, then links each one (AC-n) and says what to do first. Where an open action already covers something, the plan links that action instead of adding another.
