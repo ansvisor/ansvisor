@@ -102,6 +102,14 @@ import { DemoSetupDialog } from '@/components/demo/demo-setup-dialog';
 import { useExploreDemo, usePreloadDemo } from '@/hooks/use-explore-demo';
 import { wantsDemoAhead } from '@/lib/demo/demo-ahead';
 import { OnboardingFrame } from '@/components/onboarding/onboarding-frame';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  defaultPickCount,
+  pickedCount,
+  promptRoom,
+  withDefaultPicks,
+  type TopicPromptPicks,
+} from '@/lib/onboarding-prompt-picks';
 
 // ── Step indicator ─────────────────────────────────────────────────────────────
 
@@ -142,24 +150,23 @@ function BrandHeader({ name, domain }: { name: string; domain: string }) {
 
 // ── Topic Prompt Accordion ─────────────────────────────────────────────────────
 
-interface TopicPromptsData {
-  topic: string;
-  prompts: string[];
-}
+// A topic's suggested prompts, each ticked or not: a checklist.
+type TopicPromptsData = TopicPromptPicks;
 
 function TopicAccordion({
   data,
   defaultOpen = false,
   onRemoveTopic,
   onAddPrompt,
-  onRemovePrompt,
+  onTogglePrompt,
 }: {
   data: TopicPromptsData;
   defaultOpen?: boolean;
   onRemoveTopic: () => void;
   onAddPrompt: (prompt: string) => void;
-  onRemovePrompt: (index: number) => void;
+  onTogglePrompt: (index: number) => void;
 }) {
+  const t = useTranslations('onboarding.prompts');
   const [open, setOpen] = useState(defaultOpen);
   const [newPrompt, setNewPrompt] = useState('');
 
@@ -184,7 +191,12 @@ function TopicAccordion({
             <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
           )}
           <span className="font-medium">{data.topic}</span>
-          <span className="text-xs text-muted-foreground">{data.prompts.length} prompts</span>
+          <span className="text-xs text-muted-foreground">
+            {t('topicCount', {
+              picked: data.prompts.filter((p) => p.picked).length,
+              total: data.prompts.length,
+            })}
+          </span>
         </button>
         <DropdownMenu>
           <DropdownMenuTrigger className="p-1 rounded hover:bg-muted text-muted-foreground">
@@ -203,18 +215,17 @@ function TopicAccordion({
       {open && (
         <div className="pl-7 pb-3 space-y-1.5">
           {data.prompts.map((p, idx) => (
-            <div
+            <label
               key={idx}
-              className="flex items-center gap-2 group rounded-md border bg-muted/30 px-3 py-2"
+              data-slot="prompt-pick"
+              className={cn(
+                'flex cursor-pointer items-center gap-2.5 rounded-md border px-3 py-2',
+                p.picked ? 'bg-muted/30' : 'text-muted-foreground',
+              )}
             >
-              <span className="text-sm flex-1">{p}</span>
-              <button
-                onClick={() => onRemovePrompt(idx)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
+              <Checkbox checked={p.picked} onCheckedChange={() => onTogglePrompt(idx)} />
+              <span className="text-sm flex-1">{p.text}</span>
+            </label>
           ))}
           <div className="flex items-center gap-2 mt-2">
             <Input
@@ -280,6 +291,8 @@ export default function OnboardingPage() {
   const tOffer = useTranslations('planOffer');
   const tPlans = useTranslations('readOnly.plans');
   const tWaiting = useTranslations('prompts.waiting');
+  const tPrompts = useTranslations('onboarding.prompts');
+  const tSetup = useTranslations('onboarding');
   const { addBrand, setActiveBrand, updateBrand: updateBrandInStore } = useBrandStore();
 
   const [step, setStep] = useState(1);
@@ -365,7 +378,9 @@ export default function OnboardingPage() {
   // the first-month offer shown from the first frame (the person setting up
   // the workspace is its admin), its code checked once the step is reached.
   const [offer, setOffer] = useFirstMonthOffer(firstMonthOfferOn(), step === PLAN_STEP);
-  const [choice, setChoice] = useStartChoice(trialDays != null);
+  // The free trial first, while the workspace may have one: Monthly once
+  // it's found used.
+  const [choice, setChoice] = useStartChoice(trialDays != null, 'trial');
   // The plans' details (what each is for and includes), in the cards.
   const [planDetails, setPlanDetails] = useState(false);
   const { checkout, failed, start } = useStartCheckout({
@@ -858,16 +873,22 @@ export default function OnboardingPage() {
     }
 
     try {
-      const { topicPrompts: generated } = await generatePromptsFromTopics(
-        {
-          brandName: brandName.trim(),
-          description: description.trim(),
-          website: domain,
-          language,
-        },
-        topicNames,
-      );
-      setTopicPrompts(generated);
+      // The plan's room, read alongside: the prompts ticked at first fit in
+      // it, so none start out waiting for a spot. Unread, 15 as usual.
+      const [{ topicPrompts: generated }, capacity] = await Promise.all([
+        generatePromptsFromTopics(
+          {
+            brandName: brandName.trim(),
+            description: description.trim(),
+            website: domain,
+            language,
+          },
+          topicNames,
+        ),
+        promptCapacity ?? getPromptCapacity(createdBrand.id).catch(() => null),
+      ]);
+      if (capacity) setPromptCapacity(capacity);
+      setTopicPrompts(withDefaultPicks(generated, defaultPickCount(promptRoom(capacity))));
       track('onboarding_step_completed', {
         step: 3,
         step_name: 'topics',
@@ -896,13 +917,15 @@ export default function OnboardingPage() {
     setSaveError(null);
     try {
       const allPrompts = topicPrompts.flatMap((tp) =>
-        tp.prompts.map((text) => ({
-          text,
-          category: tp.topic,
-          platforms: activeScrapers.map((s) => s.id),
-          models: activeModels.map((m) => m.id),
-          isActive: true,
-        })),
+        tp.prompts
+          .filter((p) => p.picked)
+          .map(({ text }) => ({
+            text,
+            category: tp.topic,
+            platforms: activeScrapers.map((s) => s.id),
+            models: activeModels.map((m) => m.id),
+            isActive: true,
+          })),
       );
 
       if (allPrompts.length === 0) {
@@ -1087,7 +1110,7 @@ export default function OnboardingPage() {
       // Cloud mode → subscription step (tracking triggered after payment)
       if (isCloud()) {
         setSavingCompetitors(false);
-        toast.success('Almost done! Choose a plan to get started.');
+        toast.success(tSetup('saved', { trial: trialDays != null ? 'yes' : 'no' }));
         setStep(PLAN_STEP);
         return;
       }
@@ -1152,28 +1175,35 @@ export default function OnboardingPage() {
 
   const addPromptToTopic = (topicIndex: number, prompt: string) => {
     setTopicPrompts((prev) =>
-      prev.map((tp, i) => (i === topicIndex ? { ...tp, prompts: [...tp.prompts, prompt] } : tp)),
+      prev.map((tp, i) =>
+        i === topicIndex ? { ...tp, prompts: [...tp.prompts, { text: prompt, picked: true }] } : tp,
+      ),
     );
   };
 
-  const removePromptFromTopic = (topicIndex: number, promptIndex: number) => {
+  const togglePrompt = (topicIndex: number, promptIndex: number) => {
     setTopicPrompts((prev) =>
       prev.map((tp, i) =>
         i === topicIndex
-          ? { ...tp, prompts: tp.prompts.filter((_, pi) => pi !== promptIndex) }
+          ? {
+              ...tp,
+              prompts: tp.prompts.map((p, pi) =>
+                pi === promptIndex ? { ...p, picked: !p.picked } : p,
+              ),
+            }
           : tp,
       ),
     );
   };
 
-  const totalPrompts = topicPrompts.reduce((sum, tp) => sum + tp.prompts.length, 0);
+  // The prompts offered, and the ticked ones: only those are saved, and they
+  // count toward the plan.
+  const offeredPrompts = topicPrompts.reduce((sum, tp) => sum + tp.prompts.length, 0);
+  const totalPrompts = pickedCount(topicPrompts);
   // Prompts this brand may track before hitting the org's plan cap (null =
   // unknown or unlimited); past it, the rest are saved waiting for a spot
   // (savePromptSet), as on a new brand's wizard, and a note says how many.
-  const promptLimit =
-    promptCapacity && promptCapacity.maxPrompts !== -1
-      ? Math.max(0, promptCapacity.maxPrompts - promptCapacity.used)
-      : null;
+  const promptLimit = promptRoom(promptCapacity);
   const overPrompts = promptLimit !== null ? Math.max(0, totalPrompts - promptLimit) : 0;
 
   async function loadResumedPreview(orgId: string) {
@@ -1603,11 +1633,8 @@ export default function OnboardingPage() {
             <BrandHeader name={brandName} domain={domain} />
 
             <div className="mb-6">
-              <h1 className="text-2xl font-bold tracking-tight">Review your prompts</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                These prompts will be sent to AI platforms daily. Feel free to edit, add, or remove
-                any before starting.
-              </p>
+              <h1 className="text-2xl font-bold tracking-tight">{tPrompts('title')}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{tPrompts('intro')}</p>
             </div>
 
             {promptGenError && (
@@ -1637,7 +1664,9 @@ export default function OnboardingPage() {
 
             <div className="mb-4">
               <p className="text-sm font-medium">Your Prompt List</p>
-              <p className="text-xs text-muted-foreground">{totalPrompts} prompts total</p>
+              <p data-slot="prompt-count" className="text-xs text-muted-foreground">
+                {tPrompts('count', { picked: totalPrompts, total: offeredPrompts })}
+              </p>
             </div>
 
             <div className="rounded-lg border">
@@ -1651,7 +1680,7 @@ export default function OnboardingPage() {
                   defaultOpen={idx === 0}
                   onRemoveTopic={() => removeTopic(idx)}
                   onAddPrompt={(p) => addPromptToTopic(idx, p)}
-                  onRemovePrompt={(pi) => removePromptFromTopic(idx, pi)}
+                  onTogglePrompt={(pi) => togglePrompt(idx, pi)}
                 />
               ))}
               {topicPrompts.length === 0 && (
@@ -1847,11 +1876,23 @@ export default function OnboardingPage() {
                       Finishing setup...
                     </>
                   ) : hasSelectedCompetitors ? (
-                    `Start tracking with ${selectedCompetitorCount} competitor${selectedCompetitorCount !== 1 ? 's' : ''}`
+                    // On the cloud, tracking starts with the plan step's
+                    // Checkout (the trial or a plan bought), not here.
+                    tSetup(isCloud() ? 'competitors.continue' : 'competitors.startTracking', {
+                      count: selectedCompetitorCount,
+                    })
                   ) : (
                     'Add a competitor to continue'
                   )}
                 </Button>
+                {isCloud() && (
+                  <p
+                    data-slot="tracking-starts"
+                    className="text-center text-xs text-muted-foreground"
+                  >
+                    {tSetup('trackingStarts', { trial: trialDays != null ? 'yes' : 'no' })}
+                  </p>
+                )}
               </div>
             )}
           </div>

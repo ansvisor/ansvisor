@@ -226,6 +226,67 @@ describe('setup suggestions used up for the day', () => {
   });
 });
 
+describe('the prompts step', () => {
+  it('offers the suggested prompts as a checklist, 15 ticked, and saves only the ticked ones', async () => {
+    const topics = ['Beans', 'Brewing', 'Grinders', 'Gifts'];
+    setup.generatePromptsFromTopics.mockResolvedValue({
+      topicPrompts: topics.map((topic) => ({
+        topic,
+        prompts: [1, 2, 3, 4, 5].map((n) => `Best ${topic.toLowerCase()} question ${n}`),
+      })),
+    });
+    await render();
+    await act(async () => button('Looks good')!.click());
+    expect(text()).toContain('Choose your prompts');
+    expect(container.querySelector('[data-slot="prompt-count"]')?.textContent).toBe(
+      '15 of 20 prompts ticked',
+    );
+    expect(text()).toContain('4 of 5 ticked');
+    expect(text()).toContain('3 of 5 ticked');
+    // The first topic is open: its first four ticked, its fifth not.
+    const boxes = () => [...container.querySelectorAll<HTMLButtonElement>('[role="checkbox"]')];
+    expect(boxes().map((b) => b.getAttribute('aria-checked'))).toEqual([
+      'true',
+      'true',
+      'true',
+      'true',
+      'false',
+    ]);
+    await act(async () => boxes()[0].click());
+    expect(container.querySelector('[data-slot="prompt-count"]')?.textContent).toBe(
+      '14 of 20 prompts ticked',
+    );
+    const { savePromptSet } = await import('@/lib/actions/prompt');
+    await act(async () => button('Continue')!.click());
+    const saved = vi.mocked(savePromptSet).mock.calls[0][0].prompts.map((p) => p.text);
+    expect(saved).toHaveLength(14);
+    expect(saved).not.toContain('Best beans question 1');
+    expect(saved).not.toContain('Best beans question 5');
+    expect(saved).toContain('Best gifts question 3');
+  });
+  it('ticks no more than the plan has room for, so no note shows until more are ticked', async () => {
+    const { getPromptCapacity } = await import('@/lib/actions/prompt');
+    vi.mocked(getPromptCapacity).mockResolvedValueOnce({ maxPrompts: 50, used: 40 });
+    setup.generatePromptsFromTopics.mockResolvedValue({
+      topicPrompts: ['Beans', 'Brewing', 'Grinders', 'Gifts'].map((topic) => ({
+        topic,
+        prompts: [1, 2, 3, 4, 5].map((n) => `Best ${topic.toLowerCase()} question ${n}`),
+      })),
+    });
+    await render();
+    await act(async () => button('Looks good')!.click());
+    expect(container.querySelector('[data-slot="prompt-count"]')?.textContent).toBe(
+      '10 of 20 prompts ticked',
+    );
+    expect(text()).not.toContain('waiting for a spot');
+    const unticked = container.querySelector<HTMLButtonElement>(
+      '[role="checkbox"][aria-checked="false"]',
+    )!;
+    await act(async () => unticked.click());
+    expect(text()).toContain('Your plan has room for 10 more prompts: the other 1 will be saved');
+  });
+});
+
 describe('topic suggestions', () => {
   async function type(id: string, value: string) {
     const input = container.querySelector<HTMLInputElement>(`#${id}`)!;
@@ -372,7 +433,12 @@ describe('the plan step', () => {
       isEcommerce: false,
     });
     await render();
-    await act(async () => button('Start tracking with 1 competitor')!.click());
+    // Tracking starts with the plan step's Checkout, so the button only goes on.
+    expect(button('Start tracking with 1 competitor')).toBeUndefined();
+    expect(container.querySelector('[data-slot="tracking-starts"]')?.textContent).toBe(
+      'Next, choose how to start. Tracking starts when you start the free trial or buy a plan.',
+    );
+    await act(async () => button('Continue with 1 competitor')!.click());
     await act(async () => {});
     expect(text()).toContain('Choose how to start');
     expect(text()).not.toContain('What do you work on?');
@@ -452,15 +518,27 @@ describe('the plan step', () => {
     expect(cardButton.textContent).toBe('Setting up the demo…');
   });
 
+  it('opens on the free trial, while the workspace may have one', async () => {
+    await render();
+    const pressed = container.querySelector('[data-choice][aria-pressed="true"]');
+    expect(pressed?.getAttribute('data-choice')).toBe('trial');
+    expect(modeButtons('trial').map((b) => b.textContent)).toEqual([
+      'Start 14-day free trial',
+      'Start 14-day free trial',
+    ]);
+    expect(modeButtons('buy')).toEqual([]);
+  });
+
   it('offers one choice of how to start, then one button on each plan, a card for both', async () => {
     await render();
+    await choose('month');
     expect(text()).toContain('Choose how to start');
     expect(text()).not.toContain('Start Your 14-Day Free Trial');
     expect(text()).not.toContain('No charge today');
     // The first-month offer is on the cards, not by Monthly; the demo comes last.
     expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
     expect(text()).not.toContain('50% off the first month');
-    // Monthly first, with the first-month offer: its price large on the card.
+    // Monthly, with the first-month offer: its price large on the card.
     expect(modeButtons('buy').map((b) => b.textContent)).toEqual(['Buy now', 'Buy now']);
     expect(modeButtons('trial')).toEqual([]);
     expect(slots('plan-price')[0]).toContain('$24.50first month');
@@ -525,6 +603,7 @@ describe('the plan step', () => {
 
   it('buys now with the first-month offer, and starts the trial without it', async () => {
     await render();
+    await choose('month');
     await act(async () => modeButtons('buy')[0].click());
     expect(checkoutBody()).toEqual({
       planId: 'starter',
@@ -538,7 +617,6 @@ describe('the plan step', () => {
     root = createRoot(container);
     fetchMock.mockClear();
     await render();
-    await choose('trial');
     await act(async () => modeButtons('trial')[1].click());
     expect(checkoutBody()).toEqual({
       planId: 'growth',
@@ -567,6 +645,7 @@ describe('the plan step', () => {
 
   it('says by the button when Checkout would not open, and stops waiting', async () => {
     await render();
+    await choose('month');
     fetchMock.mockImplementation(async (url: string) =>
       url === '/api/stripe/checkout'
         ? Response.json({ error: 'Price not configured for this plan' }, { status: 400 })
@@ -600,6 +679,7 @@ describe('the plan step', () => {
   it('keeps the offer as configured when its code could not be checked', async () => {
     promo.status = 500;
     await render();
+    await choose('month');
     await act(async () => {});
     expect(slots('due-amount')).toEqual(['$24.50', '$124.50']);
     await act(async () => modeButtons('buy')[0].click());
@@ -619,6 +699,7 @@ describe('the plan step', () => {
   it('shows the plain price with the first-month offer off', async () => {
     vi.stubEnv('NEXT_PUBLIC_FIRST_MONTH_OFFER', 'off');
     await render();
+    await choose('month');
     expect(choices()).toEqual(['14-day trial', 'Monthly', 'YearlySave 20%', 'Demo · no card']);
     expect(modeButtons('buy').map((b) => b.textContent)).toEqual([
       'Choose Starter',

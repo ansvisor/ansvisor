@@ -131,11 +131,12 @@ export function useFirstMonthOffer(applies: boolean, check: boolean = applies) {
 
 /**
  * The start selector's choice: Monthly at first, where the first-month
- * offer is. A trial picked falls back to Monthly once the trial isn't
+ * offer is, unless `initial` says otherwise (onboarding's plan step opens on
+ * the trial). A trial picked falls back to Monthly once the trial isn't
  * offered (a workspace found to have used it).
  */
-export function useStartChoice(trialOffered: boolean) {
-  const [picked, setPicked] = useState<StartChoice>('month');
+export function useStartChoice(trialOffered: boolean, initial: StartChoice = 'month') {
+  const [picked, setPicked] = useState<StartChoice>(initial);
   const choice: StartChoice = picked === 'trial' && !trialOffered ? 'month' : picked;
   return [choice, setPicked] as const;
 }
